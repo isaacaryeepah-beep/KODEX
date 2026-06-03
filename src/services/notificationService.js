@@ -390,3 +390,41 @@ function _fmtDate(date) {
 // Re-export core functions for direct use
 exports.notify     = notify;
 exports.notifyMany = notifyMany;
+
+/**
+ * Notify admin(s) and HOD(s) of the same company that a student's password
+ * was reset (either by an admin or by the student themselves via reset code).
+ *
+ * @param {{ _id, name, IndexNumber, company }} student
+ * @param {"admin_reset"|"self_reset"} method
+ * @param {string} [resetByName]  — name of admin who did it (admin_reset only)
+ */
+exports.notifyPasswordReset = async (student, method, resetByName) => {
+  try {
+    const User = require("../models/User");
+    const admins = await User.find({
+      company: student.company,
+      role: { $in: ["admin", "superadmin", "hod"] },
+      _id: { $ne: student._id },
+    }).select("_id").lean();
+
+    if (!admins.length) return;
+    const recipientIds = admins.map(a => a._id);
+
+    const studentLabel = student.name || student.IndexNumber || "A student";
+    const body = method === "admin_reset"
+      ? `${studentLabel}'s password was reset by ${resetByName || "an admin"}.`
+      : `${studentLabel} (${student.IndexNumber || "unknown ID"}) reset their own password using a reset code.`;
+
+    await notifyMany(recipientIds, {
+      company: student.company,
+      type:    NOTIFICATION_TYPES.PASSWORD_RESET,
+      title:   "Student password reset",
+      body,
+      link:    "/users",
+      data:    { studentId: student._id, method },
+    });
+  } catch (err) {
+    console.error("[NotificationService] notifyPasswordReset failed:", err.message);
+  }
+};

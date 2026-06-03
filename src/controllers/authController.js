@@ -1219,6 +1219,9 @@ exports.resetPassword = async (req, res) => {
     });
     await user.save({ validateBeforeSave: false });
 
+    // In-app notification to all admins + HODs
+    require('../services/notificationService').notifyPasswordReset(user, 'self_reset');
+
     try {
       const admin = await User.findOne({
         company: user.company,

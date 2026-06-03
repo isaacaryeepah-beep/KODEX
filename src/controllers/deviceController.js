@@ -1030,6 +1030,23 @@ exports.removeLecturer = async (req, res) => {
   }
 };
 
+// ─── REMOVE DEVICE ───────────────────────────────────────────────────────────
+// DELETE /api/devices/:deviceId/remove
+// Admin/HOD: unpairs the device from the institution (deletes the Device doc).
+exports.removeDevice = async (req, res) => {
+  try {
+    const companyId = req.user.company;
+    const { deviceId } = req.params;
+    const device = await Device.findOne({ deviceId, companyId });
+    if (!device) return res.status(404).json({ message: 'Device not found' });
+    await Device.deleteOne({ _id: device._id });
+    res.json({ message: 'Device removed' });
+  } catch (err) {
+    console.error('[removeDevice]', err);
+    res.status(500).json({ message: 'Server error', error: err.message });
+  }
+};
+
 // ─── GET DEVICE LECTURERS ─────────────────────────────────────────────────────
 // GET /api/devices/:deviceId/lecturers
 // Returns populated assignedLecturers for the device.

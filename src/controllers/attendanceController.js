@@ -183,7 +183,6 @@ exports.startSession = async (req, res) => {
       }
     }
     // ── End timetable check ───────────────────────────────────────────────────
-
     const activeFilter = { company: companyId, status: "active" };
     if (req.user.role === "lecturer") {
       activeFilter.createdBy = req.user._id;

@@ -865,63 +865,144 @@ function _devCSS() {
 async function renderAdminDevices() {
   const content = document.getElementById('main-content');
   if (!content) return;
+  const instCode = (typeof currentUser !== 'undefined' && currentUser?.company?.institutionCode) || '——';
 
   content.innerHTML = `
-    <style>${_devCSS()}</style>
+    <style>${_devCSS()}
+    .ad-hero{background:linear-gradient(135deg,#4f46e5 0%,#7c3aed 100%);border-radius:20px;padding:28px 32px;margin-bottom:24px;display:flex;align-items:center;justify-content:space-between;gap:20px;flex-wrap:wrap;box-shadow:0 8px 32px rgba(79,70,229,.25)}
+    .ad-hero-left{display:flex;align-items:center;gap:18px}
+    .ad-hero-icon{width:52px;height:52px;background:rgba(255,255,255,.15);border-radius:14px;display:flex;align-items:center;justify-content:center;flex-shrink:0}
+    .ad-hero-title{font-size:22px;font-weight:800;color:#fff;margin:0 0 4px}
+    .ad-hero-sub{font-size:13px;color:rgba(255,255,255,.75);margin:0}
+    .ad-gen-btn{display:inline-flex;align-items:center;gap:8px;background:#fff;color:#4f46e5;border:none;border-radius:12px;padding:10px 20px;font-size:13px;font-weight:700;cursor:pointer;box-shadow:0 2px 8px rgba(0,0,0,.12);transition:transform .15s,box-shadow .15s;white-space:nowrap}
+    .ad-gen-btn:hover{transform:translateY(-1px);box-shadow:0 4px 16px rgba(0,0,0,.18)}
+    .ad-gen-btn:active{transform:translateY(0)}
+    .ad-info-row{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:24px}
+    @media(max-width:560px){.ad-info-row{grid-template-columns:1fr}}
+    .ad-info-card{background:#fff;border-radius:16px;padding:20px 24px;box-shadow:0 1px 4px rgba(0,0,0,.06),0 0 0 1px rgba(0,0,0,.04)}
+    .ad-info-label{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:#94a3b8;margin-bottom:8px}
+    .ad-inst-code-display{font-size:26px;font-weight:900;font-family:monospace;letter-spacing:5px;color:#1e293b;margin-bottom:4px}
+    .ad-info-hint{font-size:11px;color:#94a3b8;line-height:1.5}
+    .ad-pair-banner{display:none;background:linear-gradient(135deg,#eef2ff,#f5f3ff);border:1.5px solid #c7d2fe;border-radius:16px;padding:24px;margin-bottom:24px}
+    .ad-pair-banner-title{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:#6366f1;margin-bottom:12px;display:flex;align-items:center;gap:6px}
+    .ad-pair-codes{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:16px}
+    @media(max-width:480px){.ad-pair-codes{grid-template-columns:1fr}}
+    .ad-pair-code-box{background:#fff;border-radius:12px;padding:16px 20px;text-align:center;box-shadow:0 1px 4px rgba(0,0,0,.06)}
+    .ad-pair-code-label{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.6px;color:#94a3b8;margin-bottom:6px}
+    .ad-pair-code-val{font-size:28px;font-weight:900;letter-spacing:6px;font-family:monospace;color:#4f46e5}
+    .ad-pair-code-val.inst{color:#1e293b}
+    .ad-pair-expires-note{font-size:11px;color:#6366f1;text-align:center;margin-bottom:12px}
+    .ad-pair-steps{font-size:12px;color:#475569;background:rgba(255,255,255,.6);border-radius:10px;padding:10px 14px;line-height:1.8}
+    .ad-list-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:16px}
+    .ad-list-title{font-size:13px;font-weight:700;color:#475569;display:flex;align-items:center;gap:8px}
+    .ad-list-badge{background:#f1f5f9;color:#64748b;border-radius:999px;padding:2px 10px;font-size:11px;font-weight:700}
+    .ad-refresh-btn{display:inline-flex;align-items:center;gap:6px;background:none;border:1px solid #e2e8f0;border-radius:8px;padding:5px 12px;font-size:12px;color:#64748b;cursor:pointer;transition:border-color .15s}
+    .ad-refresh-btn:hover{border-color:#6366f1;color:#6366f1}
+    .ad-last-updated{font-size:11px;color:#94a3b8}
+    .ad-device-grid{display:flex;flex-direction:column;gap:12px}
+    .ad-device-card{background:#fff;border-radius:16px;padding:0;box-shadow:0 1px 4px rgba(0,0,0,.06),0 0 0 1px rgba(0,0,0,.04);overflow:hidden;transition:box-shadow .18s}
+    .ad-device-card:hover{box-shadow:0 4px 20px rgba(0,0,0,.1),0 0 0 1px rgba(0,0,0,.06)}
+    .ad-device-card-top{display:flex;align-items:center;gap:14px;padding:16px 20px;border-bottom:1px solid #f1f5f9}
+    .ad-device-avatar{width:42px;height:42px;border-radius:12px;background:linear-gradient(135deg,#e0e7ff,#ede9fe);display:flex;align-items:center;justify-content:center;flex-shrink:0}
+    .ad-device-name{font-size:15px;font-weight:700;color:#1e293b;margin:0 0 3px}
+    .ad-device-meta{font-size:11px;color:#94a3b8;display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+    .ad-status-dot{width:7px;height:7px;border-radius:50%;display:inline-block;flex-shrink:0}
+    .ad-status-online{background:#22c55e;box-shadow:0 0 0 3px rgba(34,197,94,.2)}
+    .ad-status-offline{background:#cbd5e1}
+    .ad-status-label-online{color:#16a34a;font-weight:600}
+    .ad-status-label-offline{color:#94a3b8}
+    .ad-device-actions{margin-left:auto;display:flex;gap:6px;flex-shrink:0}
+    .ad-act-btn{display:inline-flex;align-items:center;gap:4px;border-radius:8px;padding:5px 11px;font-size:11px;font-weight:600;cursor:pointer;border:none;transition:background .15s}
+    .ad-act-setup{background:#f1f5f9;color:#475569}
+    .ad-act-setup:hover{background:#e2e8f0}
+    .ad-act-remove{background:#fff0f0;color:#dc2626}
+    .ad-act-remove:hover{background:#fee2e2}
+    .ad-device-card-body{padding:14px 20px;display:flex;flex-direction:column;gap:10px}
+    .ad-device-dept{font-size:12px;font-weight:600;color:#475569;display:flex;align-items:center;gap:6px}
+    .ad-device-dept-icon{color:#94a3b8}
+    .ad-lec-row{display:flex;flex-wrap:wrap;gap:6px;align-items:center}
+    .ad-lec-pill{display:inline-flex;align-items:center;gap:5px;background:#ede9fe;color:#5b21b6;border-radius:999px;padding:3px 10px 3px 12px;font-size:11px;font-weight:600;white-space:nowrap}
+    .ad-lec-remove{background:none;border:none;cursor:pointer;color:#7c3aed;font-size:14px;padding:0;line-height:1;opacity:.6}
+    .ad-lec-remove:hover{opacity:1}
+    .ad-assign-btn{display:inline-flex;align-items:center;gap:4px;background:#f8fafc;border:1.5px dashed #cbd5e1;color:#64748b;border-radius:999px;padding:3px 12px;font-size:11px;font-weight:600;cursor:pointer;transition:border-color .15s,color .15s}
+    .ad-assign-btn:hover{border-color:#6366f1;color:#6366f1}
+    .ad-device-footer{display:flex;align-items:center;gap:16px;flex-wrap:wrap;padding:10px 20px;background:#f8fafc;border-top:1px solid #f1f5f9}
+    .ad-footer-chip{display:flex;align-items:center;gap:5px;font-size:11px;color:#94a3b8}
+    .ad-footer-chip svg{opacity:.5}
+    .ad-empty{text-align:center;padding:56px 24px;background:#fff;border-radius:20px;box-shadow:0 1px 4px rgba(0,0,0,.06)}
+    .ad-empty-icon{width:64px;height:64px;background:#f1f5f9;border-radius:20px;display:flex;align-items:center;justify-content:center;margin:0 auto 16px}
+    .ad-empty-title{font-size:17px;font-weight:700;color:#1e293b;margin:0 0 6px}
+    .ad-empty-desc{font-size:13px;color:#64748b;max-width:320px;margin:0 auto;line-height:1.6}
+    </style>
     <div class="dev-page">
-      <div class="dev-page-header">
-        <div>
-          <h1 class="dev-page-title">Classroom Devices</h1>
-          <p class="dev-page-subtitle">Manage and provision ESP32 attendance devices for your institution</p>
+
+      <!-- Hero header -->
+      <div class="ad-hero">
+        <div class="ad-hero-left">
+          <div class="ad-hero-icon">
+            <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2"><rect x="5" y="2" width="14" height="20" rx="2"/><line x1="12" y1="18" x2="12.01" y2="18" stroke-width="2.5"/><line x1="9" y1="6" x2="15" y2="6"/><line x1="9" y1="10" x2="15" y2="10"/></svg>
+          </div>
+          <div>
+            <h1 class="ad-hero-title">Classroom Devices</h1>
+            <p class="ad-hero-sub">Manage and provision ESP32 attendance devices</p>
+          </div>
         </div>
-        <div class="dev-header-actions">
-          <button class="dev-btn dev-btn-primary" id="ad-gen-btn" onclick="adGenerateCode()">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
-            Generate Pairing Code
-          </button>
+        <button class="ad-gen-btn" id="ad-gen-btn" onclick="adGenerateCode()">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+          Generate Pairing Code
+        </button>
+      </div>
+
+      <!-- Info cards row -->
+      <div class="ad-info-row">
+        <div class="ad-info-card">
+          <div class="ad-info-label">Institution Code</div>
+          <div class="ad-inst-code-display" id="ad-inst-code">${instCode}</div>
+          <div class="ad-info-hint">Class Rep needs this + a pairing code to set up a device. Keep it confidential.</div>
+        </div>
+        <div class="ad-info-card" style="background:linear-gradient(135deg,#f8fafc,#f1f5f9);display:flex;flex-direction:column;justify-content:center;align-items:center;text-align:center;gap:8px">
+          <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#94a3b8" stroke-width="1.5"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+          <div style="font-size:12px;font-weight:600;color:#475569">Device pairing is secure</div>
+          <div style="font-size:11px;color:#94a3b8">JWT-authenticated · Company-isolated</div>
         </div>
       </div>
 
-      <!-- Institution code — always visible -->
-      <div class="dev-card" style="margin-bottom:20px;display:flex;align-items:center;gap:20px;flex-wrap:wrap">
-        <div style="flex:1;min-width:0">
-          <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--text-secondary);margin-bottom:4px">Institution Code</div>
-          <div style="font-size:22px;font-weight:800;font-family:monospace;letter-spacing:4px;color:var(--text-primary)" id="ad-inst-code">${(typeof currentUser !== 'undefined' && currentUser?.company?.institutionCode) || '——'}</div>
+      <!-- Pairing code panel -->
+      <div id="ad-pair-panel" class="ad-pair-banner">
+        <div class="ad-pair-banner-title">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#6366f1" stroke-width="2"><path d="M21 2l-2 2m-7.61 7.61a5.5 5.5 0 1 1-7.778 7.778 5.5 5.5 0 0 1 7.777-7.777zm0 0L15.5 7.5m0 0l3 3L22 7l-3-3m-3.5 3.5L19 4"/></svg>
+          New Pairing Code Generated
         </div>
-        <div style="font-size:12px;color:var(--text-secondary);max-width:320px">
-          The Class Rep needs this code <em>and</em> a pairing code when setting up the device. Keep it confidential.
+        <div class="ad-pair-codes">
+          <div class="ad-pair-code-box">
+            <div class="ad-pair-code-label">Institution Code</div>
+            <div class="ad-pair-code-val inst" id="ad-inst-code-2">${instCode}</div>
+          </div>
+          <div class="ad-pair-code-box">
+            <div class="ad-pair-code-label">Pairing Code</div>
+            <div class="ad-pair-code-val dev-pairing-code" id="ad-pair-code">——————</div>
+          </div>
         </div>
-      </div>
-
-      <!-- Pairing code panel (hidden until generated) -->
-      <div id="ad-pair-panel" style="display:none;margin-bottom:20px">
-        <div class="dev-card" style="border-left:4px solid #6366f1">
-          <div style="font-size:13px;font-weight:700;color:#6366f1;margin-bottom:4px;text-transform:uppercase;letter-spacing:.5px">New Pairing Code</div>
-          <div style="font-size:11px;color:var(--text-secondary);margin-bottom:14px">Give this code to the Class Rep who will physically set up the device. Valid for 7 days.</div>
-          <div class="dev-pairing-code-box">
-            <div class="dev-pairing-code" id="ad-pair-code">——————</div>
-            <div class="dev-pairing-expires" id="ad-pair-expires"></div>
-          </div>
-          <div style="margin-top:14px;display:flex;gap:16px;flex-wrap:wrap">
-            <div style="flex:1;min-width:140px">
-              <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--text-secondary);margin-bottom:4px">Institution Code</div>
-              <div style="font-size:16px;font-weight:800;font-family:monospace;letter-spacing:3px;color:var(--text-primary)" id="ad-inst-code-2">${(typeof currentUser !== 'undefined' && currentUser?.company?.institutionCode) || '——'}</div>
-            </div>
-            <div style="flex:1;min-width:140px">
-              <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--text-secondary);margin-bottom:4px">Pairing Code</div>
-              <div style="font-size:16px;font-weight:800;font-family:monospace;letter-spacing:3px;color:#6366f1" id="ad-pair-code-2">——————</div>
-            </div>
-          </div>
-          <div style="margin-top:12px;font-size:12px;color:var(--text-secondary)">
-            Rep connects to <strong>Dikly-XXXXXX</strong> WiFi → opens <strong>192.168.4.1</strong> → enters both codes above + school WiFi credentials.
-          </div>
+        <div class="ad-pair-expires-note" id="ad-pair-expires"></div>
+        <div class="ad-pair-steps">
+          📱 Rep connects to <strong>Dikly-XXXXXX</strong> WiFi → opens <strong>192.168.4.1</strong> → enters both codes above + school WiFi → done.
         </div>
       </div>
 
       <!-- Device list -->
-      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
-        <div style="font-size:11px;color:var(--text-secondary)" id="ad-last-updated"></div>
-        <button class="dev-btn dev-btn-ghost" style="font-size:12px;padding:5px 12px" onclick="adRefreshDevices()">↻ Refresh</button>
+      <div class="ad-list-header">
+        <div class="ad-list-title">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#64748b" stroke-width="2"><rect x="5" y="2" width="14" height="20" rx="2"/><line x1="12" y1="18" x2="12.01" y2="18"/></svg>
+          Paired Devices
+          <span class="ad-list-badge" id="ad-device-count">—</span>
+        </div>
+        <div style="display:flex;align-items:center;gap:10px">
+          <span class="ad-last-updated" id="ad-last-updated"></span>
+          <button class="ad-refresh-btn" onclick="adRefreshDevices()">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>
+            Refresh
+          </button>
+        </div>
       </div>
       <div id="ad-device-list"><div class="loading">Loading devices…</div></div>
     </div>`;
@@ -980,13 +1061,18 @@ async function adLoadDevices() {
       stamp.textContent = 'Updated ' + t.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit', second: '2-digit' });
     }
     const devices = data.devices || [];
+    const countEl = document.getElementById('ad-device-count');
+    if (countEl) countEl.textContent = devices.length;
+
     if (!devices.length) {
       const instCode = (typeof currentUser !== 'undefined' && currentUser?.company?.institutionCode) || null;
       list.innerHTML = `
-        <div class="dev-card" style="text-align:center;padding:40px 20px">
-          <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="#cbd5e1" stroke-width="1.5" style="margin-bottom:12px"><rect x="5" y="2" width="14" height="20" rx="2"/><line x1="12" y1="18" x2="12.01" y2="18"/></svg>
-          <div style="font-size:15px;font-weight:600;color:var(--text-secondary)">No devices paired yet</div>
-          <div style="font-size:13px;color:var(--text-secondary);margin-top:8px;max-width:400px;margin-left:auto;margin-right:auto">
+        <div class="ad-empty">
+          <div class="ad-empty-icon">
+            <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#94a3b8" stroke-width="1.5"><rect x="5" y="2" width="14" height="20" rx="2"/><line x1="12" y1="18" x2="12.01" y2="18"/><line x1="9" y1="6" x2="15" y2="6"/><line x1="9" y1="10" x2="15" y2="10"/></svg>
+          </div>
+          <div class="ad-empty-title">No devices paired yet</div>
+          <div class="ad-empty-desc">
             To pair a device: <strong>1)</strong> Click <em>Generate Pairing Code</em> above.
             <strong>2)</strong> Give the Class Rep your Institution Code
             ${instCode ? `(<strong style="color:var(--primary);font-family:monospace;letter-spacing:2px">${instCode}</strong>)` : ''}
@@ -996,65 +1082,95 @@ async function adLoadDevices() {
       return;
     }
 
-    list.innerHTML = `
-      <div style="font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--text-secondary);margin-bottom:10px">${devices.length} device${devices.length !== 1 ? 's' : ''} paired</div>
-      <div style="display:flex;flex-direction:column;gap:10px">
-        ${devices.map(d => {
-          const onlineDot = d.online
-            ? `<span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:#22c55e;margin-right:5px"></span><span style="color:#22c55e;font-weight:600">Online</span>`
-            : `<span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:#94a3b8;margin-right:5px"></span><span style="color:#94a3b8">Offline</span>`;
-          const last = d.lastHeartbeat
-            ? new Date(d.lastHeartbeat).toLocaleString(undefined, { day:'numeric', month:'short', hour:'2-digit', minute:'2-digit' })
-            : 'Never';
-          const deptLabel = [
-            d.assignedDepartment,
-            d.assignedLevel && 'Level ' + d.assignedLevel,
-            d.assignedGroup && 'Group ' + d.assignedGroup,
-          ].filter(Boolean).join(' · ') || '—';
-          const fw    = d.firmwareVersion || '—';
-          const ip    = d.localIp || '—';
+    list.innerHTML = `<div class="ad-device-grid">
+      ${devices.map(d => {
+        const isOnline = !!d.online;
+        const last = d.lastHeartbeat
+          ? new Date(d.lastHeartbeat).toLocaleString(undefined, { day:'numeric', month:'short', hour:'2-digit', minute:'2-digit' })
+          : 'Never';
+        const deptLabel = [
+          d.assignedDepartment,
+          d.assignedLevel && 'Level ' + d.assignedLevel,
+          d.assignedGroup && 'Group ' + d.assignedGroup,
+        ].filter(Boolean).join(' · ') || 'No class assigned';
+        const fw = d.firmwareVersion || '—';
+        const ip = d.localIp || '—';
 
-          // Build lecturer pills
-          const lecturerPills = (d.assignedLecturers || []).map(a => {
-            const lecName  = a.lecturerId?.name  || 'Unknown';
-            const crsName  = a.courseId?.title   || a.courseId?.name || 'Unknown Course';
-            const lecId    = a.lecturerId?._id   || a.lecturerId   || '';
-            const crsId    = a.courseId?._id     || a.courseId     || '';
-            return `<span style="display:inline-flex;align-items:center;gap:4px;background:#ede9fe;color:#5b21b6;border-radius:999px;padding:2px 10px 2px 10px;font-size:11px;font-weight:600;white-space:nowrap">
-              ${lecName} – ${crsName}
-              <button onclick="adRemoveLecturer('${d.deviceId}','${lecId}','${crsId}')" title="Remove" style="background:none;border:none;cursor:pointer;color:#7c3aed;font-size:13px;padding:0 0 0 4px;line-height:1">&times;</button>
-            </span>`;
-          }).join('');
+        const lecturerPills = (d.assignedLecturers || []).map(a => {
+          const lecName = a.lecturerId?.name || 'Unknown';
+          const crsName = a.courseId?.title || a.courseId?.name || 'Unknown Course';
+          const lecId   = a.lecturerId?._id || a.lecturerId || '';
+          const crsId   = a.courseId?._id   || a.courseId   || '';
+          return `<span class="ad-lec-pill">
+            <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="8" r="4"/><path d="M4 20c0-4 3.6-7 8-7s8 3 8 7"/></svg>
+            ${lecName} · ${crsName}
+            <button class="ad-lec-remove" onclick="adRemoveLecturer('${d.deviceId}','${lecId}','${crsId}')" title="Remove">&times;</button>
+          </span>`;
+        }).join('');
 
-          const setupData = JSON.stringify({
-            name: d.deviceName || '',
-            dept: d.assignedDepartment || '',
-            level: d.assignedLevel || '',
-            group: d.assignedGroup || '',
-          }).replace(/'/g, '&#39;');
+        const setupData = JSON.stringify({
+          name: d.deviceName || '',
+          dept: d.assignedDepartment || '',
+          level: d.assignedLevel || '',
+          group: d.assignedGroup || '',
+        }).replace(/'/g, '&#39;');
 
-          return `
-            <div class="dev-card" style="display:flex;flex-direction:column;gap:10px">
-              <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
-                <span style="font-size:15px;font-weight:700;color:var(--text-primary)">${d.deviceName}</span>
-                <span style="font-size:12px">${onlineDot}</span>
-                <button onclick="adOpenSetupModal('${d.deviceId}', ${setupData})" title="Setup device" style="margin-left:auto;background:none;border:1px solid #e2e8f0;border-radius:6px;padding:2px 8px;cursor:pointer;font-size:11px;color:#475569;font-weight:600">Setup</button>
+        return `
+          <div class="ad-device-card">
+            <div class="ad-device-card-top">
+              <div class="ad-device-avatar">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#6366f1" stroke-width="1.8"><rect x="5" y="2" width="14" height="20" rx="2"/><line x1="12" y1="18" x2="12.01" y2="18" stroke-width="2.5"/><line x1="9" y1="7" x2="15" y2="7"/><line x1="9" y1="11" x2="15" y2="11"/></svg>
               </div>
-              <div style="font-size:12px;color:var(--text-secondary);font-weight:500">${deptLabel}</div>
-              <div style="display:flex;flex-wrap:wrap;gap:6px;align-items:center">
-                ${lecturerPills || '<span style="font-size:12px;color:var(--text-secondary);font-style:italic">No lecturers assigned</span>'}
-                <button onclick="adOpenAssignModal('${d.deviceId}')" style="display:inline-flex;align-items:center;gap:4px;background:#f1f5f9;border:1px dashed #94a3b8;color:#475569;border-radius:999px;padding:3px 12px;font-size:11px;font-weight:600;cursor:pointer">
-                  + Assign Lecturer
+              <div style="min-width:0">
+                <div class="ad-device-name">${d.deviceName}</div>
+                <div class="ad-device-meta">
+                  <span class="ad-status-dot ${isOnline ? 'ad-status-online' : 'ad-status-offline'}"></span>
+                  <span class="${isOnline ? 'ad-status-label-online' : 'ad-status-label-offline'}">${isOnline ? 'Online' : 'Offline'}</span>
+                  <span>·</span>
+                  <span>${d.deviceId}</span>
+                </div>
+              </div>
+              <div class="ad-device-actions">
+                <button class="ad-act-btn ad-act-setup" onclick="adOpenSetupModal('${d.deviceId}', ${setupData})">
+                  <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+                  Setup
+                </button>
+                <button class="ad-act-btn ad-act-remove" onclick="adRemoveDevice('${d.deviceId}','${d.deviceName}')">
+                  <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6M14 11v6"/><path d="M9 6V4h6v2"/></svg>
+                  Remove
                 </button>
               </div>
-              <div style="font-size:11px;color:var(--text-secondary);display:flex;flex-wrap:wrap;gap:14px">
-                <span>IP: ${ip}</span>
-                <span>fw: ${fw}</span>
-                <span>${last}</span>
+            </div>
+            <div class="ad-device-card-body">
+              <div class="ad-device-dept">
+                <svg class="ad-device-dept-icon" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
+                ${deptLabel}
               </div>
-            </div>`;
-        }).join('')}
-      </div>`;
+              <div class="ad-lec-row">
+                ${lecturerPills || '<span style="font-size:11px;color:#94a3b8;font-style:italic">No lecturers assigned</span>'}
+                <button class="ad-assign-btn" onclick="adOpenAssignModal('${d.deviceId}')">
+                  <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+                  Assign Lecturer
+                </button>
+              </div>
+            </div>
+            <div class="ad-device-footer">
+              <span class="ad-footer-chip">
+                <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>
+                IP: ${ip}
+              </span>
+              <span class="ad-footer-chip">
+                <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg>
+                fw: ${fw}
+              </span>
+              <span class="ad-footer-chip">
+                <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+                Last seen: ${last}
+              </span>
+            </div>
+          </div>`;
+      }).join('')}
+    </div>`;
   } catch (e) {
     list.innerHTML = `<div class="dev-card" style="border-left:4px solid var(--danger);font-size:13px;color:var(--danger)">Failed to load devices: ${e.message}</div>`;
   }
@@ -1265,4 +1381,15 @@ async function adSubmitSetup(deviceId) {
 
   document.getElementById('ad-setup-modal-overlay')?.remove();
   await adLoadDevices();
+}
+
+// ─── REMOVE DEVICE ────────────────────────────────────────────────────────────
+async function adRemoveDevice(deviceId, deviceName) {
+  if (!confirm(`Remove "${deviceName}" from your institution?\n\nThis will unpair the device and delete its JWT. The physical device will reset to setup mode on next boot.`)) return;
+  try {
+    await api(`/api/devices/${deviceId}/remove`, { method: 'DELETE' });
+    await adLoadDevices();
+  } catch (e) {
+    alert('Failed to remove device: ' + e.message);
+  }
 }

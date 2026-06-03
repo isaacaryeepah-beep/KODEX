@@ -636,6 +636,11 @@ exports.adminResetStudentPassword = async (req, res) => {
     // Skip validation — only password is changing, not required fields like IndexNumber
     await target.save({ validateBeforeSave: false });
 
+    // In-app notification to all admins + HODs
+    require('../services/notificationService').notifyPasswordReset(
+      target, 'admin_reset', req.user.name || req.user.email || 'Admin'
+    );
+
     // Notify admin of the reset (non-fatal)
     try {
       const { sendAdminPasswordResetNotice } = require('../services/emailService');

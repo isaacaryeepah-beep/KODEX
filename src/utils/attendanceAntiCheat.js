@@ -26,7 +26,7 @@
  */
 
 const MAX_HUMAN_SPEED_KMH         = 200;   // realistic ground/air travel ceiling
-const MAX_GPS_ACCURACY_METERS     = 100;   // reject readings worse than this
+const MAX_GPS_ACCURACY_METERS     = 500;   // browser WiFi-based GPS is typically 200–500 m
 const MIN_GPS_ACCURACY_METERS     = 1;     // anything tighter than this is likely faked
 const MIN_CLOCK_OUT_INTERVAL_MS   = 5 * 60 * 1000;        //  5 minutes
 const MAX_CLOCK_OPEN_DURATION_MS  = 16 * 60 * 60 * 1000;  // 16 hours

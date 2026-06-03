@@ -5343,7 +5343,7 @@ async function employeeSignIn() {
     _showGPSBlockedModal(gpsErr.message);
     return;
   }
-  if (gpsData.accuracy != null && gpsData.accuracy > 100) {
+  if (gpsData.accuracy != null && gpsData.accuracy > 500) {
     _showStrictBlockedModal(`GPS accuracy too poor (${gpsData.accuracy}m). Move to an open area and try again.`);
     return;
   }
@@ -5376,7 +5376,7 @@ async function employeeSignOut() {
     _showGPSBlockedModal(gpsErr.message);
     return;
   }
-  if (gpsData.accuracy != null && gpsData.accuracy > 100) {
+  if (gpsData.accuracy != null && gpsData.accuracy > 500) {
     _showStrictBlockedModal(`GPS accuracy too poor (${gpsData.accuracy}m). Move to an open area and try again.`);
     return;
   }
