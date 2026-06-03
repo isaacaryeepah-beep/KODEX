@@ -62,6 +62,17 @@ jobs:
         run: |
           cp -r src/public/. www/
 
+      - name: Minify JS for Android bundle
+        run: |
+          npm install -g terser --silent
+          for f in www/js/app.js www/js/pages-academic.js www/js/pages-device.js www/js/pages-corporate.js www/js/pages-faq.js www/js/manager-portal.js www/js/offline-idb.js www/js/faq-widget.js www/js/faq-assistant.js; do
+            if [ -f "$f" ]; then
+              terser "$f" --compress --mangle --output "$f" && echo "Minified $f"
+            fi
+          done
+          echo "JS sizes after minification:"
+          du -sh www/js/
+
       - name: Bundle Google Fonts offline (DM Sans + DM Mono + Inter)
         run: |
           mkdir -p www/fonts
@@ -175,11 +186,11 @@ jobs:
           signing_block = """
               signingConfigs {
                   release {
-                      storeFile file("${{ github.workspace }}/ci/release.p12")
-                      storePassword "DiklySecure2026"
+                      storeFile file("${{ github.workspace }}/ci/dikly-upload.jks")
+                      storePassword "DiklyUpload2026"
                       keyAlias "dikly"
-                      keyPassword "DiklySecure2026"
-                      storeType "PKCS12"
+                      keyPassword "DiklyUpload2026"
+                      storeType "JKS"
                   }
               }
           """

@@ -1065,13 +1065,19 @@ async function adLoadDevices() {
     if (countEl) countEl.textContent = devices.length;
 
     if (!devices.length) {
+      const instCode = (typeof currentUser !== 'undefined' && currentUser?.company?.institutionCode) || null;
       list.innerHTML = `
         <div class="ad-empty">
           <div class="ad-empty-icon">
             <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#94a3b8" stroke-width="1.5"><rect x="5" y="2" width="14" height="20" rx="2"/><line x1="12" y1="18" x2="12.01" y2="18"/><line x1="9" y1="6" x2="15" y2="6"/><line x1="9" y1="10" x2="15" y2="10"/></svg>
           </div>
           <div class="ad-empty-title">No devices paired yet</div>
-          <div class="ad-empty-desc">Generate a pairing code above and have the Class Rep set up the first device.</div>
+          <div class="ad-empty-desc">
+            To pair a device: <strong>1)</strong> Click <em>Generate Pairing Code</em> above.
+            <strong>2)</strong> Give the Class Rep your Institution Code
+            ${instCode ? `(<strong style="color:var(--primary);font-family:monospace;letter-spacing:2px">${instCode}</strong>)` : ''}
+            and the pairing code. <strong>3)</strong> The Class Rep connects to the device hotspot and enters both codes.
+          </div>
         </div>`;
       return;
     }

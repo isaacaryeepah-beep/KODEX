@@ -190,8 +190,15 @@ exports.sendCommand = async (req, res) => {
     if (!company.esp32Devices || company.esp32Devices.length === 0)
       return res.status(404).json({ error: "No ESP32 device registered. Power on the device and send REGISTER via serial." });
 
-    // seed = sessionId — both ESP32 and server derive the same rotating code from this
-    const seed = sessionId || null;
+    // Fetch the session's actual esp32Seed (random 48-char hex set at session creation).
+    // We must NOT use sessionId as the seed — the session already has a cryptographically
+    // random seed, and overwriting it with the ObjectId would cause code mismatch if the
+    // device already received the real seed via a heartbeat response before this command.
+    let seed = null;
+    if (action === "start" && sessionId) {
+      const sess = await AttendanceSession.findById(sessionId).select("esp32Seed").lean();
+      seed = sess?.esp32Seed || null;
+    }
     const durationSecs = Number(duration) || 300;
 
     company.esp32PendingCommand = {
@@ -204,10 +211,9 @@ exports.sendCommand = async (req, res) => {
     };
     await company.save();
 
-    // Also persist seed and duration on the AttendanceSession if it exists
+    // Only update durationSeconds — never overwrite esp32Seed, which is set by startSession.
     if (action === "start" && sessionId) {
       await AttendanceSession.findByIdAndUpdate(sessionId, {
-        esp32Seed: seed,
         durationSeconds: durationSecs,
       }).catch(() => {}); // non-fatal
     }
