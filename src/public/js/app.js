@@ -6323,11 +6323,20 @@ async function renderManagerDashboard(content) {
 let _sessionsFilterCourseId = '';
 let _sessionsFilterCourseTitle = '';
 
+let _sessionsAutoRefreshTimer = null;
+
 async function renderSessions(courseId, courseTitle) {
   // Allow passing a courseId to pre-filter (e.g. from course page)
   if (courseId) { _sessionsFilterCourseId = courseId; _sessionsFilterCourseTitle = courseTitle || ''; }
   const content = document.getElementById('main-content');
   if (!content) return;
+
+  // Auto-refresh every 30 s so the UI reflects watchdog-killed sessions
+  if (_sessionsAutoRefreshTimer) clearInterval(_sessionsAutoRefreshTimer);
+  _sessionsAutoRefreshTimer = setInterval(() => {
+    if (document.getElementById('main-content')) renderSessions();
+    else { clearInterval(_sessionsAutoRefreshTimer); _sessionsAutoRefreshTimer = null; }
+  }, 30_000);
 
   // Offline: render from cache immediately
   if (!isOnline()) {
@@ -6338,9 +6347,27 @@ async function renderSessions(courseId, courseTitle) {
 
   try {
     const qs = _sessionsFilterCourseId ? `?courseId=${_sessionsFilterCourseId}` : '';
-    const data = await api('/api/attendance-sessions' + qs);
+    const [data, flaggedData, deviceData] = await Promise.allSettled([
+      api('/api/attendance-sessions' + qs),
+      ['lecturer', 'hod', 'admin', 'superadmin'].includes(currentUser.role)
+        ? api('/api/attendance-sessions/flagged/new-devices?limit=200')
+        : Promise.resolve(null),
+      api('/api/devices/my').catch(() => null),
+    ]).then(r => r.map(p => p.status === 'fulfilled' ? p.value : null));
+
     offlineCache('sessions', data);
-    _renderSessionsHTML(content, data.sessions || [], false);
+
+    // Build sessionId → flag count map for row badges
+    const flaggedBySession = {};
+    if (flaggedData?.records) {
+      for (const r of flaggedData.records) {
+        const sid = r.session?._id || r.session;
+        if (sid) flaggedBySession[sid] = (flaggedBySession[sid] || 0) + 1;
+      }
+    }
+    const pendingDeviceRecords = deviceData?.data?.pendingRecordsCount || 0;
+
+    _renderSessionsHTML(content, data?.sessions || [], false, { flaggedBySession, pendingDeviceRecords });
   } catch (e) {
     const cached = offlineRead('sessions');
     if (cached) {
@@ -6351,10 +6378,13 @@ async function renderSessions(courseId, courseTitle) {
   }
 }
 
-function _renderSessionsHTML(content, sessions, isOffline) {
+function _renderSessionsHTML(content, sessions, isOffline, extras) {
   const pendingCount = offlineQueueCount();
   const canStart = ['lecturer', 'manager'].includes(currentUser.role);
   const isLecturer = currentUser.role === 'lecturer';
+  const flaggedBySession = extras?.flaggedBySession || {};
+  const pendingDeviceRecords = extras?.pendingDeviceRecords || 0;
+  const totalFlags = Object.values(flaggedBySession).reduce((a, b) => a + b, 0);
 
   const filterPill = _sessionsFilterCourseId
     ? `<div style="display:flex;align-items:center;gap:6px;background:#eff6ff;border:1px solid #bfdbfe;border-radius:20px;padding:3px 10px 3px 8px;font-size:12px;color:#1e40af;font-weight:600;">
@@ -6363,11 +6393,27 @@ function _renderSessionsHTML(content, sessions, isOffline) {
       </div>`
     : '';
 
+  const newDeviceBanner = totalFlags > 0
+    ? `<div style="background:#fff7ed;border:1px solid #fed7aa;border-radius:8px;padding:10px 14px;margin-bottom:12px;display:flex;align-items:center;gap:10px;font-size:13px;color:#92400e;">
+        <span style="font-size:18px">⚠️</span>
+        <span><strong>${totalFlags} new-device flag${totalFlags !== 1 ? 's' : ''}</strong> detected — a student marked attendance from an unrecognised device. Check highlighted sessions below.</span>
+      </div>`
+    : '';
+
+  const pendingDeviceBanner = pendingDeviceRecords > 0
+    ? `<div style="background:#f0f9ff;border:1px solid #bae6fd;border-radius:8px;padding:10px 14px;margin-bottom:12px;display:flex;align-items:center;gap:10px;font-size:13px;color:#0369a1;">
+        <span style="font-size:18px">📴</span>
+        <span><strong>${pendingDeviceRecords} record${pendingDeviceRecords !== 1 ? 's' : ''} pending sync</strong> — the classroom device recorded attendance offline and will sync to the server when it reconnects to the internet.</span>
+      </div>`
+    : '';
+
   content.innerHTML = `
     <div class="page-header">
       <h2>Attendance Sessions</h2>
       <p>Manage attendance sessions${isOffline ? ' <span style="color:#f59e0b;font-weight:600">(Offline — showing cached data)</span>' : ''}</p>
     </div>
+    ${newDeviceBanner}
+    ${pendingDeviceBanner}
     <div class="actions-bar" style="margin-bottom:14px;">
       ${canStart ? `<button class="btn btn-primary btn-sm" onclick="showStartSessionModal()">Start New Session</button>` : ''}
       ${filterPill}
@@ -6381,9 +6427,14 @@ function _renderSessionsHTML(content, sessions, isOffline) {
             ${isLecturer ? '<th>Course</th>' : ''}
             <th>Status</th><th>Started</th><th>Stopped</th><th>Actions</th>
           </tr></thead>
-          <tbody>${sessions.map((s, i) => `
-            <tr>
-              <td>${s.title || 'Untitled'}</td>
+          <tbody>${sessions.map((s, i) => {
+            const flags = flaggedBySession[s._id] || 0;
+            const flagBadge = flags > 0
+              ? `<span title="${flags} new-device flag${flags !== 1 ? 's' : ''}" style="background:#fef3c7;color:#92400e;border:1px solid #fbbf24;border-radius:4px;padding:1px 6px;font-size:11px;font-weight:700;margin-left:6px;">⚠️ ${flags}</span>`
+              : '';
+            return `
+            <tr style="${flags > 0 ? 'background:#fffbeb;' : ''}">
+              <td>${s.title || 'Untitled'}${flagBadge}</td>
               ${isLecturer ? `<td><span style="font-size:11px;font-weight:600;color:#6366f1;">${s.course ? esc(s.course.code || s.course.title || '') : '—'}</span></td>` : ''}
               <td><span class="status-badge status-${s.status}">${s.status}</span></td>
               <td>${new Date(s.startedAt).toLocaleString()}</td>
@@ -6396,8 +6447,8 @@ function _renderSessionsHTML(content, sessions, isOffline) {
               ` : ['active','live','paused','locked'].includes(s.status) ? `
                 <button class="btn btn-sm" style="font-size:11px;background:var(--bg);border:1px solid var(--border)" onclick="viewAttendees('${s._id}', '${(s.title||'Session').replace(/['\''\'']/g,'')}')">Attendees</button>
               ` : ''}</td>
-            </tr>
-          `).join('')}</tbody>
+            </tr>`;
+          }).join('')}</tbody>
         </table>
       ` : `<div class="empty-state"><p>${_sessionsFilterCourseId ? 'No sessions for this course yet.' : 'No sessions found'}</p></div>`}
     </div>
@@ -6792,7 +6843,7 @@ async function stopSession(id) {
 // QR auto-rotation state
 let _qrRotateTimer = null;
 let _qrCountdownTimer = null;
-const QR_EXPIRY_SECONDS = 15;
+const QR_EXPIRY_SECONDS = 60;
 
 function _stopQrTimers() {
   if (_qrRotateTimer)   { clearTimeout(_qrRotateTimer);  _qrRotateTimer = null; }
@@ -6858,12 +6909,12 @@ async function generateQR(sessionId) {
                     style="transition:stroke-dashoffset 1s linear,stroke 0.3s"/>
                 </svg>
                 <div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center">
-                  <span id="qr-countdown" style="font-size:16px;font-weight:800;color:var(--primary)">${QR_EXPIRY_SECONDS}</span>
+                  <span id="qr-countdown" style="font-size:16px;font-weight:800;color:var(--primary)">${Math.floor(QR_EXPIRY_SECONDS/60)}:${String(QR_EXPIRY_SECONDS%60).padStart(2,'0')}</span>
                 </div>
               </div>
               <div id="qr-status" style="display:inline-flex;align-items:center;gap:6px;background:rgba(34,197,94,0.1);border:1px solid rgba(34,197,94,0.3);border-radius:999px;padding:5px 14px;font-size:12px;font-weight:600;color:#16a34a">
                 <span style="width:7px;height:7px;border-radius:50%;background:#16a34a;display:inline-block;animation:pulse-green 1.5s infinite"></span>
-                Live · Auto-refreshes every ${QR_EXPIRY_SECONDS}s
+                Live · Auto-refreshes every 1 min
               </div>
             </div>
 
@@ -6879,17 +6930,18 @@ async function generateQR(sessionId) {
       const ring = document.getElementById('qr-ring');
       const countEl = document.getElementById('qr-countdown');
       const circumference = 170;
+      const _fmtTime = s => `${Math.floor(s/60)}:${String(s%60).padStart(2,'0')}`;
 
       _qrCountdownTimer = setInterval(() => {
         remaining--;
-        if (countEl) countEl.textContent = remaining;
+        if (countEl) countEl.textContent = _fmtTime(remaining);
         if (ring) {
           const offset = circumference * (1 - remaining / QR_EXPIRY_SECONDS);
           ring.style.strokeDashoffset = offset;
-          // Turn orange at 5s, red at 3s
-          if (remaining <= 3)       ring.style.stroke = '#ef4444';
-          else if (remaining <= 5)  ring.style.stroke = '#f97316';
-          else                      ring.style.stroke = 'var(--primary)';
+          // Turn orange at 15s, red at 5s
+          if (remaining <= 5)        ring.style.stroke = '#ef4444';
+          else if (remaining <= 15)  ring.style.stroke = '#f97316';
+          else                       ring.style.stroke = 'var(--primary)';
         }
         if (remaining <= 0) {
           clearInterval(_qrCountdownTimer);
@@ -6909,11 +6961,21 @@ async function generateQR(sessionId) {
       }, QR_EXPIRY_SECONDS * 1000);
 
     } catch (e) {
+      _stopQrTimers();
+      const sessionEnded = e.message?.toLowerCase().includes('not active') || e.message?.toLowerCase().includes('not found');
       container.innerHTML = `
-        <div class="modal-overlay" onclick="_stopQrTimers();closeModal(event)">
-          <div class="modal" style="text-align:center">
-            <p style="color:var(--danger)">${e.message}</p>
-            <button class="btn btn-primary btn-sm" onclick="_stopQrTimers();closeModal()">Close</button>
+        <div class="modal-overlay" onclick="closeModal(event)">
+          <div class="modal" style="text-align:center;max-width:360px">
+            <div style="font-size:40px;margin-bottom:12px">${sessionEnded ? '📴' : '⚠️'}</div>
+            <h3 style="margin:0 0 8px">${sessionEnded ? 'Session Ended' : 'QR Error'}</h3>
+            <p style="color:var(--text-light);font-size:14px;margin-bottom:20px">
+              ${sessionEnded
+                ? 'The classroom device went offline and the session was automatically stopped.'
+                : e.message}
+            </p>
+            <div class="modal-actions" style="justify-content:center">
+              <button class="btn btn-primary btn-sm" onclick="closeModal();renderSessions()">Back to Sessions</button>
+            </div>
           </div>
         </div>`;
     }
@@ -11417,168 +11479,128 @@ async function renderMarkAttendance() {
   // Check if arriving via QR scan deep link
   if (await handleQrScan()) return;
 
-  // Offline: show queued state and cached session info
-  if (!isOnline()) {
-    const cachedSession = offlineRead('activeSession');
-    const pendingCount  = offlineQueueCount();
+  // ── Step 1: Discover classroom device (mandatory for code marking) ───────────
+  // The device's WiFi hotspot is the only accepted proximity proof.
+  // No device found = no attendance. This runs whether the phone has internet
+  // or not — the device at 192.168.4.1 is always the entry point.
+  content.innerHTML = `
+    <div class="page-header"><h2>Mark Attendance</h2><p>Check in to active sessions</p></div>
+    <div class="card" style="text-align:center;padding:32px 20px">
+      <div style="font-size:32px;margin-bottom:12px">📡</div>
+      <div style="font-size:16px;font-weight:700;margin-bottom:6px">Looking for classroom device…</div>
+      <p style="font-size:13px;color:var(--text-light)">Make sure your phone is connected to the classroom WiFi hotspot.</p>
+    </div>`;
 
-    // SVG icons
-    const wifiOffIcon  = svgIcon('<line x1="1" y1="1" x2="23" y2="23"/><path d="M16.72 11.06A10.94 10.94 0 0 1 19 12.55"/><path d="M5 12.55a10.94 10.94 0 0 1 5.17-2.39"/><path d="M10.71 5.05A16 16 0 0 1 22.56 9"/><path d="M1.42 9a15.91 15.91 0 0 1 4.7-2.88"/><path d="M8.53 16.11a6 6 0 0 1 6.95 0"/><line x1="12" y1="20" x2="12.01" y2="20"/>', 22);
-    const radarIcon    = svgIcon('<circle cx="12" cy="12" r="2"/><path d="M16.24 7.76a6 6 0 0 1 0 8.49m-8.48-.01a6 6 0 0 1 0-8.49m11.31-2.82a10 10 0 0 1 0 14.14m-14.14 0a10 10 0 0 1 0-14.14"/>', 48);
+  const deviceFound = await discoverESP32();
 
+  if (!deviceFound) {
     content.innerHTML = `
       <div class="page-header"><h2>Mark Attendance</h2><p>Check in to active sessions</p></div>
-
-      <!-- Offline status bar -->
-      <div class="card" style="border-left:4px solid #f59e0b;background:#fffbeb;padding:14px 16px;margin-bottom:16px">
-        <div style="display:flex;align-items:center;gap:12px">
-          <div style="flex-shrink:0;width:36px;height:36px;border-radius:50%;background:#fef3c7;display:flex;align-items:center;justify-content:center;color:#92400e">
-            ${wifiOffIcon}
-          </div>
-          <div style="flex:1;min-width:0">
-            <div style="font-weight:700;font-size:15px;color:#92400e">No Internet Connection</div>
-            <div style="font-size:12px;color:#b45309;margin-top:2px">
-              ${pendingCount > 0
-                ? `${pendingCount} pending action${pendingCount !== 1 ? 's' : ''} will sync automatically when you reconnect`
-                : 'Reconnect to submit attendance and access live sessions'}
-            </div>
-          </div>
-          ${pendingCount > 0 ? `
-            <div style="flex-shrink:0;background:#f59e0b;color:#fff;font-size:12px;font-weight:700;padding:4px 10px;border-radius:999px">
-              ${pendingCount} pending
-            </div>
-          ` : ''}
-        </div>
-      </div>
-
-      ${cachedSession ? `
-        <!-- Cached session -->
-        <div class="card" style="border-left:4px solid var(--success);background:#f0fdf4;padding:16px;margin-bottom:16px">
-          <div style="font-size:11px;text-transform:uppercase;letter-spacing:.6px;font-weight:700;color:var(--success);margin-bottom:6px">Last Known Active Session</div>
-          <div style="font-size:17px;font-weight:700;color:var(--text-primary)">${cachedSession.title || 'Untitled Session'}</div>
-          ${cachedSession.course ? `<div style="font-size:13px;color:var(--text-light);margin-top:3px">${cachedSession.course.code ? cachedSession.course.code + ' — ' : ''}${cachedSession.course.title || ''}</div>` : ''}
-          <div style="font-size:12px;color:var(--text-muted);margin-top:4px">Started ${new Date(cachedSession.startedAt).toLocaleString()}</div>
-        </div>
-
-        <!-- Explain that attendance requires internet (offline queuing disabled to prevent fraud) -->
-        <div class="card" style="text-align:center;padding:28px 20px">
-          <div style="display:inline-flex;align-items:center;justify-content:center;width:56px;height:56px;border-radius:50%;background:#f0f9ff;color:#0369a1;margin-bottom:14px">
-            ${radarIcon}
-          </div>
-          <div style="font-size:16px;font-weight:700;margin-bottom:8px">Internet Required to Mark Attendance</div>
-          <p style="font-size:13px;color:var(--text-light);max-width:300px;margin:0 auto;line-height:1.6">
-            Connect to <strong>classroom WiFi with internet access</strong> to submit your attendance code.
-            Offline marking is disabled to prevent remote fraud.
-          </p>
-        </div>
-      ` : `
-        <!-- No cached data at all -->
-        <div class="card" style="text-align:center;padding:48px 24px">
-          <div style="display:inline-flex;align-items:center;justify-content:center;width:72px;height:72px;border-radius:50%;background:#f0f9ff;color:#0369a1;margin-bottom:16px">
-            ${radarIcon}
-          </div>
-          <div style="font-size:18px;font-weight:700;margin-bottom:8px">No Offline Data Available</div>
-          <p style="font-size:14px;color:var(--text-light);max-width:300px;margin:0 auto;line-height:1.6">
-            Open this page while online at least once so session data can be saved for offline use.
-          </p>
-        </div>
-      `}
-    `;
+      <div class="card" style="text-align:center;padding:40px 20px">
+        <div style="font-size:52px;margin-bottom:14px">📴</div>
+        <div style="font-size:18px;font-weight:700;margin-bottom:10px">Connect to Classroom WiFi First</div>
+        <p style="font-size:13px;color:var(--text-light);max-width:320px;margin:0 auto;line-height:1.7">
+          Your phone must be connected to the <strong>classroom device's WiFi hotspot</strong>
+          before you can mark attendance.<br><br>
+          Go to your phone's WiFi settings and connect to the classroom hotspot, then come back here.
+        </p>
+        <button class="btn btn-primary btn-sm" style="margin-top:24px" onclick="renderMarkAttendance()">I'm Connected — Try Again</button>
+      </div>`;
     return;
   }
 
-  let activeSession = null;
-  let deviceLocalIp = null;
+  // ── Step 2: Get session info from device (no internet needed) ────────────────
+  let deviceSession = null;
   try {
-    const data = await api('/api/attendance-sessions/active');
-    activeSession = data.session;
-    deviceLocalIp = data.deviceLocalIp || null;
-    if (activeSession) offlineCache('activeSession', activeSession);
-    if (deviceLocalIp) offlineCache('deviceLocalIp', deviceLocalIp);
-  } catch (e) {
-    deviceLocalIp = offlineRead('deviceLocalIp');
+    deviceSession = await esp32Api('/session');
+  } catch (e) { /* device online but no session yet */ }
+
+  // Also fetch from server if online (richer session info: course title, etc.)
+  let serverSession = null;
+  if (isOnline()) {
+    try {
+      const data = await api('/api/attendance-sessions/active');
+      serverSession = data.session;
+      if (serverSession) offlineCache('activeSession', serverSession);
+    } catch (e) { /* server unreachable */ }
   }
 
-  const alreadyMarked = activeSession ? await api('/api/attendance-sessions/my-attendance?limit=100')
-    .then(d => d.records.some(r => r.session?._id === activeSession._id))
-    .catch(() => false) : false;
+  const session = serverSession || (deviceSession?.sessionId ? deviceSession : null);
 
-  content.innerHTML = `
-    <div class="page-header">
-      <h2>Mark Attendance</h2>
-      <p>Check in to active sessions</p>
-    </div>
-    
-    ${activeSession ? `
-      <div class="card" style="border-left: 4px solid var(--success); background: #f0fdf4">
-        <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px">
+  // ── Step 3: No active session ────────────────────────────────────────────────
+  if (!session) {
+    content.innerHTML = `
+      <div class="page-header"><h2>Mark Attendance</h2><p>Check in to active sessions</p></div>
+      <div class="card" style="border-left:4px solid var(--success);background:#f0fdf4;padding:14px 16px;margin-bottom:16px">
+        <div style="display:flex;align-items:center;gap:10px">
+          <span style="font-size:22px">📶</span>
           <div>
-            <div style="font-size:12px;text-transform:uppercase;color:var(--success);font-weight:700;letter-spacing:0.5px">Active Session</div>
-            <div style="font-size:18px;font-weight:700;margin-top:4px">${activeSession.title || 'Untitled Session'}</div>
-            <div style="font-size:13px;color:var(--text-light);margin-top:2px">Started ${new Date(activeSession.startedAt).toLocaleString()} by ${activeSession.createdBy?.name || 'Unknown'}</div>
-            ${activeSession.course ? `<div style="font-size:13px;color:var(--text-light)">Course: ${activeSession.course.title || activeSession.course.code || ''}</div>` : ''}
+            <div style="font-weight:700;font-size:14px;color:#15803d">Connected to classroom device</div>
+            <div style="font-size:12px;color:#166534;margin-top:2px">Proximity verified — you are in the classroom.</div>
           </div>
-          <span class="status-badge status-active" style="font-size:13px;padding:6px 14px">LIVE</span>
         </div>
       </div>
-      
-      ${alreadyMarked ? `
-        <div class="card" style="text-align:center;border-left:4px solid var(--primary)">
-          <div style="font-size:48px;margin-bottom:8px">${svgIcon('<polyline points="9 11 12 14 22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/>', 48)}</div>
-          <div style="font-size:18px;font-weight:700;color:var(--success)">Attendance Already Marked</div>
-          <p style="font-size:13px;color:var(--text-light);margin-top:4px">You have already checked in for this session.</p>
-        </div>
-      ` : `
-        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:16px;margin-bottom:16px">
-          
-          <div class="card mark-method-card" onclick="showCodeEntry('${deviceLocalIp || ''}')" style="cursor:pointer;text-align:center;transition:all 0.2s">
-            <div style="font-size:36px;margin-bottom:12px">${svgIcon('<rect x="3" y="3" width="18" height="18" rx="2"/><path d="M7 7h.01M7 12h.01M12 7h.01M12 12h.01M17 7h.01M7 17h.01M12 17h.01M17 12h.01M17 17h.01"/>', 42)}</div>
-            <div style="font-size:16px;font-weight:700">Enter Code</div>
-            <p style="font-size:12px;color:var(--text-light);margin-top:4px">Type the verbal code read out by your lecturer</p>
-          </div>
-
-          <div class="card mark-method-card" onclick="showQrEntry()" style="cursor:pointer;text-align:center;transition:all 0.2s">
-            <div style="font-size:36px;margin-bottom:12px">${svgIcon('<rect x="2" y="2" width="8" height="8" rx="1"/><rect x="14" y="2" width="8" height="8" rx="1"/><rect x="2" y="14" width="8" height="8" rx="1"/><rect x="14" y="14" width="4" height="4"/><path d="M18 14h4v4M14 18h4v4"/>', 42)}</div>
-            <div style="font-size:16px;font-weight:700">QR Code</div>
-            <p style="font-size:12px;color:var(--text-light);margin-top:4px">Enter QR token from your lecturer's screen</p>
-          </div>
-          
-          <div class="card mark-method-card" onclick="showJitsiJoin()" style="cursor:pointer;text-align:center;transition:all 0.2s">
-            <div style="font-size:36px;margin-bottom:12px">${svgIcon('<path d="M23 7l-7 5 7 5V7z"/><rect x="1" y="5" width="15" height="14" rx="2" ry="2"/>', 42)}</div>
-            <div style="font-size:16px;font-weight:700">Join Meeting</div>
-            <p style="font-size:12px;color:var(--text-light);margin-top:4px">Mark attendance by joining the session meeting</p>
-          </div>
-        </div>
-        
-        <div id="mark-input-area"></div>
-      `}
-    ` : `
       <div class="card" style="text-align:center;padding:40px 20px">
-        <div style="margin-bottom:16px">${svgIcon('<circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>', 48)}</div>
+        <div style="font-size:48px;margin-bottom:14px">⏳</div>
         <div style="font-size:18px;font-weight:700;margin-bottom:8px">No Active Session</div>
-        <p style="font-size:14px;color:var(--text-light)">There are no active attendance sessions right now.</p>
-        <p style="font-size:13px;color:var(--text-light);margin-top:8px">Your lecturer will start a session when it's time to mark attendance.</p>
-        <button class="btn btn-secondary btn-sm" style="margin-top:16px" onclick="navigateTo('mark-attendance')">Refresh</button>
+        <p style="font-size:14px;color:var(--text-light)">Your lecturer hasn't started a session yet.</p>
+        <button class="btn btn-secondary btn-sm" style="margin-top:16px" onclick="renderMarkAttendance()">Refresh</button>
+      </div>`;
+    return;
+  }
+
+  // ── Step 4: Check if already marked ─────────────────────────────────────────
+  let alreadyMarked = false;
+  if (isOnline() && serverSession) {
+    alreadyMarked = await api('/api/attendance-sessions/my-attendance?limit=100')
+      .then(d => d.records.some(r => r.session?._id === serverSession._id))
+      .catch(() => false);
+  }
+
+  // ── Step 5: Render code entry ────────────────────────────────────────────────
+  const deviceIp = esp32IP || '192.168.4.1';
+  content.innerHTML = `
+    <div class="page-header"><h2>Mark Attendance</h2><p>Check in to active sessions</p></div>
+
+    <div class="card" style="border-left:4px solid var(--success);background:#f0fdf4;padding:14px 16px;margin-bottom:16px">
+      <div style="display:flex;align-items:center;gap:10px">
+        <span style="font-size:22px">📶</span>
+        <div>
+          <div style="font-weight:700;font-size:14px;color:#15803d">Connected to classroom device</div>
+          <div style="font-size:12px;color:#166534;margin-top:2px">
+            Proximity verified — you are in the classroom.${!isOnline() ? ' Offline mode — attendance will sync automatically.' : ''}
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="card" style="border-left:4px solid var(--primary);margin-bottom:16px">
+      <div style="font-size:11px;text-transform:uppercase;color:var(--primary);font-weight:700;letter-spacing:0.5px">Active Session</div>
+      <div style="font-size:18px;font-weight:700;margin-top:4px">${esc(session.title || 'Attendance Session')}</div>
+      ${session.course ? `<div style="font-size:13px;color:var(--text-light);margin-top:2px">${esc(session.course.title || session.course.code || '')}</div>` : ''}
+      <div style="font-size:12px;color:var(--text-muted);margin-top:4px">Started ${new Date(session.startedAt).toLocaleString()}</div>
+    </div>
+
+    ${alreadyMarked ? `
+      <div class="card" style="text-align:center;border-left:4px solid var(--success)">
+        <div style="font-size:52px;margin-bottom:8px">✅</div>
+        <div style="font-size:18px;font-weight:700;color:var(--success)">Attendance Already Marked</div>
+        <p style="font-size:13px;color:var(--text-light);margin-top:4px">You have already checked in for this session.</p>
+      </div>
+    ` : `
+      <div class="card">
+        <div class="card-title">Enter Attendance Code</div>
+        <p style="font-size:13px;color:var(--text-muted);margin-bottom:14px">Type the 6-digit code shown on the classroom device screen.</p>
+        <div class="form-group">
+          <label>6-Digit Code</label>
+          <input type="text" id="mark-code-input" placeholder="000000" maxlength="6" inputmode="numeric"
+            style="font-size:28px;text-align:center;letter-spacing:10px;font-weight:700" autofocus
+            onkeydown="if(event.key==='Enter') submitCodeMark('${deviceIp}')">
+        </div>
+        <div id="mark-code-msg" style="display:none;padding:10px 14px;border-radius:8px;font-size:13px;margin-bottom:12px"></div>
+        <button class="btn btn-primary" onclick="submitCodeMark('${deviceIp}')" style="width:100%">Mark Attendance</button>
       </div>
     `}
-  `;
-}
-
-function showCodeEntry(localIp) {
-  const area = document.getElementById('mark-input-area');
-  if (!area) return;
-  area.innerHTML = `
-    <div class="card">
-      <div class="card-title">Enter Attendance Code</div>
-      <p style="font-size:13px;color:var(--text-muted);margin-bottom:14px">Type the 6-digit code shown on the classroom device screen.</p>
-      <div class="form-group">
-        <label>6-Digit Code</label>
-        <input type="text" id="mark-code-input" placeholder="000000" maxlength="6" inputmode="numeric"
-          style="font-size:28px;text-align:center;letter-spacing:10px;font-weight:700" autofocus>
-      </div>
-      <div id="mark-code-msg" style="display:none;padding:10px 14px;border-radius:8px;font-size:13px;margin-bottom:12px"></div>
-      <button class="btn btn-primary" onclick="submitCodeMark('${localIp || ''}')" style="width:100%">Mark Attendance</button>
-    </div>
   `;
   document.getElementById('mark-code-input')?.focus();
 }
@@ -11601,7 +11623,7 @@ function showQrEntry() {
   `;
 }
 
-async function submitCodeMark(localIp) {
+async function submitCodeMark(deviceIp) {
   const code = document.getElementById('mark-code-input')?.value?.trim();
   const msgEl = document.getElementById('mark-code-msg');
   const showMsg = (txt, ok) => {
@@ -11619,73 +11641,32 @@ async function submitCodeMark(localIp) {
 
   const btn = document.querySelector('#mark-input-area .btn-primary');
   if (btn) { btn.textContent = 'Submitting…'; btn.disabled = true; }
-
   const restoreBtn = () => { if (btn) { btn.textContent = 'Mark Attendance'; btn.disabled = false; } };
 
-  // ── Try server first (online path) ──────────────────────────────────────
-  if (isOnline()) {
-    try {
-      await api('/api/attendance-sessions/mark', {
-        method: 'POST',
-        body: JSON.stringify({ code, method: 'code_mark', deviceId: getDeviceFingerprint() }),
-      });
-      showToastNotif('Attendance marked successfully!', 'success');
-      navigateTo('mark-attendance');
-      return;
-    } catch (e) {
-      restoreBtn();
-      if (e.data?.networkMismatch) {
-        showMsg('You must be connected to the school WiFi to mark attendance. Switch from mobile data to school WiFi and try again.', false);
-        return;
-      }
-      if (e.data?.esp32Offline) {
-        showMsg('The classroom device is offline. Ask your lecturer to power it on.', false);
-        return;
-      }
-      if (e.data?.attendanceWindowClosed) {
-        showMsg('The attendance window for this session has closed.', false);
-        return;
-      }
-      // Network error (no internet) — fall through to local ESP32 submission
-      if (!e.data && localIp) {
-        // intentional fall-through
-      } else {
-        showMsg(e.message || 'Failed to mark attendance.', false);
-        return;
-      }
-    }
-  }
-
-  // ── Offline path — submit directly to ESP32 on local network ─────────────
-  if (!localIp) {
-    restoreBtn();
-    showMsg('No internet and no classroom device found on this network. Connect to school WiFi with internet access.', false);
-    return;
-  }
-
+  // Device is the authority — always submit directly to the classroom device.
+  // Students must be on the device's WiFi hotspot; no server bypass allowed.
+  const ip = deviceIp || esp32IP || '192.168.4.1';
   try {
-    const resp = await fetch(`http://${localIp}/attend`, {
+    const resp = await fetch(`http://${ip}/attend`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        userId:      currentUser?._id || '',
+        userId:      currentUser?._id || currentUser?.id || '',
         indexNumber: currentUser?.indexNumber || currentUser?.IndexNumber || '',
         code,
-        sessionId:   '',
       }),
-      signal: AbortSignal.timeout(6000),
+      signal: AbortSignal.timeout(8000),
     });
     const result = await resp.json();
     if (!resp.ok || result.error) throw new Error(result.error || 'Device rejected the code');
-    restoreBtn();
-    showMsg('✓ Attendance recorded offline — will sync when internet returns.', true);
+    showMsg('✓ Attendance marked! You can now disconnect from classroom WiFi.', true);
     setTimeout(() => navigateTo('mark-attendance'), 2200);
   } catch (e) {
     restoreBtn();
-    if (e.name === 'TimeoutError' || e.message?.includes('fetch')) {
-      showMsg('Could not reach the classroom device. Make sure you are connected to the school WiFi.', false);
+    if (e.name === 'TimeoutError' || e.name === 'AbortError') {
+      showMsg('Device not responding. Make sure you are still connected to the classroom WiFi.', false);
     } else {
-      showMsg(e.message || 'Failed to mark attendance offline.', false);
+      showMsg(e.message || 'Failed to submit. Stay connected to classroom WiFi and try again.', false);
     }
   }
 }

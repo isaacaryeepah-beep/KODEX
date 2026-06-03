@@ -560,18 +560,48 @@ static int postJson(const String& path, const String& body,
   return code;
 }
 
-// ─── Offline attendance sync ──────────────────────────────────────────────────
+// ─── Offline sync (sessions + attendance records) ─────────────────────────────
 static void syncOfflineAttendance() {
-  // ── SD path ──────────────────────────────────────────────────────────────────
+  bool hasSessions = sdAvailable && SD_MMC.exists("/sessions.jsonl");
+  bool hasRecords  = (sdAvailable && sdRecordCount > 0 && SD_MMC.exists(SD_ATT_FILE))
+                     || offlineCount > 0;
+
+  if (!hasSessions && !hasRecords) return;
+
+  JsonDocument doc;
+
+  // ── Sessions ─────────────────────────────────────────────────────────────────
+  if (hasSessions) {
+    JsonArray sArr = doc["sessions"].to<JsonArray>();
+    File sf = SD_MMC.open("/sessions.jsonl", FILE_READ);
+    if (sf) {
+      while (sf.available()) {
+        String line = sf.readStringUntil('\n'); line.trim();
+        if (line.isEmpty()) continue;
+        JsonDocument s;
+        if (!deserializeJson(s, line) && !s["synced"].as<bool>()) {
+          JsonObject o = sArr.add<JsonObject>();
+          o["sessionId"]  = s["sessionId"]  | "";
+          o["courseCode"] = s["courseCode"] | "";
+          o["title"]      = s["title"]      | "Attendance";
+          o["lecturer"]   = s["lecturer"]   | "";
+          o["startedAt"]  = s["startedAt"]  | (uint32_t)0;
+          o["duration"]   = s["duration"]   | (uint32_t)300;
+          o["seed"]       = s["seed"]       | "";
+        }
+      }
+      sf.close();
+    }
+  }
+
+  // ── Attendance records (SD path) ──────────────────────────────────────────────
   if (sdAvailable && sdRecordCount > 0 && SD_MMC.exists(SD_ATT_FILE)) {
+    JsonArray arr = doc["records"].to<JsonArray>();
     File f = SD_MMC.open(SD_ATT_FILE, FILE_READ);
     if (f) {
-      JsonDocument doc;
-      JsonArray arr = doc["records"].to<JsonArray>();
       uint32_t parsed = 0;
       while (f.available()) {
-        String line = f.readStringUntil('\n');
-        line.trim();
+        String line = f.readStringUntil('\n'); line.trim();
         if (line.isEmpty()) continue;
         JsonDocument rec;
         if (!deserializeJson(rec, line)) {
@@ -586,40 +616,73 @@ static void syncOfflineAttendance() {
         }
       }
       f.close();
-      if (parsed == 0) { SD_MMC.remove(SD_ATT_FILE); sdRecordCount = 0; return; }
-      String body; serializeJson(doc, body);
-      String resp; int code = postJson("/api/devices/sync", body, resp);
-      if (code == 200) {
-        LOG("SD sync: " + String(parsed) + " records sent");
-        SD_MMC.remove(SD_ATT_FILE);
-        sdRecordCount = 0;
-      } else {
-        LOG("SD sync failed " + String(code) + ": " + resp);
-      }
+      if (parsed == 0) { SD_MMC.remove(SD_ATT_FILE); sdRecordCount = 0; }
     }
-    return;
+  } else if (offlineCount > 0) {
+    // ── RAM fallback ────────────────────────────────────────────────────────────
+    JsonArray arr = doc["records"].to<JsonArray>();
+    for (uint8_t i = 0; i < offlineCount; i++) {
+      JsonObject o = arr.add<JsonObject>();
+      if (offlineBuf[i].indexNumber[0]) o["indexNumber"] = offlineBuf[i].indexNumber;
+      if (offlineBuf[i].userId[0])      o["userId"]      = offlineBuf[i].userId;
+      o["sessionId"] = offlineBuf[i].sessionId[0] ? offlineBuf[i].sessionId : sessionId.c_str();
+      o["courseId"]  = offlineBuf[i].courseId[0]  ? offlineBuf[i].courseId  : "";
+      o["timestamp"] = offlineBuf[i].ts;
+    }
   }
 
-  // ── RAM fallback path ─────────────────────────────────────────────────────────
-  if (offlineCount == 0) return;
-  JsonDocument doc;
-  JsonArray arr = doc["records"].to<JsonArray>();
-  for (uint8_t i = 0; i < offlineCount; i++) {
-    JsonObject o = arr.add<JsonObject>();
-    if (offlineBuf[i].indexNumber[0]) o["indexNumber"] = offlineBuf[i].indexNumber;
-    if (offlineBuf[i].userId[0])      o["userId"]      = offlineBuf[i].userId;
-    o["sessionId"] = offlineBuf[i].sessionId[0] ? offlineBuf[i].sessionId : sessionId.c_str();
-    o["courseId"]  = offlineBuf[i].courseId[0]  ? offlineBuf[i].courseId  : "";
-    o["timestamp"] = offlineBuf[i].ts;
-  }
   String body; serializeJson(doc, body);
   String resp; int code = postJson("/api/devices/sync", body, resp);
+
   if (code == 200) {
-    LOG("RAM sync: " + String(offlineCount) + " records sent");
+    LOG("Sync OK — sessions + records pushed");
+    // Clear synced files
+    if (hasSessions)                    SD_MMC.remove("/sessions.jsonl");
+    if (sdAvailable && SD_MMC.exists(SD_ATT_FILE)) { SD_MMC.remove(SD_ATT_FILE); sdRecordCount = 0; }
     offlineCount = 0;
   } else {
-    LOG("RAM sync failed " + String(code) + ": " + resp);
+    LOG("Sync failed " + String(code) + ": " + resp);
   }
+}
+
+// ─── Roster download ──────────────────────────────────────────────────────────
+// Downloads enrolled students from server and caches to SD card.
+// Called after a successful heartbeat so the device can validate student IDs
+// in /attend even when internet is unavailable later.
+static void downloadRoster() {
+  if (!sdAvailable) return;
+  String resp; int code = -1;
+  HTTPClient http;
+  String url = String(apiBase) + "/api/devices/roster";
+  http.begin(url);
+  http.addHeader("Authorization", "Bearer " + deviceJWT);
+  http.addHeader("Content-Type",  "application/json");
+  http.setTimeout(10000);
+  code = http.GET();
+  if (code == 200) {
+    resp = http.getString();
+    File rf = SD_MMC.open("/roster.json", FILE_WRITE);
+    if (rf) { rf.print(resp); rf.close(); LOG("Roster saved (" + String(resp.length()) + " bytes)"); }
+
+    // Write a companion line-per-index-number file for fast O(n) search during /attend
+    // without loading the full JSON into RAM.
+    JsonDocument rDoc;
+    if (!deserializeJson(rDoc, resp)) {
+      JsonArray arr = rDoc["roster"].as<JsonArray>();
+      File ix = SD_MMC.open("/roster_idx.txt", FILE_WRITE);
+      if (ix) {
+        for (JsonObject student : arr) {
+          const char* idx = student["indexNumber"] | "";
+          if (idx[0]) { ix.println(idx); }
+        }
+        ix.close();
+        LOG("Roster index written (" + String(arr.size()) + " entries)");
+      }
+    }
+  } else {
+    LOG("Roster fetch failed: " + String(code));
+  }
+  http.end();
 }
 
 // ─── Pairing ─────────────────────────────────────────────────────────────────
@@ -679,6 +742,7 @@ static void sendHeartbeat() {
   req["localIp"]         = WiFi.localIP().toString();
   req["rtcValid"]        = timeSynced;
   req["firmwareVersion"] = FIRMWARE_VERSION;
+  req["pendingRecords"]  = (uint32_t)(sdRecordCount + offlineCount); // unsynced offline attendance records
   String body; serializeJson(req, body);
   String resp; int code = postJson("/api/devices/heartbeat", body, resp);
   if (code == 401) { LOG("JWT revoked — factory reset"); factoryReset(); return; }
@@ -689,8 +753,11 @@ static void sendHeartbeat() {
   }
   hbFails    = 0;
   lastSyncMs = millis();
-  // Flush any offline attendance records now that we have internet.
+  // Flush any offline sessions + attendance records now that we have internet.
   syncOfflineAttendance();
+  // Refresh the student roster every ~10 minutes (120 heartbeats × 5 s).
+  static uint32_t rosterHbCount = 0;
+  if (++rosterHbCount >= 120) { rosterHbCount = 0; downloadRoster(); }
   JsonDocument doc;
   if (deserializeJson(doc, resp)) return;
   if (doc["serverTime"].is<const char*>()) {
@@ -2499,6 +2566,33 @@ static void registerLocalHttp() {
     time_t now = time(nullptr);
     if (now < 1700000000UL) now = 1700000000UL + (millis() / 1000);
 
+    // ── Session expiry check ──────────────────────────────────────────────────
+    // Reject submissions more than 60 s after the session's declared end time.
+    if (sessionStartedAt > 0 && sessionDuration > 0) {
+      time_t sessionEnd = (time_t)(sessionStartedAt + sessionDuration + 60); // 60 s grace
+      if (now > sessionEnd) {
+        localHttp.send(403, "application/json", "{\"error\":\"Session has ended. Attendance is no longer accepted.\"}"); return;
+      }
+    }
+
+    // ── Roster validation (soft — gracefully skips if index file missing) ─────
+    // Prevents unknown index numbers from being recorded offline.
+    if (indexNum.length() && sdAvailable && SD_MMC.exists("/roster_idx.txt")) {
+      File ix = SD_MMC.open("/roster_idx.txt", FILE_READ);
+      bool found = false;
+      if (ix) {
+        while (ix.available() && !found) {
+          String line = ix.readStringUntil('\n');
+          line.trim();
+          if (line.equalsIgnoreCase(indexNum)) found = true;
+        }
+        ix.close();
+      }
+      if (!found) {
+        localHttp.send(403, "application/json", "{\"error\":\"Your student ID is not enrolled in this class.\"}"); return;
+      }
+    }
+
     // Validate against current and previous window (±20s clock tolerance)
     bool valid = (submittedCode == deriveCode(sessionSeed, (uint32_t)now)) ||
                  (submittedCode == deriveCode(sessionSeed, (uint32_t)(now - WINDOW_SECONDS)));
@@ -2592,6 +2686,7 @@ static void registerLocalHttp() {
         sDoc["lecturer"]   = lecturer;
         sDoc["startedAt"]  = (uint32_t)now;
         sDoc["duration"]   = duration;
+        sDoc["seed"]       = sessionSeed;   // needed for server-side code verification
         sDoc["synced"]     = false;
         String sl; serializeJson(sDoc, sl); sl += "\n";
         sf.print(sl); sf.close();

@@ -195,7 +195,7 @@ exports.heartbeat = async (req, res) => {
     const device = req.device;
     if (!device) return res.status(401).json({ message: 'Device authentication missing' });
 
-    const { currentNetwork, mode, localIp, rtcValid, sdOK, firmwareVersion } = req.body || {};
+    const { currentNetwork, mode, localIp, rtcValid, sdOK, firmwareVersion, pendingRecords } = req.body || {};
 
     const wasOffline = device.status === 'offline';
     device.lastHeartbeat  = new Date();
@@ -205,7 +205,8 @@ exports.heartbeat = async (req, res) => {
     if (localIp)                   device.localIp        = localIp;
     if (rtcValid !== undefined)    device.rtcValid       = !!rtcValid;
     if (sdOK     !== undefined)    device.sdOK           = !!sdOK;
-    if (firmwareVersion)           device.firmwareVersion = String(firmwareVersion).slice(0, 32);
+    if (firmwareVersion)           device.firmwareVersion     = String(firmwareVersion).slice(0, 32);
+    if (pendingRecords !== undefined) device.pendingRecordsCount = Math.max(0, Number(pendingRecords) || 0);
 
     // Track the public IP this device is reaching the server from.
     // This is the same NAT IP the school router will hand to students on the
@@ -257,29 +258,110 @@ exports.heartbeat = async (req, res) => {
 // ─── OFFLINE SYNC ────────────────────────────────────────────────────────────
 // ESP32 sends a batch of attendance records collected while it was offline.
 // Authenticated by middleware/deviceAuth (req.device is set).
-// Body: { records: [{ sessionId, userId? , indexNumber?, codeUsed, timestamp }] }
+// Body: {
+//   sessions?: [{ sessionId, courseCode, title, lecturer, startedAt, duration, seed }],
+//   records:   [{ sessionId, userId?, indexNumber?, codeUsed, timestamp }]
+// }
 //
-// For each record, we resolve the user (by _id or institutional indexNumber),
-// verify the session belongs to this device, and create an AttendanceRecord
-// (skipping duplicates and sessions that don't match this device).
+// Sessions are processed first. Local IDs ("local_*") are mapped to real
+// MongoDB session IDs so records can reference either form.
 exports.syncOfflineRecords = async (req, res) => {
   try {
     const device = req.device;
     if (!device) return res.status(401).json({ message: 'Device authentication missing' });
 
-    const { records } = req.body || {};
+    const { records, sessions } = req.body || {};
+
+    // ── Step 1: sync device-initiated sessions ────────────────────────────────
+    const sessionIdMap = {}; // localId → serverSessionId string
+
+    // Defensive size caps — a stolen device JWT must not be able to flood the DB
+    if (Array.isArray(sessions) && sessions.length > 50) {
+      return res.status(400).json({ message: 'Too many sessions in one sync (max 50)' });
+    }
+    if (Array.isArray(records) && records.length > 500) {
+      return res.status(400).json({ message: 'Too many records in one sync (max 500)' });
+    }
+
+    if (Array.isArray(sessions) && sessions.length > 0) {
+      const Course = require('../models/Course');
+
+      for (const s of sessions) {
+        try {
+          if (!s.sessionId) continue;
+
+          // Dedup: if we already synced this local session, return the existing ID
+          if (s.sessionId.startsWith('local_')) {
+            const existing = await AttendanceSession.findOne({
+              deviceLocalId: s.sessionId,
+              company: device.companyId,
+            }).select('_id').lean();
+            if (existing) { sessionIdMap[s.sessionId] = existing._id.toString(); continue; }
+          }
+
+          // Resolve course by code
+          let courseRef = null;
+          if (s.courseCode) {
+            const course = await Course.findOne({ code: s.courseCode, company: device.companyId }).select('_id').lean();
+            if (course) courseRef = course._id;
+          }
+
+          // Resolve creator: device's primary lecturer → any admin of the company
+          let creatorId = device.lecturerId || null;
+          if (!creatorId) {
+            const admin = await User.findOne({ company: device.companyId, role: { $in: ['admin', 'superadmin'] } }).select('_id').lean();
+            if (admin) creatorId = admin._id;
+          }
+          if (!creatorId) { console.warn('[sync] no creator found for device session', s.sessionId); continue; }
+
+          const startedAt = s.startedAt ? new Date(Number(s.startedAt) * 1000) : new Date();
+          const durationSecs = Number(s.duration) || 300;
+          const stoppedAt = new Date(startedAt.getTime() + durationSecs * 1000);
+
+          const newSession = await AttendanceSession.create({
+            company:            device.companyId,
+            createdBy:          creatorId,
+            title:              String(s.title || 'Attendance').slice(0, 120),
+            course:             courseRef,
+            deviceId:           device.deviceId,
+            esp32Seed:          s.seed || '',
+            durationSeconds:    durationSecs,
+            startedAt,
+            stoppedAt,
+            status:             'ended',
+            mode:               'offline-ready',
+            requiresDeviceOnline: false,
+            deviceLocalId:      s.sessionId.startsWith('local_') ? s.sessionId : null,
+          });
+
+          sessionIdMap[s.sessionId] = newSession._id.toString();
+        } catch (e) {
+          if (e.code === 11000) {
+            // Race condition — already exists, look it up
+            const dup = await AttendanceSession.findOne({ deviceLocalId: s.sessionId, company: device.companyId }).select('_id').lean();
+            if (dup) sessionIdMap[s.sessionId] = dup._id.toString();
+          } else {
+            console.error('[sync session]', s.sessionId, e.message);
+          }
+        }
+      }
+    }
+
+    // ── Step 2: sync attendance records ───────────────────────────────────────
     if (!Array.isArray(records) || records.length === 0) {
-      return res.json({ success: true, synced: 0, skipped: 0, errors: [] });
+      return res.json({ success: true, synced: 0, skipped: 0, errors: [], sessionIdMap });
     }
 
     let synced = 0, skipped = 0, errors = [];
 
     for (const rec of records) {
       try {
-        const session = rec.sessionId ? await AttendanceSession.findById(rec.sessionId) : null;
+        // Translate local session ID if needed
+        const resolvedId = sessionIdMap[rec.sessionId] || rec.sessionId;
+        const session = resolvedId ? await AttendanceSession.findById(resolvedId).catch(() => null) : null;
         if (!session || session.deviceId !== device.deviceId) { skipped++; continue; }
 
-        // Resolve user — prefer _id, fall back to indexNumber for offline-only marks
+        // Resolve user — prefer _id, fall back to indexNumber
         let userId = rec.userId || null;
         if (!userId && rec.indexNumber) {
           const idx = String(rec.indexNumber).trim().toUpperCase();
@@ -292,7 +374,8 @@ exports.syncOfflineRecords = async (req, res) => {
         }
         if (!userId) { skipped++; continue; }
 
-        const markedAt = rec.timestamp ? new Date(rec.timestamp) : new Date();
+        // Firmware stores timestamps in Unix seconds; convert to ms
+        const markedAt = rec.timestamp ? new Date(Number(rec.timestamp) * 1000) : new Date();
         const late = (markedAt - new Date(session.startedAt)) > 15 * 60 * 1000;
 
         await AttendanceRecord.create({
@@ -314,9 +397,36 @@ exports.syncOfflineRecords = async (req, res) => {
       }
     }
 
-    res.json({ success: true, synced, skipped, errors });
+    res.json({ success: true, synced, skipped, errors, sessionIdMap });
   } catch (err) {
     console.error('[device sync]', err);
+    res.status(500).json({ message: 'Server error', error: err.message });
+  }
+};
+
+// ─── DEVICE ROSTER ───────────────────────────────────────────────────────────
+// Returns all active students for this device's institution so the device can
+// validate student IDs offline during attendance marking.
+exports.getRoster = async (req, res) => {
+  try {
+    const device = req.device;
+    if (!device) return res.status(401).json({ message: 'Device authentication missing' });
+
+    const students = await User.find({
+      company: device.companyId,
+      role: 'student',
+      isActive: { $ne: false },
+    }).select('_id indexNumber IndexNumber name email').lean();
+
+    const roster = students.map(s => ({
+      id:          s._id.toString(),
+      indexNumber: (s.indexNumber || s.IndexNumber || '').toUpperCase(),
+      name:        s.name || s.email || '',
+    })).filter(s => s.indexNumber || s.id);
+
+    res.json({ ok: true, roster, count: roster.length });
+  } catch (err) {
+    console.error('[device roster]', err);
     res.status(500).json({ message: 'Server error', error: err.message });
   }
 };

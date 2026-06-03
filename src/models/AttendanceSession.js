@@ -124,6 +124,15 @@ const attendanceSessionSchema = new mongoose.Schema(
       type: Number,
       default: 0,
     },
+    // Original local ID assigned by the device (e.g. "local_AABB_1234567").
+    // Set when a device-initiated session is synced to the server so we can
+    // deduplicate re-syncs of the same session.
+    deviceLocalId: {
+      type: String,
+      default: null,
+      index: true,
+      sparse: true,
+    },
 
     // ── Session Dashboard fields ──────────────────────────────────────────────
     // Timestamp when session was paused (dashboard flow)
