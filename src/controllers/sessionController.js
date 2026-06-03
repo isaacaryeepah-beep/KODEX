@@ -246,6 +246,15 @@ exports.runWatchdog = async () => {
 
       const isOnline = device.lastHeartbeat && device.lastHeartbeat > threshold;
       if (!isOnline) {
+        // For offline-ready sessions: only kill if the device actually came
+        // online after the session started and has since gone offline.
+        // If lastHeartbeat is null or predates the session, the device never
+        // connected — leave the session alive so it can sync when device boots.
+        if (session.mode === 'offline-ready') {
+          const cameOnlineDuringSession = device.lastHeartbeat && device.lastHeartbeat >= session.startedAt;
+          if (!cameOnlineDuringSession) continue;
+        }
+
         await Device.updateOne({ deviceId: session.deviceId }, { status: 'offline' });
         await AttendanceSession.updateOne(
           { _id: session._id },
