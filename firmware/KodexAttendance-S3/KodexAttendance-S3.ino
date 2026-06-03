@@ -889,14 +889,14 @@ static void drawSplash() {
   }
 
   // ── Large "D" badge ──────────────────────────────────────────────────────
-  const int32_t BR = 36;
+  const int32_t BADGE_R = 36;
   // Outer glow ring
-  spr.drawCircle(BCX, BCY, BR + 4, COL_BORDER);
-  spr.drawCircle(BCX, BCY, BR + 3, COL_BORDER);
+  spr.drawCircle(BCX, BCY, BADGE_R + 4, COL_BORDER);
+  spr.drawCircle(BCX, BCY, BADGE_R + 3, COL_BORDER);
   // Primary filled circle
-  spr.fillCircle(BCX, BCY, BR, COL_PRIMARY);
+  spr.fillCircle(BCX, BCY, BADGE_R, COL_PRIMARY);
   // Inner highlight ring
-  spr.drawCircle(BCX, BCY, BR - 2, 0x4CBF);
+  spr.drawCircle(BCX, BCY, BADGE_R - 2, 0x4CBF);
   // "D" centered
   spr.setFont(F_MED); spr.setTextSize(1);
   spr.setTextColor(COL_WHITE, COL_PRIMARY);
@@ -908,10 +908,10 @@ static void drawSplash() {
   spr.setFont(F_LOGO); spr.setTextSize(1);
   spr.setTextColor(COL_TEXT, COL_BG);
   int32_t tw = spr.textWidth("DIKLY");
-  spr.setCursor((SW - tw) / 2, BCY + BR + 12); spr.print("DIKLY");
+  spr.setCursor((SW - tw) / 2, BCY + BADGE_R + 12); spr.print("DIKLY");
 
   // ── Cyan accent line under wordmark ─────────────────────────────────────
-  int32_t lineY = BCY + BR + 30;
+  int32_t lineY = BCY + BADGE_R + 30;
   spr.fillRect(SW / 2 - 30, lineY, 60, 2, COL_CYAN);
 
   // ── Subtitle ────────────────────────────────────────────────────────────
