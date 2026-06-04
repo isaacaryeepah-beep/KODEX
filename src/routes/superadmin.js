@@ -4,6 +4,7 @@ const authenticate = require("../middleware/auth");
 const { requireRole } = require("../middleware/role");
 const Company      = require("../models/Company");
 const User         = require("../models/User");
+const Device       = require("../models/Device");
 const PaymentLog        = require("../models/PaymentLog");
 const PlatformSettings  = require("../models/PlatformSettings");
 
@@ -304,6 +305,7 @@ router.delete("/companies/:id", async (req, res) => {
     // Delete all related data
     await Promise.all([
       require('../models/User').deleteMany({ company: companyId }),
+      Device.deleteMany({ companyId }),
       require('../models/AttendanceSession').deleteMany({ company: companyId }),
       require('../models/AttendanceRecord').deleteMany({ company: companyId }),
       require('../models/Course').deleteMany({ company: companyId }),
@@ -344,6 +346,7 @@ router.delete("/companies/by-name/:name", async (req, res) => {
       const id = company._id;
       await Promise.all([
         require('../models/User').deleteMany({ company: id }),
+        Device.deleteMany({ companyId: id }),
         require('../models/AttendanceSession').deleteMany({ company: id }),
         require('../models/AttendanceRecord').deleteMany({ company: id }),
         require('../models/Course').deleteMany({ company: id }),
@@ -625,6 +628,65 @@ router.patch("/companies/:id/subscription", async (req, res) => {
     res.json({ ok: true, subscriptionActive: company.subscriptionActive, subscriptionStatus: company.subscriptionStatus });
   } catch (err) {
     res.status(500).json({ error: "Failed to update subscription" });
+  }
+});
+
+// ── GET /api/superadmin/devices ───────────────────────────────────────────────
+// Lists all registered devices across all institutions.
+// Orphaned devices (pointing to a deleted company) are surfaced at the top.
+router.get("/devices", async (req, res) => {
+  try {
+    const devices = await Device.find({})
+      .sort({ createdAt: -1 })
+      .lean();
+
+    const companyIds = [...new Set(devices.map(d => d.companyId?.toString()).filter(Boolean))];
+    const companies  = await Company.find({ _id: { $in: companyIds } }).select('name institutionCode mode').lean();
+    const companyMap = {};
+    companies.forEach(c => { companyMap[c._id.toString()] = c; });
+
+    const enriched = devices.map(d => {
+      const company = d.companyId ? companyMap[d.companyId.toString()] : null;
+      return {
+        ...d,
+        companyName:  company?.name || null,
+        companyCode:  company?.institutionCode || null,
+        companyMode:  company?.mode || null,
+        isOrphaned:   !company,
+      };
+    });
+
+    // Orphaned first, then newest
+    enriched.sort((a, b) => (b.isOrphaned ? 1 : 0) - (a.isOrphaned ? 1 : 0));
+
+    res.json({ devices: enriched, total: enriched.length });
+  } catch (err) {
+    console.error('[superadmin devices]', err);
+    res.status(500).json({ error: 'Failed to load devices' });
+  }
+});
+
+// ── DELETE /api/superadmin/devices/:id ────────────────────────────────────────
+// Force-deletes a device record so it can be re-registered.
+// The physical ESP32 will get a 401 on its next heartbeat and auto-reset.
+router.delete("/devices/:id", async (req, res) => {
+  try {
+    const device = await Device.findById(req.params.id);
+    if (!device) return res.status(404).json({ error: 'Device not found' });
+
+    const deviceId   = device.deviceId;
+    const deviceName = device.deviceName || deviceId;
+
+    // Revoke token first so the firmware gets 401 and self-resets
+    device.token = '';
+    await device.save();
+    await Device.deleteOne({ _id: device._id });
+
+    console.log(`[superadmin] Force-deleted device ${deviceId} (${deviceName})`);
+    res.json({ ok: true, message: `Device "${deviceName}" removed. It will factory-reset on next power-on.` });
+  } catch (err) {
+    console.error('[superadmin deleteDevice]', err);
+    res.status(500).json({ error: 'Failed to delete device' });
   }
 });
 

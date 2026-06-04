@@ -116,7 +116,7 @@ exports.setLecturerPin = async (req, res) => {
 exports.clearLecturerPin = async (req, res) => {
   try {
     if (req.user.role !== 'lecturer') return res.status(403).json({ error: 'Only lecturers can clear a PIN' });
-    await User.findByIdAndUpdate(req.user._id, { $unset: { classRepPin: '' } });
+    await User.findByIdAndUpdate(req.user._id, { $unset: { classRepPin: 1 } });
     res.json({ ok: true, message: 'PIN cleared. Class reps can now connect without a PIN.' });
   } catch (e) { res.status(500).json({ error: e.message }); }
 };

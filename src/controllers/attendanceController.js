@@ -101,7 +101,7 @@ exports.startSession = async (req, res) => {
       // token, which the frontend stores and sends as x-esp32-hotspot-key.
       const inboundHotspotKey = (req.headers['x-esp32-hotspot-key'] || '').trim();
       const hotspotKeyValid   = inboundHotspotKey.length > 0 &&
-                                device.token &&
+                                device.token && device.token.length > 0 &&
                                 inboundHotspotKey === device.token;
 
       if (!hotspotKeyValid) {
@@ -1395,14 +1395,20 @@ exports.trustFlaggedDevice = async (req, res) => {
       if (!session) return res.status(403).json({ error: 'Not your session' });
     }
 
+    if (!record.user) {
+      return res.status(410).json({ error: 'Student account no longer exists' });
+    }
+
     if (!record.deviceId) {
       return res.status(400).json({ error: 'No device fingerprint on this record' });
     }
 
+    const userId = record.user._id || record.user;
+
     // Add to student's trustedDevices (skip if already there)
     await User.updateOne(
       {
-        _id:                       record.user._id || record.user,
+        _id:                       userId,
         'trustedDevices.deviceId': { $ne: record.deviceId },
       },
       {
@@ -1426,7 +1432,7 @@ exports.trustFlaggedDevice = async (req, res) => {
     await AttendanceRecord.updateMany(
       {
         company:       req.user.company,
-        user:          record.user._id || record.user,
+        user:          userId,
         deviceId:      record.deviceId,
         newDeviceFlag: true,
       },
