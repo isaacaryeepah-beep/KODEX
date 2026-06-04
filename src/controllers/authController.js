@@ -36,8 +36,8 @@ async function createMeetingIdentity(user, companyId) {
 }
 
 const SIX_HOURS_MS = 6 * 60 * 60 * 1000;
-const PAID_ROLES         = ["lecturer", "manager", "admin"];
-const ALL_PAID_ROLES     = ["lecturer", "manager", "admin", "student", "employee"];
+const PAID_ROLES         = ["lecturer", "manager", "admin", "hod"];
+const ALL_PAID_ROLES     = ["lecturer", "manager", "admin", "hod", "student", "employee"];
 const TRIAL_DAYS         = 30;
 const STUDENT_TRIAL_DAYS = 45;
 const SEMESTER_DAYS      = 112;
