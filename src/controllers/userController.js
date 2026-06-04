@@ -15,7 +15,10 @@ exports.listUsers = async (req, res) => {
       if (!ALLOWED_ROLES.includes(role)) return res.status(400).json({ error: 'Invalid role filter' });
       filter.role = role;
     }
-    if (department) filter.department = String(department).slice(0, 100);
+    if (department) {
+      const dept = String(department).trim().slice(0, 100);
+      filter.department = { $regex: new RegExp(`^${dept.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, 'i') };
+    }
 
     if (req.user.role === "lecturer") {
       const courses = await Course.find({ lecturerId: req.user._id, companyId: req.user.company });
@@ -61,7 +64,10 @@ exports.getUserStats = async (req, res) => {
 
 exports.createUser = async (req, res) => {
   try {
-    const { email, password, name, role, IndexNumber, phone, department, programme, studentLevel, studentGroup, sessionType, semester } = req.body;
+    const { password, role, phone, department, programme, studentLevel, studentGroup, sessionType, semester } = req.body;
+    const name        = req.body.name        ? req.body.name.trim()                : req.body.name;
+    const email       = req.body.email       ? req.body.email.trim().toLowerCase() : req.body.email;
+    const IndexNumber = req.body.IndexNumber ? req.body.IndexNumber.trim().toUpperCase() : req.body.IndexNumber;
     const targetRole = role || "employee";
 
     const company = await Company.findById(req.user.company);
@@ -91,7 +97,7 @@ exports.createUser = async (req, res) => {
       const hodExists = await User.findOne({
         company: company._id,
         role: "hod",
-        department: department.trim(),
+        department: { $regex: new RegExp(`^${department.trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, 'i') },
         isApproved: true,
       });
       if (!hodExists) {
@@ -142,7 +148,7 @@ exports.createUser = async (req, res) => {
       const existingHod = await User.findOne({
         company: req.user.company,
         role: "hod",
-        department: department.trim(),
+        department: { $regex: new RegExp(`^${department.trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, 'i') },
       });
       if (existingHod) {
         return res.status(400).json({
@@ -257,7 +263,7 @@ exports.updateUser = async (req, res) => {
           const clash = await User.findOne({
             company: req.user.company,
             role: "hod",
-            department: update.department,
+            department: { $regex: new RegExp(`^${update.department.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, 'i') },
             _id: { $ne: req.params.id },
           });
           if (clash) {
