@@ -1158,6 +1158,38 @@ exports.removeDevice = async (req, res) => {
   }
 };
 
+// ─── FACTORY RESET DEVICE ────────────────────────────────────────────────────
+// POST /api/devices/:deviceId/factory-reset
+// Revokes the device JWT token so the next heartbeat returns 401, which
+// triggers the firmware's built-in factoryReset() (clears Preferences +
+// ESP.restart()). The DB record is deleted immediately so the device is
+// removed from the institution list and can be re-paired fresh.
+exports.factoryResetDevice = async (req, res) => {
+  try {
+    const companyId = req.user.company;
+    const { deviceId } = req.params;
+    const ALLOWED = ['admin', 'superadmin', 'hod'];
+    if (!ALLOWED.includes(req.user.role)) {
+      return res.status(403).json({ message: 'Not authorized.' });
+    }
+    const device = await Device.findOne({ deviceId, companyId });
+    if (!device) return res.status(404).json({ message: 'Device not found.' });
+
+    // Revoke the token first — any in-flight heartbeat will get 401 and
+    // trigger the firmware's factoryReset(). Then delete the record so
+    // the device cannot authenticate again with its old JWT.
+    device.token = '';
+    await device.save();
+    await Device.deleteOne({ _id: device._id });
+
+    _auditDevice(req.user, AUDIT_ACTIONS.DELETE, device, { action: 'factory_reset', deviceName: device.deviceName });
+    res.json({ success: true, message: 'Factory reset initiated. The device will wipe itself on next heartbeat.' });
+  } catch (err) {
+    console.error('[factoryResetDevice]', err);
+    res.status(500).json({ message: 'Server error', error: err.message });
+  }
+};
+
 // ─── GET DEVICE LECTURERS ─────────────────────────────────────────────────────
 // GET /api/devices/:deviceId/lecturers
 // Returns populated assignedLecturers for the device.

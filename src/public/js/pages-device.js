@@ -920,6 +920,8 @@ async function renderAdminDevices() {
     .ad-act-setup:hover{background:#e2e8f0}
     .ad-act-remove{background:#fff0f0;color:#dc2626}
     .ad-act-remove:hover{background:#fee2e2}
+    .ad-act-factory{background:#fff7ed;color:#9a3412}
+    .ad-act-factory:hover{background:#ffedd5}
     .ad-device-card-body{padding:14px 20px;display:flex;flex-direction:column;gap:10px}
     .ad-device-dept{font-size:12px;font-weight:600;color:#475569;display:flex;align-items:center;gap:6px}
     .ad-device-dept-icon{color:#94a3b8}
@@ -1141,6 +1143,10 @@ async function adLoadDevices() {
                 <button class="ad-act-btn ad-act-setup" onclick="adOpenSetupModal('${d.deviceId}', ${setupData})">
                   <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
                   Setup
+                </button>
+                <button class="ad-act-btn ad-act-factory" onclick="adFactoryReset('${d.deviceId}','${(d.deviceName||'').replace(/'/g,"&#39;")}')" title="Wipe device to factory defaults">
+                  <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+                  Factory Reset
                 </button>
                 <button class="ad-act-btn ad-act-remove" onclick="adRemoveDevice('${d.deviceId}','${d.deviceName}')">
                   <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6M14 11v6"/><path d="M9 6V4h6v2"/></svg>
@@ -1442,6 +1448,65 @@ async function adSubmitRename(deviceId) {
   } catch (e) {
     if (errEl) { errEl.textContent = e.message || 'Failed to rename device.'; errEl.style.display = 'block'; }
     if (btn) { btn.disabled = false; btn.textContent = 'Save Name'; }
+  }
+}
+
+// ─── FACTORY RESET DEVICE ────────────────────────────────────────────────────
+function adFactoryReset(deviceId, deviceName) {
+  const existing = document.getElementById('ad-freset-modal-overlay');
+  if (existing) existing.remove();
+
+  const overlay = document.createElement('div');
+  overlay.id = 'ad-freset-modal-overlay';
+  overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:9000;display:flex;align-items:center;justify-content:center;padding:16px';
+  overlay.innerHTML = `
+    <div style="background:#fff;border-radius:16px;padding:32px;width:100%;max-width:420px;box-shadow:0 20px 60px rgba(0,0,0,.3);position:relative">
+      <div style="display:flex;align-items:center;gap:14px;margin-bottom:16px">
+        <div style="width:48px;height:48px;border-radius:12px;background:#fff7ed;border:1.5px solid #fed7aa;display:flex;align-items:center;justify-content:center;flex-shrink:0">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#ea580c" stroke-width="2"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+        </div>
+        <div>
+          <div style="font-size:17px;font-weight:700;color:#0f172a">Factory Reset Device</div>
+          <div style="font-size:12px;color:#94a3b8;margin-top:2px">${deviceId}</div>
+        </div>
+      </div>
+      <p style="font-size:13px;color:#475569;line-height:1.65;margin-bottom:12px">
+        This will <strong>permanently wipe all data</strong> on <strong>${deviceName || deviceId}</strong>:
+      </p>
+      <ul style="font-size:13px;color:#475569;line-height:2;padding-left:18px;margin-bottom:16px">
+        <li>WiFi credentials stored on the device</li>
+        <li>Institution code &amp; pairing token</li>
+        <li>All locally cached attendance records</li>
+        <li>Device configuration and settings</li>
+      </ul>
+      <div style="background:#fef2f2;border:1px solid #fecaca;border-radius:10px;padding:12px 14px;font-size:12px;color:#b91c1c;margin-bottom:20px;line-height:1.5">
+        ⚠️ The device will return to <strong>factory setup mode</strong> on its next heartbeat (within 5 seconds if online). This action cannot be undone.
+      </div>
+      <div id="ad-freset-err" style="display:none;color:#dc2626;font-size:12px;margin-bottom:10px"></div>
+      <div style="display:flex;gap:10px;justify-content:flex-end">
+        <button onclick="document.getElementById('ad-freset-modal-overlay').remove()" style="padding:10px 20px;border:1px solid #e2e8f0;border-radius:8px;background:none;cursor:pointer;font-size:13px;color:#475569;font-weight:500">Cancel</button>
+        <button id="ad-freset-submit" onclick="adSubmitFactoryReset('${deviceId}')"
+          style="padding:10px 20px;border:none;border-radius:8px;background:#dc2626;color:#fff;cursor:pointer;font-size:13px;font-weight:700">
+          Yes, Factory Reset
+        </button>
+      </div>
+    </div>`;
+  document.body.appendChild(overlay);
+  overlay.addEventListener('click', e => { if (e.target === overlay) overlay.remove(); });
+}
+
+async function adSubmitFactoryReset(deviceId) {
+  const errEl = document.getElementById('ad-freset-err');
+  const btn   = document.getElementById('ad-freset-submit');
+  if (btn) { btn.disabled = true; btn.textContent = 'Resetting…'; }
+  if (errEl) errEl.style.display = 'none';
+  try {
+    await api(`/api/devices/${deviceId}/factory-reset`, { method: 'POST' });
+    document.getElementById('ad-freset-modal-overlay')?.remove();
+    await adLoadDevices();
+  } catch (e) {
+    if (errEl) { errEl.textContent = e.message || 'Factory reset failed.'; errEl.style.display = 'block'; }
+    if (btn) { btn.disabled = false; btn.textContent = 'Yes, Factory Reset'; }
   }
 }
 
