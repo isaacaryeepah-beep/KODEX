@@ -874,10 +874,13 @@ exports.listAllDevices = async (req, res) => {
       return res.status(403).json({ message: 'Not authorized.' });
     }
 
-    const filter = { companyId };
-    // HODs see all institution devices (not filtered by department) so they can
-    // manage newly-paired devices that haven't been assigned yet.
-    // The department context is advisory, not a hard filter.
+    // HOD: own department + unassigned devices. Admin: everything.
+    const filter = req.user.role === 'hod'
+      ? { companyId, $or: [
+          { assignedDepartment: req.user.department },
+          { assignedDepartment: { $in: [null, ''] } },
+        ] }
+      : { companyId };
 
     const devices = await Device.find(filter)
       .populate('lecturerId', 'name email role')
