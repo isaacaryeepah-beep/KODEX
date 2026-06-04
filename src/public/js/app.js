@@ -6542,8 +6542,8 @@ async function showStartSessionModal(offlineOverride) {
     return;
   }
 
-  // Device registered but offline — block and require lecturer to power it on
-  if (!checkError && deviceStatus && deviceStatus.hasDevice && !deviceStatus.deviceOnline) {
+  // Device registered but offline — let lecturer choose to retry or start offline
+  if (!offlineOverride && !checkError && deviceStatus && deviceStatus.hasDevice && !deviceStatus.deviceOnline) {
     const lastSeen = deviceStatus.lastSeenAt
       ? `Last seen: ${new Date(deviceStatus.lastSeenAt).toLocaleString()}`
       : 'Last seen: Never';
@@ -6554,7 +6554,7 @@ async function showStartSessionModal(offlineOverride) {
           <h3 style="margin-bottom:8px">Device is Offline</h3>
           <p style="font-size:13px;color:var(--text-muted);margin-bottom:16px;line-height:1.6">
             The classroom device is not responding.<br>
-            Power it on and wait for it to connect, then retry.
+            Power it on and retry, or start an offline session — the device will sync the code when it reconnects.
           </p>
           <div style="background:#fef3c7;border:1px solid #fde68a;border-radius:8px;padding:10px 14px;font-size:12px;color:#92400e;margin-bottom:20px;text-align:left">
             <strong>${lastSeen}</strong><br>
@@ -6562,7 +6562,8 @@ async function showStartSessionModal(offlineOverride) {
           </div>
           <div style="display:flex;gap:8px;justify-content:center;flex-wrap:wrap">
             <button class="btn btn-secondary btn-sm" onclick="closeModal()">Cancel</button>
-            <button class="btn btn-primary btn-sm" onclick="showStartSessionModal()">↻ Retry</button>
+            <button class="btn btn-secondary btn-sm" onclick="showStartSessionModal()">↻ Retry</button>
+            <button class="btn btn-primary btn-sm" onclick="showStartSessionModal('offline')">Start Offline Session</button>
           </div>
         </div>
       </div>`;
@@ -6648,10 +6649,17 @@ async function showStartSessionModal(offlineOverride) {
     }
   } catch(_) { /* non-critical */ }
 
+  const offlineBanner = offlineOverride ? `
+    <div style="background:#fef3c7;border:1px solid #fde68a;border-radius:8px;padding:10px 14px;font-size:12px;color:#92400e;margin-bottom:14px;display:flex;align-items:flex-start;gap:8px">
+      <span style="font-size:16px;flex-shrink:0">📶</span>
+      <div><strong>Offline Mode</strong> — The classroom device is not responding. The session will start and the device will sync the rotating code when it reconnects. Students can still mark attendance using the code shown on the device screen.</div>
+    </div>` : '';
+
   container.innerHTML = `
     <div class="modal-overlay" onclick="closeModal(event)">
-      <div class="modal" onclick="event.stopPropagation()">
+      <div class="modal" onclick="event.stopPropagation()" data-offline="${offlineOverride ? '1' : ''}">
         <h3>Start New Session</h3>
+        ${offlineBanner}
         ${groupBadge}
         <div class="form-group">
           <label>Course <span style="color:red">*</span></label>
@@ -6765,7 +6773,9 @@ async function startSession() {
       body: JSON.stringify({ title, courseId, ...(deviceId ? { deviceId } : {}) }),
     });
     closeModal();
-    if (result.warning) {
+    if (result.offlineMode) {
+      toastInfo('Session started in offline mode — device will sync when it reconnects.');
+    } else if (result.warning) {
       if (container) container.innerHTML = `
         <div class="modal-overlay" onclick="closeModal(event)">
           <div class="modal" onclick="event.stopPropagation()" style="max-width:440px">
