@@ -1229,7 +1229,7 @@ exports.getLecturersForAssignment = async (req, res) => {
     const Course = require('../models/Course');
     const CourseLecturerAssignment = require('../models/CourseLecturerAssignment');
 
-    const lecturers = await User.find({ company: companyId, role: 'lecturer' }, 'name email').lean();
+    const lecturers = await User.find({ company: companyId, role: 'lecturer' }, 'name email department').lean();
 
     // Gather courses for each lecturer from both legacy field and CourseLecturerAssignment
     const result = await Promise.all(lecturers.map(async (lec) => {
