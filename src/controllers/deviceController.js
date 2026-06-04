@@ -651,13 +651,13 @@ exports.renameDevice = async (req, res) => {
     const { deviceName } = req.body;
     if (!deviceName?.trim()) return res.status(400).json({ message: 'Device name is required.' });
 
-    const isAdmin = ['admin', 'superadmin'].includes(req.user.role);
-    const query = isAdmin
+    const isPrivileged = ['admin', 'superadmin', 'hod'].includes(req.user.role);
+    const query = isPrivileged
       ? { companyId: req.user.company, ...(req.body.deviceId ? { deviceId: req.body.deviceId } : {}) }
       : { lecturerId: req.user._id, companyId: req.user.company };
 
     const device = await Device.findOneAndUpdate(query, { deviceName: deviceName.trim() }, { new: true });
-    if (!device) return res.status(404).json({ message: 'Device not found or not yours.' });
+    if (!device) return res.status(404).json({ message: 'Device not found or not authorized.' });
 
     res.json({ success: true, deviceName: device.deviceName });
   } catch (err) {
@@ -875,9 +875,9 @@ exports.listAllDevices = async (req, res) => {
     }
 
     const filter = { companyId };
-    if (req.user.role === 'hod' && req.user.department) {
-      filter.assignedDepartment = req.user.department;
-    }
+    // HODs see all institution devices (not filtered by department) so they can
+    // manage newly-paired devices that haven't been assigned yet.
+    // The department context is advisory, not a hard filter.
 
     const devices = await Device.find(filter)
       .populate('lecturerId', 'name email role')

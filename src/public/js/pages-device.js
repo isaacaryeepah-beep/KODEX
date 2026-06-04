@@ -914,6 +914,8 @@ async function renderAdminDevices() {
     .ad-status-label-offline{color:#94a3b8}
     .ad-device-actions{margin-left:auto;display:flex;gap:6px;flex-shrink:0}
     .ad-act-btn{display:inline-flex;align-items:center;gap:4px;border-radius:8px;padding:5px 11px;font-size:11px;font-weight:600;cursor:pointer;border:none;transition:background .15s}
+    .ad-act-rename{background:#f0fdf4;color:#166534}
+    .ad-act-rename:hover{background:#dcfce7}
     .ad-act-setup{background:#f1f5f9;color:#475569}
     .ad-act-setup:hover{background:#e2e8f0}
     .ad-act-remove{background:#fff0f0;color:#dc2626}
@@ -1132,6 +1134,10 @@ async function adLoadDevices() {
                 </div>
               </div>
               <div class="ad-device-actions">
+                <button class="ad-act-btn ad-act-rename" onclick="adRenameDevice('${d.deviceId}','${(d.deviceName||'').replace(/'/g,"&#39;")}')" title="Rename device">
+                  <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+                  Rename
+                </button>
                 <button class="ad-act-btn ad-act-setup" onclick="adOpenSetupModal('${d.deviceId}', ${setupData})">
                   <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
                   Setup
@@ -1382,6 +1388,61 @@ async function adSubmitSetup(deviceId) {
 
   document.getElementById('ad-setup-modal-overlay')?.remove();
   await adLoadDevices();
+}
+
+// ─── RENAME DEVICE ───────────────────────────────────────────────────────────
+async function adRenameDevice(deviceId, currentName) {
+  const existing = document.getElementById('ad-rename-modal-overlay');
+  if (existing) existing.remove();
+
+  const overlay = document.createElement('div');
+  overlay.id = 'ad-rename-modal-overlay';
+  overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:9000;display:flex;align-items:center;justify-content:center;padding:16px';
+  overlay.innerHTML = `
+    <div style="background:#fff;border-radius:16px;padding:28px;width:100%;max-width:400px;box-shadow:0 20px 60px rgba(0,0,0,.25);position:relative">
+      <button onclick="document.getElementById('ad-rename-modal-overlay').remove()" style="position:absolute;top:14px;right:14px;background:none;border:none;cursor:pointer;font-size:20px;color:#94a3b8">&times;</button>
+      <div style="font-size:16px;font-weight:700;margin-bottom:4px;color:#0f172a">Rename Device</div>
+      <div style="font-size:12px;color:#94a3b8;margin-bottom:20px">ID: ${deviceId}</div>
+      <label style="display:block;font-size:12px;font-weight:600;color:#475569;margin-bottom:6px">New device name</label>
+      <input id="ad-rename-input" type="text" value="${(currentName || '').replace(/"/g,'&quot;')}"
+        placeholder="e.g. CS-Lab-A, Room-201-Device"
+        style="width:100%;padding:10px 12px;border:1.5px solid #e2e8f0;border-radius:8px;font-size:14px;outline:none;margin-bottom:6px"
+        oninput="this.style.borderColor='#6366f1'"
+        onkeydown="if(event.key==='Enter')adSubmitRename('${deviceId}')"/>
+      <div id="ad-rename-err" style="display:none;color:#dc2626;font-size:12px;margin-bottom:10px"></div>
+      <div style="display:flex;gap:10px;justify-content:flex-end;margin-top:16px">
+        <button onclick="document.getElementById('ad-rename-modal-overlay').remove()" style="padding:9px 18px;border:1px solid #e2e8f0;border-radius:8px;background:none;cursor:pointer;font-size:13px;color:#475569">Cancel</button>
+        <button id="ad-rename-submit" onclick="adSubmitRename('${deviceId}')" style="padding:9px 18px;border:none;border-radius:8px;background:#6366f1;color:#fff;cursor:pointer;font-size:13px;font-weight:600">Save Name</button>
+      </div>
+    </div>`;
+  document.body.appendChild(overlay);
+  overlay.addEventListener('click', e => { if (e.target === overlay) overlay.remove(); });
+  setTimeout(() => document.getElementById('ad-rename-input')?.focus(), 50);
+}
+
+async function adSubmitRename(deviceId) {
+  const input  = document.getElementById('ad-rename-input');
+  const errEl  = document.getElementById('ad-rename-err');
+  const btn    = document.getElementById('ad-rename-submit');
+  const newName = input?.value?.trim();
+  if (!newName) {
+    if (errEl) { errEl.textContent = 'Device name cannot be empty.'; errEl.style.display = 'block'; }
+    return;
+  }
+  if (btn) { btn.disabled = true; btn.textContent = 'Saving…'; }
+  if (errEl) errEl.style.display = 'none';
+  try {
+    await api('/api/devices/my/rename', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ deviceName: newName, deviceId }),
+    });
+    document.getElementById('ad-rename-modal-overlay')?.remove();
+    await adLoadDevices();
+  } catch (e) {
+    if (errEl) { errEl.textContent = e.message || 'Failed to rename device.'; errEl.style.display = 'block'; }
+    if (btn) { btn.disabled = false; btn.textContent = 'Save Name'; }
+  }
 }
 
 // ─── REMOVE DEVICE ────────────────────────────────────────────────────────────
