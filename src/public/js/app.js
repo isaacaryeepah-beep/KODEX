@@ -22,7 +22,7 @@ function _loadScript(src) {
 // Role → scripts that should be preloaded right after login so first navigation is instant.
 const _ROLE_SCRIPTS = {
   student:    ['/js/pages-academic.js'],
-  lecturer:   ['/js/pages-academic.js'],
+  lecturer:   ['/js/pages-academic.js', '/js/pages-device.js'],
   admin:      ['/js/pages-academic.js', '/js/pages-device.js', '/js/pages-corporate.js'],
   manager:    ['/js/manager-portal.js', '/js/pages-corporate.js'],
   hod:        ['/js/manager-portal.js', '/js/pages-academic.js'],

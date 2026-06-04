@@ -513,6 +513,7 @@ exports.getMyDevice = async (req, res) => {
         registeredAt:       device.registeredAt,
         activeSession:      activeSession ? { sessionId: activeSession._id, status: activeSession.status } : null,
         allowedNetworks:    device.allowedNetworks.map(n => ({ ssid: n.ssid, priority: n.priority })),
+        pendingRecordsCount: device.pendingRecordsCount || 0,
       }
     });
   } catch (err) {
