@@ -111,3 +111,12 @@ exports.setLecturerPin = async (req, res) => {
     res.json({ ok: true, message: 'PIN set successfully' });
   } catch (e) { res.status(500).json({ error: e.message }); }
 };
+
+// DELETE /api/class-rep/set-pin — lecturer clears their PIN (allows open connection)
+exports.clearLecturerPin = async (req, res) => {
+  try {
+    if (req.user.role !== 'lecturer') return res.status(403).json({ error: 'Only lecturers can clear a PIN' });
+    await User.findByIdAndUpdate(req.user._id, { $unset: { classRepPin: '' } });
+    res.json({ ok: true, message: 'PIN cleared. Class reps can now connect without a PIN.' });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+};

@@ -210,6 +210,7 @@ function _devPairedHTML(d) {
   <div style="display:flex;gap:8px;align-items:center">
     <input id="lecturer-pin-input" type="password" inputmode="numeric" maxlength="4" placeholder="4 digits" style="width:100px;padding:8px 12px;border:1.5px solid #e2e8f0;border-radius:8px;font-size:16px;letter-spacing:4px">
     <button onclick="saveLecturerPin()" style="padding:8px 16px;background:#1e293b;color:#fff;border:none;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer">Save PIN</button>
+    <button onclick="clearLecturerPin()" style="padding:8px 14px;background:transparent;color:#ef4444;border:1.5px solid #ef4444;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer">Clear</button>
   </div>
 </div>
 

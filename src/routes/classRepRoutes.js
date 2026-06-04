@@ -8,5 +8,6 @@ router.get('/lecturers',   authenticate, ctrl.getCourseLecturers);
 router.post('/connect',    authenticate, ctrl.connectDevice);
 router.post('/disconnect', authenticate, ctrl.disconnectDevice);
 router.post('/set-pin',    authenticate, ctrl.setLecturerPin);
+router.delete('/set-pin',  authenticate, ctrl.clearLecturerPin);
 
 module.exports = router;
