@@ -1119,10 +1119,21 @@ async function api(method, path, body, extraHeaders) {
   try { data = await res.json(); } catch (e) { /* non-JSON response */ }
 
   if (!res.ok) {
+    if (res.status === 402 && data.subscriptionExpired) { _subBlock(data.message, data.isAdmin); }
     const msg = data.error || data.message || ('Server error ' + res.status);
     throw new Error(msg);
   }
   return data;
+}
+
+function _subBlock(msg, isAdmin) {
+  if (document.getElementById('_sub-bl')) return;
+  const d = document.createElement('div');
+  d.id = '_sub-bl';
+  d.style.cssText = 'position:fixed;inset:0;z-index:99999;background:rgba(15,23,42,.97);display:flex;align-items:center;justify-content:center;padding:24px;box-sizing:border-box';
+  d.innerHTML = `<div style="background:#fff;border-radius:16px;max-width:440px;width:100%;padding:36px 28px;text-align:center"><div style="font-size:40px;margin-bottom:16px">🔒</div><h2 style="margin:0 0 12px;font-size:20px;color:#0f172a">Subscription Expired</h2><p style="margin:0 0 24px;font-size:14px;color:#475569;line-height:1.6">${msg||"Your institution's subscription has expired."}</p>${isAdmin?`<button onclick="location.href='/'" style="background:#6366f1;color:#fff;border:none;border-radius:8px;padding:11px 22px;font-size:14px;font-weight:600;cursor:pointer;width:100%">Go to Subscription Page</button>`:'<div style="background:#f8fafc;border-radius:8px;padding:14px;font-size:13px;color:#64748b">Contact your <strong>institution administrator</strong> to renew.</div>'}<p style="margin:16px 0 0;font-size:12px;color:#94a3b8">Support: <strong>support@dikly.sbs</strong></p></div>`;
+  document.body.appendChild(d);
+  document.body.style.overflow = 'hidden';
 }
 
 // ══════════════════════════════════════════════════════════════════

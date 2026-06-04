@@ -22,7 +22,7 @@ function _loadScript(src) {
 // Role → scripts that should be preloaded right after login so first navigation is instant.
 const _ROLE_SCRIPTS = {
   student:    ['/js/pages-academic.js'],
-  lecturer:   ['/js/pages-academic.js'],
+  lecturer:   ['/js/pages-academic.js', '/js/pages-device.js'],
   admin:      ['/js/pages-academic.js', '/js/pages-device.js', '/js/pages-corporate.js'],
   manager:    ['/js/manager-portal.js', '/js/pages-corporate.js'],
   hod:        ['/js/manager-portal.js', '/js/pages-academic.js'],
@@ -1086,9 +1086,14 @@ async function api(path, options = {}) {
   if (res.headers.get('content-type')?.includes('application/json')) {
     const data = await res.json();
     if (!res.ok) {
-      // Subscription gate — redirect lecturer to subscription page automatically
+      // 402 = institution or personal subscription expired — hard full-screen block
+      if (res.status === 402 && data.subscriptionExpired) {
+        showSubscriptionBlock(data.message, data.isAdmin);
+        throw new Error(data.message || 'Subscription expired');
+      }
+      // Legacy 403 subscription gate (old middleware responses)
       if (res.status === 403 && (data.subscriptionExpired || data.subscriptionRequired)) {
-        showSubscriptionGate(data.message);
+        showSubscriptionBlock(data.message, data.isAdmin);
         throw new Error(data.message || data.error || 'Subscription required');
       }
       const err = new Error(data.message || data.error || 'Request failed');
@@ -1109,9 +1114,9 @@ async function apiUpload(urlPath, formData, method = 'POST') {
   if (res.headers.get('content-type')?.includes('application/json')) {
     const data = await res.json();
     if (!res.ok) {
-      if (res.status === 403 && data.subscriptionRequired) {
-        showSubscriptionGate(data.message);
-        throw new Error(data.error || 'Subscription required');
+      if ((res.status === 402 || res.status === 403) && (data.subscriptionExpired || data.subscriptionRequired)) {
+        showSubscriptionBlock(data.message, data.isAdmin);
+        throw new Error(data.error || 'Subscription expired');
       }
       throw new Error(data.error || data.message || 'Request failed');
     }
@@ -1121,44 +1126,61 @@ async function apiUpload(urlPath, formData, method = 'POST') {
   return res;
 }
 
-let _subGateFired = false;
-function showSubscriptionGate(message) {
-  // HODs never pay — ignore subscription gates for them
-  if (currentUser && currentUser.role === 'hod') return;
+let _subBlockActive = false;
+function showSubscriptionBlock(message, isAdmin) {
+  if (_subBlockActive) return;
+  _subBlockActive = true;
 
-  // If the user already has an active personal subscription, suppress the gate.
-  // This fires when multiple parallel API calls return 403 before the middleware
-  // catches up, or during login before the server fix propagates.
-  if (currentUserTrial?.isSubscribed) return;
-  if (currentUser?.subscriptionExpiry && new Date(currentUser.subscriptionExpiry) > new Date()) return;
+  const msg = message || 'Your subscription has expired. Access is suspended.';
+  const isAdminUser = isAdmin || (currentUser && currentUser.role === 'admin');
+  const institutionName = currentUser?.company?.name || currentUser?.institutionName || '';
 
-  // Deduplicate — multiple concurrent 403s should show only one toast
-  if (_subGateFired) return;
-  _subGateFired = true;
-  setTimeout(() => { _subGateFired = false; }, 3000);
+  // Remove any existing block overlay
+  const existing = document.getElementById('_sub-block-overlay');
+  if (existing) existing.remove();
 
-  // Navigate to subscription page and show a toast if possible
-  try {
-    if (typeof navigateTo === 'function') navigateTo('subscription');
-    const msg = message || 'Your 30-day free trial has expired. Subscribe to continue using DIKLY.';
-    if (typeof toastError === 'function') {
-      toastError(msg);
-    } else {
-      // Fallback if toast not yet available
-      const content = document.getElementById('main-content');
-      if (content) {
-        content.innerHTML = `
-          <div class="card" style="max-width:480px;margin:40px auto;text-align:center;padding:32px">
-            <div style="font-size:40px;margin-bottom:16px">🔒</div>
-            <h3 style="margin-bottom:8px">Subscription Required</h3>
-            <p style="color:var(--text-muted);margin-bottom:20px">${msg}</p>
-            <button class="btn btn-primary" onclick="navigateTo('subscription')">View Subscription</button>
-          </div>`;
+  const overlay = document.createElement('div');
+  overlay.id = '_sub-block-overlay';
+  overlay.style.cssText = [
+    'position:fixed', 'inset:0', 'z-index:99999',
+    'background:rgba(15,23,42,0.97)',
+    'display:flex', 'align-items:center', 'justify-content:center',
+    'padding:24px', 'box-sizing:border-box',
+  ].join(';');
+
+  overlay.innerHTML = `
+    <div style="background:#fff;border-radius:16px;max-width:460px;width:100%;padding:40px 32px;text-align:center;box-shadow:0 25px 60px rgba(0,0,0,.5)">
+      <div style="width:72px;height:72px;border-radius:50%;background:#fef2f2;display:flex;align-items:center;justify-content:center;margin:0 auto 20px;font-size:32px">🔒</div>
+      <h2 style="margin:0 0 8px;font-size:22px;font-weight:700;color:#0f172a">Subscription Expired</h2>
+      ${institutionName ? `<p style="margin:0 0 16px;font-size:13px;font-weight:600;color:#6366f1;letter-spacing:.4px;text-transform:uppercase">${esc(institutionName)}</p>` : ''}
+      <p style="margin:0 0 28px;font-size:14px;color:#475569;line-height:1.6">${esc(msg)}</p>
+      ${isAdminUser
+        ? `<div style="display:flex;flex-direction:column;gap:10px">
+            <button onclick="document.getElementById('_sub-block-overlay').style.display='none';navigateTo('subscription');"
+              style="background:#6366f1;color:#fff;border:none;border-radius:8px;padding:12px 24px;font-size:14px;font-weight:600;cursor:pointer;width:100%">
+              Renew Subscription
+            </button>
+            <p style="margin:0;font-size:12px;color:#94a3b8">Renewing will immediately restore access for all users.</p>
+          </div>`
+        : `<div style="background:#f8fafc;border-radius:8px;padding:14px 16px;text-align:left">
+            <p style="margin:0 0 4px;font-size:13px;font-weight:600;color:#0f172a">What to do</p>
+            <p style="margin:0;font-size:13px;color:#64748b;line-height:1.5">Contact your <strong>institution administrator</strong> and ask them to renew the DIKLY subscription. All features will be restored immediately after renewal.</p>
+          </div>`
       }
-    }
-  } catch(e) {
-    console.warn('showSubscriptionGate:', e.message);
-  }
+      <p style="margin:20px 0 0;font-size:12px;color:#94a3b8">Need help? Contact support at <strong>support@dikly.sbs</strong></p>
+    </div>
+  `;
+
+  document.body.appendChild(overlay);
+
+  // Prevent any interaction with the app behind the overlay
+  document.body.style.overflow = 'hidden';
+}
+
+// Legacy alias — kept for any old callers
+function showSubscriptionGate(message) {
+  const isAdmin = currentUser && currentUser.role === 'admin';
+  showSubscriptionBlock(message, isAdmin);
 }
 
 function timeAgo(dateStr) {
@@ -7334,9 +7356,9 @@ async function showCreateUserModal() {
           <label>Role</label>
           <select id="new-user-role" onchange="toggleUserFields(); onCreateUserRoleChange();">${roles}</select>
         </div>` : `<input type="hidden" id="new-user-role" value="${defaultRole}">`}
-        <div class="form-group" id="new-user-email-group" ${defaultRole === 'student' ? 'class="hidden"' : ''}>
-          <label>Email</label>
-          <input type="email" id="new-user-email" placeholder="user@company.com">
+        <div class="form-group" id="new-user-email-group">
+          <label>Email <span style="color:red">*</span></label>
+          <input type="email" id="new-user-email" placeholder="user@example.com">
         </div>
         <div class="form-group ${defaultRole !== 'student' ? 'hidden' : ''}" id="new-user-index-group">
           <label>Student ID / Index Number <span style="color:red">*</span></label>
@@ -7427,7 +7449,7 @@ async function showCreateUserModal() {
 
 function toggleUserFields() {
   const role = document.getElementById('new-user-role').value;
-  document.getElementById('new-user-email-group').classList.toggle('hidden', role === 'student');
+  // Email is required for ALL roles — never hide it
   document.getElementById('new-user-index-group').classList.toggle('hidden', role !== 'student');
   const deptGroup  = document.getElementById('new-user-dept-group');
   const deptReq    = document.getElementById('new-user-dept-req');
@@ -7455,6 +7477,12 @@ async function createUser() {
       password: document.getElementById('new-user-password').value,
       role,
     };
+    // Email is required for all roles
+    const email = document.getElementById('new-user-email').value.trim();
+    if (!email) { toastWarning('Email address is required.'); return; }
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) { toastWarning('Please enter a valid email address.'); return; }
+    body.email = email;
+
     if (role === 'student') {
       const idx = document.getElementById('new-user-index').value.trim().toUpperCase();
       if (!idx) { toastWarning('Student ID / Index Number is required.'); return; }
@@ -7476,8 +7504,6 @@ async function createUser() {
       body.studentGroup = studentGroup;
       body.sessionType  = sessionType;
       body.semester     = semester;
-    } else {
-      body.email = document.getElementById('new-user-email').value;
     }
     const phone = document.getElementById('new-user-phone').value.trim();
     if (!phone) { toastWarning('Phone number is required.'); return; }

@@ -108,8 +108,8 @@ exports.createUser = async (req, res) => {
       }
     }
 
-    // Check for duplicate email across the institution (non-student roles)
-    if (email && targetRole !== 'student') {
+    // Check for duplicate email across the institution (all roles)
+    if (email) {
       const emailExists = await User.findOne({ email: email.toLowerCase().trim(), company: req.user.company });
       if (emailExists) {
         return res.status(400).json({
@@ -153,6 +153,12 @@ exports.createUser = async (req, res) => {
       return res.status(400).json({ error: "Department is required when creating a student." });
     }
 
+    // Email is required for all roles
+    if (!email) {
+      return res.status(400).json({ error: "Email is required" });
+    }
+    userData.email = email;
+
     if (targetRole === "student") {
       if (!IndexNumber) {
         return res.status(400).json({ error: "Index number is required for students" });
@@ -164,11 +170,6 @@ exports.createUser = async (req, res) => {
       if (studentGroup) userData.studentGroup = studentGroup.trim().toUpperCase();
       if (sessionType)  userData.sessionType  = sessionType.trim();
       if (semester)     userData.semester     = semester.trim();
-    } else {
-      if (!email) {
-        return res.status(400).json({ error: "Email is required" });
-      }
-      userData.email = email;
     }
 
     if (targetRole === "employee") {
