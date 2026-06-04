@@ -1254,10 +1254,11 @@ exports.getLecturersForAssignment = async (req, res) => {
       }
 
       return {
-        _id:     lec._id,
-        name:    lec.name,
-        email:   lec.email,
-        courses: Array.from(courseMap.values()),
+        _id:        lec._id,
+        name:       lec.name,
+        email:      lec.email,
+        department: lec.department || null,
+        courses:    Array.from(courseMap.values()),
       };
     }));
 

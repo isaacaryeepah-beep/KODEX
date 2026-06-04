@@ -1235,7 +1235,7 @@ async function adOpenAssignModal(deviceId) {
 
     const lecSel = document.getElementById('ad-lec-select');
     lecSel.innerHTML = `<option value="">— Select lecturer —</option>` +
-      lecturers.map(l => `<option value="${l._id}">${l.name}${l.department ? ' · ' + l.department : ''}</option>`).join('');
+      lecturers.map(l => `<option value="${l._id}">${esc(l.name)}${l.department ? ' · ' + esc(l.department) : ''}</option>`).join('');
 
     lecSel.addEventListener('change', () => {
       const lec = lecturers.find(l => l._id === lecSel.value);
