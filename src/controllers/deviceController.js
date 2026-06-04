@@ -618,6 +618,12 @@ exports.assignGroup = async (req, res) => {
     const device = await Device.findOne({ deviceId, companyId: req.user.company });
     if (!device) return res.status(404).json({ message: 'Device not found.' });
 
+    // HOD can only manage devices in their own department (or unassigned ones)
+    if (req.user.role === 'hod' && device.assignedDepartment &&
+        device.assignedDepartment !== req.user.department) {
+      return res.status(403).json({ message: 'You can only manage devices assigned to your department.' });
+    }
+
     device.assignedGroup      = group.trim().toUpperCase();
     device.assignedLevel      = String(level).trim();
     device.assignedDepartment = department ? department.trim() : device.assignedDepartment;
@@ -1044,6 +1050,12 @@ exports.assignLecturer = async (req, res) => {
     const device = await Device.findOne({ deviceId, companyId: req.user.company });
     if (!device) return res.status(404).json({ message: 'Device not found.' });
 
+    // HOD can only manage devices in their own department (or unassigned ones)
+    if (req.user.role === 'hod' && device.assignedDepartment &&
+        device.assignedDepartment !== req.user.department) {
+      return res.status(403).json({ message: 'You can only manage devices assigned to your department.' });
+    }
+
     // Lecturer must exist, belong to company, and be a lecturer
     const lecturer = await User.findOne({ _id: lecturerId, company: req.user.company, role: 'lecturer' });
     if (!lecturer) return res.status(404).json({ message: 'Lecturer not found or is not a lecturer role.' });
@@ -1120,6 +1132,12 @@ exports.removeLecturer = async (req, res) => {
     const device = await Device.findOne({ deviceId, companyId: req.user.company });
     if (!device) return res.status(404).json({ message: 'Device not found.' });
 
+    // HOD can only manage devices in their own department (or unassigned ones)
+    if (req.user.role === 'hod' && device.assignedDepartment &&
+        device.assignedDepartment !== req.user.department) {
+      return res.status(403).json({ message: 'You can only manage devices assigned to your department.' });
+    }
+
     const before = (device.assignedLecturers || []).length;
     device.assignedLecturers = (device.assignedLecturers || []).filter(a =>
       !(a.lecturerId.toString() === lecturerId.toString() && a.courseId.toString() === courseId.toString())
@@ -1153,6 +1171,13 @@ exports.removeDevice = async (req, res) => {
     const { deviceId } = req.params;
     const device = await Device.findOne({ deviceId, companyId });
     if (!device) return res.status(404).json({ message: 'Device not found' });
+
+    // HOD can only remove devices in their own department (or unassigned ones)
+    if (req.user.role === 'hod' && device.assignedDepartment &&
+        device.assignedDepartment !== req.user.department) {
+      return res.status(403).json({ message: 'You can only remove devices assigned to your department.' });
+    }
+
     await Device.deleteOne({ _id: device._id });
     res.json({ message: 'Device removed' });
   } catch (err) {
@@ -1177,6 +1202,12 @@ exports.factoryResetDevice = async (req, res) => {
     }
     const device = await Device.findOne({ deviceId, companyId });
     if (!device) return res.status(404).json({ message: 'Device not found.' });
+
+    // HOD can only factory reset devices in their own department
+    if (req.user.role === 'hod' && device.assignedDepartment &&
+        device.assignedDepartment !== req.user.department) {
+      return res.status(403).json({ message: 'You can only reset devices assigned to your department.' });
+    }
 
     // Revoke the token first — any in-flight heartbeat will get 401 and
     // trigger the firmware's factoryReset(). Then delete the record so
@@ -1232,7 +1263,12 @@ exports.getLecturersForAssignment = async (req, res) => {
     const Course = require('../models/Course');
     const CourseLecturerAssignment = require('../models/CourseLecturerAssignment');
 
-    const lecturers = await User.find({ company: companyId, role: 'lecturer' }, 'name email department').lean();
+    // HOD sees only lecturers in their own department
+    const lecturerFilter = { company: companyId, role: 'lecturer' };
+    if (req.user.role === 'hod' && req.user.department) {
+      lecturerFilter.department = req.user.department;
+    }
+    const lecturers = await User.find(lecturerFilter, 'name email department').lean();
 
     // Gather courses for each lecturer from both legacy field and CourseLecturerAssignment
     const result = await Promise.all(lecturers.map(async (lec) => {
