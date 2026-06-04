@@ -5,12 +5,17 @@ const Company = require("../models/Company");
 const Course = require("../models/Course");
 const { ROLE_HIERARCHY } = require("../middleware/role");
 
+const ALLOWED_ROLES = ['student', 'lecturer', 'admin', 'superadmin', 'hod', 'manager', 'employee', 'class_rep'];
+
 exports.listUsers = async (req, res) => {
   try {
     const { role, department } = req.query;
     const filter = { ...req.companyFilter };
-    if (role) filter.role = role;
-    if (department) filter.department = department;
+    if (role) {
+      if (!ALLOWED_ROLES.includes(role)) return res.status(400).json({ error: 'Invalid role filter' });
+      filter.role = role;
+    }
+    if (department) filter.department = String(department).slice(0, 100);
 
     if (req.user.role === "lecturer") {
       const courses = await Course.find({ lecturerId: req.user._id, companyId: req.user.company });
@@ -303,6 +308,12 @@ exports.deactivateUser = async (req, res) => {
       return res.status(403).json({ error: "Cannot deactivate user with equal or higher role" });
     }
 
+    // Prevent deactivating the last active admin
+    if (user.role === 'admin') {
+      const activeAdmins = await User.countDocuments({ ...req.companyFilter, role: 'admin', isActive: true });
+      if (activeAdmins <= 1) return res.status(409).json({ error: "Cannot deactivate the last admin account" });
+    }
+
     user.isActive = false;
     await user.save({ validateBeforeSave: false });
     res.json({ message: "User deactivated successfully" });
@@ -350,6 +361,12 @@ exports.deleteUser = async (req, res) => {
 
     if (ROLE_HIERARCHY[user.role] >= ROLE_HIERARCHY[req.user.role]) {
       return res.status(403).json({ error: "Cannot delete user with equal or higher role" });
+    }
+
+    // Prevent deleting the last admin
+    if (user.role === 'admin') {
+      const activeAdmins = await User.countDocuments({ ...req.companyFilter, role: 'admin', isActive: true });
+      if (activeAdmins <= 1) return res.status(409).json({ error: "Cannot delete the last admin account" });
     }
 
     await User.findByIdAndDelete(user._id);
@@ -467,7 +484,14 @@ exports.bulkImportStudents = async (req, res) => {
           mustChangePassword: true,
         };
 
-        if (row.email) userData.email = row.email.toLowerCase().trim();
+        if (row.email) {
+          if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(row.email)) {
+            results.errors.push({ row: row.IndexNumber, error: `Invalid email: ${row.email}` });
+            results.skipped++;
+            continue;
+          }
+          userData.email = row.email.toLowerCase().trim();
+        }
         if (row.phone) {
           try { userData.phone = normalisePhone(row.phone); } catch (_) {}
         }

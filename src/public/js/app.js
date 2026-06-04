@@ -11204,6 +11204,7 @@ async function handleQrScan() {
   try {
     await api('/api/attendance-sessions/mark', {
       method: 'POST',
+      signal: AbortSignal.timeout(30000),
       body: JSON.stringify({ qrToken, method: 'qr_mark' }),
     });
     if (content) {
@@ -11218,11 +11219,13 @@ async function handleQrScan() {
   } catch(e) {
     if (content) {
       const expired = e.message?.toLowerCase().includes('expired');
+      const timedOut = e.name === 'TimeoutError' || e.name === 'AbortError';
+      const msg = timedOut ? 'Request timed out. Please check your connection and try again.' : esc(e.message || 'Failed');
       content.innerHTML = `
         <div class="card" style="text-align:center;padding:48px 24px;max-width:400px;margin:40px auto;border-left:4px solid var(--danger)">
           <div style="font-size:56px;margin-bottom:16px">${expired ? '⏰' : '❌'}</div>
           <div style="font-size:20px;font-weight:800;color:var(--danger)">${expired ? 'QR Code Expired' : 'Failed'}</div>
-          <p style="color:var(--text-light);font-size:13px;margin-top:8px">${expired ? 'This QR code has expired. Ask your lecturer/manager for a fresh one.' : e.message}</p>
+          <p style="color:var(--text-light);font-size:13px;margin-top:8px">${expired ? 'This QR code has expired. Ask your lecturer/manager for a fresh one.' : msg}</p>
           <button class="btn btn-secondary" style="margin-top:20px" onclick="navigateTo('mark-attendance')">Go Back</button>
         </div>`;
     }
@@ -11755,13 +11758,16 @@ async function submitQrMark() {
   try {
     await api('/api/attendance-sessions/mark', {
       method: 'POST',
+      signal: AbortSignal.timeout(30000),
       body: JSON.stringify({ qrToken, method: 'qr_mark' }),
     });
     offlineCache('pendingMark', null);
     toastSuccess('Attendance marked successfully!');
     navigateTo('mark-attendance');
   } catch (e) {
-    if (e.data && e.data.esp32Required) {
+    if (e.name === 'TimeoutError' || e.name === 'AbortError') {
+      toastError('Request timed out. Please check your connection and try again.');
+    } else if (e.data && e.data.esp32Required) {
       toastError('You must be connected to the classroom WiFi (DIKLY-CLASSROOM) to mark attendance.');
     } else {
       toastError(e.message);
@@ -11860,17 +11866,28 @@ async function markBLE() {
       });
     } catch (e) {
       // Map server error codes to clear messages
-      const code = e.data?.code;
-      if (code === 'NOT_ON_HOTSPOT')      throw new Error(
+      const errCode = e.data?.code;
+      // ble-verify endpoint has been removed — fall back to code entry
+      if (e.status === 410 || e.message?.includes('BLE verification has been removed')) {
+        if (area) area.innerHTML = `
+          <div class="card" style="text-align:center;padding:28px 20px;border-left:4px solid var(--warning);background:#fffbeb">
+            <div style="font-size:40px;margin-bottom:12px">📟</div>
+            <div style="font-size:15px;font-weight:700;margin-bottom:8px">BLE Check-in Unavailable</div>
+            <p style="font-size:13px;color:var(--text-muted);margin-bottom:16px">Please use the attendance code shown on the classroom device instead.</p>
+            <button class="btn btn-primary btn-sm" onclick="showCodeEntry()">Enter Code</button>
+          </div>`;
+        return;
+      }
+      if (errCode === 'NOT_ON_HOTSPOT')      throw new Error(
         'Connected to DIKLY-CLASSROOM but still failing?\n\n' +
         'Android is routing traffic through mobile data instead of WiFi.\n\n' +
         'Fix: Go to Settings → Wi-Fi → tap & hold DIKLY-CLASSROOM → ' +
         'Network usage → set to \'Always use this network\', then retry.'
       );
-      if (code === 'TOKEN_EXPIRED')       throw new Error('Token expired — move closer to the device and try again.');
-      if (code === 'INVALID_TOKEN')       throw new Error('Invalid token. You must be physically next to the classroom device.');
-      if (code === 'TOKEN_ALREADY_USED')  throw new Error('This token was already used. Each BLE scan is single-use.');
-      if (code === 'DEVICE_OFFLINE')      throw new Error('Classroom device is offline. Ask your lecturer to power it on.');
+      if (errCode === 'TOKEN_EXPIRED')       throw new Error('Token expired — move closer to the device and try again.');
+      if (errCode === 'INVALID_TOKEN')       throw new Error('Invalid token. You must be physically next to the classroom device.');
+      if (errCode === 'TOKEN_ALREADY_USED')  throw new Error('This token was already used. Each BLE scan is single-use.');
+      if (errCode === 'DEVICE_OFFLINE')      throw new Error('Classroom device is offline. Ask your lecturer to power it on.');
       throw e;
     }
 
@@ -11990,10 +12007,10 @@ function showMarkAttendanceModal() {
     <div class="modal-overlay" onclick="closeModal(event)">
       <div class="modal" onclick="event.stopPropagation()">
         <h3>Mark Attendance</h3>
-        <p style="font-size:13px;color:var(--text-light);margin-bottom:16px">Enter the 4-character code shown by your lecturer or manager.</p>
+        <p style="font-size:13px;color:var(--text-light);margin-bottom:16px">Enter the 6-digit code shown on the classroom device screen.</p>
         <div class="form-group">
           <label>Attendance Code</label>
-          <input type="text" id="attend-code" placeholder="Enter code" maxlength="4" style="font-size:22px;text-align:center;letter-spacing:8px;font-weight:700;text-transform:uppercase" autofocus>
+          <input type="text" id="attend-code" placeholder="000000" maxlength="6" inputmode="numeric" style="font-size:22px;text-align:center;letter-spacing:8px;font-weight:700" autofocus>
         </div>
         <div class="modal-actions">
           <button class="btn btn-secondary btn-sm" onclick="closeModal()">Cancel</button>
@@ -12008,7 +12025,7 @@ function showMarkAttendanceModal() {
 async function markAttendance() {
   try {
     const code = document.getElementById('attend-code').value;
-    if (!code || code.length !== 4) { toastWarning('Please enter the 4-character code.'); return; }
+    if (!code || !/^\d{6}$/.test(code)) { toastWarning('Please enter the 6-digit attendance code.'); return; }
     await api('/api/attendance-sessions/mark', {
       method: 'POST',
       body: JSON.stringify({ code, method: 'code_mark' }),

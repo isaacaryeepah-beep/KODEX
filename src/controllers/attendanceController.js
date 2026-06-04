@@ -1015,6 +1015,7 @@ exports.markAttendance = async (req, res) => {
       method: attendanceMethod,
       deviceId: clientDeviceId,
       qrToken: qrTokenRef,
+      ...(attendanceMethod === 'code_mark' && code ? { codeUsed: String(code) } : {}),
     });
 
     const populated = await record.populate([

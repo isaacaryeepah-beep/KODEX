@@ -32,10 +32,10 @@ async function syncStudentToRoster(studentId, companyId) {
     const indexNum = (student.indexNumber || student.IndexNumber || '').trim().toUpperCase();
     if (!indexNum) return;
 
-    // Find roster entries for this index number
-    // Roster studentId field stores the index number string
+    // Find roster entries for this index number (exact match — escape to prevent ReDoS)
+    const escapedIdx = indexNum.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
     const rosterEntries = await StudentRoster.find({
-      studentId: { $regex: new RegExp(`^${indexNum}$`, 'i') }
+      studentId: { $regex: new RegExp(`^${escapedIdx}$`, 'i') }
     }).lean();
 
     if (!rosterEntries.length) return;
@@ -82,10 +82,11 @@ async function syncStudentToRoster(studentId, companyId) {
  */
 async function removeStudentFromEnrollment(courseId, indexNumber) {
   try {
+    const escapedIdx = indexNumber.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
     const student = await User.findOne({
       $or: [
-        { indexNumber: { $regex: new RegExp(`^${indexNumber}$`, 'i') } },
-        { IndexNumber: { $regex: new RegExp(`^${indexNumber}$`, 'i') } },
+        { indexNumber: { $regex: new RegExp(`^${escapedIdx}$`, 'i') } },
+        { IndexNumber: { $regex: new RegExp(`^${escapedIdx}$`, 'i') } },
       ]
     }).select('_id').lean();
 
