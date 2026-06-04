@@ -3259,12 +3259,12 @@ async function renderHodDashboard(content) {
     const deptQs = currentUser.department ? '&department=' + encodeURIComponent(currentUser.department) : '';
     const [sessData, lecturerData, studentData] = await Promise.all([
       api('/api/attendance-sessions?limit=5'),
-      api('/api/users?role=lecturer&limit=1' + deptQs),
-      api('/api/users?role=student&limit=1' + deptQs),
+      api('/api/users?role=lecturer' + deptQs),
+      api('/api/users?role=student' + deptQs),
     ]);
     const sessions   = sessData.sessions   || [];
-    const lecturers  = lecturerData.total  || 0;
-    const students   = studentData.total   || 0;
+    const lecturers  = (lecturerData.users || []).length;
+    const students   = (studentData.users  || []).length;
     const activeSess = sessions.filter(s => s.active).length;
 
     content.innerHTML = `
