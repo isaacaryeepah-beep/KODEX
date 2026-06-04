@@ -4283,6 +4283,10 @@ async function renderClassRepMgmt() {
             </div>
             <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(130px,1fr));gap:10px;margin-bottom:16px;">
               <div>
+                <label style="font-size:11px;font-weight:700;color:var(--text-muted);display:block;margin-bottom:4px">DEPARTMENT</label>
+                <input id="cr-f-dept" type="text" placeholder="e.g. Computer Science" style="width:100%;padding:7px 10px;border:1.5px solid var(--border);border-radius:8px;font-size:13px;font-family:inherit;outline:none;box-sizing:border-box;" />
+              </div>
+              <div>
                 <label style="font-size:11px;font-weight:700;color:var(--text-muted);display:block;margin-bottom:4px">LEVEL</label>
                 <select id="cr-f-level" style="width:100%;padding:7px 10px;border:1.5px solid var(--border);border-radius:8px;font-size:13px;font-family:inherit;outline:none;">
                   <option value="">All</option>
@@ -4347,16 +4351,18 @@ window.crFetchStudents = async function() {
 
   listEl.innerHTML = '<div class="loading" style="padding:16px 0;">Loading…</div>';
   try {
-    const level    = document.getElementById('cr-f-level')?.value    || '';
+    const level      = document.getElementById('cr-f-level')?.value    || '';
     const group    = document.getElementById('cr-f-group')?.value    || '';
     const session  = document.getElementById('cr-f-session')?.value  || '';
     const semester = document.getElementById('cr-f-semester')?.value || '';
+    const dept     = document.getElementById('cr-f-dept')?.value.trim() || '';
     const params = new URLSearchParams();
     params.set('indexNumber', indexNumber);
     if (level)    params.set('level', level);
     if (group)    params.set('group', group);
     if (session)  params.set('sessionType', session);
     if (semester) params.set('semester', semester);
+    if (dept)     params.set('department', dept);
 
     const data = await api('/api/class-rep-admin/students?' + params.toString());
     const students = data.students || [];
