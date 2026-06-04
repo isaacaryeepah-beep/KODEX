@@ -904,17 +904,17 @@ async function renderAdminDevices() {
     .ad-device-grid{display:flex;flex-direction:column;gap:12px}
     .ad-device-card{background:#fff;border-radius:16px;padding:0;box-shadow:0 1px 4px rgba(0,0,0,.06),0 0 0 1px rgba(0,0,0,.04);overflow:hidden;transition:box-shadow .18s}
     .ad-device-card:hover{box-shadow:0 4px 20px rgba(0,0,0,.1),0 0 0 1px rgba(0,0,0,.06)}
-    .ad-device-card-top{display:flex;align-items:center;gap:14px;padding:16px 20px;border-bottom:1px solid #f1f5f9}
+    .ad-device-card-top{display:flex;align-items:center;gap:14px;padding:16px 20px 12px;border-bottom:none}
     .ad-device-avatar{width:42px;height:42px;border-radius:12px;background:linear-gradient(135deg,#e0e7ff,#ede9fe);display:flex;align-items:center;justify-content:center;flex-shrink:0}
-    .ad-device-name{font-size:15px;font-weight:700;color:#1e293b;margin:0 0 3px}
+    .ad-device-name{font-size:15px;font-weight:700;color:#1e293b;margin:0 0 3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
     .ad-device-meta{font-size:11px;color:#94a3b8;display:flex;align-items:center;gap:10px;flex-wrap:wrap}
     .ad-status-dot{width:7px;height:7px;border-radius:50%;display:inline-block;flex-shrink:0}
     .ad-status-online{background:#22c55e;box-shadow:0 0 0 3px rgba(34,197,94,.2)}
     .ad-status-offline{background:#cbd5e1}
     .ad-status-label-online{color:#16a34a;font-weight:600}
     .ad-status-label-offline{color:#94a3b8}
-    .ad-device-actions{margin-left:auto;display:flex;gap:6px;flex-shrink:0}
-    .ad-act-btn{display:inline-flex;align-items:center;gap:4px;border-radius:8px;padding:5px 11px;font-size:11px;font-weight:600;cursor:pointer;border:none;transition:background .15s}
+    .ad-device-actions{display:flex;gap:6px;flex-wrap:wrap;padding:0 20px 14px;border-bottom:1px solid #f1f5f9}
+    .ad-act-btn{display:inline-flex;align-items:center;gap:4px;border-radius:8px;padding:6px 12px;font-size:11px;font-weight:600;cursor:pointer;border:none;transition:background .15s;white-space:nowrap}
     .ad-act-rename{background:#f0fdf4;color:#166534}
     .ad-act-rename:hover{background:#dcfce7}
     .ad-act-setup{background:#f1f5f9;color:#475569}
@@ -1127,7 +1127,7 @@ async function adLoadDevices() {
               <div class="ad-device-avatar">
                 <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#6366f1" stroke-width="1.8"><rect x="5" y="2" width="14" height="20" rx="2"/><line x1="12" y1="18" x2="12.01" y2="18" stroke-width="2.5"/><line x1="9" y1="7" x2="15" y2="7"/><line x1="9" y1="11" x2="15" y2="11"/></svg>
               </div>
-              <div style="min-width:0">
+              <div style="min-width:0;flex:1">
                 <div class="ad-device-name">${d.deviceName}</div>
                 <div class="ad-device-meta">
                   <span class="ad-status-dot ${isOnline ? 'ad-status-online' : 'ad-status-offline'}"></span>
@@ -1136,24 +1136,24 @@ async function adLoadDevices() {
                   <span>${d.deviceId}</span>
                 </div>
               </div>
-              <div class="ad-device-actions">
-                <button class="ad-act-btn ad-act-rename" onclick="adRenameDevice('${d.deviceId}','${(d.deviceName||'').replace(/'/g,"&#39;")}')" title="Rename device">
-                  <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
-                  Rename
-                </button>
-                <button class="ad-act-btn ad-act-setup" onclick="adOpenSetupModal('${d.deviceId}', ${setupData})">
-                  <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
-                  Setup
-                </button>
-                <button class="ad-act-btn ad-act-factory" onclick="adFactoryReset('${d.deviceId}','${(d.deviceName||'').replace(/'/g,"&#39;")}')" title="Wipe device to factory defaults">
-                  <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
-                  Factory Reset
-                </button>
-                <button class="ad-act-btn ad-act-remove" onclick="adRemoveDevice('${d.deviceId}','${d.deviceName}')">
-                  <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6M14 11v6"/><path d="M9 6V4h6v2"/></svg>
-                  Remove
-                </button>
-              </div>
+            </div>
+            <div class="ad-device-actions">
+              <button class="ad-act-btn ad-act-rename" onclick="adRenameDevice('${d.deviceId}','${(d.deviceName||'').replace(/'/g,"&#39;")}')" title="Rename device">
+                <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+                Rename
+              </button>
+              <button class="ad-act-btn ad-act-setup" onclick="adOpenSetupModal('${d.deviceId}', ${setupData})">
+                <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+                Setup
+              </button>
+              <button class="ad-act-btn ad-act-factory" onclick="adFactoryReset('${d.deviceId}','${(d.deviceName||'').replace(/'/g,"&#39;")}')" title="Wipe device to factory defaults">
+                <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+                Factory Reset
+              </button>
+              <button class="ad-act-btn ad-act-remove" onclick="adRemoveDevice('${d.deviceId}','${d.deviceName}')">
+                <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6M14 11v6"/><path d="M9 6V4h6v2"/></svg>
+                Remove
+              </button>
             </div>
             <div class="ad-device-card-body">
               <div class="ad-device-dept">

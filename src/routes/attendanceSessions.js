@@ -22,6 +22,8 @@ router.post("/sign-in", requireRole("employee", "admin", "manager"), attendanceC
 router.post("/sign-out", requireRole("employee", "admin", "manager"), attendanceController.employeeSignOut);
 router.post("/mark", requireRole("student", "employee"), requireNoDeviceLock, enforceLogoutRestriction, attendanceController.markAttendance);
 router.get("/flagged/new-devices", requireRole("lecturer", "hod", "admin", "superadmin"), companyIsolation, attendanceController.getFlaggedNewDevices);
+router.post("/flagged/:recordId/resolve", requireRole("lecturer", "hod", "admin", "superadmin"), companyIsolation, attendanceController.resolveFlaggedRecord);
+router.post("/flagged/:recordId/trust", requireRole("lecturer", "hod", "admin", "superadmin"), companyIsolation, attendanceController.trustFlaggedDevice);
 router.get("/:id/current-code", requireRole("lecturer", "admin", "superadmin"), companyIsolation, attendanceController.getCurrentCode);
 router.get("/:id/records", requireRole("lecturer", "hod", "admin", "superadmin", "manager"), companyIsolation, attendanceController.getSessionRecords);
 router.get("/:id", requireRole("lecturer", "hod", "admin", "superadmin", "manager"), companyIsolation, attendanceController.getSession);
