@@ -95,11 +95,31 @@ exports.startSession = async (req, res) => {
 
     let deviceOfflineWarning = null;
     if (!freshness.online) {
+      // Device is paired but has no internet WiFi — heartbeats can't reach the server.
+      // Accept the hotspot key as proof the device is physically powered on:
+      // when the lecturer is connected to DIKLY-CLASSROOM the device provides its
+      // token, which the frontend stores and sends as x-esp32-hotspot-key.
+      const inboundHotspotKey = (req.headers['x-esp32-hotspot-key'] || '').trim();
+      const hotspotKeyValid   = inboundHotspotKey.length > 0 &&
+                                device.token &&
+                                inboundHotspotKey === device.token;
+
+      if (!hotspotKeyValid) {
+        const lastSeenMsg = freshness.lastSeenAt
+          ? `last seen ${freshness.secondsAgo}s ago`
+          : 'never sent a heartbeat';
+        return res.status(503).json({
+          error: 'Classroom device is not responding',
+          message: 'The classroom device is powered off or out of range. Power it on, then connect your phone to the DIKLY-CLASSROOM WiFi and try again.',
+          deviceStatus: { online: false, registered: true, lastSeenMsg },
+        });
+      }
+
       const lastSeenMsg = freshness.lastSeenAt
         ? `last seen ${freshness.secondsAgo}s ago`
-        : "never sent a heartbeat";
+        : 'never sent a heartbeat';
       deviceOfflineWarning = `Device is not responding (${lastSeenMsg}). Session started in offline mode — the device will sync codes when it reconnects.`;
-      console.warn(`[SESSION START] Device ${device?.deviceId} offline (${lastSeenMsg}) — starting offline session for ${company.name}`);
+      console.warn(`[SESSION START] Device ${device?.deviceId} offline but hotspot key valid (${lastSeenMsg}) — starting offline session for ${company.name}`);
     } else {
       console.log(`[SESSION START] ✓ Device ${device.deviceId} online (${freshness.secondsAgo}s ago) — allowing start for ${company.name}`);
     }

@@ -6630,7 +6630,7 @@ async function showStartSessionModal(offlineOverride) {
   const offlineBanner = offlineOverride ? `
     <div style="background:#fef3c7;border:1px solid #fde68a;border-radius:8px;padding:10px 14px;font-size:12px;color:#92400e;margin-bottom:14px;display:flex;align-items:flex-start;gap:8px">
       <span style="font-size:16px;flex-shrink:0">📶</span>
-      <div><strong>Offline Mode</strong> — The classroom device is not responding. The session will start and the device will sync the rotating code when it reconnects. Students can still mark attendance using the code shown on the device screen.</div>
+      <div><strong>Offline Mode</strong> — The classroom device has no internet. The session will start and the device will sync the rotating code when WiFi reconnects. Students mark attendance using the code on the device screen.</div>
     </div>` : '';
 
   container.innerHTML = `
@@ -6770,13 +6770,16 @@ async function startSession() {
   } catch (e) {
     // Device offline or not registered — show in-modal block screen
     if (e.status === 503) {
-      const msg = e.data?.message || 'The classroom device is not responding. Power it on and try again.';
+      const msg = e.data?.message || 'The classroom device is not responding. Power it on, connect to DIKLY-CLASSROOM WiFi, then try again.';
       if (container) container.innerHTML = `
         <div class="modal-overlay" onclick="closeModal(event)">
-          <div class="modal" onclick="event.stopPropagation()" style="text-align:center;max-width:400px">
+          <div class="modal" onclick="event.stopPropagation()" style="text-align:center;max-width:420px">
             <div style="font-size:40px;margin-bottom:12px">📟</div>
-            <h3 style="margin-bottom:8px">Device is Offline</h3>
+            <h3 style="margin-bottom:8px">Device Not Detected</h3>
             <p style="font-size:13px;color:var(--text-muted);margin-bottom:16px;line-height:1.6">${esc(msg)}</p>
+            <div style="background:#fef3c7;border:1px solid #fde68a;border-radius:8px;padding:10px 14px;font-size:12px;color:#92400e;margin-bottom:20px;text-align:left">
+              <strong>If the device has no internet:</strong> Connect your phone to <strong>DIKLY-CLASSROOM</strong> WiFi first, then tap Retry.
+            </div>
             <div style="display:flex;gap:8px;justify-content:center">
               <button class="btn btn-secondary btn-sm" onclick="closeModal()">Cancel</button>
               <button class="btn btn-primary btn-sm" onclick="showStartSessionModal()">↻ Retry</button>
