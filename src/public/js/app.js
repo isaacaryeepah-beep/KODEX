@@ -11377,7 +11377,19 @@ window.saveLecturerPin = async function() {
   try {
     await api('/api/class-rep/set-pin', { method: 'POST', body: JSON.stringify({ pin }) });
     showToastNotif('PIN saved', 'success');
+    const input = document.getElementById('lecturer-pin-input');
+    if (input) input.value = '';
   } catch (e) { showToastNotif(e.message || 'Failed to save PIN', 'error'); }
+};
+
+window.clearLecturerPin = async function() {
+  if (!confirm('Remove your Class Rep PIN? Class reps will be able to connect the device without entering a PIN.')) return;
+  try {
+    await api('/api/class-rep/set-pin', { method: 'DELETE' });
+    showToastNotif('PIN cleared — class reps can now connect freely', 'success');
+    const input = document.getElementById('lecturer-pin-input');
+    if (input) input.value = '';
+  } catch (e) { showToastNotif(e.message || 'Failed to clear PIN', 'error'); }
 };
 
 // ─── Class Rep WiFi Management ────────────────────────────────────────────────
@@ -12724,6 +12736,7 @@ async function renderProfile() {
             <input type="password" id="lecturer-pin-input" inputmode="numeric" maxlength="4" placeholder="4-digit PIN" style="width:100%;padding:10px 12px;border:1.5px solid var(--border);border-radius:8px;font-size:18px;letter-spacing:6px;box-sizing:border-box">
           </div>
           <button onclick="saveLecturerPin()" style="padding:10px 18px;background:var(--primary);color:#fff;border:none;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer;white-space:nowrap">Save PIN</button>
+          <button onclick="clearLecturerPin()" style="padding:10px 14px;background:transparent;color:#ef4444;border:1.5px solid #ef4444;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;white-space:nowrap">Clear PIN</button>
         </div>
       </div>` : ''}
 
