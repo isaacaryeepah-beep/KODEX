@@ -161,21 +161,34 @@ async function loadFAQList() {
 async function loadMyFAQHistory() {
   const area = document.getElementById('faq-my-history-area');
   if (!area) return;
+
+  const timer = setTimeout(() => {
+    const el = document.getElementById('faq-my-history-area');
+    if (el && el.querySelector('.loading')) {
+      el.innerHTML = '<div style="padding:12px;font-size:13px;color:var(--text-muted)">Could not load history. <button class="btn btn-sm btn-secondary" style="margin-left:8px" onclick="loadMyFAQHistory()">Retry</button></div>';
+    }
+  }, 8000);
+
   try {
     const data = await api('/api/faq/my-queries?limit=10');
+    clearTimeout(timer);
+    const liveArea = document.getElementById('faq-my-history-area');
+    if (!liveArea) return;
     const queries = data.queries || [];
     if (!queries.length) {
-      area.innerHTML = '<div style="padding:12px;font-size:13px;color:var(--text-muted)">You have not asked any questions yet.</div>';
+      liveArea.innerHTML = '<div style="padding:12px;font-size:13px;color:var(--text-muted)">You have not asked any questions yet.</div>';
       return;
     }
-    area.innerHTML = queries.map(q => `
+    liveArea.innerHTML = queries.map(q => `
       <div style="border:1px solid var(--border);border-radius:8px;padding:12px 14px;margin-bottom:8px">
         <div style="font-size:13px;font-weight:600;margin-bottom:4px">${q.question}</div>
         ${q.aiResponse ? `<div style="font-size:12px;color:var(--text-secondary);line-height:1.5">${q.aiResponse.slice(0,200)}${q.aiResponse.length>200?'…':''}</div>` : ''}
         <div style="font-size:11px;color:var(--text-muted);margin-top:6px">${new Date(q.createdAt).toLocaleString()}</div>
       </div>`).join('');
   } catch(e) {
-    if (area) area.innerHTML = '<div style="padding:12px;font-size:13px;color:var(--text-muted)">Could not load history.</div>';
+    clearTimeout(timer);
+    const liveArea = document.getElementById('faq-my-history-area');
+    if (liveArea) liveArea.innerHTML = '<div style="padding:12px;font-size:13px;color:var(--text-muted)">Could not load history.</div>';
   }
 }
 
