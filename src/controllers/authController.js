@@ -100,8 +100,10 @@ function computeUserTrial(user, company, fallbackTrialDays) {
 
 exports.register = async (req, res) => {
   try {
-    const { password, name, companyName, mode, phone } = req.body;
-    const email = req.body.email ? req.body.email.trim().toLowerCase() : null;
+    let { password, mode, phone } = req.body;
+    const name        = req.body.name        ? req.body.name.trim()        : req.body.name;
+    const companyName = req.body.companyName ? req.body.companyName.trim() : req.body.companyName;
+    const email       = req.body.email       ? req.body.email.trim().toLowerCase() : null;
 
     if (!email || !password || !name || !companyName) {
       return res.status(400).json({ error: "Email, password, name, and institution name are required" });
@@ -231,8 +233,10 @@ exports.register = async (req, res) => {
 
 exports.registerLecturer = async (req, res) => {
   try {
-    const { name, email: emailRaw, password, institutionCode, institutionName, department } = req.body;
-    const email = emailRaw ? emailRaw.trim().toLowerCase() : "";
+    const { password, institutionCode, institutionName } = req.body;
+    const name       = req.body.name       ? req.body.name.trim()       : req.body.name;
+    const email      = req.body.email      ? req.body.email.trim().toLowerCase() : "";
+    const department = req.body.department ? req.body.department.trim() : req.body.department;
 
     if (!name || !email || !password) {
       return res.status(400).json({ error: "Name, email, and password are required" });
@@ -268,7 +272,7 @@ exports.registerLecturer = async (req, res) => {
     const hod = await User.findOne({
       company: company._id,
       role: "hod",
-      department: department.trim(),
+      department: { $regex: new RegExp(`^${department.trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, 'i') },
       isApproved: true,
     });
     if (!hod) {
@@ -348,8 +352,11 @@ exports.registerLecturer = async (req, res) => {
 
 exports.registerStudent = async (req, res) => {
   try {
-    const { name, password, institutionCode, department, email: emailRaw, programme, studentLevel, studentGroup, sessionType, semester } = req.body;
-    const email = emailRaw ? emailRaw.trim().toLowerCase() : "";
+    const { password, institutionCode, studentLevel, studentGroup, sessionType, semester } = req.body;
+    const name        = req.body.name        ? req.body.name.trim()        : req.body.name;
+    const email       = req.body.email       ? req.body.email.trim().toLowerCase() : "";
+    const department  = req.body.department  ? req.body.department.trim()  : req.body.department;
+    const programme   = req.body.programme   ? req.body.programme.trim()   : req.body.programme;
     const phone = req.body.phone ? req.body.phone.trim() : "";
     const IndexNumber = req.body.IndexNumber || req.body.indexNumber;
 
@@ -374,7 +381,7 @@ exports.registerStudent = async (req, res) => {
       const hodExists = await User.findOne({
         company: company._id,
         role: "hod",
-        department: department.trim(),
+        department: { $regex: new RegExp(`^${department.trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, 'i') },
         isApproved: true,
       });
       if (!hodExists) {
@@ -440,8 +447,9 @@ exports.registerStudent = async (req, res) => {
 
 exports.registerEmployee = async (req, res) => {
   try {
-    const { name, email: emailRaw, password, institutionCode } = req.body;
-    const email = emailRaw ? emailRaw.trim().toLowerCase() : "";
+    const { password, institutionCode } = req.body;
+    const name  = req.body.name  ? req.body.name.trim()  : req.body.name;
+    const email = req.body.email ? req.body.email.trim().toLowerCase() : "";
 
     if (!name || !email || !password || !institutionCode) {
       return res.status(400).json({ error: "Name, email, password, and institution code are required" });
@@ -529,8 +537,9 @@ exports.registerEmployee = async (req, res) => {
 
 exports.registerManager = async (req, res) => {
   try {
-    const { name, email: emailRaw, password, institutionCode, phone } = req.body;
-    const email = emailRaw ? emailRaw.trim().toLowerCase() : "";
+    const { password, institutionCode, phone } = req.body;
+    const name  = req.body.name  ? req.body.name.trim()  : req.body.name;
+    const email = req.body.email ? req.body.email.trim().toLowerCase() : "";
 
     if (!name || !email || !password || !institutionCode) {
       return res.status(400).json({ error: "Name, email, password, and institution code are required" });
@@ -594,8 +603,10 @@ exports.registerManager = async (req, res) => {
 
 exports.registerHod = async (req, res) => {
   try {
-    const { name, email: emailRaw, password, institutionCode, department, phone } = req.body;
-    const email = emailRaw ? emailRaw.trim().toLowerCase() : '';
+    const { password, institutionCode, phone } = req.body;
+    const name       = req.body.name       ? req.body.name.trim()       : req.body.name;
+    const email      = req.body.email      ? req.body.email.trim().toLowerCase() : '';
+    const department = req.body.department ? req.body.department.trim() : req.body.department;
 
     if (!name || !email || !password || !institutionCode || !department) {
       return res.status(400).json({ error: 'Name, email, password, institution code and department are required' });
@@ -617,7 +628,7 @@ exports.registerHod = async (req, res) => {
       return res.status(400).json({ error: 'A user with this email already exists at this institution' });
     }
 
-    const existingHod = await User.findOne({ company: company._id, role: 'hod', department: department.trim() });
+    const existingHod = await User.findOne({ company: company._id, role: 'hod', department: { $regex: new RegExp(`^${department.trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, 'i') } });
     if (existingHod) {
       return res.status(400).json({ error: `A HOD for "${department.trim()}" already exists. Contact your admin.` });
     }
