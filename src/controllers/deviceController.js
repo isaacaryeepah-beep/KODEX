@@ -880,12 +880,10 @@ exports.listAllDevices = async (req, res) => {
       return res.status(403).json({ message: 'Not authorized.' });
     }
 
-    // HOD: own department + unassigned devices. Admin: everything.
+    // HOD: only devices explicitly assigned to their department.
+    // Admin/superadmin: everything (including unassigned).
     const filter = req.user.role === 'hod'
-      ? { companyId, $or: [
-          { assignedDepartment: req.user.department },
-          { assignedDepartment: { $in: [null, ''] } },
-        ] }
+      ? { companyId, assignedDepartment: req.user.department }
       : { companyId };
 
     const devices = await Device.find(filter)
