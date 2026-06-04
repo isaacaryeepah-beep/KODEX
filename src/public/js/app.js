@@ -242,7 +242,12 @@ function _updateNotifBadge(count) {
   }
 }
 
-function startSSE() {
+let _sseFailures = 0;
+let _sseRetryTimer = null;
+
+function startSSE(isRetry = false) {
+  if (_sseRetryTimer) { clearTimeout(_sseRetryTimer); _sseRetryTimer = null; }
+  if (!isRetry) _sseFailures = 0; // fresh start (login/reload) resets the backoff counter
   if (_sseSource) { _sseSource.close(); _sseSource = null; }
   const token = localStorage.getItem('token');
   if (!token) return;
@@ -250,6 +255,7 @@ function startSSE() {
   _sseSource = new EventSource(`/api/notifications/stream?token=${encodeURIComponent(token)}`);
 
   _sseSource.onmessage = (e) => {
+    _sseFailures = 0; // reset backoff on successful message
     try {
       const msg = JSON.parse(e.data);
       if (msg.event === 'unread_count') {
@@ -270,10 +276,13 @@ function startSSE() {
   };
 
   _sseSource.onerror = () => {
-    // EventSource auto-reconnects; close and let it retry after 5 s
-    _sseSource.close();
-    _sseSource = null;
-    setTimeout(() => { if (currentUser) startSSE(); }, 5000);
+    if (_sseSource) { _sseSource.close(); _sseSource = null; }
+    _sseFailures++;
+    // Stop retrying after 5 consecutive failures (likely auth issue or server offline)
+    if (_sseFailures > 5) return;
+    // Exponential backoff: 5s, 10s, 20s, 40s, 60s
+    const delay = Math.min(5000 * Math.pow(2, _sseFailures - 1), 60000);
+    _sseRetryTimer = setTimeout(() => { if (currentUser) startSSE(true); }, delay);
   };
 }
 
@@ -2974,8 +2983,8 @@ function navigateTo(view) {
     case 'assets':         renderAssets(); break;
     case 'my-assets':      renderMyAssets(); break;
     case 'messages':      renderMessages(); break;
-    case 'faq-center':      _lazyRender(content, '/js/pages-faq.js',       renderFAQCenter,      'FAQ Center');      break;
-    case 'support':         _lazyRender(content, '/js/pages-faq.js',       renderSupport,        'Support');         break;
+    case 'faq-center':      _lazyRender(content, '/js/pages-faq.js',       () => renderFAQCenter(), 'FAQ Center');      break;
+    case 'support':         _lazyRender(content, '/js/pages-faq.js',       () => renderSupport(),   'Support');         break;
     case 'payroll':         _lazyRender(content, '/js/pages-corporate.js', renderPayroll,        'Payroll');         break;
     case 'audit-logs':      _lazyRender(content, '/js/pages-corporate.js', renderAuditLogs,      'Audit Logs');      break;
     case 'programmes':      _lazyRender(content, '/js/pages-corporate.js', renderProgrammes,     'Programmes');      break;
