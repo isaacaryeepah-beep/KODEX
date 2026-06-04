@@ -6422,9 +6422,9 @@ function _renderSessionsHTML(content, sessions, isOffline, extras) {
     : '';
 
   const newDeviceBanner = totalFlags > 0
-    ? `<div style="background:#fff7ed;border:1px solid #fed7aa;border-radius:8px;padding:10px 14px;margin-bottom:12px;display:flex;align-items:center;gap:10px;font-size:13px;color:#92400e;">
+    ? `<div onclick="showFlaggedDevicesModal()" style="background:#fff7ed;border:1px solid #fed7aa;border-radius:8px;padding:10px 14px;margin-bottom:12px;display:flex;align-items:center;gap:10px;font-size:13px;color:#92400e;cursor:pointer;">
         <span style="font-size:18px">⚠️</span>
-        <span><strong>${totalFlags} new-device flag${totalFlags !== 1 ? 's' : ''}</strong> detected — a student marked attendance from an unrecognised device. Check highlighted sessions below.</span>
+        <span><strong>${totalFlags} new-device flag${totalFlags !== 1 ? 's' : ''}</strong> detected — a student marked attendance from an unrecognised device. <u>Review now</u></span>
       </div>`
     : '';
 
@@ -6458,7 +6458,7 @@ function _renderSessionsHTML(content, sessions, isOffline, extras) {
           <tbody>${sessions.map((s, i) => {
             const flags = flaggedBySession[s._id] || 0;
             const flagBadge = flags > 0
-              ? `<span title="${flags} new-device flag${flags !== 1 ? 's' : ''}" style="background:#fef3c7;color:#92400e;border:1px solid #fbbf24;border-radius:4px;padding:1px 6px;font-size:11px;font-weight:700;margin-left:6px;">⚠️ ${flags}</span>`
+              ? `<span onclick="showFlaggedDevicesModal('${s._id}')" title="${flags} new-device flag${flags !== 1 ? 's' : ''} — click to review" style="background:#fef3c7;color:#92400e;border:1px solid #fbbf24;border-radius:4px;padding:1px 6px;font-size:11px;font-weight:700;margin-left:6px;cursor:pointer;">⚠️ ${flags}</span>`
               : '';
             return `
             <tr style="${flags > 0 ? 'background:#fffbeb;' : ''}">
@@ -6483,6 +6483,120 @@ function _renderSessionsHTML(content, sessions, isOffline, extras) {
   `;
 }
 
+
+// ── Flagged new-device review modal ──────────────────────────────────────────
+async function showFlaggedDevicesModal(sessionId) {
+  const container = document.getElementById('modal-container');
+  if (!container) return;
+  container.classList.remove('hidden');
+  container.innerHTML = `<div class="modal-overlay"><div class="modal"><p style="color:var(--text-muted);text-align:center;padding:16px 0">⏳ Loading flagged records…</p></div></div>`;
+
+  try {
+    const qs = sessionId ? `?sessionId=${encodeURIComponent(sessionId)}&limit=100` : '?limit=100';
+    const data = await api('/api/attendance-sessions/flagged/new-devices' + qs);
+    const records = data.records || [];
+
+    if (!records.length) {
+      container.innerHTML = `
+        <div class="modal-overlay" onclick="closeModal(event)">
+          <div class="modal" onclick="event.stopPropagation()" style="text-align:center;max-width:400px">
+            <div style="font-size:40px;margin-bottom:12px">✅</div>
+            <h3 style="margin-bottom:8px">All Clear</h3>
+            <p style="font-size:13px;color:var(--text-muted);margin-bottom:20px">No unresolved new-device flags.</p>
+            <button class="btn btn-secondary btn-sm" onclick="closeModal()">Close</button>
+          </div>
+        </div>`;
+      return;
+    }
+
+    const rows = records.map(r => {
+      const studentName  = esc(r.user?.name || 'Unknown');
+      const indexNum     = esc(r.user?.indexNumber || '—');
+      const sessionTitle = esc(r.session?.title || 'Session');
+      const deviceId     = esc(r.deviceId || '—');
+      const time         = r.checkInTime ? new Date(r.checkInTime).toLocaleString() : '—';
+      const shortDev     = r.deviceId ? r.deviceId.slice(0, 16) + (r.deviceId.length > 16 ? '…' : '') : '—';
+      return `
+        <tr id="flagrow-${r._id}">
+          <td style="font-size:13px"><strong>${studentName}</strong><br><span style="color:var(--text-muted);font-size:11px">${indexNum}</span></td>
+          <td style="font-size:12px;color:var(--text-muted)">${sessionTitle}</td>
+          <td style="font-size:11px;font-family:monospace;color:#7c3aed" title="${deviceId}">${shortDev}</td>
+          <td style="font-size:11px;color:var(--text-muted)">${time}</td>
+          <td style="white-space:nowrap">
+            <button class="btn btn-sm" style="font-size:11px;background:#dcfce7;color:#166534;border:1px solid #86efac;margin-right:4px"
+              onclick="resolveFlaggedRecord('${r._id}','trust')">Trust Device</button>
+            <button class="btn btn-sm" style="font-size:11px;background:var(--bg);color:var(--text-muted);border:1px solid var(--border)"
+              onclick="resolveFlaggedRecord('${r._id}','dismiss')">Dismiss</button>
+          </td>
+        </tr>`;
+    }).join('');
+
+    container.innerHTML = `
+      <div class="modal-overlay" onclick="closeModal(event)">
+        <div class="modal" onclick="event.stopPropagation()" style="max-width:780px;width:95vw">
+          <h3 style="margin-bottom:4px">⚠️ New-Device Flags</h3>
+          <p style="font-size:12px;color:var(--text-muted);margin-bottom:16px">
+            These students marked attendance from a device not previously seen on their account.
+            <strong>Trust Device</strong> adds it to their trusted list and clears all matching flags.
+            <strong>Dismiss</strong> clears only this flag.
+          </p>
+          <div style="overflow-x:auto">
+            <table style="width:100%;font-size:13px">
+              <thead><tr style="font-size:11px;color:var(--text-muted)">
+                <th style="text-align:left;padding:6px 8px">Student</th>
+                <th style="text-align:left;padding:6px 8px">Session</th>
+                <th style="text-align:left;padding:6px 8px">Device ID</th>
+                <th style="text-align:left;padding:6px 8px">Time</th>
+                <th style="text-align:left;padding:6px 8px">Action</th>
+              </tr></thead>
+              <tbody>${rows}</tbody>
+            </table>
+          </div>
+          <div style="margin-top:16px;text-align:right">
+            <button class="btn btn-secondary btn-sm" onclick="closeModal()">Close</button>
+          </div>
+        </div>
+      </div>`;
+  } catch (e) {
+    container.innerHTML = `
+      <div class="modal-overlay" onclick="closeModal(event)">
+        <div class="modal" onclick="event.stopPropagation()" style="text-align:center;max-width:380px">
+          <p style="color:#dc2626">Failed to load flagged records: ${esc(e.message)}</p>
+          <button class="btn btn-secondary btn-sm" style="margin-top:12px" onclick="closeModal()">Close</button>
+        </div>
+      </div>`;
+  }
+}
+
+async function resolveFlaggedRecord(recordId, action) {
+  const row = document.getElementById('flagrow-' + recordId);
+  if (row) row.style.opacity = '0.4';
+
+  try {
+    const endpoint = action === 'trust'
+      ? `/api/attendance-sessions/flagged/${recordId}/trust`
+      : `/api/attendance-sessions/flagged/${recordId}/resolve`;
+
+    const result = await api(endpoint, { method: 'POST' });
+
+    if (row) row.remove();
+
+    const tbody = document.querySelector('#modal-container tbody');
+    if (tbody && !tbody.children.length) {
+      closeModal();
+      toastSuccess('All flags resolved.');
+    } else if (action === 'trust') {
+      toastSuccess(`Device trusted for ${result.studentName || 'student'} — all matching flags cleared.`);
+    } else {
+      toastSuccess('Flag dismissed.');
+    }
+
+    renderSessions();
+  } catch (e) {
+    if (row) row.style.opacity = '1';
+    toastError('Failed: ' + e.message);
+  }
+}
 
 async function showStartSessionModal(offlineOverride) {
   // Force a fresh connectivity check each time this is opened (covers Retry path)

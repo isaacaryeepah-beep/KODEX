@@ -1333,6 +1333,113 @@ exports.getFlaggedNewDevices = async (req, res) => {
   }
 };
 
+// POST /api/attendance-sessions/flagged/:recordId/resolve
+// Dismiss a new-device flag without trusting the device.
+// The attendance record stays; the flag is cleared.
+exports.resolveFlaggedRecord = async (req, res) => {
+  try {
+    const { recordId } = req.params;
+    if (!mongoose.Types.ObjectId.isValid(recordId)) {
+      return res.status(400).json({ error: 'Invalid record ID' });
+    }
+
+    const record = await AttendanceRecord.findOne({
+      _id:     recordId,
+      company: req.user.company,
+    });
+    if (!record) return res.status(404).json({ error: 'Record not found' });
+
+    // Lecturers can only resolve flags from their own sessions
+    if (req.user.role === 'lecturer') {
+      const session = await AttendanceSession.findOne({
+        _id:       record.session,
+        createdBy: req.user._id,
+        company:   req.user.company,
+      }).lean();
+      if (!session) return res.status(403).json({ error: 'Not your session' });
+    }
+
+    await AttendanceRecord.updateOne(
+      { _id: record._id },
+      { $set: { newDeviceFlag: false, flagged: false, flagNote: 'Reviewed and dismissed by ' + req.user.name } }
+    );
+
+    return res.json({ ok: true });
+  } catch (err) {
+    console.error('[resolveFlaggedRecord]', err);
+    return res.status(500).json({ error: 'Failed to resolve flag' });
+  }
+};
+
+// POST /api/attendance-sessions/flagged/:recordId/trust
+// Trust the device: add it to the student's trustedDevices list and clear the flag.
+exports.trustFlaggedDevice = async (req, res) => {
+  try {
+    const { recordId } = req.params;
+    if (!mongoose.Types.ObjectId.isValid(recordId)) {
+      return res.status(400).json({ error: 'Invalid record ID' });
+    }
+
+    const record = await AttendanceRecord.findOne({
+      _id:     recordId,
+      company: req.user.company,
+    }).populate('user', 'name').lean();
+    if (!record) return res.status(404).json({ error: 'Record not found' });
+
+    if (req.user.role === 'lecturer') {
+      const session = await AttendanceSession.findOne({
+        _id:       record.session,
+        createdBy: req.user._id,
+        company:   req.user.company,
+      }).lean();
+      if (!session) return res.status(403).json({ error: 'Not your session' });
+    }
+
+    if (!record.deviceId) {
+      return res.status(400).json({ error: 'No device fingerprint on this record' });
+    }
+
+    // Add to student's trustedDevices (skip if already there)
+    await User.updateOne(
+      {
+        _id:                       record.user._id || record.user,
+        'trustedDevices.deviceId': { $ne: record.deviceId },
+      },
+      {
+        $push: {
+          trustedDevices: {
+            deviceId:   record.deviceId,
+            firstSeenAt: record.checkInTime || new Date(),
+            lastSeenAt:  record.checkInTime || new Date(),
+          },
+        },
+      }
+    );
+
+    // Clear the flag on this record
+    await AttendanceRecord.updateOne(
+      { _id: record._id },
+      { $set: { newDeviceFlag: false, flagged: false, flagNote: 'Device trusted by ' + req.user.name } }
+    );
+
+    // Also clear flags on all other records for the same student + device
+    await AttendanceRecord.updateMany(
+      {
+        company:       req.user.company,
+        user:          record.user._id || record.user,
+        deviceId:      record.deviceId,
+        newDeviceFlag: true,
+      },
+      { $set: { newDeviceFlag: false, flagged: false, flagNote: 'Device trusted by ' + req.user.name } }
+    );
+
+    return res.json({ ok: true, studentName: record.user?.name || 'Student' });
+  } catch (err) {
+    console.error('[trustFlaggedDevice]', err);
+    return res.status(500).json({ error: 'Failed to trust device' });
+  }
+};
+
 // Legacy `exports.esp32Sync` removed. Offline sync now lives at
 // POST /api/devices/sync (deviceController.syncOfflineRecords) with
 // proper device-JWT authentication.
