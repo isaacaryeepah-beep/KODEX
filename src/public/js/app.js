@@ -7334,9 +7334,9 @@ async function showCreateUserModal() {
           <label>Role</label>
           <select id="new-user-role" onchange="toggleUserFields(); onCreateUserRoleChange();">${roles}</select>
         </div>` : `<input type="hidden" id="new-user-role" value="${defaultRole}">`}
-        <div class="form-group" id="new-user-email-group" ${defaultRole === 'student' ? 'class="hidden"' : ''}>
-          <label>Email</label>
-          <input type="email" id="new-user-email" placeholder="user@company.com">
+        <div class="form-group" id="new-user-email-group">
+          <label>Email <span style="color:red">*</span></label>
+          <input type="email" id="new-user-email" placeholder="user@example.com">
         </div>
         <div class="form-group ${defaultRole !== 'student' ? 'hidden' : ''}" id="new-user-index-group">
           <label>Student ID / Index Number <span style="color:red">*</span></label>
@@ -7427,7 +7427,7 @@ async function showCreateUserModal() {
 
 function toggleUserFields() {
   const role = document.getElementById('new-user-role').value;
-  document.getElementById('new-user-email-group').classList.toggle('hidden', role === 'student');
+  // Email is required for ALL roles — never hide it
   document.getElementById('new-user-index-group').classList.toggle('hidden', role !== 'student');
   const deptGroup  = document.getElementById('new-user-dept-group');
   const deptReq    = document.getElementById('new-user-dept-req');
@@ -7455,6 +7455,12 @@ async function createUser() {
       password: document.getElementById('new-user-password').value,
       role,
     };
+    // Email is required for all roles
+    const email = document.getElementById('new-user-email').value.trim();
+    if (!email) { toastWarning('Email address is required.'); return; }
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) { toastWarning('Please enter a valid email address.'); return; }
+    body.email = email;
+
     if (role === 'student') {
       const idx = document.getElementById('new-user-index').value.trim().toUpperCase();
       if (!idx) { toastWarning('Student ID / Index Number is required.'); return; }
@@ -7476,8 +7482,6 @@ async function createUser() {
       body.studentGroup = studentGroup;
       body.sessionType  = sessionType;
       body.semester     = semester;
-    } else {
-      body.email = document.getElementById('new-user-email').value;
     }
     const phone = document.getElementById('new-user-phone').value.trim();
     if (!phone) { toastWarning('Phone number is required.'); return; }
