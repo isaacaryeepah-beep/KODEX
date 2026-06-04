@@ -1,3 +1,4 @@
+const crypto   = require("crypto");
 const mongoose = require("mongoose");
 const User = require("../models/User");
 const Company = require("../models/Company");
@@ -453,7 +454,7 @@ exports.bulkImportStudents = async (req, res) => {
         // Generate a readable temp password: first 3 of name + last 3 of IndexNumber + 4-digit random
         const namePart = row.name.replace(/[^a-zA-Z]/g, "").slice(0, 3).toLowerCase();
         const idPart   = row.IndexNumber.replace(/[^a-zA-Z0-9]/g, "").slice(-3).toLowerCase();
-        const numPart  = String(Math.floor(1000 + Math.random() * 9000));
+        const numPart  = String(crypto.randomInt(1000, 9999));
         const tempPassword = namePart + idPart + numPart;
 
         // Build user data — email optional for students
@@ -466,7 +467,7 @@ exports.bulkImportStudents = async (req, res) => {
           mustChangePassword: true,
         };
 
-        if (row.email) userData.email = row.email.toLowerCase();
+        if (row.email) userData.email = row.email.toLowerCase().trim();
         if (row.phone) {
           try { userData.phone = normalisePhone(row.phone); } catch (_) {}
         }
@@ -616,7 +617,6 @@ exports.adminResetStudentPassword = async (req, res) => {
     }
 
     // Generate a memorable temp password: INSTITUTIONCODE-6digits
-    const crypto = require('crypto');
     const digits = String(crypto.randomInt(100000, 999999));
     // req.user.company is an ObjectId — fetch the code separately
     const Company = require('../models/Company');
