@@ -586,9 +586,23 @@ exports.bulkAction = async (req, res) => {
       result = await User.updateMany(filter, { isActive: true });
       res.json({ message: `${result.modifiedCount} user(s) activated` });
     } else if (action === "deactivate") {
+      const adminTargets = users.filter(u => u.role === 'admin' && allowedIds.some(id => id.toString() === u._id.toString()));
+      if (adminTargets.length > 0) {
+        const activeAdmins = await User.countDocuments({ ...req.companyFilter, role: 'admin', isActive: true });
+        if (activeAdmins - adminTargets.length < 1) {
+          return res.status(409).json({ error: 'Cannot deactivate all admin accounts. At least one must remain active.' });
+        }
+      }
       result = await User.updateMany(filter, { isActive: false });
       res.json({ message: `${result.modifiedCount} user(s) deactivated` });
     } else if (action === "delete") {
+      const adminTargets = users.filter(u => u.role === 'admin' && allowedIds.some(id => id.toString() === u._id.toString()));
+      if (adminTargets.length > 0) {
+        const activeAdmins = await User.countDocuments({ ...req.companyFilter, role: 'admin', isActive: true });
+        if (activeAdmins - adminTargets.length < 1) {
+          return res.status(409).json({ error: 'Cannot delete all admin accounts. At least one must remain.' });
+        }
+      }
       result = await User.deleteMany(filter);
       res.json({ message: `${result.deletedCount} user(s) permanently deleted` });
     }

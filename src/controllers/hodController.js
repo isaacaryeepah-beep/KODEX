@@ -52,6 +52,7 @@ exports.listLockedStudents = async (req, res) => {
 
 // ─── PATCH /api/hod/unlock/:userId ───────────────────────────────────────────
 exports.unlockStudent = async (req, res) => {
+  if (!requireHodDept(req, res)) return;
   try {
     const now = new Date();
     const filter = hodDeptFilter(req, {
@@ -356,6 +357,7 @@ exports.getAlerts = async (req, res) => {
 
 // ─── POST /api/hod/bulk-unlock ────────────────────────────────────────────────
 exports.bulkUnlockStudents = async (req, res) => {
+  if (!requireHodDept(req, res)) return;
   try {
     const { userIds, note } = req.body;
     if (!Array.isArray(userIds) || userIds.length === 0) {
