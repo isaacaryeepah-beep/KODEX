@@ -58,18 +58,27 @@ const authenticate = async (req, res, next) => {
         try {
           const Company = require('../models/Company');
           const co = await Company.findById(user.company)
-            .select('hasAccess subscriptionActive trialEndDate subscriptionEndDate subscriptionStatus')
+            .select('subscriptionActive subscriptionStatus trialEndDate subscriptionEndDate')
             .lean();
           if (co) {
-            const trialEnd  = co.trialEndDate     ? new Date(co.trialEndDate)     : null;
-            const subEnd    = co.subscriptionEndDate ? new Date(co.subscriptionEndDate) : null;
-            const companyOk = co.hasAccess
-              || co.subscriptionActive
-              || (trialEnd  && (trialEnd.getTime()  + GRACE_MS) > now)
-              || (subEnd    && (subEnd.getTime()    + GRACE_MS) > now);
+            const status   = co.subscriptionStatus || '';
+            const trialEnd = co.trialEndDate        ? new Date(co.trialEndDate)        : null;
+            const subEnd   = co.subscriptionEndDate ? new Date(co.subscriptionEndDate) : null;
+
+            // Use subscriptionStatus as the authority.
+            // 'active'  → paid plan; also check end date hasn't passed (+ grace).
+            // 'trial'   → only OK when trialEndDate is still in the future (+ grace).
+            // anything else ('expired', 'inactive', 'past_due', '') → blocked.
+            let companyOk = false;
+            if (status === 'active' || co.subscriptionActive) {
+              companyOk = !subEnd || (subEnd.getTime() + GRACE_MS) > now;
+            } else if (status === 'trial') {
+              companyOk = !!(trialEnd && (trialEnd.getTime() + GRACE_MS) > now);
+            }
+            // 'expired' / 'inactive' / 'past_due' / unknown → companyOk stays false
 
             if (!companyOk) {
-              const isAdmin = ['admin'].includes(user.role);
+              const isAdmin = user.role === 'admin';
               return res.status(402).json({
                 error: 'Subscription expired',
                 subscriptionExpired: true,
@@ -80,7 +89,9 @@ const authenticate = async (req, res, next) => {
               });
             }
           }
-        } catch (_) {}
+        } catch (err) {
+          console.error('[auth] company subscription check failed:', err.message);
+        }
       }
 
       // ── Per-user checks (roles that pay individually) ──────────────────────

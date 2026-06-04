@@ -1156,7 +1156,7 @@ function showSubscriptionBlock(message, isAdmin) {
       <p style="margin:0 0 28px;font-size:14px;color:#475569;line-height:1.6">${esc(msg)}</p>
       ${isAdminUser
         ? `<div style="display:flex;flex-direction:column;gap:10px">
-            <button onclick="document.getElementById('_sub-block-overlay').style.display='none';navigateTo('subscription');"
+            <button onclick="(function(){var o=document.getElementById('_sub-block-overlay');if(o)o.remove();_subBlockActive=false;document.body.style.overflow='';navigateTo('subscription');})();"
               style="background:#6366f1;color:#fff;border:none;border-radius:8px;padding:12px 24px;font-size:14px;font-weight:600;cursor:pointer;width:100%">
               Renew Subscription
             </button>
