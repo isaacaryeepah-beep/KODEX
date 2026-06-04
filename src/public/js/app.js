@@ -6542,32 +6542,10 @@ async function showStartSessionModal(offlineOverride) {
     return;
   }
 
-  // Device registered but offline — let lecturer choose to retry or start offline
+  // Device registered but offline — automatically proceed in offline mode (no explicit button needed).
+  // The device will sync the rotating code as soon as it reconnects to WiFi.
   if (!offlineOverride && !checkError && deviceStatus && deviceStatus.hasDevice && !deviceStatus.deviceOnline) {
-    const lastSeen = deviceStatus.lastSeenAt
-      ? `Last seen: ${new Date(deviceStatus.lastSeenAt).toLocaleString()}`
-      : 'Last seen: Never';
-    container.innerHTML = `
-      <div class="modal-overlay" onclick="closeModal(event)">
-        <div class="modal" onclick="event.stopPropagation()" style="text-align:center;max-width:420px">
-          <div style="font-size:40px;margin-bottom:12px">📟</div>
-          <h3 style="margin-bottom:8px">Device is Offline</h3>
-          <p style="font-size:13px;color:var(--text-muted);margin-bottom:16px;line-height:1.6">
-            The classroom device is not responding.<br>
-            Power it on and retry, or start an offline session — the device will sync the code when it reconnects.
-          </p>
-          <div style="background:#fef3c7;border:1px solid #fde68a;border-radius:8px;padding:10px 14px;font-size:12px;color:#92400e;margin-bottom:20px;text-align:left">
-            <strong>${lastSeen}</strong><br>
-            Status: Offline — no heartbeat in last 20s
-          </div>
-          <div style="display:flex;gap:8px;justify-content:center;flex-wrap:wrap">
-            <button class="btn btn-secondary btn-sm" onclick="closeModal()">Cancel</button>
-            <button class="btn btn-secondary btn-sm" onclick="showStartSessionModal()">↻ Retry</button>
-            <button class="btn btn-primary btn-sm" onclick="showStartSessionModal('offline')">Start Offline Session</button>
-          </div>
-        </div>
-      </div>`;
-    return;
+    offlineOverride = 'offline';
   }
 
   // Device check failed — network error or server unreachable.
