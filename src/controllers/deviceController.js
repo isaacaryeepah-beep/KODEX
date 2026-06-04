@@ -651,13 +651,13 @@ exports.renameDevice = async (req, res) => {
     const { deviceName } = req.body;
     if (!deviceName?.trim()) return res.status(400).json({ message: 'Device name is required.' });
 
-    const isAdmin = ['admin', 'superadmin'].includes(req.user.role);
-    const query = isAdmin
+    const isPrivileged = ['admin', 'superadmin', 'hod'].includes(req.user.role);
+    const query = isPrivileged
       ? { companyId: req.user.company, ...(req.body.deviceId ? { deviceId: req.body.deviceId } : {}) }
       : { lecturerId: req.user._id, companyId: req.user.company };
 
     const device = await Device.findOneAndUpdate(query, { deviceName: deviceName.trim() }, { new: true });
-    if (!device) return res.status(404).json({ message: 'Device not found or not yours.' });
+    if (!device) return res.status(404).json({ message: 'Device not found or not authorized.' });
 
     res.json({ success: true, deviceName: device.deviceName });
   } catch (err) {
@@ -875,9 +875,9 @@ exports.listAllDevices = async (req, res) => {
     }
 
     const filter = { companyId };
-    if (req.user.role === 'hod' && req.user.department) {
-      filter.assignedDepartment = req.user.department;
-    }
+    // HODs see all institution devices (not filtered by department) so they can
+    // manage newly-paired devices that haven't been assigned yet.
+    // The department context is advisory, not a hard filter.
 
     const devices = await Device.find(filter)
       .populate('lecturerId', 'name email role')
@@ -1154,6 +1154,38 @@ exports.removeDevice = async (req, res) => {
     res.json({ message: 'Device removed' });
   } catch (err) {
     console.error('[removeDevice]', err);
+    res.status(500).json({ message: 'Server error', error: err.message });
+  }
+};
+
+// ─── FACTORY RESET DEVICE ────────────────────────────────────────────────────
+// POST /api/devices/:deviceId/factory-reset
+// Revokes the device JWT token so the next heartbeat returns 401, which
+// triggers the firmware's built-in factoryReset() (clears Preferences +
+// ESP.restart()). The DB record is deleted immediately so the device is
+// removed from the institution list and can be re-paired fresh.
+exports.factoryResetDevice = async (req, res) => {
+  try {
+    const companyId = req.user.company;
+    const { deviceId } = req.params;
+    const ALLOWED = ['admin', 'superadmin', 'hod'];
+    if (!ALLOWED.includes(req.user.role)) {
+      return res.status(403).json({ message: 'Not authorized.' });
+    }
+    const device = await Device.findOne({ deviceId, companyId });
+    if (!device) return res.status(404).json({ message: 'Device not found.' });
+
+    // Revoke the token first — any in-flight heartbeat will get 401 and
+    // trigger the firmware's factoryReset(). Then delete the record so
+    // the device cannot authenticate again with its old JWT.
+    device.token = '';
+    await device.save();
+    await Device.deleteOne({ _id: device._id });
+
+    _auditDevice(req.user, AUDIT_ACTIONS.DELETE, device, { action: 'factory_reset', deviceName: device.deviceName });
+    res.json({ success: true, message: 'Factory reset initiated. The device will wipe itself on next heartbeat.' });
+  } catch (err) {
+    console.error('[factoryResetDevice]', err);
     res.status(500).json({ message: 'Server error', error: err.message });
   }
 };
