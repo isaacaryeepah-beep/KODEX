@@ -1330,7 +1330,7 @@ function selectPortal(t){if(window._appLoaded)window._realSelectPortal(t);else w
       startX = t.clientX; startY = t.clientY;
       const p = getPos(); startRight = p.r; startBottom = p.b;
       fab.style.transform = 'scale(1.12)';
-    }, { passive: true });
+    }, { passive: false });
 
     fab.addEventListener('touchmove', function(e) {
       if (!isDragging) return;

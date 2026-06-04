@@ -115,13 +115,13 @@ async function loadFAQList() {
   if (!area) return;
   const cat = document.getElementById('faq-cat-filter')?.value || '';
 
-  // Timeout: if API doesn't respond in 20s, show error instead of spinning forever
+  // Timeout: if API doesn't respond in 8s, show retry option (Render free tier can cold-start slowly)
   const timer = setTimeout(() => {
     const el = document.getElementById('faq-list-area');
     if (el && el.querySelector('.loading')) {
-      el.innerHTML = '<div style="color:var(--danger);padding:12px;font-size:13px">Request timed out — please refresh and try again.</div>';
+      el.innerHTML = '<div style="color:var(--danger);padding:12px;font-size:13px">Request timed out. <button class="btn btn-sm btn-secondary" style="margin-left:8px" onclick="loadFAQList()">Retry</button></div>';
     }
-  }, 20000);
+  }, 8000);
 
   try {
     const params = cat ? `?category=${cat}` : '';
