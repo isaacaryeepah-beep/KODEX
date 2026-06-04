@@ -2920,6 +2920,7 @@ function navigateTo(view) {
     case 'mark-attendance': renderMarkAttendance(); break;
     case 'emp-home': renderEmployeeDashboard(document.getElementById('main-content')); break;
     case 'emp-notifications': renderEmpNotifications(); break;
+    case 'all-notifications': renderAllNotifications(); break;
     case 'emp-assistant': renderEmpAssistant(); break;
     case 'sign-in-out': renderSignInOut(); break;
     case 'corp-attendance': renderCorporateAttendance(); break;
@@ -6541,8 +6542,8 @@ async function showStartSessionModal(offlineOverride) {
     return;
   }
 
-  // Device registered but offline — show warning and let lecturer choose
-  if (!offlineOverride && !checkError && deviceStatus && deviceStatus.hasDevice && !deviceStatus.deviceOnline) {
+  // Device registered but offline — block and require lecturer to power it on
+  if (!checkError && deviceStatus && deviceStatus.hasDevice && !deviceStatus.deviceOnline) {
     const lastSeen = deviceStatus.lastSeenAt
       ? `Last seen: ${new Date(deviceStatus.lastSeenAt).toLocaleString()}`
       : 'Last seen: Never';
@@ -6552,8 +6553,8 @@ async function showStartSessionModal(offlineOverride) {
           <div style="font-size:40px;margin-bottom:12px">📟</div>
           <h3 style="margin-bottom:8px">Device is Offline</h3>
           <p style="font-size:13px;color:var(--text-muted);margin-bottom:16px;line-height:1.6">
-            The <strong>DIKLY classroom device</strong> is not responding.<br>
-            Power it on and retry, or start an offline session — the device will sync the code when it reconnects.
+            The classroom device is not responding.<br>
+            Power it on and wait for it to connect, then retry.
           </p>
           <div style="background:#fef3c7;border:1px solid #fde68a;border-radius:8px;padding:10px 14px;font-size:12px;color:#92400e;margin-bottom:20px;text-align:left">
             <strong>${lastSeen}</strong><br>
@@ -6561,8 +6562,7 @@ async function showStartSessionModal(offlineOverride) {
           </div>
           <div style="display:flex;gap:8px;justify-content:center;flex-wrap:wrap">
             <button class="btn btn-secondary btn-sm" onclick="closeModal()">Cancel</button>
-            <button class="btn btn-secondary btn-sm" onclick="showStartSessionModal()">↻ Retry</button>
-            <button class="btn btn-primary btn-sm" onclick="showStartSessionModal('offline')">Start Offline Session</button>
+            <button class="btn btn-primary btn-sm" onclick="showStartSessionModal()">↻ Retry</button>
           </div>
         </div>
       </div>`;
@@ -6648,17 +6648,10 @@ async function showStartSessionModal(offlineOverride) {
     }
   } catch(_) { /* non-critical */ }
 
-  const offlineBanner = offlineOverride ? `
-    <div style="background:#fef3c7;border:1px solid #fde68a;border-radius:8px;padding:10px 14px;font-size:12px;color:#92400e;margin-bottom:14px;display:flex;align-items:flex-start;gap:8px">
-      <span style="font-size:16px;flex-shrink:0">📶</span>
-      <div><strong>Offline Mode</strong> — The classroom device is not responding. The session will start and the device will sync the rotating code when it reconnects. Students can still mark attendance using the code shown on the device screen.</div>
-    </div>` : '';
-
   container.innerHTML = `
     <div class="modal-overlay" onclick="closeModal(event)">
-      <div class="modal" onclick="event.stopPropagation()" data-offline="${offlineOverride ? '1' : ''}">
+      <div class="modal" onclick="event.stopPropagation()">
         <h3>Start New Session</h3>
-        ${offlineBanner}
         ${groupBadge}
         <div class="form-group">
           <label>Course <span style="color:red">*</span></label>
@@ -6772,9 +6765,7 @@ async function startSession() {
       body: JSON.stringify({ title, courseId, ...(deviceId ? { deviceId } : {}) }),
     });
     closeModal();
-    if (result.offlineMode) {
-      toastInfo('Session started in offline mode — device will sync when it reconnects.');
-    } else if (result.warning) {
+    if (result.warning) {
       if (container) container.innerHTML = `
         <div class="modal-overlay" onclick="closeModal(event)">
           <div class="modal" onclick="event.stopPropagation()" style="max-width:440px">
@@ -16948,6 +16939,58 @@ async function renderEmpNotifications() {
                 <div style="font-size:12px;color:var(--text-muted);line-height:1.5">${esc(n.body)}</div>
               </div>
               ${n.action ? `<button class="btn btn-sm" style="background:var(--card);border:1px solid var(--border);flex-shrink:0;font-size:12px" onclick="${n.action.fn}">${n.action.label}</button>` : ''}
+            </div>`;
+          }).join('')}
+    `;
+  } catch(e) {
+    content.innerHTML = `<div class="card"><p style="color:#ef4444">Error: ${e.message}</p></div>`;
+  }
+}
+
+// ── Universal Notifications page (all roles) ─────────────────────────────────
+async function renderAllNotifications() {
+  const content = document.getElementById('main-content');
+  if (!content) return;
+  content.innerHTML = '<div class="loading">Loading notifications…</div>';
+  try {
+    const d = await api('/api/notifications?limit=50');
+    const notifs = d.notifications || [];
+    const typeStyles = {
+      ok:      { bg: '#f0fdf4', border: '#86efac' },
+      success: { bg: '#f0fdf4', border: '#86efac' },
+      warn:    { bg: '#fffbeb', border: '#fde68a' },
+      warning: { bg: '#fffbeb', border: '#fde68a' },
+      error:   { bg: '#fef2f2', border: '#fca5a5' },
+      info:    { bg: '#eff6ff', border: '#bfdbfe' },
+    };
+    const iconFor = t => t === 'ok' || t === 'success' ? '✅' : t === 'warn' || t === 'warning' ? '⚠️' : t === 'error' ? '❌' : '🔔';
+    const timeAgo = iso => {
+      const s = Math.floor((Date.now() - new Date(iso)) / 1000);
+      if (s < 60) return 'Just now';
+      if (s < 3600) return `${Math.floor(s/60)}m ago`;
+      if (s < 86400) return `${Math.floor(s/3600)}h ago`;
+      return new Date(iso).toLocaleDateString('en-GB', { day:'2-digit', month:'short' });
+    };
+    content.innerHTML = `
+      <div class="page-header">
+        <div><h2>Notifications</h2><p>${notifs.length} notification${notifs.length !== 1 ? 's' : ''}</p></div>
+        <button class="btn btn-secondary btn-sm" onclick="markAllNotifsRead();this.disabled=true;this.textContent='Marked'">Mark all read</button>
+      </div>
+      ${notifs.length === 0
+        ? `<div class="card" style="text-align:center;padding:48px 24px">
+            <div style="font-size:40px;margin-bottom:16px">🔔</div>
+            <div style="font-weight:600;font-size:15px;margin-bottom:6px">All clear!</div>
+            <p style="color:var(--text-muted);font-size:13px">No notifications right now.</p>
+          </div>`
+        : notifs.map(n => {
+            const st = typeStyles[n.type] || typeStyles.info;
+            return `<div style="background:${st.bg};border:1px solid ${st.border};border-radius:10px;padding:14px 16px;margin-bottom:10px;display:flex;gap:12px;align-items:flex-start${n.read ? ';opacity:0.7' : ''}">
+              <span style="font-size:20px;flex-shrink:0;margin-top:1px">${iconFor(n.type)}</span>
+              <div style="flex:1;min-width:0">
+                <div style="font-weight:700;font-size:13px;margin-bottom:3px">${esc(n.title || '')}</div>
+                <div style="font-size:12px;color:var(--text-muted);line-height:1.5">${esc(n.body || n.message || '')}</div>
+                <div style="font-size:11px;color:var(--text-light);margin-top:4px">${n.createdAt ? timeAgo(n.createdAt) : ''}</div>
+              </div>
             </div>`;
           }).join('')}
     `;

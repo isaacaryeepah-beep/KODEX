@@ -93,20 +93,17 @@ exports.startSession = async (req, res) => {
       });
     }
 
-    let deviceOfflineWarning = null;
     if (!freshness.online) {
-      // Device is registered but not currently sending heartbeats.
-      // Allow the session to start in offline-ready mode rather than blocking —
-      // the device may be on the local hotspot with no internet, or briefly
-      // unreachable. The lecturer is physically present and can see the device.
       const lastSeenMsg = freshness.lastSeenAt
         ? `last seen ${freshness.secondsAgo}s ago`
         : "never sent a heartbeat";
-      deviceOfflineWarning = `Device is not responding (${lastSeenMsg}). Session started in offline mode — the device will sync codes when it reconnects.`;
-      console.warn(`[SESSION START] Device ${device?.deviceId} offline (${lastSeenMsg}) — starting offline session for ${company.name}`);
-    } else {
-      console.log(`[SESSION START] ✓ Device ${device.deviceId} online (${freshness.secondsAgo}s ago) — allowing start for ${company.name}`);
+      return res.status(503).json({
+        error: "Device is offline",
+        message: `The classroom device is not responding (${lastSeenMsg}). Power it on and wait for it to connect before starting a session.`,
+        deviceStatus: { online: false, registered: true, lastSeenAt: freshness.lastSeenAt },
+      });
     }
+    console.log(`[SESSION START] ✓ Device ${device.deviceId} online (${freshness.secondsAgo}s ago) — allowing start for ${company.name}`);
     // ── End device check ──────────────────────────────────
 
     // ── Device-lecturer assignment check ──────────────────────────────────────
@@ -288,11 +285,10 @@ exports.startSession = async (req, res) => {
       { path: "course", select: "title code" },
     ]);
 
-    const warnings = [courseWarning, deviceOfflineWarning].filter(Boolean);
+    const warnings = [courseWarning].filter(Boolean);
     res.status(201).json({
       session: populated,
       ...(warnings.length > 0 && { warning: warnings.join(" ") }),
-      ...(deviceOfflineWarning && { offlineMode: true }),
     });
   } catch (error) {
     if (error.name === "ValidationError") {
