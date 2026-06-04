@@ -3256,15 +3256,15 @@ async function renderHodDashboard(content) {
   }
 
   try {
-    const [sessData, userStats] = await Promise.all([
+    const deptQs = currentUser.department ? '&department=' + encodeURIComponent(currentUser.department) : '';
+    const [sessData, lecturerData, studentData] = await Promise.all([
       api('/api/attendance-sessions?limit=5'),
-      api('/api/users/stats')
+      api('/api/users?role=lecturer&limit=1' + deptQs),
+      api('/api/users?role=student&limit=1' + deptQs),
     ]);
     const sessions   = sessData.sessions   || [];
-    const stats      = userStats           || {};
-    const lecturers  = stats.lecturers     || 0;
-    const students   = stats.students      || 0;
-    const hods       = stats.hods          || 0;
+    const lecturers  = lecturerData.total  || 0;
+    const students   = studentData.total   || 0;
     const activeSess = sessions.filter(s => s.active).length;
 
     content.innerHTML = `
@@ -3440,30 +3440,55 @@ async function renderHodLecturers() {
   content.innerHTML = '<div class="loading">Loading lecturers…</div>';
   try {
     const dept = currentUser.department ? '&department=' + encodeURIComponent(currentUser.department) : '';
-    const data = await api('/api/users?role=lecturer&limit=200' + dept);
-    const lecturers = data.users || [];
+    const [lecturerData, courseData] = await Promise.all([
+      api('/api/users?role=lecturer&limit=200' + dept),
+      api('/api/courses?limit=500'),
+    ]);
+    const lecturers = lecturerData.users || [];
+    const courses   = courseData.courses || courseData || [];
+
+    // Build map: lecturerId → [course titles]
+    const coursesByLecturer = {};
+    for (const c of courses) {
+      const lid = c.lecturerId?._id || c.lecturerId;
+      if (!lid) continue;
+      const key = lid.toString();
+      if (!coursesByLecturer[key]) coursesByLecturer[key] = [];
+      coursesByLecturer[key].push(c.title || c.code || 'Untitled');
+    }
+
+    const deptLabel = currentUser.department ? `in ${currentUser.department}` : 'in your institution';
     content.innerHTML = `
       <div class="page-header">
-        <div><h2>Lecturers</h2><p>${lecturers.length} lecturer${lecturers.length !== 1 ? 's' : ''} in your institution</p></div>
+        <div><h2>Lecturers</h2><p>${lecturers.length} lecturer${lecturers.length !== 1 ? 's' : ''} ${deptLabel}</p></div>
         <button class="btn btn-secondary btn-sm" onclick="hodExportCSV('lecturers')">Export CSV</button>
       </div>
       <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:12px;">
         ${lecturers.length === 0 ? '<div class="empty-state"><p>No lecturers found.</p></div>' :
-          lecturers.map(u => `
-            <div class="card" style="display:flex;align-items:center;gap:12px;padding:14px 16px;">
-              <div style="width:38px;height:38px;border-radius:50%;background:#ecfeff;color:#0891b2;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:15px;flex-shrink:0;">
+          lecturers.map(u => {
+            const lecCourses = coursesByLecturer[u._id] || [];
+            const courseChips = lecCourses.slice(0, 3).map(t =>
+              `<span style="font-size:10px;padding:2px 7px;border-radius:20px;background:#f0fdf4;color:#166534;border:1px solid #bbf7d0;font-weight:600;white-space:nowrap;">${esc(t)}</span>`
+            ).join('');
+            const moreTag = lecCourses.length > 3
+              ? `<span style="font-size:10px;color:var(--text-muted)">+${lecCourses.length - 3} more</span>`
+              : '';
+            return `
+            <div class="card" style="display:flex;align-items:flex-start;gap:12px;padding:14px 16px;">
+              <div style="width:38px;height:38px;border-radius:50%;background:#ecfeff;color:#0891b2;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:15px;flex-shrink:0;margin-top:2px;">
                 ${(u.name||'?')[0].toUpperCase()}
               </div>
               <div style="min-width:0;flex:1;">
-                <div style="font-weight:700;font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${u.name}</div>
-                <div style="font-size:11px;color:var(--text-muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${u.email}</div>
+                <div style="font-weight:700;font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${esc(u.name)}</div>
+                <div style="font-size:11px;color:var(--text-muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${esc(u.email)}</div>
                 <div style="display:flex;gap:6px;align-items:center;margin-top:4px;flex-wrap:wrap;">
                   <span class="tag ${u.isApproved ? 'tag-green' : 'tag-amber'}">${u.isApproved ? 'Active' : 'Pending'}</span>
-                  ${u.department ? `<span style="font-size:10px;padding:2px 6px;border-radius:20px;background:#ecfeff;color:#0891b2;font-weight:600;">${u.department}</span>` : ''}
-                  
+                  ${u.department ? `<span style="font-size:10px;padding:2px 6px;border-radius:20px;background:#ecfeff;color:#0891b2;font-weight:600;">${esc(u.department)}</span>` : ''}
                 </div>
+                ${lecCourses.length ? `<div style="display:flex;gap:4px;flex-wrap:wrap;margin-top:6px;">${courseChips}${moreTag}</div>` : '<div style="font-size:11px;color:var(--text-muted);margin-top:5px;">No courses assigned</div>'}
               </div>
-            </div>`).join('')}
+            </div>`;
+          }).join('')}
       </div>`;
   } catch(e) {
     content.innerHTML = `<div class="card"><p style="color:#ef4444;">${e.message}</p></div>`;
