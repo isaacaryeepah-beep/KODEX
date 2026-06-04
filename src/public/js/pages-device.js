@@ -1206,6 +1206,11 @@ async function adOpenAssignModal(deviceId) {
       <div style="font-size:16px;font-weight:700;margin-bottom:4px;color:var(--text-primary)">Assign Lecturer to Device</div>
       <div style="font-size:12px;color:var(--text-secondary);margin-bottom:20px">Device: <strong>${deviceId}</strong></div>
 
+      <label style="display:block;font-size:12px;font-weight:600;color:var(--text-secondary);margin-bottom:4px">Department</label>
+      <select id="ad-dept-select" style="width:100%;padding:8px 10px;border:1px solid #e2e8f0;border-radius:8px;font-size:13px;margin-bottom:14px;background:var(--surface,#fff);color:var(--text-primary)">
+        <option value="">— All departments —</option>
+      </select>
+
       <label style="display:block;font-size:12px;font-weight:600;color:var(--text-secondary);margin-bottom:4px">Lecturer</label>
       <select id="ad-lec-select" style="width:100%;padding:8px 10px;border:1px solid #e2e8f0;border-radius:8px;font-size:13px;margin-bottom:14px;background:var(--surface,#fff);color:var(--text-primary)">
         <option value="">Loading lecturers…</option>
@@ -1233,9 +1238,26 @@ async function adOpenAssignModal(deviceId) {
     const lecturers = data.lecturers || [];
     window._adLecturerData = lecturers;
 
-    const lecSel = document.getElementById('ad-lec-select');
-    lecSel.innerHTML = `<option value="">— Select lecturer —</option>` +
-      lecturers.map(l => `<option value="${l._id}">${esc(l.name)}${l.department ? ' · ' + esc(l.department) : ''}</option>`).join('');
+    const deptSel = document.getElementById('ad-dept-select');
+    const lecSel  = document.getElementById('ad-lec-select');
+
+    // Populate department filter from unique departments in lecturer list
+    const depts = [...new Set(lecturers.map(l => l.department).filter(Boolean))].sort();
+    deptSel.innerHTML = `<option value="">— All departments —</option>` +
+      depts.map(d => `<option value="${esc(d)}">${esc(d)}</option>`).join('');
+
+    function populateLecturers(filterDept) {
+      const filtered = filterDept ? lecturers.filter(l => l.department === filterDept) : lecturers;
+      lecSel.innerHTML = `<option value="">— Select lecturer —</option>` +
+        filtered.map(l => `<option value="${l._id}">${esc(l.name)}${l.department ? ' · ' + esc(l.department) : ''}</option>`).join('');
+      document.getElementById('ad-crs-select').innerHTML = `<option value="">Select a lecturer first</option>`;
+    }
+
+    populateLecturers('');
+
+    deptSel.addEventListener('change', () => {
+      populateLecturers(deptSel.value);
+    });
 
     lecSel.addEventListener('change', () => {
       const lec = lecturers.find(l => l._id === lecSel.value);
