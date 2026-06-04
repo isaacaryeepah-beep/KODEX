@@ -1298,60 +1298,99 @@ function selectPortal(t){if(window._appLoaded)window._realSelectPortal(t);else w
   <script>
   (function() {
     const fab = document.getElementById('faq-fab');
-    let isDragging = false, dragMoved = false, startX, startY, origRight, origBottom;
+    let isDragging = false, dragMoved = false, startX, startY, startRight, startBottom;
 
-    function saveFabPos(right, bottom) {
-      try { localStorage.setItem('faq_fab_pos', JSON.stringify({ right, bottom })); } catch(e) {}
+    function saveFabPos(r, b) {
+      try { localStorage.setItem('faq_fab_pos', JSON.stringify({ right: r, bottom: b })); } catch(e) {}
     }
     function loadFabPos() {
       try { return JSON.parse(localStorage.getItem('faq_fab_pos')); } catch(e) { return null; }
     }
-    function setFabPos(right, bottom) {
+    function setFabPos(r, b) {
       const vw = window.innerWidth, vh = window.innerHeight;
-      right  = Math.min(Math.max(right,  8), vw - 58);
-      bottom = Math.min(Math.max(bottom, 8), vh - 58);
-      fab.style.right  = right  + 'px';
-      fab.style.bottom = bottom + 'px';
+      r = Math.min(Math.max(r, 8), vw - 58);
+      b = Math.min(Math.max(b, 8), vh - 58);
+      fab.style.right  = r + 'px';
+      fab.style.bottom = b + 'px';
+    }
+    function getPos() {
+      return {
+        r: parseInt(fab.style.right  || '24', 10),
+        b: parseInt(fab.style.bottom || '80', 10),
+      };
     }
 
     const pos = loadFabPos();
     if (pos) setFabPos(pos.right, pos.bottom);
 
-    // Use Pointer Events — works for both mouse and touch,
-    // setPointerCapture keeps tracking even outside the element.
+    // ── Touch (mobile) ────────────────────────────────────────────────────────
+    fab.addEventListener('touchstart', function(e) {
+      const t = e.touches[0];
+      isDragging = true; dragMoved = false;
+      startX = t.clientX; startY = t.clientY;
+      const p = getPos(); startRight = p.r; startBottom = p.b;
+      fab.style.transform = 'scale(1.12)';
+    }, { passive: true });
+
+    fab.addEventListener('touchmove', function(e) {
+      if (!isDragging) return;
+      const t = e.touches[0];
+      const dx = t.clientX - startX;
+      const dy = t.clientY - startY;
+      if (Math.abs(dx) > 4 || Math.abs(dy) > 4) dragMoved = true;
+      if (dragMoved) {
+        setFabPos(startRight - dx, startBottom - dy);
+        e.preventDefault(); // stop page scroll while dragging the button
+      }
+    }, { passive: false });
+
+    fab.addEventListener('touchend', function(e) {
+      if (!isDragging) return;
+      isDragging = false;
+      fab.style.transform = '';
+      window._faqFabDragMoved = dragMoved;
+      if (dragMoved) {
+        const p = getPos(); saveFabPos(p.r, p.b);
+        e.preventDefault(); // suppress the synthetic click after a drag
+      }
+    }, { passive: false });
+
+    fab.addEventListener('touchcancel', function() {
+      isDragging = false;
+      fab.style.transform = '';
+    });
+
+    // ── Pointer / mouse (desktop) ─────────────────────────────────────────────
     fab.addEventListener('pointerdown', function(e) {
-      if (e.pointerType === 'mouse' && e.button !== 0) return;
+      if (e.pointerType !== 'mouse' || e.button !== 0) return;
       isDragging = true; dragMoved = false;
       startX = e.clientX; startY = e.clientY;
-      origRight  = parseInt(fab.style.right  || '24', 10);
-      origBottom = parseInt(fab.style.bottom || '80', 10);
+      const p = getPos(); startRight = p.r; startBottom = p.b;
       fab.setPointerCapture(e.pointerId);
       fab.style.cursor = 'grabbing';
       fab.style.transform = 'scale(1.12)';
       e.preventDefault();
-      e.stopPropagation();
     });
 
     fab.addEventListener('pointermove', function(e) {
-      if (!isDragging) return;
+      if (e.pointerType !== 'mouse' || !isDragging) return;
       const dx = e.clientX - startX;
       const dy = e.clientY - startY;
       if (Math.abs(dx) > 3 || Math.abs(dy) > 3) dragMoved = true;
-      setFabPos(origRight - dx, origBottom - dy);
-      e.preventDefault();
-      e.stopPropagation();
+      setFabPos(startRight - dx, startBottom - dy);
     });
 
     fab.addEventListener('pointerup', function(e) {
-      if (!isDragging) return;
+      if (e.pointerType !== 'mouse' || !isDragging) return;
       isDragging = false;
       fab.style.cursor = 'grab';
       fab.style.transform = '';
       window._faqFabDragMoved = dragMoved;
-      if (dragMoved) saveFabPos(parseInt(fab.style.right, 10), parseInt(fab.style.bottom, 10));
+      if (dragMoved) { const p = getPos(); saveFabPos(p.r, p.b); }
     });
 
-    fab.addEventListener('pointercancel', function() {
+    fab.addEventListener('pointercancel', function(e) {
+      if (e.pointerType !== 'mouse') return;
       isDragging = false;
       fab.style.cursor = 'grab';
       fab.style.transform = '';
