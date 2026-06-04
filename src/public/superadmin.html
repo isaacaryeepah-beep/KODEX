@@ -234,9 +234,11 @@
     <div class="tabs">
       <button class="tab active" onclick="switchTab('institutions',this)">🏫 Institutions</button>
       <button class="tab" onclick="switchTab('payments',this)">💳 Payments</button>
+      <button class="tab" onclick="switchTab('devices',this)">📟 Devices</button>
     </div>
     <div id="tab-institutions"><div class="loading-msg">Loading…</div></div>
     <div id="tab-payments" style="display:none"><div class="loading-msg">Loading…</div></div>
+    <div id="tab-devices" style="display:none"><div class="loading-msg">Loading…</div></div>
   </div>
 </div>
 
@@ -344,7 +346,104 @@ function switchTab(tab, btn) {
   btn.classList.add('active');
   document.getElementById('tab-institutions').style.display = tab === 'institutions' ? 'block' : 'none';
   document.getElementById('tab-payments').style.display = tab === 'payments' ? 'block' : 'none';
+  document.getElementById('tab-devices').style.display = tab === 'devices' ? 'block' : 'none';
   if (tab === 'payments') loadPayments();
+  if (tab === 'devices') loadDevices();
+}
+
+// ── Devices Tab ───────────────────────────────────────────────────────────────
+async function loadDevices() {
+  const wrap = document.getElementById('tab-devices');
+  wrap.innerHTML = '<div class="loading-msg">Loading devices…</div>';
+  try {
+    const data = await api('/api/superadmin/devices');
+    const devices = data.devices || [];
+    const orphaned = devices.filter(d => d.isOrphaned);
+    const registered = devices.filter(d => !d.isOrphaned);
+
+    wrap.innerHTML = `
+      <div class="stats" style="margin-bottom:20px">
+        <div class="stat"><div class="stat-val">${devices.length}</div><div class="stat-lbl">Total Devices</div></div>
+        <div class="stat"><div class="stat-val" style="color:#16a34a">${registered.length}</div><div class="stat-lbl">Registered</div></div>
+        <div class="stat"><div class="stat-val" style="color:#dc2626">${orphaned.length}</div><div class="stat-lbl">Orphaned</div></div>
+      </div>
+      ${orphaned.length ? `
+      <div style="background:#fef2f2;border:1px solid #fca5a5;border-radius:10px;padding:12px 16px;margin-bottom:20px;font-size:13px;color:#991b1b">
+        <strong>⚠️ ${orphaned.length} orphaned device${orphaned.length !== 1 ? 's' : ''}</strong> — registered to institutions that no longer exist. Delete them to free the hardware for re-registration.
+      </div>` : ''}
+      <div class="table-card">
+        <div class="table-head">
+          <h3>All Devices</h3>
+          <input type="text" id="device-search" placeholder="🔍 Search by device ID or name…" oninput="filterDevices()" style="padding:6px 10px;border:1px solid #e2e8f0;border-radius:6px;font-size:13px;width:240px">
+        </div>
+        <div id="devices-list">
+          ${buildDeviceRows(devices)}
+        </div>
+      </div>`;
+
+    window._allDevices = devices;
+  } catch (e) {
+    wrap.innerHTML = `<div class="empty" style="color:#dc2626">Error: ${e.message}</div>`;
+  }
+}
+
+function filterDevices() {
+  const q = (document.getElementById('device-search')?.value || '').toLowerCase();
+  const filtered = (window._allDevices || []).filter(d =>
+    !q ||
+    (d.deviceId || '').toLowerCase().includes(q) ||
+    (d.deviceName || '').toLowerCase().includes(q) ||
+    (d.companyName || '').toLowerCase().includes(q)
+  );
+  const el = document.getElementById('devices-list');
+  if (el) el.innerHTML = buildDeviceRows(filtered);
+}
+
+function buildDeviceRows(devices) {
+  if (!devices.length) return '<div class="empty">No devices found.</div>';
+  return `<table>
+    <thead><tr>
+      <th>Device ID</th><th>Name</th><th>Institution</th><th>Status</th><th>Last Seen</th><th>Action</th>
+    </tr></thead>
+    <tbody>
+      ${devices.map(d => {
+        const isOrphaned = d.isOrphaned;
+        const lastSeen = d.lastHeartbeat ? new Date(d.lastHeartbeat).toLocaleString() : 'Never';
+        const now = Date.now();
+        const online = d.lastHeartbeat && (now - new Date(d.lastHeartbeat).getTime()) < 30000;
+        const statusDot = online
+          ? '<span style="color:#16a34a;font-weight:600">● Online</span>'
+          : '<span style="color:#94a3b8">○ Offline</span>';
+        const instCell = isOrphaned
+          ? '<span style="color:#dc2626;font-weight:600">⚠️ Orphaned</span>'
+          : `<span style="font-weight:600">${d.companyName || '—'}</span>${d.companyCode ? `<br><span style="font-size:11px;color:#64748b">${d.companyCode}</span>` : ''}`;
+        return `<tr style="${isOrphaned ? 'background:#fef2f2' : ''}">
+          <td style="font-family:monospace;font-size:12px">${d.deviceId}</td>
+          <td>${d.deviceName || '<span style="color:#94a3b8">—</span>'}</td>
+          <td>${instCell}</td>
+          <td>${statusDot}</td>
+          <td style="font-size:12px;color:#64748b">${lastSeen}</td>
+          <td>
+            <button onclick="forceDeleteDevice('${d._id}','${(d.deviceName||d.deviceId).replace(/'/g,'')}')"
+              style="background:#fee2e2;color:#dc2626;border:1px solid #fca5a5;border-radius:6px;padding:4px 10px;font-size:12px;font-weight:600;cursor:pointer">
+              🗑 Remove
+            </button>
+          </td>
+        </tr>`;
+      }).join('')}
+    </tbody>
+  </table>`;
+}
+
+async function forceDeleteDevice(id, name) {
+  if (!confirm(`Remove device "${name}"?\n\nThe ESP32 will factory-reset on its next power-on. This frees it to be registered to a new institution.`)) return;
+  try {
+    const result = await api(`/api/superadmin/devices/${id}`, { method: 'DELETE' });
+    alert(result.message || 'Device removed.');
+    loadDevices();
+  } catch (e) {
+    alert('Error: ' + e.message);
+  }
 }
 
 // ── Institutions Tab ──────────────────────────────────────────────────────────
