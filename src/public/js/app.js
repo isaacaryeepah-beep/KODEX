@@ -258,7 +258,12 @@ function startSSE() {
         const n = msg.notification;
         _updateNotifBadge(_notifUnread + 1);
         _notifSound.playChime('announcement');
-        if (window.toastInfo) toastInfo(n.title + (n.body ? ' — ' + n.body : ''));
+        if (window.toast) {
+          window.toast(n.body || '', 'info', {
+            title: n.title,
+            duration: 6000,
+          });
+        }
         if (_notifPanelOpen) _loadNotifPanel();
       }
     } catch (_) {}
@@ -501,10 +506,12 @@ function _timeAgo(date) {
 
     const el = document.createElement('div');
     el.className = `toast toast-${t}`;
+    const title = options.title;
     el.innerHTML = `
       <span class="toast-icon">${ICONS[t]}</span>
       <div class="toast-body">
-        <div class="toast-msg">${message}</div>
+        ${title ? `<div class="toast-title">${title}</div>` : ''}
+        ${message ? `<div class="toast-msg">${message}</div>` : ''}
       </div>
       <span class="toast-close">×</span>
       <div class="toast-progress" style="width:100%"></div>
@@ -928,22 +935,20 @@ async function syncOfflineQueue() {
 }
 
 function showToastNotif(msg, type) {
-  const t = document.createElement('div');
-  t.style.cssText = [
-    'position:fixed','bottom:24px','left:50%','transform:translateX(-50%)',
-    'padding:10px 20px','border-radius:8px','font-size:13px','font-weight:600',
-    'z-index:10000','box-shadow:0 4px 16px rgba(0,0,0,0.15)',
-    type === 'success' ? 'background:#dcfce7;color:#166534;border:1px solid #86efac' :
-                         'background:#fef3c7;color:#92400e;border:1px solid #fbbf24'
-  ].join(';');
-  t.textContent = msg;
-  document.body.appendChild(t);
-  setTimeout(() => t.remove(), 3500);
+  if (!msg) return;
+  // Route through the modern stacking toast system so messages never overlap
+  const t = type === 'success' ? 'success'
+          : type === 'error'   ? 'error'
+          : type === 'warn'    ? 'warning'
+          : 'info';
+  if (window.toast) { window.toast(msg, t); return; }
+  // Fallback if called before the modern system is ready
+  console.info('[toast]', type, msg);
 }
 
 // Alias used by Corporate Phase 1 functions (shifts, leave)
 function toast(msg, type) {
-  showToastNotif(msg, type === 'ok' ? 'success' : 'warn');
+  showToastNotif(msg, type === 'ok' ? 'success' : type || 'info');
 }
 
 // Listen for online/offline events
