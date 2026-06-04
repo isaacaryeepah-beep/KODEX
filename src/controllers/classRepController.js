@@ -54,9 +54,9 @@ exports.connectDevice = async (req, res) => {
     const device = await Device.findOne({ classRepId: req.user._id, companyId: req.user.company, isActive: true });
     if (!device) return res.status(404).json({ error: 'No device is assigned to your class. Contact your admin.' });
 
-    // Check device online (within 30s)
+    // Check device online (within 20s — matches Device model isOnline virtual)
     const ms = Date.now() - new Date(device.lastHeartbeat || 0).getTime();
-    if (ms > 30000) return res.status(503).json({ error: 'Device is offline. Power it on first.' });
+    if (ms > 20000) return res.status(503).json({ error: 'Device is offline. Power it on first.' });
 
     // Check if device already active
     if (device.activeLecturerId) return res.status(409).json({ error: 'Device is already connected to a session. End that session first.' });
@@ -71,9 +71,9 @@ exports.connectDevice = async (req, res) => {
       if (!pinOk) return res.status(403).json({ error: 'Incorrect lecturer PIN', requiresPin: true });
     }
 
-    // Verify course
-    const course = await Course.findOne({ _id: courseId, companyId: req.user.company, isActive: true });
-    if (!course) return res.status(404).json({ error: 'Course not found' });
+    // Verify course belongs to this lecturer
+    const course = await Course.findOne({ _id: courseId, companyId: req.user.company, isActive: true, lecturerId: lecturerId });
+    if (!course) return res.status(404).json({ error: 'Course not found or not assigned to this lecturer' });
 
     device.activeLecturerId = lecturerId;
     device.activeCourseId = courseId;
@@ -88,7 +88,7 @@ exports.connectDevice = async (req, res) => {
 exports.disconnectDevice = async (req, res) => {
   try {
     if (!req.user.isClassRep) return res.status(403).json({ error: 'Not a class rep' });
-    const device = await Device.findOne({ classRepId: req.user._id, companyId: req.user.company });
+    const device = await Device.findOne({ classRepId: req.user._id, companyId: req.user.company, isActive: true });
     if (!device) return res.status(404).json({ error: 'No device assigned' });
 
     device.activeLecturerId = null;

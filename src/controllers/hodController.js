@@ -16,8 +16,17 @@ function hodDeptFilter(req, base = {}) {
   return filter;
 }
 
+function requireHodDept(req, res) {
+  if (req.user.role === 'hod' && !req.user.department) {
+    res.status(403).json({ error: 'Your HOD account has no department assigned. Contact your admin.' });
+    return false;
+  }
+  return true;
+}
+
 // ─── GET /api/hod/locked-students ────────────────────────────────────────────
 exports.listLockedStudents = async (req, res) => {
+  if (!requireHodDept(req, res)) return;
   try {
     const now = new Date();
     const filter = hodDeptFilter(req, {
@@ -107,6 +116,7 @@ exports.unlockStudent = async (req, res) => {
 
 // ─── GET /api/hod/pending-courses ────────────────────────────────────────────
 exports.listPendingCourses = async (req, res) => {
+  if (!requireHodDept(req, res)) return;
   try {
     const companyId = req.user.company;
     const filter    = { companyId, approvalStatus: "pending", needsApproval: true };
@@ -217,6 +227,7 @@ exports.rejectCourse = async (req, res) => {
 
 // ─── GET /api/hod/dashboard-stats ────────────────────────────────────────────
 exports.getDashboardStats = async (req, res) => {
+  if (!requireHodDept(req, res)) return;
   try {
     const company = req.user.company;
     const dept    = req.user.department;
@@ -267,6 +278,7 @@ exports.getDashboardStats = async (req, res) => {
 
 // ─── GET /api/hod/alerts ─────────────────────────────────────────────────────
 exports.getAlerts = async (req, res) => {
+  if (!requireHodDept(req, res)) return;
   try {
     const company = req.user.company;
     const dept    = req.user.department;
@@ -393,6 +405,7 @@ exports.bulkUnlockStudents = async (req, res) => {
 
 // ─── POST /api/hod/send-group-message ────────────────────────────────────────
 exports.sendGroupMessage = async (req, res) => {
+  if (!requireHodDept(req, res)) return;
   try {
     const { target, body: bodyText } = req.body;
     const file = req.file || null;
@@ -475,6 +488,7 @@ exports.sendGroupMessage = async (req, res) => {
 
 // ─── GET /api/hod/course-overview ────────────────────────────────────────────
 exports.getCourseOverview = async (req, res) => {
+  if (!requireHodDept(req, res)) return;
   try {
     const company  = req.user.company;
     const dept     = req.user.department;

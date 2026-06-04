@@ -11204,6 +11204,7 @@ async function handleQrScan() {
   try {
     await api('/api/attendance-sessions/mark', {
       method: 'POST',
+      signal: AbortSignal.timeout(30000),
       body: JSON.stringify({ qrToken, method: 'qr_mark' }),
     });
     if (content) {
@@ -11218,11 +11219,13 @@ async function handleQrScan() {
   } catch(e) {
     if (content) {
       const expired = e.message?.toLowerCase().includes('expired');
+      const timedOut = e.name === 'TimeoutError' || e.name === 'AbortError';
+      const msg = timedOut ? 'Request timed out. Please check your connection and try again.' : esc(e.message || 'Failed');
       content.innerHTML = `
         <div class="card" style="text-align:center;padding:48px 24px;max-width:400px;margin:40px auto;border-left:4px solid var(--danger)">
           <div style="font-size:56px;margin-bottom:16px">${expired ? '⏰' : '❌'}</div>
           <div style="font-size:20px;font-weight:800;color:var(--danger)">${expired ? 'QR Code Expired' : 'Failed'}</div>
-          <p style="color:var(--text-light);font-size:13px;margin-top:8px">${expired ? 'This QR code has expired. Ask your lecturer/manager for a fresh one.' : e.message}</p>
+          <p style="color:var(--text-light);font-size:13px;margin-top:8px">${expired ? 'This QR code has expired. Ask your lecturer/manager for a fresh one.' : msg}</p>
           <button class="btn btn-secondary" style="margin-top:20px" onclick="navigateTo('mark-attendance')">Go Back</button>
         </div>`;
     }
@@ -11244,7 +11247,7 @@ async function renderClassDevice() {
     const lecturers = lecRes.lecturers || [];
 
     const deviceStatus = device
-      ? (Date.now() - new Date(device.lastHeartbeat || 0).getTime() < 30000
+      ? (deviceOnline
         ? '<span style="color:#16a34a;font-weight:700">● Online</span>'
         : '<span style="color:#dc2626;font-weight:700">● Offline</span>')
       : null;
@@ -11258,7 +11261,8 @@ async function renderClassDevice() {
       : '';
 
     const localIp = device && device.localIp ? device.localIp : null;
-    const currentSsid = device && device.wifiSSID ? device.wifiSSID : null;
+    const currentSsid = device && device.currentNetwork ? device.currentNetwork : null;
+    const deviceOnline = device ? (Date.now() - new Date(device.lastHeartbeat || 0).getTime() < 20000) : false;
 
     root.innerHTML = `
       <div style="max-width:560px;margin:0 auto">
@@ -11285,7 +11289,12 @@ async function renderClassDevice() {
           ${!device.activeLecturerId ? `
           <div style="background:#fff;border:1.5px solid #e2e8f0;border-radius:14px;padding:18px;margin-bottom:20px">
             <h3 style="font-size:15px;font-weight:700;margin-bottom:14px">Connect Device to a Lecturer</h3>
-            ${!lecturers.length ? `<p style="color:#64748b;font-size:13px">No lecturers found for your class courses.</p>` : `
+            ${!deviceOnline ? `
+            <div style="background:#fef3c7;border:1px solid #fde68a;border-radius:8px;padding:12px 14px;font-size:13px;color:#92400e;display:flex;align-items:flex-start;gap:8px">
+              <span style="flex-shrink:0;font-size:16px">📶</span>
+              <div><strong>Device is offline.</strong> Power it on and wait for it to connect before linking to a lecturer.</div>
+            </div>` :
+            !lecturers.length ? `<p style="color:#64748b;font-size:13px">No lecturers found for your class courses.</p>` : `
             <div style="margin-bottom:12px">
               <label style="font-size:12px;font-weight:600;text-transform:uppercase;letter-spacing:.5px;color:#64748b;display:block;margin-bottom:6px">Select Lecturer &amp; Course</label>
               <select id="cr-lecturer-select" style="width:100%;padding:10px 12px;border:1.5px solid #e2e8f0;border-radius:8px;font-size:13px">
@@ -11298,7 +11307,7 @@ async function renderClassDevice() {
               <input id="cr-pin" type="password" inputmode="numeric" maxlength="4" placeholder="4-digit PIN" style="width:100%;padding:10px 12px;border:1.5px solid #e2e8f0;border-radius:8px;font-size:16px;letter-spacing:4px;box-sizing:border-box">
             </div>
             <div id="cr-error" style="color:#dc2626;font-size:13px;margin-bottom:8px;display:none"></div>
-            <button onclick="classRepConnect()" style="width:100%;padding:11px;background:#1e293b;color:#fff;border:none;border-radius:9px;font-size:14px;font-weight:700;cursor:pointer">
+            <button id="cr-connect-btn" onclick="classRepConnect()" style="width:100%;padding:11px;background:#1e293b;color:#fff;border:none;border-radius:9px;font-size:14px;font-weight:700;cursor:pointer">
               Connect &amp; Start Session
             </button>`}
           </div>` : ''}
@@ -11338,28 +11347,38 @@ window.classRepConnect = async function() {
   const sel = document.getElementById('cr-lecturer-select');
   const pin = document.getElementById('cr-pin') ? document.getElementById('cr-pin').value : '';
   const errEl = document.getElementById('cr-error');
+  const btn = document.getElementById('cr-connect-btn');
   if (!sel || !sel.value) { if (errEl) { errEl.textContent = 'Please select a lecturer'; errEl.style.display = 'block'; } return; }
   const parts = sel.value.split('|');
   const lecturerId = parts[0];
   const courseId = parts[1];
+  if (btn) { btn.disabled = true; btn.textContent = 'Connecting…'; }
+  if (errEl) errEl.style.display = 'none';
   try {
     await api('/api/class-rep/connect', { method: 'POST', body: JSON.stringify({ lecturerId, courseId, lecturerPin: pin }) });
     showToastNotif('Device connected successfully', 'success');
     renderClassDevice();
   } catch (e) {
-    const msg = (e.data && e.data.requiresPin) ? 'Incorrect PIN — ask the lecturer for their 4-digit PIN' : (e.message || 'Failed to connect');
+    const requiresPin = e.data && e.data.requiresPin;
+    const msg = requiresPin ? 'Incorrect PIN — ask the lecturer for their 4-digit PIN' : (e.message || 'Failed to connect');
     if (errEl) { errEl.textContent = msg; errEl.style.display = 'block'; }
-    if (e.data && e.data.requiresPin) { const pw = document.getElementById('cr-pin-wrap'); if (pw) pw.style.display = 'block'; }
+    if (requiresPin) { const pw = document.getElementById('cr-pin-wrap'); if (pw) pw.style.display = 'block'; }
+    if (btn) { btn.disabled = false; btn.textContent = 'Connect & Start Session'; }
   }
 };
 
 window.classRepDisconnect = async function() {
   if (!confirm('End the session and release the device?')) return;
+  const btn = event && event.target;
+  if (btn) { btn.disabled = true; btn.textContent = 'Releasing…'; }
   try {
     await api('/api/class-rep/disconnect', { method: 'POST', body: '{}' });
     showToastNotif('Device released', 'success');
     renderClassDevice();
-  } catch (e) { showToastNotif(e.message || 'Failed to disconnect', 'error'); }
+  } catch (e) {
+    showToastNotif(e.message || 'Failed to disconnect', 'error');
+    if (btn) { btn.disabled = false; btn.textContent = 'End Session & Release Device'; }
+  }
 };
 
 window.saveLecturerPin = async function() {
@@ -11739,13 +11758,16 @@ async function submitQrMark() {
   try {
     await api('/api/attendance-sessions/mark', {
       method: 'POST',
+      signal: AbortSignal.timeout(30000),
       body: JSON.stringify({ qrToken, method: 'qr_mark' }),
     });
     offlineCache('pendingMark', null);
     toastSuccess('Attendance marked successfully!');
     navigateTo('mark-attendance');
   } catch (e) {
-    if (e.data && e.data.esp32Required) {
+    if (e.name === 'TimeoutError' || e.name === 'AbortError') {
+      toastError('Request timed out. Please check your connection and try again.');
+    } else if (e.data && e.data.esp32Required) {
       toastError('You must be connected to the classroom WiFi (DIKLY-CLASSROOM) to mark attendance.');
     } else {
       toastError(e.message);
@@ -11844,17 +11866,28 @@ async function markBLE() {
       });
     } catch (e) {
       // Map server error codes to clear messages
-      const code = e.data?.code;
-      if (code === 'NOT_ON_HOTSPOT')      throw new Error(
+      const errCode = e.data?.code;
+      // ble-verify endpoint has been removed — fall back to code entry
+      if (e.status === 410 || e.message?.includes('BLE verification has been removed')) {
+        if (area) area.innerHTML = `
+          <div class="card" style="text-align:center;padding:28px 20px;border-left:4px solid var(--warning);background:#fffbeb">
+            <div style="font-size:40px;margin-bottom:12px">📟</div>
+            <div style="font-size:15px;font-weight:700;margin-bottom:8px">BLE Check-in Unavailable</div>
+            <p style="font-size:13px;color:var(--text-muted);margin-bottom:16px">Please use the attendance code shown on the classroom device instead.</p>
+            <button class="btn btn-primary btn-sm" onclick="showCodeEntry()">Enter Code</button>
+          </div>`;
+        return;
+      }
+      if (errCode === 'NOT_ON_HOTSPOT')      throw new Error(
         'Connected to DIKLY-CLASSROOM but still failing?\n\n' +
         'Android is routing traffic through mobile data instead of WiFi.\n\n' +
         'Fix: Go to Settings → Wi-Fi → tap & hold DIKLY-CLASSROOM → ' +
         'Network usage → set to \'Always use this network\', then retry.'
       );
-      if (code === 'TOKEN_EXPIRED')       throw new Error('Token expired — move closer to the device and try again.');
-      if (code === 'INVALID_TOKEN')       throw new Error('Invalid token. You must be physically next to the classroom device.');
-      if (code === 'TOKEN_ALREADY_USED')  throw new Error('This token was already used. Each BLE scan is single-use.');
-      if (code === 'DEVICE_OFFLINE')      throw new Error('Classroom device is offline. Ask your lecturer to power it on.');
+      if (errCode === 'TOKEN_EXPIRED')       throw new Error('Token expired — move closer to the device and try again.');
+      if (errCode === 'INVALID_TOKEN')       throw new Error('Invalid token. You must be physically next to the classroom device.');
+      if (errCode === 'TOKEN_ALREADY_USED')  throw new Error('This token was already used. Each BLE scan is single-use.');
+      if (errCode === 'DEVICE_OFFLINE')      throw new Error('Classroom device is offline. Ask your lecturer to power it on.');
       throw e;
     }
 
@@ -11974,10 +12007,10 @@ function showMarkAttendanceModal() {
     <div class="modal-overlay" onclick="closeModal(event)">
       <div class="modal" onclick="event.stopPropagation()">
         <h3>Mark Attendance</h3>
-        <p style="font-size:13px;color:var(--text-light);margin-bottom:16px">Enter the 4-character code shown by your lecturer or manager.</p>
+        <p style="font-size:13px;color:var(--text-light);margin-bottom:16px">Enter the 6-digit code shown on the classroom device screen.</p>
         <div class="form-group">
           <label>Attendance Code</label>
-          <input type="text" id="attend-code" placeholder="Enter code" maxlength="4" style="font-size:22px;text-align:center;letter-spacing:8px;font-weight:700;text-transform:uppercase" autofocus>
+          <input type="text" id="attend-code" placeholder="000000" maxlength="6" inputmode="numeric" style="font-size:22px;text-align:center;letter-spacing:8px;font-weight:700" autofocus>
         </div>
         <div class="modal-actions">
           <button class="btn btn-secondary btn-sm" onclick="closeModal()">Cancel</button>
@@ -11992,7 +12025,7 @@ function showMarkAttendanceModal() {
 async function markAttendance() {
   try {
     const code = document.getElementById('attend-code').value;
-    if (!code || code.length !== 4) { toastWarning('Please enter the 4-character code.'); return; }
+    if (!code || !/^\d{6}$/.test(code)) { toastWarning('Please enter the 6-digit attendance code.'); return; }
     await api('/api/attendance-sessions/mark', {
       method: 'POST',
       body: JSON.stringify({ code, method: 'code_mark' }),
