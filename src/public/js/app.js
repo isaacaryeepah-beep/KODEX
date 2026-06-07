@@ -3726,8 +3726,16 @@ function _renderHodLevelStudents(level, allStudents) {
                   ${u.semester ? `<span style="font-size:11px;color:var(--text-muted);margin-left:4px">Sem ${esc(u.semester)}</span>` : ''}
                   ${u.academicYear ? `<span style="font-size:10px;color:var(--text-muted);margin-left:4px">${esc(u.academicYear)}</span>` : ''}
                 </td>
-                <td style="padding:11px 14px"><span class="tag ${u.isApproved ? 'tag-green' : 'tag-amber'}">${u.isApproved ? 'Active' : 'Pending'}</span></td>
-                <td style="padding:11px 14px"><button class="btn btn-xs btn-secondary" onclick="hodViewStudentAttendance('${u._id}','${(u.name||'').replace(/'/g,"\\'")}')">Attendance</button></td>
+                <td style="padding:11px 14px">
+                  <span class="tag ${u.isApproved ? 'tag-green' : 'tag-amber'}">${u.isApproved ? 'Active' : 'Pending'}</span>
+                  ${u.isClassRep ? '<span class="tag" style="background:#7c3aed;color:#fff;margin-left:4px">Rep</span>' : ''}
+                </td>
+                <td style="padding:11px 14px;display:flex;gap:6px;flex-wrap:wrap">
+                  <button class="btn btn-xs btn-secondary" onclick="hodViewStudentAttendance('${u._id}','${(u.name||'').replace(/'/g,"\\'")}')">Attendance</button>
+                  ${u.isClassRep
+                    ? `<button class="btn btn-xs" style="background:#fee2e2;color:#b91c1c;border:1px solid #fca5a5;" onclick="hodToggleClassRep('${u._id}','${esc(u.name).replace(/'/g,"\\'")}',false)">Remove Rep</button>`
+                    : `<button class="btn btn-xs" style="background:#faf5ff;color:#7c3aed;border:1px solid #d8b4fe;" onclick="hodToggleClassRep('${u._id}','${esc(u.name).replace(/'/g,"\\'")}',true)">Make Rep</button>`}
+                </td>
               </tr>`).join('')}
         </tbody>
       </table>
@@ -3740,6 +3748,23 @@ function hodFilterStudents() {
     const match = row.dataset.name.includes(q) || row.dataset.index.includes(q);
     row.style.display = match ? '' : 'none';
   });
+}
+
+async function hodToggleClassRep(studentId, name, assign) {
+  const action = assign ? `Make ${name} a class representative?` : `Remove ${name} as class representative?`;
+  if (!confirm(action)) return;
+  try {
+    if (assign) {
+      await api('/api/class-rep-admin/assign', { method: 'POST', body: JSON.stringify({ studentId }) });
+      toastSuccess(`${name} is now a class representative`);
+    } else {
+      await api(`/api/class-rep-admin/remove/${studentId}`, { method: 'DELETE' });
+      toastSuccess(`${name} removed as class representative`);
+    }
+    renderHodStudents();
+  } catch(e) {
+    toastError(e.message || 'Failed to update class representative');
+  }
 }
 
 async function renderHodReports() {
