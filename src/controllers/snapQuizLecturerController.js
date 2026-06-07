@@ -190,7 +190,7 @@ exports.updateQuiz = async (req, res) => {
   try {
     const quiz = req.assessment;
 
-    const attemptCount = await SnapQuizAttempt.countDocuments({ quiz: quiz._id });
+    const attemptCount = await SnapQuizAttempt.countDocuments({ quiz: quiz._id, company: req.companyId });
     const STRUCTURAL = ["timeLimitMinutes", "startTime", "endTime", "allowedAttempts",
                         "maxViolationsBeforeTermination", "passMark", "scorePolicy"];
     if (attemptCount > 0 && STRUCTURAL.some(f => req.body[f] !== undefined)) {
@@ -364,7 +364,7 @@ exports.closeQuiz = async (req, res) => {
 exports.deleteQuiz = async (req, res) => {
   try {
     const quiz = req.assessment;
-    const attemptCount = await SnapQuizAttempt.countDocuments({ quiz: quiz._id });
+    const attemptCount = await SnapQuizAttempt.countDocuments({ quiz: quiz._id, company: req.companyId });
 
     if (attemptCount > 0) {
       quiz.status     = SNAP_QUIZ_STATUSES.ARCHIVED;

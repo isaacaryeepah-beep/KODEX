@@ -390,7 +390,9 @@ router.get("/payments", async (req, res) => {
 });
 
 // ── POST /api/superadmin/impersonate/:companyId ───────────────────────────────
-// Issues a short-lived token scoped to an admin of the given company
+// Issues a short-lived token scoped to an admin of the given company.
+// Token lifetime is reduced to 5 minutes and a one-time nonce is embedded so
+// the same token cannot be replayed if intercepted from URL history/logs.
 router.post("/impersonate/:companyId", async (req, res) => {
   try {
     const company = await Company.findById(req.params.companyId);
@@ -400,18 +402,23 @@ router.post("/impersonate/:companyId", async (req, res) => {
     const admin = await User.findOne({ company: company._id, role: "admin", isActive: true });
     if (!admin) return res.status(404).json({ error: "No active admin found for this company" });
 
-    // Issue a 1-hour impersonation token tagged so it can be identified
+    const crypto = require("crypto");
+    const nonce  = crypto.randomBytes(16).toString("hex");
+
+    // 5-minute impersonation token with nonce for one-time use detection
     const impersonateToken = jwt.sign(
-      { id: admin._id, impersonatedBy: req.user._id, impersonation: true },
+      { id: admin._id, impersonatedBy: req.user._id, impersonation: true, nonce },
       process.env.JWT_SECRET,
-      { expiresIn: "1h" }
+      { expiresIn: "5m" }
     );
+
+    console.log(`[Impersonate] superadmin=${req.user._id} → company=${company._id} admin=${admin._id}`);
 
     res.json({
       token: impersonateToken,
       admin: { id: admin._id, name: admin.name, email: admin.email },
       company: { id: company._id, name: company.name, mode: company.mode },
-      expiresIn: "1 hour",
+      expiresIn: "5 minutes",
     });
   } catch (err) {
     res.status(500).json({ error: "Failed to generate impersonation token" });

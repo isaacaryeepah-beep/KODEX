@@ -12,8 +12,9 @@
  *   GET  /:attemptId/status   — current sync state (lecturer / student poll)
  */
 
-const path = require("path");
-const fs   = require("fs");
+const path     = require("path");
+const fs       = require("fs");
+const mongoose = require("mongoose");
 
 const OfflineSyncLog    = require("../models/OfflineSyncLog");
 const SnapQuizAttempt   = require("../models/SnapQuizAttempt");
@@ -73,12 +74,22 @@ async function verifyAttemptAccess(req, res) {
     return attempt;
   }
 
-  // Lecturers/managers: must belong to the same company as the attempt.
-  const userCompany   = (user.company || "").toString();
+  // Lecturers/managers: must belong to the same company AND be assigned to the quiz.
+  const userCompany    = (user.company || "").toString();
   const attemptCompany = (attempt.company || "").toString();
   if (!userCompany || userCompany !== attemptCompany) {
     res.status(403).json({ error: "Access denied" });
     return null;
+  }
+
+  if (user.role === "lecturer" || user.role === "hod") {
+    const SnapQuiz = require("../models/SnapQuiz");
+    const quiz = await SnapQuiz.findById(attempt.quiz).select("createdBy company").lean();
+    if (!quiz || String(quiz.company) !== userCompany ||
+        String(quiz.createdBy) !== user._id.toString()) {
+      res.status(403).json({ error: "Access denied" });
+      return null;
+    }
   }
 
   return attempt;
@@ -226,7 +237,7 @@ exports.syncEvents = async (req, res) => {
             // SnapQuizViolationLog uses ObjectId refs, but offline events
             // may only carry string IDs — store what we have and let the
             // reviewer panel reconcile.
-            attempt:      syncLog.quizId ? undefined : undefined, // resolved below
+            attempt:      mongoose.Types.ObjectId.isValid(attemptId) ? new mongoose.Types.ObjectId(attemptId) : undefined,
             quiz:         syncLog.quizId || undefined,
             student:      req.user._id,
             company:      req.user.company || undefined,
