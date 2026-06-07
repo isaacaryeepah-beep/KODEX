@@ -1702,7 +1702,7 @@ function openCreateQuizModal() {
           <label style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;color:var(--text-light);margin-bottom:5px;display:block">Course <span style="color:#dc2626">*</span></label>
           <select id="qz-m-course" style="width:100%;padding:9px 12px;border:1.5px solid var(--border);border-radius:8px;font-size:14px;font-family:inherit;outline:none">
             <option value="">Select a course…</option>
-            ${S.courses.map(c => `<option value="${c._id}">${c.code} — ${c.title}${c.level?' · L'+c.level:''}${c.group?' · Grp '+c.group:''}</option>`).join('')}
+            ${S.courses.map(c => `<option value="${c._id}">${c.code} — ${c.title}${c.level!=null?' · L'+c.level:''}${c.group?' · Grp '+c.group:''}</option>`).join('')}
           </select>
         </div>
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
@@ -1970,7 +1970,7 @@ function openCreateSnapQuizModal() {
   (S.courses || []).forEach(c => {
     const o = document.createElement('option');
     o.value = c._id;
-    o.textContent = `${c.code} — ${c.title}${c.level?' · L'+c.level:''}${c.group?' · Grp '+c.group:''}`;
+    o.textContent = `${c.code} — ${c.title}${c.level!=null?' · L'+c.level:''}${c.group?' · Grp '+c.group:''}`;
     sel.appendChild(o);
   });
 }

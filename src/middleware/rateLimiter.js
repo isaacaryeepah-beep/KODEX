@@ -77,7 +77,8 @@ const passwordResetLimiter = (() => {
     for (const [k, v] of _counts.entries()) if (now - v.start > 60 * 60 * 1000) _counts.delete(k);
   }, 5 * 60 * 1000);
   return (req, res, next) => {
-    const id = (req.body?.phone || req.body?.email || req.body?.indexNumber || 'unknown').toLowerCase().trim();
+    const id = (req.body?.phone || req.body?.email || req.body?.indexNumber || '').toLowerCase().trim();
+    if (!id) return next(); // no identifier — controller will reject; don't pollute rate-limit bucket
     const key = `pwr::${id}`;
     const now = Date.now();
     const entry = _counts.get(key);

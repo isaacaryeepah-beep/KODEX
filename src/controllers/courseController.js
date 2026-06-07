@@ -73,7 +73,7 @@ exports.getCourseById = async (req, res) => {
     // Access checks
     const role = req.user.role;
     if (role === 'student') {
-      const enrolled = course.enrolledStudents.some(
+      const enrolled = (course.enrolledStudents || []).some(
         s => s._id.toString() === req.user._id.toString()
       );
       if (!enrolled) {
