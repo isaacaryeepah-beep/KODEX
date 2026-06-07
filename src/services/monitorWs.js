@@ -107,6 +107,15 @@ function attachToServer(httpServer) {
         ws._meetingId = String(msg.meetingId);
         _send(ws, 'subscribed', { meetingId: ws._meetingId });
       }
+
+      // Quiz monitoring room — keyed as "quiz::<quizId>"
+      if (msg.type === 'subscribe' && msg.quizId) {
+        _removeClient(ws);
+        const roomId = `quiz::${msg.quizId}`;
+        _getRoomClients(roomId).add(ws);
+        ws._quizId = String(msg.quizId);
+        _send(ws, 'subscribed', { quizId: ws._quizId });
+      }
     });
 
     ws.on('close', () => {

@@ -1177,11 +1177,7 @@ async function adLoadDevices() {
                 </button>
               </div>
               <div class="ad-lec-row" style="margin-top:6px;border-top:1px dashed var(--border);padding-top:6px">
-                ${classRepPill || '<span style="font-size:11px;color:#94a3b8;font-style:italic">No class rep assigned</span>'}
-                <button class="ad-assign-btn" style="border-color:#d8b4fe;color:#7c3aed" onclick="adOpenClassRepModal('${d.deviceId}')">
-                  <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
-                  Assign Class Rep
-                </button>
+                ${classRepPill || '<span style="font-size:11px;color:#94a3b8;font-style:italic">No class rep assigned · use Class Reps page to assign</span>'}
               </div>
             </div>
             <div class="ad-device-footer">
