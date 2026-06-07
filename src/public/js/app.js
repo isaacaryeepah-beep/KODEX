@@ -2929,6 +2929,27 @@ function buildSidebar() {
       if (l.sep) return l.label ? `<div class="nav-section-label">${l.label}</div>` : `<div class="nav-sep"></div>`;
       return `<a onclick="navigateTo('${l.id}')" id="nav-${l.id}" data-tooltip="${l.label}">${l.id==='announcements'?'<div class="ann-line"></div>':''} ${l.icon}<span>${l.label}</span>${l.id==='announcements'?'<span id="ann-badge" style="display:none;position:absolute;top:4px;right:4px;background:#ef4444;color:#fff;font-size:9px;font-weight:700;padding:1px 5px;border-radius:20px;min-width:14px;text-align:center;line-height:14px;"></span>':''}</a>`;
     }).join('');
+
+  // Institution code chip — visible to all roles that belong to an institution
+  const instCode = currentUser.company?.institutionCode || currentUser.company?.code;
+  if (instCode && role !== 'superadmin') {
+    let chip = sidebar && sidebar.querySelector('.sidebar-inst-chip');
+    if (!chip) {
+      chip = document.createElement('div');
+      chip.className = 'sidebar-inst-chip';
+      if (sidebar) sidebar.appendChild(chip);
+    }
+    chip.innerHTML = `
+      <div style="padding:10px 14px 12px;border-top:1px solid rgba(255,255,255,.08);">
+        <div style="font-size:9.5px;font-weight:700;letter-spacing:.8px;text-transform:uppercase;opacity:.5;margin-bottom:4px">Institution Code</div>
+        <div style="display:flex;align-items:center;gap:6px;">
+          <span id="sidebar-inst-code-val" style="font-family:monospace;font-size:13px;font-weight:700;letter-spacing:.5px;background:rgba(255,255,255,.08);padding:4px 9px;border-radius:7px;flex:1;text-align:center;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${instCode}</span>
+          <button onclick="(function(){navigator.clipboard.writeText('${instCode}');const b=document.getElementById('sidebar-copy-btn');if(b){b.textContent='✓';setTimeout(()=>{b.textContent='Copy'},1500);}})();" id="sidebar-copy-btn"
+                  style="font-size:10px;font-weight:700;padding:4px 8px;border-radius:6px;border:1px solid rgba(255,255,255,.18);background:rgba(255,255,255,.1);cursor:pointer;color:inherit;flex-shrink:0;transition:background .15s"
+                  onmouseover="this.style.background='rgba(255,255,255,.2)'" onmouseout="this.style.background='rgba(255,255,255,.1)'">Copy</button>
+        </div>
+      </div>`;
+  }
 }
 
 function navigateTo(view) {
@@ -10687,9 +10708,6 @@ async function renderMyAttendance() {
     offlineCache('my_attendance', data);
     content.innerHTML = `
       <div class="page-header"><h2>My Attendance</h2><p>Your attendance history</p></div>
-      <div class="actions-bar">
-        <button class="btn btn-primary btn-sm" onclick="showMarkAttendanceModal()">Mark Attendance</button>
-      </div>
       <div class="card">
         ${data.records.length ? `
           <table>
@@ -14256,7 +14274,7 @@ function annCard(a, canPost, isAdmin) {
   const color = ANN_COLORS[a.type] || '#6366f1';
   const icon  = ANN_ICONS[a.type]  || 'ℹ️';
   const canDelete = isAdmin || (canPost && String(a.author?._id) === String(currentUser._id || currentUser.id));
-  const audienceLabel = { all:'Everyone', students:'Students', employees:'Employees' }[a.audience] || 'Everyone';
+  const audienceLabel = { all:'Everyone', students:'Students', employees:'Employees', lecturers:'Lecturers', hod:'HODs', class_group:'Class Group', department:'Department', programme:'Programme', course:'Course' }[a.audience] || 'Everyone';
   return `
     <div class="card" style="margin-bottom:12px;border-left:4px solid ${color};position:relative;${a.pinned?'background:linear-gradient(135deg,var(--card),#fefce8);':''}" id="ann-${a._id}">
       ${a.pinned ? '<div style="position:absolute;top:10px;right:12px;font-size:11px;color:#92400e;font-weight:700;background:#fef3c7;padding:2px 7px;border-radius:20px;">📌 Pinned</div>' : ''}
@@ -21862,6 +21880,14 @@ async function _renderStudentVideos() {
 async function renderClassAnnouncements() {
   const content = document.getElementById('main-content');
   if (!content) return;
+  if (!currentUser.isClassRep) {
+    content.innerHTML = `<div class="card" style="text-align:center;padding:40px 20px">
+      <div style="font-size:36px;margin-bottom:12px">🔒</div>
+      <h3 style="font-size:16px;font-weight:700;margin-bottom:6px">Class Representatives Only</h3>
+      <p style="color:var(--text-muted);font-size:13px">Only designated class representatives can post class announcements.</p>
+    </div>`;
+    return;
+  }
   content.innerHTML = '<div class="loading">Loading…</div>';
 
   try {
