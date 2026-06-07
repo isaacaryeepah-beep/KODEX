@@ -7479,17 +7479,102 @@ async function renderUsers(filterRole='', filterDept='', filterSearch='') {
     } else {
       _renderUsersCorporateTable(content, _cachedUsers, filterRole, filterDept, filterSearch);
     }
-  } catch(e) {
-    const _c = offlineRead('users_list');
-    if (_c) {
-      _cachedUsers = _c;
-      window._hodDepts = [...new Set(_c.filter(u => u.role==='hod' && u.department).map(u => u.department))].sort();
-      const mode = currentUser.company?.mode || 'corporate';
-      if (mode === 'academic') _renderUserDeptCards(content, _c, filterSearch);
-      else _renderUsersCorporateTable(content, _c, filterRole, filterDept, filterSearch);
-      return;
-    }
-    content.innerHTML = `<div class="card"><p style="color:#ef4444">Error loading users: ${e.message}</p></div>`;
+
+    // Collect unique departments for filter dropdown
+    const allDepts = [...new Set((data.users || []).map(u => u.department).filter(Boolean))].sort();
+
+    content.innerHTML = `
+      <div class="page-header"><h2>${pageTitle}</h2><p>${pageDesc} · ${otherUsers.length} shown</p></div>
+      <div class="actions-bar" style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:10px;">
+        ${canManage ? `<button class="btn btn-primary btn-sm" onclick="showCreateUserModal()">${addLabel}</button>` : ''}
+        ${['admin','superadmin'].includes(currentUser.role) && mode === 'academic' ? `<button class="btn btn-sm btn-secondary" onclick="showBulkImportModal()">📥 Bulk Import Students</button>` : ''}
+        ${['admin','superadmin'].includes(currentUser.role) ? `<button class="btn btn-sm" style="background:#f59e0b;color:#fff" onclick="renderResetLogs()">🔐 Password Reset Log</button>` : ''}
+        <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin-left:auto;">
+          <input id="user-search-input" placeholder="Search name / email / ID…" value="${filterSearch}"
+            oninput="renderUsers(document.getElementById('user-role-filter').value, document.getElementById('user-dept-filter').value, this.value)"
+            style="padding:7px 11px;border:1.5px solid var(--border);border-radius:8px;font-size:13px;font-family:inherit;outline:none;min-width:180px;">
+          <select id="user-role-filter" onchange="renderUsers(this.value, document.getElementById('user-dept-filter').value, document.getElementById('user-search-input').value)"
+            style="padding:7px 10px;border:1.5px solid var(--border);border-radius:8px;font-size:13px;font-family:inherit;outline:none;">
+            <option value="" ${!filterRole?'selected':''}>All Roles</option>
+            ${currentUser.role === 'superadmin'
+              ? `<option value="admin"     ${filterRole==='admin'?'selected':''}>Admin</option>
+                 <option value="manager"   ${filterRole==='manager'?'selected':''}>Manager</option>
+                 <option value="hod"       ${filterRole==='hod'?'selected':''}>HOD</option>
+                 <option value="lecturer"  ${filterRole==='lecturer'?'selected':''}>Lecturer</option>
+                 <option value="employee"  ${filterRole==='employee'?'selected':''}>Employee</option>
+                 <option value="student"   ${filterRole==='student'?'selected':''}>Student</option>`
+              : mode === 'academic'
+                ? `<option value="admin"    ${filterRole==='admin'?'selected':''}>Admin</option>
+                   <option value="hod"      ${filterRole==='hod'?'selected':''}>HOD</option>
+                   <option value="lecturer" ${filterRole==='lecturer'?'selected':''}>Lecturer</option>
+                   <option value="student"  ${filterRole==='student'?'selected':''}>Student</option>`
+                : `<option value="admin"    ${filterRole==='admin'?'selected':''}>Admin</option>
+                   <option value="manager"  ${filterRole==='manager'?'selected':''}>Manager</option>
+                   <option value="employee" ${filterRole==='employee'?'selected':''}>Employee</option>`}
+          </select>
+          ${mode === 'academic' && allDepts.length > 0 ? `
+          <select id="user-dept-filter" onchange="renderUsers(document.getElementById('user-role-filter').value, this.value, document.getElementById('user-search-input').value)"
+            style="padding:7px 10px;border:1.5px solid var(--border);border-radius:8px;font-size:13px;font-family:inherit;outline:none;">
+            <option value="" ${!filterDept?'selected':''}>All Departments</option>
+            ${allDepts.map(d => `<option value="${d}" ${filterDept===d?'selected':''}>${d}</option>`).join('')}
+          </select>` : `<select id="user-dept-filter" style="display:none;"></select>`}
+          ${filterRole || filterDept || filterSearch ? `<button class="btn btn-xs btn-secondary" onclick="renderUsers()">✕ Clear</button>` : ''}
+        </div>
+        ${canManage ? `
+          <div id="bulk-actions" style="display:none;gap:8px;align-items:center;margin-left:auto">
+            <span id="selected-count" style="font-size:13px;color:var(--text-light)">0 selected</span>
+            <button class="btn btn-sm" style="background:#22c55e;color:#fff" onclick="bulkUserAction('activate')">Activate</button>
+            <button class="btn btn-sm" style="background:#f59e0b;color:#fff" onclick="bulkUserAction('deactivate')">Deactivate</button>
+            <button class="btn btn-danger btn-sm" onclick="bulkUserAction('delete')">Delete</button>
+          </div>
+        ` : ''}
+      </div>
+      <div class="card">
+        ${otherUsers.length ? `
+          <table>
+            <thead><tr>
+              ${canManage ? '<th style="width:40px"><input type="checkbox" id="select-all-users" onchange="toggleSelectAllUsers()"></th>' : ''}
+              <th>Name</th>${mode === 'corporate' ? '<th>Employee ID</th>' : ''}<th>Email / Index</th><th>Role</th>${mode !== 'corporate' ? '<th>Classification</th>' : ''}<th>Status</th>${canManage ? '<th>Actions</th>' : ''}
+            </tr></thead>
+            <tbody>${otherUsers.map(u => `
+              <tr id="user-row-${u._id}">
+                ${canManage ? `<td>${canActOn(u) ? `<input type="checkbox" class="user-checkbox" value="${u._id}" onchange="updateBulkActions()">` : ''}</td>` : ''}
+                <td>${u.name}</td>
+                ${mode === 'corporate' ? `<td>${u.employeeId || '-'}</td>` : ''}
+                <td>
+                  ${u.email || 'N/A'}
+                  ${u.role === 'student' && (u.indexNumber || u.IndexNumber) ? `<br><span style="font-size:11px;color:var(--text-muted);font-family:monospace;letter-spacing:.4px">${esc(u.IndexNumber || u.indexNumber)}</span>` : ''}
+                </td>
+                <td><span class="role-badge role-${u.role}">${u.role}</span>${u.department ? `<span style="font-size:10px;margin-left:5px;padding:2px 6px;border-radius:20px;background:#ecfeff;color:#0891b2;font-weight:600;">${u.department}</span>` : ''}</td>
+                ${mode !== 'corporate' ? `<td style="font-size:11px;white-space:nowrap">
+                  ${u.role === 'student' ? `
+                    ${u.programme ? `<span style="background:#ede9fe;color:#7c3aed;padding:1px 6px;border-radius:20px;font-weight:700;margin-right:2px">${esc(u.programme)}</span>` : ''}
+                    ${u.studentLevel ? `<span style="background:#dbeafe;color:#1d4ed8;padding:1px 6px;border-radius:20px;font-weight:700;margin-right:2px">L${esc(u.studentLevel)}</span>` : ''}
+                    ${u.studentGroup ? `<span style="background:#ecfdf5;color:#059669;padding:1px 6px;border-radius:20px;font-weight:700;margin-right:2px">Grp ${esc(u.studentGroup)}</span>` : ''}
+                    ${u.sessionType ? `<span style="background:#fff7ed;color:#c2410c;padding:1px 6px;border-radius:20px;font-weight:600;margin-right:2px">${esc(u.sessionType)}</span>` : ''}
+                    ${u.semester ? `<span style="color:var(--text-muted)">Sem ${esc(u.semester)}</span>` : ''}
+                    ${!u.programme && !u.studentLevel ? '<span style="color:var(--text-muted)">—</span>' : ''}
+                  ` : '<span style="color:var(--text-muted)">—</span>'}
+                </td>` : ''}
+                <td><span class="status-badge ${u.isActive ? 'status-active' : 'status-stopped'}">${u.isActive ? 'Active' : 'Inactive'}</span></td>
+                ${canManage ? `<td style="white-space:nowrap">
+                  ${canActOn(u) ? `
+                    ${u.isActive
+                      ? `<button class="btn btn-sm" style="background:#f59e0b;color:#fff;font-size:11px" onclick="deactivateUser('${u._id}')">Deactivate</button>`
+                      : `<button class="btn btn-sm" style="background:#22c55e;color:#fff;font-size:11px" onclick="activateUser('${u._id}')">Activate</button>`}
+                    <button class="btn btn-sm" style="background:#6366f1;color:#fff;font-size:11px" onclick="adminResetStudentPassword('${u._id}', this)">🔑 Reset</button>
+                    ${u.role === 'student' && u.deviceId ? `<button class="btn btn-sm" style="background:#f97316;color:#fff;font-size:11px" onclick="clearStudentDeviceLock('${u._id}', this)">🔓 Unlock</button>` : ''}
+                    <button class="btn btn-danger btn-sm" style="font-size:11px" onclick="deleteUserPermanently('${u._id}', this)">Delete</button>
+                  ` : `<span style="font-size:11px;color:var(--text-muted);font-style:italic">—</span>`}
+                </td>` : ''}
+              </tr>
+            `).join('')}</tbody>
+          </table>
+        ` : '<div class="empty-state"><p>No users found</p></div>'}
+      </div>
+    `;
+  } catch (e) {
+    content.innerHTML = `<div class="card"><p>Error: ${e.message}</p></div>`;
   }
 }
 
