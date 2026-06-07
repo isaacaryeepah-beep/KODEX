@@ -720,6 +720,17 @@ async function attemptOfflineLogin(credentials) {
       throw new Error('Wrong email or password.');
     }
 
+    // Check if the cached JWT has expired — expired tokens cause all API calls to silently 401
+    try {
+      const jwtPayload = JSON.parse(atob(profile.token.split('.')[1]));
+      if (jwtPayload.exp && jwtPayload.exp * 1000 < Date.now()) {
+        throw new Error('Your offline session token has expired. Please connect to the internet to sign in again.');
+      }
+    } catch (e) {
+      if (e.message.includes('offline session token')) throw e;
+      // Malformed JWT — continue; the server will reject it on first API call
+    }
+
     // Return a fake login response matching the real API shape
     console.log('[OfflineLogin] Offline login successful for', profileKey);
     return {
@@ -742,6 +753,24 @@ function clearOfflineProfile(userRole, email, indexNumber, institutionCode) {
     localStorage.setItem(OFFLINE_LOGIN_KEY, JSON.stringify(profiles));
   } catch (e) {
     console.warn('[OfflineLogin] Could not clear profile:', e);
+  }
+}
+
+// ── Clear offline profile by user ID (used on logout — no need to reconstruct key) ──
+function clearOfflineProfileById(userId) {
+  try {
+    const profiles = JSON.parse(localStorage.getItem(OFFLINE_LOGIN_KEY) || '{}');
+    let changed = false;
+    for (const key of Object.keys(profiles)) {
+      const uid = profiles[key]?.user?.id || profiles[key]?.user?._id;
+      if (uid && uid.toString() === userId.toString()) {
+        delete profiles[key];
+        changed = true;
+      }
+    }
+    if (changed) localStorage.setItem(OFFLINE_LOGIN_KEY, JSON.stringify(profiles));
+  } catch (e) {
+    console.warn('[OfflineLogin] Could not clear profile by ID:', e);
   }
 }
 
@@ -975,6 +1004,7 @@ window.addEventListener('DOMContentLoaded', () => {
 let currentUser = null;
 let currentUserTrial = null; // mirrors data.userTrial from the last /me response
 let currentView = 'dashboard';
+let _appOfflineMode = false; // true when logged in via cached credentials (no server reachable)
 
 function svgIcon(path, size = 18) {
   return `<svg width="${size}" height="${size}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${path}</svg>`;
@@ -1625,6 +1655,7 @@ function friendlyError(msg) {
   if (m.includes('too many requests'))            return 'Too many requests. Please slow down and try again.';
   if (m.includes('no offline profile'))           return 'You\'re offline. Please connect to the internet to login for the first time.';
   if (m.includes('offline session expired'))      return 'Offline session expired. Please connect to login again.';
+  if (m.includes('offline session token has expired')) return 'Your offline session has expired. Please connect to the internet to sign in again.';
   if (m.includes('incorrect password'))           return 'Wrong email or password.';
   if (m.includes('network') || m.includes('fetch')) return 'Network error. Please check your connection.';
   return msg; // fallback: show as-is
@@ -2259,6 +2290,10 @@ async function handleLogout() {
   } catch (e) {}
   if (window.DiklyIDB) window.DiklyIDB.clearAll().catch(() => {});
   resetBranding();
+  // Clear this user's offline profile so their credentials don't persist on shared devices
+  const _logoutUserId = currentUser?._id || currentUser?.id;
+  if (_logoutUserId) clearOfflineProfileById(_logoutUserId);
+  _appOfflineMode = false;
   token = null;
   currentUser = null;
   currentUserTrial = null;
@@ -2666,7 +2701,7 @@ function showDashboard(data) {
     _notifSound.updateBtn();
     applyBranding(); // async — applies colors/logo in background
     // Show offline banner immediately when logged in via cached credentials
-    if (data?.offlineMode) showOfflineBanner(false);
+    if (data?.offlineMode) { _appOfflineMode = true; showOfflineBanner(false); }
     // If student arrived via QR scan link, go straight to mark-attendance to auto-submit
     if (new URLSearchParams(window.location.search).get('qr_token')) {
       navigateTo('mark-attendance');
@@ -9917,6 +9952,10 @@ async function submitStudentQuiz(quizId) {
     window._quizTabHandler = null;
   }
   window._quizSubmitting = false;
+  if (_appOfflineMode) {
+    toastError('You are offline. Connect to the internet to submit your quiz.');
+    return;
+  }
   if (quizTimerInterval) { clearInterval(quizTimerInterval); quizTimerInterval = null; }
   const questions = window._quizQuestions || [];
   const answers = questions.map(q => {
