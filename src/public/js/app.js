@@ -7339,7 +7339,10 @@ async function renderUsers(filterRole='', filterDept='', filterSearch='') {
                 ${canManage ? `<td>${canActOn(u) ? `<input type="checkbox" class="user-checkbox" value="${u._id}" onchange="updateBulkActions()">` : ''}</td>` : ''}
                 <td>${u.name}</td>
                 ${mode === 'corporate' ? `<td>${u.employeeId || '-'}</td>` : ''}
-                <td>${u.email || u.IndexNumber || u.indexNumber || 'N/A'}</td>
+                <td>
+                  ${u.email || 'N/A'}
+                  ${u.role === 'student' && (u.indexNumber || u.IndexNumber) ? `<br><span style="font-size:11px;color:var(--text-muted);font-family:monospace;letter-spacing:.4px">${esc(u.IndexNumber || u.indexNumber)}</span>` : ''}
+                </td>
                 <td><span class="role-badge role-${u.role}">${u.role}</span>${u.department ? `<span style="font-size:10px;margin-left:5px;padding:2px 6px;border-radius:20px;background:#ecfeff;color:#0891b2;font-weight:600;">${u.department}</span>` : ''}</td>
                 ${mode !== 'corporate' ? `<td style="font-size:11px;white-space:nowrap">
                   ${u.role === 'student' ? `
