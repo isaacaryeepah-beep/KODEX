@@ -221,7 +221,7 @@ exports.startAttempt = async (req, res) => {
       .sort((a, b) => a._sort - b._sort)
       .map(({ _sort, ...q }) => q);
 
-    res.json({ attempt, questions, timeLimit: quiz.timeLimit });
+    res.json({ attempt, questions, timeLimit: quiz.timeLimit, quizEndTime: quiz.endTime, serverTime: new Date() });
   } catch (error) {
     if (error.code === 11000) {
       const existing = await Attempt.findOne({ quiz: req.params.id, student: req.user._id });

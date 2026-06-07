@@ -3276,7 +3276,7 @@ async function renderHodDashboard(content) {
     const sessions   = sessData.sessions   || [];
     const lecturers  = (lecturerData.users || []).length;
     const students   = (studentData.users  || []).length;
-    const activeSess = sessions.filter(s => s.active).length;
+    const activeSess = sessions.filter(s => ['active','live','paused','locked'].includes(s.status)).length;
 
     content.innerHTML = `
       <div class="page-header" style="display:flex;align-items:flex-start;justify-content:space-between;flex-wrap:wrap;gap:12px;">
@@ -3324,7 +3324,7 @@ async function renderHodDashboard(content) {
                   <div style="font-size:13px;font-weight:600;">${s.title || s.courseName || 'Untitled'}</div>
                   <div style="font-size:11px;color:var(--text-muted);">${s.createdBy?.name || '—'} · ${timeAgo(s.createdAt)}</div>
                 </div>
-                <span class="tag ${s.active ? 'tag-green' : 'tag-gray'}">${s.active ? 'Live' : 'Ended'}</span>
+                <span class="tag ${['active','live','paused','locked'].includes(s.status) ? 'tag-green' : 'tag-gray'}">${['active','live','paused','locked'].includes(s.status) ? 'Live' : 'Ended'}</span>
               </div>`).join('')
           }
           <button class="btn btn-secondary btn-sm" style="margin-top:12px;width:100%;" onclick="navigateTo('hod-sessions')">View All Sessions →</button>
@@ -3436,7 +3436,7 @@ async function renderHodSessions() {
                   <td style="padding:10px 12px;color:var(--text-muted);">${s.createdBy?.name || '—'}</td>
                   <td style="padding:10px 12px;">${s.attendanceCount ?? s.records?.length ?? '—'}</td>
                   <td style="padding:10px 12px;color:var(--text-muted);font-size:12px;">${fmtDate(s.createdAt)}</td>
-                  <td style="padding:10px 12px;"><span class="tag ${s.active ? 'tag-green' : 'tag-gray'}">${s.active ? 'Live' : 'Ended'}</span></td>
+                  <td style="padding:10px 12px;"><span class="tag ${['active','live','paused','locked'].includes(s.status) ? 'tag-green' : 'tag-gray'}">${['active','live','paused','locked'].includes(s.status) ? 'Live' : 'Ended'}</span></td>
                 </tr>`).join('')}
           </tbody>
         </table>
@@ -3580,7 +3580,7 @@ async function renderHodReports() {
     ]);
     const sessions  = sessData.sessions || [];
     const stats     = userStats || {};
-    const ended     = sessions.filter(s => !s.active);
+    const ended     = sessions.filter(s => !['active','live','paused','locked'].includes(s.status));
     const totalAtt  = ended.reduce((sum, s) => sum + (s.attendanceCount ?? s.records?.length ?? 0), 0);
     const avgAtt    = ended.length ? Math.round(totalAtt / ended.length) : 0;
 
@@ -3686,7 +3686,7 @@ async function renderHodReports() {
     const trendMap = {};
     const now = Date.now();
     const days30 = 30 * 24 * 60 * 60 * 1000;
-    sessions.filter(s => !s.active && new Date(s.createdAt) > now - days30).forEach(s => {
+    sessions.filter(s => !['active','live','paused','locked'].includes(s.status) && new Date(s.createdAt) > now - days30).forEach(s => {
       const d = new Date(s.createdAt).toLocaleDateString('en-GB', { day: '2-digit', month: 'short' });
       trendMap[d] = (trendMap[d] || 0) + (s.attendanceCount ?? s.records?.length ?? 0);
     });
@@ -3874,7 +3874,7 @@ async function hodExportCSV(type) {
       const hodDept = currentUser.department ? '&department=' + encodeURIComponent(currentUser.department) : '';
       const d = await api('/api/attendance-sessions?limit=200' + hodDept);
       headers = ['Session', 'Lecturer', 'Date', 'Attendance', 'Status'];
-      rows = (d.sessions || []).map(s => [s.title || s.courseName || 'Session', s.createdBy?.name || '', fmtDate(s.createdAt), s.attendanceCount ?? s.records?.length ?? 0, s.active ? 'Live' : 'Ended']);
+      rows = (d.sessions || []).map(s => [s.title || s.courseName || 'Session', s.createdBy?.name || '', fmtDate(s.createdAt), s.attendanceCount ?? s.records?.length ?? 0, ['active','live','paused','locked'].includes(s.status) ? 'Live' : 'Ended']);
       filename = 'DIKLY_Attendance_' + (currentUser.department || 'All') + '.csv';
     } else if (type === 'courses') {
       const d = await api('/api/hod/course-overview');
@@ -9772,7 +9772,7 @@ async function renderStudentQuizzes(content, showAll) {
           ${q.canAttempt && !q.canContinue ? `<button class="btn btn-primary" style="flex:1;" onclick="startStudentQuiz('${q._id}')">${q.attemptCount > 0 ? '↩ Retake' : '▶ Take Quiz'}</button>` : ''}
           ${q.isSubmitted ? `<button class="btn btn-secondary" style="flex:1;" onclick="viewStudentResult('${q._id}')">📊 View Result</button>` : ''}
           ${q.status === 'closed' && !q.isSubmitted ? `<div style="font-size:12px;color:var(--text-muted);padding:8px 0;">This quiz has closed.</div>` : ''}
-          ${q.status === 'upcoming' && !q.canAttempt ? `<div style="font-size:12px;color:#7c3aed;padding:8px 0;">Not open yet — check back at the start time.</div>` : ''}
+          ${q.status === 'upcoming' && !q.canAttempt ? `<div style="font-size:12px;color:#7c3aed;padding:8px 0;" id="quiz-countdown-${q._id}">Opens at ${new Date(q.startTime).toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'})}</div>` : ''}
         </div>
       </div>`;
     }
@@ -9789,6 +9789,20 @@ async function renderStudentQuizzes(content, showAll) {
         ? quizzes.map(q => quizCard(q)).join('')
         : '<div class="card"><div class="empty-state"><p>No quizzes available right now.</p><p style="font-size:13px;color:var(--text-muted);margin-top:4px;">Check back when your lecturer opens a quiz.</p></div></div>'}
     `;
+
+    // Auto-refresh when the next upcoming quiz opens (within 30 min)
+    if (window._quizOpenTimer) { clearTimeout(window._quizOpenTimer); window._quizOpenTimer = null; }
+    const upcoming = quizzes.filter(q => q.status === 'upcoming');
+    if (upcoming.length > 0) {
+      const next = upcoming.reduce((a, b) => new Date(a.startTime) < new Date(b.startTime) ? a : b);
+      const msUntilOpen = new Date(next.startTime) - Date.now();
+      if (msUntilOpen > 0 && msUntilOpen <= 30 * 60 * 1000) {
+        window._quizOpenTimer = setTimeout(() => {
+          const c = document.getElementById('main-content');
+          if (c && currentView === 'quizzes') renderStudentQuizzes(c, showAll);
+        }, msUntilOpen + 500);
+      }
+    }
   } catch (e) {
     content.innerHTML = `<div class="card"><p style="color:#ef4444;">Error: ${e.message}</p></div>`;
   }
@@ -9806,7 +9820,11 @@ async function startStudentQuiz(quizId) {
     const timeLimit = data.timeLimit || 30;
     const attempt = data.attempt;
     const startedAt = new Date(attempt.startedAt);
-    const endTime = new Date(startedAt.getTime() + timeLimit * 60 * 1000);
+    // Correct for clock drift: use server time offset so timer is accurate
+    const clockOffset = data.serverTime ? (new Date(data.serverTime) - Date.now()) : 0;
+    const attemptEnd = new Date(startedAt.getTime() + timeLimit * 60 * 1000);
+    const quizEnd = data.quizEndTime ? new Date(data.quizEndTime) : null;
+    const endTime = quizEnd && quizEnd < attemptEnd ? quizEnd : attemptEnd;
 
     content.innerHTML = `
       <div class="page-header" style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;">
@@ -9862,7 +9880,7 @@ async function startStudentQuiz(quizId) {
     window._quizQuestions = questions;
 
     function updateTimer() {
-      const now = new Date();
+      const now = new Date(Date.now() + clockOffset);
       const remaining = Math.max(0, endTime - now);
       const mins = Math.floor(remaining / 60000);
       const secs = Math.floor((remaining % 60000) / 1000);
