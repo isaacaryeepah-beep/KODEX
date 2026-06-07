@@ -95,10 +95,16 @@ async function _tick() {
       return (now - new Date(a.lastHeartbeatAt)) / 1000 > quiz.heartbeatTimeoutSeconds;
     });
 
+    const _seen = new Set();
     const toSubmit = [
       ...expired.map(a => ({ attempt: a, reason: "time_expired" })),
       ...heartbeatTimedOut.map(a => ({ attempt: a, reason: "heartbeat_timeout" })),
-    ];
+    ].filter(({ attempt }) => {
+      const id = String(attempt._id);
+      if (_seen.has(id)) return false;
+      _seen.add(id);
+      return true;
+    });
 
     for (const { attempt, reason } of toSubmit) {
       try {

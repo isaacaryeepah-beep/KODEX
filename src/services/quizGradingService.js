@@ -80,7 +80,9 @@ function scoreResponse(response, question) {
   switch (question.questionType) {
     case QUESTION_TYPES.MCQ:
     case "mcq":
-      isCorrect = response.selectedOptionIndex === question.correctOptionIndex;
+      isCorrect = question.correctOptionIndex != null &&
+                  response.selectedOptionIndex != null &&
+                  response.selectedOptionIndex === question.correctOptionIndex;
       break;
 
     case QUESTION_TYPES.MCQ_MULTI:
@@ -95,7 +97,9 @@ function scoreResponse(response, question) {
 
     case QUESTION_TYPES.TRUE_FALSE:
     case "true_false":
-      isCorrect = response.selectedBoolean === question.correctBoolean;
+      isCorrect = question.correctBoolean != null &&
+                  response.selectedBoolean != null &&
+                  response.selectedBoolean === question.correctBoolean;
       break;
 
     case QUESTION_TYPES.SHORT_ANSWER:

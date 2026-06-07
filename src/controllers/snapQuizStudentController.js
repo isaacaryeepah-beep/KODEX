@@ -641,7 +641,7 @@ exports.reportViolation = async (req, res) => {
     }
 
     // Determine severity and whether this type is enforced.
-    const isCriticalType = _isCriticalViolation(violationType);
+    const isCriticalType = _isCriticalViolation(violationType, quiz);
     const severity = isCriticalType
       ? VIOLATION_SEVERITIES.CRITICAL
       : VIOLATION_SEVERITIES.INFO;
@@ -926,6 +926,7 @@ async function _loadLockedAttempt(req) {
 }
 
 async function _autoSubmit(attempt) {
+  if (attempt.status !== ATTEMPT_STATUSES.ACTIVE) return;
   attempt.status           = ATTEMPT_STATUSES.AUTO_SUBMITTED;
   attempt.submittedAt      = new Date();
   attempt.timeSpentSeconds = Math.round((new Date() - attempt.startedAt) / 1000);

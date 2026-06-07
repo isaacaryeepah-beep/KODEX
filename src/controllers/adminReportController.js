@@ -304,7 +304,7 @@ exports.sessionAnalytics = async (req, res) => {
         .populate("course", "title code")
         .sort({ startedAt: -1 }),
       Company.findById(companyId).select("name mode"),
-      Course.find({ company: companyId }).populate("enrolledStudents"),
+      Course.find({ companyId }).populate("enrolledStudents"),
     ]);
 
     const sessionIds = sessions.map(s => s._id);
@@ -801,7 +801,7 @@ exports.studentAnalytics = async (req, res) => {
     let courseEnrollments = {};
     let quizData = {};
     if (mode === "academic") {
-      const courses = await Course.find({ company: companyId }).select("enrolledStudents");
+      const courses = await Course.find({ companyId }).select("enrolledStudents");
       courses.forEach(c => {
         (c.enrolledStudents || []).forEach(sid => {
           const key = sid.toString();
@@ -1113,7 +1113,7 @@ exports.chartData = async (req, res) => {
 
     const [sessions, courses, records, totalStudentsFallback] = await Promise.all([
       AttendanceSession.find(sessionFilter).select("_id course createdBy startedAt").lean(),
-      Course.find({ company: companyId }).select("_id enrolledStudents lecturer title code").lean(),
+      Course.find({ companyId }).select("_id enrolledStudents lecturer title code").lean(),
       AttendanceRecord.find({ company: companyId }).select("session user status").lean(),
       User.countDocuments({ company: companyId, role: { $in: ["student", "employee"] }, isApproved: true }),
     ]);

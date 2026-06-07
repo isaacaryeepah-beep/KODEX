@@ -65,7 +65,7 @@ router.post("/", ...mw, adminOnly, async (req, res) => {
     const dept = await Department.create({
       company:          req.user.company,
       name:             name.trim(),
-      code:             code ? code.trim().toUpperCase() : "",
+      code:             code ? code.trim().toUpperCase() : null,
       description:      description || "",
       parentDepartment: parentDepartmentId || null,
       costCenter:       costCenter || "",

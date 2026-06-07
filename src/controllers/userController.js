@@ -498,6 +498,8 @@ exports.bulkImportStudents = async (req, res) => {
           password: tempPassword,
           role: "student",
           company: req.user.company,
+          isApproved: true,
+          isActive: true,
           mustChangePassword: true,
         };
 
@@ -675,7 +677,7 @@ exports.adminResetStudentPassword = async (req, res) => {
     const digits = String(crypto.randomInt(100000, 999999));
     // req.user.company is an ObjectId — fetch the code separately
     const Company = require('../models/Company');
-    const company = await Company.findById(req.user.company).select('institutionCode').lean().catch(() => null);
+    const company = await Company.findById(req.user.company).select('institutionCode name').lean().catch(() => null);
     const institutionCode = company?.institutionCode || 'DIKLY';
     const tempPassword = `${institutionCode}-${digits}`;
 

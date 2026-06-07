@@ -1165,10 +1165,7 @@ exports.forgotPassword = async (req, res) => {
       message = "A reset code has been sent to your email address.";
     }
 
-    res.json({
-      message,
-      resetCode: user.email ? undefined : code,
-    });
+    res.json({ message });
   } catch (error) {
     console.error("Forgot password error:", error);
     res.status(500).json({ error: "Failed to generate reset code" });
