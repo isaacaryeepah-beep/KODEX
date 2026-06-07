@@ -366,12 +366,11 @@ exports.startAttempt = async (req, res) => {
 
     // Notify monitoring dashboard that a student started
     broadcastQuizEvent(String(quiz._id), "attempt_started", {
-      attemptId:  String(attempt._id),
-      studentId:  String(req.user._id),
+      attemptId:   String(attempt._id),
       studentName: req.user.name,
-      platform:   _detectPlatform(req.headers["user-agent"]),
-      startedAt:  attempt.startedAt.toISOString(),
-      expiresAt:  attempt.expiresAt.toISOString(),
+      platform:    _detectPlatform(req.headers["user-agent"]),
+      startedAt:   attempt.startedAt.toISOString(),
+      expiresAt:   attempt.expiresAt.toISOString(),
     });
 
     return res.status(201).json({
@@ -575,13 +574,12 @@ exports.submitAttempt = async (req, res) => {
 
     // Broadcast submission to monitoring dashboard
     broadcastQuizEvent(String(attempt.quiz), "attempt_submitted", {
-      attemptId:      String(attempt._id),
-      studentId:      String(attempt.student),
-      rawScore:       attempt.rawScore,
-      maxScore:       attempt.maxScore,
+      attemptId:       String(attempt._id),
+      rawScore:        attempt.rawScore,
+      maxScore:        attempt.maxScore,
       percentageScore: attempt.percentageScore,
-      gradingStatus:  attempt.gradingStatus,
-      submittedAt:    now.toISOString(),
+      gradingStatus:   attempt.gradingStatus,
+      submittedAt:     now.toISOString(),
     });
 
     return res.json({
@@ -628,6 +626,11 @@ exports.reportViolation = async (req, res) => {
       .lean();
 
     const { violationType, occurredAt, detail, snapshotUrl } = req.body;
+
+    // Reject unknown violation types to prevent junk data in the log.
+    if (!violationType || !Object.values(VIOLATION_TYPES).includes(violationType)) {
+      return res.status(400).json({ error: "Invalid violationType" });
+    }
 
     // Determine severity and whether this type is enforced.
     const isCriticalType = _isCriticalViolation(violationType);
@@ -679,7 +682,6 @@ exports.reportViolation = async (req, res) => {
     // Real-time broadcast to monitoring dashboard
     broadcastQuizEvent(String(attempt.quiz), "violation_logged", {
       attemptId:    String(attempt._id),
-      studentId:    String(attempt.student),
       violationType,
       severity,
       newCount,

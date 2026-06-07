@@ -30,8 +30,11 @@ async function _tick() {
     const now = new Date();
 
     // ── 1. Expired by hard deadline (expiresAt) ────────────────────────────
+    // company is required on all attempts — this ensures cross-tenant safety
+    // when grading (autoGradeAttempt scopes to attempt.company).
     const expired = await SnapQuizAttempt.find({
       status:    "active",
+      company:   { $exists: true, $ne: null },
       expiresAt: { $lte: now },
     }).limit(BATCH_LIMIT).lean();
 
@@ -39,8 +42,9 @@ async function _tick() {
     // We only check heartbeat timeout for quizzes that have it enabled.
     // Load relevant quizzes once to avoid N+1 queries.
     const activeAttempts = await SnapQuizAttempt.find({
-      status: "active",
-      expiresAt: { $gt: now }, // not already expired by deadline
+      status:          "active",
+      company:         { $exists: true, $ne: null },
+      expiresAt:       { $gt: now }, // not already expired by deadline
       lastHeartbeatAt: { $ne: null },
     }).limit(BATCH_LIMIT).lean();
 
@@ -92,7 +96,6 @@ async function _tick() {
 
         broadcastQuizEvent(String(attempt.quiz), "attempt_auto_submitted", {
           attemptId: String(attempt._id),
-          studentId: String(attempt.student),
           reason,
           submittedAt: now.toISOString(),
         });

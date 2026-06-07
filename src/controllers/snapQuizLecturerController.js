@@ -145,10 +145,20 @@ exports.listAllCompanyQuizzes = async (req, res) => {
     const filter = { company: req.companyId };
     if (status) filter.status = status;
 
+    // HOD: restrict to courses belonging to their own department only.
+    if (req.user.role === "hod" && req.user.department) {
+      const Course = require("../models/Course");
+      const deptCourseIds = await Course.find(
+        { company: req.companyId, department: req.user.department },
+        { _id: 1 }
+      ).lean().then(docs => docs.map(d => d._id));
+      filter.course = { $in: deptCourseIds };
+    }
+
     const skip = (Number(page) - 1) * Number(limit);
     const [quizzes, total] = await Promise.all([
       SnapQuiz.find(filter)
-        .populate("createdBy", "name email")
+        .populate("createdBy", "name")
         .sort({ createdAt: -1 }).skip(skip).limit(Number(limit)).lean(),
       SnapQuiz.countDocuments(filter),
     ]);
@@ -872,7 +882,7 @@ exports.getLiveMonitor = async (req, res) => {
     const [attempts, recentViolations] = await Promise.all([
       SnapQuizAttempt.find({ quiz: quiz._id })
         .select("student status startedAt submittedAt expiresAt lastHeartbeatAt violationCount isTerminated terminationReason device percentageScore gradingStatus")
-        .populate("student", "name email IndexNumber studentLevel studentGroup")
+        .populate("student", "name studentLevel studentGroup")
         .sort({ startedAt: -1 })
         .lean(),
       SnapQuizViolationLog.find({ quiz: quiz._id })
@@ -890,12 +900,10 @@ exports.getLiveMonitor = async (req, res) => {
       return {
         attemptId:        String(a._id),
         student: {
-          _id:          String(a.student?._id || a.student),
-          name:         a.student?.name || "Unknown",
-          email:        a.student?.email || "",
-          indexNumber:  a.student?.IndexNumber || "",
-          level:        a.student?.studentLevel || "",
-          group:        a.student?.studentGroup || "",
+          _id:   String(a.student?._id || a.student),
+          name:  a.student?.name || "Unknown",
+          level: a.student?.studentLevel || "",
+          group: a.student?.studentGroup || "",
         },
         status:          a.status,
         violationCount:  a.violationCount || 0,

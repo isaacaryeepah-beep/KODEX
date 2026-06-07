@@ -93,8 +93,10 @@ const requireAssessmentOwnership = (Model, options = {}) => {
 
       req.assessment = assessment;
 
-      // Admin/superadmin/HOD: skip ownership and course checks.
-      if (["superadmin", "admin", "hod"].includes(req.user.role)) {
+      // Admin / superadmin only: skip ownership and course checks.
+      // HOD is NOT exempt — they can only access their own assessments as a
+      // lecturer, or use the dedicated department-overview read-only endpoint.
+      if (["superadmin", "admin"].includes(req.user.role)) {
         return next();
       }
 
