@@ -4396,8 +4396,12 @@ async function renderClassRepMgmt() {
   const content = document.getElementById('main-content');
   content.innerHTML = '<div class="loading">Loading class representatives…</div>';
   try {
-    const repsData = await api('/api/class-rep-admin/list');
-    const reps = repsData.reps || [];
+    const [repsData, devicesData] = await Promise.all([
+      api('/api/class-rep-admin/list'),
+      api('/api/devices/all').catch(() => ({ devices: [] })),
+    ]);
+    const reps    = repsData.reps || [];
+    const devices = devicesData.devices || [];
 
     // Group reps by class key for the 2-rep cap display
     const repsByClass = {};
@@ -4438,6 +4442,7 @@ async function renderClassRepMgmt() {
                   <th style="text-align:left;padding:10px 12px;font-weight:700;color:var(--text-muted);font-size:11px;text-transform:uppercase;">Level / Group</th>
                   <th style="text-align:left;padding:10px 12px;font-weight:700;color:var(--text-muted);font-size:11px;text-transform:uppercase;">Session</th>
                   <th style="text-align:left;padding:10px 12px;font-weight:700;color:var(--text-muted);font-size:11px;text-transform:uppercase;">Department</th>
+                  <th style="text-align:left;padding:10px 12px;font-weight:700;color:var(--text-muted);font-size:11px;text-transform:uppercase;">Device</th>
                   <th style="text-align:left;padding:10px 12px;font-weight:700;color:var(--text-muted);font-size:11px;text-transform:uppercase;"></th>
                 </tr>
               </thead>
@@ -4467,6 +4472,15 @@ async function renderClassRepMgmt() {
                     </td>
                     <td style="padding:10px 12px;color:var(--text-muted);font-size:12px">${esc(r.department||'—')}</td>
                     <td style="padding:10px 12px;">
+                      ${(() => {
+                        const assignedDevice = devices.find(d => d.classRepId && (d.classRepId._id || d.classRepId) === r._id);
+                        return assignedDevice
+                          ? `<span style="font-size:11px;font-weight:600;color:#0891b2">${esc(assignedDevice.deviceName || assignedDevice.deviceId)}</span>`
+                          : `<span style="font-size:11px;color:#94a3b8;font-style:italic">None</span>`;
+                      })()}
+                    </td>
+                    <td style="padding:10px 12px;white-space:nowrap;display:flex;gap:6px">
+                      <button class="btn btn-xs" style="background:#ecfeff;color:#0891b2;border:1px solid #a5f3fc;" onclick="crOpenAssignDevice('${r._id}','${esc(r.name).replace(/'/g,"\\'")}')">Assign Device</button>
                       <button class="btn btn-xs" style="background:#fee2e2;color:#b91c1c;border:1px solid #fca5a5;" onclick="crRemoveRep('${r._id}','${esc(r.name).replace(/'/g,"\\'")}')">Remove</button>
                     </td>
                   </tr>`).join('')}
@@ -4674,6 +4688,91 @@ window.crRemoveRepBrowse = async function(userId, name) {
     }).catch(() => {});
   } catch(e) {
     toastError(e.message || 'Failed to remove class representative');
+  }
+};
+
+window.crOpenAssignDevice = async function(repId, repName) {
+  const existing = document.getElementById('cr-device-assign-overlay');
+  if (existing) existing.remove();
+
+  const overlay = document.createElement('div');
+  overlay.id = 'cr-device-assign-overlay';
+  overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:9999;display:flex;align-items:center;justify-content:center;padding:16px';
+
+  let devicesHtml = '<div style="font-size:13px;color:var(--text-muted)">Loading devices…</div>';
+  overlay.innerHTML = `
+    <div style="background:var(--card,#fff);border-radius:14px;padding:28px;width:100%;max-width:460px;box-shadow:0 20px 60px rgba(0,0,0,.25);position:relative">
+      <button onclick="document.getElementById('cr-device-assign-overlay').remove()"
+        style="position:absolute;top:14px;right:16px;background:none;border:none;cursor:pointer;font-size:18px;color:var(--text-muted)">✕</button>
+      <div style="font-size:16px;font-weight:800;color:#0f172a;margin-bottom:4px">Assign Device</div>
+      <div style="font-size:12px;color:#64748b;margin-bottom:20px">Select a device to assign to <strong>${esc(repName)}</strong></div>
+      <div id="cr-device-list">${devicesHtml}</div>
+    </div>`;
+  document.body.appendChild(overlay);
+
+  try {
+    const data = await api('/api/devices/all');
+    const devices = data.devices || [];
+    const listEl  = document.getElementById('cr-device-list');
+    if (!listEl) return;
+
+    if (!devices.length) {
+      listEl.innerHTML = '<p style="font-size:13px;color:#64748b">No paired devices found. Pair a device first from the Devices page.</p>';
+      return;
+    }
+
+    listEl.innerHTML = devices.map(d => {
+      const currentRep = d.classRepId?.name || null;
+      const isMine     = d.classRepId && (d.classRepId._id || d.classRepId) === repId;
+      const isOnline   = !!d.online;
+      return `
+        <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;padding:12px 14px;border:1.5px solid ${isMine?'#7c3aed':'var(--border)'};border-radius:10px;margin-bottom:8px;background:${isMine?'#faf5ff':'var(--bg)'}">
+          <div style="min-width:0;flex:1">
+            <div style="font-size:13px;font-weight:700">${esc(d.deviceName||d.deviceId)}</div>
+            <div style="font-size:11px;color:#64748b;margin-top:2px">
+              <span style="width:7px;height:7px;border-radius:50%;display:inline-block;background:${isOnline?'#22c55e':'#94a3b8'};margin-right:4px;vertical-align:middle"></span>${isOnline?'Online':'Offline'}
+              ${d.assignedDepartment ? ` · ${esc(d.assignedDepartment)}` : ''}
+              ${currentRep && !isMine ? ` · <span style="color:#f59e0b">Currently: ${esc(currentRep)}</span>` : ''}
+              ${isMine ? ' · <span style="color:#7c3aed;font-weight:700">Assigned to this rep</span>' : ''}
+            </div>
+          </div>
+          ${isMine
+            ? `<button class="btn btn-xs" style="background:#fee2e2;color:#b91c1c;border:1px solid #fca5a5;white-space:nowrap" onclick="crUnassignDevice('${d.deviceId}','${esc(repName).replace(/'/g,"\\'")}')">Remove</button>`
+            : `<button class="btn btn-xs" style="background:#ecfeff;color:#0891b2;border:1px solid #a5f3fc;white-space:nowrap" onclick="crAssignDeviceConfirm('${d.deviceId}','${repId}','${esc(repName).replace(/'/g,"\\'")}')">Assign</button>`}
+        </div>`;
+    }).join('');
+  } catch(e) {
+    const listEl = document.getElementById('cr-device-list');
+    if (listEl) listEl.innerHTML = `<p style="font-size:13px;color:#ef4444">${e.message}</p>`;
+  }
+};
+
+window.crAssignDeviceConfirm = async function(deviceId, repId, repName) {
+  try {
+    await api(`/api/devices/${deviceId}/assign-class-rep`, {
+      method: 'PATCH',
+      body: JSON.stringify({ classRepId: repId }),
+    });
+    document.getElementById('cr-device-assign-overlay')?.remove();
+    toastSuccess(`Device assigned to ${repName}`);
+    renderClassRepMgmt();
+  } catch(e) {
+    toastError(e.message || 'Failed to assign device');
+  }
+};
+
+window.crUnassignDevice = async function(deviceId, repName) {
+  if (!confirm(`Remove device from ${repName}?`)) return;
+  try {
+    await api(`/api/devices/${deviceId}/assign-class-rep`, {
+      method: 'PATCH',
+      body: JSON.stringify({ classRepId: null }),
+    });
+    document.getElementById('cr-device-assign-overlay')?.remove();
+    toastSuccess('Device unassigned');
+    renderClassRepMgmt();
+  } catch(e) {
+    toastError(e.message || 'Failed to remove device');
   }
 };
 
