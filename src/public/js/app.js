@@ -14277,7 +14277,7 @@ function annCard(a, canPost, isAdmin) {
   const color = ANN_COLORS[a.type] || '#6366f1';
   const icon  = ANN_ICONS[a.type]  || 'ℹ️';
   const canDelete = isAdmin || (canPost && String(a.author?._id) === String(currentUser._id || currentUser.id));
-  const audienceLabel = { all:'Everyone', students:'Students', employees:'Employees' }[a.audience] || 'Everyone';
+  const audienceLabel = { all:'Everyone', students:'Students', employees:'Employees', lecturers:'Lecturers', hod:'HODs', class_group:'Class Group', department:'Department', programme:'Programme', course:'Course' }[a.audience] || 'Everyone';
   return `
     <div class="card" style="margin-bottom:12px;border-left:4px solid ${color};position:relative;${a.pinned?'background:linear-gradient(135deg,var(--card),#fefce8);':''}" id="ann-${a._id}">
       ${a.pinned ? '<div style="position:absolute;top:10px;right:12px;font-size:11px;color:#92400e;font-weight:700;background:#fef3c7;padding:2px 7px;border-radius:20px;">📌 Pinned</div>' : ''}
@@ -21883,6 +21883,14 @@ async function _renderStudentVideos() {
 async function renderClassAnnouncements() {
   const content = document.getElementById('main-content');
   if (!content) return;
+  if (!currentUser.isClassRep) {
+    content.innerHTML = `<div class="card" style="text-align:center;padding:40px 20px">
+      <div style="font-size:36px;margin-bottom:12px">🔒</div>
+      <h3 style="font-size:16px;font-weight:700;margin-bottom:6px">Class Representatives Only</h3>
+      <p style="color:var(--text-muted);font-size:13px">Only designated class representatives can post class announcements.</p>
+    </div>`;
+    return;
+  }
   content.innerHTML = '<div class="loading">Loading…</div>';
 
   try {
