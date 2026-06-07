@@ -7282,34 +7282,68 @@ async function generateVerbalCode(sessionId) {
   const container = document.getElementById('modal-container');
   container.classList.remove('hidden');
 
+  let _verbalTimer = null;
+  let _verbalRefreshTimer = null;
+
+  function _stopVerbalTimers() {
+    if (_verbalTimer)        { clearInterval(_verbalTimer);   _verbalTimer = null; }
+    if (_verbalRefreshTimer) { clearTimeout(_verbalRefreshTimer); _verbalRefreshTimer = null; }
+  }
+
   async function _fetchAndShow() {
+    _stopVerbalTimers();
     try {
-      const data = await api('/api/qr-tokens/generate', {
-        method: 'POST',
-        body: JSON.stringify({ sessionId, codeType: 'verbal', expiryMinutes: 5 })
-      });
-      const { code, expiresAt } = data.qrToken;
-      const expiry = new Date(expiresAt);
-      const totalSecs = Math.round((expiry - Date.now()) / 1000);
+      // Try to get the device code first (same HMAC code the ESP32 screen shows).
+      // Falls back to QR-token verbal code for sessions without a device.
+      let code, totalSecs, isDeviceCode = false, windowSecs = 300;
+
+      try {
+        const dc = await api(`/api/attendance-sessions/${sessionId}/current-code`);
+        code = dc.code;
+        totalSecs = dc.expiresInSeconds;
+        windowSecs = dc.windowSeconds || 300;
+        isDeviceCode = true;
+      } catch (_) {
+        // No device seed on this session — fall back to QR token verbal code
+        const data = await api('/api/qr-tokens/generate', {
+          method: 'POST',
+          body: JSON.stringify({ sessionId, codeType: 'verbal', expiryMinutes: 5 })
+        });
+        const qr = data.qrToken;
+        code = qr.code;
+        totalSecs = Math.round((new Date(qr.expiresAt) - Date.now()) / 1000);
+      }
+
+      const modeWord = currentUser.company?.mode === 'corporate' ? 'employees' : 'students';
+      const subtitle = isDeviceCode
+        ? 'This is the code currently shown on the classroom device screen.'
+        : `Read this code out loud. All ${modeWord} can use it within the time window.`;
+      const badgeText = isDeviceCode
+        ? '📟 Live device code — matches classroom screen'
+        : `Multi-use · All ${modeWord} can enter this code`;
+
+      const fmtTime = s => s >= 60 ? `${Math.floor(s/60)}m ${s%60}s` : `${s}s`;
 
       container.innerHTML = `
-        <div class="modal-overlay" onclick="closeModal(event)">
+        <div class="modal-overlay" onclick="_stopVerbalTimers();closeModal(event)">
           <div class="modal" onclick="event.stopPropagation()" style="text-align:center;max-width:380px">
             <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px">
-              <h3 style="margin:0">Verbal Attendance Code</h3>
-              <button onclick="closeModal()" style="background:none;border:none;font-size:20px;cursor:pointer;color:var(--text-light)">×</button>
+              <h3 style="margin:0">${isDeviceCode ? 'Device Attendance Code' : 'Verbal Attendance Code'}</h3>
+              <button onclick="_stopVerbalTimers();closeModal()" style="background:none;border:none;font-size:20px;cursor:pointer;color:var(--text-light)">×</button>
             </div>
-            <p style="color:var(--text-light);font-size:12px;margin-bottom:16px">Read this code out loud. All ${currentUser.company?.mode === 'corporate' ? 'employees' : 'students'} can use it within the time window.</p>
+            <p style="color:var(--text-light);font-size:12px;margin-bottom:16px">${subtitle}</p>
             <div style="font-size:64px;font-weight:900;color:#7c3aed;letter-spacing:12px;margin-bottom:8px;font-family:monospace">${code}</div>
-            <div style="display:inline-flex;align-items:center;gap:6px;background:rgba(124,58,237,0.1);border:1px solid rgba(124,58,237,0.3);border-radius:999px;padding:5px 14px;font-size:12px;font-weight:600;color:#7c3aed;margin-bottom:6px">
+            <div style="display:inline-flex;align-items:center;gap:6px;background:rgba(124,58,237,0.1);border:1px solid rgba(124,58,237,0.3);border-radius:999px;padding:5px 14px;font-size:12px;font-weight:600;color:#7c3aed;margin-bottom:10px">
               <span style="width:7px;height:7px;border-radius:50%;background:#7c3aed;display:inline-block;animation:pulse-green 1.5s infinite"></span>
-              Multi-use · All ${currentUser.company?.mode === 'corporate' ? 'employees' : 'students'} can enter this code
+              ${badgeText}
             </div>
-            <p style="color:var(--text-light);font-size:12px;margin-bottom:4px">Expires in: <span id="verbal-countdown" style="font-weight:700;color:#7c3aed">${Math.floor(totalSecs/60)}m ${totalSecs%60}s</span></p>
-            <p style="color:var(--text-muted);font-size:11px;margin-bottom:20px">Expires at ${expiry.toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'})}</p>
+            <p style="color:var(--text-light);font-size:12px;margin-bottom:20px">
+              ${isDeviceCode ? 'Rotates in:' : 'Expires in:'}
+              <span id="verbal-countdown" style="font-weight:700;color:#7c3aed">${fmtTime(totalSecs)}</span>
+            </p>
             <div class="modal-actions" style="justify-content:center;gap:8px">
-              <button class="btn btn-sm" style="background:#7c3aed;color:#fff" onclick="generateVerbalCode('${sessionId}')">New Code</button>
-              <button class="btn btn-primary btn-sm" onclick="closeModal()">Close</button>
+              <button class="btn btn-sm" style="background:#7c3aed;color:#fff" onclick="generateVerbalCode('${sessionId}')">Refresh</button>
+              <button class="btn btn-primary btn-sm" onclick="_stopVerbalTimers();closeModal()">Close</button>
             </div>
           </div>
         </div>
@@ -7318,14 +7352,24 @@ async function generateVerbalCode(sessionId) {
       // Countdown timer
       let secs = totalSecs;
       const countEl = () => document.getElementById('verbal-countdown');
-      const timer = setInterval(() => {
+      _verbalTimer = setInterval(() => {
         secs--;
-        if (secs <= 0) { clearInterval(timer); if (countEl()) countEl().textContent = 'Expired'; return; }
-        if (countEl()) countEl().textContent = Math.floor(secs/60) + 'm ' + (secs%60) + 's';
+        if (secs <= 0) {
+          clearInterval(_verbalTimer); _verbalTimer = null;
+          if (countEl()) countEl().textContent = 'Rotating…';
+          return;
+        }
+        if (countEl()) countEl().textContent = fmtTime(secs);
       }, 1000);
 
+      // Auto-refresh when the window rolls over
+      if (isDeviceCode) {
+        _verbalRefreshTimer = setTimeout(() => generateVerbalCode(sessionId), totalSecs * 1000);
+      }
+
     } catch(e) {
-      const msg = e.message || 'Failed to generate code';
+      _stopVerbalTimers();
+      const msg = e.message || 'Failed to get code';
       const isSubError = msg.toLowerCase().includes('subscription') || msg.toLowerCase().includes('trial');
       container.innerHTML = `<div class="modal-overlay" onclick="closeModal(event)"><div class="modal" onclick="event.stopPropagation()" style="text-align:center;padding:24px">
         <div style="font-size:36px;margin-bottom:12px">${isSubError ? '🔒' : '⚠️'}</div>
@@ -11524,7 +11568,7 @@ async function exportBankToPDF() {
     }
   });
 
-  doc.save(`DIKLY_QuestionBank_${new Date().toISOString().slice(0,10)}.pdf`);
+  await downloadBlob(doc.output('blob'), `DIKLY_QuestionBank_${new Date().toISOString().slice(0,10)}.pdf`);
   toastSuccess(`PDF saved with ${selected.length} question${selected.length !== 1 ? 's' : ''} ✓`);
 }
 
@@ -13555,11 +13599,12 @@ async function renderProfile() {
         <div id="devices-list"><div style="color:var(--text-muted);font-size:13px">Loading devices…</div></div>
       </div>
 
+      ${currentUser.role !== 'student' ? `
       <div style="margin-top:28px;padding-top:24px;border-top:1px solid var(--border)">
         <h3 style="font-size:14px;font-weight:700;margin-bottom:4px;color:#ef4444">Danger Zone</h3>
         <p style="font-size:12px;color:var(--text-muted);margin-bottom:14px">Permanently delete your account and all associated data.</p>
         <a href="/delete-account" target="_blank" style="display:inline-block;padding:10px 20px;border-radius:8px;border:1.5px solid #ef4444;color:#ef4444;font-size:13px;font-weight:600;text-decoration:none;background:transparent">Delete Account</a>
-      </div>
+      </div>` : ''}
     </div>
   `;
   loadMyDevices();
@@ -14827,7 +14872,8 @@ async function exportAttendanceToExcel(sessionId, sessionTitle) {
     ws['!cols'] = [{ wch: 25 }, { wch: 15 }, { wch: 12 }, { wch: 15 }, { wch: 22 }, { wch: 20 }];
 
     const filename = `Attendance_${(sessionTitle || 'session').replace(/[^a-z0-9]/gi, '_')}_${new Date().toISOString().slice(0,10)}.xlsx`;
-    window.XLSX.writeFile(wb, filename);
+    const wbout = window.XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
+    await downloadBlob(new Blob([wbout], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }), filename);
     showToastNotif('Excel file downloaded!', 'success');
   } catch(e) {
     showToastNotif('Export failed: ' + e.message, 'error');
@@ -14863,7 +14909,8 @@ async function exportAllAttendanceToExcel() {
     const wb = window.XLSX.utils.book_new();
     window.XLSX.utils.book_append_sheet(wb, ws, 'My Attendance');
     ws['!cols'] = [{ wch: 30 }, { wch: 15 }, { wch: 12 }, { wch: 15 }];
-    window.XLSX.writeFile(wb, `My_Attendance_${new Date().toISOString().slice(0,10)}.xlsx`);
+    const wboutAll = window.XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
+    await downloadBlob(new Blob([wboutAll], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }), `My_Attendance_${new Date().toISOString().slice(0,10)}.xlsx`);
     showToastNotif('Excel file downloaded!', 'success');
   } catch(e) {
     showToastNotif('Export failed: ' + e.message, 'error');
@@ -15658,7 +15705,7 @@ async function generateAttendanceReportCard() {
 
     doc.setFontSize(8); doc.setTextColor(150,150,150); doc.setFont('helvetica','normal');
     doc.text('Generated automatically by DIKLY — dikly.sbs', M, 285);
-    doc.save('DIKLY_Report_Card_' + (currentUser.indexNumber||'student') + '_' + new Date().toISOString().slice(0,10) + '.pdf');
+    await downloadBlob(doc.output('blob'), 'DIKLY_Report_Card_' + (currentUser.indexNumber||'student') + '_' + new Date().toISOString().slice(0,10) + '.pdf');
     showToastNotif('Report card downloaded!', 'success');
   } catch(e) { showToastNotif('Failed: ' + e.message, 'error'); }
 }
@@ -15731,7 +15778,7 @@ async function generateCertificate(courseId, courseTitle) {
     doc.setFontSize(8); doc.setTextColor(199,210,254);
     doc.text('dikly.sbs', W/2, H-16, { align: 'center' });
 
-    doc.save('DIKLY_Certificate_' + (courseTitle||'course').replace(/[^a-z0-9]/gi,'_') + '.pdf');
+    await downloadBlob(doc.output('blob'), 'DIKLY_Certificate_' + (courseTitle||'course').replace(/[^a-z0-9]/gi,'_') + '.pdf');
     showToastNotif('Certificate downloaded!', 'success');
   } catch(e) { showToastNotif('Failed: ' + e.message, 'error'); }
 }
