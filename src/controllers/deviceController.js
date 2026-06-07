@@ -890,6 +890,7 @@ exports.listAllDevices = async (req, res) => {
       .populate('lecturerId', 'name email role')
       .populate('assignedLecturers.lecturerId', 'name email')
       .populate('assignedLecturers.courseId',   'title code')
+      .populate('classRepId', 'name email IndexNumber studentLevel studentGroup')
       .sort({ createdAt: -1 })
       .lean();
 
@@ -914,6 +915,7 @@ exports.listAllDevices = async (req, res) => {
         courseId:   a.courseId,
         assignedAt: a.assignedAt,
       })),
+      classRepId:    d.classRepId || null,
       createdAt:     d.createdAt,
     }));
 

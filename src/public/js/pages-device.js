@@ -1114,6 +1114,15 @@ async function adLoadDevices() {
           </span>`;
         }).join('');
 
+        const classRepName = d.classRepId?.name || null;
+        const classRepPill = classRepName
+          ? `<span class="ad-lec-pill" style="background:#faf5ff;border-color:#d8b4fe;color:#7c3aed">
+              <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><polyline points="17 11 19 13 23 9"/></svg>
+              Rep: ${_esc(classRepName)}
+              <button class="ad-lec-remove" onclick="adRemoveClassRep('${d.deviceId}')" title="Remove class rep">&times;</button>
+            </span>`
+          : '';
+
         const setupData = JSON.stringify({
           name: d.deviceName || '',
           dept: d.assignedDepartment || '',
@@ -1165,6 +1174,13 @@ async function adLoadDevices() {
                 <button class="ad-assign-btn" onclick="adOpenAssignModal('${d.deviceId}')">
                   <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
                   Assign Lecturer
+                </button>
+              </div>
+              <div class="ad-lec-row" style="margin-top:6px;border-top:1px dashed var(--border);padding-top:6px">
+                ${classRepPill || '<span style="font-size:11px;color:#94a3b8;font-style:italic">No class rep assigned</span>'}
+                <button class="ad-assign-btn" style="border-color:#d8b4fe;color:#7c3aed" onclick="adOpenClassRepModal('${d.deviceId}')">
+                  <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+                  Assign Class Rep
                 </button>
               </div>
             </div>
@@ -1317,6 +1333,111 @@ async function adRemoveLecturer(deviceId, lecturerId, courseId) {
     await adLoadDevices();
   } catch (e) {
     alert('Failed to remove lecturer: ' + (e.message || 'Server error'));
+  }
+}
+
+// ─── ASSIGN CLASS REP TO DEVICE ──────────────────────────────────────────────
+async function adOpenClassRepModal(deviceId) {
+  const existing = document.getElementById('ad-classrep-modal-overlay');
+  if (existing) existing.remove();
+
+  const overlay = document.createElement('div');
+  overlay.id = 'ad-classrep-modal-overlay';
+  overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:9000;display:flex;align-items:center;justify-content:center;padding:16px';
+  overlay.innerHTML = `
+    <div style="background:var(--surface,#fff);border-radius:14px;padding:28px;width:100%;max-width:480px;box-shadow:0 20px 60px rgba(0,0,0,.25);position:relative">
+      <button onclick="document.getElementById('ad-classrep-modal-overlay').remove()"
+        style="position:absolute;top:16px;right:16px;background:none;border:none;cursor:pointer;color:var(--text-muted);font-size:18px">✕</button>
+      <div style="font-size:16px;font-weight:800;color:#0f172a;margin-bottom:4px">Assign Class Rep to Device</div>
+      <div style="font-size:12px;color:#64748b;margin-bottom:20px">Search by index number to find the class representative for this device.</div>
+
+      <div style="display:flex;gap:8px;margin-bottom:12px">
+        <input id="cr-dev-index" type="text" placeholder="Student index number (e.g. UCC/CS/23/0001)"
+          style="flex:1;padding:9px 12px;border:1.5px solid var(--border);border-radius:8px;font-size:13px;font-family:inherit;outline:none;text-transform:uppercase"
+          oninput="this.value=this.value.toUpperCase()">
+        <button onclick="adSearchClassRep('${deviceId}')"
+          style="padding:9px 16px;background:#7c3aed;color:#fff;border:none;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer;white-space:nowrap">Search</button>
+      </div>
+      <div id="cr-dev-result" style="min-height:40px"></div>
+    </div>`;
+  document.body.appendChild(overlay);
+  document.getElementById('cr-dev-index')?.focus();
+}
+
+async function adSearchClassRep(deviceId) {
+  const indexInput = document.getElementById('cr-dev-index');
+  const result     = document.getElementById('cr-dev-result');
+  if (!indexInput || !result) return;
+  const idx = indexInput.value.trim().toUpperCase();
+  if (!idx) { indexInput.style.borderColor = '#ef4444'; indexInput.focus(); return; }
+  indexInput.style.borderColor = 'var(--border)';
+  result.innerHTML = '<div style="font-size:13px;color:var(--text-muted)">Searching…</div>';
+  try {
+    const data = await api('/api/class-rep-admin/students?indexNumber=' + encodeURIComponent(idx));
+    const students = data.students || [];
+    if (!students.length) {
+      result.innerHTML = '<div style="font-size:13px;color:#ef4444">No student found with that index number.</div>';
+      return;
+    }
+    const s = students[0];
+    const tags = [
+      s.programme ? `<span style="background:#ede9fe;color:#7c3aed;padding:1px 7px;border-radius:20px;font-size:11px;font-weight:700">${_esc(s.programme)}</span>` : '',
+      s.studentLevel ? `<span style="background:#dbeafe;color:#1d4ed8;padding:1px 7px;border-radius:20px;font-size:11px;font-weight:700">L${_esc(s.studentLevel)}</span>` : '',
+      s.studentGroup ? `<span style="background:#ecfdf5;color:#059669;padding:1px 7px;border-radius:20px;font-size:11px;font-weight:700">Grp ${_esc(s.studentGroup)}</span>` : '',
+      s.sessionType  ? `<span style="background:#fff7ed;color:#c2410c;padding:1px 7px;border-radius:20px;font-size:11px;font-weight:600">${_esc(s.sessionType)}</span>` : '',
+    ].filter(Boolean).join(' ');
+    result.innerHTML = `
+      <div style="border:1.5px solid var(--border);border-radius:10px;padding:14px 16px;display:flex;gap:12px;align-items:center;margin-bottom:14px">
+        <div style="width:40px;height:40px;border-radius:50%;background:linear-gradient(135deg,#7c3aed,#6366f1);display:flex;align-items:center;justify-content:center;font-size:16px;font-weight:800;color:#fff;flex-shrink:0">
+          ${_esc((s.name||'?')[0].toUpperCase())}
+        </div>
+        <div style="min-width:0;flex:1">
+          <div style="font-weight:700;font-size:14px">${_esc(s.name)}</div>
+          <div style="font-size:11px;color:#64748b;margin-bottom:5px">${_esc(s.IndexNumber||s.indexNumber||'')} · ${_esc(s.department||'')}</div>
+          <div style="display:flex;gap:5px;flex-wrap:wrap">${tags}</div>
+          ${s.isClassRep ? '<div style="margin-top:5px;font-size:11px;color:#7c3aed;font-weight:700">⭐ Already a Class Rep</div>' : ''}
+        </div>
+      </div>
+      <div style="display:flex;gap:8px;justify-content:flex-end">
+        <button onclick="document.getElementById('ad-classrep-modal-overlay').remove()"
+          style="padding:9px 16px;background:var(--bg,#f8fafc);border:1.5px solid var(--border);border-radius:8px;font-size:13px;font-weight:600;cursor:pointer">Cancel</button>
+        <button onclick="adConfirmClassRep('${deviceId}','${s._id}','${_esc(s.name).replace(/'/g,"\\'")}','${!s.isClassRep}')"
+          style="padding:9px 16px;background:#7c3aed;color:#fff;border:none;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer">
+          ${s.isClassRep ? 'Assign to This Device' : 'Make Rep & Assign to Device'}
+        </button>
+      </div>`;
+  } catch (e) {
+    result.innerHTML = `<div style="font-size:13px;color:#ef4444">${e.message || 'Search failed'}</div>`;
+  }
+}
+
+async function adConfirmClassRep(deviceId, studentId, name, needsRepRole) {
+  try {
+    if (needsRepRole === 'true') {
+      await api('/api/class-rep-admin/assign', { method: 'POST', body: JSON.stringify({ studentId }) });
+    }
+    await api(`/api/devices/${deviceId}/assign-class-rep`, {
+      method: 'PATCH',
+      body: JSON.stringify({ classRepId: studentId }),
+    });
+    document.getElementById('ad-classrep-modal-overlay')?.remove();
+    typeof toastSuccess === 'function' ? toastSuccess(`${name} assigned as class rep for this device`) : alert(`${name} assigned as class rep`);
+    await adLoadDevices();
+  } catch (e) {
+    typeof toastError === 'function' ? toastError(e.message || 'Failed to assign class rep') : alert('Failed: ' + e.message);
+  }
+}
+
+async function adRemoveClassRep(deviceId) {
+  if (!confirm('Remove the class rep assignment from this device?')) return;
+  try {
+    await api(`/api/devices/${deviceId}/assign-class-rep`, {
+      method: 'PATCH',
+      body: JSON.stringify({ classRepId: null }),
+    });
+    await adLoadDevices();
+  } catch (e) {
+    alert('Failed to remove class rep: ' + (e.message || 'Server error'));
   }
 }
 
