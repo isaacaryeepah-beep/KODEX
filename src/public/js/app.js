@@ -7506,6 +7506,15 @@ async function renderUsers(filterRole='', filterDept='', filterSearch='') {
       _renderUsersCorporateTable(content, _cachedUsers, filterRole, filterDept, filterSearch);
     }
   } catch(e) {
+    const _c = offlineRead('users_list');
+    if (_c) {
+      _cachedUsers = _c;
+      window._hodDepts = [...new Set(_c.filter(u => u.role==='hod' && u.department).map(u => u.department))].sort();
+      const mode = currentUser.company?.mode || 'corporate';
+      if (mode === 'academic') _renderUserDeptCards(content, _c, filterSearch);
+      else _renderUsersCorporateTable(content, _c, filterRole, filterDept, filterSearch);
+      return;
+    }
     content.innerHTML = `<div class="card"><p style="color:#ef4444">Error loading users: ${e.message}</p></div>`;
   }
 }
