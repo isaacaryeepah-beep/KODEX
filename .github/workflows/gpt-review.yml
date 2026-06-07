@@ -1,0 +1,142 @@
+name: GPT-o1 Code Review
+
+on:
+  pull_request:
+    branches: [main]
+    types: [opened, synchronize, reopened]
+  workflow_dispatch:
+
+jobs:
+  gpt-review:
+    name: GPT-o1 security & bug review
+    runs-on: ubuntu-latest
+    permissions:
+      pull-requests: write
+      contents: read
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Install OpenAI SDK
+        run: npm install openai
+
+      - name: Get PR diff
+        id: diff
+        run: |
+          git fetch origin ${{ github.base_ref }}
+          DIFF=$(git diff origin/${{ github.base_ref }}...HEAD -- \
+            '*.js' '*.ts' '*.json' \
+            ':!*.min.js' \
+            ':!node_modules/**' \
+            ':!src/public/js/app.js' \
+            ':!android/**' \
+            ':!dikly_flutter/**' \
+          | head -c 60000)
+          echo "diff<<EOF" >> $GITHUB_OUTPUT
+          echo "$DIFF" >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
+
+      - name: Run GPT-o1 review
+        id: review
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          PR_DIFF: ${{ steps.diff.outputs.diff }}
+          PR_TITLE: ${{ github.event.pull_request.title }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        run: |
+          node << 'EOF'
+          const OpenAI = require("openai").default;
+          const fs     = require("fs");
+
+          const client = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+
+          const diff     = process.env.PR_DIFF     || "";
+          const prTitle  = process.env.PR_TITLE    || "";
+          const prNumber = process.env.PR_NUMBER   || "";
+
+          if (!diff.trim()) {
+            fs.writeFileSync("/tmp/review.md", "No reviewable diff found (only non-JS/TS files changed).");
+            process.exit(0);
+          }
+
+          async function run() {
+            const response = await client.chat.completions.create({
+              model: "o1",
+              messages: [
+                {
+                  role: "user",
+                  content: `You are a senior security engineer and Node.js/Express/MongoDB expert reviewing a pull request for a multi-tenant SaaS attendance and assessment platform.
+
+PR title: ${prTitle}
+
+Review the following git diff for:
+1. Security vulnerabilities (injection, auth bypass, broken access control, missing tenant isolation, mass assignment, exposed secrets/PII)
+2. Logic bugs and race conditions
+3. Missing input validation or error handling that could cause 500s
+4. Breaking changes to existing API contracts
+
+Be precise. Reference exact file names and line numbers from the diff. Skip style/formatting opinions.
+Format your response as GitHub-flavoured Markdown with these sections:
+## 🔴 Critical
+## 🟠 High
+## 🟡 Medium
+## 🟢 Low / Suggestions
+If a section has no findings, write "None."
+
+Diff:
+\`\`\`diff
+${diff}
+\`\`\``,
+                },
+              ],
+            });
+
+            const review = response.choices[0]?.message?.content || "No response from model.";
+            const output = `## GPT-o1 Code Review\n\n${review}\n\n---\n*Powered by OpenAI o1 · [workflow](.github/workflows/gpt-review.yml)*`;
+            fs.writeFileSync("/tmp/review.md", output);
+            console.log("Review complete.");
+          }
+
+          run().catch(err => {
+            fs.writeFileSync("/tmp/review.md", `GPT review failed: ${err.message}`);
+            process.exit(0); // Don't block the PR for API errors
+          });
+          EOF
+
+      - name: Post review as PR comment
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const review = fs.readFileSync('/tmp/review.md', 'utf8');
+
+            // Delete any previous GPT review comments to avoid duplicates
+            const comments = await github.rest.issues.listComments({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+            });
+            for (const c of comments.data) {
+              if (c.user.type === 'Bot' && c.body.includes('GPT-o1 Code Review')) {
+                await github.rest.issues.deleteComment({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  comment_id: c.id,
+                });
+              }
+            }
+
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+              body: review,
+            });
