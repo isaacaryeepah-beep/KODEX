@@ -3541,59 +3541,132 @@ async function renderHodLecturers() {
   }
 }
 
+let _hodCachedStudents = null;
+
 async function renderHodStudents() {
   const content = document.getElementById('main-content');
   content.innerHTML = '<div class="loading">Loading students…</div>';
   try {
     const dept = currentUser.department ? '&department=' + encodeURIComponent(currentUser.department) : '';
     const data = await api('/api/users?role=student&limit=500' + dept);
-    const students = data.users || [];
-    content.innerHTML = `
-      <div class="page-header">
-        <div><h2>Students</h2><p>${students.length} student${students.length !== 1 ? 's' : ''} enrolled</p></div>
-        <div style="display:flex;gap:8px;align-items:center;">
-          <button class="btn btn-secondary btn-sm" onclick="hodExportCSV('students')">Export CSV</button>
-          <input id="hod-stu-search" placeholder="Search students…" oninput="hodFilterStudents()" style="padding:8px 12px;border:1.5px solid var(--border);border-radius:8px;font-size:13px;font-family:inherit;outline:none;min-width:200px;">
-        </div>
-      </div>
-      <div id="hod-stu-list" style="overflow-x:auto;">
-        <table style="width:100%;border-collapse:collapse;font-size:13px;">
-          <thead>
-            <tr style="border-bottom:2px solid var(--border);">
-              <th style="text-align:left;padding:10px 12px;font-weight:700;color:var(--text-muted);font-size:11px;text-transform:uppercase;">Name</th>
-              <th style="text-align:left;padding:10px 12px;font-weight:700;color:var(--text-muted);font-size:11px;text-transform:uppercase;">Index No.</th>
-              <th style="text-align:left;padding:10px 12px;font-weight:700;color:var(--text-muted);font-size:11px;text-transform:uppercase;">Programme</th>
-              <th style="text-align:left;padding:10px 12px;font-weight:700;color:var(--text-muted);font-size:11px;text-transform:uppercase;">Level / Group</th>
-              <th style="text-align:left;padding:10px 12px;font-weight:700;color:var(--text-muted);font-size:11px;text-transform:uppercase;">Session</th>
-              <th style="text-align:left;padding:10px 12px;font-weight:700;color:var(--text-muted);font-size:11px;text-transform:uppercase;">Status</th>
-              <th style="text-align:left;padding:10px 12px;font-weight:700;color:var(--text-muted);font-size:11px;text-transform:uppercase;"></th>
-            </tr>
-          </thead>
-          <tbody id="hod-stu-tbody">
-            ${students.length === 0 ? '<tr><td colspan="4" style="padding:24px;text-align:center;color:var(--text-muted);">No students found.</td></tr>' :
-              students.map(u => `
-                <tr class="hod-stu-row" data-name="${(u.name||'').toLowerCase()}" data-index="${(u.indexNumber||'').toLowerCase()}" style="border-bottom:1px solid var(--border);">
-                  <td style="padding:10px 12px;font-weight:600;">${u.name}</td>
-                  <td style="padding:10px 12px;color:var(--text-muted);font-family:monospace;">${u.IndexNumber || u.indexNumber || '—'}</td>
-                  <td style="padding:10px 12px;">${u.programme ? `<span style="background:#ede9fe;color:#7c3aed;padding:2px 8px;border-radius:20px;font-size:11px;font-weight:700">${esc(u.programme)}</span>` : '—'}</td>
-                  <td style="padding:10px 12px;">
-                    ${u.studentLevel ? `<span style="background:#dbeafe;color:#1d4ed8;padding:2px 7px;border-radius:20px;font-size:11px;font-weight:700;margin-right:3px">L${esc(u.studentLevel)}</span>` : ''}
-                    ${u.studentGroup ? `<span style="background:#ecfdf5;color:#059669;padding:2px 7px;border-radius:20px;font-size:11px;font-weight:700">Grp ${esc(u.studentGroup)}</span>` : ''}
-                    ${!u.studentLevel && !u.studentGroup ? '—' : ''}
-                  </td>
-                  <td style="padding:10px 12px;">
-                    ${u.sessionType ? `<span style="background:#fff7ed;color:#c2410c;padding:2px 8px;border-radius:20px;font-size:11px;font-weight:600">${esc(u.sessionType)}</span>` : '—'}
-                    ${u.semester ? `<span style="font-size:11px;color:var(--text-muted);margin-left:4px">Sem ${esc(u.semester)}</span>` : ''}
-                  </td>
-                  <td style="padding:10px 12px;"><span class="tag ${u.isApproved ? 'tag-green' : 'tag-amber'}">${u.isApproved ? 'Active' : 'Pending'}</span></td>
-                  <td style="padding:10px 12px;"><button class="btn btn-xs btn-secondary" onclick="hodViewStudentAttendance('${u._id}','${u.name.replace(/'/g,"\\'")}')">Attendance</button></td>
-                </tr>`).join('')}
-          </tbody>
-        </table>
-      </div>`;
+    _hodCachedStudents = data.users || [];
+    _renderHodLevelCards(content, _hodCachedStudents);
   } catch(e) {
     content.innerHTML = `<div class="card"><p style="color:#ef4444;">${e.message}</p></div>`;
   }
+}
+
+function _renderHodLevelCards(content, allStudents) {
+  const levelMap = {};
+  allStudents.forEach(u => {
+    const lv = u.studentLevel ? String(u.studentLevel) : 'Unassigned';
+    if (!levelMap[lv]) levelMap[lv] = [];
+    levelMap[lv].push(u);
+  });
+  const levels = Object.keys(levelMap).sort((a, b) => {
+    if (a === 'Unassigned') return 1;
+    if (b === 'Unassigned') return -1;
+    return Number(a) - Number(b);
+  });
+
+  const cards = levels.map(lv => {
+    const studs = levelMap[lv];
+    const active = studs.filter(u => u.isApproved).length;
+    const accent = _deptColor('Level ' + lv);
+    const lvEnc = encodeURIComponent(lv);
+    return `
+      <div onclick="_renderHodLevelStudents(decodeURIComponent('${lvEnc}'), _hodCachedStudents)"
+           style="background:#fff;border:1.5px solid #e8eaed;border-radius:16px;padding:0;cursor:pointer;overflow:hidden;box-shadow:0 1px 4px rgba(0,0,0,.06);transition:box-shadow .18s;position:relative"
+           onmouseover="this.style.boxShadow='0 6px 24px rgba(0,0,0,.11)'" onmouseout="this.style.boxShadow='0 1px 4px rgba(0,0,0,.06)'">
+        <div style="height:5px;background:${accent};border-radius:16px 16px 0 0"></div>
+        <div style="padding:20px 22px 18px">
+          <div style="display:flex;align-items:center;gap:12px;margin-bottom:14px">
+            <div style="width:42px;height:42px;border-radius:12px;background:${accent}1a;display:flex;align-items:center;justify-content:center;flex-shrink:0">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="${accent}" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+            </div>
+            <div>
+              <div style="font-size:16px;font-weight:800;color:#0f172a">Level ${lv === 'Unassigned' ? '<span style="color:#94a3b8">Unassigned</span>' : lv}</div>
+              <div style="font-size:12px;color:#64748b;margin-top:1px">${studs.length} student${studs.length !== 1 ? 's' : ''}</div>
+            </div>
+          </div>
+          <div style="display:flex;gap:10px;flex-wrap:wrap">
+            <span style="font-size:11px;font-weight:600;background:${accent}15;color:${accent};padding:3px 10px;border-radius:20px">${active} Active</span>
+            ${studs.length - active > 0 ? `<span style="font-size:11px;font-weight:600;background:#fef3c715;color:#b45309;padding:3px 10px;border-radius:20px">${studs.length - active} Pending</span>` : ''}
+          </div>
+        </div>
+      </div>`;
+  }).join('');
+
+  content.innerHTML = `
+    <div class="page-header" style="margin-bottom:24px">
+      <div>
+        <h2 style="font-size:22px;font-weight:800;letter-spacing:-.5px;color:#0f172a;margin-bottom:2px">Students</h2>
+        <p style="color:#64748b;font-size:13px">${allStudents.length} student${allStudents.length !== 1 ? 's' : ''} enrolled${currentUser.department ? ' · ' + esc(currentUser.department) : ''}</p>
+      </div>
+      <button class="btn btn-secondary btn-sm" onclick="hodExportCSV('students')">Export CSV</button>
+    </div>
+    ${levels.length === 0
+      ? `<div style="background:#fff;border:1px solid #e8eaed;border-radius:16px;padding:60px 20px;text-align:center"><p style="color:#64748b">No students found.</p></div>`
+      : `<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:16px">${cards}</div>`}`;
+}
+
+function _renderHodLevelStudents(level, allStudents) {
+  const content = document.getElementById('main-content');
+  const studs = allStudents.filter(u => {
+    const lv = u.studentLevel ? String(u.studentLevel) : 'Unassigned';
+    return lv === level;
+  });
+  const accent = _deptColor('Level ' + level);
+
+  content.innerHTML = `
+    <div class="page-header" style="margin-bottom:20px">
+      <div style="display:flex;align-items:center;gap:10px">
+        <button onclick="_renderHodLevelCards(document.getElementById('main-content'),_hodCachedStudents)"
+                style="background:none;border:none;cursor:pointer;padding:6px 8px;border-radius:8px;color:#64748b;font-size:13px;display:flex;align-items:center;gap:5px;transition:background .15s"
+                onmouseover="this.style.background='#f1f5f9'" onmouseout="this.style.background='none'">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="15 18 9 12 15 6"/></svg>
+          All Levels
+        </button>
+        <span style="color:#cbd5e1">›</span>
+        <span style="font-size:14px;font-weight:700;color:#0f172a">Level ${esc(level)}</span>
+      </div>
+      <div style="display:flex;gap:8px;align-items:center">
+        <button class="btn btn-secondary btn-sm" onclick="hodExportCSV('students')">Export CSV</button>
+        <input id="hod-stu-search" placeholder="Search students…" oninput="hodFilterStudents()"
+               style="padding:8px 12px;border:1.5px solid var(--border);border-radius:8px;font-size:13px;font-family:inherit;outline:none;min-width:200px;">
+      </div>
+    </div>
+    <div id="hod-stu-list" style="overflow-x:auto;">
+      <table style="width:100%;border-collapse:collapse;font-size:13px;background:#fff;border:1px solid #e8eaed;border-radius:14px;overflow:hidden;box-shadow:0 1px 4px rgba(0,0,0,.05)">
+        <thead>
+          <tr style="border-bottom:2px solid var(--border);background:#f8fafc">
+            <th style="text-align:left;padding:12px 14px;font-weight:700;color:var(--text-muted);font-size:11px;text-transform:uppercase;letter-spacing:.5px">Name</th>
+            <th style="text-align:left;padding:12px 14px;font-weight:700;color:var(--text-muted);font-size:11px;text-transform:uppercase;letter-spacing:.5px">Index No.</th>
+            <th style="text-align:left;padding:12px 14px;font-weight:700;color:var(--text-muted);font-size:11px;text-transform:uppercase;letter-spacing:.5px">Programme</th>
+            <th style="text-align:left;padding:12px 14px;font-weight:700;color:var(--text-muted);font-size:11px;text-transform:uppercase;letter-spacing:.5px">Group</th>
+            <th style="text-align:left;padding:12px 14px;font-weight:700;color:var(--text-muted);font-size:11px;text-transform:uppercase;letter-spacing:.5px">Session</th>
+            <th style="text-align:left;padding:12px 14px;font-weight:700;color:var(--text-muted);font-size:11px;text-transform:uppercase;letter-spacing:.5px">Status</th>
+            <th style="text-align:left;padding:12px 14px;font-weight:700;color:var(--text-muted);font-size:11px;text-transform:uppercase;letter-spacing:.5px"></th>
+          </tr>
+        </thead>
+        <tbody id="hod-stu-tbody">
+          ${studs.length === 0 ? `<tr><td colspan="7" style="padding:32px;text-align:center;color:var(--text-muted)">No students in Level ${esc(level)}.</td></tr>` :
+            studs.map(u => `
+              <tr class="hod-stu-row" data-name="${esc((u.name||'').toLowerCase())}" data-index="${esc((u.IndexNumber||u.indexNumber||'').toLowerCase())}" style="border-bottom:1px solid var(--border);">
+                <td style="padding:11px 14px;font-weight:600">${esc(u.name)}</td>
+                <td style="padding:11px 14px;color:var(--text-muted);font-family:monospace">${u.IndexNumber || u.indexNumber || '—'}</td>
+                <td style="padding:11px 14px">${u.programme ? `<span style="background:#ede9fe;color:#7c3aed;padding:2px 9px;border-radius:20px;font-size:11px;font-weight:700">${esc(u.programme)}</span>` : '—'}</td>
+                <td style="padding:11px 14px">${u.studentGroup ? `<span style="background:#ecfdf5;color:#059669;padding:2px 9px;border-radius:20px;font-size:11px;font-weight:700">Grp ${esc(u.studentGroup)}</span>` : '—'}</td>
+                <td style="padding:11px 14px">
+                  ${u.sessionType ? `<span style="background:#fff7ed;color:#c2410c;padding:2px 9px;border-radius:20px;font-size:11px;font-weight:600">${esc(u.sessionType)}</span>` : '—'}
+                  ${u.semester ? `<span style="font-size:11px;color:var(--text-muted);margin-left:4px">Sem ${esc(u.semester)}</span>` : ''}
+                </td>
+                <td style="padding:11px 14px"><span class="tag ${u.isApproved ? 'tag-green' : 'tag-amber'}">${u.isApproved ? 'Active' : 'Pending'}</span></td>
+                <td style="padding:11px 14px"><button class="btn btn-xs btn-secondary" onclick="hodViewStudentAttendance('${u._id}','${(u.name||'').replace(/'/g,"\\'")}')">Attendance</button></td>
+              </tr>`).join('')}
+        </tbody>
+      </table>
+    </div>`;
 }
 
 function hodFilterStudents() {
@@ -9008,55 +9081,58 @@ function _renderCoursesHTML(content, courses, isOffline) {
     const approved   = !course.needsApproval || course.approvalStatus === 'approved';
     const titleEsc   = esc(course.title).replace(/'/g, "\\'");
     const codeEsc    = esc(course.code).replace(/'/g, "\\'");
-
-    const metaItems = [
-      course.lecturerId?.name ? `<span>👨‍🏫 ${esc(course.lecturerId.name)}</span>` : '',
-      course.level  ? `<span style="background:#ede9fe;color:#7c3aed;padding:2px 7px;border-radius:20px;font-weight:700;">Level ${esc(String(course.level))}</span>` : '',
-      course.group  ? `<span style="background:#ecfdf5;color:#059669;padding:2px 7px;border-radius:20px;font-weight:600;">Group ${esc(course.group)}</span>` : '',
-      `<span>👥 ${course.rosterCount ?? course.enrolledStudents?.length ?? 0} enrolled</span>`,
-    ].filter(Boolean).join('');
+    const accent     = _deptColor(course.code || course.title || '');
+    const enrolled   = course.rosterCount ?? course.enrolledStudents?.length ?? 0;
 
     let actions = '';
     if (!isOffline && canManageRoster) {
       const uploadBtn = approved
-        ? `<button class="btn btn-primary btn-sm" style="display:inline-flex;align-items:center;gap:5px" onclick="showUploadRosterModal('${course._id}','${codeEsc}')"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>Upload Students</button>`
-        : `<span style="font-size:11px;color:var(--text-muted);font-style:italic">${course.approvalStatus === 'pending' ? 'Awaiting HOD approval' : 'Rejected — contact HOD'}</span>`;
+        ? `<button class="btn btn-primary btn-sm" style="display:inline-flex;align-items:center;gap:5px;font-size:11.5px" onclick="showUploadRosterModal('${course._id}','${codeEsc}')"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>Upload</button>`
+        : `<span style="font-size:11px;color:var(--text-muted);font-style:italic">${course.approvalStatus === 'pending' ? 'Awaiting HOD approval' : 'Rejected'}</span>`;
       actions = `
         ${uploadBtn}
-        <button class="btn btn-sm" style="background:#f8fafc;border:1px solid #e2e8f0;color:#475569;display:inline-flex;align-items:center;gap:5px" onclick="viewRoster('${course._id}','${codeEsc}')"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/></svg>View Roster</button>
-        <button class="btn btn-sm" style="background:#ede9fe;color:#6d28d9;border:1px solid #ddd6fe;display:inline-flex;align-items:center;gap:5px" onclick="openBulkEmailModal('${course._id}','${titleEsc}')"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg>Email</button>
-        <button class="btn btn-sm" style="background:#dcfce7;color:#166534;border:1px solid #bbf7d0;display:inline-flex;align-items:center;gap:5px" onclick="openBulkSmsModal('${course._id}','${titleEsc}')"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>SMS</button>`;
+        <button class="btn btn-sm" style="background:#f8fafc;border:1px solid #e2e8f0;color:#475569;display:inline-flex;align-items:center;gap:4px;font-size:11.5px" onclick="viewRoster('${course._id}','${codeEsc}')"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/></svg>Roster</button>
+        <button class="btn btn-sm" style="background:#ede9fe;color:#6d28d9;border:1px solid #ddd6fe;display:inline-flex;align-items:center;gap:4px;font-size:11.5px" onclick="openBulkEmailModal('${course._id}','${titleEsc}')"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg>Email</button>
+        <button class="btn btn-sm" style="background:#dcfce7;color:#166534;border:1px solid #bbf7d0;display:inline-flex;align-items:center;gap:4px;font-size:11.5px" onclick="openBulkSmsModal('${course._id}','${titleEsc}')"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>SMS</button>`;
     } else if (!isOffline && isStudent) {
-      actions = `<button class="btn btn-sm" style="background:#f0fdf4;color:#16a34a;border:1px solid #bbf7d0;" onclick="generateCertificate('${course._id}','${titleEsc}')">🎓 Certificate</button>`;
+      actions = `<button class="btn btn-sm" style="background:#f0fdf4;color:#16a34a;border:1px solid #bbf7d0;font-size:11.5px" onclick="generateCertificate('${course._id}','${titleEsc}')">🎓 Certificate</button>`;
     } else if (!isOffline) {
-      actions = `<button class="btn btn-sm" style="background:var(--bg);border:1px solid var(--border);" onclick="viewRoster('${course._id}','${codeEsc}')">View Roster</button>`;
+      actions = `<button class="btn btn-sm" style="background:var(--bg);border:1px solid var(--border);font-size:11.5px" onclick="viewRoster('${course._id}','${codeEsc}')">View Roster</button>`;
     }
 
     return `
-      <div style="background:#fff;border:1px solid #e8eaed;border-radius:14px;padding:18px 20px;margin-bottom:12px;box-shadow:0 1px 4px rgba(0,0,0,.05);transition:box-shadow .18s" onmouseover="this.style.boxShadow='0 4px 18px rgba(0,0,0,.09)'" onmouseout="this.style.boxShadow='0 1px 4px rgba(0,0,0,.05)'">
-        <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:10px;flex-wrap:wrap;margin-bottom:10px">
-          <div style="display:flex;align-items:center;gap:10px;min-width:0">
-            <div style="width:38px;height:38px;border-radius:10px;background:#eff6ff;display:flex;align-items:center;justify-content:center;flex-shrink:0">
-              <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#2563eb" stroke-width="2"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg>
-            </div>
-            <div>
-              <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
-                <span style="font-family:monospace;font-size:11.5px;font-weight:700;background:#eff6ff;color:#1d4ed8;padding:2px 8px;border-radius:5px">${esc(course.code)}</span>
-                <span style="font-size:15px;font-weight:700;color:#0f172a">${esc(course.title)}</span>
+      <div style="background:#fff;border:1.5px solid #e8eaed;border-radius:16px;overflow:hidden;box-shadow:0 1px 4px rgba(0,0,0,.06);display:flex;flex-direction:column;transition:box-shadow .18s"
+           onmouseover="this.style.boxShadow='0 6px 24px rgba(0,0,0,.11)'" onmouseout="this.style.boxShadow='0 1px 4px rgba(0,0,0,.06)'">
+        <div style="height:5px;background:${accent}"></div>
+        <div style="padding:18px 20px 14px;flex:1;display:flex;flex-direction:column;gap:12px">
+          <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px">
+            <div style="min-width:0">
+              <div style="display:flex;align-items:center;gap:7px;flex-wrap:wrap;margin-bottom:5px">
+                <span style="font-family:monospace;font-size:11px;font-weight:700;background:${accent}18;color:${accent};padding:2px 8px;border-radius:5px;letter-spacing:.3px">${esc(course.code)}</span>
+                ${course.level ? `<span style="background:#dbeafe;color:#1d4ed8;padding:2px 7px;border-radius:20px;font-size:10.5px;font-weight:700">Level ${esc(String(course.level))}</span>` : ''}
+                ${course.group ? `<span style="background:#ecfdf5;color:#059669;padding:2px 7px;border-radius:20px;font-size:10.5px;font-weight:600">Group ${esc(course.group)}</span>` : ''}
               </div>
-              <div style="display:flex;flex-wrap:wrap;gap:6px;align-items:center;font-size:12px;color:#64748b;margin-top:5px">${metaItems}</div>
+              <div style="font-size:14px;font-weight:700;color:#0f172a;line-height:1.3">${esc(course.title)}</div>
+              ${course.lecturerId?.name ? `<div style="font-size:11.5px;color:#64748b;margin-top:3px">👨‍🏫 ${esc(course.lecturerId.name)}</div>` : ''}
             </div>
+            <div style="flex-shrink:0">${statusBadge(course)}</div>
           </div>
-          <div>${statusBadge(course)}</div>
-        </div>
-        <div style="display:flex;flex-wrap:wrap;gap:8px;align-items:center;padding-top:10px;border-top:1px solid #f1f5f9">
-          ${actions}
+          <div style="display:flex;align-items:center;gap:6px;padding:10px 12px;background:#f8fafc;border-radius:10px;border:1px solid #f1f5f9">
+            <div style="width:28px;height:28px;border-radius:8px;background:${accent}18;display:flex;align-items:center;justify-content:center">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="${accent}" stroke-width="2.5"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+            </div>
+            <span style="font-size:13px;font-weight:700;color:#0f172a">${enrolled}</span>
+            <span style="font-size:12px;color:#64748b">student${enrolled !== 1 ? 's' : ''} enrolled</span>
+          </div>
+          <div style="display:flex;flex-wrap:wrap;gap:6px;align-items:center;padding-top:2px">
+            ${actions}
+          </div>
         </div>
       </div>`;
   }
 
   content.innerHTML = `
-    <div style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:10px;margin-bottom:20px">
+    <div style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:10px;margin-bottom:24px">
       <div>
         <h2 style="font-size:22px;font-weight:800;letter-spacing:-.5px;color:#0f172a;margin-bottom:2px">${isStudent ? 'My Courses' : 'Courses'}</h2>
         <p style="color:#64748b;font-size:13px">${isStudent ? 'Your enrolled academic courses' : 'Manage academic courses'}${isOffline ? ' · <span style="color:#f59e0b;font-weight:600">Offline — cached</span>' : ''}</p>
@@ -9064,7 +9140,7 @@ function _renderCoursesHTML(content, courses, isOffline) {
       ${canCreate && !isOffline ? `<button class="btn btn-primary" onclick="showCreateCourseModal()" style="display:flex;align-items:center;gap:6px"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>Create Course</button>` : ''}
     </div>
     ${courses.length
-      ? courses.map(courseCard).join('')
+      ? `<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:16px">${courses.map(courseCard).join('')}</div>`
       : `<div style="background:#fff;border:1px solid #e8eaed;border-radius:16px;padding:60px 20px;text-align:center;box-shadow:0 1px 4px rgba(0,0,0,.05)">
           <div style="width:56px;height:56px;border-radius:16px;background:#eff6ff;display:flex;align-items:center;justify-content:center;margin:0 auto 16px">
             <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#2563eb" stroke-width="1.8"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg>
