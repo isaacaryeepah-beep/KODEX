@@ -720,6 +720,17 @@ async function attemptOfflineLogin(credentials) {
       throw new Error('Wrong email or password.');
     }
 
+    // Check if the cached JWT has expired — expired tokens cause all API calls to silently 401
+    try {
+      const jwtPayload = JSON.parse(atob(profile.token.split('.')[1]));
+      if (jwtPayload.exp && jwtPayload.exp * 1000 < Date.now()) {
+        throw new Error('Your offline session token has expired. Please connect to the internet to sign in again.');
+      }
+    } catch (e) {
+      if (e.message.includes('offline session token')) throw e;
+      // Malformed JWT — continue; the server will reject it on first API call
+    }
+
     // Return a fake login response matching the real API shape
     console.log('[OfflineLogin] Offline login successful for', profileKey);
     return {
@@ -742,6 +753,24 @@ function clearOfflineProfile(userRole, email, indexNumber, institutionCode) {
     localStorage.setItem(OFFLINE_LOGIN_KEY, JSON.stringify(profiles));
   } catch (e) {
     console.warn('[OfflineLogin] Could not clear profile:', e);
+  }
+}
+
+// ── Clear offline profile by user ID (used on logout — no need to reconstruct key) ──
+function clearOfflineProfileById(userId) {
+  try {
+    const profiles = JSON.parse(localStorage.getItem(OFFLINE_LOGIN_KEY) || '{}');
+    let changed = false;
+    for (const key of Object.keys(profiles)) {
+      const uid = profiles[key]?.user?.id || profiles[key]?.user?._id;
+      if (uid && uid.toString() === userId.toString()) {
+        delete profiles[key];
+        changed = true;
+      }
+    }
+    if (changed) localStorage.setItem(OFFLINE_LOGIN_KEY, JSON.stringify(profiles));
+  } catch (e) {
+    console.warn('[OfflineLogin] Could not clear profile by ID:', e);
   }
 }
 
@@ -975,6 +1004,7 @@ window.addEventListener('DOMContentLoaded', () => {
 let currentUser = null;
 let currentUserTrial = null; // mirrors data.userTrial from the last /me response
 let currentView = 'dashboard';
+let _appOfflineMode = false; // true when logged in via cached credentials (no server reachable)
 
 function svgIcon(path, size = 18) {
   return `<svg width="${size}" height="${size}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${path}</svg>`;
@@ -1625,6 +1655,7 @@ function friendlyError(msg) {
   if (m.includes('too many requests'))            return 'Too many requests. Please slow down and try again.';
   if (m.includes('no offline profile'))           return 'You\'re offline. Please connect to the internet to login for the first time.';
   if (m.includes('offline session expired'))      return 'Offline session expired. Please connect to login again.';
+  if (m.includes('offline session token has expired')) return 'Your offline session has expired. Please connect to the internet to sign in again.';
   if (m.includes('incorrect password'))           return 'Wrong email or password.';
   if (m.includes('network') || m.includes('fetch')) return 'Network error. Please check your connection.';
   return msg; // fallback: show as-is
@@ -2259,6 +2290,10 @@ async function handleLogout() {
   } catch (e) {}
   if (window.DiklyIDB) window.DiklyIDB.clearAll().catch(() => {});
   resetBranding();
+  // Clear this user's offline profile so their credentials don't persist on shared devices
+  const _logoutUserId = currentUser?._id || currentUser?.id;
+  if (_logoutUserId) clearOfflineProfileById(_logoutUserId);
+  _appOfflineMode = false;
   token = null;
   currentUser = null;
   currentUserTrial = null;
@@ -2666,7 +2701,7 @@ function showDashboard(data) {
     _notifSound.updateBtn();
     applyBranding(); // async — applies colors/logo in background
     // Show offline banner immediately when logged in via cached credentials
-    if (data?.offlineMode) showOfflineBanner(false);
+    if (data?.offlineMode) { _appOfflineMode = true; showOfflineBanner(false); }
     // If student arrived via QR scan link, go straight to mark-attendance to auto-submit
     if (new URLSearchParams(window.location.search).get('qr_token')) {
       navigateTo('mark-attendance');
@@ -3506,59 +3541,132 @@ async function renderHodLecturers() {
   }
 }
 
+let _hodCachedStudents = null;
+
 async function renderHodStudents() {
   const content = document.getElementById('main-content');
   content.innerHTML = '<div class="loading">Loading students…</div>';
   try {
     const dept = currentUser.department ? '&department=' + encodeURIComponent(currentUser.department) : '';
     const data = await api('/api/users?role=student&limit=500' + dept);
-    const students = data.users || [];
-    content.innerHTML = `
-      <div class="page-header">
-        <div><h2>Students</h2><p>${students.length} student${students.length !== 1 ? 's' : ''} enrolled</p></div>
-        <div style="display:flex;gap:8px;align-items:center;">
-          <button class="btn btn-secondary btn-sm" onclick="hodExportCSV('students')">Export CSV</button>
-          <input id="hod-stu-search" placeholder="Search students…" oninput="hodFilterStudents()" style="padding:8px 12px;border:1.5px solid var(--border);border-radius:8px;font-size:13px;font-family:inherit;outline:none;min-width:200px;">
-        </div>
-      </div>
-      <div id="hod-stu-list" style="overflow-x:auto;">
-        <table style="width:100%;border-collapse:collapse;font-size:13px;">
-          <thead>
-            <tr style="border-bottom:2px solid var(--border);">
-              <th style="text-align:left;padding:10px 12px;font-weight:700;color:var(--text-muted);font-size:11px;text-transform:uppercase;">Name</th>
-              <th style="text-align:left;padding:10px 12px;font-weight:700;color:var(--text-muted);font-size:11px;text-transform:uppercase;">Index No.</th>
-              <th style="text-align:left;padding:10px 12px;font-weight:700;color:var(--text-muted);font-size:11px;text-transform:uppercase;">Programme</th>
-              <th style="text-align:left;padding:10px 12px;font-weight:700;color:var(--text-muted);font-size:11px;text-transform:uppercase;">Level / Group</th>
-              <th style="text-align:left;padding:10px 12px;font-weight:700;color:var(--text-muted);font-size:11px;text-transform:uppercase;">Session</th>
-              <th style="text-align:left;padding:10px 12px;font-weight:700;color:var(--text-muted);font-size:11px;text-transform:uppercase;">Status</th>
-              <th style="text-align:left;padding:10px 12px;font-weight:700;color:var(--text-muted);font-size:11px;text-transform:uppercase;"></th>
-            </tr>
-          </thead>
-          <tbody id="hod-stu-tbody">
-            ${students.length === 0 ? '<tr><td colspan="4" style="padding:24px;text-align:center;color:var(--text-muted);">No students found.</td></tr>' :
-              students.map(u => `
-                <tr class="hod-stu-row" data-name="${(u.name||'').toLowerCase()}" data-index="${(u.indexNumber||'').toLowerCase()}" style="border-bottom:1px solid var(--border);">
-                  <td style="padding:10px 12px;font-weight:600;">${u.name}</td>
-                  <td style="padding:10px 12px;color:var(--text-muted);font-family:monospace;">${u.IndexNumber || u.indexNumber || '—'}</td>
-                  <td style="padding:10px 12px;">${u.programme ? `<span style="background:#ede9fe;color:#7c3aed;padding:2px 8px;border-radius:20px;font-size:11px;font-weight:700">${esc(u.programme)}</span>` : '—'}</td>
-                  <td style="padding:10px 12px;">
-                    ${u.studentLevel ? `<span style="background:#dbeafe;color:#1d4ed8;padding:2px 7px;border-radius:20px;font-size:11px;font-weight:700;margin-right:3px">L${esc(u.studentLevel)}</span>` : ''}
-                    ${u.studentGroup ? `<span style="background:#ecfdf5;color:#059669;padding:2px 7px;border-radius:20px;font-size:11px;font-weight:700">Grp ${esc(u.studentGroup)}</span>` : ''}
-                    ${!u.studentLevel && !u.studentGroup ? '—' : ''}
-                  </td>
-                  <td style="padding:10px 12px;">
-                    ${u.sessionType ? `<span style="background:#fff7ed;color:#c2410c;padding:2px 8px;border-radius:20px;font-size:11px;font-weight:600">${esc(u.sessionType)}</span>` : '—'}
-                    ${u.semester ? `<span style="font-size:11px;color:var(--text-muted);margin-left:4px">Sem ${esc(u.semester)}</span>` : ''}
-                  </td>
-                  <td style="padding:10px 12px;"><span class="tag ${u.isApproved ? 'tag-green' : 'tag-amber'}">${u.isApproved ? 'Active' : 'Pending'}</span></td>
-                  <td style="padding:10px 12px;"><button class="btn btn-xs btn-secondary" onclick="hodViewStudentAttendance('${u._id}','${u.name.replace(/'/g,"\\'")}')">Attendance</button></td>
-                </tr>`).join('')}
-          </tbody>
-        </table>
-      </div>`;
+    _hodCachedStudents = data.users || [];
+    _renderHodLevelCards(content, _hodCachedStudents);
   } catch(e) {
     content.innerHTML = `<div class="card"><p style="color:#ef4444;">${e.message}</p></div>`;
   }
+}
+
+function _renderHodLevelCards(content, allStudents) {
+  const levelMap = {};
+  allStudents.forEach(u => {
+    const lv = u.studentLevel ? String(u.studentLevel) : 'Unassigned';
+    if (!levelMap[lv]) levelMap[lv] = [];
+    levelMap[lv].push(u);
+  });
+  const levels = Object.keys(levelMap).sort((a, b) => {
+    if (a === 'Unassigned') return 1;
+    if (b === 'Unassigned') return -1;
+    return Number(a) - Number(b);
+  });
+
+  const cards = levels.map(lv => {
+    const studs = levelMap[lv];
+    const active = studs.filter(u => u.isApproved).length;
+    const accent = _deptColor('Level ' + lv);
+    const lvEnc = encodeURIComponent(lv);
+    return `
+      <div onclick="_renderHodLevelStudents(decodeURIComponent('${lvEnc}'), _hodCachedStudents)"
+           style="background:#fff;border:1.5px solid #e8eaed;border-radius:16px;padding:0;cursor:pointer;overflow:hidden;box-shadow:0 1px 4px rgba(0,0,0,.06);transition:box-shadow .18s;position:relative"
+           onmouseover="this.style.boxShadow='0 6px 24px rgba(0,0,0,.11)'" onmouseout="this.style.boxShadow='0 1px 4px rgba(0,0,0,.06)'">
+        <div style="height:5px;background:${accent};border-radius:16px 16px 0 0"></div>
+        <div style="padding:20px 22px 18px">
+          <div style="display:flex;align-items:center;gap:12px;margin-bottom:14px">
+            <div style="width:42px;height:42px;border-radius:12px;background:${accent}1a;display:flex;align-items:center;justify-content:center;flex-shrink:0">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="${accent}" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+            </div>
+            <div>
+              <div style="font-size:16px;font-weight:800;color:#0f172a">Level ${lv === 'Unassigned' ? '<span style="color:#94a3b8">Unassigned</span>' : lv}</div>
+              <div style="font-size:12px;color:#64748b;margin-top:1px">${studs.length} student${studs.length !== 1 ? 's' : ''}</div>
+            </div>
+          </div>
+          <div style="display:flex;gap:10px;flex-wrap:wrap">
+            <span style="font-size:11px;font-weight:600;background:${accent}15;color:${accent};padding:3px 10px;border-radius:20px">${active} Active</span>
+            ${studs.length - active > 0 ? `<span style="font-size:11px;font-weight:600;background:#fef3c715;color:#b45309;padding:3px 10px;border-radius:20px">${studs.length - active} Pending</span>` : ''}
+          </div>
+        </div>
+      </div>`;
+  }).join('');
+
+  content.innerHTML = `
+    <div class="page-header" style="margin-bottom:24px">
+      <div>
+        <h2 style="font-size:22px;font-weight:800;letter-spacing:-.5px;color:#0f172a;margin-bottom:2px">Students</h2>
+        <p style="color:#64748b;font-size:13px">${allStudents.length} student${allStudents.length !== 1 ? 's' : ''} enrolled${currentUser.department ? ' · ' + esc(currentUser.department) : ''}</p>
+      </div>
+      <button class="btn btn-secondary btn-sm" onclick="hodExportCSV('students')">Export CSV</button>
+    </div>
+    ${levels.length === 0
+      ? `<div style="background:#fff;border:1px solid #e8eaed;border-radius:16px;padding:60px 20px;text-align:center"><p style="color:#64748b">No students found.</p></div>`
+      : `<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:16px">${cards}</div>`}`;
+}
+
+function _renderHodLevelStudents(level, allStudents) {
+  const content = document.getElementById('main-content');
+  const studs = allStudents.filter(u => {
+    const lv = u.studentLevel ? String(u.studentLevel) : 'Unassigned';
+    return lv === level;
+  });
+  const accent = _deptColor('Level ' + level);
+
+  content.innerHTML = `
+    <div class="page-header" style="margin-bottom:20px">
+      <div style="display:flex;align-items:center;gap:10px">
+        <button onclick="_renderHodLevelCards(document.getElementById('main-content'),_hodCachedStudents)"
+                style="background:none;border:none;cursor:pointer;padding:6px 8px;border-radius:8px;color:#64748b;font-size:13px;display:flex;align-items:center;gap:5px;transition:background .15s"
+                onmouseover="this.style.background='#f1f5f9'" onmouseout="this.style.background='none'">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="15 18 9 12 15 6"/></svg>
+          All Levels
+        </button>
+        <span style="color:#cbd5e1">›</span>
+        <span style="font-size:14px;font-weight:700;color:#0f172a">Level ${esc(level)}</span>
+      </div>
+      <div style="display:flex;gap:8px;align-items:center">
+        <button class="btn btn-secondary btn-sm" onclick="hodExportCSV('students')">Export CSV</button>
+        <input id="hod-stu-search" placeholder="Search students…" oninput="hodFilterStudents()"
+               style="padding:8px 12px;border:1.5px solid var(--border);border-radius:8px;font-size:13px;font-family:inherit;outline:none;min-width:200px;">
+      </div>
+    </div>
+    <div id="hod-stu-list" style="overflow-x:auto;">
+      <table style="width:100%;border-collapse:collapse;font-size:13px;background:#fff;border:1px solid #e8eaed;border-radius:14px;overflow:hidden;box-shadow:0 1px 4px rgba(0,0,0,.05)">
+        <thead>
+          <tr style="border-bottom:2px solid var(--border);background:#f8fafc">
+            <th style="text-align:left;padding:12px 14px;font-weight:700;color:var(--text-muted);font-size:11px;text-transform:uppercase;letter-spacing:.5px">Name</th>
+            <th style="text-align:left;padding:12px 14px;font-weight:700;color:var(--text-muted);font-size:11px;text-transform:uppercase;letter-spacing:.5px">Index No.</th>
+            <th style="text-align:left;padding:12px 14px;font-weight:700;color:var(--text-muted);font-size:11px;text-transform:uppercase;letter-spacing:.5px">Programme</th>
+            <th style="text-align:left;padding:12px 14px;font-weight:700;color:var(--text-muted);font-size:11px;text-transform:uppercase;letter-spacing:.5px">Group</th>
+            <th style="text-align:left;padding:12px 14px;font-weight:700;color:var(--text-muted);font-size:11px;text-transform:uppercase;letter-spacing:.5px">Session</th>
+            <th style="text-align:left;padding:12px 14px;font-weight:700;color:var(--text-muted);font-size:11px;text-transform:uppercase;letter-spacing:.5px">Status</th>
+            <th style="text-align:left;padding:12px 14px;font-weight:700;color:var(--text-muted);font-size:11px;text-transform:uppercase;letter-spacing:.5px"></th>
+          </tr>
+        </thead>
+        <tbody id="hod-stu-tbody">
+          ${studs.length === 0 ? `<tr><td colspan="7" style="padding:32px;text-align:center;color:var(--text-muted)">No students in Level ${esc(level)}.</td></tr>` :
+            studs.map(u => `
+              <tr class="hod-stu-row" data-name="${esc((u.name||'').toLowerCase())}" data-index="${esc((u.IndexNumber||u.indexNumber||'').toLowerCase())}" style="border-bottom:1px solid var(--border);">
+                <td style="padding:11px 14px;font-weight:600">${esc(u.name)}</td>
+                <td style="padding:11px 14px;color:var(--text-muted);font-family:monospace">${u.IndexNumber || u.indexNumber || '—'}</td>
+                <td style="padding:11px 14px">${u.programme ? `<span style="background:#ede9fe;color:#7c3aed;padding:2px 9px;border-radius:20px;font-size:11px;font-weight:700">${esc(u.programme)}</span>` : '—'}</td>
+                <td style="padding:11px 14px">${u.studentGroup ? `<span style="background:#ecfdf5;color:#059669;padding:2px 9px;border-radius:20px;font-size:11px;font-weight:700">Grp ${esc(u.studentGroup)}</span>` : '—'}</td>
+                <td style="padding:11px 14px">
+                  ${u.sessionType ? `<span style="background:#fff7ed;color:#c2410c;padding:2px 9px;border-radius:20px;font-size:11px;font-weight:600">${esc(u.sessionType)}</span>` : '—'}
+                  ${u.semester ? `<span style="font-size:11px;color:var(--text-muted);margin-left:4px">Sem ${esc(u.semester)}</span>` : ''}
+                </td>
+                <td style="padding:11px 14px"><span class="tag ${u.isApproved ? 'tag-green' : 'tag-amber'}">${u.isApproved ? 'Active' : 'Pending'}</span></td>
+                <td style="padding:11px 14px"><button class="btn btn-xs btn-secondary" onclick="hodViewStudentAttendance('${u._id}','${(u.name||'').replace(/'/g,"\\'")}')">Attendance</button></td>
+              </tr>`).join('')}
+        </tbody>
+      </table>
+    </div>`;
 }
 
 function hodFilterStudents() {
@@ -7211,132 +7319,451 @@ async function generateVerbalCode(sessionId) {
 }
 
 
+// ── Colour palette for department accent bars ─────────────────────────────────
+let _cachedUsers = null;
+const _DEPT_COLORS = ['#6366f1','#8b5cf6','#ec4899','#f97316','#14b8a6','#22c55e','#3b82f6','#f59e0b','#ef4444','#06b6d4'];
+function _deptColor(name) {
+  let h = 0;
+  for (let i = 0; i < (name||'').length; i++) h = ((h * 31) + name.charCodeAt(i)) | 0;
+  return _DEPT_COLORS[Math.abs(h) % _DEPT_COLORS.length];
+}
+
 async function renderUsers(filterRole='', filterDept='', filterSearch='') {
   const content = document.getElementById('main-content');
   if (!content) return;
+  content.innerHTML = '<div style="padding:40px;text-align:center;color:var(--text-muted)">Loading users…</div>';
   try {
-    let url = '/api/users';
-    const params = [];
-    if (filterRole) params.push('role=' + encodeURIComponent(filterRole));
-    if (filterDept) params.push('department=' + encodeURIComponent(filterDept));
-    if (params.length) url += '?' + params.join('&');
-
-    const data = await api(url);
+    const data = await api('/api/users');
+    _cachedUsers = data.users || [];
+    window._hodDepts = [...new Set(_cachedUsers.filter(u => u.role==='hod' && u.department).map(u => u.department))].sort();
     const mode = currentUser.company?.mode || 'corporate';
-    const isManager = currentUser.role === 'manager';
-    const canManage = ['manager', 'admin', 'superadmin'].includes(currentUser.role);
-    const pageTitle = isManager ? 'Employees' : 'Users';
-    const pageDesc = isManager ? 'Manage your employees' : 'Manage team members';
-    const _roleRank = {superadmin:6,admin:5,manager:4,hod:3,lecturer:3,employee:2,student:1};
-    const _myRank = _roleRank[currentUser.role] || 0;
-    const canActOn = u => (_roleRank[u.role] || 0) < _myRank;
-    const addLabel = isManager ? 'Add Employee' : 'Add User';
-
-    let otherUsers = data.users.filter(u => u._id !== currentUser.id);
-    if (filterSearch) {
-      const q = filterSearch.toLowerCase();
-      otherUsers = otherUsers.filter(u =>
-        u.name?.toLowerCase().includes(q) ||
-        u.email?.toLowerCase().includes(q) ||
-        u.indexNumber?.toLowerCase().includes(q) ||
-        u.department?.toLowerCase().includes(q)
-      );
+    if (mode === 'academic') {
+      _renderUserDeptCards(content, _cachedUsers, filterSearch);
+    } else {
+      _renderUsersCorporateTable(content, _cachedUsers, filterRole, filterDept, filterSearch);
     }
-
-    // Collect unique departments for filter dropdown
-    const allDepts = [...new Set((data.users || []).map(u => u.department).filter(Boolean))].sort();
-
-    content.innerHTML = `
-      <div class="page-header"><h2>${pageTitle}</h2><p>${pageDesc} · ${otherUsers.length} shown</p></div>
-      <div class="actions-bar" style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:10px;">
-        ${canManage ? `<button class="btn btn-primary btn-sm" onclick="showCreateUserModal()">${addLabel}</button>` : ''}
-        ${['admin','superadmin'].includes(currentUser.role) && mode === 'academic' ? `<button class="btn btn-sm btn-secondary" onclick="showBulkImportModal()">📥 Bulk Import Students</button>` : ''}
-        ${['admin','superadmin'].includes(currentUser.role) ? `<button class="btn btn-sm" style="background:#f59e0b;color:#fff" onclick="renderResetLogs()">🔐 Password Reset Log</button>` : ''}
-        <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin-left:auto;">
-          <input id="user-search-input" placeholder="Search name / email / ID…" value="${filterSearch}"
-            oninput="renderUsers(document.getElementById('user-role-filter').value, document.getElementById('user-dept-filter').value, this.value)"
-            style="padding:7px 11px;border:1.5px solid var(--border);border-radius:8px;font-size:13px;font-family:inherit;outline:none;min-width:180px;">
-          <select id="user-role-filter" onchange="renderUsers(this.value, document.getElementById('user-dept-filter').value, document.getElementById('user-search-input').value)"
-            style="padding:7px 10px;border:1.5px solid var(--border);border-radius:8px;font-size:13px;font-family:inherit;outline:none;">
-            <option value="" ${!filterRole?'selected':''}>All Roles</option>
-            ${currentUser.role === 'superadmin'
-              ? `<option value="admin"     ${filterRole==='admin'?'selected':''}>Admin</option>
-                 <option value="manager"   ${filterRole==='manager'?'selected':''}>Manager</option>
-                 <option value="hod"       ${filterRole==='hod'?'selected':''}>HOD</option>
-                 <option value="lecturer"  ${filterRole==='lecturer'?'selected':''}>Lecturer</option>
-                 <option value="employee"  ${filterRole==='employee'?'selected':''}>Employee</option>
-                 <option value="student"   ${filterRole==='student'?'selected':''}>Student</option>`
-              : mode === 'academic'
-                ? `<option value="admin"    ${filterRole==='admin'?'selected':''}>Admin</option>
-                   <option value="hod"      ${filterRole==='hod'?'selected':''}>HOD</option>
-                   <option value="lecturer" ${filterRole==='lecturer'?'selected':''}>Lecturer</option>
-                   <option value="student"  ${filterRole==='student'?'selected':''}>Student</option>`
-                : `<option value="admin"    ${filterRole==='admin'?'selected':''}>Admin</option>
-                   <option value="manager"  ${filterRole==='manager'?'selected':''}>Manager</option>
-                   <option value="employee" ${filterRole==='employee'?'selected':''}>Employee</option>`}
-          </select>
-          ${mode === 'academic' && allDepts.length > 0 ? `
-          <select id="user-dept-filter" onchange="renderUsers(document.getElementById('user-role-filter').value, this.value, document.getElementById('user-search-input').value)"
-            style="padding:7px 10px;border:1.5px solid var(--border);border-radius:8px;font-size:13px;font-family:inherit;outline:none;">
-            <option value="" ${!filterDept?'selected':''}>All Departments</option>
-            ${allDepts.map(d => `<option value="${d}" ${filterDept===d?'selected':''}>${d}</option>`).join('')}
-          </select>` : `<select id="user-dept-filter" style="display:none;"></select>`}
-          ${filterRole || filterDept || filterSearch ? `<button class="btn btn-xs btn-secondary" onclick="renderUsers()">✕ Clear</button>` : ''}
-        </div>
-        ${canManage ? `
-          <div id="bulk-actions" style="display:none;gap:8px;align-items:center;margin-left:auto">
-            <span id="selected-count" style="font-size:13px;color:var(--text-light)">0 selected</span>
-            <button class="btn btn-sm" style="background:#22c55e;color:#fff" onclick="bulkUserAction('activate')">Activate</button>
-            <button class="btn btn-sm" style="background:#f59e0b;color:#fff" onclick="bulkUserAction('deactivate')">Deactivate</button>
-            <button class="btn btn-danger btn-sm" onclick="bulkUserAction('delete')">Delete</button>
-          </div>
-        ` : ''}
-      </div>
-      <div class="card">
-        ${otherUsers.length ? `
-          <table>
-            <thead><tr>
-              ${canManage ? '<th style="width:40px"><input type="checkbox" id="select-all-users" onchange="toggleSelectAllUsers()"></th>' : ''}
-              <th>Name</th>${mode === 'corporate' ? '<th>Employee ID</th>' : ''}<th>Email / Index</th><th>Role</th>${mode !== 'corporate' ? '<th>Classification</th>' : ''}<th>Status</th>${canManage ? '<th>Actions</th>' : ''}
-            </tr></thead>
-            <tbody>${otherUsers.map(u => `
-              <tr id="user-row-${u._id}">
-                ${canManage ? `<td>${canActOn(u) ? `<input type="checkbox" class="user-checkbox" value="${u._id}" onchange="updateBulkActions()">` : ''}</td>` : ''}
-                <td>${u.name}</td>
-                ${mode === 'corporate' ? `<td>${u.employeeId || '-'}</td>` : ''}
-                <td>${u.email || u.IndexNumber || u.indexNumber || 'N/A'}</td>
-                <td><span class="role-badge role-${u.role}">${u.role}</span>${u.department ? `<span style="font-size:10px;margin-left:5px;padding:2px 6px;border-radius:20px;background:#ecfeff;color:#0891b2;font-weight:600;">${u.department}</span>` : ''}</td>
-                ${mode !== 'corporate' ? `<td style="font-size:11px;white-space:nowrap">
-                  ${u.role === 'student' ? `
-                    ${u.programme ? `<span style="background:#ede9fe;color:#7c3aed;padding:1px 6px;border-radius:20px;font-weight:700;margin-right:2px">${esc(u.programme)}</span>` : ''}
-                    ${u.studentLevel ? `<span style="background:#dbeafe;color:#1d4ed8;padding:1px 6px;border-radius:20px;font-weight:700;margin-right:2px">L${esc(u.studentLevel)}</span>` : ''}
-                    ${u.studentGroup ? `<span style="background:#ecfdf5;color:#059669;padding:1px 6px;border-radius:20px;font-weight:700;margin-right:2px">Grp ${esc(u.studentGroup)}</span>` : ''}
-                    ${u.sessionType ? `<span style="background:#fff7ed;color:#c2410c;padding:1px 6px;border-radius:20px;font-weight:600;margin-right:2px">${esc(u.sessionType)}</span>` : ''}
-                    ${u.semester ? `<span style="color:var(--text-muted)">Sem ${esc(u.semester)}</span>` : ''}
-                    ${!u.programme && !u.studentLevel ? '<span style="color:var(--text-muted)">—</span>' : ''}
-                  ` : '<span style="color:var(--text-muted)">—</span>'}
-                </td>` : ''}
-                <td><span class="status-badge ${u.isActive ? 'status-active' : 'status-stopped'}">${u.isActive ? 'Active' : 'Inactive'}</span></td>
-                ${canManage ? `<td style="white-space:nowrap">
-                  ${canActOn(u) ? `
-                    ${u.isActive
-                      ? `<button class="btn btn-sm" style="background:#f59e0b;color:#fff;font-size:11px" onclick="deactivateUser('${u._id}')">Deactivate</button>`
-                      : `<button class="btn btn-sm" style="background:#22c55e;color:#fff;font-size:11px" onclick="activateUser('${u._id}')">Activate</button>`}
-                    <button class="btn btn-sm" style="background:#6366f1;color:#fff;font-size:11px" onclick="adminResetStudentPassword('${u._id}', this)">🔑 Reset</button>
-                    ${u.role === 'student' && u.deviceId ? `<button class="btn btn-sm" style="background:#f97316;color:#fff;font-size:11px" onclick="clearStudentDeviceLock('${u._id}', this)">🔓 Unlock</button>` : ''}
-                    <button class="btn btn-danger btn-sm" style="font-size:11px" onclick="deleteUserPermanently('${u._id}', this)">Delete</button>
-                  ` : `<span style="font-size:11px;color:var(--text-muted);font-style:italic">—</span>`}
-                </td>` : ''}
-              </tr>
-            `).join('')}</tbody>
-          </table>
-        ` : '<div class="empty-state"><p>No users found</p></div>'}
-      </div>
-    `;
-  } catch (e) {
-    content.innerHTML = `<div class="card"><p>Error: ${e.message}</p></div>`;
+  } catch(e) {
+    content.innerHTML = `<div class="card"><p style="color:#ef4444">Error loading users: ${e.message}</p></div>`;
   }
 }
+
+// ── View 1: Department overview cards ─────────────────────────────────────────
+function _renderUserDeptCards(content, allUsers, filterSearch='') {
+  const canManage = ['admin','superadmin'].includes(currentUser.role);
+  const _roleRank = {superadmin:6,admin:5,manager:4,hod:3,lecturer:3,employee:2,student:1};
+  const _myRank = _roleRank[currentUser.role] || 0;
+  const selfId = (currentUser._id || currentUser.id || '').toString();
+
+  const deptMap = {};
+  const staffNoDept = [];
+  allUsers.forEach(u => {
+    if (u._id?.toString() === selfId) return;
+    if (u.role === 'student') {
+      const d = u.department || '—';
+      if (!deptMap[d]) deptMap[d] = { students:[], lecturers:[], hod:null, levels:new Set() };
+      deptMap[d].students.push(u);
+      if (u.studentLevel) deptMap[d].levels.add(u.studentLevel);
+    } else if (u.role === 'lecturer' || u.role === 'hod') {
+      if (u.department) {
+        if (!deptMap[u.department]) deptMap[u.department] = { students:[], lecturers:[], hod:null, levels:new Set() };
+        if (u.role === 'hod') deptMap[u.department].hod = u;
+        else deptMap[u.department].lecturers.push(u);
+      } else { staffNoDept.push(u); }
+    } else { staffNoDept.push(u); }
+  });
+
+  let entries = Object.entries(deptMap);
+  if (filterSearch) {
+    const q = filterSearch.toLowerCase();
+    entries = entries.filter(([dn, d]) =>
+      dn.toLowerCase().includes(q) ||
+      d.hod?.name?.toLowerCase().includes(q) ||
+      d.lecturers.some(l => l.name?.toLowerCase().includes(q)) ||
+      d.students.some(s => s.name?.toLowerCase().includes(q) || (s.indexNumber||s.IndexNumber||'').toLowerCase().includes(q))
+    );
+  }
+  entries.sort(([a],[b]) => a.localeCompare(b));
+  const totalStudents = allUsers.filter(u => u.role==='student' && u._id?.toString()!==selfId).length;
+
+  content.innerHTML = `
+    <div class="page-header">
+      <div>
+        <h2>Users</h2>
+        <p>${totalStudents} students · ${entries.length} department${entries.length!==1?'s':''}</p>
+      </div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap">
+        ${canManage?`<button class="btn btn-primary btn-sm" onclick="showCreateUserModal()">＋ Add User</button>`:''}
+        ${canManage?`<button class="btn btn-sm btn-secondary" onclick="showBulkImportModal()">📥 Bulk Import</button>`:''}
+        ${canManage?`<button class="btn btn-sm" style="background:#f59e0b;color:#fff" onclick="renderResetLogs()">🔐 Reset Log</button>`:''}
+      </div>
+    </div>
+    <div style="margin-bottom:18px">
+      <input id="user-search-input" placeholder="Search departments, names, index numbers…" value="${esc(filterSearch)}"
+        oninput="renderUsers('','',this.value)"
+        style="width:100%;max-width:420px;padding:9px 14px;border:1.5px solid var(--border);border-radius:10px;font-size:13px;font-family:inherit;outline:none;box-sizing:border-box">
+    </div>
+    <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(265px,1fr));gap:16px;margin-bottom:28px">
+      ${entries.map(([deptName, d]) => {
+        const col = _deptColor(deptName);
+        const levArr = Array.from(d.levels).sort();
+        const enc = encodeURIComponent(deptName);
+        return `
+          <div class="card" tabindex="0" role="button"
+            style="padding:0;overflow:hidden;cursor:pointer;border:1.5px solid var(--border);transition:box-shadow .2s,transform .15s;outline:none"
+            onmouseenter="this.style.boxShadow='0 6px 24px rgba(0,0,0,.12)';this.style.transform='translateY(-2px)'"
+            onmouseleave="this.style.boxShadow='';this.style.transform=''"
+            onclick="_renderUserDeptDetail(decodeURIComponent('${enc}'),_cachedUsers)"
+            onkeydown="if(event.key==='Enter')_renderUserDeptDetail(decodeURIComponent('${enc}'),_cachedUsers)">
+            <div style="height:4px;background:${col}"></div>
+            <div style="padding:18px 20px 16px">
+              <div style="display:flex;align-items:flex-start;gap:12px;margin-bottom:14px">
+                <div style="width:46px;height:46px;border-radius:12px;background:${col}1a;display:flex;align-items:center;justify-content:center;font-size:22px;font-weight:800;color:${col};flex-shrink:0">
+                  ${esc(deptName.charAt(0).toUpperCase())}
+                </div>
+                <div style="flex:1;min-width:0">
+                  <div style="font-weight:700;font-size:14px;line-height:1.25;word-break:break-word">${esc(deptName)}</div>
+                  <div style="font-size:11px;color:var(--text-muted);margin-top:3px">
+                    ${d.hod?`HOD: <strong>${esc(d.hod.name)}</strong>`:`<span style="color:#f59e0b">No HOD assigned</span>`}
+                  </div>
+                </div>
+              </div>
+              <div style="display:grid;grid-template-columns:repeat(3,1fr);text-align:center;gap:4px;margin-bottom:12px">
+                <div>
+                  <div style="font-size:22px;font-weight:700;color:${col}">${d.students.length}</div>
+                  <div style="font-size:10px;color:var(--text-muted);text-transform:uppercase;letter-spacing:.4px">Students</div>
+                </div>
+                <div>
+                  <div style="font-size:22px;font-weight:700">${d.lecturers.length}</div>
+                  <div style="font-size:10px;color:var(--text-muted);text-transform:uppercase;letter-spacing:.4px">Lecturers</div>
+                </div>
+                <div>
+                  <div style="font-size:22px;font-weight:700">${levArr.length}</div>
+                  <div style="font-size:10px;color:var(--text-muted);text-transform:uppercase;letter-spacing:.4px">Levels</div>
+                </div>
+              </div>
+              ${levArr.length?`<div style="display:flex;flex-wrap:wrap;gap:4px;margin-bottom:12px">
+                ${levArr.map(lv=>`<span style="padding:2px 9px;border-radius:20px;font-size:11px;font-weight:700;background:${col}1a;color:${col}">${esc(lv)}</span>`).join('')}
+              </div>`:''}
+              <div style="border-top:1px solid var(--border);padding-top:10px;display:flex;justify-content:space-between;align-items:center">
+                <span style="font-size:11px;color:var(--text-muted)">${levArr.length} level${levArr.length!==1?'s':''}</span>
+                <span style="font-size:12px;font-weight:700;color:${col}">Open →</span>
+              </div>
+            </div>
+          </div>`;
+      }).join('')}
+    </div>
+    ${staffNoDept.length?`
+      <div style="font-size:11px;font-weight:700;color:var(--text-muted);letter-spacing:.8px;text-transform:uppercase;margin-bottom:10px">Other Staff</div>
+      <div class="card" style="padding:0;overflow:hidden">
+        <table>
+          <thead><tr><th>Name</th><th>Email</th><th>Role</th><th>Status</th>${canManage?'<th>Actions</th>':''}</tr></thead>
+          <tbody>
+            ${staffNoDept.filter(u => {
+              if (!filterSearch) return true;
+              const q = filterSearch.toLowerCase();
+              return u.name?.toLowerCase().includes(q) || u.email?.toLowerCase().includes(q);
+            }).map(u => {
+              const canAct = (_roleRank[u.role]||0) < _myRank;
+              return `<tr id="user-row-${u._id}">
+                <td style="font-weight:500">${esc(u.name)}</td>
+                <td style="font-size:12px;color:var(--text-muted)">${esc(u.email||'—')}</td>
+                <td><span class="role-badge role-${u.role}">${u.role}</span></td>
+                <td><span class="status-badge ${u.isActive?'status-active':'status-stopped'}">${u.isActive?'Active':'Inactive'}</span></td>
+                ${canManage?`<td style="white-space:nowrap">${canAct?`
+                  ${u.isActive?`<button class="btn btn-sm" style="background:#f59e0b;color:#fff;font-size:11px" onclick="deactivateUser('${u._id}')">Deactivate</button>`:`<button class="btn btn-sm" style="background:#22c55e;color:#fff;font-size:11px" onclick="activateUser('${u._id}')">Activate</button>`}
+                  <button class="btn btn-sm" style="background:#6366f1;color:#fff;font-size:11px" onclick="adminResetStudentPassword('${u._id}',this)">🔑 Reset</button>
+                  <button class="btn btn-danger btn-sm" style="font-size:11px" onclick="deleteUserPermanently('${u._id}',this)">Delete</button>
+                `:'—'}</td>`:''}
+              </tr>`;
+            }).join('')}
+          </tbody>
+        </table>
+      </div>`:''}
+  `;
+}
+
+// ── View 2: Level cards inside a department ────────────────────────────────────
+function _renderUserDeptDetail(deptName, allUsers) {
+  const content = document.getElementById('main-content');
+  if (!content) return;
+  const canManage = ['admin','superadmin'].includes(currentUser.role);
+  const _roleRank = {superadmin:6,admin:5,manager:4,hod:3,lecturer:3,employee:2,student:1};
+  const _myRank = _roleRank[currentUser.role] || 0;
+  const col = _deptColor(deptName);
+  const encDept = encodeURIComponent(deptName);
+
+  const deptStudents = allUsers.filter(u => u.role==='student' && u.department===deptName);
+  const deptLecturers = allUsers.filter(u => u.role==='lecturer' && u.department===deptName);
+  const deptHod = allUsers.find(u => u.role==='hod' && u.department===deptName);
+
+  const levelMap = {};
+  deptStudents.forEach(s => {
+    const lv = s.studentLevel || 'Unclassified';
+    if (!levelMap[lv]) levelMap[lv] = [];
+    levelMap[lv].push(s);
+  });
+
+  const staffList = [...(deptHod?[deptHod]:[]), ...deptLecturers];
+
+  content.innerHTML = `
+    <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;font-size:13px">
+      <span style="color:var(--primary);cursor:pointer;font-weight:500" onclick="renderUsers()">Users</span>
+      <span style="color:var(--text-muted)">›</span>
+      <span style="font-weight:600">${esc(deptName)}</span>
+    </div>
+    <div class="page-header" style="margin-bottom:20px">
+      <div style="display:flex;align-items:center;gap:14px">
+        <div style="width:52px;height:52px;border-radius:14px;background:${col}1a;display:flex;align-items:center;justify-content:center;font-size:24px;font-weight:800;color:${col};flex-shrink:0">
+          ${esc(deptName.charAt(0).toUpperCase())}
+        </div>
+        <div>
+          <h2 style="margin:0">${esc(deptName)}</h2>
+          <p style="margin:0;font-size:13px;color:var(--text-muted)">
+            ${deptStudents.length} students · ${deptLecturers.length} lecturer${deptLecturers.length!==1?'s':''}${deptHod?' · HOD: '+esc(deptHod.name):''}
+          </p>
+        </div>
+      </div>
+      ${canManage?`<button class="btn btn-primary btn-sm" onclick="showCreateUserModal()">＋ Add User</button>`:''}
+    </div>
+    <div style="font-size:11px;font-weight:700;color:var(--text-muted);letter-spacing:.8px;text-transform:uppercase;margin-bottom:12px">Levels</div>
+    <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:14px;margin-bottom:28px">
+      ${Object.entries(levelMap).sort(([a],[b])=>a.localeCompare(b)).map(([lv, students]) => {
+        const groups = {};
+        const sessions = {};
+        students.forEach(s => {
+          groups[s.studentGroup||'Unassigned'] = (groups[s.studentGroup||'Unassigned']||0)+1;
+          sessions[s.sessionType||'Regular'] = (sessions[s.sessionType||'Regular']||0)+1;
+        });
+        const active = students.filter(s=>s.isActive).length;
+        const encLv = encodeURIComponent(lv);
+        return `
+          <div class="card" tabindex="0" role="button"
+            style="padding:18px;cursor:pointer;border:1.5px solid var(--border);transition:box-shadow .2s,transform .15s;outline:none"
+            onmouseenter="this.style.boxShadow='0 6px 24px rgba(0,0,0,.12)';this.style.transform='translateY(-2px)'"
+            onmouseleave="this.style.boxShadow='';this.style.transform=''"
+            onclick="_renderUserLevelDetail(decodeURIComponent('${encDept}'),decodeURIComponent('${encLv}'),_cachedUsers,'')"
+            onkeydown="if(event.key==='Enter')_renderUserLevelDetail(decodeURIComponent('${encDept}'),decodeURIComponent('${encLv}'),_cachedUsers,'')">
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
+              <span style="font-size:26px;font-weight:800;color:${col}">${esc(lv)}</span>
+              <span style="padding:3px 10px;border-radius:20px;background:${col}1a;color:${col};font-size:11px;font-weight:700">${students.length}</span>
+            </div>
+            <div style="display:flex;flex-wrap:wrap;gap:4px;margin-bottom:8px">
+              ${Object.entries(groups).sort().map(([g,c])=>`<span style="padding:2px 8px;border-radius:20px;font-size:11px;background:#f3f4f6;color:#374151;font-weight:600">Grp ${esc(g)}: ${c}</span>`).join('')}
+            </div>
+            <div style="display:flex;flex-wrap:wrap;gap:4px;margin-bottom:10px">
+              ${Object.entries(sessions).map(([st,c])=>`<span style="padding:2px 8px;border-radius:20px;font-size:11px;font-weight:600;background:${st==='Regular'?'#f0fdf4':'#fff7ed'};color:${st==='Regular'?'#166534':'#9a3412'}">${esc(st)}: ${c}</span>`).join('')}
+            </div>
+            <div style="border-top:1px solid var(--border);padding-top:8px;display:flex;justify-content:space-between;align-items:center">
+              <span style="font-size:11px;color:${active===students.length?'#22c55e':'#f59e0b'}">${active}/${students.length} active</span>
+              <span style="font-size:12px;font-weight:700;color:${col}">View →</span>
+            </div>
+          </div>`;
+      }).join('')}
+    </div>
+    <div style="font-size:11px;font-weight:700;color:var(--text-muted);letter-spacing:.8px;text-transform:uppercase;margin-bottom:10px">Department Staff</div>
+    <div class="card" style="padding:0;overflow:hidden">
+      <table>
+        <thead><tr><th>Name</th><th>Email</th><th>Role</th><th>Status</th>${canManage?'<th>Actions</th>':''}</tr></thead>
+        <tbody>
+          ${staffList.length ? staffList.map(u => {
+            const canAct = (_roleRank[u.role]||0) < _myRank;
+            return `<tr id="user-row-${u._id}">
+              <td style="font-weight:500">${esc(u.name)}</td>
+              <td style="font-size:12px;color:var(--text-muted)">${esc(u.email||'—')}</td>
+              <td><span class="role-badge role-${u.role}">${u.role}</span></td>
+              <td><span class="status-badge ${u.isActive?'status-active':'status-stopped'}">${u.isActive?'Active':'Inactive'}</span></td>
+              ${canManage?`<td style="white-space:nowrap">${canAct?`
+                ${u.isActive?`<button class="btn btn-sm" style="background:#f59e0b;color:#fff;font-size:11px" onclick="deactivateUser('${u._id}')">Deactivate</button>`:`<button class="btn btn-sm" style="background:#22c55e;color:#fff;font-size:11px" onclick="activateUser('${u._id}')">Activate</button>`}
+                <button class="btn btn-sm" style="background:#6366f1;color:#fff;font-size:11px" onclick="adminResetStudentPassword('${u._id}',this)">🔑 Reset</button>
+                <button class="btn btn-danger btn-sm" style="font-size:11px" onclick="deleteUserPermanently('${u._id}',this)">Delete</button>
+              `:'—'}</td>`:''}
+            </tr>`;
+          }).join('') : `<tr><td colspan="${canManage?5:4}" style="text-align:center;padding:16px;color:var(--text-muted)">No staff in this department yet</td></tr>`}
+        </tbody>
+      </table>
+    </div>
+  `;
+}
+
+// ── View 3: Student list within a level ────────────────────────────────────────
+function _renderUserLevelDetail(deptName, level, allUsers, groupFilter='') {
+  const content = document.getElementById('main-content');
+  if (!content) return;
+  const canManage = ['admin','superadmin'].includes(currentUser.role);
+  const _roleRank = {superadmin:6,admin:5,manager:4,hod:3,lecturer:3,employee:2,student:1};
+  const _myRank = _roleRank[currentUser.role] || 0;
+  const col = _deptColor(deptName);
+  const encDept = encodeURIComponent(deptName);
+  const encLv = encodeURIComponent(level);
+
+  let students = allUsers.filter(u => u.role==='student' && u.department===deptName && u.studentLevel===level);
+  const allGroups = [...new Set(students.map(s=>s.studentGroup).filter(Boolean))].sort();
+  if (groupFilter) students = students.filter(s=>s.studentGroup===groupFilter);
+  const colCount = canManage ? 7 : 5;
+
+  const studentRow = u => {
+    const canAct = (_roleRank[u.role]||0) < _myRank;
+    return `<tr id="user-row-${u._id}"
+      data-name="${(u.name||'').toLowerCase()}"
+      data-idx="${(u.IndexNumber||u.indexNumber||'').toLowerCase()}"
+      data-email="${(u.email||'').toLowerCase()}">
+      ${canManage?`<td><input type="checkbox" class="user-checkbox" value="${u._id}" onchange="updateBulkActions()"></td>`:''}
+      <td style="font-weight:500">${esc(u.name)}</td>
+      <td style="font-family:monospace;font-size:12px;color:var(--text-muted)">${esc(u.IndexNumber||u.indexNumber||'—')}</td>
+      <td style="font-size:12px;color:var(--text-muted)">${esc(u.email||'—')}</td>
+      <td style="font-size:11px;white-space:nowrap">
+        ${u.programme?`<span style="background:#ede9fe;color:#7c3aed;padding:1px 6px;border-radius:20px;font-weight:700;margin-right:2px">${esc(u.programme)}</span>`:''}
+        ${u.studentGroup?`<span style="background:#ecfdf5;color:#059669;padding:1px 6px;border-radius:20px;font-weight:700;margin-right:2px">Grp ${esc(u.studentGroup)}</span>`:''}
+        ${u.sessionType?`<span style="padding:1px 6px;border-radius:20px;font-weight:600;margin-right:2px;background:${u.sessionType==='Regular'?'#f0fdf4':'#fff7ed'};color:${u.sessionType==='Regular'?'#166534':'#9a3412'}">${esc(u.sessionType)}</span>`:''}
+        ${u.semester?`<span style="color:var(--text-muted)">Sem ${esc(u.semester)}</span>`:''}
+      </td>
+      <td><span class="status-badge ${u.isActive?'status-active':'status-stopped'}">${u.isActive?'Active':'Inactive'}</span></td>
+      ${canManage?`<td style="white-space:nowrap">${canAct?`
+        ${u.isActive?`<button class="btn btn-sm" style="background:#f59e0b;color:#fff;font-size:11px" onclick="deactivateUser('${u._id}')">Deactivate</button>`:`<button class="btn btn-sm" style="background:#22c55e;color:#fff;font-size:11px" onclick="activateUser('${u._id}')">Activate</button>`}
+        <button class="btn btn-sm" style="background:#6366f1;color:#fff;font-size:11px" onclick="adminResetStudentPassword('${u._id}',this)">🔑 Reset</button>
+        ${u.deviceId?`<button class="btn btn-sm" style="background:#f97316;color:#fff;font-size:11px" onclick="clearStudentDeviceLock('${u._id}',this)">🔓 Unlock</button>`:''}
+        <button class="btn btn-danger btn-sm" style="font-size:11px" onclick="deleteUserPermanently('${u._id}',this)">Delete</button>
+      `:'—'}</td>`:''}
+    </tr>`;
+  };
+
+  content.innerHTML = `
+    <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;font-size:13px">
+      <span style="color:var(--primary);cursor:pointer;font-weight:500" onclick="renderUsers()">Users</span>
+      <span style="color:var(--text-muted)">›</span>
+      <span style="color:var(--primary);cursor:pointer;font-weight:500" onclick="_renderUserDeptDetail(decodeURIComponent('${encDept}'),_cachedUsers)">${esc(deptName)}</span>
+      <span style="color:var(--text-muted)">›</span>
+      <span style="font-weight:600">${esc(level)}</span>
+    </div>
+    <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;margin-bottom:16px">
+      <div>
+        <h2 style="margin:0;display:flex;align-items:center;gap:10px">
+          ${esc(deptName)}
+          <span style="padding:3px 12px;border-radius:20px;font-size:14px;background:${col}1a;color:${col};font-weight:800">${esc(level)}</span>
+        </h2>
+        <p style="margin:4px 0 0;font-size:13px;color:var(--text-muted)">${students.length} student${students.length!==1?'s':''}${groupFilter?' · Group '+esc(groupFilter):''}</p>
+      </div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+        ${canManage?`<button class="btn btn-primary btn-sm" onclick="showCreateUserModal()">＋ Add</button>`:''}
+        <input id="level-search" placeholder="Search students…"
+          oninput="_filterLevelRows(this.value)"
+          style="padding:7px 11px;border:1.5px solid var(--border);border-radius:8px;font-size:13px;font-family:inherit;outline:none;min-width:160px">
+        ${allGroups.length>1?`
+          <select onchange="_renderUserLevelDetail(decodeURIComponent('${encDept}'),decodeURIComponent('${encLv}'),_cachedUsers,this.value)"
+            style="padding:7px 10px;border:1.5px solid var(--border);border-radius:8px;font-size:13px;font-family:inherit;outline:none">
+            <option value="">All Groups</option>
+            ${allGroups.map(g=>`<option value="${esc(g)}" ${groupFilter===g?'selected':''}>${esc(g)}</option>`).join('')}
+          </select>`:''}
+      </div>
+    </div>
+    ${canManage?`
+      <div id="bulk-actions" style="display:none;gap:8px;align-items:center;margin-bottom:10px;padding:10px 14px;background:#f8fafc;border-radius:8px;border:1px solid var(--border)">
+        <span id="selected-count" style="font-size:13px;color:var(--text-muted)">0 selected</span>
+        <button class="btn btn-sm" style="background:#22c55e;color:#fff" onclick="bulkUserAction('activate')">Activate</button>
+        <button class="btn btn-sm" style="background:#f59e0b;color:#fff" onclick="bulkUserAction('deactivate')">Deactivate</button>
+        <button class="btn btn-danger btn-sm" onclick="bulkUserAction('delete')">Delete</button>
+      </div>`:''}
+    <div class="card" style="padding:0;overflow:hidden">
+      <table>
+        <thead><tr>
+          ${canManage?`<th style="width:36px"><input type="checkbox" id="select-all-users" onchange="toggleSelectAllUsers()"></th>`:''}
+          <th>Name</th><th>Index No.</th><th>Email</th><th>Classification</th><th>Status</th>
+          ${canManage?'<th>Actions</th>':''}
+        </tr></thead>
+        <tbody id="students-level-tbody">
+          ${students.map(studentRow).join('')}
+          ${students.length===0?`<tr><td colspan="${colCount}" style="text-align:center;padding:24px;color:var(--text-muted)">No students found</td></tr>`:''}
+        </tbody>
+      </table>
+    </div>
+  `;
+}
+
+function _filterLevelRows(searchVal) {
+  const q = (searchVal||'').toLowerCase();
+  document.querySelectorAll('#students-level-tbody tr[data-name]').forEach(row => {
+    const matches = !q || row.dataset.name.includes(q) || row.dataset.idx.includes(q) || row.dataset.email.includes(q);
+    row.style.display = matches ? '' : 'none';
+  });
+}
+
+// ── Corporate table (non-academic fallback) ────────────────────────────────────
+function _renderUsersCorporateTable(content, allUsers, filterRole='', filterDept='', filterSearch='') {
+  const canManage = ['manager','admin','superadmin'].includes(currentUser.role);
+  const isManager = currentUser.role === 'manager';
+  const _roleRank = {superadmin:6,admin:5,manager:4,hod:3,lecturer:3,employee:2,student:1};
+  const _myRank = _roleRank[currentUser.role] || 0;
+  const canActOn = u => (_roleRank[u.role]||0) < _myRank;
+  const selfId = (currentUser._id||currentUser.id||'').toString();
+
+  let users = allUsers.filter(u => u._id?.toString()!==selfId);
+  if (filterRole) users = users.filter(u => u.role===filterRole);
+  if (filterDept) users = users.filter(u => u.department===filterDept);
+  if (filterSearch) {
+    const q = filterSearch.toLowerCase();
+    users = users.filter(u => u.name?.toLowerCase().includes(q) || u.email?.toLowerCase().includes(q) || u.department?.toLowerCase().includes(q));
+  }
+  const allDepts = [...new Set(allUsers.map(u=>u.department).filter(Boolean))].sort();
+
+  content.innerHTML = `
+    <div class="page-header"><h2>${isManager?'Employees':'Users'}</h2><p>Manage team members · ${users.length} shown</p></div>
+    <div class="actions-bar" style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:10px">
+      ${canManage?`<button class="btn btn-primary btn-sm" onclick="showCreateUserModal()">${isManager?'Add Employee':'Add User'}</button>`:''}
+      ${['admin','superadmin'].includes(currentUser.role)?`<button class="btn btn-sm" style="background:#f59e0b;color:#fff" onclick="renderResetLogs()">🔐 Reset Log</button>`:''}
+      <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin-left:auto">
+        <input id="user-search-input" placeholder="Search name / email…" value="${esc(filterSearch)}"
+          oninput="_renderUsersCorporateTable(document.getElementById('main-content'),_cachedUsers,document.getElementById('user-role-filter').value,document.getElementById('user-dept-filter').value,this.value)"
+          style="padding:7px 11px;border:1.5px solid var(--border);border-radius:8px;font-size:13px;font-family:inherit;outline:none;min-width:180px">
+        <select id="user-role-filter" onchange="_renderUsersCorporateTable(document.getElementById('main-content'),_cachedUsers,this.value,document.getElementById('user-dept-filter').value,document.getElementById('user-search-input').value)"
+          style="padding:7px 10px;border:1.5px solid var(--border);border-radius:8px;font-size:13px;font-family:inherit;outline:none">
+          <option value="">All Roles</option>
+          <option value="admin" ${filterRole==='admin'?'selected':''}>Admin</option>
+          <option value="manager" ${filterRole==='manager'?'selected':''}>Manager</option>
+          <option value="employee" ${filterRole==='employee'?'selected':''}>Employee</option>
+        </select>
+        <select id="user-dept-filter" onchange="_renderUsersCorporateTable(document.getElementById('main-content'),_cachedUsers,document.getElementById('user-role-filter').value,this.value,document.getElementById('user-search-input').value)"
+          style="padding:7px 10px;border:1.5px solid var(--border);border-radius:8px;font-size:13px;font-family:inherit;outline:none">
+          <option value="">All Departments</option>
+          ${allDepts.map(d=>`<option value="${esc(d)}" ${filterDept===d?'selected':''}>${esc(d)}</option>`).join('')}
+        </select>
+      </div>
+      ${canManage?`
+        <div id="bulk-actions" style="display:none;gap:8px;align-items:center;margin-left:auto">
+          <span id="selected-count" style="font-size:13px;color:var(--text-muted)">0 selected</span>
+          <button class="btn btn-sm" style="background:#22c55e;color:#fff" onclick="bulkUserAction('activate')">Activate</button>
+          <button class="btn btn-sm" style="background:#f59e0b;color:#fff" onclick="bulkUserAction('deactivate')">Deactivate</button>
+          <button class="btn btn-danger btn-sm" onclick="bulkUserAction('delete')">Delete</button>
+        </div>`:''}
+    </div>
+    <div class="card" style="padding:0;overflow:hidden">
+      ${users.length?`
+        <table>
+          <thead><tr>
+            ${canManage?'<th style="width:40px"><input type="checkbox" id="select-all-users" onchange="toggleSelectAllUsers()"></th>':''}
+            <th>Name</th><th>Employee ID</th><th>Email</th><th>Role</th><th>Status</th>
+            ${canManage?'<th>Actions</th>':''}
+          </tr></thead>
+          <tbody>${users.map(u=>`
+            <tr id="user-row-${u._id}">
+              ${canManage?`<td>${canActOn(u)?`<input type="checkbox" class="user-checkbox" value="${u._id}" onchange="updateBulkActions()">`:''}</td>`:''}
+              <td style="font-weight:500">${esc(u.name)}</td>
+              <td style="font-size:12px;color:var(--text-muted)">${esc(u.employeeId||'—')}</td>
+              <td style="font-size:12px;color:var(--text-muted)">${esc(u.email||'—')}</td>
+              <td><span class="role-badge role-${u.role}">${u.role}</span>${u.department?`<span style="font-size:10px;margin-left:5px;padding:2px 6px;border-radius:20px;background:#ecfeff;color:#0891b2;font-weight:600">${esc(u.department)}</span>`:''}</td>
+              <td><span class="status-badge ${u.isActive?'status-active':'status-stopped'}">${u.isActive?'Active':'Inactive'}</span></td>
+              ${canManage?`<td style="white-space:nowrap">${canActOn(u)?`
+                ${u.isActive?`<button class="btn btn-sm" style="background:#f59e0b;color:#fff;font-size:11px" onclick="deactivateUser('${u._id}')">Deactivate</button>`:`<button class="btn btn-sm" style="background:#22c55e;color:#fff;font-size:11px" onclick="activateUser('${u._id}')">Activate</button>`}
+                <button class="btn btn-sm" style="background:#6366f1;color:#fff;font-size:11px" onclick="adminResetStudentPassword('${u._id}',this)">🔑 Reset</button>
+                <button class="btn btn-danger btn-sm" style="font-size:11px" onclick="deleteUserPermanently('${u._id}',this)">Delete</button>
+              `:'—'}</td>`:''}
+            </tr>`).join('')}
+          </tbody>
+        </table>
+      `:`<div class="empty-state"><p>No users found</p></div>`}
+    </div>
+  `;
+}
+
 
 async function renderResetLogs() {
   const content = document.getElementById('main-content');
@@ -8654,55 +9081,58 @@ function _renderCoursesHTML(content, courses, isOffline) {
     const approved   = !course.needsApproval || course.approvalStatus === 'approved';
     const titleEsc   = esc(course.title).replace(/'/g, "\\'");
     const codeEsc    = esc(course.code).replace(/'/g, "\\'");
-
-    const metaItems = [
-      course.lecturerId?.name ? `<span>👨‍🏫 ${esc(course.lecturerId.name)}</span>` : '',
-      course.level  ? `<span style="background:#ede9fe;color:#7c3aed;padding:2px 7px;border-radius:20px;font-weight:700;">Level ${esc(String(course.level))}</span>` : '',
-      course.group  ? `<span style="background:#ecfdf5;color:#059669;padding:2px 7px;border-radius:20px;font-weight:600;">Group ${esc(course.group)}</span>` : '',
-      `<span>👥 ${course.rosterCount ?? course.enrolledStudents?.length ?? 0} enrolled</span>`,
-    ].filter(Boolean).join('');
+    const accent     = _deptColor(course.code || course.title || '');
+    const enrolled   = course.rosterCount ?? course.enrolledStudents?.length ?? 0;
 
     let actions = '';
     if (!isOffline && canManageRoster) {
       const uploadBtn = approved
-        ? `<button class="btn btn-primary btn-sm" style="display:inline-flex;align-items:center;gap:5px" onclick="showUploadRosterModal('${course._id}','${codeEsc}')"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>Upload Students</button>`
-        : `<span style="font-size:11px;color:var(--text-muted);font-style:italic">${course.approvalStatus === 'pending' ? 'Awaiting HOD approval' : 'Rejected — contact HOD'}</span>`;
+        ? `<button class="btn btn-primary btn-sm" style="display:inline-flex;align-items:center;gap:5px;font-size:11.5px" onclick="showUploadRosterModal('${course._id}','${codeEsc}')"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>Upload</button>`
+        : `<span style="font-size:11px;color:var(--text-muted);font-style:italic">${course.approvalStatus === 'pending' ? 'Awaiting HOD approval' : 'Rejected'}</span>`;
       actions = `
         ${uploadBtn}
-        <button class="btn btn-sm" style="background:#f8fafc;border:1px solid #e2e8f0;color:#475569;display:inline-flex;align-items:center;gap:5px" onclick="viewRoster('${course._id}','${codeEsc}')"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/></svg>View Roster</button>
-        <button class="btn btn-sm" style="background:#ede9fe;color:#6d28d9;border:1px solid #ddd6fe;display:inline-flex;align-items:center;gap:5px" onclick="openBulkEmailModal('${course._id}','${titleEsc}')"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg>Email</button>
-        <button class="btn btn-sm" style="background:#dcfce7;color:#166534;border:1px solid #bbf7d0;display:inline-flex;align-items:center;gap:5px" onclick="openBulkSmsModal('${course._id}','${titleEsc}')"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>SMS</button>`;
+        <button class="btn btn-sm" style="background:#f8fafc;border:1px solid #e2e8f0;color:#475569;display:inline-flex;align-items:center;gap:4px;font-size:11.5px" onclick="viewRoster('${course._id}','${codeEsc}')"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/></svg>Roster</button>
+        <button class="btn btn-sm" style="background:#ede9fe;color:#6d28d9;border:1px solid #ddd6fe;display:inline-flex;align-items:center;gap:4px;font-size:11.5px" onclick="openBulkEmailModal('${course._id}','${titleEsc}')"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg>Email</button>
+        <button class="btn btn-sm" style="background:#dcfce7;color:#166534;border:1px solid #bbf7d0;display:inline-flex;align-items:center;gap:4px;font-size:11.5px" onclick="openBulkSmsModal('${course._id}','${titleEsc}')"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>SMS</button>`;
     } else if (!isOffline && isStudent) {
-      actions = `<button class="btn btn-sm" style="background:#f0fdf4;color:#16a34a;border:1px solid #bbf7d0;" onclick="generateCertificate('${course._id}','${titleEsc}')">🎓 Certificate</button>`;
+      actions = `<button class="btn btn-sm" style="background:#f0fdf4;color:#16a34a;border:1px solid #bbf7d0;font-size:11.5px" onclick="generateCertificate('${course._id}','${titleEsc}')">🎓 Certificate</button>`;
     } else if (!isOffline) {
-      actions = `<button class="btn btn-sm" style="background:var(--bg);border:1px solid var(--border);" onclick="viewRoster('${course._id}','${codeEsc}')">View Roster</button>`;
+      actions = `<button class="btn btn-sm" style="background:var(--bg);border:1px solid var(--border);font-size:11.5px" onclick="viewRoster('${course._id}','${codeEsc}')">View Roster</button>`;
     }
 
     return `
-      <div style="background:#fff;border:1px solid #e8eaed;border-radius:14px;padding:18px 20px;margin-bottom:12px;box-shadow:0 1px 4px rgba(0,0,0,.05);transition:box-shadow .18s" onmouseover="this.style.boxShadow='0 4px 18px rgba(0,0,0,.09)'" onmouseout="this.style.boxShadow='0 1px 4px rgba(0,0,0,.05)'">
-        <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:10px;flex-wrap:wrap;margin-bottom:10px">
-          <div style="display:flex;align-items:center;gap:10px;min-width:0">
-            <div style="width:38px;height:38px;border-radius:10px;background:#eff6ff;display:flex;align-items:center;justify-content:center;flex-shrink:0">
-              <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#2563eb" stroke-width="2"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg>
-            </div>
-            <div>
-              <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
-                <span style="font-family:monospace;font-size:11.5px;font-weight:700;background:#eff6ff;color:#1d4ed8;padding:2px 8px;border-radius:5px">${esc(course.code)}</span>
-                <span style="font-size:15px;font-weight:700;color:#0f172a">${esc(course.title)}</span>
+      <div style="background:#fff;border:1.5px solid #e8eaed;border-radius:16px;overflow:hidden;box-shadow:0 1px 4px rgba(0,0,0,.06);display:flex;flex-direction:column;transition:box-shadow .18s"
+           onmouseover="this.style.boxShadow='0 6px 24px rgba(0,0,0,.11)'" onmouseout="this.style.boxShadow='0 1px 4px rgba(0,0,0,.06)'">
+        <div style="height:5px;background:${accent}"></div>
+        <div style="padding:18px 20px 14px;flex:1;display:flex;flex-direction:column;gap:12px">
+          <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px">
+            <div style="min-width:0">
+              <div style="display:flex;align-items:center;gap:7px;flex-wrap:wrap;margin-bottom:5px">
+                <span style="font-family:monospace;font-size:11px;font-weight:700;background:${accent}18;color:${accent};padding:2px 8px;border-radius:5px;letter-spacing:.3px">${esc(course.code)}</span>
+                ${course.level ? `<span style="background:#dbeafe;color:#1d4ed8;padding:2px 7px;border-radius:20px;font-size:10.5px;font-weight:700">Level ${esc(String(course.level))}</span>` : ''}
+                ${course.group ? `<span style="background:#ecfdf5;color:#059669;padding:2px 7px;border-radius:20px;font-size:10.5px;font-weight:600">Group ${esc(course.group)}</span>` : ''}
               </div>
-              <div style="display:flex;flex-wrap:wrap;gap:6px;align-items:center;font-size:12px;color:#64748b;margin-top:5px">${metaItems}</div>
+              <div style="font-size:14px;font-weight:700;color:#0f172a;line-height:1.3">${esc(course.title)}</div>
+              ${course.lecturerId?.name ? `<div style="font-size:11.5px;color:#64748b;margin-top:3px">👨‍🏫 ${esc(course.lecturerId.name)}</div>` : ''}
             </div>
+            <div style="flex-shrink:0">${statusBadge(course)}</div>
           </div>
-          <div>${statusBadge(course)}</div>
-        </div>
-        <div style="display:flex;flex-wrap:wrap;gap:8px;align-items:center;padding-top:10px;border-top:1px solid #f1f5f9">
-          ${actions}
+          <div style="display:flex;align-items:center;gap:6px;padding:10px 12px;background:#f8fafc;border-radius:10px;border:1px solid #f1f5f9">
+            <div style="width:28px;height:28px;border-radius:8px;background:${accent}18;display:flex;align-items:center;justify-content:center">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="${accent}" stroke-width="2.5"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+            </div>
+            <span style="font-size:13px;font-weight:700;color:#0f172a">${enrolled}</span>
+            <span style="font-size:12px;color:#64748b">student${enrolled !== 1 ? 's' : ''} enrolled</span>
+          </div>
+          <div style="display:flex;flex-wrap:wrap;gap:6px;align-items:center;padding-top:2px">
+            ${actions}
+          </div>
         </div>
       </div>`;
   }
 
   content.innerHTML = `
-    <div style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:10px;margin-bottom:20px">
+    <div style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:10px;margin-bottom:24px">
       <div>
         <h2 style="font-size:22px;font-weight:800;letter-spacing:-.5px;color:#0f172a;margin-bottom:2px">${isStudent ? 'My Courses' : 'Courses'}</h2>
         <p style="color:#64748b;font-size:13px">${isStudent ? 'Your enrolled academic courses' : 'Manage academic courses'}${isOffline ? ' · <span style="color:#f59e0b;font-weight:600">Offline — cached</span>' : ''}</p>
@@ -8710,7 +9140,7 @@ function _renderCoursesHTML(content, courses, isOffline) {
       ${canCreate && !isOffline ? `<button class="btn btn-primary" onclick="showCreateCourseModal()" style="display:flex;align-items:center;gap:6px"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>Create Course</button>` : ''}
     </div>
     ${courses.length
-      ? courses.map(courseCard).join('')
+      ? `<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:16px">${courses.map(courseCard).join('')}</div>`
       : `<div style="background:#fff;border:1px solid #e8eaed;border-radius:16px;padding:60px 20px;text-align:center;box-shadow:0 1px 4px rgba(0,0,0,.05)">
           <div style="width:56px;height:56px;border-radius:16px;background:#eff6ff;display:flex;align-items:center;justify-content:center;margin:0 auto 16px">
             <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#2563eb" stroke-width="1.8"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg>
@@ -9917,6 +10347,10 @@ async function submitStudentQuiz(quizId) {
     window._quizTabHandler = null;
   }
   window._quizSubmitting = false;
+  if (_appOfflineMode) {
+    toastError('You are offline. Connect to the internet to submit your quiz.');
+    return;
+  }
   if (quizTimerInterval) { clearInterval(quizTimerInterval); quizTimerInterval = null; }
   const questions = window._quizQuestions || [];
   const answers = questions.map(q => {
