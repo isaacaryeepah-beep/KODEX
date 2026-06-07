@@ -11524,7 +11524,7 @@ async function exportBankToPDF() {
     }
   });
 
-  doc.save(`DIKLY_QuestionBank_${new Date().toISOString().slice(0,10)}.pdf`);
+  await downloadBlob(doc.output('blob'), `DIKLY_QuestionBank_${new Date().toISOString().slice(0,10)}.pdf`);
   toastSuccess(`PDF saved with ${selected.length} question${selected.length !== 1 ? 's' : ''} ✓`);
 }
 
@@ -14827,7 +14827,8 @@ async function exportAttendanceToExcel(sessionId, sessionTitle) {
     ws['!cols'] = [{ wch: 25 }, { wch: 15 }, { wch: 12 }, { wch: 15 }, { wch: 22 }, { wch: 20 }];
 
     const filename = `Attendance_${(sessionTitle || 'session').replace(/[^a-z0-9]/gi, '_')}_${new Date().toISOString().slice(0,10)}.xlsx`;
-    window.XLSX.writeFile(wb, filename);
+    const wbout = window.XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
+    await downloadBlob(new Blob([wbout], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }), filename);
     showToastNotif('Excel file downloaded!', 'success');
   } catch(e) {
     showToastNotif('Export failed: ' + e.message, 'error');
@@ -14863,7 +14864,8 @@ async function exportAllAttendanceToExcel() {
     const wb = window.XLSX.utils.book_new();
     window.XLSX.utils.book_append_sheet(wb, ws, 'My Attendance');
     ws['!cols'] = [{ wch: 30 }, { wch: 15 }, { wch: 12 }, { wch: 15 }];
-    window.XLSX.writeFile(wb, `My_Attendance_${new Date().toISOString().slice(0,10)}.xlsx`);
+    const wboutAll = window.XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
+    await downloadBlob(new Blob([wboutAll], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }), `My_Attendance_${new Date().toISOString().slice(0,10)}.xlsx`);
     showToastNotif('Excel file downloaded!', 'success');
   } catch(e) {
     showToastNotif('Export failed: ' + e.message, 'error');
@@ -15658,7 +15660,7 @@ async function generateAttendanceReportCard() {
 
     doc.setFontSize(8); doc.setTextColor(150,150,150); doc.setFont('helvetica','normal');
     doc.text('Generated automatically by DIKLY — dikly.sbs', M, 285);
-    doc.save('DIKLY_Report_Card_' + (currentUser.indexNumber||'student') + '_' + new Date().toISOString().slice(0,10) + '.pdf');
+    await downloadBlob(doc.output('blob'), 'DIKLY_Report_Card_' + (currentUser.indexNumber||'student') + '_' + new Date().toISOString().slice(0,10) + '.pdf');
     showToastNotif('Report card downloaded!', 'success');
   } catch(e) { showToastNotif('Failed: ' + e.message, 'error'); }
 }
@@ -15731,7 +15733,7 @@ async function generateCertificate(courseId, courseTitle) {
     doc.setFontSize(8); doc.setTextColor(199,210,254);
     doc.text('dikly.sbs', W/2, H-16, { align: 'center' });
 
-    doc.save('DIKLY_Certificate_' + (courseTitle||'course').replace(/[^a-z0-9]/gi,'_') + '.pdf');
+    await downloadBlob(doc.output('blob'), 'DIKLY_Certificate_' + (courseTitle||'course').replace(/[^a-z0-9]/gi,'_') + '.pdf');
     showToastNotif('Certificate downloaded!', 'success');
   } catch(e) { showToastNotif('Failed: ' + e.message, 'error'); }
 }
