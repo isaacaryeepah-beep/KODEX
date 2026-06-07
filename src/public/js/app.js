@@ -7282,34 +7282,68 @@ async function generateVerbalCode(sessionId) {
   const container = document.getElementById('modal-container');
   container.classList.remove('hidden');
 
+  let _verbalTimer = null;
+  let _verbalRefreshTimer = null;
+
+  function _stopVerbalTimers() {
+    if (_verbalTimer)        { clearInterval(_verbalTimer);   _verbalTimer = null; }
+    if (_verbalRefreshTimer) { clearTimeout(_verbalRefreshTimer); _verbalRefreshTimer = null; }
+  }
+
   async function _fetchAndShow() {
+    _stopVerbalTimers();
     try {
-      const data = await api('/api/qr-tokens/generate', {
-        method: 'POST',
-        body: JSON.stringify({ sessionId, codeType: 'verbal', expiryMinutes: 5 })
-      });
-      const { code, expiresAt } = data.qrToken;
-      const expiry = new Date(expiresAt);
-      const totalSecs = Math.round((expiry - Date.now()) / 1000);
+      // Try to get the device code first (same HMAC code the ESP32 screen shows).
+      // Falls back to QR-token verbal code for sessions without a device.
+      let code, totalSecs, isDeviceCode = false, windowSecs = 300;
+
+      try {
+        const dc = await api(`/api/attendance-sessions/${sessionId}/current-code`);
+        code = dc.code;
+        totalSecs = dc.expiresInSeconds;
+        windowSecs = dc.windowSeconds || 300;
+        isDeviceCode = true;
+      } catch (_) {
+        // No device seed on this session — fall back to QR token verbal code
+        const data = await api('/api/qr-tokens/generate', {
+          method: 'POST',
+          body: JSON.stringify({ sessionId, codeType: 'verbal', expiryMinutes: 5 })
+        });
+        const qr = data.qrToken;
+        code = qr.code;
+        totalSecs = Math.round((new Date(qr.expiresAt) - Date.now()) / 1000);
+      }
+
+      const modeWord = currentUser.company?.mode === 'corporate' ? 'employees' : 'students';
+      const subtitle = isDeviceCode
+        ? 'This is the code currently shown on the classroom device screen.'
+        : `Read this code out loud. All ${modeWord} can use it within the time window.`;
+      const badgeText = isDeviceCode
+        ? '📟 Live device code — matches classroom screen'
+        : `Multi-use · All ${modeWord} can enter this code`;
+
+      const fmtTime = s => s >= 60 ? `${Math.floor(s/60)}m ${s%60}s` : `${s}s`;
 
       container.innerHTML = `
-        <div class="modal-overlay" onclick="closeModal(event)">
+        <div class="modal-overlay" onclick="_stopVerbalTimers();closeModal(event)">
           <div class="modal" onclick="event.stopPropagation()" style="text-align:center;max-width:380px">
             <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px">
-              <h3 style="margin:0">Verbal Attendance Code</h3>
-              <button onclick="closeModal()" style="background:none;border:none;font-size:20px;cursor:pointer;color:var(--text-light)">×</button>
+              <h3 style="margin:0">${isDeviceCode ? 'Device Attendance Code' : 'Verbal Attendance Code'}</h3>
+              <button onclick="_stopVerbalTimers();closeModal()" style="background:none;border:none;font-size:20px;cursor:pointer;color:var(--text-light)">×</button>
             </div>
-            <p style="color:var(--text-light);font-size:12px;margin-bottom:16px">Read this code out loud. All ${currentUser.company?.mode === 'corporate' ? 'employees' : 'students'} can use it within the time window.</p>
+            <p style="color:var(--text-light);font-size:12px;margin-bottom:16px">${subtitle}</p>
             <div style="font-size:64px;font-weight:900;color:#7c3aed;letter-spacing:12px;margin-bottom:8px;font-family:monospace">${code}</div>
-            <div style="display:inline-flex;align-items:center;gap:6px;background:rgba(124,58,237,0.1);border:1px solid rgba(124,58,237,0.3);border-radius:999px;padding:5px 14px;font-size:12px;font-weight:600;color:#7c3aed;margin-bottom:6px">
+            <div style="display:inline-flex;align-items:center;gap:6px;background:rgba(124,58,237,0.1);border:1px solid rgba(124,58,237,0.3);border-radius:999px;padding:5px 14px;font-size:12px;font-weight:600;color:#7c3aed;margin-bottom:10px">
               <span style="width:7px;height:7px;border-radius:50%;background:#7c3aed;display:inline-block;animation:pulse-green 1.5s infinite"></span>
-              Multi-use · All ${currentUser.company?.mode === 'corporate' ? 'employees' : 'students'} can enter this code
+              ${badgeText}
             </div>
-            <p style="color:var(--text-light);font-size:12px;margin-bottom:4px">Expires in: <span id="verbal-countdown" style="font-weight:700;color:#7c3aed">${Math.floor(totalSecs/60)}m ${totalSecs%60}s</span></p>
-            <p style="color:var(--text-muted);font-size:11px;margin-bottom:20px">Expires at ${expiry.toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'})}</p>
+            <p style="color:var(--text-light);font-size:12px;margin-bottom:20px">
+              ${isDeviceCode ? 'Rotates in:' : 'Expires in:'}
+              <span id="verbal-countdown" style="font-weight:700;color:#7c3aed">${fmtTime(totalSecs)}</span>
+            </p>
             <div class="modal-actions" style="justify-content:center;gap:8px">
-              <button class="btn btn-sm" style="background:#7c3aed;color:#fff" onclick="generateVerbalCode('${sessionId}')">New Code</button>
-              <button class="btn btn-primary btn-sm" onclick="closeModal()">Close</button>
+              <button class="btn btn-sm" style="background:#7c3aed;color:#fff" onclick="generateVerbalCode('${sessionId}')">Refresh</button>
+              <button class="btn btn-primary btn-sm" onclick="_stopVerbalTimers();closeModal()">Close</button>
             </div>
           </div>
         </div>
@@ -7318,14 +7352,24 @@ async function generateVerbalCode(sessionId) {
       // Countdown timer
       let secs = totalSecs;
       const countEl = () => document.getElementById('verbal-countdown');
-      const timer = setInterval(() => {
+      _verbalTimer = setInterval(() => {
         secs--;
-        if (secs <= 0) { clearInterval(timer); if (countEl()) countEl().textContent = 'Expired'; return; }
-        if (countEl()) countEl().textContent = Math.floor(secs/60) + 'm ' + (secs%60) + 's';
+        if (secs <= 0) {
+          clearInterval(_verbalTimer); _verbalTimer = null;
+          if (countEl()) countEl().textContent = 'Rotating…';
+          return;
+        }
+        if (countEl()) countEl().textContent = fmtTime(secs);
       }, 1000);
 
+      // Auto-refresh when the window rolls over
+      if (isDeviceCode) {
+        _verbalRefreshTimer = setTimeout(() => generateVerbalCode(sessionId), totalSecs * 1000);
+      }
+
     } catch(e) {
-      const msg = e.message || 'Failed to generate code';
+      _stopVerbalTimers();
+      const msg = e.message || 'Failed to get code';
       const isSubError = msg.toLowerCase().includes('subscription') || msg.toLowerCase().includes('trial');
       container.innerHTML = `<div class="modal-overlay" onclick="closeModal(event)"><div class="modal" onclick="event.stopPropagation()" style="text-align:center;padding:24px">
         <div style="font-size:36px;margin-bottom:12px">${isSubError ? '🔒' : '⚠️'}</div>
