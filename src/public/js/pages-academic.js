@@ -31,9 +31,18 @@ async function renderCalendarEvents() {
 async function loadCalendarEvents() {
   const area = document.getElementById('calendar-events-area');
   if (!area) return;
+  let events = [];
+  if (!isOnline()) {
+    const cached = offlineRead('calendar_events');
+    if (cached) events = cached;
+    else { area.innerHTML = '<div class="card"><div class="empty-state"><p>You are offline. No cached events available.</p></div></div>'; return; }
+  }
   try {
-    const data = await api('/api/calendar-events');
-    const events = data.events || data.items || [];
+    if (events.length === 0) {
+      const data = await api('/api/calendar-events');
+      events = data.events || data.items || [];
+      offlineCache('calendar_events', events);
+    }
 
     if (!events.length) {
       area.innerHTML = '<div class="card"><div class="empty-state"><p>No upcoming events scheduled.</p></div></div>';
@@ -169,10 +178,19 @@ async function loadForums() {
   const area = document.getElementById('forums-area');
   if (!area) return;
   const cat = document.getElementById('forum-cat-filter')?.value || '';
+  let posts = [];
+  if (!isOnline()) {
+    const cached = offlineRead('forums_posts');
+    if (cached) posts = cached;
+    else { area.innerHTML = '<div class="card"><div class="empty-state"><p>You are offline. No cached forums available.</p></div></div>'; return; }
+  }
   try {
-    const params = cat ? `?category=${cat}` : '';
-    const data = await api(`/api/forums${params}`);
-    const posts = data.posts || data.items || [];
+    if (posts.length === 0) {
+      const params = cat ? `?category=${cat}` : '';
+      const data = await api(`/api/forums${params}`);
+      posts = data.posts || data.items || [];
+      if (!cat) offlineCache('forums_posts', posts);
+    }
 
     if (!posts.length) {
       area.innerHTML = '<div class="card"><div class="empty-state"><p>No forum posts yet. Start a discussion!</p></div></div>';
@@ -270,9 +288,17 @@ async function renderBadges() {
     </div>
     <div id="badges-area"><div class="loading" style="padding:20px;text-align:center;font-size:13px">Loading badges…</div></div>`;
 
+  let badges = [];
+  if (!isOnline()) {
+    const cached = offlineRead('badges');
+    if (cached) badges = cached;
+  }
   try {
-    const data = await api('/api/badges/my');
-    const badges = data.badges || data.items || [];
+    if (badges.length === 0) {
+      const data = await api('/api/badges/my');
+      badges = data.badges || data.items || [];
+      offlineCache('badges', badges);
+    }
     const area = document.getElementById('badges-area');
     if (!area) return;
 
@@ -292,7 +318,13 @@ async function renderBadges() {
     </div>`;
   } catch(e) {
     const area = document.getElementById('badges-area');
-    if (area) area.innerHTML = `<div class="card"><p style="color:var(--danger);font-size:13px">Error: ${e.message}</p></div>`;
+    const cached = offlineRead('badges');
+    if (cached && area) {
+      badges = cached;
+      area.innerHTML = `<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:14px">
+        ${badges.map(b => `<div class="card" style="text-align:center;padding:20px 16px"><div style="font-size:36px;margin-bottom:10px">${b.icon || '🏅'}</div><div style="font-size:13px;font-weight:700;margin-bottom:4px">${b.name || 'Badge'}</div><div style="font-size:11px;color:var(--text-muted);line-height:1.4;margin-bottom:8px">${b.description || ''}</div></div>`).join('')}
+      </div>`;
+    } else if (area) area.innerHTML = `<div class="card"><p style="color:var(--danger);font-size:13px">Error: ${e.message}</p></div>`;
   }
 }
 
@@ -311,8 +343,14 @@ async function renderTranscripts() {
     </div>
     <div id="transcripts-area"><div class="loading" style="padding:20px;text-align:center;font-size:13px">Loading transcript…</div></div>`;
 
+  let _transcriptData = null;
+  if (!isOnline()) { _transcriptData = offlineRead('transcripts'); }
   try {
-    const data = await api('/api/transcripts/my');
+    if (!_transcriptData) {
+      _transcriptData = await api('/api/transcripts/my');
+      offlineCache('transcripts', _transcriptData);
+    }
+    const data = _transcriptData;
     const area = document.getElementById('transcripts-area');
     if (!area) return;
 
@@ -376,13 +414,21 @@ async function renderEvaluations() {
     </div>
     <div id="evaluations-area"><div class="loading" style="padding:20px;text-align:center;font-size:13px">Loading evaluations…</div></div>`;
 
+  const _evalCacheKey = isLecturer ? 'evaluations_lecturer' : 'evaluations_student';
+  let evaluations = [];
+  if (!isOnline()) {
+    const cached = offlineRead(_evalCacheKey);
+    if (cached) evaluations = cached;
+  }
   try {
-    const endpoint = isLecturer ? '/api/evaluations/received' : '/api/evaluations/my';
-    const data = await api(endpoint);
+    if (evaluations.length === 0) {
+      const endpoint = isLecturer ? '/api/evaluations/received' : '/api/evaluations/my';
+      const data = await api(endpoint);
+      evaluations = data.evaluations || data.items || [];
+      offlineCache(_evalCacheKey, evaluations);
+    }
     const area = document.getElementById('evaluations-area');
     if (!area) return;
-
-    const evaluations = data.evaluations || data.items || [];
 
     if (!evaluations.length) {
       area.innerHTML = `<div class="card"><div class="empty-state"><p>${isLecturer ? 'No evaluations received yet.' : 'No evaluations submitted yet.'}</p></div></div>`;

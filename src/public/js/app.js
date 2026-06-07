@@ -3324,17 +3324,28 @@ async function renderHodDashboard(content) {
 
   try {
     const deptQs = currentUser.department ? '&department=' + encodeURIComponent(currentUser.department) : '';
-    const [sessData, lecturerData, studentData] = await Promise.all([
-      api('/api/attendance-sessions?limit=5'),
-      api('/api/users?role=lecturer' + deptQs),
-      api('/api/users?role=student' + deptQs),
-    ]);
-    const sessions   = sessData.sessions   || [];
-    const lecturers  = (lecturerData.users || []).length;
-    const students   = (studentData.users  || []).length;
-    const activeSess = sessions.filter(s => ['active','live','paused','locked'].includes(s.status)).length;
+    let sessions, lecturers, students, activeSess, _offlineBanner = '';
+    const _hc = !isOnline() ? offlineRead('hod_dashboard') : null;
+    if (_hc) {
+      sessions  = _hc.sessions  || [];
+      lecturers = _hc.lecturers || 0;
+      students  = _hc.students  || 0;
+      _offlineBanner = `<div style="display:inline-flex;align-items:center;gap:6px;background:#fef3c7;border:1px solid #fde68a;border-radius:20px;padding:3px 12px;font-size:11.5px;font-weight:600;color:#92400e;margin-bottom:10px">📡 Offline · Cached data</div>`;
+    } else {
+      const [sessData, lecturerData, studentData] = await Promise.all([
+        api('/api/attendance-sessions?limit=5'),
+        api('/api/users?role=lecturer' + deptQs),
+        api('/api/users?role=student' + deptQs),
+      ]);
+      sessions  = sessData.sessions   || [];
+      lecturers = (lecturerData.users || []).length;
+      students  = (studentData.users  || []).length;
+      offlineCache('hod_dashboard', { sessions, lecturers, students });
+    }
+    activeSess = sessions.filter(s => ['active','live','paused','locked'].includes(s.status)).length;
 
-    content.innerHTML = `
+    content.innerHTML = _offlineBanner + `
+
       <div class="page-header" style="display:flex;align-items:flex-start;justify-content:space-between;flex-wrap:wrap;gap:12px;">
         <div>
           <h2>Department Overview</h2>
@@ -3465,10 +3476,24 @@ async function renderHodDashboard(content) {
 async function renderHodSessions() {
   const content = document.getElementById('main-content');
   content.innerHTML = '<div class="loading">Loading sessions…</div>';
-  try {
-    const dept = currentUser.department ? '&department=' + encodeURIComponent(currentUser.department) : '';
-    const data = await api('/api/attendance-sessions?limit=100' + dept);
-    const sessions = data.sessions || [];
+  let sessions = [], _isOff = false;
+  if (!isOnline()) {
+    const _c = offlineRead('hod_sessions');
+    if (_c) { sessions = _c.sessions || []; _isOff = true; }
+    else { content.innerHTML = `<div style="text-align:center;padding:60px 20px"><div style="font-size:48px;margin-bottom:12px">📡</div><div style="font-size:18px;font-weight:700">You're Offline</div><p style="color:var(--text-muted);margin-top:8px">Connect once while online to cache this page.</p></div>`; return; }
+  } else {
+    try {
+      const dept = currentUser.department ? '&department=' + encodeURIComponent(currentUser.department) : '';
+      const data = await api('/api/attendance-sessions?limit=100' + dept);
+      sessions = data.sessions || [];
+      offlineCache('hod_sessions', data);
+    } catch(e) {
+      const _c = offlineRead('hod_sessions');
+      if (_c) { sessions = _c.sessions || []; _isOff = true; }
+      else { content.innerHTML = `<div class="card"><p style="color:#ef4444;">${e.message}</p></div>`; return; }
+    }
+  }
+  { const data = { sessions }; /* compat */
     content.innerHTML = `
       <div class="page-header" style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:10px;">
         <div><h2>All Sessions</h2><p>Department-wide attendance sessions — ${sessions.length} total</p></div>
@@ -3496,23 +3521,35 @@ async function renderHodSessions() {
                 </tr>`).join('')}
           </tbody>
         </table>
-      </div>`;
-  } catch(e) {
-    content.innerHTML = `<div class="card"><p style="color:#ef4444;">${e.message}</p></div>`;
+      </div>`+ (_isOff ? `<div style="display:inline-flex;align-items:center;gap:6px;background:#fef3c7;border:1px solid #fde68a;border-radius:20px;padding:3px 12px;font-size:11.5px;font-weight:600;color:#92400e;margin-bottom:10px">📡 Offline · Cached data</div>` : '');
   }
 }
 
 async function renderHodLecturers() {
   const content = document.getElementById('main-content');
   content.innerHTML = '<div class="loading">Loading lecturers…</div>';
-  try {
-    const dept = currentUser.department ? '&department=' + encodeURIComponent(currentUser.department) : '';
-    const [lecturerData, courseData] = await Promise.all([
-      api('/api/users?role=lecturer&limit=200' + dept),
-      api('/api/courses?limit=500'),
-    ]);
-    const lecturers = lecturerData.users || [];
-    const courses   = courseData.courses || courseData || [];
+  let lecturers = [], courses = [], _isOff = false;
+  if (!isOnline()) {
+    const _c = offlineRead('hod_lecturers');
+    if (_c) { lecturers = _c.lecturers || []; courses = _c.courses || []; _isOff = true; }
+    else { content.innerHTML = `<div style="text-align:center;padding:60px 20px"><div style="font-size:48px;margin-bottom:12px">📡</div><div style="font-size:18px;font-weight:700">You're Offline</div><p style="color:var(--text-muted);margin-top:8px">Connect once while online to cache this page.</p></div>`; return; }
+  } else {
+    try {
+      const dept = currentUser.department ? '&department=' + encodeURIComponent(currentUser.department) : '';
+      const [lecturerData, courseData] = await Promise.all([
+        api('/api/users?role=lecturer&limit=200' + dept),
+        api('/api/courses?limit=500'),
+      ]);
+      lecturers = lecturerData.users || [];
+      courses   = courseData.courses || courseData || [];
+      offlineCache('hod_lecturers', { lecturers, courses });
+    } catch(e) {
+      const _c = offlineRead('hod_lecturers');
+      if (_c) { lecturers = _c.lecturers || []; courses = _c.courses || []; _isOff = true; }
+      else { content.innerHTML = `<div class="card"><p style="color:#ef4444;">${e.message}</p></div>`; return; }
+    }
+  }
+  {
 
     // Build map: lecturerId → [course titles]
     const coursesByLecturer = {};
@@ -3557,8 +3594,6 @@ async function renderHodLecturers() {
             </div>`;
           }).join('')}
       </div>`;
-  } catch(e) {
-    content.innerHTML = `<div class="card"><p style="color:#ef4444;">${e.message}</p></div>`;
   }
 }
 
@@ -3567,12 +3602,20 @@ let _hodCachedStudents = null;
 async function renderHodStudents() {
   const content = document.getElementById('main-content');
   content.innerHTML = '<div class="loading">Loading students…</div>';
+  if (!isOnline()) {
+    const _c = offlineRead('hod_students');
+    if (_c) { _hodCachedStudents = _c; _renderHodLevelCards(content, _c); return; }
+    content.innerHTML = `<div style="text-align:center;padding:60px 20px"><div style="font-size:48px;margin-bottom:12px">📡</div><div style="font-size:18px;font-weight:700">You're Offline</div><p style="color:var(--text-muted);margin-top:8px">Connect once while online to cache this page.</p></div>`; return;
+  }
   try {
     const dept = currentUser.department ? '&department=' + encodeURIComponent(currentUser.department) : '';
     const data = await api('/api/users?role=student&limit=500' + dept);
     _hodCachedStudents = data.users || [];
+    offlineCache('hod_students', _hodCachedStudents);
     _renderHodLevelCards(content, _hodCachedStudents);
   } catch(e) {
+    const _c = offlineRead('hod_students');
+    if (_c) { _hodCachedStudents = _c; _renderHodLevelCards(content, _c); return; }
     content.innerHTML = `<div class="card"><p style="color:#ef4444;">${e.message}</p></div>`;
   }
 }
@@ -3681,6 +3724,7 @@ function _renderHodLevelStudents(level, allStudents) {
                 <td style="padding:11px 14px">
                   ${u.sessionType ? `<span style="background:#fff7ed;color:#c2410c;padding:2px 9px;border-radius:20px;font-size:11px;font-weight:600">${esc(u.sessionType)}</span>` : '—'}
                   ${u.semester ? `<span style="font-size:11px;color:var(--text-muted);margin-left:4px">Sem ${esc(u.semester)}</span>` : ''}
+                  ${u.academicYear ? `<span style="font-size:10px;color:var(--text-muted);margin-left:4px">${esc(u.academicYear)}</span>` : ''}
                 </td>
                 <td style="padding:11px 14px"><span class="tag ${u.isApproved ? 'tag-green' : 'tag-amber'}">${u.isApproved ? 'Active' : 'Pending'}</span></td>
                 <td style="padding:11px 14px"><button class="btn btn-xs btn-secondary" onclick="hodViewStudentAttendance('${u._id}','${(u.name||'').replace(/'/g,"\\'")}')">Attendance</button></td>
@@ -5002,12 +5046,17 @@ async function renderSuperadminDashboard(content) {
 
 
 async function renderLecturerDashboard(content) {
-  const [sessionsData, coursesData, quizzesData, meetingsData] = await Promise.all([
+  let _ld = !isOnline() ? offlineRead('lecturer_dashboard') : null;
+  if (!isOnline() && !_ld) { content.innerHTML = `<div style="text-align:center;padding:60px 20px"><div style="font-size:48px;margin-bottom:12px">📡</div><div style="font-size:18px;font-weight:700">You're Offline</div><p style="color:var(--text-muted);margin-top:8px">Connect once while online to cache this page.</p></div>`; return; }
+  const [sessionsData, coursesData, quizzesData, meetingsData] = _ld
+    ? [_ld.sessionsData, _ld.coursesData, _ld.quizzesData, _ld.meetingsData]
+    : await Promise.all([
     api('/api/attendance-sessions?limit=5').catch(() => ({ sessions: [], pagination: { total: 0 } })),
     api('/api/courses').catch(() => ({ courses: [] })),
     api('/api/lecturer/quizzes').catch(() => ({ quizzes: [] })),
     api('/api/meetings?limit=10').catch(() => ({ data: [] })),
   ]);
+  if (!_ld) offlineCache('lecturer_dashboard', { sessionsData, coursesData, quizzesData, meetingsData });
 
   const totalStudents  = coursesData.courses.reduce((sum, c) => sum + (c.enrolledStudents?.length || 0), 0);
   const activeCourses  = coursesData.courses.length;
@@ -5868,7 +5917,11 @@ async function viewStudentQuizResult(quizId) {
 }
 
 async function renderStudentDashboard(content) {
-  const [attendance, coursesData, quizzesData, meetingsData, activeSessionData, upcomingAsgData] = await Promise.all([
+  let _sd = !isOnline() ? offlineRead('student_dashboard') : null;
+  if (!isOnline() && !_sd) { content.innerHTML = `<div style="text-align:center;padding:60px 20px"><div style="font-size:48px;margin-bottom:12px">📡</div><div style="font-size:18px;font-weight:700">You're Offline</div><p style="color:var(--text-muted);margin-top:8px">Connect once while online to cache this page.</p></div>`; return; }
+  const [attendance, coursesData, quizzesData, meetingsData, activeSessionData, upcomingAsgData] = _sd
+    ? [_sd.attendance, _sd.coursesData, _sd.quizzesData, _sd.meetingsData, _sd.activeSessionData, _sd.upcomingAsgData]
+    : await Promise.all([
     api('/api/attendance-sessions/my-attendance?limit=5').catch(() => ({ records: [], pagination: { total: 0 } })),
     api('/api/courses').catch(() => ({ courses: [] })),
     api('/api/student/quizzes').catch(() => ({ quizzes: [] })),
@@ -5876,6 +5929,7 @@ async function renderStudentDashboard(content) {
     api('/api/attendance-sessions/active').catch(() => ({ session: null })),
     api('/api/student/assignments/upcoming').catch(() => ({ assignments: [] })),
   ]);
+  if (!_sd) offlineCache('student_dashboard', { attendance, coursesData, quizzesData, meetingsData, activeSessionData, upcomingAsgData });
 
   const totalCheckins = attendance.pagination.total;
   const enrolledCourses = coursesData.courses.length;
@@ -6025,12 +6079,17 @@ async function renderStudentDashboard(content) {
 }
 
 async function renderAdminDashboard(content) {
-  const [sessionsData, usersData, pendingData, announcementsData] = await Promise.all([
+  let _ad = !isOnline() ? offlineRead('admin_dashboard') : null;
+  if (!isOnline() && !_ad) { content.innerHTML = `<div style="text-align:center;padding:60px 20px"><div style="font-size:48px;margin-bottom:12px">📡</div><div style="font-size:18px;font-weight:700">You're Offline</div><p style="color:var(--text-muted);margin-top:8px">Connect once while online to cache this page.</p></div>`; return; }
+  const [sessionsData, usersData, pendingData, announcementsData] = _ad
+    ? [_ad.sessionsData, _ad.usersData, _ad.pendingData, _ad.announcementsData]
+    : await Promise.all([
     api('/api/attendance-sessions?limit=5').catch(() => ({ sessions: [], pagination: { total: 0 } })),
     api('/api/users').catch(() => ({ users: [] })),
     api('/api/approvals/pending').catch(() => ({ pending: [] })),
     api('/api/announcements').catch(() => ({ announcements: [] })),
   ]);
+  if (!_ad) offlineCache('admin_dashboard', { sessionsData, usersData, pendingData, announcementsData });
 
   const activeSessions = sessionsData.sessions.filter(s => ['active', 'live', 'paused', 'locked'].includes(s.status)).length;
   // Auto-refresh every 30s if there are active sessions
@@ -7397,9 +7456,22 @@ async function renderUsers(filterRole='', filterDept='', filterSearch='') {
   const content = document.getElementById('main-content');
   if (!content) return;
   content.innerHTML = '<div style="padding:40px;text-align:center;color:var(--text-muted)">Loading users…</div>';
+  if (!isOnline()) {
+    const _c = offlineRead('users_list');
+    if (_c) {
+      _cachedUsers = _c;
+      window._hodDepts = [...new Set(_c.filter(u => u.role==='hod' && u.department).map(u => u.department))].sort();
+      const mode = currentUser.company?.mode || 'corporate';
+      if (mode === 'academic') _renderUserDeptCards(content, _c, filterSearch);
+      else _renderUsersCorporateTable(content, _c, filterRole, filterDept, filterSearch);
+      return;
+    }
+    content.innerHTML = `<div style="text-align:center;padding:60px 20px"><div style="font-size:48px;margin-bottom:12px">📡</div><div style="font-size:18px;font-weight:700">You're Offline</div><p style="color:var(--text-muted);margin-top:8px">Connect once while online to cache this page.</p></div>`; return;
+  }
   try {
     const data = await api('/api/users');
     _cachedUsers = data.users || [];
+    offlineCache('users_list', _cachedUsers);
     window._hodDepts = [...new Set(_cachedUsers.filter(u => u.role==='hod' && u.department).map(u => u.department))].sort();
     const mode = currentUser.company?.mode || 'corporate';
     if (mode === 'academic') {
@@ -7408,6 +7480,15 @@ async function renderUsers(filterRole='', filterDept='', filterSearch='') {
       _renderUsersCorporateTable(content, _cachedUsers, filterRole, filterDept, filterSearch);
     }
   } catch(e) {
+    const _c = offlineRead('users_list');
+    if (_c) {
+      _cachedUsers = _c;
+      window._hodDepts = [...new Set(_c.filter(u => u.role==='hod' && u.department).map(u => u.department))].sort();
+      const mode = currentUser.company?.mode || 'corporate';
+      if (mode === 'academic') _renderUserDeptCards(content, _c, filterSearch);
+      else _renderUsersCorporateTable(content, _c, filterRole, filterDept, filterSearch);
+      return;
+    }
     content.innerHTML = `<div class="card"><p style="color:#ef4444">Error loading users: ${e.message}</p></div>`;
   }
 }
@@ -8066,6 +8147,17 @@ async function showCreateUserModal() {
               </select>
             </div>
           </div>
+          <div class="form-group">
+            <label>Academic Year <span style="color:red">*</span></label>
+            <select id="new-user-academic-year" style="width:100%;padding:9px 12px;border:1.5px solid var(--border);border-radius:8px;font-size:13px">
+              <option value="">— Select Academic Year —</option>
+              ${(() => {
+                const yr = new Date().getFullYear();
+                return [yr-1, yr, yr+1].map(y => `<option value="${y}/${y+1}" ${y === yr ? 'selected' : ''}>${y}/${y+1}</option>`).join('');
+              })()}
+            </select>
+            <p style="font-size:11px;color:var(--text-light);margin-top:4px">The academic year this student is enrolled in.</p>
+          </div>
         </div>
         <div class="form-group">
           <label>Phone Number <span style="color:red">*</span></label>
@@ -8129,16 +8221,19 @@ async function createUser() {
       const studentGroup= document.getElementById('new-user-group')?.value?.trim().toUpperCase();
       const sessionType = document.getElementById('new-user-session-type')?.value;
       const semester    = document.getElementById('new-user-semester')?.value;
+      const academicYear = document.getElementById('new-user-academic-year')?.value;
       if (!programme)    { toastWarning('Please select the student\'s programme (e.g. BSc, HND).'); return; }
       if (!studentLevel) { toastWarning('Please select the student\'s level.'); return; }
       if (!studentGroup) { toastWarning('Please enter the student\'s group (e.g. A, B, C).'); return; }
       if (!sessionType)  { toastWarning('Please select the session type (Morning, Evening etc.).'); return; }
       if (!semester)     { toastWarning('Please select the semester.'); return; }
+      if (!academicYear) { toastWarning('Please select the academic year.'); return; }
       body.programme    = programme;
       body.studentLevel = studentLevel;
       body.studentGroup = studentGroup;
       body.sessionType  = sessionType;
       body.semester     = semester;
+      body.academicYear = academicYear;
     }
     const phone = document.getElementById('new-user-phone').value.trim();
     if (!phone) { toastWarning('Phone number is required.'); return; }
@@ -8305,8 +8400,23 @@ async function renderMeetings() {
   const content = document.getElementById('main-content');
   if (!content) return;
   content.innerHTML = '<div style="padding:32px;text-align:center;color:var(--text-muted);">Loading meetings…</div>';
+  if (!isOnline()) {
+    const _c = offlineRead('meetings');
+    if (_c) { /* render below */ Object.assign(arguments, [_c]); }
+    else { content.innerHTML = `<div style="text-align:center;padding:60px 20px"><div style="font-size:48px;margin-bottom:12px">📡</div><div style="font-size:18px;font-weight:700">You're Offline</div><p style="color:var(--text-muted);margin-top:8px">Connect once while online to cache this page.</p></div>`; return; }
+  }
+  const _meetingsCached = !isOnline() ? offlineRead('meetings') : null;
+  let data;
+  if (_meetingsCached) { data = _meetingsCached; }
+  else {
+    try { data = await api('/api/meetings'); offlineCache('meetings', data); }
+    catch(e) {
+      const _c = offlineRead('meetings');
+      if (_c) { data = _c; }
+      else { content.innerHTML = `<div class="card"><p style="color:#ef4444;">${e.message}</p></div>`; return; }
+    }
+  }
   try {
-    const data = await api('/api/meetings');
     const canCreate = ['manager', 'lecturer'].includes(currentUser.role);
     const canManageExisting = ['manager', 'lecturer', 'admin', 'superadmin', 'hod'].includes(currentUser.role);
 
@@ -15031,13 +15141,26 @@ async function renderLecturerTimetable() {
   const content = document.getElementById('main-content');
   if (!content) return;
   content.innerHTML = '<div class="loading">Loading timetable…</div>';
-  try {
-    const [slotData, courseData] = await Promise.all([
-      api('/api/timetable'),
-      api('/api/courses').catch(() => api('/api/lecturer/quizzes').then(d => ({ courses: [] })).catch(() => ({ courses: [] }))),
-    ]);
-    _timetableSlots   = slotData.slots   || [];
-    _timetableCourses = (courseData.courses || courseData || []);
+  if (!isOnline()) {
+    const _c = offlineRead('lecturer_timetable');
+    if (_c) { _timetableSlots = _c.slots || []; _timetableCourses = _c.courses || []; }
+    else { content.innerHTML = `<div style="text-align:center;padding:60px 20px"><div style="font-size:48px;margin-bottom:12px">📡</div><div style="font-size:18px;font-weight:700">You're Offline</div><p style="color:var(--text-muted);margin-top:8px">Connect once while online to cache this page.</p></div>`; return; }
+  } else {
+    try {
+      const [slotData, courseData] = await Promise.all([
+        api('/api/timetable'),
+        api('/api/courses').catch(() => api('/api/lecturer/quizzes').then(d => ({ courses: [] })).catch(() => ({ courses: [] }))),
+      ]);
+      _timetableSlots   = slotData.slots   || [];
+      _timetableCourses = (courseData.courses || courseData || []);
+      offlineCache('lecturer_timetable', { slots: _timetableSlots, courses: _timetableCourses });
+    } catch(e) {
+      const _c = offlineRead('lecturer_timetable');
+      if (_c) { _timetableSlots = _c.slots || []; _timetableCourses = _c.courses || []; }
+      else { content.innerHTML = `<div class="card"><p style="color:var(--danger)">Error: ${e.message}</p></div>`; return; }
+    }
+  }
+  {
 
     const isAdminView = ['admin','superadmin','manager'].includes(currentUser?.role);
     const ttTitle    = isAdminView ? 'All Timetables' : 'My Timetable';
@@ -15076,8 +15199,6 @@ async function renderLecturerTimetable() {
           </div>`
         : `<div style="background:#fff;border:1px solid #e8eaed;border-radius:14px;overflow-x:auto;box-shadow:0 1px 4px rgba(0,0,0,.05)">${_timetableGrid(_timetableSlots, true)}</div>`
       }`;
-  } catch(e) {
-    content.innerHTML = `<div class="card"><p style="color:var(--danger)">Error: ${e.message}</p></div>`;
   }
 }
 
@@ -15085,9 +15206,23 @@ async function renderStudentTimetable() {
   const content = document.getElementById('main-content');
   if (!content) return;
   content.innerHTML = '<div class="loading">Loading timetable…</div>';
-  try {
-    const slotData = await api('/api/timetable');
-    const slots = slotData.slots || [];
+  let slots = [];
+  if (!isOnline()) {
+    const _c = offlineRead('student_timetable');
+    if (_c) { slots = _c.slots || []; }
+    else { content.innerHTML = `<div style="text-align:center;padding:60px 20px"><div style="font-size:48px;margin-bottom:12px">📡</div><div style="font-size:18px;font-weight:700">You're Offline</div><p style="color:var(--text-muted);margin-top:8px">Connect once while online to cache this page.</p></div>`; return; }
+  } else {
+    try {
+      const slotData = await api('/api/timetable');
+      slots = slotData.slots || [];
+      offlineCache('student_timetable', slotData);
+    } catch(e) {
+      const _c = offlineRead('student_timetable');
+      if (_c) { slots = _c.slots || []; }
+      else { content.innerHTML = `<div class="card"><p style="color:var(--danger)">Error: ${e.message}</p></div>`; return; }
+    }
+  }
+  {
     const isClassRep = currentUser.isClassRep;
     const isHod = currentUser.role === 'hod';
     content.innerHTML = `
@@ -15117,8 +15252,6 @@ async function renderStudentTimetable() {
           </div>`
         : `<div style="background:#fff;border:1px solid #e8eaed;border-radius:14px;overflow-x:auto;box-shadow:0 1px 4px rgba(0,0,0,.05)">${_timetableGrid(slots, false)}</div>`
       }`;
-  } catch(e) {
-    content.innerHTML = `<div class="card"><p style="color:var(--danger)">Error: ${e.message}</p></div>`;
   }
 }
 
