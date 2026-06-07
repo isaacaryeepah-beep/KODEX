@@ -2901,6 +2901,8 @@ function navigateTo(view) {
   if (window._empClockTimer) { clearInterval(window._empClockTimer); window._empClockTimer = null; }
   // Stop thread poll when leaving messages
   if (view !== 'messages') _stopThreadPoll();
+  // Stop QR camera stream if navigating away from mark-attendance
+  if (view !== 'mark-attendance' && typeof _stopQrScanner === 'function') _stopQrScanner();
   currentView = view;
   document.querySelectorAll('.sidebar-nav a').forEach(a => a.classList.remove('active'));
   const navEl = document.getElementById(`nav-${view}`);
@@ -11788,7 +11790,7 @@ async function renderMarkAttendance() {
     ` : `
       <div class="card">
         <div class="card-title">Enter Attendance Code</div>
-        <p style="font-size:13px;color:var(--text-muted);margin-bottom:14px">Type the 6-digit code shown on the classroom device screen.</p>
+        <p style="font-size:13px;color:var(--text-muted);margin-bottom:14px">Type the 6-digit code shown on the classroom device screen, or scan the QR code.</p>
         <div class="form-group">
           <label>6-Digit Code</label>
           <input type="text" id="mark-code-input" placeholder="000000" maxlength="6" inputmode="numeric"
@@ -11796,11 +11798,158 @@ async function renderMarkAttendance() {
             onkeydown="if(event.key==='Enter') submitCodeMark('${deviceIp}')">
         </div>
         <div id="mark-code-msg" style="display:none;padding:10px 14px;border-radius:8px;font-size:13px;margin-bottom:12px"></div>
-        <button class="btn btn-primary" onclick="submitCodeMark('${deviceIp}')" style="width:100%">Mark Attendance</button>
+        <button class="btn btn-primary" onclick="submitCodeMark('${deviceIp}')" style="width:100%;margin-bottom:10px">Mark Attendance</button>
+        <button class="btn btn-secondary" onclick="openQrScanner()" style="width:100%">📷 Scan QR Code Instead</button>
+        <div id="qr-scanner-area" style="display:none;margin-top:14px"></div>
       </div>
     `}
   `;
   document.getElementById('mark-code-input')?.focus();
+}
+
+let _qrScanStream = null;
+let _qrScanRaf = null;
+
+function _stopQrScanner() {
+  if (_qrScanRaf) { cancelAnimationFrame(_qrScanRaf); _qrScanRaf = null; }
+  if (_qrScanStream) { _qrScanStream.getTracks().forEach(t => t.stop()); _qrScanStream = null; }
+}
+
+async function openQrScanner() {
+  const area = document.getElementById('qr-scanner-area');
+  if (!area) return;
+
+  // Toggle off if already open
+  if (area.style.display !== 'none') {
+    _stopQrScanner();
+    area.style.display = 'none';
+    area.innerHTML = '';
+    return;
+  }
+
+  area.style.display = 'block';
+  area.innerHTML = '<div style="text-align:center;padding:20px;font-size:13px;color:var(--text-muted)">Starting camera…</div>';
+
+  // Load jsQR lazily from CDN
+  if (!window.jsQR) {
+    await new Promise((resolve, reject) => {
+      const s = document.createElement('script');
+      s.src = 'https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.min.js';
+      s.onload = resolve; s.onerror = reject;
+      document.head.appendChild(s);
+    }).catch(() => {
+      area.innerHTML = '<div style="color:var(--danger);font-size:13px;padding:12px">Could not load QR scanner. Please enter the code manually.</div>';
+    });
+    if (!window.jsQR) return;
+  }
+
+  let stream;
+  try {
+    stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' }, audio: false });
+  } catch (err) {
+    area.innerHTML = '<div style="color:var(--danger);font-size:13px;padding:12px">Camera access denied. Please enter the code manually or allow camera permission.</div>';
+    return;
+  }
+  _qrScanStream = stream;
+
+  area.innerHTML = `
+    <div style="position:relative;border-radius:10px;overflow:hidden;background:#000;max-width:100%">
+      <video id="qr-video" autoplay playsinline muted style="width:100%;display:block;max-height:260px;object-fit:cover"></video>
+      <canvas id="qr-canvas" style="display:none"></canvas>
+      <div style="position:absolute;inset:0;pointer-events:none;display:flex;align-items:center;justify-content:center">
+        <div style="width:180px;height:180px;border:3px solid rgba(255,255,255,.8);border-radius:12px;box-shadow:0 0 0 4000px rgba(0,0,0,.3)"></div>
+      </div>
+    </div>
+    <p style="font-size:12px;color:var(--text-muted);text-align:center;margin-top:8px">Point at the QR code on the classroom screen</p>
+    <button class="btn btn-secondary btn-sm" onclick="openQrScanner()" style="width:100%;margin-top:6px">Cancel</button>`;
+
+  const video = document.getElementById('qr-video');
+  const canvas = document.getElementById('qr-canvas');
+  video.srcObject = stream;
+  await video.play().catch(() => {});
+
+  const scan = () => {
+    if (!video.videoWidth) { _qrScanRaf = requestAnimationFrame(scan); return; }
+    canvas.width = video.videoWidth;
+    canvas.height = video.videoHeight;
+    const ctx = canvas.getContext('2d');
+    ctx.drawImage(video, 0, 0);
+    const img = ctx.getImageData(0, 0, canvas.width, canvas.height);
+    const result = window.jsQR(img.data, img.width, img.height, { inversionAttempts: 'dontInvert' });
+    if (result?.data) {
+      _stopQrScanner();
+      area.style.display = 'none';
+      area.innerHTML = '';
+      // Extract qr_token from the encoded URL
+      try {
+        const url = new URL(result.data);
+        const qrToken = url.searchParams.get('qr_token');
+        const qrCode  = url.searchParams.get('qr_code');
+        if (qrToken) {
+          _submitQrToken(qrToken, qrCode);
+        } else {
+          // Maybe raw 6-digit code was encoded
+          const raw = result.data.replace(/\D/g, '');
+          if (raw.length === 6) {
+            const inp = document.getElementById('mark-code-input');
+            if (inp) { inp.value = raw; inp.dispatchEvent(new Event('input')); }
+          } else {
+            toastError('Unrecognised QR code. Enter the code manually.');
+          }
+        }
+      } catch(_) {
+        const raw = result.data.replace(/\D/g, '');
+        if (raw.length === 6) {
+          const inp = document.getElementById('mark-code-input');
+          if (inp) { inp.value = raw; }
+        } else {
+          toastError('Unrecognised QR code. Enter the code manually.');
+        }
+      }
+      return;
+    }
+    _qrScanRaf = requestAnimationFrame(scan);
+  };
+  _qrScanRaf = requestAnimationFrame(scan);
+}
+
+async function _submitQrToken(qrToken, qrCode) {
+  const content = document.getElementById('main-content');
+  if (content) {
+    content.innerHTML = `
+      <div class="card" style="text-align:center;padding:48px 24px;max-width:400px;margin:40px auto">
+        <div style="font-size:48px;margin-bottom:16px">⏳</div>
+        <div style="font-size:18px;font-weight:700">Marking your attendance…</div>
+        <p style="color:var(--text-light);font-size:13px;margin-top:8px">Please wait</p>
+      </div>`;
+  }
+  try {
+    await api('/api/attendance-sessions/mark', {
+      method: 'POST',
+      signal: AbortSignal.timeout(30000),
+      body: JSON.stringify({ qrToken, method: 'qr_mark' }),
+    });
+    if (content) {
+      content.innerHTML = `
+        <div class="card" style="text-align:center;padding:48px 24px;max-width:400px;margin:40px auto;border-left:4px solid var(--success)">
+          <div style="font-size:56px;margin-bottom:16px">✅</div>
+          <div style="font-size:20px;font-weight:800;color:var(--success)">Attendance Marked!</div>
+          <p style="color:var(--text-light);font-size:13px;margin-top:8px">You have been checked in successfully.</p>
+          <button class="btn btn-primary" style="margin-top:20px" onclick="navigateTo('my-attendance')">View My Attendance</button>
+        </div>`;
+    }
+  } catch(e) {
+    if (content) {
+      const expired = e.message?.toLowerCase().includes('expired');
+      content.innerHTML = `
+        <div class="card" style="text-align:center;padding:48px 24px;max-width:400px;margin:40px auto;border-left:4px solid var(--danger)">
+          <div style="font-size:56px;margin-bottom:16px">${expired ? '⏰' : '❌'}</div>
+          <div style="font-size:20px;font-weight:800;color:var(--danger)">${expired ? 'QR Code Expired' : 'Failed'}</div>
+          <p style="color:var(--text-light);font-size:13px;margin-top:8px">${expired ? 'This QR code has expired. Ask your lecturer for a fresh one.' : esc(e.message || 'Failed')}</p>
+          <button class="btn btn-secondary" style="margin-top:20px" onclick="navigateTo('mark-attendance')">Go Back</button>
+        </div>`;
+    }
+  }
 }
 
 function showQrEntry() {
