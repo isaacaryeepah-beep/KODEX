@@ -90,12 +90,13 @@ exports.poll = async (req, res) => {
     const cmd = company.esp32PendingCommand;
     if (cmd && cmd.action) {
       const delivered = {
-        action:    cmd.action,
-        sessionId: cmd.sessionId || null,
-        title:     cmd.title     || null,
-        seed:      cmd.seed      || cmd.sessionId || null, // seed = sessionId if not explicitly set
-        duration:  cmd.duration  || 300,
-        issuedAt:  cmd.issuedAt  || null,
+        action:     cmd.action,
+        sessionId:  cmd.sessionId || null,
+        title:      cmd.title     || null,
+        seed:       cmd.seed      || null, // never fall back to sessionId — wrong key = wrong code
+        duration:   cmd.duration  || 300,
+        issuedAt:   cmd.issuedAt  || null,
+        serverTime: new Date().toISOString(), // lets ESP32 detect clock drift
       };
       company.esp32PendingCommand = { action: null, sessionId: null, title: null, seed: null, duration: 300, issuedAt: null };
       await company.save();
@@ -112,6 +113,7 @@ exports.poll = async (req, res) => {
     return res.json({
       command: null,
       activeSession: activeSession ? { id: activeSession._id, title: activeSession.title, startedAt: activeSession.startedAt } : null,
+      serverTime: new Date().toISOString(),
     });
   } catch (err) {
     if (err.status) return res.status(err.status).json({ error: err.message });

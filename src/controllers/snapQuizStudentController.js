@@ -43,6 +43,14 @@ const { analyzeSnapshot, generateQuizReport } = require("../services/aiProctorin
  */
 exports.listQuizzes = async (req, res) => {
   try {
+    const Course = require("../models/Course");
+    const enrolled = await Course.findOne({
+      _id: req.params.courseId,
+      companyId: req.companyId,
+      enrolledStudents: req.user._id,
+    }).select("_id").lean();
+    if (!enrolled) return res.status(403).json({ error: "You are not enrolled in this course" });
+
     const quizzes = await SnapQuiz.find({
       company:     req.companyId,
       course:      req.params.courseId,
@@ -107,18 +115,25 @@ exports.listQuizzes = async (req, res) => {
 
 /**
  * GET /student/snap-quizzes/quizzes
- * List all published snap quizzes across all courses the student is enrolled in.
+ * List all published snap quizzes for courses the student is enrolled in.
  */
 exports.listAllQuizzes = async (req, res) => {
   try {
-    // Show all published quizzes for this company.
-    // Enrollment is enforced at startAttempt — not here — so students can
-    // see what's available even if their lecturer hasn't enrolled them yet.
+    // Only show quizzes for courses this student is actually enrolled in.
+    const Course = require("../models/Course");
+    const enrolledCourses = await Course.find({
+      companyId: req.companyId,
+      enrolledStudents: req.user._id,
+      // Do not filter by isActive — archived courses may still have open quiz windows
+    }).select("_id").lean();
+    const enrolledIds = enrolledCourses.map(c => c._id);
+
     const showAll = req.query.showAll === "true";
     const filter = {
       company:     req.companyId,
       isPublished: true,
       isActive:    true,
+      course:      { $in: enrolledIds },
     };
     if (!showAll) {
       const now = new Date();

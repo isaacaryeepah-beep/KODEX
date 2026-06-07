@@ -73,7 +73,7 @@ exports.getCourseById = async (req, res) => {
     // Access checks
     const role = req.user.role;
     if (role === 'student') {
-      const enrolled = course.enrolledStudents.some(
+      const enrolled = (course.enrolledStudents || []).some(
         s => s._id.toString() === req.user._id.toString()
       );
       if (!enrolled) {
@@ -82,6 +82,8 @@ exports.getCourseById = async (req, res) => {
           message: 'You are not enrolled in this course.',
         });
       }
+      // Strip peer student data — students must not see each other's details
+      course.enrolledStudents = [];
     }
     if (role === 'lecturer') {
       const isOwner = course.lecturerId?._id?.toString() === req.user._id.toString();

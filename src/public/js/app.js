@@ -2901,6 +2901,8 @@ function navigateTo(view) {
   if (window._empClockTimer) { clearInterval(window._empClockTimer); window._empClockTimer = null; }
   // Stop thread poll when leaving messages
   if (view !== 'messages') _stopThreadPoll();
+  // Stop QR camera stream if navigating away from mark-attendance
+  if (view !== 'mark-attendance' && typeof _stopQrScanner === 'function') _stopQrScanner();
   currentView = view;
   document.querySelectorAll('.sidebar-nav a').forEach(a => a.classList.remove('active'));
   const navEl = document.getElementById(`nav-${view}`);
@@ -3274,7 +3276,7 @@ async function renderHodDashboard(content) {
     const sessions   = sessData.sessions   || [];
     const lecturers  = (lecturerData.users || []).length;
     const students   = (studentData.users  || []).length;
-    const activeSess = sessions.filter(s => s.active).length;
+    const activeSess = sessions.filter(s => ['active','live','paused','locked'].includes(s.status)).length;
 
     content.innerHTML = `
       <div class="page-header" style="display:flex;align-items:flex-start;justify-content:space-between;flex-wrap:wrap;gap:12px;">
@@ -3322,7 +3324,7 @@ async function renderHodDashboard(content) {
                   <div style="font-size:13px;font-weight:600;">${s.title || s.courseName || 'Untitled'}</div>
                   <div style="font-size:11px;color:var(--text-muted);">${s.createdBy?.name || '—'} · ${timeAgo(s.createdAt)}</div>
                 </div>
-                <span class="tag ${s.active ? 'tag-green' : 'tag-gray'}">${s.active ? 'Live' : 'Ended'}</span>
+                <span class="tag ${['active','live','paused','locked'].includes(s.status) ? 'tag-green' : 'tag-gray'}">${['active','live','paused','locked'].includes(s.status) ? 'Live' : 'Ended'}</span>
               </div>`).join('')
           }
           <button class="btn btn-secondary btn-sm" style="margin-top:12px;width:100%;" onclick="navigateTo('hod-sessions')">View All Sessions →</button>
@@ -3434,7 +3436,7 @@ async function renderHodSessions() {
                   <td style="padding:10px 12px;color:var(--text-muted);">${s.createdBy?.name || '—'}</td>
                   <td style="padding:10px 12px;">${s.attendanceCount ?? s.records?.length ?? '—'}</td>
                   <td style="padding:10px 12px;color:var(--text-muted);font-size:12px;">${fmtDate(s.createdAt)}</td>
-                  <td style="padding:10px 12px;"><span class="tag ${s.active ? 'tag-green' : 'tag-gray'}">${s.active ? 'Live' : 'Ended'}</span></td>
+                  <td style="padding:10px 12px;"><span class="tag ${['active','live','paused','locked'].includes(s.status) ? 'tag-green' : 'tag-gray'}">${['active','live','paused','locked'].includes(s.status) ? 'Live' : 'Ended'}</span></td>
                 </tr>`).join('')}
           </tbody>
         </table>
@@ -3578,7 +3580,7 @@ async function renderHodReports() {
     ]);
     const sessions  = sessData.sessions || [];
     const stats     = userStats || {};
-    const ended     = sessions.filter(s => !s.active);
+    const ended     = sessions.filter(s => !['active','live','paused','locked'].includes(s.status));
     const totalAtt  = ended.reduce((sum, s) => sum + (s.attendanceCount ?? s.records?.length ?? 0), 0);
     const avgAtt    = ended.length ? Math.round(totalAtt / ended.length) : 0;
 
@@ -3684,7 +3686,7 @@ async function renderHodReports() {
     const trendMap = {};
     const now = Date.now();
     const days30 = 30 * 24 * 60 * 60 * 1000;
-    sessions.filter(s => !s.active && new Date(s.createdAt) > now - days30).forEach(s => {
+    sessions.filter(s => !['active','live','paused','locked'].includes(s.status) && new Date(s.createdAt) > now - days30).forEach(s => {
       const d = new Date(s.createdAt).toLocaleDateString('en-GB', { day: '2-digit', month: 'short' });
       trendMap[d] = (trendMap[d] || 0) + (s.attendanceCount ?? s.records?.length ?? 0);
     });
@@ -3872,7 +3874,7 @@ async function hodExportCSV(type) {
       const hodDept = currentUser.department ? '&department=' + encodeURIComponent(currentUser.department) : '';
       const d = await api('/api/attendance-sessions?limit=200' + hodDept);
       headers = ['Session', 'Lecturer', 'Date', 'Attendance', 'Status'];
-      rows = (d.sessions || []).map(s => [s.title || s.courseName || 'Session', s.createdBy?.name || '', fmtDate(s.createdAt), s.attendanceCount ?? s.records?.length ?? 0, s.active ? 'Live' : 'Ended']);
+      rows = (d.sessions || []).map(s => [s.title || s.courseName || 'Session', s.createdBy?.name || '', fmtDate(s.createdAt), s.attendanceCount ?? s.records?.length ?? 0, ['active','live','paused','locked'].includes(s.status) ? 'Live' : 'Ended']);
       filename = 'DIKLY_Attendance_' + (currentUser.department || 'All') + '.csv';
     } else if (type === 'courses') {
       const d = await api('/api/hod/course-overview');
@@ -9770,7 +9772,7 @@ async function renderStudentQuizzes(content, showAll) {
           ${q.canAttempt && !q.canContinue ? `<button class="btn btn-primary" style="flex:1;" onclick="startStudentQuiz('${q._id}')">${q.attemptCount > 0 ? '↩ Retake' : '▶ Take Quiz'}</button>` : ''}
           ${q.isSubmitted ? `<button class="btn btn-secondary" style="flex:1;" onclick="viewStudentResult('${q._id}')">📊 View Result</button>` : ''}
           ${q.status === 'closed' && !q.isSubmitted ? `<div style="font-size:12px;color:var(--text-muted);padding:8px 0;">This quiz has closed.</div>` : ''}
-          ${q.status === 'upcoming' && !q.canAttempt ? `<div style="font-size:12px;color:#7c3aed;padding:8px 0;">Not open yet — check back at the start time.</div>` : ''}
+          ${q.status === 'upcoming' && !q.canAttempt ? `<div style="font-size:12px;color:#7c3aed;padding:8px 0;" id="quiz-countdown-${q._id}">Opens at ${new Date(q.startTime).toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'})}</div>` : ''}
         </div>
       </div>`;
     }
@@ -9787,6 +9789,20 @@ async function renderStudentQuizzes(content, showAll) {
         ? quizzes.map(q => quizCard(q)).join('')
         : '<div class="card"><div class="empty-state"><p>No quizzes available right now.</p><p style="font-size:13px;color:var(--text-muted);margin-top:4px;">Check back when your lecturer opens a quiz.</p></div></div>'}
     `;
+
+    // Auto-refresh when the next upcoming quiz opens (within 30 min)
+    if (window._quizOpenTimer) { clearTimeout(window._quizOpenTimer); window._quizOpenTimer = null; }
+    const upcoming = quizzes.filter(q => q.status === 'upcoming');
+    if (upcoming.length > 0) {
+      const next = upcoming.reduce((a, b) => new Date(a.startTime) < new Date(b.startTime) ? a : b);
+      const msUntilOpen = new Date(next.startTime) - Date.now();
+      if (msUntilOpen > 0 && msUntilOpen <= 30 * 60 * 1000) {
+        window._quizOpenTimer = setTimeout(() => {
+          const c = document.getElementById('main-content');
+          if (c && currentView === 'quizzes') renderStudentQuizzes(c, showAll);
+        }, msUntilOpen + 500);
+      }
+    }
   } catch (e) {
     content.innerHTML = `<div class="card"><p style="color:#ef4444;">Error: ${e.message}</p></div>`;
   }
@@ -9804,7 +9820,11 @@ async function startStudentQuiz(quizId) {
     const timeLimit = data.timeLimit || 30;
     const attempt = data.attempt;
     const startedAt = new Date(attempt.startedAt);
-    const endTime = new Date(startedAt.getTime() + timeLimit * 60 * 1000);
+    // Correct for clock drift: use server time offset so timer is accurate
+    const clockOffset = data.serverTime ? (new Date(data.serverTime) - Date.now()) : 0;
+    const attemptEnd = new Date(startedAt.getTime() + timeLimit * 60 * 1000);
+    const quizEnd = data.quizEndTime ? new Date(data.quizEndTime) : null;
+    const endTime = quizEnd && quizEnd < attemptEnd ? quizEnd : attemptEnd;
 
     content.innerHTML = `
       <div class="page-header" style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;">
@@ -9860,7 +9880,7 @@ async function startStudentQuiz(quizId) {
     window._quizQuestions = questions;
 
     function updateTimer() {
-      const now = new Date();
+      const now = new Date(Date.now() + clockOffset);
       const remaining = Math.max(0, endTime - now);
       const mins = Math.floor(remaining / 60000);
       const secs = Math.floor((remaining % 60000) / 1000);
@@ -11677,23 +11697,56 @@ async function renderMarkAttendance() {
   // Check if arriving via QR scan deep link
   if (await handleQrScan()) return;
 
-  // ── Step 1: Discover classroom device (mandatory for code marking) ───────────
-  // The device's WiFi hotspot is the only accepted proximity proof.
-  // No device found = no attendance. This runs whether the phone has internet
-  // or not — the device at 192.168.4.1 is always the entry point.
+  // ── Step 1: Fetch active session from server first ───────────────────────────
   content.innerHTML = `
     <div class="page-header"><h2>Mark Attendance</h2><p>Check in to active sessions</p></div>
     <div class="card" style="text-align:center;padding:32px 20px">
       <div style="font-size:32px;margin-bottom:12px">📡</div>
-      <div style="font-size:16px;font-weight:700;margin-bottom:6px">Looking for classroom device…</div>
-      <p style="font-size:13px;color:var(--text-light)">Make sure your phone is connected to the classroom WiFi hotspot.</p>
+      <div style="font-size:16px;font-weight:700;margin-bottom:6px">Checking for active sessions…</div>
     </div>`;
 
-  const deviceFound = await discoverESP32();
+  let serverSession = null;
+  if (isOnline()) {
+    try {
+      const data = await api('/api/attendance-sessions/active');
+      serverSession = data.session;
+      if (serverSession) offlineCache('activeSession', serverSession);
+    } catch (e) { /* server unreachable */ }
+  } else {
+    serverSession = offlineCache('activeSession') || null;
+  }
 
-  if (!deviceFound) {
+  // Does this session require an ESP32 device for proximity?
+  const requiresDevice = !!(serverSession?.deviceId);
+
+  // ── Step 2: ESP32 discovery (only when session requires a device) ─────────────
+  let deviceFound = false;
+  let deviceSession = null;
+
+  if (requiresDevice || !serverSession) {
+    // Show searching message only when device is needed
     content.innerHTML = `
       <div class="page-header"><h2>Mark Attendance</h2><p>Check in to active sessions</p></div>
+      <div class="card" style="text-align:center;padding:32px 20px">
+        <div style="font-size:32px;margin-bottom:12px">📡</div>
+        <div style="font-size:16px;font-weight:700;margin-bottom:6px">Looking for classroom device…</div>
+        <p style="font-size:13px;color:var(--text-light)">Make sure your phone is connected to the classroom WiFi hotspot.</p>
+      </div>`;
+    deviceFound = await discoverESP32();
+    if (deviceFound) {
+      try { deviceSession = await esp32Api('/session'); } catch (e) {}
+    }
+  }
+
+  // If device is required but not found, block with clear instructions
+  if (requiresDevice && !deviceFound) {
+    content.innerHTML = `
+      <div class="page-header"><h2>Mark Attendance</h2><p>Check in to active sessions</p></div>
+      ${serverSession ? `<div class="card" style="border-left:4px solid var(--primary);margin-bottom:16px;padding:14px 16px">
+        <div style="font-size:11px;text-transform:uppercase;color:var(--primary);font-weight:700">Active Session</div>
+        <div style="font-size:16px;font-weight:700;margin-top:4px">${esc(serverSession.title || 'Attendance Session')}</div>
+        <div style="font-size:12px;color:var(--text-muted);margin-top:2px">You must connect to the classroom device to mark attendance.</div>
+      </div>` : ''}
       <div class="card" style="text-align:center;padding:40px 20px">
         <div style="font-size:52px;margin-bottom:14px">📴</div>
         <div style="font-size:18px;font-weight:700;margin-bottom:10px">Connect to Classroom WiFi First</div>
@@ -11707,28 +11760,11 @@ async function renderMarkAttendance() {
     return;
   }
 
-  // ── Step 2: Get session info from device (no internet needed) ────────────────
-  let deviceSession = null;
-  try {
-    deviceSession = await esp32Api('/session');
-  } catch (e) { /* device online but no session yet */ }
-
-  // Also fetch from server if online (richer session info: course title, etc.)
-  let serverSession = null;
-  if (isOnline()) {
-    try {
-      const data = await api('/api/attendance-sessions/active');
-      serverSession = data.session;
-      if (serverSession) offlineCache('activeSession', serverSession);
-    } catch (e) { /* server unreachable */ }
-  }
-
   const session = serverSession || (deviceSession?.sessionId ? deviceSession : null);
 
   // ── Step 3: No active session ────────────────────────────────────────────────
   if (!session) {
-    content.innerHTML = `
-      <div class="page-header"><h2>Mark Attendance</h2><p>Check in to active sessions</p></div>
+    const connectedBanner = deviceFound ? `
       <div class="card" style="border-left:4px solid var(--success);background:#f0fdf4;padding:14px 16px;margin-bottom:16px">
         <div style="display:flex;align-items:center;gap:10px">
           <span style="font-size:22px">📶</span>
@@ -11737,7 +11773,10 @@ async function renderMarkAttendance() {
             <div style="font-size:12px;color:#166534;margin-top:2px">Proximity verified — you are in the classroom.</div>
           </div>
         </div>
-      </div>
+      </div>` : '';
+    content.innerHTML = `
+      <div class="page-header"><h2>Mark Attendance</h2><p>Check in to active sessions</p></div>
+      ${connectedBanner}
       <div class="card" style="text-align:center;padding:40px 20px">
         <div style="font-size:48px;margin-bottom:14px">⏳</div>
         <div style="font-size:18px;font-weight:700;margin-bottom:8px">No Active Session</div>
@@ -11755,22 +11794,24 @@ async function renderMarkAttendance() {
       .catch(() => false);
   }
 
-  // ── Step 5: Render code entry ────────────────────────────────────────────────
+  // ── Step 5: Render session + code entry ──────────────────────────────────────
   const deviceIp = esp32IP || '192.168.4.1';
-  content.innerHTML = `
-    <div class="page-header"><h2>Mark Attendance</h2><p>Check in to active sessions</p></div>
-
-    <div class="card" style="border-left:4px solid var(--success);background:#f0fdf4;padding:14px 16px;margin-bottom:16px">
-      <div style="display:flex;align-items:center;gap:10px">
-        <span style="font-size:22px">📶</span>
-        <div>
-          <div style="font-weight:700;font-size:14px;color:#15803d">Connected to classroom device</div>
-          <div style="font-size:12px;color:#166534;margin-top:2px">
-            Proximity verified — you are in the classroom.${!isOnline() ? ' Offline mode — attendance will sync automatically.' : ''}
+  const proximityBanner = deviceFound
+    ? `<div class="card" style="border-left:4px solid var(--success);background:#f0fdf4;padding:14px 16px;margin-bottom:16px">
+        <div style="display:flex;align-items:center;gap:10px">
+          <span style="font-size:22px">📶</span>
+          <div>
+            <div style="font-weight:700;font-size:14px;color:#15803d">Connected to classroom device</div>
+            <div style="font-size:12px;color:#166534;margin-top:2px">
+              Proximity verified — you are in the classroom.${!isOnline() ? ' Offline mode — attendance will sync automatically.' : ''}
+            </div>
           </div>
         </div>
-      </div>
-    </div>
+      </div>`
+    : '';
+  content.innerHTML = `
+    <div class="page-header"><h2>Mark Attendance</h2><p>Check in to active sessions</p></div>
+    ${proximityBanner}
 
     <div class="card" style="border-left:4px solid var(--primary);margin-bottom:16px">
       <div style="font-size:11px;text-transform:uppercase;color:var(--primary);font-weight:700;letter-spacing:0.5px">Active Session</div>
@@ -11788,7 +11829,7 @@ async function renderMarkAttendance() {
     ` : `
       <div class="card">
         <div class="card-title">Enter Attendance Code</div>
-        <p style="font-size:13px;color:var(--text-muted);margin-bottom:14px">Type the 6-digit code shown on the classroom device screen.</p>
+        <p style="font-size:13px;color:var(--text-muted);margin-bottom:14px">Type the 6-digit code shown on the classroom device screen, or scan the QR code.</p>
         <div class="form-group">
           <label>6-Digit Code</label>
           <input type="text" id="mark-code-input" placeholder="000000" maxlength="6" inputmode="numeric"
@@ -11796,11 +11837,158 @@ async function renderMarkAttendance() {
             onkeydown="if(event.key==='Enter') submitCodeMark('${deviceIp}')">
         </div>
         <div id="mark-code-msg" style="display:none;padding:10px 14px;border-radius:8px;font-size:13px;margin-bottom:12px"></div>
-        <button class="btn btn-primary" onclick="submitCodeMark('${deviceIp}')" style="width:100%">Mark Attendance</button>
+        <button class="btn btn-primary" onclick="submitCodeMark('${deviceIp}')" style="width:100%;margin-bottom:10px">Mark Attendance</button>
+        <button class="btn btn-secondary" onclick="openQrScanner()" style="width:100%">📷 Scan QR Code Instead</button>
+        <div id="qr-scanner-area" style="display:none;margin-top:14px"></div>
       </div>
     `}
   `;
   document.getElementById('mark-code-input')?.focus();
+}
+
+let _qrScanStream = null;
+let _qrScanRaf = null;
+
+function _stopQrScanner() {
+  if (_qrScanRaf) { cancelAnimationFrame(_qrScanRaf); _qrScanRaf = null; }
+  if (_qrScanStream) { _qrScanStream.getTracks().forEach(t => t.stop()); _qrScanStream = null; }
+}
+
+async function openQrScanner() {
+  const area = document.getElementById('qr-scanner-area');
+  if (!area) return;
+
+  // Toggle off if already open
+  if (area.style.display !== 'none') {
+    _stopQrScanner();
+    area.style.display = 'none';
+    area.innerHTML = '';
+    return;
+  }
+
+  area.style.display = 'block';
+  area.innerHTML = '<div style="text-align:center;padding:20px;font-size:13px;color:var(--text-muted)">Starting camera…</div>';
+
+  // Load jsQR lazily from CDN
+  if (!window.jsQR) {
+    await new Promise((resolve, reject) => {
+      const s = document.createElement('script');
+      s.src = 'https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.min.js';
+      s.onload = resolve; s.onerror = reject;
+      document.head.appendChild(s);
+    }).catch(() => {
+      area.innerHTML = '<div style="color:var(--danger);font-size:13px;padding:12px">Could not load QR scanner. Please enter the code manually.</div>';
+    });
+    if (!window.jsQR) return;
+  }
+
+  let stream;
+  try {
+    stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' }, audio: false });
+  } catch (err) {
+    area.innerHTML = '<div style="color:var(--danger);font-size:13px;padding:12px">Camera access denied. Please enter the code manually or allow camera permission.</div>';
+    return;
+  }
+  _qrScanStream = stream;
+
+  area.innerHTML = `
+    <div style="position:relative;border-radius:10px;overflow:hidden;background:#000;max-width:100%">
+      <video id="qr-video" autoplay playsinline muted style="width:100%;display:block;max-height:260px;object-fit:cover"></video>
+      <canvas id="qr-canvas" style="display:none"></canvas>
+      <div style="position:absolute;inset:0;pointer-events:none;display:flex;align-items:center;justify-content:center">
+        <div style="width:180px;height:180px;border:3px solid rgba(255,255,255,.8);border-radius:12px;box-shadow:0 0 0 4000px rgba(0,0,0,.3)"></div>
+      </div>
+    </div>
+    <p style="font-size:12px;color:var(--text-muted);text-align:center;margin-top:8px">Point at the QR code on the classroom screen</p>
+    <button class="btn btn-secondary btn-sm" onclick="openQrScanner()" style="width:100%;margin-top:6px">Cancel</button>`;
+
+  const video = document.getElementById('qr-video');
+  const canvas = document.getElementById('qr-canvas');
+  video.srcObject = stream;
+  await video.play().catch(() => {});
+
+  const scan = () => {
+    if (!video.videoWidth) { _qrScanRaf = requestAnimationFrame(scan); return; }
+    canvas.width = video.videoWidth;
+    canvas.height = video.videoHeight;
+    const ctx = canvas.getContext('2d');
+    ctx.drawImage(video, 0, 0);
+    const img = ctx.getImageData(0, 0, canvas.width, canvas.height);
+    const result = window.jsQR(img.data, img.width, img.height, { inversionAttempts: 'dontInvert' });
+    if (result?.data) {
+      _stopQrScanner();
+      area.style.display = 'none';
+      area.innerHTML = '';
+      // Extract qr_token from the encoded URL
+      try {
+        const url = new URL(result.data);
+        const qrToken = url.searchParams.get('qr_token');
+        const qrCode  = url.searchParams.get('qr_code');
+        if (qrToken) {
+          _submitQrToken(qrToken, qrCode);
+        } else {
+          // Maybe raw 6-digit code was encoded
+          const raw = result.data.replace(/\D/g, '');
+          if (raw.length === 6) {
+            const inp = document.getElementById('mark-code-input');
+            if (inp) { inp.value = raw; inp.dispatchEvent(new Event('input')); }
+          } else {
+            toastError('Unrecognised QR code. Enter the code manually.');
+          }
+        }
+      } catch(_) {
+        const raw = result.data.replace(/\D/g, '');
+        if (raw.length === 6) {
+          const inp = document.getElementById('mark-code-input');
+          if (inp) { inp.value = raw; }
+        } else {
+          toastError('Unrecognised QR code. Enter the code manually.');
+        }
+      }
+      return;
+    }
+    _qrScanRaf = requestAnimationFrame(scan);
+  };
+  _qrScanRaf = requestAnimationFrame(scan);
+}
+
+async function _submitQrToken(qrToken, qrCode) {
+  const content = document.getElementById('main-content');
+  if (content) {
+    content.innerHTML = `
+      <div class="card" style="text-align:center;padding:48px 24px;max-width:400px;margin:40px auto">
+        <div style="font-size:48px;margin-bottom:16px">⏳</div>
+        <div style="font-size:18px;font-weight:700">Marking your attendance…</div>
+        <p style="color:var(--text-light);font-size:13px;margin-top:8px">Please wait</p>
+      </div>`;
+  }
+  try {
+    await api('/api/attendance-sessions/mark', {
+      method: 'POST',
+      signal: AbortSignal.timeout(30000),
+      body: JSON.stringify({ qrToken, method: 'qr_mark' }),
+    });
+    if (content) {
+      content.innerHTML = `
+        <div class="card" style="text-align:center;padding:48px 24px;max-width:400px;margin:40px auto;border-left:4px solid var(--success)">
+          <div style="font-size:56px;margin-bottom:16px">✅</div>
+          <div style="font-size:20px;font-weight:800;color:var(--success)">Attendance Marked!</div>
+          <p style="color:var(--text-light);font-size:13px;margin-top:8px">You have been checked in successfully.</p>
+          <button class="btn btn-primary" style="margin-top:20px" onclick="navigateTo('my-attendance')">View My Attendance</button>
+        </div>`;
+    }
+  } catch(e) {
+    if (content) {
+      const expired = e.message?.toLowerCase().includes('expired');
+      content.innerHTML = `
+        <div class="card" style="text-align:center;padding:48px 24px;max-width:400px;margin:40px auto;border-left:4px solid var(--danger)">
+          <div style="font-size:56px;margin-bottom:16px">${expired ? '⏰' : '❌'}</div>
+          <div style="font-size:20px;font-weight:800;color:var(--danger)">${expired ? 'QR Code Expired' : 'Failed'}</div>
+          <p style="color:var(--text-light);font-size:13px;margin-top:8px">${expired ? 'This QR code has expired. Ask your lecturer for a fresh one.' : esc(e.message || 'Failed')}</p>
+          <button class="btn btn-secondary" style="margin-top:20px" onclick="navigateTo('mark-attendance')">Go Back</button>
+        </div>`;
+    }
+  }
 }
 
 function showQrEntry() {
