@@ -126,6 +126,11 @@ const userSchema = new mongoose.Schema(
       trim: true,
       default: null, // e.g. "1", "2"
     },
+    academicYear: {
+      type: String,
+      trim: true,
+      default: null, // e.g. "2024/2025"
+    },
     branch: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "Branch",

@@ -64,7 +64,7 @@ exports.getUserStats = async (req, res) => {
 
 exports.createUser = async (req, res) => {
   try {
-    const { password, role, phone, department, programme, studentLevel, studentGroup, sessionType, semester } = req.body;
+    const { password, role, phone, department, programme, studentLevel, studentGroup, sessionType, semester, academicYear } = req.body;
     const name        = req.body.name        ? req.body.name.trim()                : req.body.name;
     const email       = req.body.email       ? req.body.email.trim().toLowerCase() : req.body.email;
     const IndexNumber = req.body.IndexNumber ? req.body.IndexNumber.trim().toUpperCase() : req.body.IndexNumber;
@@ -182,6 +182,7 @@ exports.createUser = async (req, res) => {
       if (studentGroup) userData.studentGroup = studentGroup.trim().toUpperCase();
       if (sessionType)  userData.sessionType  = sessionType.trim();
       if (semester)     userData.semester     = semester.trim();
+      if (academicYear) userData.academicYear = academicYear.trim();
     }
 
     if (targetRole === "employee") {
