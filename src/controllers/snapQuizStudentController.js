@@ -94,11 +94,16 @@ exports.listQuizzes = async (req, res) => {
     submittedCounts.forEach(c => { submittedMap[c._id.toString()] = c.count; });
     qCounts.forEach(c         => { qCountMap[c._id.toString()]    = c.count; });
 
+    const nowMs = Date.now();
     return res.json({
       quizzes: quizzes.map(q => {
         const id          = q._id.toString();
         const isSubmitted = (submittedMap[id] || 0) > 0;
-        const canAttempt  = q.status === "open" && !isSubmitted;
+        // Allow attempts as soon as startTime passes even if watchdog hasn't
+        // flipped status to "open" yet (up to 30s lag).
+        const isInWindow  = q.status === "open" ||
+          (q.status === "published" && q.startTime && nowMs >= new Date(q.startTime).getTime());
+        const canAttempt  = isInWindow && !isSubmitted;
         return {
           ...q,
           questionCount:  qCountMap[id] || 0,
@@ -179,11 +184,14 @@ exports.listAllQuizzes = async (req, res) => {
     submittedCounts.forEach(c => { submittedMap[c._id.toString()] = c.count; });
     qCounts.forEach(c         => { qCountMap[c._id.toString()]    = c.count; });
 
+    const nowMs = Date.now();
     return res.json({
       quizzes: quizzes.map(q => {
         const id          = q._id.toString();
         const isSubmitted = (submittedMap[id] || 0) > 0;
-        const canAttempt  = q.status === "open" && !isSubmitted;
+        const isInWindow  = q.status === "open" ||
+          (q.status === "published" && q.startTime && nowMs >= new Date(q.startTime).getTime());
+        const canAttempt  = isInWindow && !isSubmitted;
         return {
           ...q,
           questionCount:  qCountMap[id] || 0,
