@@ -70,7 +70,36 @@ app.use((req, res, next) => {
 });
 
 app.use(helmet({
-  contentSecurityPolicy: false,
+  contentSecurityPolicy: {
+    useDefaults: true,
+    directives: {
+      // Self + CDN scripts (Jitsi, Stream, fonts)
+      "script-src": [
+        "'self'",
+        "https://meet.jit.si",
+        "https://8x8.vc",
+        "https://cdn.jsdelivr.net",
+        "https://unpkg.com",
+        "'unsafe-inline'",   // Required for inline event handlers in legacy HTML pages
+      ],
+      "style-src":  ["'self'", "https://fonts.googleapis.com", "'unsafe-inline'"],
+      "font-src":   ["'self'", "https://fonts.gstatic.com", "data:"],
+      "img-src":    ["'self'", "data:", "blob:", "https:"],
+      "media-src":  ["'self'", "blob:", "https:"],
+      "connect-src": [
+        "'self'",
+        "https://dikly.sbs", "https://api.dikly.sbs",
+        "https://dikly.live", "https://api.dikly.live",
+        "https://getstream.io", "wss://getstream.io",
+        "wss://dikly.sbs", "wss://dikly.live",
+        "https://livekit.cloud", "wss://livekit.cloud",
+      ],
+      "frame-src":  ["'self'", "https://meet.jit.si", "https://8x8.vc"],
+      "object-src": ["'none'"],
+      "base-uri":   ["'self'"],
+      "form-action": ["'self'"],
+    },
+  },
   crossOriginEmbedderPolicy: false,
   referrerPolicy: { policy: "strict-origin-when-cross-origin" },
   hsts: { maxAge: 31536000, includeSubDomains: true },

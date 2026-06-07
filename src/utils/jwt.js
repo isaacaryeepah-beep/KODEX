@@ -13,11 +13,19 @@ const _secret = () => {
   return process.env.JWT_SECRET;
 };
 
+// Refresh tokens use a dedicated secret so a leaked access token cannot be used
+// to forge refresh tokens. Falls back to JWT_SECRET suffixed with "-refresh" so
+// existing single-secret deployments continue to work after rotation.
+const _refreshSecret = () => {
+  if (!process.env.JWT_SECRET) throw new Error("JWT_SECRET is not set in environment variables!");
+  return process.env.JWT_REFRESH_SECRET || (process.env.JWT_SECRET + "-refresh");
+};
+
 const generateToken = (userId) =>
   jwt.sign({ id: userId, type: "access" }, _secret(), { expiresIn: ACCESS_TOKEN_EXPIRY });
 
 const generateRefreshToken = (userId) =>
-  jwt.sign({ id: userId, type: "refresh" }, _secret(), { expiresIn: REFRESH_TOKEN_EXPIRY });
+  jwt.sign({ id: userId, type: "refresh" }, _refreshSecret(), { expiresIn: REFRESH_TOKEN_EXPIRY });
 
 const verifyToken = (token) => {
   const decoded = jwt.verify(token, _secret());
@@ -27,7 +35,7 @@ const verifyToken = (token) => {
 };
 
 const verifyRefreshToken = (token) => {
-  const decoded = jwt.verify(token, _secret());
+  const decoded = jwt.verify(token, _refreshSecret());
   if (decoded.type !== "refresh") throw new Error("Invalid token type");
   return decoded;
 };
