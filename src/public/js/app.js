@@ -8670,8 +8670,6 @@ async function showCreateMeetingModal() {
               <option value="meeting">General Meeting</option>
               ${currentUser?.company?.mode !== 'corporate' ? `
               <option value="lecture">Lecture</option>
-              <option value="proctored_quiz">Proctored Quiz</option>
-              <option value="snap_quiz">Snap Quiz</option>
               <option value="oral_exam">Oral Exam</option>
               <option value="live_assessment">Live Assessment</option>
               ` : ''}
