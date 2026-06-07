@@ -106,10 +106,8 @@ exports.loadMeeting = async (req, res, next) => {
       isActive: true,
     });
     if (!meeting) {
-      // Check if meeting exists at all (helps diagnose company mismatch vs deleted)
-      const exists = await Meeting.exists({ _id: req.params.id });
-      if (!exists) return res.status(404).json({ message: 'Meeting not found' });
-      return res.status(403).json({ message: 'You do not have access to this meeting' });
+      // Always return 404 — do not reveal whether a meeting exists in another tenant
+      return res.status(404).json({ message: 'Meeting not found' });
     }
     req.meeting = meeting;
     next();
