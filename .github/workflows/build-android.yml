@@ -2,7 +2,7 @@ name: Build Android (Capacitor)
 
 on:
   push:
-    branches: [main]
+    branches: [main, claude/update-resume-aVv3d]
   workflow_dispatch:
 
 jobs:
@@ -41,6 +41,7 @@ jobs:
           mkdir -p android/app/src/main/res/drawable
           mkdir -p android/app/src/main/res/drawable-land
           python3 scripts/gen_icons.py
+          python3 scripts/gen_splash.py
 
       - name: Ensure strings.xml
         run: |
