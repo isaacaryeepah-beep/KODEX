@@ -10,6 +10,8 @@ const Question  = require("../models/Question");
 const Quiz      = require("../models/Quiz");
 const { UPLOAD_DIR } = require("../middleware/questionBankUpload");
 
+const escapeRegex = s => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
 function parseJsonField(val, fallback) {
   if (Array.isArray(val)) return val;
   if (typeof val === "string") {
@@ -47,7 +49,7 @@ exports.list = async (req, res) => {
     const { topic, search, page = 1, limit = 50 } = req.query;
     const filter = { company: req.user.company, createdBy: req.user._id };
     if (topic) filter.topic = topic;
-    if (search) filter.questionText = { $regex: search, $options: "i" };
+    if (search) filter.questionText = { $regex: escapeRegex(search), $options: "i" };
 
     const [questions, total, topics] = await Promise.all([
       QuestionBank.find(filter)

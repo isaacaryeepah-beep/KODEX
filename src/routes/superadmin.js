@@ -2,6 +2,7 @@ const express      = require("express");
 const jwt          = require("jsonwebtoken");
 const authenticate = require("../middleware/auth");
 const { requireRole } = require("../middleware/role");
+const { loginLimiter } = require('../middleware/rateLimiter');
 const Company      = require("../models/Company");
 const User         = require("../models/User");
 const Device       = require("../models/Device");
@@ -11,10 +12,12 @@ const PlatformSettings  = require("../models/PlatformSettings");
 const bcrypt = require("bcryptjs");
 const emailService = require("../services/emailService");
 
+const escapeRegex = s => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
 const router = express.Router();
 
 // ── POST /api/superadmin/login (public — no auth needed) ─────────────────────
-router.post("/login", async (req, res) => {
+router.post("/login", loginLimiter, async (req, res) => {
   try {
     const { email, password } = req.body;
     if (!email || !password) return res.status(400).json({ error: "Email and password required" });
@@ -515,8 +518,8 @@ router.get("/users", async (req, res) => {
     const query = { role: { $ne: "superadmin" } };
     if (role) query.role = role;
     if (search) query.$or = [
-      { name: { $regex: search, $options: "i" } },
-      { email: { $regex: search, $options: "i" } },
+      { name: { $regex: escapeRegex(search), $options: "i" } },
+      { email: { $regex: escapeRegex(search), $options: "i" } },
     ];
 
     let companyIds;

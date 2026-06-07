@@ -390,7 +390,17 @@ exports.deleteUser = async (req, res) => {
 // Generates a random password for each student; returns a downloadable results list.
 exports.bulkImportStudents = async (req, res) => {
   const multer = require("multer");
-  const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 2 * 1024 * 1024 } }).single("csv");
+  const upload = multer({
+    storage: multer.memoryStorage(),
+    limits: { fileSize: 2 * 1024 * 1024 },
+    fileFilter: (req, file, cb) => {
+      if (file.mimetype === 'text/csv' || file.mimetype === 'text/plain' || file.originalname.endsWith('.csv')) {
+        cb(null, true);
+      } else {
+        cb(new Error('Only CSV files are allowed'), false);
+      }
+    },
+  }).single("csv");
 
   upload(req, res, async (uploadErr) => {
     if (uploadErr) return res.status(400).json({ error: uploadErr.message });
