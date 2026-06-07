@@ -1,0 +1,47 @@
+name: CodeQL Security Audit
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  schedule:
+    # Run every Monday at 02:00 UTC for ongoing coverage
+    - cron: "0 2 * * 1"
+  workflow_dispatch:
+
+jobs:
+  analyze:
+    name: Analyze (${{ matrix.language }})
+    runs-on: ubuntu-latest
+    permissions:
+      security-events: write
+      actions: read
+      contents: read
+
+    strategy:
+      fail-fast: false
+      matrix:
+        language: [javascript-typescript]
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Initialize CodeQL
+        uses: github/codeql-action/init@v3
+        with:
+          languages: ${{ matrix.language }}
+          queries: security-and-quality
+          # Extra query packs for Node.js / Express specific patterns
+          packs: |
+            codeql/javascript-queries
+
+      - name: Autobuild
+        uses: github/codeql-action/autobuild@v3
+
+      - name: Perform CodeQL Analysis
+        uses: github/codeql-action/analyze@v3
+        with:
+          category: "/language:${{ matrix.language }}"
+          upload: true
