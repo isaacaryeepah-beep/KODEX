@@ -52,7 +52,7 @@ const router  = express.Router();
 
 const authenticate               = require("../middleware/auth");
 const { requireCompanyScope }    = require("../middleware/requireCompanyScope");
-const { lecturerOrHod }          = require("../middleware/requireAcademicRole");
+const { lecturerOrHod, hodOrAdmin } = require("../middleware/requireAcademicRole");
 const requireAssessmentOwnership = require("../middleware/requireAssessmentOwnership");
 const SnapQuiz                   = require("../models/SnapQuiz");
 const ctrl                       = require("../controllers/snapQuizLecturerController");
@@ -69,6 +69,10 @@ const ownsQuiz = requireAssessmentOwnership(SnapQuiz, {
   getAssessmentId: (req) => req.params.quizId,
   skipCourseCheck: true, // Courses are assigned via Course.lecturerId, not CourseLecturerAssignment
 });
+
+// ─── HOD / Admin overview (all lecturers' quizzes) ───────────────────────────
+
+router.get("/department-overview", hodOrAdmin, ctrl.listAllCompanyQuizzes);
 
 // ─── Quiz CRUD ────────────────────────────────────────────────────────────────
 

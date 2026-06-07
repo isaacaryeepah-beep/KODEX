@@ -1052,6 +1052,8 @@ function _isCriticalViolation(type, quiz) {
   if (type === "copy_paste"      && quiz.preventCopyPaste)          return true;
   if (type === "right_click"     && quiz.preventRightClick)         return true;
   if (type === "print_screen"    && quiz.preventPrintScreen)        return true;
+  // Mobile backgrounding is treated as tab_switch equivalent when mobileMonitoring is on
+  if (type === "app_backgrounded" && quiz.mobileMonitoring !== false && quiz.terminateOnTabSwitch) return true;
   // Always-critical: security and proctoring events (not configurable)
   return [
     "session_conflict", "devtools_open", "multiple_windows",

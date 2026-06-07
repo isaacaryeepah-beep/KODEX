@@ -135,6 +135,32 @@ exports.listQuizzes = async (req, res) => {
 };
 
 /**
+ * GET /lecturer/snap-quizzes/department-overview
+ * HOD / admin: all quizzes across the company (not scoped to createdBy).
+ * Used by the quiz monitoring dashboard to show quizzes from all lecturers.
+ */
+exports.listAllCompanyQuizzes = async (req, res) => {
+  try {
+    const { status, page = 1, limit = 100 } = req.query;
+    const filter = { company: req.companyId };
+    if (status) filter.status = status;
+
+    const skip = (Number(page) - 1) * Number(limit);
+    const [quizzes, total] = await Promise.all([
+      SnapQuiz.find(filter)
+        .populate("createdBy", "name email")
+        .sort({ createdAt: -1 }).skip(skip).limit(Number(limit)).lean(),
+      SnapQuiz.countDocuments(filter),
+    ]);
+
+    return res.json({ quizzes, total, page: Number(page), limit: Number(limit) });
+  } catch (err) {
+    console.error("[snapQuiz listAllCompanyQuizzes]", err);
+    return res.status(500).json({ error: "Internal server error" });
+  }
+};
+
+/**
  * GET /lecturer/snap-quizzes/:quizId
  */
 exports.getQuiz = async (req, res) => {

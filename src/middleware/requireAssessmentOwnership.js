@@ -93,8 +93,8 @@ const requireAssessmentOwnership = (Model, options = {}) => {
 
       req.assessment = assessment;
 
-      // Admin/superadmin: skip ownership and course checks.
-      if (req.user.role === "superadmin" || req.user.role === "admin") {
+      // Admin/superadmin/HOD: skip ownership and course checks.
+      if (["superadmin", "admin", "hod"].includes(req.user.role)) {
         return next();
       }
 
