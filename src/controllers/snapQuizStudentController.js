@@ -124,7 +124,7 @@ exports.listAllQuizzes = async (req, res) => {
     const enrolledCourses = await Course.find({
       companyId: req.companyId,
       enrolledStudents: req.user._id,
-      isActive: true,
+      // Do not filter by isActive — archived courses may still have open quiz windows
     }).select("_id").lean();
     const enrolledIds = enrolledCourses.map(c => c._id);
 
