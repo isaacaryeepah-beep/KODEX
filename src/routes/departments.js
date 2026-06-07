@@ -37,17 +37,16 @@ router.get("/", ...mw, canView, async (req, res) => {
       .populate("parentDepartment", "name code")
       .sort({ name: 1 });
 
-    // Attach live headcount
-    const withCount = await Promise.all(
-      depts.map(async (d) => {
-        const count = await User.countDocuments({
-          company:    req.user.company,
-          department: d.name,
-          isActive:   true,
-        });
-        return { ...d.toObject(), headcount: count };
-      })
-    );
+    // Attach live headcount via a single aggregation instead of N+1 queries
+    const deptNames = depts.map(d => d.name);
+    const countAgg  = await User.aggregate([
+      { $match: { company: req.user.company, department: { $in: deptNames }, isActive: true } },
+      { $group: { _id: "$department", headcount: { $sum: 1 } } },
+    ]);
+    const countMap = {};
+    countAgg.forEach(r => { countMap[r._id] = r.headcount; });
+
+    const withCount = depts.map(d => ({ ...d.toObject(), headcount: countMap[d.name] || 0 }));
 
     res.json({ departments: withCount });
   } catch (e) {

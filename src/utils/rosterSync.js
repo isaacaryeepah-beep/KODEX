@@ -35,7 +35,8 @@ async function syncStudentToRoster(studentId, companyId) {
     // Find roster entries for this index number (exact match — escape to prevent ReDoS)
     const escapedIdx = indexNum.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
     const rosterEntries = await StudentRoster.find({
-      studentId: { $regex: new RegExp(`^${escapedIdx}$`, 'i') }
+      studentId: { $regex: new RegExp(`^${escapedIdx}$`, 'i') },
+      company:   companyId,
     }).lean();
 
     if (!rosterEntries.length) return;
