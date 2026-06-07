@@ -323,7 +323,7 @@ router.delete("/companies/:id", async (req, res) => {
       require('../models/GradeBook').deleteMany({ company: companyId }),
       require('../models/PaymentLog').deleteMany({ company: companyId }),
       require('../models/JitsiMeeting').deleteMany({ companyId }),
-      require('../models/JitsiAttendance').deleteMany({ }),
+      require('../models/JitsiAttendance').deleteMany({ companyId }),
     ]);
 
     // Hard delete the company document
