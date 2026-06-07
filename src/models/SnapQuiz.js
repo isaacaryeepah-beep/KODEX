@@ -370,6 +370,7 @@ snapQuizSchema.virtual("isOpen").get(function () {
   if (!this.isPublished || !this.isActive) return false;
   const now = new Date();
   if (now < this.startTime) return false;
+  if (!this.endTime) return true;
   const closeTime = new Date(this.endTime.getTime() + (this.gracePeriodSeconds || 0) * 1000);
   return now <= closeTime;
 });

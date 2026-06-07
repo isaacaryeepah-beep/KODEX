@@ -136,7 +136,7 @@ exports.registerDevice = async (req, res) => {
     // Block if device already registered to another lecturer
     const existing = await Device.findOne({ deviceId });
     if (existing) {
-      if (existing.lecturerId.toString() !== lecturerId.toString()) {
+      if ((existing.lecturerId?.toString() || '') !== lecturerId.toString()) {
         return res.status(403).json({
           message: 'This ESP32 device is assigned to another lecturer and cannot be used for this session.'
         });
@@ -442,7 +442,7 @@ exports.updateNetworks = async (req, res) => {
 
     // Only owner or admin can update networks
     const isAdmin = ['admin', 'superadmin'].includes(req.user.role);
-    if (!isAdmin && device.lecturerId.toString() !== req.user._id.toString()) {
+    if (!isAdmin && (device.lecturerId?.toString() || '') !== req.user._id.toString()) {
       return res.status(403).json({
         message: 'This ESP32 device is assigned to another lecturer and cannot be used for this session.'
       });

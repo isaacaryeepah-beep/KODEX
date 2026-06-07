@@ -123,7 +123,7 @@ router.post("/sync/:courseId", ...mw, requireRole("admin", "superadmin"), async 
     const { courseId } = req.params;
     const company      = req.user.company;
 
-    const course = await Course.findOne({ _id: courseId, company }).lean();
+    const course = await Course.findOne({ _id: courseId, companyId: company }).lean();
     if (!course) return res.status(404).json({ error: "Course not found" });
 
     const studentIds = course.enrolledStudents || [];

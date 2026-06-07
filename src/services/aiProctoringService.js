@@ -55,7 +55,8 @@ async function analyzeSnapshot(imageBase64) {
       }],
     });
 
-    const raw = response.content[0]?.text?.trim() || '{}';
+    const rawText = response.content[0]?.text?.trim() || '{}';
+    const raw = rawText.replace(/^```json?\s*/i, '').replace(/```\s*$/i, '').trim();
     const result = JSON.parse(raw);
     // Validate expected shape; fall back to safe defaults for any missing booleans
     return {

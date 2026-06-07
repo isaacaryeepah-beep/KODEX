@@ -293,7 +293,7 @@ exports.closeQuiz = async (req, res) => {
     const activeAttempts = await SnapQuizAttempt.find({
       quiz:   quiz._id,
       status: "active",
-    }).select("_id company quiz startedAt");
+    }).select("_id company quiz startedAt student");
 
     const now = new Date();
     if (activeAttempts.length > 0) {
@@ -324,7 +324,7 @@ exports.closeQuiz = async (req, res) => {
           });
           // Upsert result document so the grade book has an entry.
           await SnapQuizResult.findOneAndUpdate(
-            { quiz: a.quiz, student: (await SnapQuizAttempt.findById(a._id).select("student").lean())?.student, company: a.company },
+            { quiz: a.quiz, student: a.student, company: a.company },
             {
               $set: {
                 attempt:         a._id,

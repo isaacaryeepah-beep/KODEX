@@ -611,6 +611,10 @@ exports.studentSubmit = (req, res) => {
         return res.status(400).json({ error: "Assignment has not been released yet" });
       }
 
+      if (!assignment.course) {
+        safeDeleteFile(req.file?.path);
+        return res.status(404).json({ error: "Course not found" });
+      }
       const enrolled = assignment.course.enrolledStudents.some((s) => s.toString() === req.user._id.toString());
       if (!enrolled) {
         safeDeleteFile(req.file?.path);

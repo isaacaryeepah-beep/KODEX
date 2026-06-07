@@ -139,9 +139,7 @@ const assignmentSchema = new mongoose.Schema(
 
 // ── Pre-save: recalculate totalMarks from embedded questions ──────────────────
 assignmentSchema.pre("save", function () {
-  if (this.questions && this.questions.length > 0) {
-    this.totalMarks = this.questions.reduce((sum, q) => sum + (q.marks || 1), 0);
-  }
+  this.totalMarks = (this.questions || []).reduce((sum, q) => sum + (q.marks || 1), 0);
 });
 
 // ── Indexes ───────────────────────────────────────────────────────────────────

@@ -629,7 +629,7 @@ exports.markAttendance = async (req, res) => {
       session = await AttendanceSession.findOne({
         _id: resolvedSessionId,
         company: req.user.company,
-        status: "active",
+        status: { $in: ["active", "live"] },
       });
     } else {
       // Auto-detect: find the most recent active session for courses the student is enrolled in.
@@ -1066,7 +1066,7 @@ exports.markAttendance = async (req, res) => {
           $set: {
             newDeviceFlag: true,
             flagged:  true,
-            flagNote: `Device fingerprint not in student's trusted-devices list (index: ${req.user.indexNumber || 'N/A'}) — auto-flagged for review`,
+            flagNote: `Device fingerprint not in student's trusted-devices list (index: ${req.user.IndexNumber || 'N/A'}) — auto-flagged for review`,
           },
         });
 
@@ -1078,11 +1078,11 @@ exports.markAttendance = async (req, res) => {
           userId:      req.user._id,
           deviceId:    clientDeviceId,
           eventType:   'new_device_for_user',
-          reason:      `${req.user.name} (index: ${req.user.indexNumber || req.user._id}) marked attendance from a device not in their trusted-devices list.`,
+          reason:      `${req.user.name} (index: ${req.user.IndexNumber || req.user._id}) marked attendance from a device not in their trusted-devices list.`,
           actionTaken: 'flagged',
         });
 
-        console.log(`[MARK] Untrusted device flagged for ${req.user.name} (${req.user.indexNumber}), device=${clientDeviceId}`);
+        console.log(`[MARK] Untrusted device flagged for ${req.user.name} (${req.user.IndexNumber}), device=${clientDeviceId}`);
         populated.newDeviceFlag = true;
         populated.flagged = true;
       }
