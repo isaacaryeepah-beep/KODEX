@@ -4,7 +4,7 @@
 // FROM address always resolves to the Gmail user so bounces reach a real inbox.
 
 // Always use the real Gmail address as FROM — no-reply@dikly.sbs has no mail server.
-const GMAIL_USER    = process.env.GMAIL_USER || 'nelsonkel78@gmail.com';
+const GMAIL_USER    = process.env.GMAIL_USER || '';
 const SUPPORT_EMAIL = GMAIL_USER;
 const _rawFrom      = process.env.EMAIL_FROM || `DIKLY <${GMAIL_USER}>`;
 const _safeFrom     = _rawFrom.includes('kodex.it.com') || _rawFrom.includes('dikly.it.com')

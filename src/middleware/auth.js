@@ -37,6 +37,9 @@ const authenticate = async (req, res, next) => {
         accountLocked: true,
       });
     }
+    if (user.isSuspended) {
+      return res.status(403).json({ error: "Account suspended. Contact your administrator." });
+    }
 
     req.user = user;
 

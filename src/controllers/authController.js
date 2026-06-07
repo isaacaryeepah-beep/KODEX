@@ -749,8 +749,8 @@ exports.login = async (req, res) => {
 
     const isMatch = await user.comparePassword(password);
     if (!isMatch) {
-      // Track failed attempts for students and employees; lock after 5 consecutive failures
-      if (user && ['student', 'employee'].includes(user.role)) {
+      // Track failed attempts for all non-superadmin roles; lock after 5 consecutive failures
+      if (user && user.role !== 'superadmin') {
         user.failedLoginAttempts = (user.failedLoginAttempts || 0) + 1;
         user.lastFailedLoginAt = new Date();
         if (user.failedLoginAttempts >= 5 && !user.isLocked) {
@@ -758,7 +758,9 @@ exports.login = async (req, res) => {
           user.lockedAt = new Date();
           user.lockReason = user.role === 'employee'
             ? 'Account locked after 5 failed login attempts. Contact your manager or admin.'
-            : 'Account locked after 5 failed login attempts. Contact your department HOD.';
+            : user.role === 'student'
+            ? 'Account locked after 5 failed login attempts. Contact your department HOD.'
+            : 'Account locked after 5 failed login attempts. Contact your institution admin.';
         }
         await user.save().catch(() => {});
       }
