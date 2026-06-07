@@ -505,6 +505,13 @@ const start = async () => {
     }
 
     try {
+      const snapQuizWatchdog = require("./services/snapQuizWatchdog");
+      snapQuizWatchdog.start();
+    } catch (e) {
+      console.error("[SnapQuizWatchdog] Failed to start:", e.message);
+    }
+
+    try {
       const { startAssignmentReminder } = require("./services/assignmentReminder");
       startAssignmentReminder();
     } catch (e) {

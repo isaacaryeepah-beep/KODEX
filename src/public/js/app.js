@@ -2837,6 +2837,7 @@ function buildSidebar() {
       links.push({ id: 'courses', label: 'Courses', icon: coursesIcon() });
       links.push({ id: 'course-videos', label: 'Course Videos', icon: svgIcon('<polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2" ry="2"/>') });
       links.push({ id: 'quizzes', label: 'Proctored/Snap Quiz', icon: quizzesIcon() });
+      links.push({ id: 'quiz-monitor', label: 'Quiz Monitor 🔴', icon: svgIcon('<path d="M1 6s4-2 11-2 11 2 11 2v3s-4 2-11 2S1 9 1 9V6z"/><path d="M1 6v12s4 2 11 2 11-2 11-2V6"/><line x1="12" y1="12" x2="12" y2="20"/>') });
       links.push({ id: 'timetable', label: 'Timetable', icon: svgIcon('<rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/>') });
       links.push({ id: 'question-bank', label: 'Question Bank', icon: svgIcon('<ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"/><path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"/>') });
       links.push({ id: 'assignments', label: 'Assignment', icon: assignmentsIcon() });
@@ -2980,6 +2981,7 @@ function navigateTo(view) {
     case 'courses': renderCourses(); break;
     case 'quizzes': renderQuizzes(); break;
     case 'quiz-history': renderStudentQuizHistory(); break;
+    case 'quiz-monitor': renderQuizMonitorPage(); break;
     case 'lecturer-performance': renderLecturerPerformance(); break;
     case 'timetable': (currentUser.role === 'student' || currentUser.role === 'hod') ? renderStudentTimetable() : renderLecturerTimetable(); break;
     case 'question-bank': renderQuestionBank(); break;
@@ -10733,6 +10735,252 @@ async function viewStudentResult(quizId) {
   }
 }
 
+// ── Snap Quiz Live Monitoring Dashboard ───────────────────────────────────────
+
+async function renderQuizMonitorPage() {
+  const content = document.getElementById('main-content');
+  content.innerHTML = '<div class="loading">Loading quiz list…</div>';
+  try {
+    const data = await api('/api/lecturer/snap-quizzes?status=open&limit=50');
+    const quizzes = data.quizzes || [];
+    if (!quizzes.length) {
+      content.innerHTML = `<div class="page-header"><div><h2>Quiz Monitor</h2><p>No open quizzes right now</p></div></div>
+        <div class="card" style="text-align:center;padding:48px">
+          <div style="font-size:36px;margin-bottom:12px">📋</div>
+          <p style="color:var(--text-muted)">Open a quiz from the <a href="#" onclick="navigateTo('quizzes');return false">Quizzes</a> page to see live student status here.</p>
+        </div>`;
+      return;
+    }
+    content.innerHTML = `
+      <div class="page-header"><div><h2>Quiz Monitor</h2><p>Select a quiz to watch live</p></div></div>
+      <div style="display:grid;gap:10px;max-width:800px">
+        ${quizzes.map(q => `
+          <div style="background:var(--card);border:1.5px solid #22c55e;border-radius:12px;padding:14px 18px;display:flex;align-items:center;justify-content:space-between;gap:12px;cursor:pointer" onclick="renderQuizLiveDashboard('${q._id}','${esc(q.title).replace(/'/g,"\\'")}')" onmouseover="this.style.boxShadow='0 4px 16px rgba(0,0,0,.1)'" onmouseout="this.style.boxShadow=''">
+            <div>
+              <div style="font-weight:700;font-size:14px">${esc(q.title)}</div>
+              <div style="font-size:11px;color:var(--text-muted);margin-top:3px">
+                <span style="background:#dcfce7;color:#166534;padding:2px 7px;border-radius:20px;font-size:10px;font-weight:700">LIVE</span>
+                · ${q.timeLimitMinutes} min
+                · Security: <strong>${q.securityLevel || 'medium'}</strong>
+              </div>
+            </div>
+            <button class="btn btn-primary btn-sm">Monitor →</button>
+          </div>`).join('')}
+      </div>`;
+  } catch (e) {
+    content.innerHTML = `<div class="card"><p>Error: ${e.message}</p></div>`;
+  }
+}
+
+let _quizMonitorWs = null;
+let _quizMonitorRefreshTimer = null;
+
+async function renderQuizLiveDashboard(quizId, quizTitle) {
+  const content = document.getElementById('main-content');
+  content.innerHTML = '<div class="loading">Connecting to live monitor…</div>';
+
+  // Cleanup previous ws
+  if (_quizMonitorWs) { try { _quizMonitorWs.close(); } catch(_) {} _quizMonitorWs = null; }
+  if (_quizMonitorRefreshTimer) { clearInterval(_quizMonitorRefreshTimer); _quizMonitorRefreshTimer = null; }
+
+  const render = async () => {
+    try {
+      const d = await api(`/api/lecturer/snap-quizzes/${quizId}/live-monitor`);
+      _renderQuizMonitorUI(d, quizId, quizTitle);
+    } catch (e) {
+      content.innerHTML = `<div class="card"><p>Error: ${e.message}</p><button class="btn btn-secondary btn-sm" onclick="renderQuizMonitorPage()">← Back</button></div>`;
+    }
+  };
+
+  await render();
+
+  // Connect WebSocket for live updates
+  try {
+    const token = localStorage.getItem('diklyToken') || sessionStorage.getItem('diklyToken') || '';
+    const wsUrl = (location.protocol === 'https:' ? 'wss' : 'ws') + '://' + location.host + '/ws/monitor?token=' + encodeURIComponent(token);
+    const ws = new WebSocket(wsUrl);
+    _quizMonitorWs = ws;
+    ws.onopen = () => ws.send(JSON.stringify({ type: 'subscribe', quizId }));
+    ws.onmessage = (ev) => {
+      try {
+        const msg = JSON.parse(ev.data);
+        if (msg.type && msg.type.startsWith('quiz:')) {
+          _handleQuizMonitorEvent(msg.type.replace('quiz:', ''), msg.payload);
+        }
+      } catch (_) {}
+    };
+    ws.onerror = ws.onclose = () => { _quizMonitorWs = null; };
+  } catch (_) {}
+
+  // Fallback: refresh stats every 20s in case WS is unavailable
+  _quizMonitorRefreshTimer = setInterval(render, 20000);
+}
+
+function _handleQuizMonitorEvent(eventType, payload) {
+  const feed = document.getElementById('qm-feed');
+  if (!feed) return;
+  const colors = { violation_logged: '#ef4444', attempt_started: '#22c55e', attempt_submitted: '#3b82f6', attempt_auto_submitted: '#f59e0b', heartbeat_missed: '#f97316', snapshot_analyzed: '#8b5cf6' };
+  const icons  = { violation_logged: '⚠️', attempt_started: '▶️', attempt_submitted: '✅', attempt_auto_submitted: '⏰', heartbeat_missed: '💔', snapshot_analyzed: '🤖' };
+  const labels = { violation_logged: 'Violation', attempt_started: 'Started', attempt_submitted: 'Submitted', attempt_auto_submitted: 'Auto-submitted', heartbeat_missed: 'Missed heartbeat', snapshot_analyzed: 'AI analysis' };
+  const color = colors[eventType] || '#64748b';
+  const icon  = icons[eventType]  || '📌';
+  const label = labels[eventType] || eventType;
+
+  const item = document.createElement('div');
+  item.style.cssText = `display:flex;align-items:flex-start;gap:10px;padding:8px 12px;border-left:3px solid ${color};background:${color}11;border-radius:0 8px 8px 0;margin-bottom:6px`;
+  item.innerHTML = `
+    <span style="font-size:14px;margin-top:1px">${icon}</span>
+    <div style="flex:1;min-width:0">
+      <div style="font-size:12px;font-weight:700;color:${color}">${label}</div>
+      <div style="font-size:11px;color:var(--text-muted);margin-top:1px">${payload.studentId ? 'Student: ...'+String(payload.studentId).slice(-6) : ''}${payload.violationType ? ' · '+payload.violationType : ''}${payload.causedTermination ? ' · <strong style="color:#ef4444">TERMINATED</strong>' : ''}</div>
+    </div>
+    <span style="font-size:10px;color:#94a3b8;white-space:nowrap">${new Date().toLocaleTimeString()}</span>`;
+  feed.prepend(item);
+  while (feed.children.length > 50) feed.removeChild(feed.lastChild);
+
+  // Update student row if present
+  if (payload.attemptId) {
+    const row = document.getElementById('qm-student-' + payload.attemptId);
+    if (row && eventType === 'violation_logged') {
+      const vc = row.querySelector('.qm-vcount');
+      if (vc) vc.textContent = (parseInt(vc.textContent) || 0) + 1;
+    }
+    if (row && (eventType === 'attempt_submitted' || eventType === 'attempt_auto_submitted')) {
+      row.style.opacity = '0.6';
+      const st = row.querySelector('.qm-status');
+      if (st) { st.textContent = eventType === 'attempt_auto_submitted' ? 'Auto-submitted' : 'Submitted'; st.style.color = '#22c55e'; }
+    }
+  }
+}
+
+function _renderQuizMonitorUI(d, quizId, quizTitle) {
+  const content = document.getElementById('main-content');
+  const { quiz, students, recentViolations, summary } = d;
+  const secColors = { low: '#22c55e', medium: '#6366f1', high: '#dc2626' };
+  const secColor = secColors[quiz.securityLevel] || '#6366f1';
+  const fmt = n => n ?? '—';
+
+  const studentRows = students.map(s => {
+    const statusColor = s.status === 'active' ? '#22c55e' : s.isTerminated ? '#ef4444' : '#64748b';
+    const statusLabel = s.isTerminated ? 'Terminated' : s.status === 'active' ? 'Active' : s.status === 'submitted' ? 'Submitted' : s.status === 'auto_submitted' ? 'Auto-submitted' : s.status;
+    const onlineDot = s.online ? '🟢' : s.status === 'active' ? '🔴' : '⚫';
+    const minutes = s.timeRemaining != null ? Math.floor(s.timeRemaining / 60) + ':' + String(s.timeRemaining % 60).padStart(2, '0') : '—';
+    return `<tr id="qm-student-${s.attemptId}" style="border-bottom:1px solid var(--border)">
+      <td style="padding:10px 12px">
+        <div style="font-weight:600;font-size:13px">${esc(s.student.name)}</div>
+        <div style="font-size:10px;color:var(--text-muted)">${esc(s.student.indexNumber || s.student.email)}</div>
+        <div style="font-size:10px;color:#94a3b8">${esc(s.platform)}</div>
+      </td>
+      <td style="padding:10px 12px">
+        ${onlineDot} <span class="qm-status" style="font-size:12px;font-weight:600;color:${statusColor}">${statusLabel}</span>
+      </td>
+      <td style="padding:10px 12px;text-align:center">
+        <span class="qm-vcount" style="font-size:13px;font-weight:700;color:${(s.violationCount||0) > 0 ? '#ef4444' : '#64748b'}">${s.violationCount||0}</span>
+      </td>
+      <td style="padding:10px 12px;text-align:center;font-size:12px;color:var(--text-muted)">${minutes}</td>
+      <td style="padding:10px 12px;text-align:center">
+        ${s.percentageScore != null ? `<span style="font-size:12px;font-weight:700">${s.percentageScore}%</span>` : '<span style="color:#94a3b8;font-size:11px">—</span>'}
+      </td>
+      <td style="padding:10px 12px;text-align:center">
+        <button class="btn btn-xs" style="font-size:10px" onclick="sqForceSubmit('${quizId}','${s.attemptId}','${esc(s.student.name).replace(/'/g,"\\'")}')">Force Submit</button>
+      </td>
+    </tr>`;
+  }).join('');
+
+  content.innerHTML = `
+    <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:18px;flex-wrap:wrap">
+      <div>
+        <div style="display:flex;align-items:center;gap:10px">
+          <button class="btn btn-secondary btn-sm" onclick="renderQuizMonitorPage()">← Back</button>
+          <h2 style="font-size:18px;font-weight:800;margin:0">${esc(quizTitle)}</h2>
+          <span style="background:#dcfce7;color:#166534;padding:3px 10px;border-radius:20px;font-size:11px;font-weight:700">● LIVE</span>
+        </div>
+        <div style="margin-top:4px;font-size:12px;color:var(--text-muted)">
+          Security: <span style="background:${secColor}22;color:${secColor};padding:1px 8px;border-radius:20px;font-size:11px;font-weight:700">${(quiz.securityLevel||'medium').toUpperCase()}</span>
+          · ${quiz.monitoringMode === 'ai' ? '🤖 AI Monitoring ON' : '📋 Standard monitoring'}
+          ${quiz.mobileMonitoring ? ' · 📱 Mobile' : ''}
+        </div>
+      </div>
+      <button class="btn btn-sm" style="background:#f1f5f9;border:1px solid var(--border)" onclick="renderQuizLiveDashboard('${quizId}','${esc(quizTitle).replace(/'/g,"\\'")}')">🔄 Refresh</button>
+    </div>
+
+    <!-- KPI row -->
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:10px;margin-bottom:18px">
+      ${[
+        { label:'Total', value:fmt(summary.total),     color:'#6366f1' },
+        { label:'Active', value:fmt(summary.active),   color:'#22c55e' },
+        { label:'Submitted', value:fmt(summary.submitted), color:'#3b82f6' },
+        { label:'Online now', value:fmt(summary.online),  color:'#10b981' },
+        { label:'Terminated', value:fmt(summary.terminated), color:'#ef4444' },
+      ].map(k => `<div style="background:var(--card);border:1.5px solid ${k.color}33;border-radius:12px;padding:14px;text-align:center">
+        <div style="font-size:22px;font-weight:800;color:${k.color}">${k.value}</div>
+        <div style="font-size:11px;color:var(--text-muted);margin-top:2px">${k.label}</div>
+      </div>`).join('')}
+    </div>
+
+    <div style="display:grid;grid-template-columns:1fr 300px;gap:16px;align-items:start">
+      <!-- Student table -->
+      <div style="background:var(--card);border:1px solid var(--border);border-radius:14px;overflow:hidden">
+        <div style="padding:12px 16px;border-bottom:1px solid var(--border);font-weight:700;font-size:13px">Students (${students.length})</div>
+        <div style="overflow-x:auto">
+          <table style="width:100%;border-collapse:collapse;font-size:12px">
+            <thead><tr style="background:var(--bg);border-bottom:1.5px solid var(--border)">
+              <th style="padding:8px 12px;text-align:left;font-size:11px;color:var(--text-muted);text-transform:uppercase">Student</th>
+              <th style="padding:8px 12px;text-align:left;font-size:11px;color:var(--text-muted);text-transform:uppercase">Status</th>
+              <th style="padding:8px 12px;text-align:center;font-size:11px;color:var(--text-muted);text-transform:uppercase">Violations</th>
+              <th style="padding:8px 12px;text-align:center;font-size:11px;color:var(--text-muted);text-transform:uppercase">Time left</th>
+              <th style="padding:8px 12px;text-align:center;font-size:11px;color:var(--text-muted);text-transform:uppercase">Score</th>
+              <th style="padding:8px 12px;text-align:center;font-size:11px;color:var(--text-muted);text-transform:uppercase">Action</th>
+            </tr></thead>
+            <tbody>${studentRows || '<tr><td colspan="6" style="text-align:center;padding:24px;color:var(--text-muted)">No students yet</td></tr>'}</tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- Live event feed -->
+      <div style="background:var(--card);border:1px solid var(--border);border-radius:14px;overflow:hidden">
+        <div style="padding:12px 16px;border-bottom:1px solid var(--border);font-weight:700;font-size:13px;display:flex;align-items:center;justify-content:space-between">
+          Live Events
+          <span style="width:8px;height:8px;border-radius:50%;background:#22c55e;display:inline-block" title="WebSocket connected"></span>
+        </div>
+        <div id="qm-feed" style="padding:10px;max-height:480px;overflow-y:auto">
+          ${recentViolations.length === 0
+            ? '<p style="font-size:12px;color:#94a3b8;text-align:center;padding:24px 0">No events yet</p>'
+            : recentViolations.map(v => `
+              <div style="display:flex;align-items:flex-start;gap:8px;padding:7px 10px;border-left:3px solid ${v.severity==='critical'?'#ef4444':v.severity==='warning'?'#f59e0b':'#94a3b8'};background:${v.severity==='critical'?'#fef2f2':v.severity==='warning'?'#fffbeb':'#f8fafc'};border-radius:0 8px 8px 0;margin-bottom:5px">
+                <div style="flex:1;min-width:0">
+                  <div style="font-size:11px;font-weight:700;color:${v.severity==='critical'?'#ef4444':'#f59e0b'}">${v.violationType?.replace(/_/g,' ') || 'Event'}</div>
+                  ${v.causedTermination ? '<div style="font-size:10px;color:#ef4444;font-weight:700">SESSION TERMINATED</div>' : ''}
+                </div>
+                <span style="font-size:10px;color:#94a3b8;white-space:nowrap">${v.occurredAt ? new Date(v.occurredAt).toLocaleTimeString() : ''}</span>
+              </div>`).join('')}
+        </div>
+      </div>
+    </div>`;
+}
+
+window.sqForceSubmit = async function(quizId, attemptId, studentName) {
+  if (!confirm(`Force-submit quiz for ${studentName}? This cannot be undone.`)) return;
+  try {
+    await api(`/api/lecturer/snap-quizzes/${quizId}/attempts/${attemptId}/force-submit`, { method: 'POST' });
+    toastSuccess(`Submitted for ${studentName}`);
+    const row = document.getElementById('qm-student-' + attemptId);
+    if (row) {
+      row.style.opacity = '0.6';
+      const st = row.querySelector('.qm-status');
+      if (st) { st.textContent = 'Force-submitted'; st.style.color = '#22c55e'; }
+    }
+  } catch (e) {
+    toastError(e.message);
+  }
+};
+
+// Cleanup ws when navigating away
+document.addEventListener('navigated', () => {
+  if (_quizMonitorWs) { try { _quizMonitorWs.close(); } catch(_) {} _quizMonitorWs = null; }
+  if (_quizMonitorRefreshTimer) { clearInterval(_quizMonitorRefreshTimer); _quizMonitorRefreshTimer = null; }
+});
+
 async function renderAdminQuizzes(content) {
   try {
     const data = await api('/api/admin/quizzes');
@@ -16137,6 +16385,7 @@ function buildBottomNav(role) {
     dashboard:       '<rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/>',
     sessions:        '<circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>',
     quizzes:         '<path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><rect x="8" y="2" width="8" height="4" rx="1"/><path d="M9 14l2 2 4-4"/>',
+    'quiz-monitor':  '<path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7z"/><circle cx="12" cy="12" r="3"/><circle cx="12" cy="12" r="1" fill="red"/>',
     reports:         '<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/>',
     subscription:    '<rect x="1" y="4" width="22" height="16" rx="2"/><line x1="1" y1="10" x2="23" y2="10"/>',
     users:           '<path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/>',
@@ -16171,6 +16420,7 @@ function buildBottomNav(role) {
     'mark-attendance': 'Attendance', subscription: 'Subscribe',
     announcements: 'Notices', assignments: 'Assignment',
     quizzes: 'Proctored/Snap Quiz',
+    'quiz-monitor': 'Quiz Monitor',
   };
 
   const priority = PRIORITY[role] || ['dashboard', 'sessions', 'reports'];

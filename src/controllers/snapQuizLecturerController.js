@@ -25,7 +25,7 @@ const SnapQuizResponse       = require("../models/SnapQuizResponse");
 const SnapQuizViolationLog   = require("../models/SnapQuizViolationLog");
 const SnapQuizProctoringEvent = require("../models/SnapQuizProctoringEvent");
 const SnapQuizResult         = require("../models/SnapQuizResult");
-const { SNAP_QUIZ_STATUSES } = require("../models/SnapQuiz");
+const { SNAP_QUIZ_STATUSES, SECURITY_PRESETS } = require("../models/SnapQuiz");
 const { ATTEMPT_STATUSES, GRADING_STATUSES } = require("../models/SnapQuizAttempt");
 const { autoGradeAttempt } = require("../services/quizGradingService");
 
@@ -38,6 +38,7 @@ exports.createQuiz = async (req, res) => {
   try {
     const {
       courseId, title, description, instructions, quizType, quizLevel,
+      securityLevel,
       totalMarks, passMark, scorePolicy,
       timeLimitMinutes, startTime, endTime, gracePeriodSeconds, lockAfterEndTime,
       allowedAttempts,
@@ -48,41 +49,53 @@ exports.createQuiz = async (req, res) => {
       showViolationWarnings,
       proctoringEnabled, snapshotIntervalSeconds, aiProctoringEnabled,
       monitoringMode, maxConcurrentMonitors, noiseDetectionThreshold,
+      mobileMonitoring, screenshotDetection, liveAlerts,
       showResultAfterSubmission, showAnswersAfterSubmission,
       showAnswersAfterClose, autoReleaseResults,
       randomizeQuestions, randomizeOptions,
     } = req.body;
 
-    // quizLevel drives monitoring defaults:
-    //   proctored → AI snapshots every 12s, full proctoring enabled
-    //   snap      → no AI snapshots, basic anti-cheat only
-    const level = quizLevel === "proctored" ? "proctored" : "snap";
-    const isProctored = level === "proctored";
-    const resolvedMode               = isProctored ? "ai" : "none";
-    const resolvedProctoringEnabled   = proctoringEnabled   ?? isProctored;
-    const resolvedAiProctoringEnabled = aiProctoringEnabled ?? isProctored;
-    const resolvedSnapshotInterval    = snapshotIntervalSeconds ?? (isProctored ? 12 : 0);
+    // Apply security preset if one was selected, then allow field-level overrides.
+    const preset = SECURITY_PRESETS[securityLevel] || SECURITY_PRESETS.medium;
+
+    // quizLevel: "high" security forces proctored mode
+    const resolvedLevel = securityLevel === "high" ? "proctored"
+      : quizLevel === "proctored" ? "proctored" : "snap";
 
     const quiz = await SnapQuiz.create({
       company:   req.companyId,
       course:    courseId,
       createdBy: req.user._id,
       title, description, instructions, quizType,
-      quizLevel: level,
+      quizLevel:     resolvedLevel,
+      securityLevel: securityLevel || "medium",
       totalMarks, passMark, scorePolicy,
       timeLimitMinutes, startTime, endTime, gracePeriodSeconds, lockAfterEndTime,
       allowedAttempts,
-      enforceSessionLock, heartbeatIntervalSeconds, heartbeatTimeoutSeconds,
-      maxViolationsBeforeTermination,
-      terminateOnTabSwitch, terminateOnFocusLost, terminateOnFullscreenExit,
-      requireFullscreen, preventCopyPaste, preventRightClick, preventPrintScreen,
-      showViolationWarnings,
-      proctoringEnabled: resolvedProctoringEnabled,
-      snapshotIntervalSeconds: resolvedSnapshotInterval,
-      aiProctoringEnabled: resolvedAiProctoringEnabled,
-      monitoringMode: resolvedMode,
+      // Anti-cheat — preset values used unless caller explicitly provided one
+      enforceSessionLock:            enforceSessionLock            ?? preset.enforceSessionLock,
+      heartbeatIntervalSeconds:      heartbeatIntervalSeconds      ?? preset.heartbeatIntervalSeconds,
+      heartbeatTimeoutSeconds:       heartbeatTimeoutSeconds       ?? preset.heartbeatTimeoutSeconds,
+      maxViolationsBeforeTermination: maxViolationsBeforeTermination ?? preset.maxViolationsBeforeTermination,
+      terminateOnTabSwitch:          terminateOnTabSwitch          ?? preset.terminateOnTabSwitch,
+      terminateOnFocusLost:          terminateOnFocusLost          ?? preset.terminateOnFocusLost,
+      terminateOnFullscreenExit:     terminateOnFullscreenExit     ?? preset.terminateOnFullscreenExit,
+      requireFullscreen:             requireFullscreen             ?? preset.requireFullscreen,
+      preventCopyPaste:              preventCopyPaste              ?? preset.preventCopyPaste,
+      preventRightClick:             preventRightClick             ?? preset.preventRightClick,
+      preventPrintScreen:            preventPrintScreen            ?? preset.preventPrintScreen,
+      showViolationWarnings:         showViolationWarnings         ?? true,
+      // Proctoring — preset unless overridden
+      proctoringEnabled:         proctoringEnabled         ?? preset.proctoringEnabled,
+      snapshotIntervalSeconds:   snapshotIntervalSeconds   ?? preset.snapshotIntervalSeconds,
+      aiProctoringEnabled:       aiProctoringEnabled       ?? preset.aiProctoringEnabled,
+      monitoringMode:            monitoringMode            ?? preset.monitoringMode,
       humanMonitors:  [],
       maxConcurrentMonitors, noiseDetectionThreshold,
+      // Mobile / advanced monitoring
+      mobileMonitoring:    mobileMonitoring    ?? true,
+      screenshotDetection: screenshotDetection ?? (securityLevel === "high"),
+      liveAlerts:          liveAlerts          ?? true,
       showResultAfterSubmission, showAnswersAfterSubmission,
       showAnswersAfterClose, autoReleaseResults,
       randomizeQuestions, randomizeOptions,
@@ -817,6 +830,95 @@ exports.getQuizStats = async (req, res) => {
     });
   } catch (err) {
     console.error("[snapQuiz getQuizStats]", err);
+    return res.status(500).json({ error: "Internal server error" });
+  }
+};
+
+/**
+ * GET /:quizId/live-monitor
+ * Returns per-student attempt status for the real-time monitoring dashboard.
+ * Designed to be polled on first load; live updates arrive via WebSocket.
+ */
+exports.getLiveMonitor = async (req, res) => {
+  try {
+    const quiz = req.assessment;
+
+    const [attempts, recentViolations] = await Promise.all([
+      SnapQuizAttempt.find({ quiz: quiz._id })
+        .select("student status startedAt submittedAt expiresAt lastHeartbeatAt violationCount isTerminated terminationReason device percentageScore gradingStatus")
+        .populate("student", "name email IndexNumber studentLevel studentGroup")
+        .sort({ startedAt: -1 })
+        .lean(),
+      SnapQuizViolationLog.find({ quiz: quiz._id })
+        .select("attempt student violationType severity occurredAt causedTermination")
+        .sort({ occurredAt: -1 })
+        .limit(50)
+        .lean(),
+    ]);
+
+    const now = Date.now();
+    const rows = attempts.map(a => {
+      const lastSeen = a.lastHeartbeatAt ? new Date(a.lastHeartbeatAt) : new Date(a.startedAt);
+      const secondsSinceSeen = Math.round((now - lastSeen) / 1000);
+      const timeRemaining = a.expiresAt ? Math.max(0, Math.round((new Date(a.expiresAt) - now) / 1000)) : null;
+      return {
+        attemptId:        String(a._id),
+        student: {
+          _id:          String(a.student?._id || a.student),
+          name:         a.student?.name || "Unknown",
+          email:        a.student?.email || "",
+          indexNumber:  a.student?.IndexNumber || "",
+          level:        a.student?.studentLevel || "",
+          group:        a.student?.studentGroup || "",
+        },
+        status:          a.status,
+        violationCount:  a.violationCount || 0,
+        isTerminated:    a.isTerminated || false,
+        terminationReason: a.terminationReason || null,
+        platform:        a.device?.platform || "unknown",
+        secondsSinceSeen,
+        online:          a.status === "active" && secondsSinceSeen < (quiz.heartbeatTimeoutSeconds || 90),
+        timeRemaining,
+        percentageScore: a.percentageScore ?? null,
+        gradingStatus:   a.gradingStatus || null,
+        startedAt:       a.startedAt,
+        submittedAt:     a.submittedAt || null,
+      };
+    });
+
+    return res.json({
+      quiz: {
+        _id:             quiz._id,
+        title:           quiz.title,
+        status:          quiz.status,
+        securityLevel:   quiz.securityLevel || "medium",
+        monitoringMode:  quiz.monitoringMode,
+        proctoringEnabled: quiz.proctoringEnabled,
+        aiProctoringEnabled: quiz.aiProctoringEnabled,
+        mobileMonitoring: quiz.mobileMonitoring,
+        liveAlerts:      quiz.liveAlerts,
+        timeLimitMinutes: quiz.timeLimitMinutes,
+        maxViolationsBeforeTermination: quiz.maxViolationsBeforeTermination,
+      },
+      students: rows,
+      recentViolations: recentViolations.map(v => ({
+        attemptId:    String(v.attempt),
+        studentId:    String(v.student),
+        violationType: v.violationType,
+        severity:     v.severity,
+        occurredAt:   v.occurredAt,
+        causedTermination: v.causedTermination,
+      })),
+      summary: {
+        total:       rows.length,
+        active:      rows.filter(r => r.status === "active").length,
+        submitted:   rows.filter(r => ["submitted", "auto_submitted"].includes(r.status)).length,
+        terminated:  rows.filter(r => r.isTerminated).length,
+        online:      rows.filter(r => r.online).length,
+      },
+    });
+  } catch (err) {
+    console.error("[snapQuiz getLiveMonitor]", err);
     return res.status(500).json({ error: "Internal server error" });
   }
 };

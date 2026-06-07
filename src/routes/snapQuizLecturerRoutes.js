@@ -109,9 +109,10 @@ router.patch("/:quizId/proctoring/:eventId",    ownsQuiz, ctrl.reviewProctoringE
 router.patch("/:quizId/attempts/:attemptId/responses/:responseId/grade", ownsQuiz, ctrl.gradeResponse);
 router.patch("/:quizId/attempts/:attemptId/grade",                        ownsQuiz, ctrl.gradeBulk);
 
-// ─── Dashboard stats ──────────────────────────────────────────────────────────
+// ─── Dashboard stats & live monitor ──────────────────────────────────────────
 
 router.get("/:quizId/stats",             ownsQuiz, ctrl.getQuizStats);
+router.get("/:quizId/live-monitor",      ownsQuiz, ctrl.getLiveMonitor);
 
 // ─── Result release ───────────────────────────────────────────────────────────
 
