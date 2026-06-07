@@ -11679,23 +11679,56 @@ async function renderMarkAttendance() {
   // Check if arriving via QR scan deep link
   if (await handleQrScan()) return;
 
-  // ── Step 1: Discover classroom device (mandatory for code marking) ───────────
-  // The device's WiFi hotspot is the only accepted proximity proof.
-  // No device found = no attendance. This runs whether the phone has internet
-  // or not — the device at 192.168.4.1 is always the entry point.
+  // ── Step 1: Fetch active session from server first ───────────────────────────
   content.innerHTML = `
     <div class="page-header"><h2>Mark Attendance</h2><p>Check in to active sessions</p></div>
     <div class="card" style="text-align:center;padding:32px 20px">
       <div style="font-size:32px;margin-bottom:12px">📡</div>
-      <div style="font-size:16px;font-weight:700;margin-bottom:6px">Looking for classroom device…</div>
-      <p style="font-size:13px;color:var(--text-light)">Make sure your phone is connected to the classroom WiFi hotspot.</p>
+      <div style="font-size:16px;font-weight:700;margin-bottom:6px">Checking for active sessions…</div>
     </div>`;
 
-  const deviceFound = await discoverESP32();
+  let serverSession = null;
+  if (isOnline()) {
+    try {
+      const data = await api('/api/attendance-sessions/active');
+      serverSession = data.session;
+      if (serverSession) offlineCache('activeSession', serverSession);
+    } catch (e) { /* server unreachable */ }
+  } else {
+    serverSession = offlineCache('activeSession') || null;
+  }
 
-  if (!deviceFound) {
+  // Does this session require an ESP32 device for proximity?
+  const requiresDevice = !!(serverSession?.deviceId);
+
+  // ── Step 2: ESP32 discovery (only when session requires a device) ─────────────
+  let deviceFound = false;
+  let deviceSession = null;
+
+  if (requiresDevice || !serverSession) {
+    // Show searching message only when device is needed
     content.innerHTML = `
       <div class="page-header"><h2>Mark Attendance</h2><p>Check in to active sessions</p></div>
+      <div class="card" style="text-align:center;padding:32px 20px">
+        <div style="font-size:32px;margin-bottom:12px">📡</div>
+        <div style="font-size:16px;font-weight:700;margin-bottom:6px">Looking for classroom device…</div>
+        <p style="font-size:13px;color:var(--text-light)">Make sure your phone is connected to the classroom WiFi hotspot.</p>
+      </div>`;
+    deviceFound = await discoverESP32();
+    if (deviceFound) {
+      try { deviceSession = await esp32Api('/session'); } catch (e) {}
+    }
+  }
+
+  // If device is required but not found, block with clear instructions
+  if (requiresDevice && !deviceFound) {
+    content.innerHTML = `
+      <div class="page-header"><h2>Mark Attendance</h2><p>Check in to active sessions</p></div>
+      ${serverSession ? `<div class="card" style="border-left:4px solid var(--primary);margin-bottom:16px;padding:14px 16px">
+        <div style="font-size:11px;text-transform:uppercase;color:var(--primary);font-weight:700">Active Session</div>
+        <div style="font-size:16px;font-weight:700;margin-top:4px">${esc(serverSession.title || 'Attendance Session')}</div>
+        <div style="font-size:12px;color:var(--text-muted);margin-top:2px">You must connect to the classroom device to mark attendance.</div>
+      </div>` : ''}
       <div class="card" style="text-align:center;padding:40px 20px">
         <div style="font-size:52px;margin-bottom:14px">📴</div>
         <div style="font-size:18px;font-weight:700;margin-bottom:10px">Connect to Classroom WiFi First</div>
@@ -11709,28 +11742,11 @@ async function renderMarkAttendance() {
     return;
   }
 
-  // ── Step 2: Get session info from device (no internet needed) ────────────────
-  let deviceSession = null;
-  try {
-    deviceSession = await esp32Api('/session');
-  } catch (e) { /* device online but no session yet */ }
-
-  // Also fetch from server if online (richer session info: course title, etc.)
-  let serverSession = null;
-  if (isOnline()) {
-    try {
-      const data = await api('/api/attendance-sessions/active');
-      serverSession = data.session;
-      if (serverSession) offlineCache('activeSession', serverSession);
-    } catch (e) { /* server unreachable */ }
-  }
-
   const session = serverSession || (deviceSession?.sessionId ? deviceSession : null);
 
   // ── Step 3: No active session ────────────────────────────────────────────────
   if (!session) {
-    content.innerHTML = `
-      <div class="page-header"><h2>Mark Attendance</h2><p>Check in to active sessions</p></div>
+    const connectedBanner = deviceFound ? `
       <div class="card" style="border-left:4px solid var(--success);background:#f0fdf4;padding:14px 16px;margin-bottom:16px">
         <div style="display:flex;align-items:center;gap:10px">
           <span style="font-size:22px">📶</span>
@@ -11739,7 +11755,10 @@ async function renderMarkAttendance() {
             <div style="font-size:12px;color:#166534;margin-top:2px">Proximity verified — you are in the classroom.</div>
           </div>
         </div>
-      </div>
+      </div>` : '';
+    content.innerHTML = `
+      <div class="page-header"><h2>Mark Attendance</h2><p>Check in to active sessions</p></div>
+      ${connectedBanner}
       <div class="card" style="text-align:center;padding:40px 20px">
         <div style="font-size:48px;margin-bottom:14px">⏳</div>
         <div style="font-size:18px;font-weight:700;margin-bottom:8px">No Active Session</div>
@@ -11757,22 +11776,24 @@ async function renderMarkAttendance() {
       .catch(() => false);
   }
 
-  // ── Step 5: Render code entry ────────────────────────────────────────────────
+  // ── Step 5: Render session + code entry ──────────────────────────────────────
   const deviceIp = esp32IP || '192.168.4.1';
-  content.innerHTML = `
-    <div class="page-header"><h2>Mark Attendance</h2><p>Check in to active sessions</p></div>
-
-    <div class="card" style="border-left:4px solid var(--success);background:#f0fdf4;padding:14px 16px;margin-bottom:16px">
-      <div style="display:flex;align-items:center;gap:10px">
-        <span style="font-size:22px">📶</span>
-        <div>
-          <div style="font-weight:700;font-size:14px;color:#15803d">Connected to classroom device</div>
-          <div style="font-size:12px;color:#166534;margin-top:2px">
-            Proximity verified — you are in the classroom.${!isOnline() ? ' Offline mode — attendance will sync automatically.' : ''}
+  const proximityBanner = deviceFound
+    ? `<div class="card" style="border-left:4px solid var(--success);background:#f0fdf4;padding:14px 16px;margin-bottom:16px">
+        <div style="display:flex;align-items:center;gap:10px">
+          <span style="font-size:22px">📶</span>
+          <div>
+            <div style="font-weight:700;font-size:14px;color:#15803d">Connected to classroom device</div>
+            <div style="font-size:12px;color:#166534;margin-top:2px">
+              Proximity verified — you are in the classroom.${!isOnline() ? ' Offline mode — attendance will sync automatically.' : ''}
+            </div>
           </div>
         </div>
-      </div>
-    </div>
+      </div>`
+    : '';
+  content.innerHTML = `
+    <div class="page-header"><h2>Mark Attendance</h2><p>Check in to active sessions</p></div>
+    ${proximityBanner}
 
     <div class="card" style="border-left:4px solid var(--primary);margin-bottom:16px">
       <div style="font-size:11px;text-transform:uppercase;color:var(--primary);font-weight:700;letter-spacing:0.5px">Active Session</div>

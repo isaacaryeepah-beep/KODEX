@@ -98,10 +98,57 @@
   <link rel="stylesheet" href="/css/style.css">
   <script>window.MathJax = { tex: { inlineMath: [["\\(","\\)"]], displayMath: [["\\[","\\]"]], processEscapes: true }, options: { skipHtmlTags: ["script","noscript","style","textarea"] } };</script>
   <script id="MathJax-script" async src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-chtml.js"></script>
+<style>
+.pw-wrap{position:relative;display:flex;align-items:center}
+.pw-wrap input{flex:1;padding-right:40px!important}
+.pw-toggle{position:absolute;right:10px;background:none;border:none;cursor:pointer;padding:4px;color:var(--text-muted,#94a3b8);display:flex;align-items:center;line-height:1;font-size:18px;user-select:none}
+.pw-toggle:hover{color:var(--text,#1e293b)}
+</style>
 <script>
 // Stubs prevent "X is not defined" if app.js is slow — real functions override these
 function selectMode(m){if(window._appLoaded)window._realSelectMode(m);else window._pendingMode=m;}
 function selectPortal(t){if(window._appLoaded)window._realSelectPortal(t);else window._pendingPortal=t;}
+
+// ── Global password visibility toggle ────────────────────────────────────────
+// Wraps every input[type=password] — including ones injected by app.js later —
+// in a .pw-wrap container and inserts a show/hide button.
+(function() {
+  function _wrapInput(inp) {
+    if (inp._pwWrapped) return;
+    inp._pwWrapped = true;
+    const wrap = document.createElement('div');
+    wrap.className = 'pw-wrap';
+    inp.parentNode.insertBefore(wrap, inp);
+    wrap.appendChild(inp);
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'pw-toggle';
+    btn.setAttribute('tabindex', '-1');
+    btn.setAttribute('aria-label', 'Show password');
+    btn.innerHTML = '👁';
+    btn.addEventListener('click', function(e) {
+      e.preventDefault();
+      const show = inp.type === 'password';
+      inp.type = show ? 'text' : 'password';
+      btn.innerHTML = show ? '🙈' : '👁';
+      btn.setAttribute('aria-label', show ? 'Hide password' : 'Show password');
+    });
+    wrap.appendChild(btn);
+  }
+
+  function _scanForPasswords() {
+    document.querySelectorAll('input[type="password"]').forEach(_wrapInput);
+  }
+
+  // Run on load for static inputs
+  document.addEventListener('DOMContentLoaded', _scanForPasswords);
+
+  // Re-run whenever DOM changes (for inputs injected by app.js dynamically)
+  const obs = new MutationObserver(_scanForPasswords);
+  document.addEventListener('DOMContentLoaded', function() {
+    obs.observe(document.body, { childList: true, subtree: true });
+  });
+})();
 </script>
 </head>
 <body>

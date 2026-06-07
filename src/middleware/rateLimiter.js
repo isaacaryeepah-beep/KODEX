@@ -67,12 +67,36 @@ const registerLimiter = createRateLimiter({
   message: 'Too many accounts created from this IP. Please try again later.',
 });
 
-// Password reset: max 5 attempts per hour per phone number
-const passwordResetLimiter = createRateLimiter({
-  windowMs: 60 * 60 * 1000,
-  max: 5,
-  message: 'Too many password reset attempts. Please wait an hour and try again.',
-});
+// Password reset: keyed on identifier only (not IP) so shared campus Wi-Fi
+// doesn't cause one person's failed attempts to block another.
+// Max 10 per hour per email/phone — enough for typos, strict enough vs abuse.
+const passwordResetLimiter = (() => {
+  const _counts = new Map();
+  setInterval(() => {
+    const now = Date.now();
+    for (const [k, v] of _counts.entries()) if (now - v.start > 60 * 60 * 1000) _counts.delete(k);
+  }, 5 * 60 * 1000);
+  return (req, res, next) => {
+    const id = (req.body?.phone || req.body?.email || req.body?.indexNumber || 'unknown').toLowerCase().trim();
+    const key = `pwr::${id}`;
+    const now = Date.now();
+    const entry = _counts.get(key);
+    if (!entry || now - entry.start > 60 * 60 * 1000) {
+      _counts.set(key, { count: 1, start: now });
+      return next();
+    }
+    entry.count++;
+    if (entry.count > 10) {
+      const retryAfterSec = Math.ceil((60 * 60 * 1000 - (now - entry.start)) / 1000);
+      res.setHeader('Retry-After', retryAfterSec);
+      return res.status(429).json({
+        error: 'Too many password reset attempts. Please wait and try again.',
+        retryAfter: retryAfterSec,
+      });
+    }
+    next();
+  };
+})();
 
 // General API: max 200 requests per 15 minutes per IP
 const apiLimiter = createRateLimiter({
