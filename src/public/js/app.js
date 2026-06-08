@@ -62,7 +62,20 @@ async function openUrl(url, forceExternal = false) {
 // running inside the native app (iOS/Android), falls back to standard browser
 // anchor-click download for web.
 async function downloadBlob(blob, filename) {
-  if (window.Capacitor?.isNativePlatform?.()) {
+  // Detect Capacitor native app (Android/iOS)
+  const isNative = !!(window.Capacitor?.isNativePlatform?.() ||
+                      navigator.userAgent.includes('DiklyApp/'));
+
+  if (isNative) {
+    const FS    = window.Capacitor?.Plugins?.Filesystem;
+    const Share = window.Capacitor?.Plugins?.Share;
+
+    if (!FS || !Share) {
+      // Old APK — native plugins not registered yet
+      toastError('Please reinstall the DIKLY app to enable file downloads.');
+      return;
+    }
+
     try {
       const reader = new FileReader();
       const base64 = await new Promise((res, rej) => {
@@ -70,15 +83,15 @@ async function downloadBlob(blob, filename) {
         reader.onerror = rej;
         reader.readAsDataURL(blob);
       });
-      const result = await window.Capacitor.Plugins.Filesystem.writeFile({
+      const result = await FS.writeFile({
         path:      filename,
         data:      base64,
         directory: 'CACHE',
         recursive: true,
       });
-      await window.Capacitor.Plugins.Share.share({
-        title:      filename,
-        url:        result.uri,
+      await Share.share({
+        title:       filename,
+        url:         result.uri,
         dialogTitle: 'Save or share ' + filename,
       });
       return;
@@ -88,6 +101,7 @@ async function downloadBlob(blob, filename) {
       return;
     }
   }
+
   // Standard browser download
   const url = URL.createObjectURL(blob);
   const a   = document.createElement('a');
