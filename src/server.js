@@ -242,9 +242,9 @@ app.get('/exam-room', (req, res) => {
 // Streams the app installer directly so the browser downloads it without
 // opening a new tab or redirecting to GitHub.
 const DOWNLOAD_URLS = {
-  android: process.env.ANDROID_DOWNLOAD_URL || 'https://github.com/isaacaryeepah-beep/Dikly_releases/releases/latest/download/dikly.apk',
-  windows: process.env.WINDOWS_DOWNLOAD_URL || 'https://github.com/isaacaryeepah-beep/Dikly_releases/releases/latest/download/dikly-windows-setup.exe',
-  mac:     process.env.MAC_DOWNLOAD_URL     || 'https://github.com/isaacaryeepah-beep/Dikly_releases/releases/latest/download/dikly-mac.dmg',
+  android: process.env.ANDROID_DOWNLOAD_URL || 'https://github.com/isaacaryeepah-beep/Dikly_releases/releases/download/apk-latest/dikly.apk',
+  windows: process.env.WINDOWS_DOWNLOAD_URL || 'https://github.com/isaacaryeepah-beep/Dikly_releases/releases/download/windows-latest/dikly-windows-setup.exe',
+  mac:     process.env.MAC_DOWNLOAD_URL     || 'https://github.com/isaacaryeepah-beep/Dikly_releases/releases/download/mac-latest/dikly-mac.dmg',
 };
 const DOWNLOAD_META = {
   android: { filename: 'dikly.apk',               type: 'application/vnd.android.package-archive' },
