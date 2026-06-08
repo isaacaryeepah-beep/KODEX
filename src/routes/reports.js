@@ -7,8 +7,19 @@ const reportController = require("../controllers/reportController");
 
 const router = express.Router();
 
+// One-time download token endpoint — no auth middleware (UUID is the credential)
+router.get("/download/:uuid", reportController.downloadByToken);
+
 router.use(authenticate);
 router.use(requireActiveSubscription);
+
+// Create a one-time download link (native app uses this to open PDF in external browser)
+router.get(
+  "/download-link/:type",
+  requireRole("manager", "lecturer", "admin", "superadmin", "employee", "student"),
+  companyIsolation,
+  reportController.createDownloadLink
+);
 
 router.get(
   "/attendance",

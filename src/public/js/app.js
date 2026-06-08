@@ -13818,11 +13818,37 @@ async function downloadReport(type, apiBase = 'reports', e) {
   }
   if (card) card.style.pointerEvents = 'none';
   try {
+    const isNative = !!(window.Capacitor?.isNativePlatform?.() ||
+                        navigator.userAgent.includes('DiklyApp/'));
+
+    if (isNative) {
+      // Get a one-time download URL then open it in the system browser
+      // (Chrome/default browser handles the PDF download natively — no Filesystem needed)
+      const linkRes = await fetch(`${API}/api/reports/download-link/${type}`, {
+        headers: { 'Authorization': `Bearer ${token}` },
+      });
+      if (!linkRes.ok) {
+        let errMsg = 'Failed to prepare download';
+        try { const err = await linkRes.json(); errMsg = err.error; } catch(_) {}
+        throw new Error(errMsg);
+      }
+      const { url } = await linkRes.json();
+      const fullUrl = `${API}${url}`;
+      const Browser = window.Capacitor?.Plugins?.Browser;
+      if (Browser) {
+        await Browser.open({ url: fullUrl });
+      } else {
+        window.open(fullUrl, '_blank', 'noopener,noreferrer');
+      }
+      return;
+    }
+
+    // Web browser: fetch blob and trigger anchor download
     const headers = { 'Authorization': `Bearer ${token}` };
     const res = await fetch(`${API}/api/${apiBase}/${type}`, { headers });
     if (!res.ok) {
       let errMsg = 'Failed to generate report';
-      try { const err = await res.json(); errMsg = err.error; } catch(e) {}
+      try { const err = await res.json(); errMsg = err.error; } catch(_) {}
       throw new Error(errMsg);
     }
     const blob = await res.blob();
