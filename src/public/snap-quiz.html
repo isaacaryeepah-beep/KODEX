@@ -1937,9 +1937,20 @@ function startProctoring() {
     if (state.examActive) logEvent('orientation_change').catch(console.warn);
   });
 
-  // ── Copy / cut prevention ─────────────────────────────────────
+  // ── Copy / cut / paste prevention ────────────────────────────
   document.addEventListener('copy', handleCopy);
   document.addEventListener('cut', handleCopy);
+  document.addEventListener('paste', (e) => {
+    if (state.examActive) {
+      e.preventDefault();
+      logEvent('paste_attempt').catch(console.warn);
+      toast('⚠️ Pasting is not allowed during the exam', 'warn');
+    }
+  });
+
+  // ── Drag-and-drop prevention (data exfiltration) ──────────────
+  document.addEventListener('dragstart', (e) => { if (state.examActive) e.preventDefault(); }, true);
+  document.addEventListener('drop',      (e) => { if (state.examActive) e.preventDefault(); }, true);
 
   // ── Back button protection ────────────────────────────────────
   history.pushState(null, '', location.href);
@@ -1971,9 +1982,12 @@ function startProctoring() {
         toast(quiz.terminateOnFullscreenExit
           ? '⛔ Fullscreen required — exiting may terminate your exam'
           : '⚠️ Please return to fullscreen to continue', 'warn');
+        // Re-enforce immediately
+        document.documentElement.requestFullscreen().catch(() => {});
       }
     };
     document.addEventListener('fullscreenchange', state._handleFullscreen);
+    document.addEventListener('webkitfullscreenchange', state._handleFullscreen);
   }
 
   // ── Focus / window-blur enforcement ──────────────────────────
@@ -1995,17 +2009,70 @@ function startProctoring() {
     document.addEventListener('contextmenu', state._handleContextMenu);
   }
 
-  // ── Print-screen prevention ───────────────────────────────────
+  // ── PrintScreen + DevTools key blocking ──────────────────────
   if (quiz.preventPrintScreen) {
     state._handleKeydown = (e) => {
-      if (state.examActive && (e.key === 'PrintScreen' || e.code === 'PrintScreen' || e.keyCode === 44)) {
-        e.preventDefault();
+      if (!state.examActive) return;
+      const ctrl = e.ctrlKey || e.metaKey;
+      const shift = e.shiftKey;
+      const key = e.key;
+      // PrintScreen
+      if (key === 'PrintScreen' || e.code === 'PrintScreen' || e.keyCode === 44) {
+        e.preventDefault(); e.stopPropagation();
         logEvent('print_screen').catch(console.warn);
         toast('⚠️ Screenshots are not allowed during this exam', 'warn');
+        return;
+      }
+      // F12
+      if (key === 'F12') {
+        e.preventDefault(); e.stopPropagation();
+        logEvent('devtools_shortcut', { key: 'F12' }).catch(console.warn);
+        toast('⚠️ Developer Tools are not allowed during this exam', 'warn');
+        return;
+      }
+      // Ctrl+Shift+I/J/C/K/E/M (DevTools in Chrome/Firefox/Edge)
+      if (ctrl && shift && ['I','J','C','K','E','M'].includes(key.toUpperCase())) {
+        e.preventDefault(); e.stopPropagation();
+        logEvent('devtools_shortcut', { key: 'Ctrl+Shift+' + key.toUpperCase() }).catch(console.warn);
+        toast('⚠️ Developer Tools are not allowed during this exam', 'warn');
+        return;
+      }
+      // Ctrl+U (view source)
+      if (ctrl && key.toUpperCase() === 'U') {
+        e.preventDefault(); e.stopPropagation();
+        logEvent('view_source_attempt').catch(console.warn);
+        return;
+      }
+      // Ctrl+P (print dialog)
+      if (ctrl && key.toUpperCase() === 'P') {
+        e.preventDefault(); e.stopPropagation();
+        logEvent('print_attempt').catch(console.warn);
+        return;
+      }
+      // Ctrl+S (save page)
+      if (ctrl && key.toUpperCase() === 'S') {
+        e.preventDefault(); e.stopPropagation();
+        return;
       }
     };
-    document.addEventListener('keydown', state._handleKeydown);
+    document.addEventListener('keydown', state._handleKeydown, true);
   }
+
+  // ── DevTools detection via window size delta ──────────────────
+  state._devToolsOpen = false;
+  state._devToolsInterval = setInterval(() => {
+    if (!state.examActive) return;
+    const wDiff = window.outerWidth - window.innerWidth;
+    const hDiff = window.outerHeight - window.innerHeight;
+    const open = wDiff > 200 || hDiff > 200;
+    if (open && !state._devToolsOpen) {
+      state._devToolsOpen = true;
+      logEvent('devtools_open', { widthDelta: wDiff, heightDelta: hDiff }).catch(console.warn);
+      toast('⚠️ Developer Tools detected and logged', 'warn');
+    } else if (!open) {
+      state._devToolsOpen = false;
+    }
+  }, 2000);
 
   // ── Noise / audio detection ───────────────────────────────────
   const noiseThreshold = quiz.noiseDetectionThreshold ?? 40;
@@ -2664,6 +2731,7 @@ function stopExamCleanup() {
   document.removeEventListener('cut', handleCopy);
   if (state._handleFullscreen) {
     document.removeEventListener('fullscreenchange', state._handleFullscreen);
+    document.removeEventListener('webkitfullscreenchange', state._handleFullscreen);
     state._handleFullscreen = null;
   }
   if (state._handleBlur) {
@@ -2675,8 +2743,12 @@ function stopExamCleanup() {
     state._handleContextMenu = null;
   }
   if (state._handleKeydown) {
-    document.removeEventListener('keydown', state._handleKeydown);
+    document.removeEventListener('keydown', state._handleKeydown, true);
     state._handleKeydown = null;
+  }
+  if (state._devToolsInterval) {
+    clearInterval(state._devToolsInterval);
+    state._devToolsInterval = null;
   }
   if (document.fullscreenElement) document.exitFullscreen().catch(() => {});
   if (state.audioStream) {
