@@ -73,7 +73,7 @@ async function downloadBlob(blob, filename) {
       const result = await window.Capacitor.Plugins.Filesystem.writeFile({
         path:      filename,
         data:      base64,
-        directory: 'DOCUMENTS',
+        directory: 'CACHE',
         recursive: true,
       });
       await window.Capacitor.Plugins.Share.share({
@@ -83,7 +83,9 @@ async function downloadBlob(blob, filename) {
       });
       return;
     } catch (e) {
-      console.warn('[downloadBlob] Native failed, using browser fallback:', e.message);
+      console.error('[downloadBlob] Native download failed:', e);
+      toastError('Download failed: ' + (e.message || 'unknown error'));
+      return;
     }
   }
   // Standard browser download
