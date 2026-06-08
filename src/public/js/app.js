@@ -1311,6 +1311,9 @@ function selectMode(mode) {
 function selectPortal(type) {
   selectedPortalType = type;
   document.getElementById('portal-selector').classList.add('hidden');
+  ['workspace-brand','app-download-section','workspace-foot'].forEach(id => {
+    const el = document.getElementById(id); if (el) el.classList.add('hidden');
+  });
   if (type === 'admin-corporate' || type === 'admin-academic' || type === 'manager') {
     const isAcademic = type === 'admin-academic';
     const isManager  = type === 'manager';
@@ -1349,6 +1352,9 @@ function showPortalSelector() {
   document.getElementById('employee-auth').classList.add('hidden');
   document.getElementById('student-auth').classList.add('hidden');
   document.getElementById('portal-selector').classList.remove('hidden');
+  ['workspace-brand','app-download-section','workspace-foot'].forEach(id => {
+    const el = document.getElementById(id); if (el) el.classList.remove('hidden');
+  });
   const mrf = document.getElementById('manager-register-form'); if (mrf) mrf.classList.add('hidden');
   document.querySelectorAll('.auth-container input').forEach(i => i.value = '');
   document.querySelectorAll('.error-msg').forEach(e => e.style.display = 'none');
@@ -13822,8 +13828,7 @@ async function downloadReport(type, apiBase = 'reports', e) {
                         navigator.userAgent.includes('DiklyApp/'));
 
     if (isNative) {
-      const FS    = window.Capacitor?.Plugins?.Filesystem;
-      const Share = window.Capacitor?.Plugins?.Share;
+      const FS = window.Capacitor?.Plugins?.Filesystem;
       if (!FS) {
         toastError('Please reinstall the DIKLY app to enable downloads.');
         return;
@@ -13846,24 +13851,14 @@ async function downloadReport(type, apiBase = 'reports', e) {
         reader.readAsDataURL(blob);
       });
       const filename = `${type}-report.pdf`;
-      // Write to cache (no permissions needed on any Android version)
-      const result = await FS.writeFile({
-        path: filename,
+      // Save to app-specific external storage — no permission needed on any Android version
+      await FS.writeFile({
+        path: `Reports/${filename}`,
         data: base64,
-        directory: 'CACHE',
+        directory: 'EXTERNAL',
         recursive: true,
       });
-      if (Share) {
-        // Open Android share/open-with sheet — user can view in PDF app or save to Downloads
-        // NOTE: must use `files:` array, NOT `url:`, for local file URIs
-        await Share.share({
-          title:       filename,
-          files:       [result.uri],
-          dialogTitle: 'Open or save report',
-        });
-      } else {
-        toast('Report saved to device storage', 'ok');
-      }
+      toast('Report saved to device storage', 'ok');
       return;
     }
 
