@@ -324,34 +324,39 @@ function selectPortal(t){if(window._appLoaded)window._realSelectPortal(t);else w
       </div>
       <div class="app-dl-sub">Free on Android &amp; Desktop</div>
 
-      <div class="app-dl-outer-card">
+      <div class="app-dl-cards">
 
-        <a class="app-dl-row android" href="/downloads/android">
-          <div class="app-dl-row-icon android-wrap">
+        <a class="app-dl-card android" href="/downloads/android">
+          <div class="app-dl-card-icon android-ic">
             <svg width="26" height="26" viewBox="0 0 24 24" fill="currentColor"><path d="M17.6 9.48l1.84-3.18c.16-.31.04-.69-.26-.85a.64.64 0 0 0-.86.27l-1.86 3.22A10.4 10.4 0 0 0 12 8c-1.53 0-2.98.33-4.27.94L5.67 5.72a.64.64 0 0 0-.86-.27.64.64 0 0 0-.26.85L6.4 9.48A9.93 9.93 0 0 0 2 18h20a9.93 9.93 0 0 0-4.4-8.52zM8.5 15a1 1 0 1 1 0-2 1 1 0 0 1 0 2zm7 0a1 1 0 1 1 0-2 1 1 0 0 1 0 2z"/></svg>
           </div>
-          <div class="app-dl-row-text"><div class="app-dl-row-name">Android</div><div class="app-dl-row-desc">Download &amp; install the APK</div></div>
-          <div class="app-dl-row-btn android-btn">↓ APK</div>
+          <div class="app-dl-card-body">
+            <div class="app-dl-card-name">Android</div>
+            <div class="app-dl-card-desc">Download &amp; install the APK</div>
+          </div>
+          <div class="app-dl-card-btn android-btn">↓ APK</div>
         </a>
 
-        <div class="app-dl-divider"></div>
-
-        <a class="app-dl-row windows" href="/downloads/windows">
-          <div class="app-dl-row-icon windows-wrap">
+        <a class="app-dl-card windows" href="/downloads/windows">
+          <div class="app-dl-card-icon windows-ic">
             <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor"><path d="M3 5.557 9.875 4.64V11H3V5.557ZM3 12h6.875v6.385L3 17.443V12ZM10.875 4.5 21 3v8h-10.125V4.5ZM10.875 12H21v8.002l-10.125-1.5V12Z"/></svg>
           </div>
-          <div class="app-dl-row-text"><div class="app-dl-row-name">Windows</div><div class="app-dl-row-desc">Desktop installer</div></div>
-          <div class="app-dl-row-btn windows-btn">↓ EXE</div>
+          <div class="app-dl-card-body">
+            <div class="app-dl-card-name">Windows</div>
+            <div class="app-dl-card-desc">Desktop installer</div>
+          </div>
+          <div class="app-dl-card-btn windows-btn">↓ EXE</div>
         </a>
 
-        <div class="app-dl-divider"></div>
-
-        <a class="app-dl-row mac" href="/downloads/mac">
-          <div class="app-dl-row-icon mac-wrap">
+        <a class="app-dl-card mac" href="/downloads/mac">
+          <div class="app-dl-card-icon mac-ic">
             <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor"><path d="M18.71 19.5c-.83 1.24-1.71 2.45-3.05 2.47-1.34.03-1.77-.79-3.29-.79-1.53 0-2 .77-3.27.82-1.31.05-2.3-1.32-3.14-2.53C4.25 17 2.94 12.45 4.7 9.39c.87-1.52 2.43-2.48 4.12-2.51 1.28-.02 2.5.87 3.29.87.78 0 2.26-1.07 3.8-.91.65.03 2.47.26 3.64 1.98-.09.06-2.17 1.28-2.15 3.81.03 3.02 2.65 4.03 2.68 4.04-.03.07-.42 1.44-1.38 2.83M13 3.5c.73-.83 1.94-1.46 2.94-1.5.13 1.17-.34 2.35-1.04 3.19-.69.85-1.83 1.51-2.95 1.42-.15-1.15.41-2.35 1.05-3.11Z"/></svg>
           </div>
-          <div class="app-dl-row-text"><div class="app-dl-row-name">macOS</div><div class="app-dl-row-desc">Disk image installer</div></div>
-          <div class="app-dl-row-btn mac-btn">↓ DMG</div>
+          <div class="app-dl-card-body">
+            <div class="app-dl-card-name">macOS</div>
+            <div class="app-dl-card-desc">Disk image installer</div>
+          </div>
+          <div class="app-dl-card-btn mac-btn">↓ DMG</div>
         </a>
 
       </div>
@@ -383,51 +388,54 @@ function selectPortal(t){if(window._appLoaded)window._realSelectPortal(t);else w
         font-size:12px;color:rgba(255,255,255,.45);
         margin-bottom:16px;font-weight:500;text-align:center;
       }
-      /* ── Single outer card wrapping all rows ── */
-      .app-dl-outer-card{
-        background:rgba(255,255,255,.82);
-        backdrop-filter:blur(28px) saturate(1.8);
-        border:1px solid rgba(255,255,255,.9);
-        border-radius:22px;
-        box-shadow:0 8px 40px rgba(0,0,0,.18),inset 0 1px 0 rgba(255,255,255,.95);
-        overflow:hidden;
-        margin-bottom:12px;
-      }
-      .app-dl-row{
+      /* ── Three individual tinted cards ── */
+      .app-dl-cards{display:flex;flex-direction:column;gap:10px;margin-bottom:12px;}
+      .app-dl-card{
         display:flex;align-items:center;gap:14px;
-        padding:14px 18px;text-decoration:none;
-        transition:background .15s;
+        padding:15px 18px;border-radius:22px;text-decoration:none;
+        backdrop-filter:blur(24px) saturate(1.8);
+        border:1px solid rgba(255,255,255,.3);
+        box-shadow:0 4px 20px rgba(0,0,0,.12),inset 0 1px 0 rgba(255,255,255,.7);
+        transition:transform .16s,box-shadow .16s;
+        position:relative;overflow:hidden;
       }
-      .app-dl-row:active{background:rgba(0,0,0,.04);}
-      .app-dl-row:hover{background:rgba(0,0,0,.03);}
-      .app-dl-divider{
-        height:1px;margin:0 18px;
-        background:rgba(0,0,0,.06);
+      .app-dl-card:active{transform:scale(.98);}
+      .app-dl-card:hover{transform:translateY(-2px);box-shadow:0 8px 28px rgba(0,0,0,.18),inset 0 1px 0 rgba(255,255,255,.8);}
+      /* Tinted backgrounds */
+      .app-dl-card.android{background:linear-gradient(135deg,rgba(187,247,208,.9) 0%,rgba(209,250,229,.92) 100%);}
+      .app-dl-card.windows{background:linear-gradient(135deg,rgba(191,219,254,.9) 0%,rgba(219,234,254,.92) 100%);}
+      .app-dl-card.mac    {background:linear-gradient(135deg,rgba(221,214,254,.9) 0%,rgba(237,233,254,.92) 100%);}
+      /* Subtle glow blob in top-right */
+      .app-dl-card::after{
+        content:'';position:absolute;top:-20px;right:-20px;
+        width:80px;height:80px;border-radius:50%;pointer-events:none;opacity:.35;
       }
+      .app-dl-card.android::after{background:radial-gradient(circle,#4ade80,transparent);}
+      .app-dl-card.windows::after{background:radial-gradient(circle,#60a5fa,transparent);}
+      .app-dl-card.mac::after    {background:radial-gradient(circle,#a78bfa,transparent);}
       /* ── Icon circle ── */
-      .app-dl-row-icon{
-        width:48px;height:48px;border-radius:50%;flex-shrink:0;
+      .app-dl-card-icon{
+        width:52px;height:52px;border-radius:50%;flex-shrink:0;
         display:grid;place-items:center;
-        box-shadow:0 2px 8px rgba(0,0,0,.1);
+        position:relative;z-index:1;
+        box-shadow:0 3px 10px rgba(0,0,0,.12);
       }
-      .android-wrap{background:rgba(134,239,172,.55);}
-      .android-wrap svg{color:#16a34a;}
-      .windows-wrap{background:rgba(147,197,253,.55);}
-      .windows-wrap svg{color:#1d4ed8;}
-      .mac-wrap{background:rgba(196,181,253,.55);}
-      .mac-wrap svg{color:#6d28d9;}
-      /* ── Text ── */
-      .app-dl-row-text{flex:1;min-width:0;}
-      .app-dl-row-name{font-size:15px;font-weight:800;color:#1e1b4b;line-height:1.1;}
-      .app-dl-row-desc{font-size:11px;color:rgba(30,27,75,.45);margin-top:2px;}
+      .android-ic{background:linear-gradient(135deg,#86efac,#4ade80);color:#15803d;}
+      .windows-ic{background:linear-gradient(135deg,#93c5fd,#60a5fa);color:#1e40af;}
+      .mac-ic    {background:linear-gradient(135deg,#c4b5fd,#a78bfa);color:#5b21b6;}
+      /* ── Body text ── */
+      .app-dl-card-body{flex:1;min-width:0;position:relative;z-index:1;}
+      .app-dl-card-name{font-size:16px;font-weight:800;color:#1e1b4b;line-height:1.1;}
+      .app-dl-card-desc{font-size:11px;color:rgba(30,27,75,.5);margin-top:2px;}
       /* ── Pill button ── */
-      .app-dl-row-btn{
-        flex-shrink:0;font-size:11px;font-weight:800;letter-spacing:.04em;
-        padding:8px 16px;border-radius:30px;white-space:nowrap;
+      .app-dl-card-btn{
+        flex-shrink:0;font-size:11.5px;font-weight:800;letter-spacing:.03em;
+        padding:9px 18px;border-radius:30px;white-space:nowrap;
+        position:relative;z-index:1;
       }
-      .android-btn{background:linear-gradient(135deg,#22c55e,#16a34a);color:#fff;box-shadow:0 3px 10px rgba(34,197,94,.4);}
-      .windows-btn{background:linear-gradient(135deg,#3b82f6,#1d4ed8);color:#fff;box-shadow:0 3px 10px rgba(59,130,246,.4);}
-      .mac-btn{background:linear-gradient(135deg,#a78bfa,#7c3aed);color:#fff;box-shadow:0 3px 10px rgba(124,58,237,.4);}
+      .android-btn{background:linear-gradient(135deg,#22c55e,#16a34a);color:#fff;box-shadow:0 3px 12px rgba(34,197,94,.5);}
+      .windows-btn{background:linear-gradient(135deg,#3b82f6,#1d4ed8);color:#fff;box-shadow:0 3px 12px rgba(59,130,246,.5);}
+      .mac-btn    {background:linear-gradient(135deg,#a78bfa,#7c3aed);color:#fff;box-shadow:0 3px 12px rgba(124,58,237,.5);}
       /* ── iOS note ── */
       .app-dl-ios-note{
         display:flex;align-items:center;justify-content:center;gap:6px;
