@@ -251,23 +251,26 @@ jobs:
           cp "$APK" dikly.apk
           echo "APK size: $(du -sh dikly.apk | cut -f1)"
 
-      # Delete the existing apk-latest tag so the release can be re-created cleanly
+      # Publish to the PUBLIC dikly-releases repo so downloads work without GitHub login.
+      # Requires RELEASES_PAT secret: a fine-grained PAT with Contents write on dikly-releases.
       - name: Delete previous apk-latest release & tag (if exists)
         run: |
-          gh release delete apk-latest --yes --cleanup-tag 2>/dev/null || true
+          gh release delete apk-latest --yes --cleanup-tag \
+            --repo isaacaryeepah-beep/dikly-releases 2>/dev/null || true
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.RELEASES_PAT }}
 
-      - name: Publish GitHub Release
+      - name: Publish to dikly-releases (public repo)
         uses: softprops/action-gh-release@v2
         with:
+          repository: isaacaryeepah-beep/dikly-releases
           tag_name: apk-latest
           name: "DIKLY App — Latest Build"
           body: |
-            **DIKLY Android App** — latest build from `main` (build #${{ github.run_number }}).
+            **DIKLY Android App** — latest build (build #${{ github.run_number }}).
 
             ### How to install
-            1. Tap **dikly.apk** below to download
+            1. Download **dikly.apk** below
             2. On your Android phone: open the file and tap **Install**
                *(If prompted, enable "Install from unknown sources" in Settings)*
 
@@ -275,4 +278,4 @@ jobs:
           files: dikly.apk
           make_latest: true
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.RELEASES_PAT }}
