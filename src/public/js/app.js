@@ -13822,37 +13822,24 @@ async function downloadReport(type, apiBase = 'reports', e) {
                         navigator.userAgent.includes('DiklyApp/'));
 
     if (isNative) {
-      const FS = window.Capacitor?.Plugins?.Filesystem;
-      if (!FS) {
-        toastError('Please reinstall the DIKLY app to enable downloads.');
-        return;
-      }
-      // Fetch PDF bytes directly using JWT bearer token
-      const pdfRes = await fetch(`${API}/api/${apiBase}/${type}`, {
+      // Get a one-time download URL then open it in the system browser
+      // (Chrome/default browser handles the PDF download natively — no Filesystem needed)
+      const linkRes = await fetch(`${API}/api/reports/download-link/${type}`, {
         headers: { 'Authorization': `Bearer ${token}` },
       });
-      if (!pdfRes.ok) {
-        let errMsg = 'Failed to generate report';
-        try { const e = await pdfRes.json(); errMsg = e.error || errMsg; } catch(_) {}
+      if (!linkRes.ok) {
+        let errMsg = 'Failed to prepare download';
+        try { const err = await linkRes.json(); errMsg = err.error; } catch(_) {}
         throw new Error(errMsg);
       }
-      const blob = await pdfRes.blob();
-      // Convert blob to base64
-      const base64 = await new Promise((resolve, reject) => {
-        const reader = new FileReader();
-        reader.onload  = () => resolve(reader.result.split(',')[1]);
-        reader.onerror = reject;
-        reader.readAsDataURL(blob);
-      });
-      const filename = `${type}-report.pdf`;
-      // Save to app-specific external storage — no permission needed on any Android version
-      await FS.writeFile({
-        path: `Reports/${filename}`,
-        data: base64,
-        directory: 'EXTERNAL',
-        recursive: true,
-      });
-      toast('Report saved to device storage', 'ok');
+      const { url } = await linkRes.json();
+      const fullUrl = `${API}${url}`;
+      const Browser = window.Capacitor?.Plugins?.Browser;
+      if (Browser) {
+        await Browser.open({ url: fullUrl });
+      } else {
+        window.open(fullUrl, '_blank', 'noopener,noreferrer');
+      }
       return;
     }
 
