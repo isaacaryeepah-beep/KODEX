@@ -238,6 +238,42 @@ app.get('/exam-room', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'exam-room.html'));
 });
 
+// ── App download proxy ───────────────────────────────────────────────────────
+// Streams the app installer directly so the browser downloads it without
+// opening a new tab or redirecting to GitHub.
+const DOWNLOAD_URLS = {
+  android: process.env.ANDROID_DOWNLOAD_URL || 'https://github.com/isaacaryeepah-beep/dikly-releases/releases/latest/download/dikly.apk',
+  windows: process.env.WINDOWS_DOWNLOAD_URL || 'https://github.com/isaacaryeepah-beep/dikly-releases/releases/latest/download/dikly-windows-setup.exe',
+  mac:     process.env.MAC_DOWNLOAD_URL     || 'https://github.com/isaacaryeepah-beep/dikly-releases/releases/latest/download/dikly-mac.dmg',
+};
+const DOWNLOAD_META = {
+  android: { filename: 'dikly.apk',               type: 'application/vnd.android.package-archive' },
+  windows: { filename: 'dikly-windows-setup.exe',  type: 'application/octet-stream' },
+  mac:     { filename: 'dikly-mac.dmg',             type: 'application/octet-stream' },
+};
+
+app.get('/downloads/:platform', async (req, res) => {
+  const platform = req.params.platform;
+  const url  = DOWNLOAD_URLS[platform];
+  const meta = DOWNLOAD_META[platform];
+  if (!url || !meta) return res.status(404).json({ error: 'Unknown platform' });
+
+  try {
+    const upstream = await fetch(url, { redirect: 'follow' });
+    if (!upstream.ok) {
+      return res.status(404).json({ error: 'App build not available yet. Please try again shortly.' });
+    }
+    const size = upstream.headers.get('content-length');
+    res.setHeader('Content-Type', meta.type);
+    res.setHeader('Content-Disposition', `attachment; filename="${meta.filename}"`);
+    if (size) res.setHeader('Content-Length', size);
+    res.setHeader('Cache-Control', 'no-store');
+    upstream.body.pipe(res);
+  } catch (err) {
+    res.status(502).json({ error: 'Download temporarily unavailable. Please try again.' });
+  }
+});
+
 app.get("/anticheat",      (req, res) => res.sendFile(path.join(__dirname, "public", "anticheat-dashboard.html")));
 app.get("/about",          (req, res) => res.sendFile(path.join(__dirname, "public", "about.html")));
 app.get("/founder",        (req, res) => res.sendFile(path.join(__dirname, "public", "founder.html")));

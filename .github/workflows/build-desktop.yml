@@ -53,14 +53,15 @@ jobs:
         shell: pwsh
 
       - name: Delete previous windows-latest release (if exists)
-        run: gh release delete windows-latest --yes --cleanup-tag 2>$null; exit 0
+        run: gh release delete windows-latest --yes --cleanup-tag --repo isaacaryeepah-beep/dikly-releases 2>$null; exit 0
         shell: pwsh
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.RELEASES_PAT }}
 
-      - name: Publish Windows GitHub Release
+      - name: Publish Windows to dikly-releases (public repo)
         uses: softprops/action-gh-release@v2
         with:
+          repository: isaacaryeepah-beep/dikly-releases
           tag_name: windows-latest
           name: "DIKLY Desktop — Windows (Latest)"
           body: |
@@ -73,7 +74,7 @@ jobs:
           files: dikly-windows-setup.exe
           make_latest: false
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.RELEASES_PAT }}
 
   build-mac:
     runs-on: macos-latest
@@ -119,13 +120,14 @@ jobs:
           echo "Found: $DMG ($(du -sh dikly-mac.dmg | cut -f1))"
 
       - name: Delete previous mac-latest release (if exists)
-        run: gh release delete mac-latest --yes --cleanup-tag 2>/dev/null || true
+        run: gh release delete mac-latest --yes --cleanup-tag --repo isaacaryeepah-beep/dikly-releases 2>/dev/null || true
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.RELEASES_PAT }}
 
-      - name: Publish Mac GitHub Release
+      - name: Publish Mac to dikly-releases (public repo)
         uses: softprops/action-gh-release@v2
         with:
+          repository: isaacaryeepah-beep/dikly-releases
           tag_name: mac-latest
           name: "DIKLY Desktop — macOS (Latest)"
           body: |
@@ -141,4 +143,4 @@ jobs:
           files: dikly-mac.dmg
           make_latest: false
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.RELEASES_PAT }}
