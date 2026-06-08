@@ -1311,6 +1311,9 @@ function selectMode(mode) {
 function selectPortal(type) {
   selectedPortalType = type;
   document.getElementById('portal-selector').classList.add('hidden');
+  ['workspace-brand','app-download-section','workspace-foot'].forEach(id => {
+    const el = document.getElementById(id); if (el) el.classList.add('hidden');
+  });
   if (type === 'admin-corporate' || type === 'admin-academic' || type === 'manager') {
     const isAcademic = type === 'admin-academic';
     const isManager  = type === 'manager';
@@ -1349,6 +1352,9 @@ function showPortalSelector() {
   document.getElementById('employee-auth').classList.add('hidden');
   document.getElementById('student-auth').classList.add('hidden');
   document.getElementById('portal-selector').classList.remove('hidden');
+  ['workspace-brand','app-download-section','workspace-foot'].forEach(id => {
+    const el = document.getElementById(id); if (el) el.classList.remove('hidden');
+  });
   const mrf = document.getElementById('manager-register-form'); if (mrf) mrf.classList.add('hidden');
   document.querySelectorAll('.auth-container input').forEach(i => i.value = '');
   document.querySelectorAll('.error-msg').forEach(e => e.style.display = 'none');
