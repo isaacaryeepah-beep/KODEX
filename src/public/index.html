@@ -392,55 +392,37 @@ function selectPortal(t){if(window._appLoaded)window._realSelectPortal(t);else w
       }
       .app-dl-card{
         display:flex;flex-direction:column;align-items:center;justify-content:center;
-        gap:8px;padding:16px 8px;border-radius:20px;text-decoration:none;
+        gap:8px;padding:16px 8px;border-radius:14px;text-decoration:none;
         aspect-ratio:1/1;
-        border:1px solid rgba(255,255,255,.4);
-        box-shadow:0 6px 20px rgba(0,0,0,.16),inset 0 1px 0 rgba(255,255,255,.9);
+        background:#fff;
+        border:1.5px solid #e5e7eb;
+        box-shadow:0 1px 2px rgba(0,0,0,.05);
         transition:transform .18s,box-shadow .18s;
         position:relative;overflow:hidden;
       }
-      .app-dl-card:active{transform:scale(.94);}
-      .app-dl-card:hover{transform:translateY(-4px);box-shadow:0 14px 32px rgba(0,0,0,.22),inset 0 1px 0 rgba(255,255,255,.95);}
-      .app-dl-card.android{background:linear-gradient(160deg,#c7f7dc,#bbf7d0 40%,#d1fae5);}
-      .app-dl-card.windows{background:linear-gradient(160deg,#c4e6ff,#bfdbfe 40%,#dbeafe);}
-      .app-dl-card.mac    {background:linear-gradient(160deg,#e4daff,#ddd6fe 40%,#ede9fe);}
-      /* top gloss shimmer */
-      .app-dl-card::before{
-        content:'';position:absolute;inset:0;border-radius:20px;pointer-events:none;
-        background:linear-gradient(170deg,rgba(255,255,255,.55) 0%,rgba(255,255,255,0) 55%);
-      }
-      /* corner glow blob */
-      .app-dl-card::after{
-        content:'';position:absolute;top:-20px;right:-20px;
-        width:72px;height:72px;border-radius:50%;pointer-events:none;opacity:.5;
-      }
-      .app-dl-card.android::after{background:radial-gradient(circle,#34d399,transparent);}
-      .app-dl-card.windows::after{background:radial-gradient(circle,#60a5fa,transparent);}
-      .app-dl-card.mac::after    {background:radial-gradient(circle,#a78bfa,transparent);}
-      /* ── Icon circle ── */
+      .app-dl-card:active{transform:scale(.96);}
+      .app-dl-card:hover{transform:translateY(-3px);box-shadow:0 8px 20px rgba(0,0,0,.12);border-color:transparent;}
+      /* ── Icon rounded square (matches portal-icon style) ── */
       .app-dl-card-icon{
-        width:46px;height:46px;border-radius:50%;
+        width:44px;height:44px;border-radius:11px;
         display:grid;place-items:center;
-        box-shadow:0 4px 12px rgba(0,0,0,.18);
-        position:relative;z-index:1;
       }
-      .android-ic{background:linear-gradient(135deg,#6ee7b7,#10b981);color:#064e3b;}
-      .windows-ic{background:linear-gradient(135deg,#7dd3fc,#3b82f6);color:#1e3a8a;}
-      .mac-ic    {background:linear-gradient(135deg,#c4b5fd,#7c3aed);color:#3b0764;}
+      .android-ic{background:#dcfce7;color:#16a34a;}
+      .windows-ic{background:#dbeafe;color:#2563eb;}
+      .mac-ic    {background:#ede9fe;color:#7c3aed;}
       /* ── Name ── */
       .app-dl-card-name{
-        font-size:12px;font-weight:800;color:#1e1b4b;
-        position:relative;z-index:1;text-align:center;letter-spacing:.02em;
+        font-size:12px;font-weight:700;color:#111827;
+        text-align:center;
       }
       /* ── Button ── */
       .app-dl-card-btn{
         font-size:10px;font-weight:800;letter-spacing:.06em;
-        padding:5px 12px;border-radius:20px;
-        position:relative;z-index:1;white-space:nowrap;
+        padding:5px 12px;border-radius:20px;white-space:nowrap;
       }
-      .android-btn{background:linear-gradient(135deg,#10b981,#059669);color:#fff;box-shadow:0 3px 10px rgba(16,185,129,.5);}
-      .windows-btn{background:linear-gradient(135deg,#3b82f6,#1d4ed8);color:#fff;box-shadow:0 3px 10px rgba(59,130,246,.5);}
-      .mac-btn    {background:linear-gradient(135deg,#8b5cf6,#6d28d9);color:#fff;box-shadow:0 3px 10px rgba(139,92,246,.5);}
+      .android-btn{background:linear-gradient(135deg,#10b981,#059669);color:#fff;box-shadow:0 2px 8px rgba(16,185,129,.4);}
+      .windows-btn{background:linear-gradient(135deg,#3b82f6,#1d4ed8);color:#fff;box-shadow:0 2px 8px rgba(59,130,246,.4);}
+      .mac-btn    {background:linear-gradient(135deg,#8b5cf6,#6d28d9);color:#fff;box-shadow:0 2px 8px rgba(139,92,246,.4);}
       /* ── iOS note ── */
       .app-dl-ios-note{
         display:flex;align-items:center;justify-content:center;gap:6px;
