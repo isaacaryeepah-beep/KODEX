@@ -155,64 +155,9 @@ function selectPortal(t){if(window._appLoaded)window._realSelectPortal(t);else w
 
 <!-- ── Native app splash overlay (Capacitor only, hidden on web) ── -->
 <div id="native-splash" style="display:none;position:fixed;inset:0;z-index:99999;
-  background:linear-gradient(160deg,#061528 0%,#0a1f3d 40%,#071220 100%);
-  flex-direction:column;align-items:center;justify-content:center;
-  font-family:'DM Sans',Inter,sans-serif;overflow:hidden;">
-
-  <!-- animated glow blobs -->
-  <div style="position:absolute;width:320px;height:320px;border-radius:50%;
-    background:radial-gradient(circle,rgba(0,200,255,.18) 0%,transparent 70%);
-    top:10%;left:50%;transform:translateX(-50%);filter:blur(40px);animation:splashPulse 3s ease-in-out infinite;"></div>
-  <div style="position:absolute;width:500px;height:200px;border-radius:50%;
-    background:radial-gradient(ellipse,rgba(0,120,255,.12) 0%,transparent 70%);
-    bottom:18%;left:50%;transform:translateX(-50%);filter:blur(30px);animation:splashPulse 3s ease-in-out infinite .8s;"></div>
-
-  <!-- wave lines at bottom -->
-  <svg style="position:absolute;bottom:0;left:0;width:100%;opacity:.35" viewBox="0 0 400 180" preserveAspectRatio="none">
-    <path d="M0,140 C60,100 120,160 200,130 C280,100 340,150 400,120 L400,180 L0,180Z" fill="rgba(0,180,255,.15)"/>
-    <path d="M0,155 C80,130 140,165 220,145 C300,125 360,158 400,138 L400,180 L0,180Z" fill="rgba(0,140,255,.2)"/>
-    <path d="M0,165 C90,150 160,172 240,158 C320,144 370,168 400,152 L400,180 L0,180Z" fill="rgba(0,100,200,.25)"/>
-  </svg>
-  <!-- glowing particle dots -->
-  <svg style="position:absolute;bottom:0;left:0;width:100%;opacity:.5" viewBox="0 0 400 180">
-    <circle cx="40" cy="140" r="1.5" fill="#00cfff"/><circle cx="80" cy="160" r="1" fill="#00cfff"/>
-    <circle cx="130" cy="148" r="2" fill="#00cfff"/><circle cx="200" cy="135" r="1.5" fill="#00cfff"/>
-    <circle cx="260" cy="152" r="1" fill="#00cfff"/><circle cx="320" cy="142" r="2" fill="#00cfff"/>
-    <circle cx="370" cy="158" r="1.5" fill="#00cfff"/>
-  </svg>
-
-  <!-- D logo -->
-  <div style="position:relative;z-index:2;margin-bottom:20px;filter:drop-shadow(0 0 24px rgba(0,210,255,.7))">
-    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" width="90" height="90">
-      <defs>
-        <linearGradient id="sg" x1="0%" y1="0%" x2="100%" y2="100%">
-          <stop offset="0%" stop-color="#00e5ff"/>
-          <stop offset="50%" stop-color="#00aaff"/>
-          <stop offset="100%" stop-color="#0066dd"/>
-        </linearGradient>
-        <clipPath id="sc"><path d="M14,4 L14,96 L50,96 C97,93 97,7 50,4 Z"/></clipPath>
-      </defs>
-      <path d="M14,4 L14,96 L50,96 C97,93 97,7 50,4 Z" fill="url(#sg)"/>
-      <g clip-path="url(#sc)">
-        <polygon points="4,58 63,-2 89,-2 30,58" fill="rgba(255,255,255,0.5)"/>
-        <polygon points="30,102 89,42 63,42 4,102" fill="rgba(255,255,255,0.5)"/>
-      </g>
-    </svg>
-  </div>
-
-  <!-- wordmark -->
-  <div style="position:relative;z-index:2;color:#ffffff;font-size:38px;font-weight:700;
-    letter-spacing:2px;text-shadow:0 0 30px rgba(0,200,255,.5);margin-bottom:10px">Dikly</div>
-
-  <!-- tagline -->
-  <div style="position:relative;z-index:2;color:rgba(160,210,255,.75);font-size:11px;
-    letter-spacing:3.5px;font-weight:400;text-transform:uppercase">
-    INNOVATE &nbsp;•&nbsp; CONNECT &nbsp;•&nbsp; EMPOWER
-  </div>
-</div>
+  background:#061528 url('/splash-screen.png') center/cover no-repeat;"></div>
 
 <style>
-@keyframes splashPulse{0%,100%{opacity:.6;transform:translateX(-50%) scale(1)}50%{opacity:1;transform:translateX(-50%) scale(1.12)}}
 @keyframes splashFade{0%{opacity:1;pointer-events:auto}80%{opacity:1}100%{opacity:0;pointer-events:none}}
 </style>
 <script>
@@ -221,8 +166,7 @@ function selectPortal(t){if(window._appLoaded)window._realSelectPortal(t);else w
   var isNative=navigator.userAgent.includes('DiklyApp/')||
     (typeof window.Capacitor!=='undefined'&&window.Capacitor.isNativePlatform&&window.Capacitor.isNativePlatform());
   if(!isNative){el.remove();return;}
-  el.style.display='flex';
-  // Fade out after 2.4 s, remove after animation
+  el.style.display='block';
   setTimeout(function(){
     el.style.animation='splashFade 0.6s ease forwards';
     setTimeout(function(){el.remove();},600);
