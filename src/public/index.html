@@ -182,6 +182,60 @@ function selectPortal(t){if(window._appLoaded)window._realSelectPortal(t);else w
       <p class="workspace-subtitle">Enterprise Attendance Management Platform</p>
     </div>
 
+    <!-- ── Get the App banner ──────────────────────────────────────── -->
+    <div id="app-download-strip">
+      <div class="app-dl-inner">
+        <div class="app-dl-left">
+          <div class="app-dl-icon">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="2" width="14" height="20" rx="2"/><path d="M12 18h.01"/></svg>
+          </div>
+          <div>
+            <div class="app-dl-title">Get the DIKLY App</div>
+            <div class="app-dl-sub">Take DIKLY anywhere — attendance, quizzes &amp; more</div>
+          </div>
+        </div>
+        <div class="app-dl-buttons">
+          <!-- Android APK direct download -->
+          <a id="android-dl-btn" class="app-dl-btn android-btn" href="/downloads/dikly.apk" download="dikly.apk">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor"><path d="M17.523 15.341 14.026 12l3.497-3.341a.75.75 0 0 0-1.046-1.077l-3.73 3.564a.75.75 0 0 0 0 1.028l3.73 3.564a.75.75 0 0 0 1.046-1.077ZM1.477 15.341a.75.75 0 0 0 1.046 1.077l3.73-3.564a.75.75 0 0 0 0-1.028L2.523 8.262a.75.75 0 0 0-1.046 1.077L4.974 12l-3.497 3.341Z"/><path d="M8.5 2.5a.75.75 0 0 1 .75.75V12a.75.75 0 0 1-1.5 0V3.25A.75.75 0 0 1 8.5 2.5Z"/></svg>
+            <span>Android APK</span>
+          </a>
+          <!-- iOS: coming soon -->
+          <div class="app-dl-btn ios-btn coming-soon">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor"><path d="M18.71 19.5c-.83 1.24-1.71 2.45-3.05 2.47-1.34.03-1.77-.79-3.29-.79-1.53 0-2 .77-3.27.82-1.31.05-2.3-1.32-3.14-2.53C4.25 17 2.94 12.45 4.7 9.39c.87-1.52 2.43-2.48 4.12-2.51 1.28-.02 2.5.87 3.29.87.78 0 2.26-1.07 3.8-.91.65.03 2.47.26 3.64 1.98-.09.06-2.17 1.28-2.15 3.81.03 3.02 2.65 4.03 2.68 4.04-.03.07-.42 1.44-1.38 2.83M13 3.5c.73-.83 1.94-1.46 2.94-1.5.13 1.17-.34 2.35-1.04 3.19-.69.85-1.83 1.51-2.95 1.42-.15-1.15.41-2.35 1.05-3.11Z"/></svg>
+            <span>iOS — Coming Soon</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <style>
+      #app-download-strip{width:100%;max-width:480px;margin:0 auto 18px;padding:0 16px}
+      .app-dl-inner{display:flex;align-items:center;justify-content:space-between;gap:12px;
+        background:linear-gradient(135deg,rgba(79,70,229,.08) 0%,rgba(99,102,241,.05) 100%);
+        border:1px solid rgba(99,102,241,.18);border-radius:16px;padding:14px 16px;flex-wrap:wrap}
+      .app-dl-left{display:flex;align-items:center;gap:10px;flex:1;min-width:0}
+      .app-dl-icon{width:36px;height:36px;border-radius:10px;
+        background:linear-gradient(135deg,#4f46e5,#7c3aed);
+        display:grid;place-items:center;color:#fff;flex-shrink:0}
+      .app-dl-title{font-size:13px;font-weight:700;color:#1e293b;line-height:1.3}
+      .app-dl-sub{font-size:11px;color:#64748b;margin-top:1px;line-height:1.4}
+      .app-dl-buttons{display:flex;align-items:center;gap:7px;flex-shrink:0;flex-wrap:wrap}
+      .app-dl-btn{display:inline-flex;align-items:center;gap:6px;padding:8px 13px;
+        border-radius:10px;font-size:12px;font-weight:700;text-decoration:none;
+        cursor:pointer;transition:transform .1s,box-shadow .15s;white-space:nowrap}
+      .app-dl-btn:active{transform:scale(.97)}
+      .android-btn{background:#1a1a2e;color:#fff;box-shadow:0 2px 8px rgba(0,0,0,.15)}
+      .android-btn:hover{box-shadow:0 4px 14px rgba(0,0,0,.22)}
+      .ios-btn{background:rgba(100,116,139,.08);border:1px solid rgba(100,116,139,.2);color:#94a3b8;cursor:default}
+      .coming-soon{opacity:.7}
+      @media(max-width:460px){
+        .app-dl-inner{flex-direction:column;align-items:flex-start}
+        .app-dl-buttons{width:100%}
+        .app-dl-btn{flex:1;justify-content:center}
+      }
+    </style>
+
     <div id="portal-selector">
       <div class="portal-main-heading">CHOOSE YOUR WORKSPACE</div>
 
