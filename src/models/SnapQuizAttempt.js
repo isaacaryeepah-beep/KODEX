@@ -225,6 +225,18 @@ snapQuizAttemptSchema.index(
   { unique: true, name: "snap_unique_attempt_number" }
 );
 
+// Prevent concurrent active attempts for the same student/quiz.
+// partialFilterExpression means this index only covers documents where status="active",
+// so it doesn't block multiple submitted/terminated attempts.
+snapQuizAttemptSchema.index(
+  { quiz: 1, student: 1 },
+  {
+    unique: true,
+    partialFilterExpression: { status: "active" },
+    name: "snap_one_active_attempt_per_student",
+  }
+);
+
 // Session token lookup (for session-lock validation on every request).
 snapQuizAttemptSchema.index(
   { sessionToken: 1 },

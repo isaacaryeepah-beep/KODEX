@@ -297,17 +297,20 @@ exports.closeQuiz = async (req, res) => {
 
     const now = new Date();
     if (activeAttempts.length > 0) {
-      // Mark all as auto_submitted first so no further responses can be saved.
-      const ids = activeAttempts.map(a => a._id);
-      await SnapQuizAttempt.updateMany(
-        { _id: { $in: ids } },
-        { $set: { status: "auto_submitted", submittedAt: now } }
-      );
-
-      // Auto-grade each attempt and upsert its result document.
+      // Auto-grade each attempt. Use atomic findOneAndUpdate({ status: "active" })
+      // so that if the watchdog runs concurrently it won't double-grade.
       const { passMark, autoReleaseResults } = quiz;
       await Promise.all(activeAttempts.map(async (a) => {
         try {
+          // Atomic claim: only grade if still active
+          const claimed = await SnapQuizAttempt.findOneAndUpdate(
+            { _id: a._id, status: "active" },
+            { $set: { status: "auto_submitted", submittedAt: now,
+                       timeSpentSeconds: Math.round((now - a.startedAt) / 1000) } },
+            { new: false }
+          );
+          if (!claimed) return; // Already handled by watchdog
+
           const { rawScore, maxScore, hasManual } = await _autoGradeAttemptLecturer(a._id, a.company);
           const pct      = maxScore > 0 ? (rawScore / maxScore) * 100 : 0;
           const isPassed = passMark != null ? rawScore >= passMark : null;
@@ -317,7 +320,6 @@ exports.closeQuiz = async (req, res) => {
               maxScore,
               percentageScore: Math.round(pct * 100) / 100,
               isPassed,
-              timeSpentSeconds: Math.round((now - a.startedAt) / 1000),
               gradingStatus: hasManual ? "partially_graded" : "auto_graded",
               ...(hasManual ? {} : { gradedAt: now }),
             },
@@ -683,8 +685,9 @@ exports.gradeResponse = async (req, res) => {
       _id: req.params.responseId, attempt: req.params.attemptId, company: req.companyId,
     });
     if (!response) return res.status(404).json({ error: "Response not found" });
-    if (earnedMarks < 0 || earnedMarks > response.maxMarks) {
-      return res.status(400).json({ error: `earnedMarks must be 0–${response.maxMarks}` });
+    const ceiling = Math.max(response.maxMarks ?? 0, 0);
+    if (earnedMarks < 0 || earnedMarks > ceiling) {
+      return res.status(400).json({ error: `earnedMarks must be 0–${ceiling}` });
     }
 
     response.earnedMarks      = earnedMarks;

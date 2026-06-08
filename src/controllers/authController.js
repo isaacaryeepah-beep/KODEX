@@ -5,7 +5,8 @@ const Company = require("../models/Company");
 const PlatformSettings = require("../models/PlatformSettings");
 const StudentRoster = require("../models/StudentRoster");
 const MeetingIdentity = require("../models/MeetingIdentity");
-const { generateToken, generateRefreshToken, verifyRefreshToken } = require("../utils/jwt");
+const { generateToken, generateRefreshToken, verifyRefreshToken, hashToken } = require("../utils/jwt");
+const RefreshToken = require("../models/RefreshToken");
 const { sendWelcome, sendAdminPasswordResetNotice, sendPasswordReset, sendNewInstitutionAlert, sendLecturerWelcome, sendEmployeeWelcome, sendHodWelcome } = require("../services/emailService");
 const { sendOtp, normalisePhone } = require("../services/smsService");
 const { syncStudentToRoster } = require("../utils/rosterSync");
@@ -32,6 +33,24 @@ async function createMeetingIdentity(user, companyId) {
   } catch (e) {
     // Non-fatal — identity can be created lazily on first join
     console.error('[MeetingIdentity] auto-create failed:', e.message);
+  }
+}
+
+// Store a newly issued refresh token hash in the DB.
+// Kept in a try/catch so a DB error never blocks login.
+async function persistRefreshToken(token, userId, req) {
+  try {
+    const REFRESH_EXPIRY_DAYS = parseInt(process.env.JWT_REFRESH_EXPIRES_IN) || 30;
+    const expiresAt = new Date(Date.now() + REFRESH_EXPIRY_DAYS * 24 * 60 * 60 * 1000);
+    await RefreshToken.create({
+      userId,
+      tokenHash: hashToken(token),
+      expiresAt,
+      userAgent: req?.headers?.["user-agent"] || null,
+      ipAddress: req?.ip || null,
+    });
+  } catch (e) {
+    console.error("[RefreshToken] Failed to persist token:", e.message);
   }
 }
 
@@ -168,6 +187,7 @@ exports.register = async (req, res) => {
 
     const token        = generateToken(user._id);
     const refreshToken = generateRefreshToken(user._id);
+    await persistRefreshToken(refreshToken, user._id, req);
 
     // Auto-create Jitsi meeting identity for the new admin
     await createMeetingIdentity(user, company._id);
@@ -952,6 +972,7 @@ exports.login = async (req, res) => {
 
     const token        = generateToken(user._id);
     const refreshToken = generateRefreshToken(user._id);
+    await persistRefreshToken(refreshToken, user._id, req);
 
     res.json({
       token,
@@ -1014,6 +1035,18 @@ exports.logout = async (req, res) => {
       deviceId: null,
     });
 
+    // Revoke the refresh token supplied with this logout request (if any).
+    const { refreshToken } = req.body;
+    if (refreshToken) {
+      try {
+        const hash = hashToken(refreshToken);
+        await RefreshToken.findOneAndUpdate(
+          { tokenHash: hash, userId: req.user._id },
+          { $set: { revoked: true, revokedAt: new Date() } }
+        );
+      } catch (_) {}
+    }
+
     res.json({
       message: "Logged out successfully",
       restrictedUntil: new Date(Date.now() + SIX_HOURS_MS).toISOString(),
@@ -1028,9 +1061,32 @@ exports.refresh = async (req, res) => {
   try {
     const { refreshToken } = req.body;
     if (!refreshToken) return res.status(400).json({ error: "Refresh token required" });
+
     const decoded = verifyRefreshToken(refreshToken);
-    const token   = generateToken(decoded.id);
+    const hash    = hashToken(refreshToken);
+
+    // Check the token exists and has not been revoked.
+    const stored = await RefreshToken.findOne({ tokenHash: hash, userId: decoded.id });
+    if (!stored) {
+      // Token not in store — possible reuse attack. Revoke all tokens for this user.
+      await RefreshToken.updateMany({ userId: decoded.id }, { $set: { revoked: true, revokedAt: new Date() } });
+      console.warn(`[RefreshToken] Unknown token for user ${decoded.id} — all tokens revoked (possible reuse attack)`);
+      return res.status(401).json({ error: "Invalid refresh token" });
+    }
+    if (stored.revoked) {
+      // Revoked token reuse — revoke all tokens for this user (token theft scenario).
+      await RefreshToken.updateMany({ userId: decoded.id }, { $set: { revoked: true, revokedAt: new Date() } });
+      console.warn(`[RefreshToken] Revoked token reused for user ${decoded.id} — all tokens revoked`);
+      return res.status(401).json({ error: "Refresh token has been revoked" });
+    }
+
+    // Rotate: revoke the old token, issue a new one.
+    await RefreshToken.findByIdAndUpdate(stored._id, { $set: { revoked: true, revokedAt: new Date() } });
+
+    const token           = generateToken(decoded.id);
     const newRefreshToken = generateRefreshToken(decoded.id);
+    await persistRefreshToken(newRefreshToken, decoded.id, req);
+
     res.json({ token, refreshToken: newRefreshToken });
   } catch (err) {
     res.status(401).json({ error: "Invalid or expired refresh token" });
@@ -1042,7 +1098,8 @@ exports.getMe = async (req, res) => {
     const user = await User.findById(req.user._id).populate("company", "name mode institutionCode");
     const company = await Company.findById(user.company);
 
-    const isAdmin = ['admin', 'superadmin', 'manager'].includes(user.role);
+    const isAdmin       = ['admin', 'superadmin', 'manager'].includes(user.role);
+    const canSeeQrSeed  = ['admin', 'superadmin'].includes(user.role);
     res.json({
       user: {
         ...user.toJSON(),
@@ -1052,7 +1109,8 @@ exports.getMe = async (req, res) => {
           name: company.name,
           mode: company.mode,
           institutionCode: company.institutionCode,
-          ...(isAdmin ? { qrSeed: company.qrSeed, bleLocationId: company.bleLocationId } : {}),
+          ...(isAdmin ? { bleLocationId: company.bleLocationId } : {}),
+          ...(canSeeQrSeed ? { qrSeed: company.qrSeed } : {}),
         } : user.company,
       },
       trial: company ? {
@@ -1110,11 +1168,14 @@ exports.migrateOrphanUsers = async (req, res) => {
 
 exports.forgotPassword = async (req, res) => {
   try {
-    const IndexNumber = req.body.IndexNumber || req.body.indexNumber;
-    const { institutionCode } = req.body;
+    const IndexNumber = (req.body.IndexNumber || req.body.indexNumber || "").trim();
+    const institutionCode = (req.body.institutionCode || req.body.institution_code || "").trim();
 
-    if (!IndexNumber || !institutionCode) {
-      return res.status(400).json({ error: "Student ID and institution code are required" });
+    if (!IndexNumber) {
+      return res.status(400).json({ error: "Student ID is required" });
+    }
+    if (!institutionCode) {
+      return res.status(400).json({ error: "Institution code is required" });
     }
 
     const company = await Company.findOne({ institutionCode: institutionCode.toUpperCase() });
@@ -1571,6 +1632,7 @@ exports.verify2FACode = async (req, res) => {
 
     const token        = generateToken(user._id);
     const refreshToken = generateRefreshToken(user._id);
+    await persistRefreshToken(refreshToken, user._id, req);
     res.json({ ok: true, token, refreshToken });
   } catch(e) {
     console.error("2FA verify error:", e);

@@ -101,8 +101,11 @@ exports.listQuizzes = async (req, res) => {
         const isSubmitted = (submittedMap[id] || 0) > 0;
         // Allow attempts as soon as startTime passes even if watchdog hasn't
         // flipped status to "open" yet (up to 30s lag).
-        const isInWindow  = q.status === "open" ||
-          (q.status === "published" && q.startTime && nowMs >= new Date(q.startTime).getTime());
+        const pastStart   = q.startTime && nowMs >= new Date(q.startTime).getTime();
+        const pastDeadline = q.lockAfterEndTime && q.endTime &&
+          nowMs > new Date(q.endTime).getTime() + (q.gracePeriodSeconds || 0) * 1000;
+        const isInWindow  = !pastDeadline && (q.status === "open" ||
+          (q.status === "published" && pastStart));
         const canAttempt  = isInWindow && !isSubmitted;
         return {
           ...q,
@@ -188,10 +191,13 @@ exports.listAllQuizzes = async (req, res) => {
     return res.json({
       quizzes: quizzes.map(q => {
         const id          = q._id.toString();
-        const isSubmitted = (submittedMap[id] || 0) > 0;
-        const isInWindow  = q.status === "open" ||
-          (q.status === "published" && q.startTime && nowMs >= new Date(q.startTime).getTime());
-        const canAttempt  = isInWindow && !isSubmitted;
+        const isSubmitted  = (submittedMap[id] || 0) > 0;
+        const pastStart    = q.startTime && nowMs >= new Date(q.startTime).getTime();
+        const pastDeadline = q.lockAfterEndTime && q.endTime &&
+          nowMs > new Date(q.endTime).getTime() + (q.gracePeriodSeconds || 0) * 1000;
+        const isInWindow   = !pastDeadline && (q.status === "open" ||
+          (q.status === "published" && pastStart));
+        const canAttempt   = isInWindow && !isSubmitted;
         return {
           ...q,
           questionCount:  qCountMap[id] || 0,
@@ -731,7 +737,7 @@ exports.reportViolation = async (req, res) => {
 exports.recordSnapshot = async (req, res) => {
   try {
     const attempt = await _loadLockedAttempt(req);
-    if (!attempt) return res.sendStatus(204);
+    if (!attempt) return res.status(403).json({ error: "Session invalid or already submitted" });
 
     const quiz = await SnapQuiz.findById(attempt.quiz)
       .select("proctoringEnabled aiProctoringEnabled").lean();
