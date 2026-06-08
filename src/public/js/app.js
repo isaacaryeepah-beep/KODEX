@@ -1568,15 +1568,7 @@ function showEmployeeError(msg) {
   el._hideTimer = setTimeout(() => { el.style.display = 'none'; el.classList.remove('shake'); }, 8000);
 }
 
-function showStudentRegister() {
-  document.getElementById('student-login-form').classList.add('hidden');
-  document.getElementById('student-forgot-form').classList.add('hidden');
-  document.getElementById('student-register-form').classList.remove('hidden');
-  document.getElementById('student-auth-error').style.display = 'none';
-}
-
 function showStudentLogin() {
-  document.getElementById('student-register-form').classList.add('hidden');
   document.getElementById('student-forgot-form').classList.add('hidden');
   document.getElementById('student-login-form').classList.remove('hidden');
   document.getElementById('student-auth-error').style.display = 'none';
@@ -1585,7 +1577,6 @@ function showStudentLogin() {
 
 function showStudentForgot() {
   document.getElementById('student-login-form').classList.add('hidden');
-  document.getElementById('student-register-form').classList.add('hidden');
   document.getElementById('student-forgot-form').classList.remove('hidden');
   document.getElementById('student-auth-error').style.display = 'none';
   document.getElementById('student-reset-code-group').classList.add('hidden');
@@ -2181,59 +2172,6 @@ async function handleStudentLogin() {
   }
 }
 
-async function handleStudentRegister() {
-  try {
-    const name = document.getElementById('student-reg-name').value.trim();
-    const indexNumber = document.getElementById('student-reg-index').value.trim().toUpperCase();
-    const institutionCode = document.getElementById('student-reg-code').value.trim();
-    const password = document.getElementById('student-reg-password').value;
-    const confirm = document.getElementById('student-reg-confirm').value;
-    const department = document.getElementById('student-reg-dept')?.value?.trim();
-    const programme = document.getElementById('student-reg-programme')?.value?.trim();
-    const studentLevel = document.getElementById('student-reg-level')?.value?.trim();
-    const studentGroup = document.getElementById('student-reg-group')?.value?.trim().toUpperCase();
-    const sessionType = document.getElementById('student-reg-session-type')?.value?.trim();
-    const semester = document.getElementById('student-reg-semester')?.value?.trim();
-    if (!name) return showStudentError('Please enter your full name.');
-    if (!institutionCode) return showStudentError('Please enter your Institution Code.');
-    if (!indexNumber) return showStudentError('Student ID / Index Number is required.');
-    if (indexNumber.length < 3) return showStudentError('Student ID looks too short. Please check and enter your full index number.');
-    if (!password) return showStudentError('Please enter a password.');
-    if (password.length < 8) return showStudentError('Password must be at least 8 characters.');
-    if (password !== confirm) return showStudentError('Passwords do not match.');
-    if (!department) return showStudentError('Please enter your department.');
-    if (!programme) return showStudentError('Please select your programme.');
-    if (!studentLevel) return showStudentError('Please select your level.');
-    if (!studentGroup) return showStudentError('Please enter your group (e.g. A, B, C).');
-    if (!sessionType) return showStudentError('Please select your session type.');
-    if (!semester) return showStudentError('Please select your semester.');
-    const data = await api('/api/auth/register-student', { method: 'POST', body: JSON.stringify({ name, indexNumber, password, institutionCode, department, programme, studentLevel, studentGroup, sessionType, semester }) });
-    if (data.token) {
-      token = data.token;
-      localStorage.setItem('token', token);
-      if (data.refreshToken) localStorage.setItem('refreshToken', data.refreshToken);
-      currentUser = data.user;
-      showDashboard(data);
-      if (data.departmentNote) toastWarning(data.departmentNote);
-    } else {
-      const el = document.getElementById('student-auth-error');
-      el.textContent = data.message || 'Registration successful!';
-      el.style.display = 'block';
-      el.style.background = '#f0fdf4';
-      el.style.color = '#15803d';
-      showStudentLogin();
-      document.getElementById('student-auth-error').style.display = 'block';
-      if (data.departmentNote) {
-        const warn = document.createElement('div');
-        warn.style.cssText = 'margin-top:8px;padding:10px 14px;background:#fffbeb;border:1px solid #fde68a;border-radius:8px;font-size:12px;color:#92400e;';
-        warn.textContent = data.departmentNote;
-        el.after(warn);
-      }
-    }
-  } catch (e) {
-    showStudentError(e.message || 'Registration failed');
-  }
-}
 
 let studentForgotStep = 'request';
 let studentForgotIndex = '';
@@ -16544,7 +16482,7 @@ function openAIQuizPanel(quizId) {
           </div>
           <div>
             <h3 style="font-size:16px;font-weight:700;margin:0">AI Question Generator</h3>
-            <p style="font-size:12px;color:var(--text-muted);margin:0">Powered by Claude AI</p>
+            <p style="font-size:12px;color:var(--text-muted);margin:0">Powered by Dikly AI</p>
           </div>
         </div>
         <button onclick="document.getElementById('ai-quiz-overlay').remove()" style="width:28px;height:28px;border-radius:7px;border:1px solid var(--border);background:var(--bg);cursor:pointer;font-size:14px;display:flex;align-items:center;justify-content:center">✕</button>
