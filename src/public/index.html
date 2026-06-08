@@ -428,6 +428,8 @@ function selectPortal(t){if(window._appLoaded)window._realSelectPortal(t);else w
         display:flex;align-items:center;justify-content:center;gap:6px;
         font-size:11px;color:rgba(255,255,255,.3);font-weight:500;
       }
+      /* Hide when any login form is active */
+      #auth-page:has(.auth-container:not(.hidden)) #app-download-section{display:none!important;}
     </style>
 
     <!-- Footer shown below workspace card — hidden on login forms -->
