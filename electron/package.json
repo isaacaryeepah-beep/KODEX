@@ -15,7 +15,8 @@
       "output": "dist"
     },
     "win": {
-      "target": [{ "target": "nsis", "arch": ["x64"] }]
+      "target": [{ "target": "nsis", "arch": ["x64"] }],
+      "icon": "icon.ico"
     },
     "nsis": {
       "oneClick": false,
@@ -23,7 +24,8 @@
     },
     "mac": {
       "target": [{ "target": "dmg", "arch": ["x64"] }],
-      "category": "public.app-category.education"
+      "category": "public.app-category.education",
+      "icon": "icon.icns"
     }
   },
   "devDependencies": {
