@@ -1291,6 +1291,10 @@ function selectMode(mode) {
   tglCorp.classList.remove('active-corp');
   tglAcad.classList.remove('active-acad');
 
+  // Hide download section once user starts navigating portals
+  const dlSec = document.getElementById('app-download-section');
+  if (dlSec) dlSec.classList.add('hidden');
+
   // Toggle off if same mode tapped again
   if (_selectedMode === mode) { _selectedMode = null; return; }
 
@@ -1352,7 +1356,7 @@ function showPortalSelector() {
   document.getElementById('employee-auth').classList.add('hidden');
   document.getElementById('student-auth').classList.add('hidden');
   document.getElementById('portal-selector').classList.remove('hidden');
-  ['workspace-brand','app-download-section','workspace-foot'].forEach(id => {
+  ['workspace-brand','workspace-foot'].forEach(id => {
     const el = document.getElementById(id); if (el) el.classList.remove('hidden');
   });
   const mrf = document.getElementById('manager-register-form'); if (mrf) mrf.classList.add('hidden');
