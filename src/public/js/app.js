@@ -16544,7 +16544,7 @@ function openAIQuizPanel(quizId) {
           </div>
           <div>
             <h3 style="font-size:16px;font-weight:700;margin:0">AI Question Generator</h3>
-            <p style="font-size:12px;color:var(--text-muted);margin:0">Powered by Claude AI</p>
+            <p style="font-size:12px;color:var(--text-muted);margin:0">Powered by Dikly AI</p>
           </div>
         </div>
         <button onclick="document.getElementById('ai-quiz-overlay').remove()" style="width:28px;height:28px;border-radius:7px;border:1px solid var(--border);background:var(--bg);cursor:pointer;font-size:14px;display:flex;align-items:center;justify-content:center">✕</button>
