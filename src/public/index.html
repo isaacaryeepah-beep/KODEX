@@ -355,40 +355,64 @@ function selectPortal(t){if(window._appLoaded)window._realSelectPortal(t);else w
       #app-download-section{
         width:100%;max-width:400px;margin:0 auto 18px;padding:0 16px;
         text-align:center;
+        opacity:.7;transition:opacity .25s;
       }
+      #app-download-section:hover{opacity:1;}
       .app-dl-heading{
-        font-size:13px;font-weight:700;letter-spacing:.07em;text-transform:uppercase;
-        color:rgba(255,255,255,.55);margin-bottom:10px;
+        font-size:10px;font-weight:700;letter-spacing:.18em;text-transform:uppercase;
+        color:rgba(255,255,255,.32);margin-bottom:4px;
       }
-      .app-dl-grid{
-        display:grid;grid-template-columns:repeat(3,1fr);gap:8px;
+      .app-dl-sub{
+        font-size:11px;color:rgba(255,255,255,.28);margin-bottom:14px;font-weight:500;
       }
-      .app-dl-tile{
-        display:flex;flex-direction:column;align-items:center;gap:6px;
-        padding:12px 8px;border-radius:14px;text-decoration:none;color:#fff;
-        background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.09);
-        transition:background .18s,transform .15s;
+      .app-dl-card{
+        display:flex;flex-direction:column;align-items:center;gap:4px;
+        padding:16px 18px;border-radius:16px;text-decoration:none;
+        min-width:120px;flex:1;max-width:150px;
+        transition:transform .15s,box-shadow .15s,opacity .2s;cursor:pointer;
       }
-      .app-dl-tile:active{transform:scale(.95);}
-      .app-dl-tile:hover{background:rgba(255,255,255,.1);transform:translateY(-2px);}
-      .app-dl-tile-icon{
-        width:36px;height:36px;border-radius:10px;
-        display:grid;place-items:center;flex-shrink:0;
+      .app-dl-card:active{transform:scale(.96)}
+      .app-dl-card.android{
+        background:linear-gradient(145deg,rgba(26,26,46,.7),rgba(22,33,62,.6));
+        border:1px solid rgba(255,255,255,.07);color:rgba(255,255,255,.65);
+        box-shadow:0 4px 18px rgba(0,0,0,.2);
       }
-      .android-ic{background:linear-gradient(135deg,#2ecc71,#27ae60);}
-      .windows-ic{background:linear-gradient(135deg,#00b4d8,#0077b6);}
-      .mac-ic{background:linear-gradient(135deg,#636e72,#2d3436);}
-      .app-dl-tile-name{font-size:12px;font-weight:700;letter-spacing:-.01em;}
-      .app-dl-tile-badge{
-        font-size:10px;font-weight:700;letter-spacing:.04em;
-        padding:3px 9px;border-radius:20px;
+      .app-dl-card.android:hover{transform:translateY(-3px);box-shadow:0 8px 26px rgba(0,0,0,.35);color:#fff;}
+      .app-dl-card.windows{
+        background:linear-gradient(145deg,rgba(0,99,177,.5),rgba(0,120,212,.4));
+        border:1px solid rgba(0,120,212,.25);color:rgba(255,255,255,.65);
+        box-shadow:0 4px 18px rgba(0,120,212,.15);
       }
-      .android-badge{background:rgba(46,204,113,.18);color:#2ecc71;border:1px solid rgba(46,204,113,.3);}
-      .windows-badge{background:rgba(0,180,216,.18);color:#00b4d8;border:1px solid rgba(0,180,216,.3);}
-      .mac-badge{background:rgba(255,255,255,.1);color:rgba(255,255,255,.65);border:1px solid rgba(255,255,255,.15);}
-      .app-dl-ios-row{
-        display:flex;align-items:center;justify-content:center;gap:5px;
-        margin-top:9px;font-size:10px;color:rgba(255,255,255,.28);font-weight:500;
+      .app-dl-card.windows:hover{transform:translateY(-3px);box-shadow:0 8px 26px rgba(0,120,212,.3);color:#fff;}
+      .app-dl-card.mac{
+        background:linear-gradient(145deg,rgba(29,29,31,.7),rgba(45,45,47,.6));
+        border:1px solid rgba(255,255,255,.07);color:rgba(255,255,255,.65);
+        box-shadow:0 4px 18px rgba(0,0,0,.2);
+      }
+      .app-dl-card.mac:hover{transform:translateY(-3px);box-shadow:0 8px 26px rgba(0,0,0,.35);color:#fff;}
+      .app-dl-card.ios-soon{
+        background:rgba(255,255,255,.03);
+        border:1px solid rgba(255,255,255,.06);color:rgba(255,255,255,.25);
+        cursor:default;
+      }
+      .app-dl-card-icon{
+        width:46px;height:46px;border-radius:13px;
+        background:rgba(255,255,255,.08);
+        display:grid;place-items:center;margin-bottom:4px;
+        opacity:.75;transition:opacity .2s;
+      }
+      .app-dl-card:hover .app-dl-card-icon{opacity:1;}
+      .ios-soon .app-dl-card-icon{background:rgba(255,255,255,.04)}
+      .app-dl-card-label{font-size:10px;font-weight:500;opacity:.55;letter-spacing:.03em}
+      .app-dl-card-platform{font-size:14px;font-weight:800;letter-spacing:-.01em}
+      .app-dl-card-arrow{
+        font-size:9.5px;font-weight:700;letter-spacing:.05em;
+        background:rgba(255,255,255,.08);border-radius:6px;
+        padding:2px 8px;margin-top:2px;
+      }
+      .ios-soon .app-dl-card-arrow{background:rgba(255,255,255,.04)}
+      @media(max-width:480px){
+        .app-dl-card{min-width:calc(50% - 5px);max-width:none;flex:0 0 calc(50% - 5px)}
       }
     </style>
     </div><!-- /portal-selector -->
