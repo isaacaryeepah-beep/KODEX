@@ -73,28 +73,30 @@ jobs:
               messages: [
                 {
                   role: "user",
-                  content: `You are a senior security engineer and Node.js/Express/MongoDB expert reviewing a pull request for a multi-tenant SaaS attendance and assessment platform.
-
-PR title: ${prTitle}
-
-Review the following git diff for:
-1. Security vulnerabilities (injection, auth bypass, broken access control, missing tenant isolation, mass assignment, exposed secrets/PII)
-2. Logic bugs and race conditions
-3. Missing input validation or error handling that could cause 500s
-4. Breaking changes to existing API contracts
-
-Be precise. Reference exact file names and line numbers from the diff. Skip style/formatting opinions.
-Format your response as GitHub-flavoured Markdown with these sections:
-## 🔴 Critical
-## 🟠 High
-## 🟡 Medium
-## 🟢 Low / Suggestions
-If a section has no findings, write "None."
-
-Diff:
-\`\`\`diff
-${diff}
-\`\`\``,
+                  content: [
+                    "You are a senior security engineer and Node.js/Express/MongoDB expert reviewing a pull request for a multi-tenant SaaS attendance and assessment platform.",
+                    "",
+                    `PR title: ${prTitle}`,
+                    "",
+                    "Review the following git diff for:",
+                    "  1. Security vulnerabilities (injection, auth bypass, broken access control, missing tenant isolation, mass assignment, exposed secrets/PII)",
+                    "  2. Logic bugs and race conditions",
+                    "  3. Missing input validation or error handling that could cause 500s",
+                    "  4. Breaking changes to existing API contracts",
+                    "",
+                    "Be precise. Reference exact file names and line numbers from the diff. Skip style/formatting opinions.",
+                    "Format your response as GitHub-flavoured Markdown with these sections:",
+                    "## 🔴 Critical",
+                    "## 🟠 High",
+                    "## 🟡 Medium",
+                    "## 🟢 Low / Suggestions",
+                    "If a section has no findings, write \"None.\"",
+                    "",
+                    "Diff:",
+                    "```diff",
+                    diff,
+                    "```",
+                  ].join("\n"),
                 },
               ],
             });

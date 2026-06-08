@@ -252,26 +252,15 @@ const DOWNLOAD_META = {
   mac:     { filename: 'dikly-mac.dmg',             type: 'application/octet-stream' },
 };
 
-app.get('/downloads/:platform', async (req, res) => {
+app.get('/downloads/:platform', (req, res) => {
   const platform = req.params.platform;
   const url  = DOWNLOAD_URLS[platform];
   const meta = DOWNLOAD_META[platform];
   if (!url || !meta) return res.status(404).json({ error: 'Unknown platform' });
-
-  try {
-    const upstream = await fetch(url, { redirect: 'follow' });
-    if (!upstream.ok) {
-      return res.status(404).json({ error: 'App build not available yet. Please try again shortly.' });
-    }
-    const size = upstream.headers.get('content-length');
-    res.setHeader('Content-Type', meta.type);
-    res.setHeader('Content-Disposition', `attachment; filename="${meta.filename}"`);
-    if (size) res.setHeader('Content-Length', size);
-    res.setHeader('Cache-Control', 'no-store');
-    upstream.body.pipe(res);
-  } catch (err) {
-    res.status(502).json({ error: 'Download temporarily unavailable. Please try again.' });
-  }
+  // Redirect to GitHub releases — browser follows the redirect chain and
+  // downloads the file directly from the CDN without opening a new tab.
+  res.setHeader('Content-Disposition', `attachment; filename="${meta.filename}"`);
+  res.redirect(302, url);
 });
 
 app.get("/anticheat",      (req, res) => res.sendFile(path.join(__dirname, "public", "anticheat-dashboard.html")));
