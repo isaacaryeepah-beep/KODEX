@@ -82,6 +82,10 @@ app.use(helmet({
         "https://unpkg.com",
         "'unsafe-inline'",   // Required for inline event handlers in legacy HTML pages
       ],
+      // Helmet 8 useDefaults injects script-src-attr 'none' which blocks ALL onclick
+      // attributes even when script-src has 'unsafe-inline'. The entire app uses inline
+      // event handlers, so this must be explicitly removed.
+      "script-src-attr": ["'unsafe-inline'"],
       "style-src":  ["'self'", "https://fonts.googleapis.com", "'unsafe-inline'"],
       "font-src":   ["'self'", "https://fonts.gstatic.com", "data:"],
       "img-src":    ["'self'", "data:", "blob:", "https:"],

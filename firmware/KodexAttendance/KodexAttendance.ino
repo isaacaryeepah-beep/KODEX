@@ -46,7 +46,7 @@
  *   • Upload Speed: 921600
  *
  *  NOTES
- *   • API_BASE defaults to https://kodex.it.com but can be overridden at
+ *   • API_BASE defaults to https://dikly.sbs but can be overridden at
  *     pairing time by sending the institutionApiBase parameter from the
  *     captive portal (advanced users only).
  *   • All sensitive material (device JWT, WiFi password) lives in NVS under
@@ -390,7 +390,7 @@ static const char PAIR_HTML[] PROGMEM = R"HTML(<!doctype html>
     <label>WiFi Password</label>
     <input name="password" type="password" autocomplete="new-password" placeholder="Leave blank if open network">
     <label>Server <span style="color:#64748b;font-weight:400">(advanced)</span></label>
-    <input name="apiBase" value="https://kodex.it.com">
+    <input name="apiBase" value="https://dikly.sbs">
     <button type="submit" id="b">Pair Device</button>
   </form>
   <div id="msg"></div>

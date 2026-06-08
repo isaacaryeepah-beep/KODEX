@@ -7,7 +7,7 @@
 const GMAIL_USER    = process.env.GMAIL_USER || '';
 const SUPPORT_EMAIL = GMAIL_USER;
 const _rawFrom      = process.env.EMAIL_FROM || `DIKLY <${GMAIL_USER}>`;
-const _safeFrom     = _rawFrom.includes('kodex.it.com') || _rawFrom.includes('dikly.it.com')
+const _safeFrom     = _rawFrom.includes('dikly.it.com')
   ? `DIKLY <${GMAIL_USER}>`
   : _rawFrom;
 // If EMAIL_FROM still points at no-reply@dikly.sbs, override with the real Gmail address.
