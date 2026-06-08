@@ -293,14 +293,14 @@ static void dedupClear(const String& sid) {
 
 // Returns true if this identifier has already been seen in the current session.
 static bool dedupCheck(const char* id) {
-  if (!id || id[0] == '\0') return false;
+  if (!dedupIds || !id || id[0] == '\0') return false;
   for (uint16_t i = 0; i < dedupCount; i++)
     if (strncmp(dedupIds[i], id, 31) == 0) return true;
   return false;
 }
 
 static void dedupAdd(const char* id) {
-  if (!id || id[0] == '\0' || dedupCount >= 400) return;
+  if (!dedupIds || !id || id[0] == '\0' || dedupCount >= 400) return;
   strncpy(dedupIds[dedupCount++], id, 31);
   dedupIds[dedupCount - 1][31] = '\0';
 }
@@ -2629,6 +2629,11 @@ static void registerLocalHttp() {
     }
     // ── RAM fallback ──────────────────────────────────────────────────────────
     if (!stored) {
+      if (!offlineBuf || offlineCount >= 200) {
+        LOG("RAM buffer full or unavailable — attendance lost");
+        localHttp.send(507, "application/json", "{\"error\":\"storage_full\"}");
+        return;
+      }
       OfflineRec& rec = offlineBuf[offlineCount++];
       strncpy(rec.indexNumber, indexNum.c_str(),       sizeof(rec.indexNumber) - 1);
       strncpy(rec.userId,      userId.c_str(),         sizeof(rec.userId) - 1);

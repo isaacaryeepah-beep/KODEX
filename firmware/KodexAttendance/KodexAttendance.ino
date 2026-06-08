@@ -69,7 +69,7 @@
 
 // ─── Configuration ───────────────────────────────────────────────────────────
 static const char* FIRMWARE_VERSION = "kodex-1.0.0";
-static const char* DEFAULT_API_BASE = "https://kodex.it.com";
+static const char* DEFAULT_API_BASE = "https://dikly.sbs";
 static const uint32_t HEARTBEAT_INTERVAL_MS = 5000;
 static const uint32_t WIFI_RETRY_TIMEOUT_MS = 30000;
 static const uint8_t  STATUS_LED_PIN = 2;
