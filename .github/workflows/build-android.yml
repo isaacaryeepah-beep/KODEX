@@ -45,8 +45,7 @@ jobs:
 
       - name: Patch Android 12+ splash screen background
         run: |
-          # Android 12+ (API 31) uses the new SplashScreen API — set the dark
-          # background color so the system splash matches the app theme.
+          # Android 12+ (API 31): use the SplashScreen API with dark background + DIKLY icon
           mkdir -p android/app/src/main/res/values-v31
           cat > android/app/src/main/res/values-v31/styles.xml << 'EOF'
           <?xml version="1.0" encoding="utf-8"?>
@@ -59,6 +58,15 @@ jobs:
             </style>
           </resources>
           EOF
+
+          # Android < 12: Theme.SplashScreen compat ignores android:background and shows
+          # white + launcher icon by default. Switch parent to AppTheme.NoActionBar so our
+          # full-screen splash.png is shown as the window background instead.
+          STYLES=android/app/src/main/res/values/styles.xml
+          if [ -f "$STYLES" ]; then
+            sed -i 's/parent="Theme\.SplashScreen"/parent="AppTheme.NoActionBar"/g' "$STYLES"
+            echo "Patched $STYLES: Theme.SplashScreen → AppTheme.NoActionBar"
+          fi
 
       - name: Ensure strings.xml
         run: |
