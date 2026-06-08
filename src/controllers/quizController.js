@@ -6,7 +6,7 @@ const Course = require("../models/Course");
 
 exports.createQuiz = async (req, res) => {
   try {
-    const { title, courseId, questions, duration, startTime, endTime } = req.body;
+    const { title, courseId, questions, duration, startTime, endTime, targetAudience, targetGroup, targetLevel, targetStudyType, targetQualificationType } = req.body;
 
     if (!title || !courseId || !questions || !startTime || !endTime) {
       return res.status(400).json({ error: "Title, courseId, questions, startTime, and endTime are required" });
@@ -31,6 +31,7 @@ exports.createQuiz = async (req, res) => {
       return res.status(400).json({ error: "At least one question is required" });
     }
 
+    const audience = targetAudience === 'group' ? 'group' : 'all';
     const quiz = await Quiz.create({
       title,
       course: courseId,
@@ -39,6 +40,11 @@ exports.createQuiz = async (req, res) => {
       timeLimit: duration || 30,
       startTime: new Date(startTime),
       endTime: new Date(endTime),
+      targetAudience: audience,
+      targetGroup:             audience === 'group' ? (targetGroup || null) : null,
+      targetLevel:             targetLevel || null,
+      targetStudyType:         targetStudyType || null,
+      targetQualificationType: targetQualificationType || null,
     });
 
     const populated = await quiz.populate([
@@ -79,6 +85,11 @@ exports.listQuizzes = async (req, res) => {
         }
         filter.course = courseId;
       }
+      // Only show quizzes this student's group is allowed to see
+      filter.$or = [
+        { targetAudience: 'all' },
+        { targetAudience: 'group', targetGroup: req.user.studentGroup || '__none__' },
+      ];
     } else {
       if (courseId) filter.course = courseId;
     }
@@ -123,6 +134,9 @@ exports.getQuiz = async (req, res) => {
       if (!course) {
         return res.status(403).json({ error: "You are not enrolled in this course" });
       }
+      if (quiz.targetAudience === 'group' && quiz.targetGroup && quiz.targetGroup !== req.user.studentGroup) {
+        return res.status(403).json({ error: "This quiz is not assigned to your group" });
+      }
     }
 
     const result = quiz.toObject();
@@ -164,6 +178,9 @@ exports.submitQuiz = async (req, res) => {
     });
     if (!course) {
       return res.status(403).json({ error: "You are not enrolled in this course" });
+    }
+    if (quiz.targetAudience === 'group' && quiz.targetGroup && quiz.targetGroup !== req.user.studentGroup) {
+      return res.status(403).json({ error: "This quiz is not assigned to your group" });
     }
 
     const now = new Date();

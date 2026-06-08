@@ -94,6 +94,13 @@ const attendanceSessionSchema = new mongoose.Schema(
       type: String,
       default: null,
     },
+    // Restrict session to a specific student group (e.g. "A", "B", "C").
+    // null means all enrolled students in the course can mark attendance.
+    targetGroup: {
+      type: String,
+      default: null,
+      trim: true,
+    },
     // Room if applicable
     room: {
       type: String,

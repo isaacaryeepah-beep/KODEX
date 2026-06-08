@@ -291,6 +291,7 @@ exports.startSession = async (req, res) => {
       startedAt: new Date(),
       mode: deviceOfflineWarning ? "offline-ready" : "online",
       requiresDeviceOnline: !deviceOfflineWarning,
+      targetGroup: req.body.targetGroup || null,
     };
 
     if (company.qrSeed)        sessionData.qrSeed        = company.qrSeed;
@@ -890,6 +891,13 @@ exports.markAttendance = async (req, res) => {
       if (!enrolled) {
         return res.status(403).json({
           error: 'You are not enrolled in this course. This session belongs to a different class.',
+        });
+      }
+
+      // If the session is group-restricted, only students in that group can mark
+      if (session.targetGroup && req.user.studentGroup !== session.targetGroup) {
+        return res.status(403).json({
+          error: `This attendance session is for Group ${session.targetGroup} only.`,
         });
       }
     }

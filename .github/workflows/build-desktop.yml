@@ -53,7 +53,7 @@ jobs:
         shell: pwsh
 
       - name: Delete previous windows-latest release (if exists)
-        run: gh release delete windows-latest --yes --cleanup-tag --repo isaacaryeepah-beep/dikly-releases 2>$null; exit 0
+        run: gh release delete windows-latest --yes --cleanup-tag --repo isaacaryeepah-beep/Dikly_releases 2>$null; exit 0
         shell: pwsh
         env:
           GITHUB_TOKEN: ${{ secrets.RELEASES_PAT }}
@@ -61,7 +61,7 @@ jobs:
       - name: Publish Windows to dikly-releases (public repo)
         uses: softprops/action-gh-release@v2
         with:
-          repository: isaacaryeepah-beep/dikly-releases
+          repository: isaacaryeepah-beep/Dikly_releases
           tag_name: windows-latest
           name: "DIKLY Desktop — Windows (Latest)"
           body: |
@@ -120,14 +120,14 @@ jobs:
           echo "Found: $DMG ($(du -sh dikly-mac.dmg | cut -f1))"
 
       - name: Delete previous mac-latest release (if exists)
-        run: gh release delete mac-latest --yes --cleanup-tag --repo isaacaryeepah-beep/dikly-releases 2>/dev/null || true
+        run: gh release delete mac-latest --yes --cleanup-tag --repo isaacaryeepah-beep/Dikly_releases 2>/dev/null || true
         env:
           GITHUB_TOKEN: ${{ secrets.RELEASES_PAT }}
 
       - name: Publish Mac to dikly-releases (public repo)
         uses: softprops/action-gh-release@v2
         with:
-          repository: isaacaryeepah-beep/dikly-releases
+          repository: isaacaryeepah-beep/Dikly_releases
           tag_name: mac-latest
           name: "DIKLY Desktop — macOS (Latest)"
           body: |

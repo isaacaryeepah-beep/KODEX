@@ -256,14 +256,14 @@ jobs:
       - name: Delete previous apk-latest release & tag (if exists)
         run: |
           gh release delete apk-latest --yes --cleanup-tag \
-            --repo isaacaryeepah-beep/dikly-releases 2>/dev/null || true
+            --repo isaacaryeepah-beep/Dikly_releases 2>/dev/null || true
         env:
           GITHUB_TOKEN: ${{ secrets.RELEASES_PAT }}
 
       - name: Publish to dikly-releases (public repo)
         uses: softprops/action-gh-release@v2
         with:
-          repository: isaacaryeepah-beep/dikly-releases
+          repository: isaacaryeepah-beep/Dikly_releases
           tag_name: apk-latest
           name: "DIKLY App — Latest Build"
           body: |

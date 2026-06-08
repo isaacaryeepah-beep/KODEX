@@ -7022,6 +7022,11 @@ async function showStartSessionModal(offlineOverride) {
           <label>Session Title <span style="font-weight:400;color:var(--text-muted);font-size:12px">(optional)</span></label>
           <input type="text" id="session-title" placeholder="e.g., Week 5 Lecture">
         </div>
+        <div class="form-group">
+          <label>Restrict to Group <span style="font-weight:400;color:var(--text-muted);font-size:12px">(optional)</span></label>
+          <input type="text" id="session-target-group" placeholder="e.g. A, B, C — leave blank for all groups">
+          <p style="font-size:11px;color:var(--text-muted);margin-top:4px">Only students in this group will be able to mark attendance.</p>
+        </div>
         <div class="modal-actions">
           <button class="btn btn-secondary btn-sm" onclick="closeModal()">Cancel</button>
           <button class="btn btn-primary btn-sm" onclick="startSession()">Start Session</button>
@@ -7107,10 +7112,11 @@ async function startSession() {
 
   try {
     const hotspotKey = sessionStorage.getItem('dikly_esp32_hotspot_key') || '';
+    const sessionTargetGroup = (document.getElementById('session-target-group')?.value || '').trim() || null;
     const result = await api('/api/attendance-sessions/start', {
       method: 'POST',
       headers: hotspotKey ? { 'x-esp32-hotspot-key': hotspotKey } : {},
-      body: JSON.stringify({ title, courseId, ...(deviceId ? { deviceId } : {}) }),
+      body: JSON.stringify({ title, courseId, ...(deviceId ? { deviceId } : {}), ...(sessionTargetGroup ? { targetGroup: sessionTargetGroup } : {}) }),
     });
     closeModal();
     if (result.offlineMode) {
@@ -9690,6 +9696,18 @@ async function showCreateQuizModal() {
             <option value="">Select a course</option>
             ${courses.map(c => `<option value="${c._id}">${esc(c.title)}${c.level?' · L'+c.level:''}${c.group?' · Grp '+c.group:''}</option>`).join('')}
           </select></div>
+          <div class="form-group">
+            <label>Target Audience</label>
+            <select id="cq-audience" onchange="document.getElementById('cq-group-row').style.display=this.value==='group'?'':'none'" style="width:100%;padding:8px;border:1px solid #d1d5db;border-radius:6px;">
+              <option value="all">All enrolled students</option>
+              <option value="group">Specific group only</option>
+            </select>
+          </div>
+          <div class="form-group" id="cq-group-row" style="display:none">
+            <label>Group <span style="color:#ef4444">*</span></label>
+            <input type="text" id="cq-group" placeholder="e.g. A, B, C" style="width:100%;padding:8px;border:1px solid #d1d5db;border-radius:6px;">
+            <p style="font-size:11px;color:#6b7280;margin-top:4px">Only students whose group matches this value will see the quiz.</p>
+          </div>
           <div class="form-group"><label>Time Limit (minutes)</label><input type="number" id="cq-timelimit" value="30" min="1" style="width:100%;padding:8px;border:1px solid #d1d5db;border-radius:6px;"></div>
           <div class="form-group"><label>Start Time *</label><input type="datetime-local" id="cq-start" style="width:100%;padding:8px;border:1px solid #d1d5db;border-radius:6px;"></div>
           <div class="form-group"><label>End Time *</label><input type="datetime-local" id="cq-end" style="width:100%;padding:8px;border:1px solid #d1d5db;border-radius:6px;"></div>
@@ -9726,10 +9744,17 @@ async function submitCreateQuiz() {
   const endTime = document.getElementById('cq-end').value;
   const maxAttempts = parseInt(document.getElementById('cq-max-attempts')?.value ?? '1');
   const scorePolicy = document.getElementById('cq-score-policy')?.value || 'best';
+  const targetAudience = document.getElementById('cq-audience')?.value || 'all';
+  const targetGroup = (document.getElementById('cq-group')?.value || '').trim();
   const errEl = document.getElementById('cq-error');
 
   if (!title || !courseId || !startTime || !endTime) {
     errEl.textContent = 'Please fill in all required fields.';
+    errEl.style.display = 'block';
+    return;
+  }
+  if (targetAudience === 'group' && !targetGroup) {
+    errEl.textContent = 'Please enter the group name/letter.';
     errEl.style.display = 'block';
     return;
   }
@@ -9739,7 +9764,7 @@ async function submitCreateQuiz() {
   try {
     const data = await api('/api/lecturer/quizzes', {
       method: 'POST',
-      body: JSON.stringify({ title, description, courseId, timeLimit, startTime: new Date(startTime).toISOString(), endTime: new Date(endTime).toISOString(), maxAttempts: isNaN(maxAttempts) ? 1 : maxAttempts, scorePolicy })
+      body: JSON.stringify({ title, description, courseId, timeLimit, startTime: new Date(startTime).toISOString(), endTime: new Date(endTime).toISOString(), maxAttempts: isNaN(maxAttempts) ? 1 : maxAttempts, scorePolicy, targetAudience, targetGroup: targetAudience === 'group' ? targetGroup : null })
     });
     closeQuizModal();
     showAddQuestionsView(data.quiz._id);

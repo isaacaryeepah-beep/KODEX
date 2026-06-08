@@ -267,6 +267,18 @@ window.MathJax = { tex: { inlineMath: [['\\(','\\)']], displayMath: [['\\[','\\]
       <label>Course <span class="req">*</span></label>
       <select id="a-course"><option value="">Select a course…</option></select>
     </div>
+    <div class="fg">
+      <label>Target Audience</label>
+      <select id="a-audience" onchange="document.getElementById('a-group-row').style.display=this.value==='group'?'block':'none'" style="width:100%">
+        <option value="all">All enrolled students</option>
+        <option value="group">Specific group only</option>
+      </select>
+    </div>
+    <div class="fg" id="a-group-row" style="display:none">
+      <label>Group <span class="req">*</span></label>
+      <input type="text" id="a-group" placeholder="e.g. A, B, C"/>
+      <p style="font-size:11px;color:var(--text-muted);margin-top:4px">Only students in this group will see the assignment.</p>
+    </div>
 
     <!-- Section: Schedule -->
     <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:var(--text-muted);margin:18px 0 10px;padding-bottom:6px;border-bottom:1px solid var(--border)">Schedule</div>
@@ -556,6 +568,9 @@ function openCreate(){
   $('edit-id').value=''; $('a-title').value=''; $('a-desc').value=''; $('a-course').value='';
   $('a-release').value=''; $('a-due').value='';
   $('a-filesub').checked=true; $('a-late').checked=false;
+  if($('a-audience')){ $('a-audience').value='all'; }
+  if($('a-group')){ $('a-group').value=''; }
+  if(document.getElementById('a-group-row')) document.getElementById('a-group-row').style.display='none';
   $('pdf-preview').style.display='none'; $('pdf-existing').style.display='none'; $('pdf-input').value='';
   $('a-course').innerHTML=`<option value="">Select a course…</option>`+
     S.courses.map(c=>`<option value="${c._id}">${c.code} — ${c.title}</option>`).join('');
@@ -583,6 +598,9 @@ async function openEdit(id){
       S.courses.map(c=>`<option value="${c._id}" ${c._id.toString()===_selCId?'selected':''}>${c.code} — ${c.title}</option>`).join('');
     $('a-release').value=toLocal(a.releaseDate); $('a-due').value=toLocal(a.dueDate);
     $('a-filesub').checked=a.allowFileSubmission; $('a-late').checked=a.allowLateSubmission; if($('a-late-penalty'))$('a-late-penalty').value=a.latePenaltyPercent||0; if(document.getElementById('late-penalty-group'))document.getElementById('late-penalty-group').style.display=a.allowLateSubmission?'flex':'none';
+    if($('a-audience')){ $('a-audience').value=a.targetAudience||'all'; }
+    if($('a-group')){ $('a-group').value=a.targetGroup||''; }
+    if(document.getElementById('a-group-row')) document.getElementById('a-group-row').style.display=(a.targetAudience==='group')?'block':'none';
     const pp=$('pdf-preview'); if(pp) pp.style.display='none';
     const pe=$('pdf-existing'); if(pe) pe.style.display=S.pdfExisting?'block':'none';
     const pen=$('pdf-existing-name'); if(pen) pen.textContent=S.pdfExisting||'';
@@ -608,12 +626,17 @@ async function saveAssignment(){
   try{
     const penaltyEl=$('a-late-penalty');
     const penalty=penaltyEl?Math.min(100,Math.max(0,parseInt(penaltyEl.value,10)||0)):0;
+    const targetAudience=$('a-audience')?.value||'all';
+    const targetGroup=(($('a-group')?.value)||'').trim();
+    if(targetAudience==='group'&&!targetGroup) return toast('Please enter the group name/letter','err');
     const payload={
       title, courseId, description:$('a-desc').value.trim(),
       releaseDate:rdObj.toISOString(), dueDate:ddObj.toISOString(),
       allowFileSubmission:$('a-filesub').checked,
       allowLateSubmission:$('a-late').checked,
-      latePenaltyPercent:penalty
+      latePenaltyPercent:penalty,
+      targetAudience,
+      targetGroup: targetAudience==='group' ? targetGroup : null,
     };
     let saved;
     if(S.editId){ saved=(await api('PUT',`/api/assignments/lecturer/${S.editId}`,payload)).assignment; }
