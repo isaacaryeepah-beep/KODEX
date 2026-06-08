@@ -13822,7 +13822,8 @@ async function downloadReport(type, apiBase = 'reports', e) {
                         navigator.userAgent.includes('DiklyApp/'));
 
     if (isNative) {
-      const FS = window.Capacitor?.Plugins?.Filesystem;
+      const FS    = window.Capacitor?.Plugins?.Filesystem;
+      const Share = window.Capacitor?.Plugins?.Share;
       if (!FS) {
         toastError('Please reinstall the DIKLY app to enable downloads.');
         return;
@@ -13845,14 +13846,24 @@ async function downloadReport(type, apiBase = 'reports', e) {
         reader.readAsDataURL(blob);
       });
       const filename = `${type}-report.pdf`;
-      // Save to app-specific external storage — no permission needed on any Android version
-      await FS.writeFile({
-        path: `Reports/${filename}`,
+      // Write to cache (no permissions needed on any Android version)
+      const result = await FS.writeFile({
+        path: filename,
         data: base64,
-        directory: 'EXTERNAL',
+        directory: 'CACHE',
         recursive: true,
       });
-      toast('Report saved to device storage', 'ok');
+      if (Share) {
+        // Open Android share/open-with sheet — user can view in PDF app or save to Downloads
+        // NOTE: must use `files:` array, NOT `url:`, for local file URIs
+        await Share.share({
+          title:       filename,
+          files:       [result.uri],
+          dialogTitle: 'Open or save report',
+        });
+      } else {
+        toast('Report saved to device storage', 'ok');
+      }
       return;
     }
 
