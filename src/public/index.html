@@ -315,52 +315,45 @@ function selectPortal(t){if(window._appLoaded)window._realSelectPortal(t);else w
 
     <!-- ── Download the App (inside portal-selector so it hides with it) ── -->
     <div id="app-download-section">
-      <div class="app-dl-heading">Get the DIKLY App</div>
-      <div class="app-dl-sub">Available on Android, Windows &amp; Mac</div>
-      <div class="app-dl-cards">
+      <div class="app-dl-heading">Download DIKLY</div>
 
-        <a class="app-dl-card android" href="/downloads/android">
-          <div class="app-dl-card-icon">
-            <svg width="28" height="28" viewBox="0 0 24 24" fill="currentColor"><path d="M17.523 15.341 14.026 12l3.497-3.341a.75.75 0 0 0-1.046-1.077l-3.73 3.564a.75.75 0 0 0 0 1.028l3.73 3.564a.75.75 0 0 0 1.046-1.077ZM1.477 15.341a.75.75 0 0 0 1.046 1.077l3.73-3.564a.75.75 0 0 0 0-1.028L2.523 8.262a.75.75 0 0 0-1.046 1.077L4.974 12l-3.497 3.341Z"/><path d="M8.5 2.5a.75.75 0 0 1 .75.75V12a.75.75 0 0 1-1.5 0V3.25A.75.75 0 0 1 8.5 2.5Z"/></svg>
+      <div class="app-dl-grid">
+
+        <a class="app-dl-tile android" href="/downloads/android">
+          <div class="app-dl-tile-icon android-ic">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M17.6 9.48l1.84-3.18c.16-.31.04-.69-.26-.85a.64.64 0 0 0-.86.27l-1.86 3.22A10.4 10.4 0 0 0 12 8c-1.53 0-2.98.33-4.27.94L5.67 5.72a.64.64 0 0 0-.86-.27.64.64 0 0 0-.26.85L6.4 9.48A9.93 9.93 0 0 0 2 18h20a9.93 9.93 0 0 0-4.4-8.52zM8.5 15a1 1 0 1 1 0-2 1 1 0 0 1 0 2zm7 0a1 1 0 1 1 0-2 1 1 0 0 1 0 2z"/></svg>
           </div>
-          <div class="app-dl-card-label">Download for</div>
-          <div class="app-dl-card-platform">Android</div>
-          <div class="app-dl-card-arrow">↓ APK</div>
+          <div class="app-dl-tile-name">Android</div>
+          <div class="app-dl-tile-badge android-badge">↓ APK</div>
         </a>
 
-        <a class="app-dl-card windows" href="/downloads/windows">
-          <div class="app-dl-card-icon">
-            <svg width="28" height="28" viewBox="0 0 24 24" fill="currentColor"><path d="M3 5.557 9.875 4.64V11H3V5.557ZM3 12h6.875v6.385L3 17.443V12ZM10.875 4.5 21 3v8h-10.125V4.5ZM10.875 12H21v8.002l-10.125-1.5V12Z"/></svg>
+        <a class="app-dl-tile windows" href="/downloads/windows">
+          <div class="app-dl-tile-icon windows-ic">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M3 5.557 9.875 4.64V11H3V5.557ZM3 12h6.875v6.385L3 17.443V12ZM10.875 4.5 21 3v8h-10.125V4.5ZM10.875 12H21v8.002l-10.125-1.5V12Z"/></svg>
           </div>
-          <div class="app-dl-card-label">Download for</div>
-          <div class="app-dl-card-platform">Windows</div>
-          <div class="app-dl-card-arrow">↓ EXE</div>
+          <div class="app-dl-tile-name">Windows</div>
+          <div class="app-dl-tile-badge windows-badge">↓ EXE</div>
         </a>
 
-        <a class="app-dl-card mac" href="/downloads/mac">
-          <div class="app-dl-card-icon">
-            <svg width="28" height="28" viewBox="0 0 24 24" fill="currentColor"><path d="M18.71 19.5c-.83 1.24-1.71 2.45-3.05 2.47-1.34.03-1.77-.79-3.29-.79-1.53 0-2 .77-3.27.82-1.31.05-2.3-1.32-3.14-2.53C4.25 17 2.94 12.45 4.7 9.39c.87-1.52 2.43-2.48 4.12-2.51 1.28-.02 2.5.87 3.29.87.78 0 2.26-1.07 3.8-.91.65.03 2.47.26 3.64 1.98-.09.06-2.17 1.28-2.15 3.81.03 3.02 2.65 4.03 2.68 4.04-.03.07-.42 1.44-1.38 2.83M13 3.5c.73-.83 1.94-1.46 2.94-1.5.13 1.17-.34 2.35-1.04 3.19-.69.85-1.83 1.51-2.95 1.42-.15-1.15.41-2.35 1.05-3.11Z"/></svg>
+        <a class="app-dl-tile mac" href="/downloads/mac">
+          <div class="app-dl-tile-icon mac-ic">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M18.71 19.5c-.83 1.24-1.71 2.45-3.05 2.47-1.34.03-1.77-.79-3.29-.79-1.53 0-2 .77-3.27.82-1.31.05-2.3-1.32-3.14-2.53C4.25 17 2.94 12.45 4.7 9.39c.87-1.52 2.43-2.48 4.12-2.51 1.28-.02 2.5.87 3.29.87.78 0 2.26-1.07 3.8-.91.65.03 2.47.26 3.64 1.98-.09.06-2.17 1.28-2.15 3.81.03 3.02 2.65 4.03 2.68 4.04-.03.07-.42 1.44-1.38 2.83M13 3.5c.73-.83 1.94-1.46 2.94-1.5.13 1.17-.34 2.35-1.04 3.19-.69.85-1.83 1.51-2.95 1.42-.15-1.15.41-2.35 1.05-3.11Z"/></svg>
           </div>
-          <div class="app-dl-card-label">Download for</div>
-          <div class="app-dl-card-platform">macOS</div>
-          <div class="app-dl-card-arrow">↓ DMG</div>
+          <div class="app-dl-tile-name">macOS</div>
+          <div class="app-dl-tile-badge mac-badge">↓ DMG</div>
         </a>
 
-        <div class="app-dl-card ios-soon">
-          <div class="app-dl-card-icon">
-            <svg width="28" height="28" viewBox="0 0 24 24" fill="currentColor"><path d="M18.71 19.5c-.83 1.24-1.71 2.45-3.05 2.47-1.34.03-1.77-.79-3.29-.79-1.53 0-2 .77-3.27.82-1.31.05-2.3-1.32-3.14-2.53C4.25 17 2.94 12.45 4.7 9.39c.87-1.52 2.43-2.48 4.12-2.51 1.28-.02 2.5.87 3.29.87.78 0 2.26-1.07 3.8-.91.65.03 2.47.26 3.64 1.98-.09.06-2.17 1.28-2.15 3.81.03 3.02 2.65 4.03 2.68 4.04-.03.07-.42 1.44-1.38 2.83M13 3.5c.73-.83 1.94-1.46 2.94-1.5.13 1.17-.34 2.35-1.04 3.19-.69.85-1.83 1.51-2.95 1.42-.15-1.15.41-2.35 1.05-3.11Z"/></svg>
-          </div>
-          <div class="app-dl-card-label">Coming soon</div>
-          <div class="app-dl-card-platform">iOS</div>
-          <div class="app-dl-card-arrow">App Store</div>
-        </div>
+      </div>
 
+      <div class="app-dl-ios-row">
+        <svg width="11" height="11" viewBox="0 0 24 24" fill="currentColor" style="opacity:.35"><path d="M18.71 19.5c-.83 1.24-1.71 2.45-3.05 2.47-1.34.03-1.77-.79-3.29-.79-1.53 0-2 .77-3.27.82-1.31.05-2.3-1.32-3.14-2.53C4.25 17 2.94 12.45 4.7 9.39c.87-1.52 2.43-2.48 4.12-2.51 1.28-.02 2.5.87 3.29.87.78 0 2.26-1.07 3.8-.91.65.03 2.47.26 3.64 1.98-.09.06-2.17 1.28-2.15 3.81.03 3.02 2.65 4.03 2.68 4.04-.03.07-.42 1.44-1.38 2.83M13 3.5c.73-.83 1.94-1.46 2.94-1.5.13 1.17-.34 2.35-1.04 3.19-.69.85-1.83 1.51-2.95 1.42-.15-1.15.41-2.35 1.05-3.11Z"/></svg>
+        <span>iOS — App Store coming soon</span>
       </div>
     </div>
 
     <style>
       #app-download-section{
-        width:100%;max-width:680px;margin:0 auto 24px;padding:0 16px;
+        width:100%;max-width:400px;margin:0 auto 18px;padding:0 16px;
         text-align:center;
         opacity:.7;transition:opacity .25s;
       }
@@ -371,9 +364,6 @@ function selectPortal(t){if(window._appLoaded)window._realSelectPortal(t);else w
       }
       .app-dl-sub{
         font-size:11px;color:rgba(255,255,255,.28);margin-bottom:14px;font-weight:500;
-      }
-      .app-dl-cards{
-        display:flex;gap:10px;justify-content:center;flex-wrap:wrap;
       }
       .app-dl-card{
         display:flex;flex-direction:column;align-items:center;gap:4px;
