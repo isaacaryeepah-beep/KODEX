@@ -24,7 +24,8 @@
     },
     "mac": {
       "target": [{ "target": "dmg", "arch": ["x64"] }],
-      "category": "public.app-category.education"
+      "category": "public.app-category.education",
+      "icon": "icon.icns"
     }
   },
   "devDependencies": {
