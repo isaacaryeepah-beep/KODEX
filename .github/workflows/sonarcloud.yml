@@ -12,7 +12,6 @@ jobs:
   sonarcloud:
     name: SonarCloud scan
     runs-on: ubuntu-latest
-    continue-on-error: true  # non-blocking until project is created on sonarcloud.io
 
     steps:
       - name: Checkout repository
