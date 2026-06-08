@@ -20,17 +20,7 @@ jobs:
       - name: Generate Windows icon (ICO)
         run: |
           pip install Pillow --quiet
-          python - <<'PYEOF'
-          from PIL import Image
-          import shutil
-          img = Image.open("resources/icon.png").convert("RGBA")
-          sizes = [(16,16),(32,32),(48,48),(64,64),(128,128),(256,256)]
-          img.save("electron/icon.ico", format="ICO", sizes=sizes)
-          shutil.copy("resources/icon.png", "electron/icon.png")
-          import os
-          size = os.path.getsize("electron/icon.ico")
-          print(f"icon.ico written: {size} bytes, icon.png copied")
-          PYEOF
+          python scripts/gen_win_icon.py
         shell: pwsh
 
       - name: Install dependencies
