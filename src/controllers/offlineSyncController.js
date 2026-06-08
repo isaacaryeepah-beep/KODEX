@@ -371,7 +371,7 @@ exports.handleBeacon = async (req, res) => {
 
   try {
     const { attemptId } = req.params;
-    if (!attemptId) return;
+    if (!attemptId || !mongoose.Types.ObjectId.isValid(attemptId)) return;
 
     // sendBeacon sends Content-Type: text/plain, so the body arrives as a
     // raw string.  express.json() won't parse it — we must do it ourselves.
@@ -382,6 +382,20 @@ exports.handleBeacon = async (req, res) => {
       } else if (typeof req.body === "object") {
         payload = req.body;
       }
+    }
+
+    // Validate the attempt-specific sessionToken embedded in the payload.
+    // The client already holds this token from startAttempt — sendBeacon
+    // can't send headers but can include it in the JSON body.
+    if (payload.sessionToken) {
+      const attempt = await SnapQuizAttempt.findById(attemptId)
+        .select("sessionToken").lean();
+      if (!attempt || attempt.sessionToken !== payload.sessionToken) return;
+    } else {
+      // No token → only allow upsert if the OfflineSyncLog already exists
+      // (i.e., the attempt has already been legitimately synced).
+      const exists = await OfflineSyncLog.exists({ attemptId });
+      if (!exists) return;
     }
 
     const beaconEntry = {
@@ -395,7 +409,7 @@ exports.handleBeacon = async (req, res) => {
     await OfflineSyncLog.findOneAndUpdate(
       { attemptId },
       { $push: { beaconEvents: { $each: [beaconEntry], $slice: -200 } } },
-      { upsert: true }
+      { upsert: false }  // don't create new docs — must exist from a legitimate sync
     );
   } catch (err) {
     // Never throw — response already sent.

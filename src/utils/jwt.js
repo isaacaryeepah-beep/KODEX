@@ -1,4 +1,8 @@
-const jwt = require("jsonwebtoken");
+const jwt    = require("jsonwebtoken");
+const crypto = require("crypto");
+
+// Hash a refresh token for safe DB storage (so a DB breach doesn't yield live tokens)
+const hashToken = (token) => crypto.createHash("sha256").update(token).digest("hex");
 
 // ── Token expiry ──────────────────────────────────────────────────────────────
 // Access tokens: 15 min. Refresh tokens: 30 days.
@@ -58,4 +62,5 @@ module.exports = {
   generateToken, generateRefreshToken,
   verifyToken,   verifyRefreshToken,
   generateMeetingToken, verifyMeetingToken,
+  hashToken,
 };

@@ -77,7 +77,7 @@ router.post("/quizzes/:quizId/attempts/:attemptId/violations",     snapQuizSecur
 
 // ─── Proctoring ───────────────────────────────────────────────────────────────
 
-router.post("/quizzes/:quizId/attempts/:attemptId/snapshots",      ctrl.recordSnapshot);
+router.post("/quizzes/:quizId/attempts/:attemptId/snapshots",      snapQuizSecurityValidator, ctrl.recordSnapshot);
 
 // ─── Results & review ─────────────────────────────────────────────────────────
 

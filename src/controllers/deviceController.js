@@ -485,8 +485,11 @@ exports.getMyDevice = async (req, res) => {
       return res.status(403).json({ message: 'Not authorized.' });
     }
 
-    let device = await Device.findOne({ companyId: req.user.company })
-      .populate('lecturerId', 'name email');
+    const isAdmin = ['admin', 'superadmin'].includes(req.user.role);
+    const deviceQuery = isAdmin
+      ? { companyId: req.user.company }
+      : { companyId: req.user.company, lecturerId: req.user._id };
+    let device = await Device.findOne(deviceQuery).populate('lecturerId', 'name email');
     if (!device) return res.json({ success: true, data: null });
 
     device = await _markStaleOffline(device);
@@ -1315,10 +1318,20 @@ exports.transferDevice = async (req, res) => {
       return res.status(403).json({ message: 'Only superadmin can transfer device ownership.' });
     }
 
-    const { deviceId, newLecturerId } = req.body;
+    const { deviceId, newLecturerId, companyId: targetCompanyId } = req.body;
+    // For superadmin, allow specifying a target company; default to their own
+    const scopeCompany = targetCompanyId || req.user.company;
 
-    // Check new lecturer doesn't already own a device
-    const existingOwnership = await Device.findOne({ lecturerId: newLecturerId });
+    // Verify the target lecturer exists and belongs to the same company
+    const newLecturer = await require('../models/User').findOne({
+      _id: newLecturerId, company: scopeCompany, isActive: true,
+    }).select('_id').lean();
+    if (!newLecturer) {
+      return res.status(404).json({ message: 'Target lecturer not found in specified company.' });
+    }
+
+    // Check new lecturer doesn't already own a device in that company
+    const existingOwnership = await Device.findOne({ lecturerId: newLecturerId, companyId: scopeCompany });
     if (existingOwnership) {
       return res.status(400).json({
         message: `The target lecturer already owns device ${existingOwnership.deviceId}.`
@@ -1326,7 +1339,7 @@ exports.transferDevice = async (req, res) => {
     }
 
     const device = await Device.findOneAndUpdate(
-      { deviceId },
+      { deviceId, companyId: scopeCompany },
       { lecturerId: newLecturerId },
       { new: true }
     );

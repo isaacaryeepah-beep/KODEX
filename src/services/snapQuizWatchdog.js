@@ -125,13 +125,22 @@ async function _tick() {
 }
 
 async function _autoSubmitAttempt(attempt, now, reason) {
-  await SnapQuizAttempt.findByIdAndUpdate(attempt._id, {
-    status:      "auto_submitted",
-    submittedAt: now,
-    timeSpentSeconds: attempt.startedAt
-      ? Math.round((now - new Date(attempt.startedAt)) / 1000)
-      : null,
-  });
+  // Atomic check-and-set: only proceed if the attempt is still "active".
+  // This prevents double-grading when closeQuiz and the watchdog run concurrently.
+  const updated = await SnapQuizAttempt.findOneAndUpdate(
+    { _id: attempt._id, status: "active" },
+    {
+      $set: {
+        status:      "auto_submitted",
+        submittedAt: now,
+        timeSpentSeconds: attempt.startedAt
+          ? Math.round((now - new Date(attempt.startedAt)) / 1000)
+          : null,
+      },
+    },
+    { new: false }
+  );
+  if (!updated) return; // Already submitted by another process — skip grading.
 
   const { rawScore, maxScore, hasManual } = await autoGradeAttempt(
     attempt._id,
@@ -162,10 +171,9 @@ async function _autoCloseQuiz(quiz, now) {
   }).select("_id company quiz startedAt").lean();
 
   if (active.length) {
-    await SnapQuizAttempt.updateMany(
-      { _id: { $in: active.map(a => a._id) } },
-      { $set: { status: "auto_submitted", submittedAt: now } }
-    );
+    // _autoSubmitAttempt does its own atomic findByIdAndUpdate, so skip the
+    // redundant updateMany that would leave timeSpentSeconds null if the
+    // process crashed between the two writes.
     await Promise.all(active.map(a => _autoSubmitAttempt(a, now, "quiz_closed")));
   }
 
