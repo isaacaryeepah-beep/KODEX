@@ -68,6 +68,20 @@ const quizSchema = new mongoose.Schema(
       default: 'proctored',
       index: true,
     },
+
+    // ── Group targeting ────────────────────────────────────────────────────
+    // 'all'   → every enrolled student in this course sees the quiz
+    // 'group' → only students whose studentGroup matches targetGroup
+    targetAudience: {
+      type: String,
+      enum: ['all', 'group'],
+      default: 'all',
+      index: true,
+    },
+    targetGroup:             { type: String, default: null, trim: true },
+    targetLevel:             { type: String, default: null, trim: true },
+    targetStudyType:         { type: String, default: null, trim: true },
+    targetQualificationType: { type: String, default: null, trim: true },
   },
   {
     timestamps: true,
