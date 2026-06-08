@@ -26,7 +26,7 @@ jobs:
           sizes = [(16,16),(32,32),(48,48),(64,64),(128,128),(256,256)]
           icons = [img.resize(s, Image.LANCZOS) for s in sizes]
           icons[0].save("electron/icon.ico", format="ICO",
-                        sizes=sizes, append_images=icons[1:])
+                        append_images=icons[1:])
           import shutil; shutil.copy("resources/icon.png", "electron/icon.png")
           print("icon.ico + icon.png written")
           PYEOF
