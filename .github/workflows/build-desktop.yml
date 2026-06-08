@@ -52,29 +52,17 @@ jobs:
           Write-Output "Found: $EXE"
         shell: pwsh
 
-      - name: Delete previous windows-latest release (if exists)
-        run: gh release delete windows-latest --yes --cleanup-tag --repo isaacaryeepah-beep/Dikly_releases 2>$null; exit 0
+      - name: Publish Windows to Dikly_releases
+        run: |
+          gh release delete windows-latest --yes --cleanup-tag --repo isaacaryeepah-beep/Dikly_releases 2>$null; $true
+          gh release create windows-latest dikly-windows-setup.exe `
+            --repo isaacaryeepah-beep/Dikly_releases `
+            --title "DIKLY Desktop — Windows (Latest)" `
+            --notes "**DIKLY Desktop App for Windows** — build #${{ github.run_number }}.`n`n### How to install`n1. Download **dikly-windows-setup.exe** below`n2. Run the installer and follow the prompts`n3. Launch DIKLY from your Start Menu or Desktop shortcut" `
+            --latest=false
         shell: pwsh
         env:
-          GITHUB_TOKEN: ${{ secrets.RELEASES_PAT }}
-
-      - name: Publish Windows to dikly-releases (public repo)
-        uses: softprops/action-gh-release@v2
-        with:
-          repository: isaacaryeepah-beep/Dikly_releases
-          tag_name: windows-latest
-          name: "DIKLY Desktop — Windows (Latest)"
-          body: |
-            **DIKLY Desktop App for Windows** — build #${{ github.run_number }}.
-
-            ### How to install
-            1. Download **dikly-windows-setup.exe** below
-            2. Run the installer and follow the prompts
-            3. Launch DIKLY from your Start Menu or Desktop shortcut
-          files: dikly-windows-setup.exe
-          make_latest: false
-        env:
-          GITHUB_TOKEN: ${{ secrets.RELEASES_PAT }}
+          GH_TOKEN: ${{ secrets.RELEASES_PAT }}
 
   build-mac:
     runs-on: macos-latest
@@ -119,28 +107,20 @@ jobs:
           cp "$DMG" dikly-mac.dmg
           echo "Found: $DMG ($(du -sh dikly-mac.dmg | cut -f1))"
 
-      - name: Delete previous mac-latest release (if exists)
-        run: gh release delete mac-latest --yes --cleanup-tag --repo isaacaryeepah-beep/Dikly_releases 2>/dev/null || true
+      - name: Publish Mac to Dikly_releases
+        run: |
+          gh release delete mac-latest --yes --cleanup-tag --repo isaacaryeepah-beep/Dikly_releases 2>/dev/null || true
+          gh release create mac-latest dikly-mac.dmg \
+            --repo isaacaryeepah-beep/Dikly_releases \
+            --title "DIKLY Desktop — macOS (Latest)" \
+            --notes "**DIKLY Desktop App for macOS** — build #${{ github.run_number }}.
+
+          ### How to install
+          1. Download **dikly-mac.dmg** below
+          2. Open the DMG and drag DIKLY to your Applications folder
+          3. Launch DIKLY from Applications
+
+          > If macOS shows \"app can't be opened\", right-click → Open → Open anyway." \
+            --latest=false
         env:
-          GITHUB_TOKEN: ${{ secrets.RELEASES_PAT }}
-
-      - name: Publish Mac to dikly-releases (public repo)
-        uses: softprops/action-gh-release@v2
-        with:
-          repository: isaacaryeepah-beep/Dikly_releases
-          tag_name: mac-latest
-          name: "DIKLY Desktop — macOS (Latest)"
-          body: |
-            **DIKLY Desktop App for macOS** — build #${{ github.run_number }}.
-
-            ### How to install
-            1. Download **dikly-mac.dmg** below
-            2. Open the DMG and drag DIKLY to your Applications folder
-            3. Launch DIKLY from Applications
-
-            > **Note:** If macOS shows "app can't be opened because Apple cannot check it for malicious software",
-            > right-click the app → Open → Open anyway. This is normal for apps outside the App Store.
-          files: dikly-mac.dmg
-          make_latest: false
-        env:
-          GITHUB_TOKEN: ${{ secrets.RELEASES_PAT }}
+          GH_TOKEN: ${{ secrets.RELEASES_PAT }}
