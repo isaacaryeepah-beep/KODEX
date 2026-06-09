@@ -6006,7 +6006,10 @@ async function renderStudentDashboard(content) {
     api('/api/attendance-sessions/active').catch(() => ({ session: null })),
     api('/api/student/assignments/upcoming').catch(() => ({ assignments: [] })),
   ]);
-  if (!_sd) offlineCache('student_dashboard', { attendance, coursesData, quizzesData, meetingsData, activeSessionData, upcomingAsgData });
+  if (!_sd) {
+    offlineCache('student_dashboard', { attendance, coursesData, quizzesData, meetingsData, activeSessionData, upcomingAsgData });
+    if (activeSessionData.session) offlineCache('activeSession', activeSessionData.session);
+  }
 
   const totalCheckins = attendance.pagination.total;
   const enrolledCourses = coursesData.courses.length;
@@ -12771,7 +12774,11 @@ async function renderMarkAttendance() {
       const data = await api('/api/attendance-sessions/active');
       serverSession = data.session;
       if (serverSession) offlineCache('activeSession', serverSession);
-    } catch (e) { /* server unreachable */ }
+      else offlineCache('activeSession', null); // clear stale cache when no active session
+    } catch (e) {
+      // API unreachable — phone connected to ESP32 hotspot (no internet gateway)
+      serverSession = offlineCache('activeSession') || null;
+    }
   } else {
     serverSession = offlineCache('activeSession') || null;
   }
