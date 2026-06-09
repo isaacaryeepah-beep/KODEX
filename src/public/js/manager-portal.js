@@ -8,20 +8,36 @@
 // ─────────────────────────────────────────────────────────────────────────────
 async function renderManagerDashboard(content) {
   content.innerHTML = '<div class="loading">Loading dashboard…</div>';
-  try {
-    const [usersData, pendingData, sessionsData, leavesData, analyticsData] = await Promise.all([
+  let _mgrOffline = false;
+  let usersData, pendingData, sessionsData, leavesData, analyticsData;
+  const _mgrCached = typeof offlineRead === 'function' ? offlineRead('manager_dashboard') : null;
+  if (!navigator.onLine && _mgrCached) {
+    ({ usersData, pendingData, sessionsData, leavesData, analyticsData } = _mgrCached);
+    _mgrOffline = true;
+  } else if (!navigator.onLine) {
+    content.innerHTML = '<div class="card"><div class="empty-state"><p>📶 You\'re offline and no cached data is available yet. Please connect and reload.</p></div></div>';
+    return;
+  } else {
+    try {
+    [usersData, , sessionsData, leavesData, analyticsData] = await Promise.all([
       api('/api/users').catch(() => ({ users: [] })),
       Promise.resolve({ pending: [] }),
       api('/api/attendance-sessions?limit=10').catch(() => ({ sessions: [], pagination: { total: 0 } })),
       api('/api/leaves/pending').catch(() => ({ leaves: [] })),
       api('/api/advanced/analytics').catch(() => null),
     ]);
+    pendingData = { pending: [] };
+    if (typeof offlineCache === 'function') offlineCache('manager_dashboard', { usersData, pendingData, sessionsData, leavesData, analyticsData });
+    } catch(e) { content.innerHTML = `<div class="card"><p style="color:#ef4444">Error: ${e.message}</p></div>`; return; }
+  }
+  try {
 
-    const users       = usersData.users || [];
+    const _offlineBadge = _mgrOffline ? '<div style="background:#fef3c7;border:1px solid #fcd34d;border-radius:8px;padding:8px 14px;font-size:12px;font-weight:600;color:#92400e;margin-bottom:12px">📶 Offline — showing cached data</div>' : '';
+    const users       = (usersData && usersData.users) || [];
     const employees   = users.filter(u => u.role === 'employee');
     const pending     = [];
-    const sessions    = sessionsData.sessions || [];
-    const leaves      = leavesData.leaves || [];
+    const sessions    = (sessionsData && sessionsData.sessions) || [];
+    const leaves      = (leavesData && leavesData.leaves) || [];
     const analytics   = analyticsData;
     const activeSessions = sessions.filter(s => s.active).length;
     const hour = new Date().getHours();
@@ -44,6 +60,7 @@ async function renderManagerDashboard(content) {
     const depts = Object.entries(deptMap).sort((a,b) => b[1]-a[1]);
 
     content.innerHTML = `
+      ${_offlineBadge}
       <div style="display:flex;flex-direction:column;gap:16px">
 
         <!-- Welcome bar -->

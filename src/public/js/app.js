@@ -5303,12 +5303,23 @@ async function renderEmployeeDashboard(content) {
   const today      = new Date().toISOString().slice(0, 10);
   const monthStart = new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString().slice(0, 10);
 
-  const [todayData, monthData, shiftData, leavesData] = await Promise.all([
-    api(`/api/corporate-attendance/my?from=${today}&to=${today}`).catch(() => ({ records: [] })),
-    api(`/api/corporate-attendance/my?from=${monthStart}&to=${today}`).catch(() => ({ records: [] })),
-    api('/api/shifts/my-shift').catch(() => ({})),
-    api('/api/leaves/my').catch(() => ({ leaves: [] })),
-  ]);
+  let todayData, monthData, shiftData, leavesData, _empOffline = false;
+  const _empCached = offlineRead('employee_dashboard');
+  if (!isOnline() && _empCached) {
+    ({ todayData, monthData, shiftData, leavesData } = _empCached);
+    _empOffline = true;
+  } else if (!isOnline()) {
+    content.innerHTML = '<div class="card"><div class="empty-state"><p>📶 You\'re offline and no cached data is available yet. Please connect and reload.</p></div></div>';
+    return;
+  } else {
+    [todayData, monthData, shiftData, leavesData] = await Promise.all([
+      api(`/api/corporate-attendance/my?from=${today}&to=${today}`).catch(() => ({ records: [] })),
+      api(`/api/corporate-attendance/my?from=${monthStart}&to=${today}`).catch(() => ({ records: [] })),
+      api('/api/shifts/my-shift').catch(() => ({})),
+      api('/api/leaves/my').catch(() => ({ leaves: [] })),
+    ]);
+    offlineCache('employee_dashboard', { todayData, monthData, shiftData, leavesData });
+  }
 
   // ── Today ─────────────────────────────────────────────────────────────────
   const todayRecord  = todayData.records?.[0] || null;
@@ -5389,6 +5400,7 @@ async function renderEmployeeDashboard(content) {
   const statusColors = { present:'#16a34a', late:'#d97706', absent:'#dc2626', half_day:'#7c3aed', on_leave:'#0284c7', remote:'#0891b2' };
 
   content.innerHTML = `
+    ${_empOffline ? '<div style="background:#fef3c7;border:1px solid #fcd34d;border-radius:8px;padding:8px 14px;font-size:12px;font-weight:600;color:#92400e;margin-bottom:12px">📶 Offline — showing cached data</div>' : ''}
     <div class="page-header">
       <div>
         <h2>Welcome back, ${esc(currentUser.name.split(' ')[0])}</h2>

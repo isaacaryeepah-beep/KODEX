@@ -28,9 +28,23 @@ async function renderPayroll() {
 async function _loadPayroll(isAdmin) {
   const area = document.getElementById('payroll-area');
   if (!area) return;
+  const cacheKey = isAdmin ? 'corp_payroll_admin' : 'corp_payroll_my';
+  let _payrollOffline = false;
   try {
-    const endpoint = isAdmin ? '/api/payroll' : '/api/payroll/my';
-    const data = await api(endpoint);
+    let data;
+    if (!navigator.onLine) {
+      const cached = typeof offlineRead === 'function' ? offlineRead(cacheKey) : null;
+      if (!cached) {
+        area.innerHTML = '<div class="card"><div class="empty-state"><p>📶 Offline — no cached payroll data available.</p></div></div>';
+        return;
+      }
+      data = cached;
+      _payrollOffline = true;
+    } else {
+      const endpoint = isAdmin ? '/api/payroll' : '/api/payroll/my';
+      data = await api(endpoint);
+      if (typeof offlineCache === 'function') offlineCache(cacheKey, data);
+    }
     const records = data.payroll || data.records || data.items || [];
 
     if (!records.length) {
@@ -41,6 +55,7 @@ async function _loadPayroll(isAdmin) {
     const statusColors = { paid: '#16a34a', pending: '#d97706', draft: '#6b7280', cancelled: '#dc2626' };
 
     area.innerHTML = `
+      ${_payrollOffline ? '<div style="background:#fef3c7;border:1px solid #fcd34d;border-radius:8px;padding:8px 14px;font-size:12px;font-weight:600;color:#92400e;margin-bottom:12px">📶 Offline — showing cached payroll data</div>' : ''}
       <div class="card" style="overflow-x:auto">
         <table>
           <thead><tr>
@@ -129,40 +144,51 @@ async function loadAuditLogs() {
   if (action) params.set('action', action);
   params.set('days', days);
 
+  if (!navigator.onLine) {
+    const cached = typeof offlineRead === 'function' ? offlineRead('corp_audit_logs') : null;
+    if (cached) {
+      _renderAuditLogs(area, cached, true);
+    } else {
+      area.innerHTML = '<div class="card"><div class="empty-state"><p>📶 Offline — audit logs require an internet connection.</p></div></div>';
+    }
+    return;
+  }
+
   try {
     const data = await api(`/api/audit-logs?${params}`);
+    if (typeof offlineCache === 'function' && !search && !action) offlineCache('corp_audit_logs', data);
     const logs = data.logs || data.items || [];
-
-    if (!logs.length) {
-      area.innerHTML = '<div class="card"><div class="empty-state"><p>No audit logs found for the selected filters.</p></div></div>';
-      return;
-    }
-
-    const actionColors = {
-      login: '#2563eb', logout: '#6b7280', create: '#16a34a', update: '#d97706',
-      delete: '#dc2626', approve: '#059669', reject: '#dc2626',
-    };
-
-    area.innerHTML = `
-      <div class="card" style="overflow-x:auto">
-        <table>
-          <thead><tr><th>Time</th><th>User</th><th>Action</th><th>Resource</th><th>Details</th><th>IP</th></tr></thead>
-          <tbody>${logs.map(l => {
-            const ac = actionColors[l.action?.toLowerCase()] || 'var(--text-muted)';
-            return `<tr>
-              <td style="font-size:11px;color:var(--text-muted);white-space:nowrap">${l.createdAt ? new Date(l.createdAt).toLocaleString('en-GB',{day:'2-digit',month:'short',hour:'2-digit',minute:'2-digit'}) : '—'}</td>
-              <td style="font-size:12px;font-weight:600">${l.userName || l.user?.name || '—'}</td>
-              <td><span style="background:${ac}20;color:${ac};border:1px solid ${ac}40;padding:2px 7px;border-radius:20px;font-size:10px;font-weight:700;text-transform:uppercase">${l.action || '—'}</span></td>
-              <td style="font-size:12px">${l.resource || l.model || '—'}</td>
-              <td style="font-size:12px;color:var(--text-secondary);max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${(l.details||'').replace(/"/g,'&quot;')}">${l.details || '—'}</td>
-              <td style="font-size:11px;color:var(--text-muted)">${l.ipAddress || '—'}</td>
-            </tr>`;
-          }).join('')}</tbody>
-        </table>
-      </div>`;
+    _renderAuditLogs(area, { logs }, false);
   } catch(e) {
     area.innerHTML = `<div class="card"><p style="color:var(--danger);font-size:13px">Error: ${e.message}</p></div>`;
   }
+}
+
+function _renderAuditLogs(area, data, isOffline) {
+  const logs = data.logs || data.items || [];
+  if (!logs.length) {
+    area.innerHTML = '<div class="card"><div class="empty-state"><p>No audit logs found for the selected filters.</p></div></div>';
+    return;
+  }
+  const actionColors = { login:'#2563eb', logout:'#6b7280', create:'#16a34a', update:'#d97706', delete:'#dc2626', approve:'#059669', reject:'#dc2626' };
+  area.innerHTML = `
+    ${isOffline ? '<div style="background:#fef3c7;border:1px solid #fcd34d;border-radius:8px;padding:8px 14px;font-size:12px;font-weight:600;color:#92400e;margin-bottom:12px">📶 Offline — showing cached audit logs</div>' : ''}
+    <div class="card" style="overflow-x:auto">
+      <table>
+        <thead><tr><th>Time</th><th>User</th><th>Action</th><th>Resource</th><th>Details</th><th>IP</th></tr></thead>
+        <tbody>${logs.map(l => {
+          const ac = actionColors[l.action?.toLowerCase()] || 'var(--text-muted)';
+          return `<tr>
+            <td style="font-size:11px;color:var(--text-muted);white-space:nowrap">${l.createdAt ? new Date(l.createdAt).toLocaleString('en-GB',{day:'2-digit',month:'short',hour:'2-digit',minute:'2-digit'}) : '—'}</td>
+            <td style="font-size:12px;font-weight:600">${l.userName || l.user?.name || '—'}</td>
+            <td><span style="background:${ac}20;color:${ac};border:1px solid ${ac}40;padding:2px 7px;border-radius:20px;font-size:10px;font-weight:700;text-transform:uppercase">${l.action || '—'}</span></td>
+            <td style="font-size:12px">${l.resource || l.model || '—'}</td>
+            <td style="font-size:12px;color:var(--text-secondary);max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${(l.details||'').replace(/"/g,'&quot;')}">${l.details || '—'}</td>
+            <td style="font-size:11px;color:var(--text-muted)">${l.ipAddress || '—'}</td>
+          </tr>`;
+        }).join('')}</tbody>
+      </table>
+    </div>`;
 }
 
 // ════════════════════════════════════════════════════════════════════════════
@@ -192,6 +218,16 @@ async function loadProgrammes() {
   const area = document.getElementById('programmes-area');
   if (!area) return;
 
+  if (!navigator.onLine) {
+    const cached = typeof offlineRead === 'function' ? offlineRead('corp_programmes') : null;
+    if (cached) {
+      _renderProgrammesData(area, cached, true);
+    } else {
+      area.innerHTML = '<div class="card"><div class="empty-state"><p>📶 Offline — no cached programmes data available.</p></div></div>';
+    }
+    return;
+  }
+
   // Timeout guard so the page never stays on "Loading programmes…" forever
   const timer = setTimeout(() => {
     const el = document.getElementById('programmes-area');
@@ -203,11 +239,20 @@ async function loadProgrammes() {
   try {
     const data = await api('/api/programmes');
     clearTimeout(timer);
+    if (typeof offlineCache === 'function') offlineCache('corp_programmes', data);
 
     // Re-acquire in case DOM changed during await
     const liveArea = document.getElementById('programmes-area');
     if (!liveArea) return;
+    _renderProgrammesData(liveArea, data, false);
+  } catch(e) {
+    clearTimeout(timer);
+    const liveArea = document.getElementById('programmes-area');
+    if (liveArea) liveArea.innerHTML = `<div class="card"><p style="color:var(--danger);font-size:13px">Error: ${e.message}</p></div>`;
+  }
+}
 
+function _renderProgrammesData(liveArea, data, isOffline) {
     const programmes = data.programmes || data.items || [];
 
     if (!programmes.length) {
@@ -215,7 +260,9 @@ async function loadProgrammes() {
       return;
     }
 
-    liveArea.innerHTML = `<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:14px">
+    liveArea.innerHTML = `
+    ${isOffline ? '<div style="background:#fef3c7;border:1px solid #fcd34d;border-radius:8px;padding:8px 14px;font-size:12px;font-weight:600;color:#92400e;margin-bottom:12px">📶 Offline — showing cached programmes</div>' : ''}
+    <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:14px">
       ${programmes.map(p => `
         <div class="card" style="padding:18px 20px">
           <div style="font-size:15px;font-weight:700;margin-bottom:4px">${p.name || 'Unnamed Programme'}</div>
@@ -228,20 +275,6 @@ async function loadProgrammes() {
           </div>
         </div>`).join('')}
     </div>`;
-  } catch(e) {
-    clearTimeout(timer);
-    const liveArea = document.getElementById('programmes-area');
-    if (!liveArea) return;
-    // Friendly message for mode restriction (corporate company viewing academic feature)
-    if (e.message && e.message.toLowerCase().includes('academic mode')) {
-      liveArea.innerHTML = `<div class="card" style="border-left:4px solid #d97706">
-        <div style="font-size:14px;font-weight:700;color:#d97706;margin-bottom:6px">Academic Feature</div>
-        <p style="font-size:13px;color:var(--text-secondary)">Programmes are available for institutions in Academic mode. Your workspace is currently in Corporate mode.</p>
-      </div>`;
-    } else {
-      liveArea.innerHTML = `<div class="card"><p style="color:var(--danger);font-size:13px">Could not load programmes: ${e.message || 'Unknown error'}</p></div>`;
-    }
-  }
 }
 
 async function showNewProgrammeModal() {
