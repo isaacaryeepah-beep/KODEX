@@ -12988,14 +12988,10 @@ async function submitCodeMark(deviceIp) {
   const userId      = currentUser?._id || currentUser?.id || '';
   const indexNumber = currentUser?.indexNumber || currentUser?.IndexNumber || '';
 
-  // Detect if running inside the Capacitor app (allowMixedContent:true, so HTTP to
-  // ESP32 works). In-app: require physical ESP32 connection as anti-cheat.
-  // Browser: fall through to cloud API (mixed-content blocks HTTP to device).
-  const isInApp = /DiklyApp/.test(navigator.userAgent);
-
-  // ── Path 1: Submit directly to ESP32 /attend (S3 firmware, offline, anti-cheat) ─
-  // Requires physical presence on classroom WiFi — 192.168.4.1 is unreachable
-  // from outside the ESP32 hotspot. Works in Capacitor app (allowMixedContent:true).
+  // ── Path 1: ESP32 /attend — offline, anti-cheat (S3 firmware) ────────────────
+  // 192.168.4.1 is a private LAN IP only reachable on the classroom hotspot.
+  // Works in the Capacitor app (allowMixedContent:true). Silently skipped in
+  // Chrome where mixed-content blocks HTTP from HTTPS pages.
   try {
     const resp = await fetch(`http://${ip}/attend`, {
       method: 'POST',
@@ -13005,7 +13001,7 @@ async function submitCodeMark(deviceIp) {
     });
     const result = await resp.json();
     if (resp.ok && !result.error) {
-      showMsg('✓ Attendance recorded! You can now disconnect from classroom WiFi.', true);
+      showMsg('✓ Attendance recorded!', true);
       setTimeout(() => navigateTo('mark-attendance'), 2200);
       return;
     }
@@ -13014,10 +13010,9 @@ async function submitCodeMark(deviceIp) {
       showMsg(result.error || 'Device rejected the code. Check the screen and try again.', false);
       return;
     }
-    // 404/405 = standard firmware (no /attend) — fall through
-  } catch (_) { /* timeout or mixed-content — fall through */ }
+  } catch (_) {}
 
-  // ── Path 2: Get connectionToken from ESP32, then cloud API (standard firmware) ─
+  // ── Path 2: connectionToken from ESP32, then cloud API (standard firmware) ───
   let connectionToken = null;
   try {
     const tokenRes = await fetch(`http://${ip}/session?studentId=${encodeURIComponent(userId)}`, {
@@ -13035,15 +13030,9 @@ async function submitCodeMark(deviceIp) {
     } catch (_) {}
   }
 
-  // ── In-app strict mode: require ESP32 connection ────────────────────────────
-  // Paths 1 and 2 both failed inside the app → student is not on classroom WiFi.
-  if (isInApp && !connectionToken?.sessionId) {
-    restoreBtn();
-    showMsg('Connect to the classroom WiFi hotspot (Dikly-XXXXXX) first, then try again.', false);
-    return;
-  }
-
-  // ── Path 3: Cloud API — code-only (browser fallback, code is the anti-cheat) ─
+  // ── Path 3: Cloud API — works for both Capacitor and browser ─────────────────
+  // Anti-cheat: rotating 6-digit TOTP changes every 30 s and is only visible
+  // on the physical device screen in the classroom. Server validates cryptographically.
   try {
     const body = connectionToken?.sessionId
       ? { code, method: 'code_mark', connectionToken }
