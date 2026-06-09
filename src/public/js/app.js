@@ -12443,7 +12443,7 @@ async function renderClassDevice() {
               </div>
               <div id="cr-manual-error" style="color:#dc2626;font-size:13px;margin-bottom:8px;display:none"></div>
               <button id="cr-manual-connect-btn" onclick="classRepConnectManual()" disabled
-                style="width:100%;padding:11px;background:#4f6ef7;color:#fff;border:none;border-radius:9px;font-size:14px;font-weight:700;cursor:pointer;opacity:.5">
+                style="width:100%;padding:11px;background:#cbd5e1;color:#94a3b8;border:none;border-radius:9px;font-size:14px;font-weight:700;cursor:not-allowed">
                 Assign &amp; Connect
               </button>
             </div>`}
@@ -12515,7 +12515,7 @@ window.crSearchLecturers = function(query) {
   _crSearchTimer = setTimeout(async () => {
     if (resultsEl) { resultsEl.style.display = 'block'; resultsEl.innerHTML = '<div style="padding:10px 14px;color:#64748b;font-size:13px">Searching…</div>'; }
     try {
-      const data = await api(`/api/users?role=lecturer&search=${encodeURIComponent(query.trim())}&limit=10`);
+      const data = await api(`/api/class-rep/search-lecturers?q=${encodeURIComponent(query.trim())}`);
       const list = data.users || data.data || data || [];
       if (!list.length) {
         if (resultsEl) resultsEl.innerHTML = '<div style="padding:10px 14px;color:#64748b;font-size:13px">No lecturers found</div>';
@@ -12546,7 +12546,7 @@ window.crSelectLecturer = function(id, name) {
   if (idEl) idEl.value = id;
   if (selEl) { selEl.textContent = '✓ ' + name; selEl.style.display = 'block'; }
   if (pinWrap) pinWrap.style.display = 'block';
-  if (btn) { btn.disabled = false; btn.style.opacity = '1'; }
+  if (btn) { btn.disabled = false; btn.style.background = '#4f6ef7'; btn.style.color = '#fff'; btn.style.cursor = 'pointer'; }
   if (resultsEl) resultsEl.style.display = 'none';
   if (searchEl) searchEl.value = name;
 };
@@ -12567,7 +12567,7 @@ window.classRepConnectManual = async function() {
     const requiresPin = e.data && e.data.requiresPin;
     const msg = requiresPin ? 'Incorrect PIN — ask the lecturer for their 4-digit PIN' : (e.message || 'Failed to connect');
     if (errEl) { errEl.textContent = msg; errEl.style.display = 'block'; }
-    if (btn) { btn.disabled = false; btn.textContent = 'Assign & Connect'; btn.style.opacity = '1'; }
+    if (btn) { btn.disabled = false; btn.textContent = 'Assign & Connect'; btn.style.background = '#4f6ef7'; btn.style.color = '#fff'; btn.style.cursor = 'pointer'; }
   }
 };
 
