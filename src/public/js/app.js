@@ -12619,10 +12619,8 @@ window.crScanWifi = async function(localIp) {
   msgEl.textContent = '';
 
   try {
-    const res = await fetch(`http://${localIp}/wifi/scan`, { signal: AbortSignal.timeout(12000) });
-    if (!res.ok) throw new Error('Device returned an error');
-    const nets = await res.json();
-    const list = Array.isArray(nets) ? nets : (nets.networks || []);
+    const data = await api('/api/class-rep/scan-wifi');
+    const list = data.networks || [];
     list.sort((a, b) => (b.rssi || 0) - (a.rssi || 0));
 
     if (!list.length) {
@@ -12673,10 +12671,7 @@ window.crScanWifi = async function(localIp) {
     listEl.style.cssText = 'display:block;border:1.5px solid #e2e8f0;border-radius:10px;overflow:hidden';
 
   } catch (e) {
-    const isBlocked = e.message && (e.message.includes('Failed to fetch') || e.message.includes('NetworkError'));
-    msgEl.innerHTML = isBlocked
-      ? `<span style="color:#dc2626">Could not reach device. Make sure you're on the same WiFi network as the device.</span>`
-      : `<span style="color:#dc2626">Scan failed: ${esc(e.message)}</span>`;
+    msgEl.innerHTML = `<span style="color:#dc2626">${esc(e.message || 'Scan failed')}</span>`;
   } finally {
     btn.disabled = false;
     btn.textContent = 'Scan for Networks';
@@ -12705,22 +12700,15 @@ window.crConnectWifi = async function(localIp, ssid, idx, isOpen = false) {
   if (msgEl) { msgEl.innerHTML = `<span style="color:#64748b">Connecting to <strong>${esc(ssid)}</strong>…</span>`; }
 
   try {
-    const res = await fetch(`http://${localIp}/wifi/reconfigure`, {
+    const data = await api('/api/class-rep/configure-wifi', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ ssid, password }),
-      signal: AbortSignal.timeout(35000),
     });
-    const json = await res.json().catch(() => ({}));
-    if (!res.ok) throw new Error(json.error || 'Connection failed');
     if (msgEl) msgEl.innerHTML = `<span style="color:#16a34a;font-weight:600">✓ Connected to <strong>${esc(ssid)}</strong>. Device is restarting…</span>`;
     showToastNotif(`Device switching to ${ssid}`, 'success');
-    // Refresh after device reboots (~3s)
     setTimeout(() => renderClassDevice(), 4000);
   } catch (e) {
-    const msg = e.message.includes('aborted') || e.message.includes('timeout')
-      ? 'Timed out — device may be rebooting on the new network'
-      : (e.message || 'Failed to connect');
+    const msg = e.message || 'Failed to connect';
     if (msgEl) msgEl.innerHTML = `<span style="color:#dc2626">${esc(msg)}</span>`;
     showToastNotif(msg, 'error');
   }
