@@ -12165,19 +12165,55 @@ async function esp32Api(path, options = {}) {
   return data;
 }
 
-// Try to find ESP32 on local network
+// Detect local IPs via WebRTC (works from HTTPS — no HTTP request needed).
+// Returns an array of local IP strings the device has on all interfaces.
+async function _getLocalIPs() {
+  return new Promise(resolve => {
+    const ips = new Set();
+    const pc = new RTCPeerConnection({ iceServers: [] });
+    pc.createDataChannel('');
+    pc.onicecandidate = e => {
+      if (!e.candidate) { pc.close(); return resolve([...ips]); }
+      const m = e.candidate.candidate.match(/(\d{1,3}(?:\.\d{1,3}){3})/);
+      if (m) ips.add(m[1]);
+    };
+    pc.createOffer().then(o => pc.setLocalDescription(o));
+    setTimeout(() => { pc.close(); resolve([...ips]); }, 2500);
+  });
+}
+
+// Try to find ESP32 on local network.
+// Primary (HTTPS-safe): WebRTC reveals the student's local IPs. If any are in
+// the ESP32 AP subnet (192.168.4.x), the student is connected to the hotspot.
+// Fallback: direct HTTP fetch — works in Capacitor WebView, blocked in browsers.
 async function discoverESP32() {
-  // Always try 192.168.4.1 — the fixed AP gateway IP of the ESP32.
-  // The Capacitor WebView allows HTTP requests to local network IPs.
-  // Two-step: first /token (gets key in JSON body), then /status (confirms device).
+  // WebRTC local-IP check — works from HTTPS without any HTTP request.
+  // The ESP32 AP mode always uses 192.168.4.x. A student connected to it
+  // will have a 192.168.4.2–254 address.
+  try {
+    const localIPs = await _getLocalIPs();
+    const onHotspot = localIPs.some(ip => /^192\.168\.4\.[2-9]\d*$|^192\.168\.4\.[1-9]\d+$/.test(ip));
+    if (onHotspot) {
+      setEsp32IP('192.168.4.1');
+      bleDetected = true;
+      // Try to fetch hotspot token while we're on the network (Capacitor / HTTP only)
+      try {
+        const tokenRes = await fetch('http://192.168.4.1/token', { cache: 'no-store', signal: AbortSignal.timeout(2000) });
+        if (tokenRes.ok) {
+          const td = await tokenRes.json();
+          if (td.token) sessionStorage.setItem('dikly_esp32_hotspot_key', td.token);
+        }
+      } catch (_) {}
+      return true;
+    }
+  } catch (_) {}
+
+  // HTTP fallback for Capacitor WebView (no mixed-content restriction)
   const candidates = ['192.168.4.1'];
   if (esp32IP && esp32IP !== '192.168.4.1') candidates.push(esp32IP);
-
   for (const ip of candidates) {
     try {
-      // Step 1: fetch /token — returns { token: "..." } in JSON body.
-      // This is more reliable than reading response headers in a WebView.
-      const tokenRes = await fetch(`http://${ip}/token`, { cache: 'no-store' });
+      const tokenRes = await fetch(`http://${ip}/token`, { cache: 'no-store', signal: AbortSignal.timeout(3000) });
       if (tokenRes.ok) {
         const tokenData = await tokenRes.json();
         if (tokenData.token) {
@@ -12187,10 +12223,8 @@ async function discoverESP32() {
           return true;
         }
       }
-    } catch(e) { /* try /status fallback */ }
-
+    } catch(e) {}
     try {
-      // Step 2 fallback: /status — reads token from response header
       esp32IP = ip;
       const status = await esp32Api('/status');
       if (status.device === 'DIKLY-ESP32') {
@@ -12198,7 +12232,7 @@ async function discoverESP32() {
         bleDetected = true;
         return true;
       }
-    } catch(e) { /* not reachable on this IP */ }
+    } catch(e) {}
   }
   return false;
 }
@@ -12764,15 +12798,10 @@ async function renderMarkAttendance() {
     }
   }
 
-  // If device is required but not found, block with clear instructions
+  // Device proximity is required — block if not on classroom WiFi hotspot.
   if (requiresDevice && !deviceFound) {
     content.innerHTML = `
       <div class="page-header"><h2>Mark Attendance</h2><p>Check in to active sessions</p></div>
-      ${serverSession ? `<div class="card" style="border-left:4px solid var(--primary);margin-bottom:16px;padding:14px 16px">
-        <div style="font-size:11px;text-transform:uppercase;color:var(--primary);font-weight:700">Active Session</div>
-        <div style="font-size:16px;font-weight:700;margin-top:4px">${esc(serverSession.title || 'Attendance Session')}</div>
-        <div style="font-size:12px;color:var(--text-muted);margin-top:2px">You must connect to the classroom device to mark attendance.</div>
-      </div>` : ''}
       <div class="card" style="text-align:center;padding:40px 20px">
         <div style="font-size:52px;margin-bottom:14px">📴</div>
         <div style="font-size:18px;font-weight:700;margin-bottom:10px">Connect to Classroom WiFi First</div>
