@@ -12905,7 +12905,9 @@ async function renderMarkAttendance() {
           </div>
         </div>
       </div>`
-    : '';
+    : `<div class="card" style="border-left:4px solid #f59e0b;background:#fffbeb;padding:12px 14px;margin-bottom:16px;font-size:13px;color:#92400e">
+        <strong>Classroom device not detected on WiFi.</strong> Enter the 6-digit code shown on the device screen below.
+      </div>`;
   content.innerHTML = `
     <div class="page-header"><h2>Mark Attendance</h2><p>Check in to active sessions</p></div>
     ${proximityBanner}
