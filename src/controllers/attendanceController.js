@@ -479,21 +479,38 @@ exports.getActiveSession = async (req, res) => {
       activeFilter.createdBy = req.user._id;
     }
 
-    // Students only see sessions for courses they are enrolled in.
+    // Students only see sessions for courses that belong to their academic group.
+    // Match by academic profile (level/group/sessionType/semester/programme) so students
+    // from different departments or groups cannot see each other's sessions.
+    // Also check legacy Course.enrolledStudents for individually-added students.
     if (req.user.role === "student") {
       const Course = require("../models/Course");
       const StudentCourseEnrollment = require('../models/StudentCourseEnrollment');
 
-      // Collect enrolled course IDs from both legacy array and new enrollment model
-      const [legacyCourses, newEnrollments] = await Promise.all([
-        Course.find({ companyId: req.user.company, enrolledStudents: req.user._id }).select("_id").lean(),
+      const student = await User.findById(req.user._id)
+        .select('studentLevel studentGroup sessionType semester programme')
+        .lean();
+
+      // Build course query matching student's academic profile
+      const courseQuery = { companyId: req.user.company, isActive: true };
+      if (student.studentLevel)  courseQuery.level       = student.studentLevel;
+      if (student.studentGroup)  courseQuery.group       = student.studentGroup;
+      if (student.sessionType)   courseQuery.sessionType = student.sessionType;
+      if (student.semester)      courseQuery.semester    = student.semester;
+      if (student.programme)     courseQuery.qualificationType = student.programme;
+
+      const [profileCourses, legacyCourses, newEnrollments] = await Promise.all([
+        Course.find(courseQuery).select('_id').lean(),
+        Course.find({ companyId: req.user.company, enrolledStudents: req.user._id }).select('_id').lean(),
         StudentCourseEnrollment.find({ student: req.user._id, company: req.user.company, status: 'active' }).select('course').lean(),
       ]);
+
       const courseIdSet = new Set([
+        ...profileCourses.map(c => c._id.toString()),
         ...legacyCourses.map(c => c._id.toString()),
         ...newEnrollments.map(e => e.course.toString()),
       ]);
-      // Also include sessions with no course (general/all-hands sessions visible to all enrolled students)
+
       activeFilter.$or = [
         { course: { $in: [...courseIdSet] } },
         { course: null },
