@@ -12801,7 +12801,20 @@ async function renderMarkAttendance() {
       </div>`;
     deviceFound = await discoverESP32();
     if (deviceFound) {
-      try { deviceSession = await esp32Api('/session'); } catch (e) {}
+      try {
+        const status = await esp32Api('/status');
+        if (status?.sessionActive) {
+          // Synthesize a minimal session from device status so the UI can show
+          deviceSession = {
+            _id:       status.sessionId || null,
+            title:     status.sessionTitle || 'Attendance Session',
+            course:    null,
+            startedAt: new Date().toISOString(),
+            deviceId:  status.deviceId || null,
+            _fromDevice: true,
+          };
+        }
+      } catch (e) {}
     }
   }
 
@@ -12822,7 +12835,7 @@ async function renderMarkAttendance() {
     return;
   }
 
-  const session = serverSession || (deviceSession?.sessionId ? deviceSession : null);
+  const session = serverSession || (deviceSession?._fromDevice ? deviceSession : null);
 
   // ── Step 3: No active session ────────────────────────────────────────────────
   if (!session) {
@@ -13091,31 +13104,49 @@ async function submitCodeMark(deviceIp) {
   if (btn) { btn.textContent = 'Submitting…'; btn.disabled = true; }
   const restoreBtn = () => { if (btn) { btn.textContent = 'Mark Attendance'; btn.disabled = false; } };
 
-  // Device is the authority — always submit directly to the classroom device.
-  // Students must be on the device's WiFi hotspot; no server bypass allowed.
+  // Get a connectionToken from the ESP32 — proves the student is physically
+  // on the classroom hotspot. The token is an HMAC signed with the session seed.
   const ip = deviceIp || esp32IP || '192.168.4.1';
+  const userId = currentUser?._id || currentUser?.id || '';
+  let connectionToken = null;
   try {
-    const resp = await fetch(`http://${ip}/attend`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        userId:      currentUser?._id || currentUser?.id || '',
-        indexNumber: currentUser?.indexNumber || currentUser?.IndexNumber || '',
-        code,
-      }),
-      signal: AbortSignal.timeout(8000),
+    const tokenRes = await fetch(`http://${ip}/session?studentId=${encodeURIComponent(userId)}`, {
+      cache: 'no-store', signal: AbortSignal.timeout(5000),
     });
-    const result = await resp.json();
-    if (!resp.ok || result.error) throw new Error(result.error || 'Device rejected the code');
+    if (tokenRes.ok) connectionToken = await tokenRes.json();
+  } catch (_) {}
+
+  if (!connectionToken) {
+    // Fallback: try POST /token (standard firmware variant)
+    try {
+      const tokenRes = await fetch(`http://${ip}/token`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId }),
+        signal: AbortSignal.timeout(5000),
+      });
+      if (tokenRes.ok) connectionToken = await tokenRes.json();
+    } catch (_) {}
+  }
+
+  if (!connectionToken?.sessionId) {
+    restoreBtn();
+    showMsg('Could not reach classroom device. Make sure you are still connected to the classroom WiFi hotspot.', false);
+    return;
+  }
+
+  // Submit to cloud API with the connectionToken as proximity proof.
+  try {
+    await api('/api/attendance-sessions/mark', {
+      method: 'POST',
+      body: JSON.stringify({ code, method: 'code_mark', connectionToken }),
+    });
     showMsg('✓ Attendance marked! You can now disconnect from classroom WiFi.', true);
+    offlineCache('activeSession', null);
     setTimeout(() => navigateTo('mark-attendance'), 2200);
   } catch (e) {
     restoreBtn();
-    if (e.name === 'TimeoutError' || e.name === 'AbortError') {
-      showMsg('Device not responding. Make sure you are still connected to the classroom WiFi.', false);
-    } else {
-      showMsg(e.message || 'Failed to submit. Stay connected to classroom WiFi and try again.', false);
-    }
+    showMsg(e.message || 'Failed to submit. Stay connected to classroom WiFi and try again.', false);
   }
 }
 

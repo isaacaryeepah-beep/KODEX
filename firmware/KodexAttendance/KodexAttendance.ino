@@ -522,6 +522,74 @@ static void startApPortal() {
 
 // ─── Local HTTP API (used by the Attendance Device page WiFi proxy) ──────────
 static void registerLocalHttp() {
+  // POST /token  { userId: "<studentId>" }
+  // Returns a connectionToken HMAC that the student's app sends to the cloud
+  // as proof of physical proximity (student is on the device WiFi hotspot).
+  localHttp.on("/token", HTTP_POST, [](){
+    localHttp.sendHeader("Access-Control-Allow-Origin", "*");
+    if (!sessionId.length() || !sessionSeed.length()) {
+      localHttp.send(503, "application/json", "{\"error\":\"No active session\"}"); return;
+    }
+    StaticJsonDocument<256> req;
+    if (deserializeJson(req, localHttp.arg("plain"))) {
+      localHttp.send(400, "application/json", "{\"error\":\"Bad JSON\"}"); return;
+    }
+    String userId = req["userId"] | "";
+    if (!userId.length()) {
+      localHttp.send(400, "application/json", "{\"error\":\"userId required\"}"); return;
+    }
+    uint32_t issuedAt = (uint32_t)time(nullptr);
+    String msg = "conn:" + sessionId + ":" + userId + ":" + String(issuedAt);
+    uint8_t digest[32];
+    hmacSha256(reinterpret_cast<const uint8_t*>(sessionSeed.c_str()), sessionSeed.length(),
+               reinterpret_cast<const uint8_t*>(msg.c_str()), msg.length(), digest);
+    char sig[33]; // 16 bytes = 32 hex chars
+    for (int i = 0; i < 16; i++) snprintf(sig + i * 2, 3, "%02x", digest[i]);
+    sig[32] = '\0';
+    StaticJsonDocument<512> resp;
+    resp["sessionId"] = sessionId;
+    resp["studentId"] = userId;
+    resp["issuedAt"]  = (long long)issuedAt;
+    resp["sig"]       = sig;
+    String s; serializeJson(resp, s);
+    localHttp.send(200, "application/json", s);
+  });
+
+  // GET /session?studentId=<id>  — same as /token but GET (matches S3 firmware interface)
+  localHttp.on("/session", HTTP_GET, [](){
+    localHttp.sendHeader("Access-Control-Allow-Origin", "*");
+    if (!sessionId.length() || !sessionSeed.length()) {
+      localHttp.send(503, "application/json", "{\"error\":\"No active session\"}"); return;
+    }
+    String userId = localHttp.arg("studentId");
+    if (!userId.length()) {
+      localHttp.send(400, "application/json", "{\"error\":\"studentId required\"}"); return;
+    }
+    uint32_t issuedAt = (uint32_t)time(nullptr);
+    String msg = "conn:" + sessionId + ":" + userId + ":" + String(issuedAt);
+    uint8_t digest[32];
+    hmacSha256(reinterpret_cast<const uint8_t*>(sessionSeed.c_str()), sessionSeed.length(),
+               reinterpret_cast<const uint8_t*>(msg.c_str()), msg.length(), digest);
+    char sig[33];
+    for (int i = 0; i < 16; i++) snprintf(sig + i * 2, 3, "%02x", digest[i]);
+    sig[32] = '\0';
+    StaticJsonDocument<512> resp;
+    resp["sessionId"] = sessionId;
+    resp["studentId"] = userId;
+    resp["issuedAt"]  = (long long)issuedAt;
+    resp["sig"]       = sig;
+    String s; serializeJson(resp, s);
+    localHttp.send(200, "application/json", s);
+  });
+
+  // OPTIONS for CORS preflights
+  localHttp.on("/token", HTTP_OPTIONS, [](){
+    localHttp.sendHeader("Access-Control-Allow-Origin", "*");
+    localHttp.sendHeader("Access-Control-Allow-Methods", "POST, GET, OPTIONS");
+    localHttp.sendHeader("Access-Control-Allow-Headers", "Content-Type");
+    localHttp.send(204);
+  });
+
   localHttp.on("/status", HTTP_GET, [](){
     StaticJsonDocument<256> doc;
     doc["deviceId"]        = deviceId;
@@ -529,9 +597,10 @@ static void registerLocalHttp() {
     doc["wifiSSID"]        = wifiSSID;
     doc["localIp"]         = WiFi.localIP().toString();
     doc["sessionActive"]   = sessionId.length() > 0;
+    if (sessionId.length())   doc["sessionId"]    = sessionId;
+    if (sessionTitle.length()) doc["sessionTitle"] = sessionTitle;
     String s; serializeJson(doc, s);
-    // Echo the device token back as an HTTP header so the captive-portal
-    // page on the same WiFi can pick it up as proof-of-proximity.
+    localHttp.sendHeader("Access-Control-Allow-Origin", "*");
     localHttp.sendHeader("X-ESP32-Device-Token", deviceJWT.substring(0, 16));
     localHttp.send(200, "application/json", s);
   });
