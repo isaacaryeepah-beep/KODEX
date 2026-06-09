@@ -69,38 +69,37 @@ exports.connectDevice = async (req, res) => {
   try {
     if (!req.user.isClassRep) return res.status(403).json({ error: 'Not a class rep' });
     const { lecturerId, courseId, lecturerPin } = req.body;
-    if (!lecturerId || !courseId) return res.status(400).json({ error: 'lecturerId and courseId required' });
+    if (!lecturerId) return res.status(400).json({ error: 'lecturerId required' });
 
     const device = await Device.findOne({ classRepId: req.user._id, companyId: req.user.company, isActive: true });
     if (!device) return res.status(404).json({ error: 'No device is assigned to your class. Contact your admin.' });
 
-    // Check device online (within 20s — matches Device model isOnline virtual)
     const ms = Date.now() - new Date(device.lastHeartbeat || 0).getTime();
     if (ms > 20000) return res.status(503).json({ error: 'Device is offline. Power it on first.' });
 
-    // Check if device already active
     if (device.activeLecturerId) return res.status(409).json({ error: 'Device is already connected to a session. End that session first.' });
 
-    // Verify lecturer belongs to same company
     const lecturer = await User.findOne({ _id: lecturerId, company: req.user.company, role: 'lecturer', isActive: true }).select('+classRepPin name email');
     if (!lecturer) return res.status(404).json({ error: 'Lecturer not found' });
 
-    // Verify lecturer PIN if they have set one
     if (lecturer.classRepPin) {
       const pinOk = lecturerPin && await bcrypt.compare(String(lecturerPin), lecturer.classRepPin);
       if (!pinOk) return res.status(403).json({ error: 'Incorrect lecturer PIN', requiresPin: true });
     }
 
-    // Verify course belongs to this lecturer
-    const course = await Course.findOne({ _id: courseId, companyId: req.user.company, isActive: true, lecturerId: lecturerId });
-    if (!course) return res.status(404).json({ error: 'Course not found or not assigned to this lecturer' });
+    // courseId is optional — provided when connecting via course dropdown, absent for manual assignments
+    let course = null;
+    if (courseId) {
+      course = await Course.findOne({ _id: courseId, companyId: req.user.company, isActive: true, lecturerId });
+      if (!course) return res.status(404).json({ error: 'Course not found or not assigned to this lecturer' });
+    }
 
     device.activeLecturerId = lecturerId;
-    device.activeCourseId = courseId;
+    device.activeCourseId = course ? course._id : null;
     device.connectedAt = new Date();
     await device.save({ validateModifiedOnly: true });
 
-    res.json({ ok: true, message: `Device connected to ${lecturer.name} — ${course.code}` });
+    res.json({ ok: true, message: course ? `Device connected to ${lecturer.name} — ${course.code}` : `Device connected to ${lecturer.name}` });
   } catch (e) { res.status(500).json({ error: e.message }); }
 };
 
