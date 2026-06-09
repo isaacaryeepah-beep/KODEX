@@ -12449,23 +12449,19 @@ async function renderClassDevice() {
             </div>`}
           </div>` : ''}
 
-          <!-- WiFi Management -->
-          ${localIp ? `
+          <!-- WiFi Info -->
+          ${(localIp || currentSsid) ? `
           <div style="background:#fff;border:1.5px solid #e2e8f0;border-radius:14px;padding:18px">
             <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
-              <h3 style="font-size:15px;font-weight:700;margin:0">Device WiFi</h3>
+              <h3 style="font-size:15px;font-weight:700;margin:0">Device Network</h3>
               ${currentSsid ? `<span style="font-size:12px;color:#16a34a;font-weight:600;background:#f0fdf4;padding:3px 10px;border-radius:20px;border:1px solid #86efac">&#9679; ${esc(currentSsid)}</span>` : ''}
             </div>
-            <p style="font-size:12px;color:#64748b;margin-bottom:14px">To change the WiFi network, open the device portal on your local network.</p>
-            <div style="background:#f1f5f9;border-radius:8px;padding:12px 14px;font-size:12px;color:#475569;margin-bottom:12px;display:flex;align-items:center;gap:10px">
-              <span style="font-size:16px">&#128225;</span>
-              <div>Device address: <strong style="font-family:monospace;color:#1e293b">${esc(localIp)}</strong><br>
-              <span style="color:#94a3b8">Must be on the same WiFi network as the device</span></div>
+            <div style="display:flex;align-items:flex-start;gap:10px;background:#f8fafc;border-radius:8px;padding:12px 14px;font-size:13px;color:#475569">
+              <span style="flex-shrink:0;font-size:16px">ℹ️</span>
+              <div>To change the device WiFi, ask your <strong>admin</strong> to update it from the Admin portal.
+              ${localIp ? `<br><span style="font-size:12px;color:#94a3b8;margin-top:4px;display:block">Device IP: <span style="font-family:monospace">${esc(localIp)}</span></span>` : ''}
+              </div>
             </div>
-            <a href="http://${localIp}" target="_blank" rel="noopener"
-              style="display:block;width:100%;box-sizing:border-box;padding:10px;background:#f8fafc;color:#1e293b;border:1.5px solid #e2e8f0;border-radius:9px;font-size:13px;font-weight:700;cursor:pointer;text-align:center;text-decoration:none">
-              Open Device Portal &#8599;
-            </a>
           </div>` : ''}
         `}
       </div>
