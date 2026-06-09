@@ -53,7 +53,7 @@ exports.searchLecturers = async (req, res) => {
     const rep = await User.findById(req.user._id).select('department').lean();
     const regex = new RegExp(q, 'i');
     const filter = {
-      companyId: req.user.company,
+      company: req.user.company,
       role: 'lecturer',
       isActive: true,
       $or: [{ name: regex }, { email: regex }],
