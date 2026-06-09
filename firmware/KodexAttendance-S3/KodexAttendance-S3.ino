@@ -2483,7 +2483,10 @@ static void registerLocalHttp() {
     doc["wifiSSID"]        = wifiSSID;
     doc["localIp"]         = WiFi.localIP().toString();
     doc["sessionActive"]   = !sessionId.isEmpty();
+    if (!sessionId.isEmpty())    doc["sessionId"]    = sessionId;
+    if (!sessionTitle.isEmpty()) doc["sessionTitle"] = sessionTitle;
     String s; serializeJson(doc, s);
+    localHttp.sendHeader("Access-Control-Allow-Origin", "*");
     localHttp.sendHeader("X-ESP32-Device-Token", deviceJWT.substring(0, 16));
     localHttp.send(200, "application/json", s);
   });
