@@ -14,7 +14,8 @@ const DEVICE_MARK_WINDOW_MS   = 15_000;   // mark-attendance gate
 // Finds the device that should handle a session for the given user + course.
 // Priority:
 //   1. Device assigned to the group enrolled in this course (new group model)
-//   2. Any online company device (fallback for admins or unassigned devices)
+//   2. Shared device currently connected to this lecturer by a class rep
+//   3. Any online company device (fallback for admins or unassigned devices)
 async function _resolveSessionDevice(user, courseId, explicitDeviceId) {
   const companyId = user.company;
 
@@ -23,6 +24,18 @@ async function _resolveSessionDevice(user, courseId, explicitDeviceId) {
     return Device.findOne({ deviceId: explicitDeviceId, companyId })
       .populate('assignedLecturers.lecturerId', 'name email')
       .populate('assignedLecturers.courseId',   'title code');
+  }
+
+  // Check if a class rep has connected a shared device to this lecturer
+  if (user.role === 'lecturer') {
+    const classRepDevice = await Device.findOne({
+      companyId,
+      ownershipType: 'shared',
+      activeLecturerId: user._id,
+    })
+      .populate('assignedLecturers.lecturerId', 'name email')
+      .populate('assignedLecturers.courseId',   'title code');
+    if (classRepDevice) return classRepDevice;
   }
 
   // Try to find the device assigned to the group for this course
@@ -126,21 +139,27 @@ exports.startSession = async (req, res) => {
     // ── End device check ──────────────────────────────────
 
     // ── Device-lecturer assignment check ──────────────────────────────────────
-    // Lecturers must be explicitly assigned to this device for the selected course.
-    // Admin/HOD/superadmin are exempt — they oversee all devices.
+    // Lecturers must be explicitly assigned to this device for the selected course,
+    // OR a class rep must have temporarily connected them via activeLecturerId.
+    // Admin/HOD/superadmin are exempt.
     if (req.user.role === 'lecturer' && req.body.courseId) {
-      const assignment = (device.assignedLecturers || []).find(a => {
-        const assignedLecId  = a.lecturerId?._id ? a.lecturerId._id.toString() : a.lecturerId?.toString();
-        const assignedCrsId  = a.courseId?._id   ? a.courseId._id.toString()   : a.courseId?.toString();
-        return assignedLecId === req.user._id.toString() &&
-               assignedCrsId === req.body.courseId.toString();
-      });
-      if (!assignment) {
-        return res.status(403).json({
-          error: 'Not assigned to this device',
-          message: 'You are not assigned to this attendance device. Please contact your Group Representative, HOD, or use your assigned departmental device.',
-          deviceAssigned: false,
+      const classRepConnected = device.activeLecturerId &&
+        device.activeLecturerId.toString() === req.user._id.toString();
+
+      if (!classRepConnected) {
+        const assignment = (device.assignedLecturers || []).find(a => {
+          const assignedLecId  = a.lecturerId?._id ? a.lecturerId._id.toString() : a.lecturerId?.toString();
+          const assignedCrsId  = a.courseId?._id   ? a.courseId._id.toString()   : a.courseId?.toString();
+          return assignedLecId === req.user._id.toString() &&
+                 assignedCrsId === req.body.courseId.toString();
         });
+        if (!assignment) {
+          return res.status(403).json({
+            error: 'Not assigned to this device',
+            message: 'You are not assigned to this attendance device. Please contact your Group Representative, HOD, or use your assigned departmental device.',
+            deviceAssigned: false,
+          });
+        }
       }
     }
     // ── End device-lecturer assignment check ──────────────────────────────────
