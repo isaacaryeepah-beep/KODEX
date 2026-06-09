@@ -479,65 +479,24 @@ exports.getActiveSession = async (req, res) => {
       activeFilter.createdBy = req.user._id;
     }
 
-    // Students: fetch active sessions then check each one against student's profile.
-    // "Fetch then filter" is more reliable than building an intermediate course query,
-    // which fails when company ObjectId comparisons or course field nullability differs.
+    // Students: return the most recent active session for this company.
+    // Enrollment/group isolation is enforced at mark time — not at display time.
+    // Showing the session to a student who can't mark it is harmless; blocking
+    // display causes confusing "No Active Session" errors when the session exists.
     if (req.user.role === "student") {
-      const Course = require("../models/Course");
-      const StudentCourseEnrollment = require('../models/StudentCourseEnrollment');
-
-      const student = await User.findById(req.user._id)
-        .select('studentLevel studentGroup sessionType semester programme')
-        .lean();
-
-      const hasProfile = !!(student.studentLevel || student.studentGroup ||
-                            student.sessionType  || student.semester     || student.programme);
-
-      // Get up to 5 most recent active sessions for this company
-      const sessions = await AttendanceSession.find(activeFilter)
+      const session = await AttendanceSession.findOne(activeFilter)
         .populate({ path: 'course', select: 'title code level group sessionType semester qualificationType' })
         .populate('company', 'name')
         .populate('createdBy', 'name email')
         .sort({ startedAt: -1 })
-        .limit(5)
         .lean();
 
-      let matchedSession = null;
-      for (const sess of sessions) {
-        const c = sess.course;
-
-        // No course on session → open to all students in the company
-        if (!c) { matchedSession = sess; break; }
-
-        // Check explicit legacy enrollment
-        const inLegacy = await Course.exists({ _id: c._id, enrolledStudents: req.user._id });
-        if (inLegacy) { matchedSession = sess; break; }
-
-        // Check new enrollment model
-        const inSCE = await StudentCourseEnrollment.exists({ course: c._id, student: req.user._id, status: 'active' });
-        if (inSCE) { matchedSession = sess; break; }
-
-        // If student has no profile attributes, show all company sessions —
-        // they are unconfigured and cannot be placed in a "wrong" group.
-        if (!hasProfile) { matchedSession = sess; break; }
-
-        // Profile match: course attribute must be null (open) or match student's attribute
-        const ok = (ca, sa) => !ca || (sa && ca === sa);
-        if (
-          ok(c.level,            student.studentLevel) &&
-          ok(c.group,            student.studentGroup) &&
-          ok(c.sessionType,      student.sessionType)  &&
-          ok(c.semester,         student.semester)     &&
-          ok(c.qualificationType, student.programme)
-        ) { matchedSession = sess; break; }
-      }
-
       let deviceLocalIp = null;
-      if (matchedSession?.deviceId) {
-        const dev = await Device.findOne({ deviceId: matchedSession.deviceId, companyId: req.user.company }).select('localIp').lean();
+      if (session?.deviceId) {
+        const dev = await Device.findOne({ deviceId: session.deviceId, companyId: req.user.company }).select('localIp').lean();
         deviceLocalIp = dev?.localIp || null;
       }
-      return res.json({ session: matchedSession || null, deviceLocalIp });
+      return res.json({ session: session || null, deviceLocalIp });
     }
 
     const session = await AttendanceSession.findOne(activeFilter)
