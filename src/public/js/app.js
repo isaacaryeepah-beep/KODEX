@@ -12401,10 +12401,10 @@ async function renderClassDevice() {
             <div style="background:#fef3c7;border:1px solid #fde68a;border-radius:8px;padding:12px 14px;font-size:13px;color:#92400e;display:flex;align-items:flex-start;gap:8px">
               <span style="flex-shrink:0;font-size:16px">📶</span>
               <div><strong>Device is offline.</strong> Power it on and wait for it to connect before linking to a lecturer.</div>
-            </div>` :
-            !lecturers.length ? `<p style="color:#64748b;font-size:13px">No lecturers found for your class courses.</p>` : `
+            </div>` : `
+            ${lecturers.length ? `
             <div style="margin-bottom:12px">
-              <label style="font-size:12px;font-weight:600;text-transform:uppercase;letter-spacing:.5px;color:#64748b;display:block;margin-bottom:6px">Select Lecturer &amp; Course</label>
+              <label style="font-size:12px;font-weight:600;text-transform:uppercase;letter-spacing:.5px;color:#64748b;display:block;margin-bottom:6px">From Your Courses</label>
               <select id="cr-lecturer-select" style="width:100%;padding:10px 12px;border:1.5px solid #e2e8f0;border-radius:8px;font-size:13px">
                 <option value="">&mdash; Choose lecturer / course &mdash;</option>
                 ${lecturers.map(l => `<option value="${l.lecturerId}|${l.courseId}">${esc(l.lecturerName)} — ${esc(l.courseCode)}: ${esc(l.courseTitle)}</option>`).join('')}
@@ -12417,7 +12417,36 @@ async function renderClassDevice() {
             <div id="cr-error" style="color:#dc2626;font-size:13px;margin-bottom:8px;display:none"></div>
             <button id="cr-connect-btn" onclick="classRepConnect()" style="width:100%;padding:11px;background:#1e293b;color:#fff;border:none;border-radius:9px;font-size:14px;font-weight:700;cursor:pointer">
               Connect &amp; Start Session
-            </button>`}
+            </button>
+            <div style="display:flex;align-items:center;gap:8px;margin:14px 0 10px">
+              <div style="flex:1;height:1px;background:#e2e8f0"></div>
+              <span style="font-size:12px;color:#94a3b8;font-weight:500">or assign manually</span>
+              <div style="flex:1;height:1px;background:#e2e8f0"></div>
+            </div>` : `
+            <div style="background:#f1f5f9;border-radius:8px;padding:10px 14px;font-size:13px;color:#64748b;margin-bottom:14px">
+              No lecturers auto-detected from your enrolled courses — search below to assign one.
+            </div>`}
+            <!-- Manual lecturer search -->
+            <div>
+              <label style="font-size:12px;font-weight:600;text-transform:uppercase;letter-spacing:.5px;color:#64748b;display:block;margin-bottom:6px">Assign Any Lecturer</label>
+              <div style="position:relative;margin-bottom:8px">
+                <input id="cr-lec-search" type="text" placeholder="Search by name or email…"
+                  style="width:100%;padding:10px 12px;border:1.5px solid #e2e8f0;border-radius:8px;font-size:13px;box-sizing:border-box"
+                  oninput="crSearchLecturers(this.value)">
+              </div>
+              <div id="cr-lec-results" style="display:none;border:1.5px solid #e2e8f0;border-radius:8px;overflow:hidden;margin-bottom:10px;max-height:200px;overflow-y:auto"></div>
+              <input id="cr-manual-lecturer-id" type="hidden">
+              <div id="cr-manual-selected" style="display:none;background:#f0fdf4;border:1.5px solid #86efac;border-radius:8px;padding:9px 13px;font-size:13px;font-weight:600;color:#15803d;margin-bottom:10px"></div>
+              <div id="cr-manual-pin-wrap" style="margin-bottom:10px;display:none">
+                <label style="font-size:12px;font-weight:600;text-transform:uppercase;letter-spacing:.5px;color:#64748b;display:block;margin-bottom:5px">Lecturer PIN (if required)</label>
+                <input id="cr-manual-pin" type="password" inputmode="numeric" maxlength="4" placeholder="4-digit PIN" style="width:100%;padding:10px 12px;border:1.5px solid #e2e8f0;border-radius:8px;font-size:16px;letter-spacing:4px;box-sizing:border-box">
+              </div>
+              <div id="cr-manual-error" style="color:#dc2626;font-size:13px;margin-bottom:8px;display:none"></div>
+              <button id="cr-manual-connect-btn" onclick="classRepConnectManual()" disabled
+                style="width:100%;padding:11px;background:#4f6ef7;color:#fff;border:none;border-radius:9px;font-size:14px;font-weight:700;cursor:pointer;opacity:.5">
+                Assign &amp; Connect
+              </button>
+            </div>`}
           </div>` : ''}
 
           <!-- WiFi Management -->
@@ -12472,6 +12501,73 @@ window.classRepConnect = async function() {
     if (errEl) { errEl.textContent = msg; errEl.style.display = 'block'; }
     if (requiresPin) { const pw = document.getElementById('cr-pin-wrap'); if (pw) pw.style.display = 'block'; }
     if (btn) { btn.disabled = false; btn.textContent = 'Connect & Start Session'; }
+  }
+};
+
+let _crSearchTimer = null;
+window.crSearchLecturers = function(query) {
+  clearTimeout(_crSearchTimer);
+  const resultsEl = document.getElementById('cr-lec-results');
+  if (!query || query.trim().length < 2) {
+    if (resultsEl) resultsEl.style.display = 'none';
+    return;
+  }
+  _crSearchTimer = setTimeout(async () => {
+    if (resultsEl) { resultsEl.style.display = 'block'; resultsEl.innerHTML = '<div style="padding:10px 14px;color:#64748b;font-size:13px">Searching…</div>'; }
+    try {
+      const data = await api(`/api/users?role=lecturer&search=${encodeURIComponent(query.trim())}&limit=10`);
+      const list = data.users || data.data || data || [];
+      if (!list.length) {
+        if (resultsEl) resultsEl.innerHTML = '<div style="padding:10px 14px;color:#64748b;font-size:13px">No lecturers found</div>';
+        return;
+      }
+      if (resultsEl) resultsEl.innerHTML = list.map(l =>
+        `<div data-id="${l._id||l.id}" data-name="${(l.name||l.fullName||'').replace(/"/g,'&quot;')}"
+          style="padding:10px 14px;font-size:13px;cursor:pointer;border-bottom:1px solid #f1f5f9"
+          onmouseover="this.style.background='#f8fafc'" onmouseout="this.style.background=''"
+          onclick="crSelectLecturer('${l._id||l.id}','${(l.name||l.fullName||'').replace(/'/g,"\\'")}')">
+          <span style="font-weight:600">${l.name||l.fullName||'Unknown'}</span>
+          <span style="color:#64748b;margin-left:8px;font-size:12px">${l.email||''}</span>
+        </div>`
+      ).join('');
+    } catch (e) {
+      if (resultsEl) resultsEl.innerHTML = '<div style="padding:10px 14px;color:#dc2626;font-size:13px">Search failed</div>';
+    }
+  }, 350);
+};
+
+window.crSelectLecturer = function(id, name) {
+  const idEl = document.getElementById('cr-manual-lecturer-id');
+  const selEl = document.getElementById('cr-manual-selected');
+  const pinWrap = document.getElementById('cr-manual-pin-wrap');
+  const btn = document.getElementById('cr-manual-connect-btn');
+  const resultsEl = document.getElementById('cr-lec-results');
+  const searchEl = document.getElementById('cr-lec-search');
+  if (idEl) idEl.value = id;
+  if (selEl) { selEl.textContent = '✓ ' + name; selEl.style.display = 'block'; }
+  if (pinWrap) pinWrap.style.display = 'block';
+  if (btn) { btn.disabled = false; btn.style.opacity = '1'; }
+  if (resultsEl) resultsEl.style.display = 'none';
+  if (searchEl) searchEl.value = name;
+};
+
+window.classRepConnectManual = async function() {
+  const idEl = document.getElementById('cr-manual-lecturer-id');
+  const pin = document.getElementById('cr-manual-pin') ? document.getElementById('cr-manual-pin').value : '';
+  const errEl = document.getElementById('cr-manual-error');
+  const btn = document.getElementById('cr-manual-connect-btn');
+  if (!idEl || !idEl.value) { if (errEl) { errEl.textContent = 'Please select a lecturer first'; errEl.style.display = 'block'; } return; }
+  if (btn) { btn.disabled = true; btn.textContent = 'Connecting…'; btn.style.opacity = '.7'; }
+  if (errEl) errEl.style.display = 'none';
+  try {
+    await api('/api/class-rep/connect', { method: 'POST', body: JSON.stringify({ lecturerId: idEl.value, lecturerPin: pin }) });
+    showToastNotif('Lecturer assigned and device connected', 'success');
+    renderClassDevice();
+  } catch (e) {
+    const requiresPin = e.data && e.data.requiresPin;
+    const msg = requiresPin ? 'Incorrect PIN — ask the lecturer for their 4-digit PIN' : (e.message || 'Failed to connect');
+    if (errEl) { errEl.textContent = msg; errEl.style.display = 'block'; }
+    if (btn) { btn.disabled = false; btn.textContent = 'Assign & Connect'; btn.style.opacity = '1'; }
   }
 };
 
