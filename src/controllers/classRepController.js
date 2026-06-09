@@ -44,6 +44,23 @@ exports.getCourseLecturers = async (req, res) => {
   } catch (e) { res.status(500).json({ error: e.message }); }
 };
 
+// GET /api/class-rep/search-lecturers?q=... — search any lecturer in the same company
+exports.searchLecturers = async (req, res) => {
+  try {
+    if (!req.user.isClassRep) return res.status(403).json({ error: 'Not a class rep' });
+    const q = (req.query.q || req.query.search || '').trim();
+    if (q.length < 2) return res.json({ users: [] });
+    const regex = new RegExp(q, 'i');
+    const lecturers = await User.find({
+      companyId: req.user.company,
+      role: 'lecturer',
+      isActive: true,
+      $or: [{ name: regex }, { email: regex }],
+    }).select('_id name email').limit(10).lean();
+    res.json({ users: lecturers });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+};
+
 // POST /api/class-rep/connect — connect device to a lecturer for this session
 exports.connectDevice = async (req, res) => {
   try {

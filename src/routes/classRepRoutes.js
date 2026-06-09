@@ -5,6 +5,7 @@ const ctrl = require('../controllers/classRepController');
 
 router.get('/device',      authenticate, ctrl.getMyDevice);
 router.get('/lecturers',   authenticate, ctrl.getCourseLecturers);
+router.get('/search-lecturers', authenticate, ctrl.searchLecturers);
 router.post('/connect',    authenticate, ctrl.connectDevice);
 router.post('/disconnect', authenticate, ctrl.disconnectDevice);
 router.post('/set-pin',    authenticate, ctrl.setLecturerPin);
