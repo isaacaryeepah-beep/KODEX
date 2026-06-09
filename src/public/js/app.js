@@ -12838,6 +12838,38 @@ async function renderMarkAttendance() {
 
   // ── Step 3: No active session ────────────────────────────────────────────────
   if (!session) {
+    // If the phone has no internet (likely connected to ESP32 hotspot), show a
+    // code-entry form so the student can still mark — the code is the proof of
+    // physical presence and will be validated by the server.
+    if (!isOnline()) {
+      const deviceIp = esp32IP || '192.168.4.1';
+      content.innerHTML = `
+        <div class="page-header"><h2>Mark Attendance</h2><p>Check in to active sessions</p></div>
+        <div class="card" style="border-left:4px solid var(--warning);background:#fffbeb;padding:14px 16px;margin-bottom:16px">
+          <div style="display:flex;align-items:center;gap:10px">
+            <span style="font-size:22px">📴</span>
+            <div>
+              <div style="font-weight:700;font-size:14px;color:#92400e">You appear to be offline</div>
+              <div style="font-size:12px;color:#78350f;margin-top:2px">Enter the code shown on the classroom device. Your attendance will be recorded automatically.</div>
+            </div>
+          </div>
+        </div>
+        <div class="card">
+          <div class="card-title">Enter Attendance Code</div>
+          <p style="font-size:13px;color:var(--text-muted);margin-bottom:14px">Type the 6-digit code shown on the classroom device screen.</p>
+          <div class="form-group">
+            <label>6-Digit Code</label>
+            <input type="text" id="mark-code-input" placeholder="000000" maxlength="6" inputmode="numeric"
+              style="font-size:28px;text-align:center;letter-spacing:10px;font-weight:700" autofocus
+              onkeydown="if(event.key==='Enter') submitCodeMark('${deviceIp}')">
+          </div>
+          <div id="mark-code-msg" style="display:none;padding:10px 14px;border-radius:8px;font-size:13px;margin-bottom:12px"></div>
+          <button class="btn btn-primary" onclick="submitCodeMark('${deviceIp}')" style="width:100%;margin-bottom:10px">Mark Attendance</button>
+        </div>`;
+      document.getElementById('mark-code-input')?.focus();
+      return;
+    }
+
     const connectedBanner = deviceFound ? `
       <div class="card" style="border-left:4px solid var(--success);background:#f0fdf4;padding:14px 16px;margin-bottom:16px">
         <div style="display:flex;align-items:center;gap:10px">
@@ -13154,23 +13186,24 @@ async function submitCodeMark(deviceIp) {
     } catch (_) {}
   }
 
-  if (!connectionToken?.sessionId) {
-    restoreBtn();
-    showMsg('Could not reach classroom device. Make sure you are still connected to the classroom WiFi hotspot.', false);
-    return;
-  }
-
+  // ── Path 3: Cloud API (code-only — connectionToken is optional) ──────────────
+  // Mixed-content blocks both ESP32 HTTP paths in Chrome. The server now accepts
+  // code_mark with just the TOTP code when the session has an esp32Seed. Mobile
+  // data stays active even when connected to ESP32 WiFi, so this path works.
   try {
+    const body = connectionToken?.sessionId
+      ? { code, method: 'code_mark', connectionToken }
+      : { code, method: 'code_mark' };
     await api('/api/attendance-sessions/mark', {
       method: 'POST',
-      body: JSON.stringify({ code, method: 'code_mark', connectionToken }),
+      body: JSON.stringify(body),
     });
     showMsg('✓ Attendance marked! You can now disconnect from classroom WiFi.', true);
     offlineCache('activeSession', null);
     setTimeout(() => navigateTo('mark-attendance'), 2200);
   } catch (e) {
     restoreBtn();
-    showMsg(e.message || 'Failed to submit. Stay connected to classroom WiFi and try again.', false);
+    showMsg(e.message || 'Failed to submit. Check your internet connection and try again.', false);
   }
 }
 
