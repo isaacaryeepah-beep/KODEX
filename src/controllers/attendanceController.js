@@ -662,22 +662,13 @@ exports.markAttendance = async (req, res) => {
         status: { $in: ["active", "live"] },
       });
     } else {
-      // Auto-detect: find the most recent active session for courses the student is enrolled in.
-      const Course = require('../models/Course');
-      const StudentCourseEnrollment = require('../models/StudentCourseEnrollment');
-      const [legacyCourses, newEnrollments] = await Promise.all([
-        Course.find({ companyId: req.user.company, enrolledStudents: req.user._id }).select('_id').lean(),
-        StudentCourseEnrollment.find({ student: req.user._id, company: req.user.company, status: 'active' }).select('course').lean(),
-      ]);
-      const enrolledCourseIds = [...new Set([
-        ...legacyCourses.map(c => c._id.toString()),
-        ...newEnrollments.map(e => e.course.toString()),
-      ])];
-
+      // Auto-detect: find the most recent active session for this company.
+      // Enrollment/group isolation is enforced below after we have the session —
+      // filtering here caused "No active session" when the student wasn't enrolled
+      // in the course yet or enrollment data was stale.
       session = await AttendanceSession.findOne({
         company: req.user.company,
-        status: "active",
-        course: { $in: enrolledCourseIds },
+        status: { $in: ["active", "live", "paused", "locked"] },
       }).sort({ startedAt: -1 });
       if (session) {
         resolvedSessionId = session._id.toString();
