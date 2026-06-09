@@ -12774,7 +12774,6 @@ async function renderMarkAttendance() {
       const data = await api('/api/attendance-sessions/active');
       serverSession = data.session;
       if (serverSession) offlineCache('activeSession', serverSession);
-      else offlineCache('activeSession', null); // clear stale cache when no active session
     } catch (e) {
       // API unreachable — phone connected to ESP32 hotspot (no internet gateway)
       serverSession = offlineCache('activeSession') || null;
@@ -13104,10 +13103,37 @@ async function submitCodeMark(deviceIp) {
   if (btn) { btn.textContent = 'Submitting…'; btn.disabled = true; }
   const restoreBtn = () => { if (btn) { btn.textContent = 'Mark Attendance'; btn.disabled = false; } };
 
-  // Get a connectionToken from the ESP32 — proves the student is physically
-  // on the classroom hotspot. The token is an HMAC signed with the session seed.
   const ip = deviceIp || esp32IP || '192.168.4.1';
-  const userId = currentUser?._id || currentUser?.id || '';
+  const userId      = currentUser?._id || currentUser?.id || '';
+  const indexNumber = currentUser?.indexNumber || currentUser?.IndexNumber || '';
+
+  // ── Path 1: Submit directly to the ESP32 device (S3 firmware, no internet needed) ──
+  // The device validates the code locally and queues it for cloud sync.
+  try {
+    const resp = await fetch(`http://${ip}/attend`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ code, userId, indexNumber }),
+      signal: AbortSignal.timeout(8000),
+    });
+    const result = await resp.json();
+    if (resp.ok && !result.error) {
+      showMsg('✓ Attendance recorded! You can now disconnect from classroom WiFi.', true);
+      offlineCache('activeSession', null);
+      setTimeout(() => navigateTo('mark-attendance'), 2200);
+      return;
+    }
+    // Device returned an application error (wrong code, already marked, etc.) — surface it
+    if (resp.status !== 404 && resp.status !== 405) {
+      restoreBtn();
+      showMsg(result.error || 'Device rejected the code. Check the screen and try again.', false);
+      return;
+    }
+    // 404/405 means device has no /attend endpoint (standard firmware) — fall through
+  } catch (_) { /* timeout or mixed-content — fall through to cloud path */ }
+
+  // ── Path 2: Cloud API with connectionToken (standard firmware) ────────────────
+  // Get a short-lived HMAC token from the device proving hotspot presence.
   let connectionToken = null;
   try {
     const tokenRes = await fetch(`http://${ip}/session?studentId=${encodeURIComponent(userId)}`, {
@@ -13116,8 +13142,7 @@ async function submitCodeMark(deviceIp) {
     if (tokenRes.ok) connectionToken = await tokenRes.json();
   } catch (_) {}
 
-  if (!connectionToken) {
-    // Fallback: try POST /token (standard firmware variant)
+  if (!connectionToken?.sessionId) {
     try {
       const tokenRes = await fetch(`http://${ip}/token`, {
         method: 'POST',
@@ -13135,7 +13160,6 @@ async function submitCodeMark(deviceIp) {
     return;
   }
 
-  // Submit to cloud API with the connectionToken as proximity proof.
   try {
     await api('/api/attendance-sessions/mark', {
       method: 'POST',
