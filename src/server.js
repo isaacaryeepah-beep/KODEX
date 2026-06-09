@@ -289,8 +289,11 @@ app.get('/app/{*path}', (req, res) => {
 app.use(express.static(path.join(__dirname, "public"), {
   setHeaders: (res, filePath) => {
     const ext = path.extname(filePath).toLowerCase();
-    if (['.js', '.css', '.svg', '.png', '.jpg', '.jpeg', '.webp', '.woff', '.woff2'].includes(ext)) {
+    if (['.png', '.jpg', '.jpeg', '.webp', '.woff', '.woff2', '.svg'].includes(ext)) {
       res.setHeader("Cache-Control", "public, max-age=604800, stale-while-revalidate=86400");
+    } else if (['.js', '.css'].includes(ext)) {
+      // Must revalidate on every load — prevents stale JS/CSS in mobile WebViews
+      res.setHeader("Cache-Control", "no-cache, must-revalidate");
     } else {
       res.setHeader("Cache-Control", "no-cache, no-store, must-revalidate");
       res.setHeader("Pragma", "no-cache");
