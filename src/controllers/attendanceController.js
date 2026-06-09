@@ -493,7 +493,12 @@ exports.getActiveSession = async (req, res) => {
         ...legacyCourses.map(c => c._id.toString()),
         ...newEnrollments.map(e => e.course.toString()),
       ]);
-      activeFilter.course = { $in: [...courseIdSet] };
+      // Also include sessions with no course (general/all-hands sessions visible to all enrolled students)
+      activeFilter.$or = [
+        { course: { $in: [...courseIdSet] } },
+        { course: null },
+        { course: { $exists: false } },
+      ];
     }
 
     const session = await AttendanceSession.findOne(activeFilter)
