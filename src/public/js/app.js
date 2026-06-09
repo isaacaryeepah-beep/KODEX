@@ -12754,193 +12754,51 @@ async function renderMarkAttendance() {
   const content = document.getElementById('main-content');
   if (!content) return;
 
-  // Capture esp32key from URL if redirected from ESP32 captive portal
   handleEsp32KeyParam();
-
-  // Check if arriving via QR scan deep link
   if (await handleQrScan()) return;
 
-  // ── Step 1: Fetch active session from server first ───────────────────────────
+  // Show code entry form immediately — no WiFi detection, no session polling.
+  // The 6-digit rotating code (TOTP) is the anti-cheat: it changes every 30 s
+  // and is only visible on the physical classroom device screen.
+  const deviceIp = esp32IP || '192.168.4.1';
+
   content.innerHTML = `
     <div class="page-header"><h2>Mark Attendance</h2><p>Check in to active sessions</p></div>
-    <div class="card" style="text-align:center;padding:32px 20px">
-      <div style="font-size:32px;margin-bottom:12px">📡</div>
-      <div style="font-size:16px;font-weight:700;margin-bottom:6px">Checking for active sessions…</div>
+    <div class="card">
+      <div class="card-title">Enter Attendance Code</div>
+      <p style="font-size:13px;color:var(--text-muted);margin-bottom:14px">
+        Type the 6-digit code shown on the classroom device screen.
+      </p>
+      <div class="form-group">
+        <label>6-Digit Code</label>
+        <input type="text" id="mark-code-input" placeholder="000000" maxlength="6" inputmode="numeric"
+          style="font-size:28px;text-align:center;letter-spacing:10px;font-weight:700" autofocus
+          onkeydown="if(event.key==='Enter') submitCodeMark('${deviceIp}')">
+      </div>
+      <div id="mark-code-msg" style="display:none;padding:10px 14px;border-radius:8px;font-size:13px;margin-bottom:12px"></div>
+      <button class="btn btn-primary" onclick="submitCodeMark('${deviceIp}')" style="width:100%;margin-bottom:10px">Mark Attendance</button>
+      <button class="btn btn-secondary" onclick="openQrScanner()" style="width:100%">📷 Scan QR Code Instead</button>
+      <div id="qr-scanner-area" style="display:none;margin-top:14px"></div>
     </div>`;
 
-  let serverSession = null;
-  if (isOnline()) {
-    try {
-      const data = await api('/api/attendance-sessions/active');
-      serverSession = data.session;
-      if (serverSession) offlineCache('activeSession', serverSession);
-    } catch (e) {
-      // API unreachable — phone connected to ESP32 hotspot (no internet gateway)
-      serverSession = offlineCache('activeSession') || null;
-    }
-  } else {
-    serverSession = offlineCache('activeSession') || null;
-  }
-
-  // Does this session require an ESP32 device for proximity?
-  const requiresDevice = !!(serverSession?.deviceId);
-
-  // ── Step 2: ESP32 discovery (only when session requires a device) ─────────────
-  let deviceFound = false;
-  let deviceSession = null;
-
-  if (requiresDevice || !serverSession) {
-    // Show searching message only when device is needed
-    content.innerHTML = `
-      <div class="page-header"><h2>Mark Attendance</h2><p>Check in to active sessions</p></div>
-      <div class="card" style="text-align:center;padding:32px 20px">
-        <div style="font-size:32px;margin-bottom:12px">📡</div>
-        <div style="font-size:16px;font-weight:700;margin-bottom:6px">Looking for classroom device…</div>
-        <p style="font-size:13px;color:var(--text-light)">Make sure your phone is connected to the classroom WiFi hotspot.</p>
-      </div>`;
-    deviceFound = await discoverESP32();
-    if (deviceFound) {
-      try {
-        const status = await esp32Api('/status');
-        if (status?.sessionActive) {
-          // Synthesize a minimal session from device status so the UI can show
-          deviceSession = {
-            _id:       status.sessionId || null,
-            title:     status.sessionTitle || 'Attendance Session',
-            course:    null,
-            startedAt: new Date().toISOString(),
-            deviceId:  status.deviceId || null,
-            _fromDevice: true,
-          };
-        }
-      } catch (e) {}
-    }
-  }
-
-  // Device proximity is required — block if not on classroom WiFi hotspot.
-  if (requiresDevice && !deviceFound) {
-    content.innerHTML = `
-      <div class="page-header"><h2>Mark Attendance</h2><p>Check in to active sessions</p></div>
-      <div class="card" style="text-align:center;padding:40px 20px">
-        <div style="font-size:52px;margin-bottom:14px">📴</div>
-        <div style="font-size:18px;font-weight:700;margin-bottom:10px">Connect to Classroom WiFi First</div>
-        <p style="font-size:13px;color:var(--text-light);max-width:320px;margin:0 auto;line-height:1.7">
-          Your phone must be connected to the <strong>classroom device's WiFi hotspot</strong>
-          before you can mark attendance.<br><br>
-          Go to your phone's WiFi settings and connect to the classroom hotspot, then come back here.
-        </p>
-        <button class="btn btn-primary btn-sm" style="margin-top:24px" onclick="renderMarkAttendance()">I'm Connected — Try Again</button>
-      </div>`;
-    return;
-  }
-
-  const session = serverSession || (deviceSession?._fromDevice ? deviceSession : null);
-
-  // ── Step 3: No active session ────────────────────────────────────────────────
-  if (!session) {
-    // If the student is physically on the classroom ESP32 WiFi (deviceFound)
-    // OR offline (no internet) — show the code entry form immediately.
-    // Physical presence on the ESP32 hotspot IS the proximity check.
-    // The server validates the TOTP code independently; we don't need to
-    // confirm the session exists client-side first.
-    if (deviceFound || !isOnline()) {
-      const deviceIp = esp32IP || '192.168.4.1';
-      content.innerHTML = `
-        <div class="page-header"><h2>Mark Attendance</h2><p>Check in to active sessions</p></div>
-        <div class="card" style="border-left:4px solid var(--success);background:#f0fdf4;padding:14px 16px;margin-bottom:16px">
-          <div style="display:flex;align-items:center;gap:10px">
-            <span style="font-size:22px">📶</span>
-            <div>
-              <div style="font-weight:700;font-size:14px;color:#15803d">Connected to classroom device</div>
-              <div style="font-size:12px;color:#166534;margin-top:2px">Enter the code shown on the device screen to mark your attendance.</div>
-            </div>
-          </div>
-        </div>
-        <div class="card">
-          <div class="card-title">Enter Attendance Code</div>
-          <p style="font-size:13px;color:var(--text-muted);margin-bottom:14px">Type the 6-digit code shown on the classroom device screen.</p>
-          <div class="form-group">
-            <label>6-Digit Code</label>
-            <input type="text" id="mark-code-input" placeholder="000000" maxlength="6" inputmode="numeric"
-              style="font-size:28px;text-align:center;letter-spacing:10px;font-weight:700" autofocus
-              onkeydown="if(event.key==='Enter') submitCodeMark('${deviceIp}')">
-          </div>
-          <div id="mark-code-msg" style="display:none;padding:10px 14px;border-radius:8px;font-size:13px;margin-bottom:12px"></div>
-          <button class="btn btn-primary" onclick="submitCodeMark('${deviceIp}')" style="width:100%;margin-bottom:10px">Mark Attendance</button>
-        </div>`;
-      document.getElementById('mark-code-input')?.focus();
-      return;
-    }
-
-    content.innerHTML = `
-      <div class="page-header"><h2>Mark Attendance</h2><p>Check in to active sessions</p></div>
-      <div class="card" style="text-align:center;padding:40px 20px">
-        <div style="font-size:48px;margin-bottom:14px">⏳</div>
-        <div style="font-size:18px;font-weight:700;margin-bottom:8px">No Active Session</div>
-        <p style="font-size:14px;color:var(--text-light)">Your lecturer hasn't started a session yet.</p>
-        <button class="btn btn-secondary btn-sm" style="margin-top:16px" onclick="renderMarkAttendance()">Refresh</button>
-      </div>`;
-    return;
-  }
-
-  // ── Step 4: Check if already marked ─────────────────────────────────────────
-  let alreadyMarked = false;
-  if (isOnline() && serverSession) {
-    alreadyMarked = await api('/api/attendance-sessions/my-attendance?limit=100')
-      .then(d => d.records.some(r => r.session?._id === serverSession._id))
-      .catch(() => false);
-  }
-
-  // ── Step 5: Render session + code entry ──────────────────────────────────────
-  const deviceIp = esp32IP || '192.168.4.1';
-  const proximityBanner = deviceFound
-    ? `<div class="card" style="border-left:4px solid var(--success);background:#f0fdf4;padding:14px 16px;margin-bottom:16px">
-        <div style="display:flex;align-items:center;gap:10px">
-          <span style="font-size:22px">📶</span>
-          <div>
-            <div style="font-weight:700;font-size:14px;color:#15803d">Connected to classroom device</div>
-            <div style="font-size:12px;color:#166534;margin-top:2px">
-              Proximity verified — you are in the classroom.${!isOnline() ? ' Offline mode — attendance will sync automatically.' : ''}
-            </div>
-          </div>
-        </div>
-      </div>`
-    : '';
-  content.innerHTML = `
-    <div class="page-header"><h2>Mark Attendance</h2><p>Check in to active sessions</p></div>
-    ${proximityBanner}
-
-    <div class="card" style="border-left:4px solid var(--primary);margin-bottom:16px">
-      <div style="font-size:11px;text-transform:uppercase;color:var(--primary);font-weight:700;letter-spacing:0.5px">Active Session</div>
-      <div style="font-size:18px;font-weight:700;margin-top:4px">${esc(session.title || 'Attendance Session')}</div>
-      ${session.course ? `<div style="font-size:13px;color:var(--text-light);margin-top:2px">${esc(session.course.title || session.course.code || '')}</div>` : ''}
-      <div style="font-size:12px;color:var(--text-muted);margin-top:4px">Started ${new Date(session.startedAt).toLocaleString()}</div>
-    </div>
-
-    ${alreadyMarked ? `
-      <div class="card" style="text-align:center;border-left:4px solid var(--success)">
-        <div style="font-size:52px;margin-bottom:8px">✅</div>
-        <div style="font-size:18px;font-weight:700;color:var(--success)">Attendance Already Marked</div>
-        <p style="font-size:13px;color:var(--text-light);margin-top:4px">You have already checked in for this session.</p>
-      </div>
-    ` : `
-      <div class="card">
-        <div class="card-title">Enter Attendance Code</div>
-        <p style="font-size:13px;color:var(--text-muted);margin-bottom:14px">Type the 6-digit code shown on the classroom device screen, or scan the QR code.</p>
-        <div class="form-group">
-          <label>6-Digit Code</label>
-          <input type="text" id="mark-code-input" placeholder="000000" maxlength="6" inputmode="numeric"
-            style="font-size:28px;text-align:center;letter-spacing:10px;font-weight:700" autofocus
-            onkeydown="if(event.key==='Enter') submitCodeMark('${deviceIp}')">
-        </div>
-        <div id="mark-code-msg" style="display:none;padding:10px 14px;border-radius:8px;font-size:13px;margin-bottom:12px"></div>
-        <button class="btn btn-primary" onclick="submitCodeMark('${deviceIp}')" style="width:100%;margin-bottom:10px">Mark Attendance</button>
-        <button class="btn btn-secondary" onclick="openQrScanner()" style="width:100%">📷 Scan QR Code Instead</button>
-        <div id="qr-scanner-area" style="display:none;margin-top:14px"></div>
-      </div>
-    `}
-  `;
   document.getElementById('mark-code-input')?.focus();
+
+  // Optionally show active session info below (best-effort, non-blocking)
+  if (isOnline()) {
+    api('/api/attendance-sessions/active').then(data => {
+      const session = data?.session;
+      if (!session) return;
+      const infoEl = document.createElement('div');
+      infoEl.className = 'card';
+      infoEl.style.cssText = 'border-left:4px solid var(--primary);margin-top:14px';
+      infoEl.innerHTML = `
+        <div style="font-size:11px;text-transform:uppercase;color:var(--primary);font-weight:700;letter-spacing:0.5px">Active Session</div>
+        <div style="font-size:17px;font-weight:700;margin-top:4px">${esc(session.title || 'Attendance Session')}</div>
+        ${session.course ? `<div style="font-size:13px;color:var(--text-light);margin-top:2px">${esc(session.course.title || session.course.code || '')}</div>` : ''}
+        <div style="font-size:12px;color:var(--text-muted);margin-top:4px">Started ${new Date(session.startedAt).toLocaleString()}</div>`;
+      content.querySelector('.page-header')?.after(infoEl);
+    }).catch(() => {});
+  }
 }
 
 let _qrScanStream = null;
@@ -13130,8 +12988,14 @@ async function submitCodeMark(deviceIp) {
   const userId      = currentUser?._id || currentUser?.id || '';
   const indexNumber = currentUser?.indexNumber || currentUser?.IndexNumber || '';
 
-  // ── Path 1: Submit directly to the ESP32 device (S3 firmware, no internet needed) ──
-  // The device validates the code locally and queues it for cloud sync.
+  // Detect if running inside the Capacitor app (allowMixedContent:true, so HTTP to
+  // ESP32 works). In-app: require physical ESP32 connection as anti-cheat.
+  // Browser: fall through to cloud API (mixed-content blocks HTTP to device).
+  const isInApp = /DiklyApp/.test(navigator.userAgent);
+
+  // ── Path 1: Submit directly to ESP32 /attend (S3 firmware, offline, anti-cheat) ─
+  // Requires physical presence on classroom WiFi — 192.168.4.1 is unreachable
+  // from outside the ESP32 hotspot. Works in Capacitor app (allowMixedContent:true).
   try {
     const resp = await fetch(`http://${ip}/attend`, {
       method: 'POST',
@@ -13142,21 +13006,18 @@ async function submitCodeMark(deviceIp) {
     const result = await resp.json();
     if (resp.ok && !result.error) {
       showMsg('✓ Attendance recorded! You can now disconnect from classroom WiFi.', true);
-      offlineCache('activeSession', null);
       setTimeout(() => navigateTo('mark-attendance'), 2200);
       return;
     }
-    // Device returned an application error (wrong code, already marked, etc.) — surface it
     if (resp.status !== 404 && resp.status !== 405) {
       restoreBtn();
       showMsg(result.error || 'Device rejected the code. Check the screen and try again.', false);
       return;
     }
-    // 404/405 means device has no /attend endpoint (standard firmware) — fall through
-  } catch (_) { /* timeout or mixed-content — fall through to cloud path */ }
+    // 404/405 = standard firmware (no /attend) — fall through
+  } catch (_) { /* timeout or mixed-content — fall through */ }
 
-  // ── Path 2: Cloud API with connectionToken (standard firmware) ────────────────
-  // Get a short-lived HMAC token from the device proving hotspot presence.
+  // ── Path 2: Get connectionToken from ESP32, then cloud API (standard firmware) ─
   let connectionToken = null;
   try {
     const tokenRes = await fetch(`http://${ip}/session?studentId=${encodeURIComponent(userId)}`, {
@@ -13164,23 +13025,25 @@ async function submitCodeMark(deviceIp) {
     });
     if (tokenRes.ok) connectionToken = await tokenRes.json();
   } catch (_) {}
-
   if (!connectionToken?.sessionId) {
     try {
       const tokenRes = await fetch(`http://${ip}/token`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ userId }),
-        signal: AbortSignal.timeout(5000),
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId }), signal: AbortSignal.timeout(5000),
       });
       if (tokenRes.ok) connectionToken = await tokenRes.json();
     } catch (_) {}
   }
 
-  // ── Path 3: Cloud API (code-only — connectionToken is optional) ──────────────
-  // Mixed-content blocks both ESP32 HTTP paths in Chrome. The server now accepts
-  // code_mark with just the TOTP code when the session has an esp32Seed. Mobile
-  // data stays active even when connected to ESP32 WiFi, so this path works.
+  // ── In-app strict mode: require ESP32 connection ────────────────────────────
+  // Paths 1 and 2 both failed inside the app → student is not on classroom WiFi.
+  if (isInApp && !connectionToken?.sessionId) {
+    restoreBtn();
+    showMsg('Connect to the classroom WiFi hotspot (Dikly-XXXXXX) first, then try again.', false);
+    return;
+  }
+
+  // ── Path 3: Cloud API — code-only (browser fallback, code is the anti-cheat) ─
   try {
     const body = connectionToken?.sessionId
       ? { code, method: 'code_mark', connectionToken }
@@ -13189,8 +13052,7 @@ async function submitCodeMark(deviceIp) {
       method: 'POST',
       body: JSON.stringify(body),
     });
-    showMsg('✓ Attendance marked! You can now disconnect from classroom WiFi.', true);
-    offlineCache('activeSession', null);
+    showMsg('✓ Attendance marked!', true);
     setTimeout(() => navigateTo('mark-attendance'), 2200);
   } catch (e) {
     restoreBtn();
