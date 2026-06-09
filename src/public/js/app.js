@@ -12390,7 +12390,7 @@ async function renderClassDevice() {
 
     const localIp = device && device.localIp ? device.localIp : null;
     const currentSsid = device && device.currentNetwork ? device.currentNetwork : null;
-    const deviceOnline = device ? (Date.now() - new Date(device.lastHeartbeat || 0).getTime() < 20000) : false;
+    var deviceOnline = device ? (Date.now() - new Date(device.lastHeartbeat || 0).getTime() < 20000) : false;
 
     const deviceStatus = device
       ? (deviceOnline
