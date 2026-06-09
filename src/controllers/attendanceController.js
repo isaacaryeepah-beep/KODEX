@@ -482,11 +482,18 @@ exports.getActiveSession = async (req, res) => {
     // Students only see sessions for courses they are enrolled in.
     if (req.user.role === "student") {
       const Course = require("../models/Course");
-      const enrolledCourses = await Course.find({
-        companyId: req.user.company,
-        enrolledStudents: req.user._id,
-      }).select("_id").lean();
-      activeFilter.course = { $in: enrolledCourses.map(c => c._id) };
+      const StudentCourseEnrollment = require('../models/StudentCourseEnrollment');
+
+      // Collect enrolled course IDs from both legacy array and new enrollment model
+      const [legacyCourses, newEnrollments] = await Promise.all([
+        Course.find({ companyId: req.user.company, enrolledStudents: req.user._id }).select("_id").lean(),
+        StudentCourseEnrollment.find({ student: req.user._id, company: req.user.company, status: 'active' }).select('course').lean(),
+      ]);
+      const courseIdSet = new Set([
+        ...legacyCourses.map(c => c._id.toString()),
+        ...newEnrollments.map(e => e.course.toString()),
+      ]);
+      activeFilter.course = { $in: [...courseIdSet] };
     }
 
     const session = await AttendanceSession.findOne(activeFilter)
@@ -654,11 +661,15 @@ exports.markAttendance = async (req, res) => {
     } else {
       // Auto-detect: find the most recent active session for courses the student is enrolled in.
       const Course = require('../models/Course');
-      const enrolledCourses = await Course.find({
-        companyId: req.user.company,
-        enrolledStudents: req.user._id,
-      }).select("_id").lean();
-      const enrolledCourseIds = enrolledCourses.map(c => c._id);
+      const StudentCourseEnrollment = require('../models/StudentCourseEnrollment');
+      const [legacyCourses, newEnrollments] = await Promise.all([
+        Course.find({ companyId: req.user.company, enrolledStudents: req.user._id }).select('_id').lean(),
+        StudentCourseEnrollment.find({ student: req.user._id, company: req.user.company, status: 'active' }).select('course').lean(),
+      ]);
+      const enrolledCourseIds = [...new Set([
+        ...legacyCourses.map(c => c._id.toString()),
+        ...newEnrollments.map(e => e.course.toString()),
+      ])];
 
       session = await AttendanceSession.findOne({
         company: req.user.company,
