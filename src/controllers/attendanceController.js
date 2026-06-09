@@ -479,10 +479,9 @@ exports.getActiveSession = async (req, res) => {
       activeFilter.createdBy = req.user._id;
     }
 
-    // Students only see sessions for courses that belong to their academic group.
-    // Match by academic profile (level/group/sessionType/semester/programme) so students
-    // from different departments or groups cannot see each other's sessions.
-    // Also check legacy Course.enrolledStudents for individually-added students.
+    // Students: fetch active sessions then check each one against student's profile.
+    // "Fetch then filter" is more reliable than building an intermediate course query,
+    // which fails when company ObjectId comparisons or course field nullability differs.
     if (req.user.role === "student") {
       const Course = require("../models/Course");
       const StudentCourseEnrollment = require('../models/StudentCourseEnrollment');
@@ -491,35 +490,57 @@ exports.getActiveSession = async (req, res) => {
         .select('studentLevel studentGroup sessionType semester programme')
         .lean();
 
-      // Build course query matching student's academic profile.
-      // For each attribute: course value must match OR be null/unset (meaning open to all).
-      // A strict exact-match breaks when a course has no level/group set.
-      const courseConditions = [{ companyId: req.user.company }];
-      const _orNull = (field, val) => ({ $or: [{ [field]: val }, { [field]: null }, { [field]: { $exists: false } }] });
-      if (student.studentLevel) courseConditions.push(_orNull('level',            student.studentLevel));
-      if (student.studentGroup) courseConditions.push(_orNull('group',            student.studentGroup));
-      if (student.sessionType)  courseConditions.push(_orNull('sessionType',      student.sessionType));
-      if (student.semester)     courseConditions.push(_orNull('semester',         student.semester));
-      if (student.programme)    courseConditions.push(_orNull('qualificationType', student.programme));
-      const courseQuery = courseConditions.length > 1 ? { $and: courseConditions } : courseConditions[0];
+      const hasProfile = !!(student.studentLevel || student.studentGroup ||
+                            student.sessionType  || student.semester     || student.programme);
 
-      const [profileCourses, legacyCourses, newEnrollments] = await Promise.all([
-        Course.find(courseQuery).select('_id').lean(),
-        Course.find({ companyId: req.user.company, enrolledStudents: req.user._id }).select('_id').lean(),
-        StudentCourseEnrollment.find({ student: req.user._id, company: req.user.company, status: 'active' }).select('course').lean(),
-      ]);
+      // Get up to 5 most recent active sessions for this company
+      const sessions = await AttendanceSession.find(activeFilter)
+        .populate({ path: 'course', select: 'title code level group sessionType semester qualificationType' })
+        .populate('company', 'name')
+        .populate('createdBy', 'name email')
+        .sort({ startedAt: -1 })
+        .limit(5)
+        .lean();
 
-      const courseIdSet = new Set([
-        ...profileCourses.map(c => c._id.toString()),
-        ...legacyCourses.map(c => c._id.toString()),
-        ...newEnrollments.map(e => e.course.toString()),
-      ]);
+      let matchedSession = null;
+      for (const sess of sessions) {
+        const c = sess.course;
 
-      activeFilter.$or = [
-        { course: { $in: [...courseIdSet] } },
-        { course: null },
-        { course: { $exists: false } },
-      ];
+        // No course on session → open to all students in the company
+        if (!c) { matchedSession = sess; break; }
+
+        // Check explicit legacy enrollment
+        const inLegacy = await Course.exists({ _id: c._id, enrolledStudents: req.user._id });
+        if (inLegacy) { matchedSession = sess; break; }
+
+        // Check new enrollment model
+        const inSCE = await StudentCourseEnrollment.exists({ course: c._id, student: req.user._id, status: 'active' });
+        if (inSCE) { matchedSession = sess; break; }
+
+        // If student has no profile attributes, show sessions for courses with no restrictions
+        if (!hasProfile) {
+          const noRestrictions = !c.level && !c.group && !c.sessionType && !c.semester && !c.qualificationType;
+          if (noRestrictions) { matchedSession = sess; break; }
+          continue;
+        }
+
+        // Profile match: course attribute must be null (open) or match student's attribute
+        const ok = (ca, sa) => !ca || (sa && ca === sa);
+        if (
+          ok(c.level,            student.studentLevel) &&
+          ok(c.group,            student.studentGroup) &&
+          ok(c.sessionType,      student.sessionType)  &&
+          ok(c.semester,         student.semester)     &&
+          ok(c.qualificationType, student.programme)
+        ) { matchedSession = sess; break; }
+      }
+
+      let deviceLocalIp = null;
+      if (matchedSession?.deviceId) {
+        const dev = await Device.findOne({ deviceId: matchedSession.deviceId, companyId: req.user.company }).select('localIp').lean();
+        deviceLocalIp = dev?.localIp || null;
+      }
+      return res.json({ session: matchedSession || null, deviceLocalIp });
     }
 
     const session = await AttendanceSession.findOne(activeFilter)
