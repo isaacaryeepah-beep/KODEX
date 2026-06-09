@@ -263,11 +263,85 @@ class ApiService {
     return (list as List).map((e) => AttendanceSession.fromJson(e as Map<String, dynamic>)).toList();
   }
 
-  Future<void> markAttendance(String code) async {
-    await _queueablePost('/api/attendance-sessions/mark', {
-      'code': code,
-      'method': 'code_mark',
-    });
+  Future<void> markAttendance(String code, {Map<String, dynamic>? connectionToken}) async {
+    final body = <String, dynamic>{'code': code, 'method': 'code_mark'};
+    if (connectionToken != null) body['connectionToken'] = connectionToken;
+    await _queueablePost('/api/attendance-sessions/mark', body);
+  }
+
+  /// Try to reach the ESP32 device on the local classroom WiFi.
+  /// Returns device status map or null if unreachable.
+  Future<Map<String, dynamic>?> probeESP32({String ip = '192.168.4.1'}) async {
+    final localDio = Dio(BaseOptions(
+      connectTimeout: const Duration(seconds: 3),
+      receiveTimeout: const Duration(seconds: 3),
+    ));
+    try {
+      final resp = await localDio.get('http://$ip/status');
+      if (resp.statusCode == 200 && resp.data is Map) {
+        return Map<String, dynamic>.from(resp.data as Map);
+      }
+    } catch (_) {}
+    return null;
+  }
+
+  /// Submit attendance directly to the ESP32 (S3 firmware only).
+  /// Returns true if accepted, false/null otherwise.
+  Future<bool> submitToESP32(String code, {
+    required String userId,
+    required String indexNumber,
+    String ip = '192.168.4.1',
+  }) async {
+    final localDio = Dio(BaseOptions(
+      connectTimeout: const Duration(seconds: 8),
+      receiveTimeout: const Duration(seconds: 8),
+    ));
+    try {
+      final resp = await localDio.post(
+        'http://$ip/attend',
+        data: {'code': code, 'userId': userId, 'indexNumber': indexNumber},
+      );
+      if (resp.statusCode == 200) {
+        final data = resp.data;
+        return data is Map && data['error'] == null;
+      }
+    } on DioException catch (e) {
+      // 404/405 = no /attend endpoint (standard firmware) — caller falls through
+      if (e.response?.statusCode == 404 || e.response?.statusCode == 405) return false;
+    } catch (_) {}
+    return false;
+  }
+
+  /// Get a connectionToken from the ESP32 (standard firmware).
+  Future<Map<String, dynamic>?> getESP32ConnectionToken(String userId, {
+    String ip = '192.168.4.1',
+  }) async {
+    final localDio = Dio(BaseOptions(
+      connectTimeout: const Duration(seconds: 5),
+      receiveTimeout: const Duration(seconds: 5),
+    ));
+    // Try GET /session first, then POST /token
+    try {
+      final resp = await localDio.get(
+        'http://$ip/session',
+        queryParameters: {'studentId': userId},
+      );
+      if (resp.statusCode == 200 && resp.data is Map) {
+        final data = Map<String, dynamic>.from(resp.data as Map);
+        if (data['sessionId'] != null) return data;
+      }
+    } catch (_) {}
+    try {
+      final resp = await localDio.post(
+        'http://$ip/token',
+        data: {'userId': userId},
+      );
+      if (resp.statusCode == 200 && resp.data is Map) {
+        final data = Map<String, dynamic>.from(resp.data as Map);
+        if (data['sessionId'] != null) return data;
+      }
+    } catch (_) {}
+    return null;
   }
 
   // Users

@@ -4,6 +4,8 @@
         <domain includeSubdomains="true">dikly.sbs</domain>
         <domain includeSubdomains="true">meet.jit.si</domain>
         <domain includeSubdomains="true">8x8.vc</domain>
+        <!-- ESP32 classroom device (local WiFi hotspot) -->
+        <domain includeSubdomains="false">192.168.4.1</domain>
     </domain-config>
     <base-config cleartextTrafficPermitted="false">
         <trust-anchors>

@@ -23,6 +23,12 @@ class _AttendanceScreenState extends ConsumerState<AttendanceScreen> {
   final _codeController = TextEditingController();
   bool _markingAttendance = false;
 
+  // ESP32 device state — detected via native HTTP (no mixed-content restriction)
+  bool _esp32Found = false;
+  bool _esp32SessionActive = false;
+  String _esp32Ip = '192.168.4.1';
+  Map<String, dynamic>? _esp32Status;
+
   @override
   void initState() {
     super.initState();
@@ -43,6 +49,18 @@ class _AttendanceScreenState extends ConsumerState<AttendanceScreen> {
     } catch (e) {
       setState(() { _error = e.toString(); _loading = false; });
     }
+    // Probe ESP32 in parallel — native HTTP, no mixed-content restriction
+    _probeESP32();
+  }
+
+  Future<void> _probeESP32() async {
+    final status = await apiService.probeESP32(ip: _esp32Ip);
+    if (!mounted) return;
+    setState(() {
+      _esp32Found = status != null;
+      _esp32Status = status;
+      _esp32SessionActive = status?['sessionActive'] == true;
+    });
   }
 
   Future<void> _markAttendance() async {
@@ -55,6 +73,45 @@ class _AttendanceScreenState extends ConsumerState<AttendanceScreen> {
     }
     setState(() => _markingAttendance = true);
     try {
+      final user = ref.read(currentUserProvider);
+      final userId = user?.id ?? '';
+      final indexNumber = user?.indexNumber ?? '';
+
+      // Path 1: S3 firmware — submit directly to device (works even without internet)
+      if (_esp32Found) {
+        final ok = await apiService.submitToESP32(
+          code,
+          userId: userId,
+          indexNumber: indexNumber,
+          ip: _esp32Ip,
+        );
+        if (ok) {
+          _codeController.clear();
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(content: Text('Attendance recorded! You can now disconnect from classroom WiFi.'), backgroundColor: DiklyColors.success),
+            );
+          }
+          return;
+        }
+        // false = 404/405 (standard firmware) — fall through to Path 2/3
+
+        // Path 2: standard firmware — get connectionToken from device, then cloud API
+        final token = await apiService.getESP32ConnectionToken(userId, ip: _esp32Ip);
+        if (token != null) {
+          await apiService.markAttendance(code, connectionToken: token);
+          _codeController.clear();
+          await _loadData();
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(content: Text('Attendance marked successfully!'), backgroundColor: DiklyColors.success),
+            );
+          }
+          return;
+        }
+      }
+
+      // Path 3: code-only cloud API (server validates TOTP as proximity proof)
       await apiService.markAttendance(code);
       _codeController.clear();
       await _loadData();
@@ -102,18 +159,43 @@ class _AttendanceScreenState extends ConsumerState<AttendanceScreen> {
                   ),
                 ],
               ),
-              const SizedBox(height: 20),
+              if (_esp32Found) ...[
+                const SizedBox(height: 12),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                  decoration: BoxDecoration(
+                    color: DiklyColors.success.withOpacity(0.08),
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(color: DiklyColors.success.withOpacity(0.3)),
+                  ),
+                  child: Row(
+                    children: [
+                      const Icon(Icons.wifi_rounded, size: 16, color: DiklyColors.success),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          'Connected to classroom device${_esp32SessionActive ? ' — session active' : ''}',
+                          style: const TextStyle(fontSize: 12, color: DiklyColors.success, fontWeight: FontWeight.w600),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+              const SizedBox(height: 16),
               Text('Enter the attendance code provided by your lecturer', style: Theme.of(ctx).textTheme.bodyMedium?.copyWith(color: DiklyColors.textSecondary)),
               const SizedBox(height: 16),
               TextField(
                 controller: _codeController,
                 autofocus: true,
-                textCapitalization: TextCapitalization.characters,
+                keyboardType: TextInputType.number,
+                maxLength: 6,
                 style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w700, letterSpacing: 6),
                 textAlign: TextAlign.center,
                 decoration: const InputDecoration(
-                  hintText: 'CODE',
+                  hintText: '000000',
                   hintStyle: TextStyle(letterSpacing: 6, color: DiklyColors.textSecondary),
+                  counterText: '',
                 ),
               ),
               const SizedBox(height: 20),
