@@ -857,10 +857,19 @@ body {
 /* Trial banners */
 /* ── Subscription / Trial status banner ── */
 /* Students never see subscription banners — guaranteed via body attribute */
-body[data-role="student"] .trial-banner,
-body[data-role="student"] .trial-expired-banner {
-  display: none !important;
+/* class-rep persistent banner */
+#class-rep-banner {
+  display: none;
+  align-items: center;
+  gap: 14px;
+  padding: 10px 24px;
+  background: linear-gradient(135deg, #ede9fe, #f5f3ff);
+  border-bottom: 1px solid #c4b5fd;
+  font-size: 13px;
+  flex-shrink: 0;
+  cursor: pointer;
 }
+#class-rep-banner.visible { display: flex; }
 
 .trial-banner,
 .trial-expired-banner {

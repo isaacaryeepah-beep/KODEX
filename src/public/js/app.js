@@ -2520,8 +2520,29 @@ function showDashboard(data) {
     const roleEl = document.getElementById('user-role');
     roleEl.textContent = currentUser.role || '';
     roleEl.className = `role-badge role-${currentUser.role || 'user'}`;
-    // Mark role on body so CSS can scope role-specific overrides (e.g. hide banners for student)
+    // Mark role on body for CSS scoping
     document.body.setAttribute('data-role', currentUser.role || '');
+
+    // ── Persistent class-rep banner (shown for the whole session, not per-page) ──
+    const _repBannerEl = document.getElementById('class-rep-banner');
+    if (_repBannerEl) {
+      if (currentUser.isClassRep) {
+        _repBannerEl.innerHTML = `
+          <div style="width:32px;height:32px;border-radius:8px;background:linear-gradient(135deg,#7c3aed,#6366f1);display:flex;align-items:center;justify-content:center;flex-shrink:0">
+            ${svgIcon('<path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/><polyline points="9 11 12 14 22 4"/>', 16, '#fff')}
+          </div>
+          <div style="flex:1">
+            <span style="background:#7c3aed;color:#fff;font-size:10px;font-weight:800;padding:2px 7px;border-radius:20px;letter-spacing:.5px;margin-right:8px">CLASS REP</span>
+            <span style="font-weight:700;color:#5b21b6">You are a Class Representative</span>
+            <span style="color:#6d28d9;font-size:12px;margin-left:8px">· Tap to manage the class device</span>
+          </div>
+          <span style="color:#7c3aed;opacity:.7">${svgIcon('<polyline points="9 18 15 12 9 6"/>', 16)}</span>`;
+        _repBannerEl.classList.add('visible');
+        _repBannerEl.onclick = () => navigateTo('class-device');
+      } else {
+        _repBannerEl.classList.remove('visible');
+      }
+    }
 
     const companyName = currentUser.company?.name || '';
     const mode = currentUser.company?.mode || 'corporate';
@@ -6017,20 +6038,7 @@ async function renderStudentDashboard(content) {
     </div>`;
   })() : '';
 
-  const classRepBanner = currentUser.isClassRep ? `
-    <div style="background:linear-gradient(135deg,#ede9fe,#f5f3ff);border:1.5px solid #c4b5fd;border-radius:12px;padding:16px 20px;margin-bottom:16px;display:flex;gap:14px;align-items:center;cursor:pointer" onclick="navigateTo('class-device')">
-      <div style="width:44px;height:44px;border-radius:12px;background:linear-gradient(135deg,#7c3aed,#6366f1);display:flex;align-items:center;justify-content:center;flex-shrink:0">
-        ${svgIcon('<path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/><polyline points="9 11 12 14 22 4"/>', 20, '#fff')}
-      </div>
-      <div style="flex:1">
-        <div style="font-weight:700;color:#5b21b6;font-size:14px;display:flex;align-items:center;gap:6px">
-          <span style="background:#7c3aed;color:#fff;font-size:10px;font-weight:800;padding:2px 7px;border-radius:20px;letter-spacing:.5px">CLASS REP</span>
-          You are a Class Representative
-        </div>
-        <div style="color:#6d28d9;font-size:12px;margin-top:2px">Tap to manage the class device &amp; connect attendance for your group.</div>
-      </div>
-      <div style="color:#7c3aed;opacity:.7">${svgIcon('<polyline points="9 18 15 12 9 6"/>', 18)}</div>
-    </div>` : '';
+  const classRepBanner = ''; // now rendered as persistent #class-rep-banner, not per-page
 
   content.innerHTML = `
     <div class="page-header">
