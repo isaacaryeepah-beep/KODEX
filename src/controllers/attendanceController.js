@@ -491,13 +491,17 @@ exports.getActiveSession = async (req, res) => {
         .select('studentLevel studentGroup sessionType semester programme')
         .lean();
 
-      // Build course query matching student's academic profile
-      const courseQuery = { companyId: req.user.company, isActive: true };
-      if (student.studentLevel)  courseQuery.level       = student.studentLevel;
-      if (student.studentGroup)  courseQuery.group       = student.studentGroup;
-      if (student.sessionType)   courseQuery.sessionType = student.sessionType;
-      if (student.semester)      courseQuery.semester    = student.semester;
-      if (student.programme)     courseQuery.qualificationType = student.programme;
+      // Build course query matching student's academic profile.
+      // For each attribute: course value must match OR be null/unset (meaning open to all).
+      // A strict exact-match breaks when a course has no level/group set.
+      const courseConditions = [{ companyId: req.user.company }];
+      const _orNull = (field, val) => ({ $or: [{ [field]: val }, { [field]: null }, { [field]: { $exists: false } }] });
+      if (student.studentLevel) courseConditions.push(_orNull('level',            student.studentLevel));
+      if (student.studentGroup) courseConditions.push(_orNull('group',            student.studentGroup));
+      if (student.sessionType)  courseConditions.push(_orNull('sessionType',      student.sessionType));
+      if (student.semester)     courseConditions.push(_orNull('semester',         student.semester));
+      if (student.programme)    courseConditions.push(_orNull('qualificationType', student.programme));
+      const courseQuery = courseConditions.length > 1 ? { $and: courseConditions } : courseConditions[0];
 
       const [profileCourses, legacyCourses, newEnrollments] = await Promise.all([
         Course.find(courseQuery).select('_id').lean(),
