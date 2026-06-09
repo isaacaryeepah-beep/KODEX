@@ -479,9 +479,44 @@ exports.getActiveSession = async (req, res) => {
       activeFilter.createdBy = req.user._id;
     }
 
-    // Students see all active sessions for their company.
-    // Session visibility is enforced by company isolation (above) + ESP32 proximity + 6-digit code.
-    // Filtering by enrolled courses was too strict and caused students to miss their own sessions.
+    // Students only see sessions for courses that belong to their academic group.
+    // Match by academic profile (level/group/sessionType/semester/programme) so students
+    // from different departments or groups cannot see each other's sessions.
+    // Also check legacy Course.enrolledStudents for individually-added students.
+    if (req.user.role === "student") {
+      const Course = require("../models/Course");
+      const StudentCourseEnrollment = require('../models/StudentCourseEnrollment');
+
+      const student = await User.findById(req.user._id)
+        .select('studentLevel studentGroup sessionType semester programme')
+        .lean();
+
+      // Build course query matching student's academic profile
+      const courseQuery = { companyId: req.user.company, isActive: true };
+      if (student.studentLevel)  courseQuery.level       = student.studentLevel;
+      if (student.studentGroup)  courseQuery.group       = student.studentGroup;
+      if (student.sessionType)   courseQuery.sessionType = student.sessionType;
+      if (student.semester)      courseQuery.semester    = student.semester;
+      if (student.programme)     courseQuery.qualificationType = student.programme;
+
+      const [profileCourses, legacyCourses, newEnrollments] = await Promise.all([
+        Course.find(courseQuery).select('_id').lean(),
+        Course.find({ companyId: req.user.company, enrolledStudents: req.user._id }).select('_id').lean(),
+        StudentCourseEnrollment.find({ student: req.user._id, company: req.user.company, status: 'active' }).select('course').lean(),
+      ]);
+
+      const courseIdSet = new Set([
+        ...profileCourses.map(c => c._id.toString()),
+        ...legacyCourses.map(c => c._id.toString()),
+        ...newEnrollments.map(e => e.course.toString()),
+      ]);
+
+      activeFilter.$or = [
+        { course: { $in: [...courseIdSet] } },
+        { course: null },
+        { course: { $exists: false } },
+      ];
+    }
 
     const session = await AttendanceSession.findOne(activeFilter)
       .populate("company", "name")
