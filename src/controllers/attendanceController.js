@@ -479,27 +479,9 @@ exports.getActiveSession = async (req, res) => {
       activeFilter.createdBy = req.user._id;
     }
 
-    // Students only see sessions for courses they are enrolled in.
-    if (req.user.role === "student") {
-      const Course = require("../models/Course");
-      const StudentCourseEnrollment = require('../models/StudentCourseEnrollment');
-
-      // Collect enrolled course IDs from both legacy array and new enrollment model
-      const [legacyCourses, newEnrollments] = await Promise.all([
-        Course.find({ companyId: req.user.company, enrolledStudents: req.user._id }).select("_id").lean(),
-        StudentCourseEnrollment.find({ student: req.user._id, company: req.user.company, status: 'active' }).select('course').lean(),
-      ]);
-      const courseIdSet = new Set([
-        ...legacyCourses.map(c => c._id.toString()),
-        ...newEnrollments.map(e => e.course.toString()),
-      ]);
-      // Also include sessions with no course (general/all-hands sessions visible to all enrolled students)
-      activeFilter.$or = [
-        { course: { $in: [...courseIdSet] } },
-        { course: null },
-        { course: { $exists: false } },
-      ];
-    }
+    // Students see all active sessions for their company.
+    // Session visibility is enforced by company isolation (above) + ESP32 proximity + 6-digit code.
+    // Filtering by enrolled courses was too strict and caused students to miss their own sessions.
 
     const session = await AttendanceSession.findOne(activeFilter)
       .populate("company", "name")
