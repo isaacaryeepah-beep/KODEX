@@ -2520,8 +2520,29 @@ function showDashboard(data) {
     const roleEl = document.getElementById('user-role');
     roleEl.textContent = currentUser.role || '';
     roleEl.className = `role-badge role-${currentUser.role || 'user'}`;
-    // Mark role on body so CSS can scope role-specific overrides (e.g. hide banners for student)
+    // Mark role on body for CSS scoping
     document.body.setAttribute('data-role', currentUser.role || '');
+
+    // ── Persistent class-rep banner (shown for the whole session, not per-page) ──
+    const _repBannerEl = document.getElementById('class-rep-banner');
+    if (_repBannerEl) {
+      if (currentUser.isClassRep) {
+        _repBannerEl.innerHTML = `
+          <div style="width:32px;height:32px;border-radius:8px;background:linear-gradient(135deg,#7c3aed,#6366f1);display:flex;align-items:center;justify-content:center;flex-shrink:0">
+            ${svgIcon('<path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/><polyline points="9 11 12 14 22 4"/>', 16, '#fff')}
+          </div>
+          <div style="flex:1">
+            <span style="background:#7c3aed;color:#fff;font-size:10px;font-weight:800;padding:2px 7px;border-radius:20px;letter-spacing:.5px;margin-right:8px">CLASS REP</span>
+            <span style="font-weight:700;color:#5b21b6">You are a Class Representative</span>
+            <span style="color:#6d28d9;font-size:12px;margin-left:8px">· Tap to manage the class device</span>
+          </div>
+          <span style="color:#7c3aed;opacity:.7">${svgIcon('<polyline points="9 18 15 12 9 6"/>', 16)}</span>`;
+        _repBannerEl.classList.add('visible');
+        _repBannerEl.onclick = () => navigateTo('class-device');
+      } else {
+        _repBannerEl.classList.remove('visible');
+      }
+    }
 
     const companyName = currentUser.company?.name || '';
     const mode = currentUser.company?.mode || 'corporate';
@@ -5303,12 +5324,23 @@ async function renderEmployeeDashboard(content) {
   const today      = new Date().toISOString().slice(0, 10);
   const monthStart = new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString().slice(0, 10);
 
-  const [todayData, monthData, shiftData, leavesData] = await Promise.all([
-    api(`/api/corporate-attendance/my?from=${today}&to=${today}`).catch(() => ({ records: [] })),
-    api(`/api/corporate-attendance/my?from=${monthStart}&to=${today}`).catch(() => ({ records: [] })),
-    api('/api/shifts/my-shift').catch(() => ({})),
-    api('/api/leaves/my').catch(() => ({ leaves: [] })),
-  ]);
+  let todayData, monthData, shiftData, leavesData, _empOffline = false;
+  const _empCached = offlineRead('employee_dashboard');
+  if (!isOnline() && _empCached) {
+    ({ todayData, monthData, shiftData, leavesData } = _empCached);
+    _empOffline = true;
+  } else if (!isOnline()) {
+    content.innerHTML = '<div class="card"><div class="empty-state"><p>📶 You\'re offline and no cached data is available yet. Please connect and reload.</p></div></div>';
+    return;
+  } else {
+    [todayData, monthData, shiftData, leavesData] = await Promise.all([
+      api(`/api/corporate-attendance/my?from=${today}&to=${today}`).catch(() => ({ records: [] })),
+      api(`/api/corporate-attendance/my?from=${monthStart}&to=${today}`).catch(() => ({ records: [] })),
+      api('/api/shifts/my-shift').catch(() => ({})),
+      api('/api/leaves/my').catch(() => ({ leaves: [] })),
+    ]);
+    offlineCache('employee_dashboard', { todayData, monthData, shiftData, leavesData });
+  }
 
   // ── Today ─────────────────────────────────────────────────────────────────
   const todayRecord  = todayData.records?.[0] || null;
@@ -5389,6 +5421,7 @@ async function renderEmployeeDashboard(content) {
   const statusColors = { present:'#16a34a', late:'#d97706', absent:'#dc2626', half_day:'#7c3aed', on_leave:'#0284c7', remote:'#0891b2' };
 
   content.innerHTML = `
+    ${_empOffline ? '<div style="background:#fef3c7;border:1px solid #fcd34d;border-radius:8px;padding:8px 14px;font-size:12px;font-weight:600;color:#92400e;margin-bottom:12px">📶 Offline — showing cached data</div>' : ''}
     <div class="page-header">
       <div>
         <h2>Welcome back, ${esc(currentUser.name.split(' ')[0])}</h2>
@@ -6005,20 +6038,7 @@ async function renderStudentDashboard(content) {
     </div>`;
   })() : '';
 
-  const classRepBanner = currentUser.isClassRep ? `
-    <div style="background:linear-gradient(135deg,#ede9fe,#f5f3ff);border:1.5px solid #c4b5fd;border-radius:12px;padding:16px 20px;margin-bottom:16px;display:flex;gap:14px;align-items:center;cursor:pointer" onclick="navigateTo('class-device')">
-      <div style="width:44px;height:44px;border-radius:12px;background:linear-gradient(135deg,#7c3aed,#6366f1);display:flex;align-items:center;justify-content:center;flex-shrink:0">
-        ${svgIcon('<path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/><polyline points="9 11 12 14 22 4"/>', 20, '#fff')}
-      </div>
-      <div style="flex:1">
-        <div style="font-weight:700;color:#5b21b6;font-size:14px;display:flex;align-items:center;gap:6px">
-          <span style="background:#7c3aed;color:#fff;font-size:10px;font-weight:800;padding:2px 7px;border-radius:20px;letter-spacing:.5px">CLASS REP</span>
-          You are a Class Representative
-        </div>
-        <div style="color:#6d28d9;font-size:12px;margin-top:2px">Tap to manage the class device &amp; connect attendance for your group.</div>
-      </div>
-      <div style="color:#7c3aed;opacity:.7">${svgIcon('<polyline points="9 18 15 12 9 6"/>', 18)}</div>
-    </div>` : '';
+  const classRepBanner = ''; // now rendered as persistent #class-rep-banner, not per-page
 
   content.innerHTML = `
     <div class="page-header">
@@ -12334,6 +12354,10 @@ async function renderClassDevice() {
     const device = devRes.device;
     const lecturers = lecRes.lecturers || [];
 
+    const localIp = device && device.localIp ? device.localIp : null;
+    const currentSsid = device && device.currentNetwork ? device.currentNetwork : null;
+    const deviceOnline = device ? (Date.now() - new Date(device.lastHeartbeat || 0).getTime() < 20000) : false;
+
     const deviceStatus = device
       ? (deviceOnline
         ? '<span style="color:#16a34a;font-weight:700">● Online</span>'
@@ -12347,10 +12371,6 @@ async function renderClassDevice() {
           <br><button onclick="classRepDisconnect()" style="margin-top:10px;padding:7px 16px;background:#dc2626;color:#fff;border:none;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer">End Session &amp; Release Device</button>
          </div>`
       : '';
-
-    const localIp = device && device.localIp ? device.localIp : null;
-    const currentSsid = device && device.currentNetwork ? device.currentNetwork : null;
-    const deviceOnline = device ? (Date.now() - new Date(device.lastHeartbeat || 0).getTime() < 20000) : false;
 
     root.innerHTML = `
       <div style="max-width:560px;margin:0 auto">
