@@ -490,6 +490,16 @@ exports.getMyDevice = async (req, res) => {
       ? { companyId: req.user.company }
       : { companyId: req.user.company, lecturerId: req.user._id };
     let device = await Device.findOne(deviceQuery).populate('lecturerId', 'name email');
+
+    // Also check for a shared (class-rep) device currently connected to this lecturer
+    if (!device && req.user.role === 'lecturer') {
+      device = await Device.findOne({
+        companyId: req.user.company,
+        activeLecturerId: req.user._id,
+        ownershipType: 'shared',
+      }).populate('lecturerId', 'name email');
+    }
+
     if (!device) return res.json({ success: true, data: null });
 
     device = await _markStaleOffline(device);
