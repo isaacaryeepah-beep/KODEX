@@ -517,12 +517,9 @@ exports.getActiveSession = async (req, res) => {
         const inSCE = await StudentCourseEnrollment.exists({ course: c._id, student: req.user._id, status: 'active' });
         if (inSCE) { matchedSession = sess; break; }
 
-        // If student has no profile attributes, show sessions for courses with no restrictions
-        if (!hasProfile) {
-          const noRestrictions = !c.level && !c.group && !c.sessionType && !c.semester && !c.qualificationType;
-          if (noRestrictions) { matchedSession = sess; break; }
-          continue;
-        }
+        // If student has no profile attributes, show all company sessions —
+        // they are unconfigured and cannot be placed in a "wrong" group.
+        if (!hasProfile) { matchedSession = sess; break; }
 
         // Profile match: course attribute must be null (open) or match student's attribute
         const ok = (ca, sa) => !ca || (sa && ca === sa);
@@ -957,22 +954,36 @@ exports.markAttendance = async (req, res) => {
     }
 
     // Anyone marking against a course-linked session must be enrolled in that course.
-    if (session.course) {
+    if (session.course && req.user.role === 'student') {
       const Course = require('../models/Course');
-      const enrolled = await Course.findOne({
-        _id: session.course,
-        companyId: req.user.company,
-        enrolledStudents: req.user._id,
-      }).select('_id').lean();
+      const StudentCourseEnrollment = require('../models/StudentCourseEnrollment');
+      const student = req.user;
+      const hasProfile = !!(student.studentLevel || student.studentGroup ||
+                            student.sessionType  || student.semester     || student.programme);
 
-      if (!enrolled) {
-        return res.status(403).json({
-          error: 'You are not enrolled in this course. This session belongs to a different class.',
+      // Students with no profile attributes are unconfigured — allow them through
+      // rather than blocking them with a false "wrong class" error.
+      if (hasProfile) {
+        const inLegacy = await Course.exists({
+          _id: session.course,
+          companyId: req.user.company,
+          enrolledStudents: req.user._id,
         });
+        const inSCE = !inLegacy && await StudentCourseEnrollment.exists({
+          course: session.course,
+          student: req.user._id,
+          status: 'active',
+        });
+
+        if (!inLegacy && !inSCE) {
+          return res.status(403).json({
+            error: 'You are not enrolled in this course. This session belongs to a different class.',
+          });
+        }
       }
 
       // If the session is group-restricted, only students in that group can mark
-      if (session.targetGroup && req.user.studentGroup !== session.targetGroup) {
+      if (session.targetGroup && req.user.studentGroup && req.user.studentGroup !== session.targetGroup) {
         return res.status(403).json({
           error: `This attendance session is for Group ${session.targetGroup} only.`,
         });
