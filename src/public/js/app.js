@@ -12838,19 +12838,21 @@ async function renderMarkAttendance() {
 
   // ── Step 3: No active session ────────────────────────────────────────────────
   if (!session) {
-    // If the phone has no internet (likely connected to ESP32 hotspot), show a
-    // code-entry form so the student can still mark — the code is the proof of
-    // physical presence and will be validated by the server.
-    if (!isOnline()) {
+    // If the student is physically on the classroom ESP32 WiFi (deviceFound)
+    // OR offline (no internet) — show the code entry form immediately.
+    // Physical presence on the ESP32 hotspot IS the proximity check.
+    // The server validates the TOTP code independently; we don't need to
+    // confirm the session exists client-side first.
+    if (deviceFound || !isOnline()) {
       const deviceIp = esp32IP || '192.168.4.1';
       content.innerHTML = `
         <div class="page-header"><h2>Mark Attendance</h2><p>Check in to active sessions</p></div>
-        <div class="card" style="border-left:4px solid var(--warning);background:#fffbeb;padding:14px 16px;margin-bottom:16px">
+        <div class="card" style="border-left:4px solid var(--success);background:#f0fdf4;padding:14px 16px;margin-bottom:16px">
           <div style="display:flex;align-items:center;gap:10px">
-            <span style="font-size:22px">📴</span>
+            <span style="font-size:22px">📶</span>
             <div>
-              <div style="font-weight:700;font-size:14px;color:#92400e">You appear to be offline</div>
-              <div style="font-size:12px;color:#78350f;margin-top:2px">Enter the code shown on the classroom device. Your attendance will be recorded automatically.</div>
+              <div style="font-weight:700;font-size:14px;color:#15803d">Connected to classroom device</div>
+              <div style="font-size:12px;color:#166534;margin-top:2px">Enter the code shown on the device screen to mark your attendance.</div>
             </div>
           </div>
         </div>
@@ -12870,19 +12872,8 @@ async function renderMarkAttendance() {
       return;
     }
 
-    const connectedBanner = deviceFound ? `
-      <div class="card" style="border-left:4px solid var(--success);background:#f0fdf4;padding:14px 16px;margin-bottom:16px">
-        <div style="display:flex;align-items:center;gap:10px">
-          <span style="font-size:22px">📶</span>
-          <div>
-            <div style="font-weight:700;font-size:14px;color:#15803d">Connected to classroom device</div>
-            <div style="font-size:12px;color:#166534;margin-top:2px">Proximity verified — you are in the classroom.</div>
-          </div>
-        </div>
-      </div>` : '';
     content.innerHTML = `
       <div class="page-header"><h2>Mark Attendance</h2><p>Check in to active sessions</p></div>
-      ${connectedBanner}
       <div class="card" style="text-align:center;padding:40px 20px">
         <div style="font-size:48px;margin-bottom:14px">⏳</div>
         <div style="font-size:18px;font-weight:700;margin-bottom:8px">No Active Session</div>
