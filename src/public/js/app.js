@@ -12346,6 +12346,10 @@ async function renderClassDevice() {
     const device = devRes.device;
     const lecturers = lecRes.lecturers || [];
 
+    const localIp = device && device.localIp ? device.localIp : null;
+    const currentSsid = device && device.currentNetwork ? device.currentNetwork : null;
+    const deviceOnline = device ? (Date.now() - new Date(device.lastHeartbeat || 0).getTime() < 20000) : false;
+
     const deviceStatus = device
       ? (deviceOnline
         ? '<span style="color:#16a34a;font-weight:700">● Online</span>'
@@ -12359,10 +12363,6 @@ async function renderClassDevice() {
           <br><button onclick="classRepDisconnect()" style="margin-top:10px;padding:7px 16px;background:#dc2626;color:#fff;border:none;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer">End Session &amp; Release Device</button>
          </div>`
       : '';
-
-    const localIp = device && device.localIp ? device.localIp : null;
-    const currentSsid = device && device.currentNetwork ? device.currentNetwork : null;
-    const deviceOnline = device ? (Date.now() - new Date(device.lastHeartbeat || 0).getTime() < 20000) : false;
 
     root.innerHTML = `
       <div style="max-width:560px;margin:0 auto">
