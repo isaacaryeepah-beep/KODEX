@@ -2337,9 +2337,12 @@ async function loadUserData() {
     if (!currentUser) throw new Error('No user data');
     showDashboard(data);
   } catch (e) {
-    // When offline with a stored token, auto-login from the cached profile so the
-    // user doesn't have to re-enter credentials (important for the ESP32 return flow).
-    if (token && !isOnline()) {
+    // Fall back to cached profile when the server is unreachable (network error).
+    // This covers: truly offline, connected to ESP32 hotspot (no internet),
+    // or any scenario where navigator.onLine is true but the server can't be reached.
+    // Only skip the cache when the server replied with a real error (e.status exists).
+    const isNetworkError = !e.status;
+    if (token && isNetworkError) {
       try {
         const profiles = JSON.parse(localStorage.getItem(OFFLINE_LOGIN_KEY) || '{}');
         const cached = Object.values(profiles).find(p =>
