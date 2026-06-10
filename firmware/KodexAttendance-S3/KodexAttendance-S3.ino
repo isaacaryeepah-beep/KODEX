@@ -2569,12 +2569,59 @@ static void registerLocalHttp() {
     char sigHex[33];
     for (int i = 0; i < 16; i++) sprintf(sigHex + i * 2, "%02x", hmacOut[i]);
     sigHex[32] = '\0';
+    // If &mark=1, also record attendance locally right now so the count
+    // updates on screen immediately — no internet or second request needed.
+    bool markNow = (localHttp.arg("mark") == "1");
+    bool alreadyMarked = false;
+    if (markNow) {
+      if (dedupSession != sessionId) dedupClear(sessionId);
+      const char* dk = userId.c_str();
+      if (dedupCheck(dk)) {
+        alreadyMarked = true;  // already marked this session — still return proof for cloud sync
+      } else if (!sdAvailable && offlineCount >= 200) {
+        localHttp.send(503, "application/json", "{\"error\":\"Offline buffer full. Internet needed.\"}"); return;
+      } else {
+        bool stored = false;
+        if (sdAvailable) {
+          File f = SD_MMC.open(SD_ATT_FILE, FILE_APPEND);
+          if (f) {
+            char recId[40];
+            snprintf(recId, sizeof(recId), "rec_%s_%lu", macSuffix().c_str(), (uint32_t)ts);
+            JsonDocument entry;
+            entry["id"]        = recId;
+            entry["userId"]    = userId;
+            entry["sessionId"] = sessionId;
+            entry["courseId"]  = sessionCourse;
+            entry["timestamp"] = (uint32_t)ts;
+            entry["synced"]    = false;
+            String line; serializeJson(entry, line); line += "\n";
+            f.print(line); f.close();
+            sdRecordCount++;
+            stored = true;
+          }
+        }
+        if (!stored) {
+          if (!offlineBuf || offlineCount >= 200) {
+            localHttp.send(507, "application/json", "{\"error\":\"storage_full\"}"); return;
+          }
+          OfflineRec& rec = offlineBuf[offlineCount++];
+          strncpy(rec.userId,    userId.c_str(),    sizeof(rec.userId) - 1);
+          strncpy(rec.sessionId, sessionId.c_str(), sizeof(rec.sessionId) - 1);
+          strncpy(rec.courseId,  sessionCourse.c_str(), sizeof(rec.courseId) - 1);
+          rec.ts = (uint32_t)ts;
+        }
+        dedupAdd(dk);
+        studentsMarked++;
+      }
+    }
+
     JsonDocument resp;
-    resp["sessionId"] = sessionId;
-    resp["studentId"] = userId;
-    resp["timestamp"] = (long long)ts;
-    resp["nonce"]     = nonce;
-    resp["sig"]       = sigHex;
+    resp["sessionId"]     = sessionId;
+    resp["studentId"]     = userId;
+    resp["timestamp"]     = (long long)ts;
+    resp["nonce"]         = nonce;
+    resp["sig"]           = sigHex;
+    if (markNow) resp["marked"] = !alreadyMarked;
     String s; serializeJson(resp, s);
     localHttp.sendHeader("Access-Control-Allow-Origin", "*");
     localHttp.send(200, "application/json", s);
@@ -2729,6 +2776,7 @@ static void registerLocalHttp() {
       LOG("RAM attendance [" + String(offlineCount) + "] idx=" + indexNum);
     }
     dedupAdd(dedupKey);
+    studentsMarked++;  // update count immediately — visible on screen without waiting for server heartbeat
     localHttp.send(200, "application/json", "{\"ok\":true,\"message\":\"Attendance recorded.\"}");
   });
 

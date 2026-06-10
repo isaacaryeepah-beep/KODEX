@@ -12833,9 +12833,11 @@ async function _tryAutoMark(ip, userId) {
   setStatus('📡', 'Connecting to classroom device…', 'Make sure you\'re connected to <strong>Dikly-XXXXXX</strong> WiFi', null);
   showRetry(false);
 
+  // &mark=1 — ESP32 records attendance immediately and returns a proof for cloud sync.
+  // Count increments on the device screen right away; no internet needed.
   let proof = null;
   try {
-    const r = await fetch(`http://${ip}/proof?studentId=${encodeURIComponent(userId)}`, {
+    const r = await fetch(`http://${ip}/proof?studentId=${encodeURIComponent(userId)}&mark=1`, {
       cache: 'no-store', signal: AbortSignal.timeout(8000),
     });
     if (r.ok) {
@@ -12866,34 +12868,29 @@ async function _tryAutoMark(ip, userId) {
     return;
   }
 
-  setStatus('✅', 'Connected! Marking attendance…', 'Submitting to server…', 'rgba(20,83,45,.2)');
-
+  // Attendance is already recorded on the device (count updated).
+  // Queue the proof to cloud — syncs automatically when internet returns.
   const deviceId = getDeviceFingerprint();
+  setStatus('✅', 'Attendance recorded!', 'Count updated on device. Syncing to server when connected…', 'rgba(20,83,45,.2)');
+  showAutoMsg('✓ Attendance recorded! Count updated on device.', true);
+
   try {
     await api('/api/attendance-sessions/mark', {
       method: 'POST',
       body: JSON.stringify({ method: 'code_mark', esp32Proof: proof, deviceId }),
     });
-    setStatus('✅', 'Attendance marked!', 'You have been checked in successfully', 'rgba(20,83,45,.2)');
-    showAutoMsg('✓ Attendance recorded successfully!', true);
+    setStatus('✅', 'Attendance marked!', 'Checked in and synced successfully', 'rgba(20,83,45,.2)');
   } catch (e) {
-    // SW returns 503 + {error:'You are offline'} when network is unavailable —
-    // treat that the same as a thrown network error (no e.status).
     const swOffline = e.status === 503 && (e.data?.error || e.message || '').toLowerCase().includes('offline');
     if (!e.status || swOffline) {
+      // Already marked on device — just queue for cloud sync
       offlineEnqueue({
         url: '/api/attendance-sessions/mark',
         options: { method: 'POST', body: JSON.stringify({ method: 'code_mark', esp32Proof: proof, deviceId }) },
-        label: 'Mark attendance (offline)',
+        label: 'Sync attendance to server',
       });
-      setStatus('📴', 'Attendance saved!', 'No internet right now — will sync automatically when you reconnect', 'rgba(30,58,138,.2)');
-      showAutoMsg('📴 Saved offline — will sync when internet returns.', true);
-    } else {
-      setStatus('❌', 'Could not mark attendance', e.message || 'Please try again or use the code below', null);
-      showRetry(true);
-      showFallback();
-      showAutoMsg(e.message || 'Failed. Try again or enter the code manually.', false);
     }
+    // Don't show an error — device already recorded the attendance
   }
 }
 
