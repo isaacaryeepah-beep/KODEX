@@ -2660,7 +2660,7 @@ static void registerLocalHttp() {
     if (sessionId.isEmpty() || sessionSeed.isEmpty()) {
       localHttp.send(503, "application/json", "{\"error\":\"No active session\"}"); return;
     }
-    if (!timeSynced) {
+    if (!timeSynced && !sessionLocallyStarted) {
       localHttp.send(503, "application/json", "{\"error\":\"Device clock not synced\"}"); return;
     }
     String userId = localHttp.arg("studentId");
@@ -2686,7 +2686,9 @@ static void registerLocalHttp() {
     char nonce[17];
     for (int i = 0; i < 8; i++) sprintf(nonce + i * 2, "%02x", nb[i]);
     nonce[16] = '\0';
-    unsigned long ts = (unsigned long)time(nullptr);
+    time_t rawNowP = time(nullptr);
+    unsigned long ts = (unsigned long)(rawNowP < 1700000000UL
+      ? (time_t)(1700000000UL + millis() / 1000) : rawNowP);
     String msg = "proof:" + sessionId + ":" + userId + ":" + String(ts) + ":" + String(nonce);
     uint8_t hmacOut[32];
     hmacSha256((const uint8_t*)sessionSeed.c_str(), sessionSeed.length(),
@@ -2785,7 +2787,8 @@ static void registerLocalHttp() {
         return;
       }
     }
-    if (!timeSynced) {
+    // For locally-started sessions, allow millis-based timestamp when NTP unavailable
+    if (!timeSynced && !sessionLocallyStarted) {
       localHttp.send(503, "text/html",
         "<!doctype html><html><head><meta charset='utf-8'>"
         "<meta name='viewport' content='width=device-width,initial-scale=1'></head>"
@@ -2794,7 +2797,9 @@ static void registerLocalHttp() {
         "<script>setTimeout(()=>history.back(),3000)</script></body></html>");
       return;
     }
-    unsigned long issuedAt = (unsigned long)time(nullptr);
+    time_t rawNow = time(nullptr);
+    unsigned long issuedAt = (unsigned long)(rawNow < 1700000000UL
+      ? (time_t)(1700000000UL + millis() / 1000) : rawNow);
 
     // ── One-time nonce — prevents URL replay even if token is intercepted ────
     uint8_t nb[8];
