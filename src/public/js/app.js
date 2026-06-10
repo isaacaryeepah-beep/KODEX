@@ -12780,21 +12780,13 @@ async function renderMarkAttendance() {
       <div id="mark-auto-msg" style="display:none;padding:10px 14px;border-radius:8px;font-size:13px;margin-top:8px"></div>
     </div>
     <div id="code-fallback" style="display:none;margin-top:14px">
-      <div class="card">
-        <div class="card-title">Enter Code Manually</div>
-        <p style="font-size:13px;color:var(--text-muted);margin-bottom:14px">
-          Type the 6-digit code shown on the classroom device screen.
+      <div class="card" style="text-align:center;padding:20px">
+        <div style="font-size:36px;margin-bottom:10px">📶</div>
+        <div style="font-weight:700;font-size:15px;margin-bottom:8px">Connect to classroom WiFi</div>
+        <p style="font-size:13px;color:var(--text-muted);margin:0 auto;max-width:260px;line-height:1.6">
+          You must be connected to <strong>Dikly-XXXXXX</strong> WiFi to mark attendance.<br><br>
+          Go to your phone <strong>WiFi settings</strong>, connect to <strong>Dikly-XXXXXX</strong>, tap <strong>Stay connected</strong> when prompted, then tap <strong>Try Again</strong> above.
         </p>
-        <div class="form-group">
-          <label>6-Digit Code</label>
-          <input type="text" id="mark-code-input" placeholder="000000" maxlength="6" inputmode="numeric"
-            style="font-size:28px;text-align:center;letter-spacing:10px;font-weight:700"
-            onkeydown="if(event.key==='Enter') submitCodeMark('${deviceIp}')">
-        </div>
-        <div id="mark-code-msg" style="display:none;padding:10px 14px;border-radius:8px;font-size:13px;margin-bottom:12px"></div>
-        <button class="btn btn-primary" onclick="submitCodeMark('${deviceIp}')" style="width:100%;margin-bottom:10px">Mark Attendance</button>
-        <button class="btn btn-secondary" onclick="openQrScanner()" style="width:100%">📷 Scan QR Code Instead</button>
-        <div id="qr-scanner-area" style="display:none;margin-top:14px"></div>
       </div>
     </div>`;
 
@@ -12848,14 +12840,13 @@ async function _tryAutoMark(ip, userId) {
       if (msg.toLowerCase().includes('no active session') || msg.toLowerCase().includes('no session')) {
         setStatus('⏳', 'No active session', 'Ask your lecturer to start the attendance session', null);
       } else {
-        setStatus('⚠️', msg, 'Or enter the code manually below', null);
-        showFallback();
+        setStatus('⚠️', msg, 'Tap Try Again to retry', null);
       }
       showRetry(true);
       return;
     }
   } catch (_) {
-    setStatus('📶', 'Not on classroom WiFi', 'Connect to <strong>Dikly-XXXXXX</strong> and tap retry — or enter the code manually below', null);
+    setStatus('📶', 'Not on classroom WiFi', 'Connect to <strong>Dikly-XXXXXX</strong> WiFi, tap <strong>Stay connected</strong>, then tap Try Again', null);
     showRetry(true);
     showFallback();
     return;
