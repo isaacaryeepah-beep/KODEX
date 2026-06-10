@@ -967,6 +967,9 @@ exports.markAttendance = async (req, res) => {
         });
       }
 
+      // Hotspot token verified — student was physically on the classroom AP
+      skipCodeCheck = true;
+
     }
     // No proximity token — fall through to TOTP code validation below.
     // The 2-minute rotating code visible only on the physical device screen

@@ -2703,6 +2703,22 @@ static void registerLocalHttp() {
         "<h2>Open DIKLY first</h2><p>Go to Mark Attendance in the DIKLY app or website, then tap 'Verify WiFi Connection'.</p></body></html>");
       return;
     }
+    // ── RSSI proximity check ─────────────────────────────────────────────────
+    {
+      String cip = localHttp.client().remoteIP().toString();
+      int8_t rssi = getClientRSSI(cip);
+      if (rssi != 0 && rssi < rssiThreshold) {
+        String body = String("<!doctype html><html><head><meta charset='utf-8'>") +
+          "<meta name='viewport' content='width=device-width,initial-scale=1'></head>" +
+          "<body style='font-family:sans-serif;padding:24px;background:#0a0f1e;color:#fff'>" +
+          "<h2 style='color:#f87171'>Too far from classroom device</h2>" +
+          "<p>Your signal is too weak (" + String(rssi) + " dBm). Move closer to the device and try again.</p>" +
+          "<script>setTimeout(()=>history.back(),4000)</script></body></html>";
+        localHttp.send(403, "text/html", body);
+        LOG("RSSI reject /mark: " + String(rssi) + " dBm");
+        return;
+      }
+    }
     if (!timeSynced) {
       localHttp.send(503, "text/html",
         "<!doctype html><html><head><meta charset='utf-8'></head><body style='font-family:sans-serif;padding:24px'>"
