@@ -12764,10 +12764,18 @@ async function renderMarkAttendance() {
 
   content.innerHTML = `
     <div class="page-header"><h2>Mark Attendance</h2><p>Check in to active sessions</p></div>
+    <div style="display:flex;align-items:flex-start;gap:10px;padding:12px 14px;background:rgba(79,110,247,.1);border:1px solid rgba(79,110,247,.3);border-radius:10px;margin-bottom:14px;font-size:13px;color:var(--text-light)">
+      <span style="font-size:18px;flex-shrink:0">📶</span>
+      <div>
+        <div style="font-weight:700;margin-bottom:3px">Connect to classroom WiFi first</div>
+        <div>Go to phone <strong>WiFi settings</strong> → connect to <strong>Dikly-XXXXXX</strong>.<br>
+        If your phone says <em>"Internet may not be available"</em> — tap <strong>Stay connected</strong>.</div>
+      </div>
+    </div>
     <div id="proof-status-card" class="card" style="text-align:center;padding:32px 20px">
       <div id="proof-status-icon" style="font-size:52px;margin-bottom:12px">📡</div>
       <div id="proof-status-title" style="font-weight:700;font-size:17px;margin-bottom:6px">Connecting to classroom device…</div>
-      <div id="proof-status-sub" style="font-size:13px;color:var(--text-muted);margin-bottom:16px">Connect your phone to the <strong>Dikly-XXXXXX</strong> WiFi, then tap below</div>
+      <div id="proof-status-sub" style="font-size:13px;color:var(--text-muted);margin-bottom:16px">Once connected to <strong>Dikly-XXXXXX</strong>, tap Try Again below</div>
       <button id="proof-retry-btn" class="btn btn-primary" onclick="_tryAutoMark('${deviceIp}','${userId}')" style="display:none;width:100%;margin-bottom:10px">Try Again</button>
       <div id="mark-auto-msg" style="display:none;padding:10px 14px;border-radius:8px;font-size:13px;margin-top:8px"></div>
     </div>
