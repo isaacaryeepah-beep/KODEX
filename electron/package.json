@@ -10,25 +10,24 @@
   "build": {
     "appId": "sbs.dikly.attendance",
     "productName": "DIKLY",
-    "icon": "icon.svg",
     "directories": {
       "output": "dist"
     },
     "win": {
       "target": [{ "target": "nsis", "arch": ["x64"] }],
-      "icon": "icon.svg"
+      "icon": "icon.ico"
     },
     "nsis": {
       "oneClick": false,
       "allowToChangeInstallationDirectory": true,
-      "installerIcon": "icon.svg",
-      "uninstallerIcon": "icon.svg",
-      "installerHeaderIcon": "icon.svg"
+      "installerIcon": "icon.ico",
+      "uninstallerIcon": "icon.ico",
+      "installerHeaderIcon": "icon.ico"
     },
     "mac": {
       "target": [{ "target": "dmg", "arch": ["x64"] }],
       "category": "public.app-category.education",
-      "icon": "icon.svg"
+      "icon": "icon.icns"
     }
   },
   "devDependencies": {
