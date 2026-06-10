@@ -13075,21 +13075,21 @@ async function submitCodeMark(deviceIp) {
   if (btn) { btn.textContent = 'Submitting…'; btn.disabled = true; }
   const restoreBtn = () => { if (btn) { btn.textContent = 'Mark Attendance'; btn.disabled = false; } };
 
-  const ip        = deviceIp || esp32IP || '192.168.4.1';
-  const userId    = currentUser?._id || currentUser?.id || '';
+  const ip          = deviceIp || esp32IP || '192.168.4.1';
+  const userId      = currentUser?._id || currentUser?.id || '';
   const indexNumber = currentUser?.indexNumber || currentUser?.IndexNumber || '';
-  const deviceId  = getDeviceFingerprint();
 
-  // Step 1: Try local ESP32 /attend first (S3 firmware).
-  // The ESP32 validates the code locally, increments its own Present counter
-  // immediately, and syncs to the server later when internet returns.
-  // This gives instant count feedback on the device screen.
+  // Attendance MUST go through the classroom ESP32 device — no cloud fallback.
+  // This prevents remote marking: the student must be physically connected to
+  // the Dikly-XXXXXX hotspot to reach 192.168.4.1.
+  // The ESP32 validates the code locally, increments the Present counter
+  // instantly, and syncs records to the server when internet returns.
   try {
     const r = await fetch(`http://${ip}/attend`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ code, userId, indexNumber }),
-      signal: AbortSignal.timeout(6000),
+      signal: AbortSignal.timeout(8000),
     });
     const result = await r.json().catch(() => ({}));
     if (r.ok && !result.error) {
@@ -13097,37 +13097,11 @@ async function submitCodeMark(deviceIp) {
       setTimeout(() => navigateTo('mark-attendance'), 2200);
       return;
     }
-    // 404/405 = old firmware without /attend — fall through to cloud path
-    if (r.status !== 404 && r.status !== 405) {
-      restoreBtn();
-      showMsg(result.error || 'Device rejected the code. Check the screen and try again.', false);
-      return;
-    }
+    restoreBtn();
+    showMsg(result.error || 'Wrong code. Check the screen and try again.', false);
   } catch (_) {
-    // Not on ESP32 hotspot or timeout — fall through to cloud path
-  }
-
-  // Step 2: Cloud path (student has internet, or offline queue)
-  try {
-    await api('/api/attendance-sessions/mark', {
-      method: 'POST',
-      body: JSON.stringify({ code, method: 'code_mark', deviceId }),
-    });
-    showMsg('✓ Attendance marked!', true);
-    setTimeout(() => navigateTo('mark-attendance'), 2200);
-  } catch (e) {
-    const swOffline = e.status === 503 && (e.data?.error || e.message || '').toLowerCase().includes('offline');
-    if (!e.status || swOffline) {
-      offlineEnqueue({
-        url: '/api/attendance-sessions/mark',
-        options: { method: 'POST', body: JSON.stringify({ code, method: 'code_mark', deviceId }) },
-        label: 'Mark attendance (offline)',
-      });
-      showMsg('📴 No internet — saved. Will sync automatically when connected.', true);
-    } else {
-      restoreBtn();
-      showMsg(e.message || 'Failed to submit. Check your internet connection.', false);
-    }
+    restoreBtn();
+    showMsg('Not connected to classroom WiFi. Connect to <strong>Dikly-XXXXXX</strong> and try again.', false);
   }
 }
 
