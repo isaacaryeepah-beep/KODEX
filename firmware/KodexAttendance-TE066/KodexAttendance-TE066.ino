@@ -748,6 +748,48 @@ void registerLocalApi() {
     ESP.restart();
   });
 
+  // /proof?studentId=<id> — generates a one-time signed attendance proof.
+  // Unique random nonce per call; 15-second expiry; replay prevented by server.
+  httpServer.on("/proof", HTTP_GET, []() {
+    httpServer.sendHeader("Access-Control-Allow-Origin", "*");
+    if (sessId.isEmpty() || sessSeed.isEmpty()) {
+      httpServer.send(503, "application/json", "{\"error\":\"No active session\"}"); return;
+    }
+    if (!timeSynced) {
+      httpServer.send(503, "application/json", "{\"error\":\"Clock not synced\"}"); return;
+    }
+    String userId = httpServer.arg("studentId");
+    if (userId.isEmpty()) {
+      httpServer.send(400, "application/json", "{\"error\":\"studentId required\"}"); return;
+    }
+    uint8_t nb[8];
+    for (int i = 0; i < 8; i++) nb[i] = (uint8_t)(esp_random() & 0xFF);
+    char nonce[17];
+    for (int i = 0; i < 8; i++) snprintf(nonce + i * 2, 3, "%02x", nb[i]);
+    nonce[16] = '\0';
+    uint32_t ts = (uint32_t)time(nullptr);
+    String msg = "proof:" + sessId + ":" + userId + ":" + String(ts) + ":" + String(nonce);
+    uint8_t digest[32];
+    const mbedtls_md_info_t* info = mbedtls_md_info_from_type(MBEDTLS_MD_SHA256);
+    mbedtls_md_context_t ctx; mbedtls_md_init(&ctx);
+    mbedtls_md_setup(&ctx, info, 1);
+    mbedtls_md_hmac_starts(&ctx, reinterpret_cast<const uint8_t*>(sessSeed.c_str()), sessSeed.length());
+    mbedtls_md_hmac_update(&ctx, reinterpret_cast<const uint8_t*>(msg.c_str()), msg.length());
+    mbedtls_md_hmac_finish(&ctx, digest);
+    mbedtls_md_free(&ctx);
+    char sig[33];
+    for (int i = 0; i < 16; i++) snprintf(sig + i * 2, 3, "%02x", digest[i]);
+    sig[32] = '\0';
+    StaticJsonDocument<512> resp;
+    resp["sessionId"] = sessId;
+    resp["studentId"] = userId;
+    resp["timestamp"] = (long long)ts;
+    resp["nonce"]     = nonce;
+    resp["sig"]       = sig;
+    String s; serializeJson(resp, s);
+    httpServer.send(200, "application/json", s);
+  });
+
   // /session?studentId=<id> — returns HMAC connectionToken proving classroom WiFi
   httpServer.on("/session", HTTP_GET, []() {
     httpServer.sendHeader("Access-Control-Allow-Origin", "*");

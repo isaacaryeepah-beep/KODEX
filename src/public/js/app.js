@@ -12763,8 +12763,6 @@ async function renderMarkAttendance() {
   const userId   = currentUser?._id || currentUser?.id || '';
 
   // Check for connectionToken returned by ESP32 /mark redirect (browser flow).
-  // The ESP32 redirects to https://dikly.sbs/?esp32session=...#mark-attendance
-  // after the student visits http://192.168.4.1/mark on classroom WiFi.
   const urlParams = new URLSearchParams(window.location.search);
   if (urlParams.get('esp32session')) {
     _esp32UrlToken = {
@@ -12778,9 +12776,39 @@ async function renderMarkAttendance() {
 
   const esp32MarkUrl = `http://${deviceIp}/mark?studentId=${encodeURIComponent(userId)}`;
 
-  // Proximity banner — only shown in browser (app handles this natively via fetch)
-  let proximityBanner = '';
-  if (!isInApp) {
+  if (isInApp) {
+    // ── Capacitor app: auto-proof flow (no code entry needed) ──────────────────
+    content.innerHTML = `
+      <div class="page-header"><h2>Mark Attendance</h2><p>Check in to active sessions</p></div>
+      <div class="card" id="auto-mark-card">
+        <div style="text-align:center;padding:12px 0 6px">
+          <div id="auto-mark-icon" style="font-size:36px;margin-bottom:10px">📡</div>
+          <div id="auto-mark-status" style="font-size:15px;font-weight:600;color:var(--text)">Checking classroom device…</div>
+          <div id="auto-mark-sub" style="font-size:13px;color:var(--text-muted);margin-top:6px"></div>
+        </div>
+      </div>
+      <div id="manual-form-area" style="display:none">
+        <div class="card">
+          <div class="card-title">Enter Attendance Code</div>
+          <p style="font-size:13px;color:var(--text-muted);margin-bottom:14px">
+            Could not connect to the classroom device automatically. Enter the 6-digit code shown on the device screen.
+          </p>
+          <div class="form-group">
+            <label>6-Digit Code</label>
+            <input type="text" id="mark-code-input" placeholder="000000" maxlength="6" inputmode="numeric"
+              style="font-size:28px;text-align:center;letter-spacing:10px;font-weight:700"
+              onkeydown="if(event.key==='Enter') submitCodeMark('${deviceIp}')">
+          </div>
+          <div id="mark-code-msg" style="display:none;padding:10px 14px;border-radius:8px;font-size:13px;margin-bottom:12px"></div>
+          <button class="btn btn-primary" onclick="submitCodeMark('${deviceIp}')" style="width:100%;margin-bottom:10px">Mark Attendance</button>
+          <button class="btn btn-secondary" onclick="openQrScanner()" style="width:100%">📷 Scan QR Code Instead</button>
+          <div id="qr-scanner-area" style="display:none;margin-top:14px"></div>
+        </div>
+      </div>`;
+    _tryAutoProofMark(deviceIp, userId);
+  } else {
+    // ── Browser: connection verification banner + code form ────────────────────
+    let proximityBanner = '';
     if (_esp32UrlToken?.sessionId) {
       proximityBanner = `
         <div style="display:flex;align-items:center;gap:8px;padding:10px 14px;background:#f0fdf4;border:1px solid #86efac;border-radius:8px;margin-bottom:14px;font-size:13px;color:#15803d;font-weight:600">
@@ -12794,29 +12822,27 @@ async function renderMarkAttendance() {
           <a href="${esc(esp32MarkUrl)}" style="display:inline-block;padding:8px 16px;background:#d97706;color:white;border-radius:8px;text-decoration:none;font-weight:600;font-size:13px">Verify WiFi Connection →</a>
         </div>`;
     }
+    content.innerHTML = `
+      <div class="page-header"><h2>Mark Attendance</h2><p>Check in to active sessions</p></div>
+      <div class="card">
+        <div class="card-title">Enter Attendance Code</div>
+        ${proximityBanner}
+        <p style="font-size:13px;color:var(--text-muted);margin-bottom:14px">
+          Type the 6-digit code shown on the classroom device screen.
+        </p>
+        <div class="form-group">
+          <label>6-Digit Code</label>
+          <input type="text" id="mark-code-input" placeholder="000000" maxlength="6" inputmode="numeric"
+            style="font-size:28px;text-align:center;letter-spacing:10px;font-weight:700" autofocus
+            onkeydown="if(event.key==='Enter') submitCodeMark('${deviceIp}')">
+        </div>
+        <div id="mark-code-msg" style="display:none;padding:10px 14px;border-radius:8px;font-size:13px;margin-bottom:12px"></div>
+        <button class="btn btn-primary" onclick="submitCodeMark('${deviceIp}')" style="width:100%;margin-bottom:10px">Mark Attendance</button>
+        <button class="btn btn-secondary" onclick="openQrScanner()" style="width:100%">📷 Scan QR Code Instead</button>
+        <div id="qr-scanner-area" style="display:none;margin-top:14px"></div>
+      </div>`;
+    document.getElementById('mark-code-input')?.focus();
   }
-
-  content.innerHTML = `
-    <div class="page-header"><h2>Mark Attendance</h2><p>Check in to active sessions</p></div>
-    <div class="card">
-      <div class="card-title">Enter Attendance Code</div>
-      ${proximityBanner}
-      <p style="font-size:13px;color:var(--text-muted);margin-bottom:14px">
-        Type the 6-digit code shown on the classroom device screen.
-      </p>
-      <div class="form-group">
-        <label>6-Digit Code</label>
-        <input type="text" id="mark-code-input" placeholder="000000" maxlength="6" inputmode="numeric"
-          style="font-size:28px;text-align:center;letter-spacing:10px;font-weight:700" autofocus
-          onkeydown="if(event.key==='Enter') submitCodeMark('${deviceIp}')">
-      </div>
-      <div id="mark-code-msg" style="display:none;padding:10px 14px;border-radius:8px;font-size:13px;margin-bottom:12px"></div>
-      <button class="btn btn-primary" onclick="submitCodeMark('${deviceIp}')" style="width:100%;margin-bottom:10px">Mark Attendance</button>
-      <button class="btn btn-secondary" onclick="openQrScanner()" style="width:100%">📷 Scan QR Code Instead</button>
-      <div id="qr-scanner-area" style="display:none;margin-top:14px"></div>
-    </div>`;
-
-  document.getElementById('mark-code-input')?.focus();
 
   if (isOnline()) {
     api('/api/attendance-sessions/active').then(data => {
@@ -12833,6 +12859,65 @@ async function renderMarkAttendance() {
       content.querySelector('.page-header')?.after(infoEl);
     }).catch(() => {});
   }
+}
+
+// Auto-proof mark for Capacitor app — no user interaction required.
+// 1. Fetch one-time proof from ESP32 (/proof endpoint)
+// 2. POST proof to cloud API
+// 3. Show status + navigate to dashboard on success
+// Falls back to manual code form if any step fails.
+async function _tryAutoProofMark(ip, userId) {
+  const statusEl = document.getElementById('auto-mark-status');
+  const subEl    = document.getElementById('auto-mark-sub');
+  const iconEl   = document.getElementById('auto-mark-icon');
+  const update   = (icon, txt, sub = '') => {
+    if (iconEl) iconEl.textContent = icon;
+    if (statusEl) statusEl.textContent = txt;
+    if (subEl) subEl.textContent = sub;
+  };
+  const fallback = (msg) => {
+    update('📶', 'Connect to classroom WiFi', msg);
+    const card = document.getElementById('auto-mark-card');
+    const form = document.getElementById('manual-form-area');
+    if (card) card.style.cssText = 'border-left:4px solid #f59e0b;background:#fffbeb';
+    if (form) { form.style.display = 'block'; document.getElementById('mark-code-input')?.focus(); }
+  };
+
+  // Step 1: get proof from ESP32
+  update('📡', 'Checking classroom device…');
+  let proof = null;
+  try {
+    const r = await fetch(`http://${ip}/proof?studentId=${encodeURIComponent(userId)}`, {
+      cache: 'no-store', signal: AbortSignal.timeout(8000),
+    });
+    if (!r.ok) {
+      const e = await r.json().catch(() => ({}));
+      fallback(e.error || 'Device not ready. Enter code manually.');
+      return;
+    }
+    proof = await r.json();
+  } catch (_) {
+    fallback('Not connected to classroom WiFi (Dikly-XXXXXX).');
+    return;
+  }
+
+  // Step 2: submit proof to backend
+  update('🔐', 'Generating secure proof…', 'Verifying with server…');
+  try {
+    await api('/api/attendance-sessions/mark', {
+      method: 'POST',
+      body: JSON.stringify({ method: 'proof_mark', esp32Proof: proof }),
+    });
+  } catch (e) {
+    fallback(e.message || 'Submission failed. Enter code manually.');
+    return;
+  }
+
+  // Step 3: success
+  update('✅', 'Attendance marked!', 'Redirecting…');
+  const card = document.getElementById('auto-mark-card');
+  if (card) card.style.cssText = 'border-left:4px solid #22c55e;background:#f0fdf4';
+  setTimeout(() => navigateTo('dashboard'), 1800);
 }
 
 let _qrScanStream = null;

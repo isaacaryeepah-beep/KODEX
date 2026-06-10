@@ -582,6 +582,42 @@ static void registerLocalHttp() {
     localHttp.send(200, "application/json", s);
   });
 
+  // /proof?studentId=<id> — generates a one-time signed attendance proof.
+  // Unique random nonce per call; 15-second expiry; replay prevented by server.
+  // The Capacitor app calls this automatically — no manual code entry needed.
+  localHttp.on("/proof", HTTP_GET, [](){
+    localHttp.sendHeader("Access-Control-Allow-Origin", "*");
+    if (!sessionId.length() || !sessionSeed.length()) {
+      localHttp.send(503, "application/json", "{\"error\":\"No active session\"}"); return;
+    }
+    String userId = localHttp.arg("studentId");
+    if (!userId.length()) {
+      localHttp.send(400, "application/json", "{\"error\":\"studentId required\"}"); return;
+    }
+    // Random 8-byte nonce
+    uint8_t nb[8];
+    for (int i = 0; i < 8; i++) nb[i] = (uint8_t)(esp_random() & 0xFF);
+    char nonce[17];
+    for (int i = 0; i < 8; i++) snprintf(nonce + i * 2, 3, "%02x", nb[i]);
+    nonce[16] = '\0';
+    uint32_t ts = (uint32_t)time(nullptr);
+    String msg = "proof:" + sessionId + ":" + userId + ":" + String(ts) + ":" + String(nonce);
+    uint8_t digest[32];
+    hmacSha256(reinterpret_cast<const uint8_t*>(sessionSeed.c_str()), sessionSeed.length(),
+               reinterpret_cast<const uint8_t*>(msg.c_str()), msg.length(), digest);
+    char sig[33];
+    for (int i = 0; i < 16; i++) snprintf(sig + i * 2, 3, "%02x", digest[i]);
+    sig[32] = '\0';
+    StaticJsonDocument<512> resp;
+    resp["sessionId"] = sessionId;
+    resp["studentId"] = userId;
+    resp["timestamp"] = (long long)ts;
+    resp["nonce"]     = nonce;
+    resp["sig"]       = sig;
+    String s; serializeJson(resp, s);
+    localHttp.send(200, "application/json", s);
+  });
+
   // /mark — browser redirect flow: generates connectionToken and redirects to
   // https://dikly.sbs/?esp32session=...#mark-attendance so the browser can
   // prove classroom WiFi connection without a JS fetch (mixed-content bypass).
