@@ -1,4 +1,4 @@
-const SIX_HOURS_MS = 30 * 60 * 1000;  // 30 min — prevents quick account-switch cheating
+const SIX_HOURS_MS = 6 * 60 * 60 * 1000;
 
 const validateDevice = (req, res, next) => {
   if (!req.user) {
@@ -33,10 +33,10 @@ const enforceLogoutRestriction = (req, res, next) => {
     const timeSinceLogout = Date.now() - new Date(req.user.lastLogoutTime).getTime();
     if (timeSinceLogout < SIX_HOURS_MS) {
       const remainingMs = SIX_HOURS_MS - timeSinceLogout;
-      const remainingMins = Math.ceil(remainingMs / 60000);
+      const remainingHours = Math.ceil(remainingMs / (60 * 60 * 1000));
       return res.status(403).json({
         error: "Action restricted after logout",
-        message: `You must wait ${remainingMins} minute(s) after logout before marking attendance`,
+        message: `You must wait ${remainingHours} hour(s) after logout before performing this action`,
         restrictedUntil: new Date(
           new Date(req.user.lastLogoutTime).getTime() + SIX_HOURS_MS
         ).toISOString(),

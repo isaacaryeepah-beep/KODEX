@@ -846,6 +846,9 @@ exports.unlockAccountDeviceLock = async (req, res) => {
       unlockedBy: req.user._id,
       unlockedAt: new Date(),
     };
+    // Also clear the post-logout attendance restriction so the student
+    // can mark attendance immediately after being unlocked.
+    user.lastLogoutTime = null;
 
     await user.save({ validateBeforeSave: false });
 

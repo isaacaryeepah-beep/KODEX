@@ -81,11 +81,12 @@ exports.unlockStudent = async (req, res) => {
     student.lockedBy            = null;
     student.failedLoginAttempts = 0;
     student.lastFailedLoginAt   = null;
-    // Also clear device lock if active
+    // Also clear device lock and post-logout restriction if active
     if (student.accountDeviceLock?.isLocked) {
       student.accountDeviceLock.isLocked    = false;
       student.accountDeviceLock.lockedUntil = null;
     }
+    student.lastLogoutTime = null;
     await student.save();
 
     // Audit trail
