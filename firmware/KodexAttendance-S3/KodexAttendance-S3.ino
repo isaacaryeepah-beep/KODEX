@@ -118,7 +118,7 @@ static const char*   FIRMWARE_VERSION     = "s3-2.1.0";
 static const char*   DEFAULT_API_BASE     = "https://dikly.sbs";
 static const uint32_t HEARTBEAT_MS        = 5000;
 static const uint32_t WIFI_TIMEOUT_MS     = 30000;
-static const uint32_t WINDOW_SECONDS      = 300;  // code rotation period (5 minutes)
+static const uint32_t WINDOW_SECONDS      = 120;  // code rotation period (2 minutes)
 
 // ─── Theme selector ──────────────────────────────────────────────────────────
 // Change THEME to switch the whole UI colour scheme without touching anything else.

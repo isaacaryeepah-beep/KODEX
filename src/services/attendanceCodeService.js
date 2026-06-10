@@ -10,7 +10,7 @@
 //  Formula: HMAC-SHA256(seed, floor(unixSeconds / WINDOW_SECONDS)) → 6 digits
 //
 //  Anti-cheat properties:
-//    - Code rotates every WINDOW_SECONDS (default 20s). A friend forwarding the
+//    - Code rotates every WINDOW_SECONDS (2 minutes). A friend forwarding the
 //      code over WhatsApp is racing the clock.
 //    - We accept the CURRENT window and the PREVIOUS window so a student who
 //      grabbed the code at second 19 isn't unfairly rejected at second 21.
@@ -22,11 +22,11 @@
 
 const crypto = require("crypto");
 
-// How long each code is valid for, in seconds. 300s = 5 minutes.
-const WINDOW_SECONDS = 300;
+// How long each code is valid for, in seconds. 120s = 2 minutes.
+const WINDOW_SECONDS = 120;
 
 // How many previous windows to accept (grace period for slow networks / typing).
-// 1 means: current window + 1 previous window = up to 10 min effective validity.
+// 1 means: current window + 1 previous window = up to 4 min effective validity.
 const GRACE_WINDOWS = 1;
 
 function _slotForTime(unixSeconds) {

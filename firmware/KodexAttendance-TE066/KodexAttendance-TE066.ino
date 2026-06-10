@@ -102,7 +102,7 @@
 static const char*    FIRMWARE_VER        = "te066-1.0.0";
 static const char*    DEFAULT_API_BASE    = "https://dikly.sbs";
 static const char*    NVS_NAMESPACE       = "dikly";
-static const uint32_t WINDOW_SECONDS      = 300;   // MUST match backend WINDOW_SECONDS
+static const uint32_t WINDOW_SECONDS      = 120;   // MUST match backend WINDOW_SECONDS
 static const uint32_t HEARTBEAT_INTERVAL  = 5000;  // ms between heartbeats
 static const uint32_t WIFI_CONNECT_TIMEOUT= 30000; // ms to wait for WiFi
 static const uint32_t NTP_TIMEOUT         = 8000;  // ms to wait for NTP
