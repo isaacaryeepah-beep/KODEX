@@ -893,19 +893,14 @@ exports.markAttendance = async (req, res) => {
       }
 
     } else if (!proximityExempt) {
-      // No BLE token and no hotspot token.
-      // For code_mark with an esp32Seed session the rotating TOTP code IS the
-      // proximity proof — the student must physically read the display. Allow it
-      // through; the code will be verified below.
-      // All other methods (and code_mark on seed-less sessions) are hard-blocked.
-      if (resolvedMethod !== 'code_mark' || !session.esp32Seed) {
-        return res.status(403).json({
-          error: 'You must connect to the classroom device WiFi hotspot to mark attendance. Open the Dikly app while connected to the classroom WiFi.',
-          requiresHotspot: true,
-          networkMismatch: true,
-        });
-      }
-      // code_mark + esp32Seed: fall through — TOTP check below serves as proof.
+      // No connectionToken and no BLE token.
+      // All marking methods require physical connection to the classroom device WiFi —
+      // the connectionToken from ESP32 /session or /mark is the only accepted proof.
+      return res.status(403).json({
+        error: 'You must connect to the classroom device WiFi hotspot to mark attendance. Connect to the Dikly-XXXXXX WiFi, open DIKLY, and tap "Verify WiFi Connection".',
+        requiresHotspot: true,
+        networkMismatch: true,
+      });
     }
 
     // Anyone marking against a course-linked session must be enrolled in that course.

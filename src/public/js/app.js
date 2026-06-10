@@ -12146,6 +12146,7 @@ const ESP32_LOCAL_PORT   = 80;
 let   esp32IP            = localStorage.getItem('dikly_esp32_ip') || null;
 let   bleDetected        = false;
 let   bleScanInterval    = null;
+let   _esp32UrlToken     = null; // connectionToken received via ESP32 /mark redirect
 
 // Save ESP32 IP when found
 function setEsp32IP(ip) {
@@ -12757,15 +12758,49 @@ async function renderMarkAttendance() {
   handleEsp32KeyParam();
   if (await handleQrScan()) return;
 
-  // Show code entry form immediately — no WiFi detection, no session polling.
-  // The 6-digit rotating code (TOTP) is the anti-cheat: it changes every 30 s
-  // and is only visible on the physical classroom device screen.
   const deviceIp = esp32IP || '192.168.4.1';
+  const isInApp  = /DiklyApp/i.test(navigator.userAgent);
+  const userId   = currentUser?._id || currentUser?.id || '';
+
+  // Check for connectionToken returned by ESP32 /mark redirect (browser flow).
+  // The ESP32 redirects to https://dikly.sbs/?esp32session=...#mark-attendance
+  // after the student visits http://192.168.4.1/mark on classroom WiFi.
+  const urlParams = new URLSearchParams(window.location.search);
+  if (urlParams.get('esp32session')) {
+    _esp32UrlToken = {
+      sessionId: urlParams.get('esp32session'),
+      studentId: urlParams.get('esp32student'),
+      issuedAt:  Number(urlParams.get('esp32issued')),
+      sig:       urlParams.get('esp32sig'),
+    };
+    history.replaceState({}, '', window.location.pathname + '#mark-attendance');
+  }
+
+  const esp32MarkUrl = `http://${deviceIp}/mark?studentId=${encodeURIComponent(userId)}`;
+
+  // Proximity banner — only shown in browser (app handles this natively via fetch)
+  let proximityBanner = '';
+  if (!isInApp) {
+    if (_esp32UrlToken?.sessionId) {
+      proximityBanner = `
+        <div style="display:flex;align-items:center;gap:8px;padding:10px 14px;background:#f0fdf4;border:1px solid #86efac;border-radius:8px;margin-bottom:14px;font-size:13px;color:#15803d;font-weight:600">
+          ✓ Classroom WiFi verified — enter the code shown on the device screen
+        </div>`;
+    } else {
+      proximityBanner = `
+        <div style="padding:12px 14px;background:#fef3c7;border:1px solid #fde68a;border-radius:8px;margin-bottom:14px;font-size:13px;color:#92400e">
+          <div style="font-weight:700;margin-bottom:6px">Connect to classroom WiFi first</div>
+          <div style="margin-bottom:10px">Connect your phone to the <strong>Dikly-XXXXXX</strong> WiFi, then tap the button below to verify your connection.</div>
+          <a href="${esc(esp32MarkUrl)}" style="display:inline-block;padding:8px 16px;background:#d97706;color:white;border-radius:8px;text-decoration:none;font-weight:600;font-size:13px">Verify WiFi Connection →</a>
+        </div>`;
+    }
+  }
 
   content.innerHTML = `
     <div class="page-header"><h2>Mark Attendance</h2><p>Check in to active sessions</p></div>
     <div class="card">
       <div class="card-title">Enter Attendance Code</div>
+      ${proximityBanner}
       <p style="font-size:13px;color:var(--text-muted);margin-bottom:14px">
         Type the 6-digit code shown on the classroom device screen.
       </p>
@@ -12783,7 +12818,6 @@ async function renderMarkAttendance() {
 
   document.getElementById('mark-code-input')?.focus();
 
-  // Optionally show active session info below (best-effort, non-blocking)
   if (isOnline()) {
     api('/api/attendance-sessions/active').then(data => {
       const session = data?.session;
@@ -13030,22 +13064,38 @@ async function submitCodeMark(deviceIp) {
     } catch (_) {}
   }
 
-  // ── Path 3: Cloud API — works for both Capacitor and browser ─────────────────
-  // Anti-cheat: rotating 6-digit TOTP changes every 30 s and is only visible
-  // on the physical device screen in the classroom. Server validates cryptographically.
-  try {
-    const body = connectionToken?.sessionId
-      ? { code, method: 'code_mark', connectionToken }
-      : { code, method: 'code_mark' };
-    await api('/api/attendance-sessions/mark', {
-      method: 'POST',
-      body: JSON.stringify(body),
-    });
-    showMsg('✓ Attendance marked!', true);
-    setTimeout(() => navigateTo('mark-attendance'), 2200);
-  } catch (e) {
-    restoreBtn();
-    showMsg(e.message || 'Failed to submit. Check your internet connection and try again.', false);
+  // ── Path 3: Cloud API with connectionToken ────────────────────────────────
+  // Use whichever token is available: Path 2 result or URL-redirect result.
+  const token = connectionToken?.sessionId ? connectionToken : (_esp32UrlToken?.sessionId ? _esp32UrlToken : null);
+  if (token) {
+    try {
+      await api('/api/attendance-sessions/mark', {
+        method: 'POST',
+        body: JSON.stringify({ code, method: 'code_mark', connectionToken: token }),
+      });
+      showMsg('✓ Attendance marked!', true);
+      _esp32UrlToken = null;
+      setTimeout(() => navigateTo('mark-attendance'), 2200);
+    } catch (e) {
+      restoreBtn();
+      showMsg(e.message || 'Failed to submit. Check your internet connection and try again.', false);
+    }
+    return;
+  }
+
+  // No connectionToken — student is not on classroom WiFi
+  restoreBtn();
+  const isInAppCtx = /DiklyApp/i.test(navigator.userAgent);
+  if (isInAppCtx) {
+    showMsg('Connect to the classroom WiFi hotspot (Dikly-XXXXXX) to mark attendance.', false);
+  } else {
+    const uid2 = currentUser?._id || currentUser?.id || '';
+    const verifyUrl = `http://${ip}/mark?studentId=${encodeURIComponent(uid2)}`;
+    const msgEl2 = document.getElementById('mark-code-msg');
+    if (msgEl2) {
+      msgEl2.innerHTML = `You must connect to the classroom WiFi first. <a href="${esc(verifyUrl)}" style="color:#4f6ef7;font-weight:700">Verify WiFi Connection →</a>`;
+      msgEl2.style.cssText = 'display:block;padding:10px 14px;border-radius:8px;font-size:13px;margin-bottom:12px;background:#fef2f2;color:#dc2626;border:1px solid #fca5a5';
+    }
   }
 }
 
