@@ -1806,86 +1806,56 @@ static void drawSession(const String& code, uint32_t secsLeft, uint32_t secsTota
     spr.setCursor(SW - lw2 - 14, 70); spr.print(lect);
   }
 
-  // ── "ATTENDANCE CODE" section label ──────────────────────────────────────────
-  spr.setFont(F_TINY); spr.setTextColor(COL_MUTED, COL_BG);
-  const char* aclbl = "ATTENDANCE CODE";
-  int32_t tw = spr.textWidth(aclbl);
-  spr.setCursor((SW - tw) / 2, 96); spr.print(aclbl);
-  // Accent underline
-  spr.fillRect((SW - tw) / 2, 106, tw, 2, COL_PRIMARY);
-
-  // ── Code card (COL_SURFACE elevated) — y=110..178 ───────────────────────────
-  spr.fillRoundRect(8, 110, SW - 16, 66, 8, COL_SURFACE);
-  spr.drawRoundRect(8, 110, SW - 16, 66, 8, COL_BORDER);
-  // Subtle inner glow at top
-  spr.drawFastHLine(14, 111, SW - 28, COL_PRIMARY);
-
-  // 6-digit code split into two groups of 3 (letter-spacing effect)
-  spr.setTextFont(7); spr.setTextSize(1);
-  spr.setTextColor(COL_TEXT, COL_SURFACE);
-  String cA = code.substring(0, 3), cB = code.substring(3);
-  int32_t wA = spr.textWidth(cA), wB = spr.textWidth(cB), gap = 18;
-  int32_t codeX = (SW - wA - gap - wB) / 2;
-  spr.setCursor(codeX, 116); spr.print(cA);
-  // Gap separator dots
-  int32_t sepX = codeX + wA + gap / 2 - 2;
-  spr.fillCircle(sepX, 143, 3, COL_MUTED);
-  spr.fillCircle(sepX, 152, 3, COL_MUTED);
-  spr.setCursor(codeX + wA + gap, 116); spr.print(cB);
-
-  // ── Timer section ──────────────────────────────────────────────────────────────
+  // ── Timer (directly below header) ────────────────────────────────────────────
   uint16_t barCol = secsLeft > 120 ? COL_SUCCESS : secsLeft > 60 ? COL_WARNING : COL_ERROR;
-  // Label: Xm Ys
   uint32_t mins = secsLeft / 60, secs = secsLeft % 60;
   char timerBuf[12];
   if (mins > 0) snprintf(timerBuf, sizeof(timerBuf), "%um %02us", (unsigned)mins, (unsigned)secs);
   else          snprintf(timerBuf, sizeof(timerBuf), "%us", (unsigned)secs);
   spr.setFont(F_TINY); spr.setTextColor(barCol, COL_BG);
-  tw = spr.textWidth(timerBuf);
-  spr.setCursor((SW - tw) / 2, 181); spr.print(timerBuf);
-  // Progress bar (4px rounded)
+  int32_t tw = spr.textWidth(timerBuf);
+  spr.setCursor((SW - tw) / 2, 96); spr.print(timerBuf);
   int32_t barW = (secsTotal > 0) ? (int32_t)((SW - 32) * secsLeft / secsTotal) : 0;
-  spr.fillRoundRect(16, 191, SW - 32, 4, 2, COL_DIM_CARD);
-  if (barW > 0) spr.fillRoundRect(16, 191, barW, 4, 2, barCol);
+  spr.fillRoundRect(16, 106, SW - 32, 4, 2, COL_DIM_CARD);
+  if (barW > 0) spr.fillRoundRect(16, 106, barW, 4, 2, barCol);
 
-  // ── Stats row: Present | Time (y=200..264) ─────────────────────────────────────
+  // ── Stats row: Present | Time (y=116..256) ───────────────────────────────────
   int32_t cw = (SW - 26) / 2;
 
-  // Present card
-  spr.fillRoundRect(8, 200, cw, 62, 6, COL_CARD);
-  spr.drawRoundRect(8, 200, cw, 62, 6, COL_BORDER);
+  // Present card — tall, big count
+  spr.fillRoundRect(8, 116, cw, 138, 6, COL_CARD);
+  spr.drawRoundRect(8, 116, cw, 138, 6, COL_BORDER);
   spr.setFont(F_TINY); spr.setTextColor(COL_MUTED, COL_CARD);
   tw = spr.textWidth("Present");
-  spr.setCursor(8 + (cw - tw) / 2, 208); spr.print("Present");
-  spr.setFont(F_LARGE); spr.setTextColor(COL_SUCCESS, COL_CARD);
+  spr.setCursor(8 + (cw - tw) / 2, 124); spr.print("Present");
+  spr.setTextFont(7); spr.setTextSize(1);
+  spr.setTextColor(COL_SUCCESS, COL_CARD);
   String ps = String(studentsMarked);
   tw = spr.textWidth(ps);
-  spr.setCursor(8 + (cw - tw) / 2, 222); spr.print(ps);
-  // / total sub-label
+  spr.setCursor(8 + (cw - tw) / 2, 148); spr.print(ps);
   if (sessionTotalEnrolled > 0) {
     spr.setFont(F_TINY); spr.setTextColor(COL_MUTED, COL_CARD);
     String totLbl = "/ " + String(sessionTotalEnrolled);
     tw = spr.textWidth(totLbl);
-    spr.setCursor(8 + (cw - tw) / 2, 250); spr.print(totLbl);
+    spr.setCursor(8 + (cw - tw) / 2, 238); spr.print(totLbl);
   }
 
   // Time card
   int32_t tc = 18 + cw;
-  spr.fillRoundRect(tc, 200, cw, 62, 6, COL_CARD);
-  spr.drawRoundRect(tc, 200, cw, 62, 6, COL_BORDER);
+  spr.fillRoundRect(tc, 116, cw, 138, 6, COL_CARD);
+  spr.drawRoundRect(tc, 116, cw, 138, 6, COL_BORDER);
   time_t nowT = time(nullptr); struct tm tmNow; localtime_r(&nowT, &tmNow);
   char timeBuf[9]; strftime(timeBuf, sizeof(timeBuf), "%I:%M %p", &tmNow);
   spr.setFont(F_TINY); spr.setTextColor(COL_MUTED, COL_CARD);
   tw = spr.textWidth("Time");
-  spr.setCursor(tc + (cw - tw) / 2, 208); spr.print("Time");
+  spr.setCursor(tc + (cw - tw) / 2, 124); spr.print("Time");
   spr.setFont(F_SMALL); spr.setTextColor(COL_TEXT, COL_CARD);
   tw = spr.textWidth(timeBuf);
-  spr.setCursor(tc + (cw - tw) / 2, 226); spr.print(timeBuf);
-  // SD/sync indicator
+  spr.setCursor(tc + (cw - tw) / 2, 170); spr.print(timeBuf);
   uint16_t sdC = sdAvailable ? COL_SUCCESS : COL_MUTED;
-  spr.fillCircle(tc + 10, 251, 3, sdC);
+  spr.fillCircle(tc + 10, 241, 3, sdC);
   spr.setFont(F_TINY); spr.setTextColor(sdC, COL_CARD);
-  spr.setCursor(tc + 17, 248);
+  spr.setCursor(tc + 17, 238);
   spr.print(sdAvailable ? (sdRecordCount > 0 ? "SD pend" : "SD OK") : "RAM");
 
   spr.pushSprite(0, 0);
@@ -2808,12 +2778,28 @@ static void registerLocalHttp() {
                  "&esp32sig="     + String(sigHex) +
                  status +
                  "#mark-attendance";
+    // postMessage to opener (popup mode — student stays in the Dikly app).
+    // Falls back to full redirect if there is no opener (direct navigation).
     String html = String("<!doctype html><html><head><meta charset='utf-8'>") +
       "<meta name='viewport' content='width=device-width,initial-scale=1'>" +
-      "<meta http-equiv='refresh' content='0;url=" + url + "'>" +
-      "<script>window.location.replace('" + url + "')</script>" +
-      "</head><body style='font-family:sans-serif;padding:24px;background:#0a0f1e;color:#fff'>" +
-      "<p>✓ Attendance recorded. Redirecting to DIKLY…</p></body></html>";
+      "</head><body style='font-family:sans-serif;text-align:center;padding:32px 16px;background:#0a0f1e;color:#fff'>" +
+      "<p style='font-size:22px;margin:0 0 8px'>✅</p>" +
+      "<p style='font-size:14px;color:#9ca3af'>Attendance recorded</p>" +
+      "<script>(function(){" +
+      "var d={type:'ESP32_MARK'," +
+      "session:'" + sessionId + "'," +
+      "student:'" + userId + "'," +
+      "issued:" + String(issuedAt) + "," +
+      "nonce:'" + String(nonce) + "'," +
+      "sig:'" + String(sigHex) + "'," +
+      "marked:" + (alreadyMarked ? "false" : "true") + "," +
+      "dup:" + (alreadyMarked ? "true" : "false") + "};" +
+      "if(window.opener&&!window.opener.closed){" +
+      "try{window.opener.postMessage(d,'*');}catch(e){}" +
+      "setTimeout(function(){try{window.close();}catch(e){}},400);" +
+      "}else{window.location.replace('" + url + "');}" +
+      "})();</script>" +
+      "</body></html>";
     localHttp.send(200, "text/html", html);
   });
 
