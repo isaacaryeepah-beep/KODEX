@@ -94,6 +94,7 @@ public:
 #include <esp_bt.h>        // esp_bt_controller_mem_release
 #include <esp_wifi.h>      // esp_wifi_stop / esp_wifi_deinit for hard reset
 #include <ESPmDNS.h>       // dikly.local hostname on both AP and STA networks
+#include "lwip/etharp.h"   // ARP table for IP→MAC→RSSI mapping
 
 // Forward declarations
 static void startWifiReconfigPortal();
@@ -2486,6 +2487,38 @@ static void startApPortal() {
   drawSetup("Dikly-" + macSuffix());
 }
 
+// ─── RSSI helper: looks up a connected station's signal strength by IP ───────
+// Uses the lwIP ARP table (IP→MAC) then cross-references with the softAP
+// station list (MAC→RSSI).  Returns 0 if not found — caller treats 0 as "allow".
+static int8_t getClientRSSI(const String& clientIp) {
+  wifi_sta_list_t stalist;
+  if (esp_wifi_ap_get_sta_list(&stalist) != ESP_OK || stalist.num == 0) return 0;
+
+  // Parse IP string into 4 bytes
+  uint8_t ip4[4] = {0};
+  int a, b, c, d;
+  if (sscanf(clientIp.c_str(), "%d.%d.%d.%d", &a, &b, &c, &d) != 4) return 0;
+  ip4[0]=(uint8_t)a; ip4[1]=(uint8_t)b; ip4[2]=(uint8_t)c; ip4[3]=(uint8_t)d;
+  // lwIP stores IPv4 in little-endian word
+  uint32_t target = (uint32_t)ip4[0] | ((uint32_t)ip4[1]<<8) |
+                    ((uint32_t)ip4[2]<<16) | ((uint32_t)ip4[3]<<24);
+
+  // Walk ARP table to find MAC for this IP
+  for (size_t i = 0; i < ARP_TABLE_SIZE; i++) {
+    ip4_addr_t*    arp_ip;
+    struct netif*  arp_nif;
+    struct eth_addr* arp_mac;
+    if (etharp_get_entry(i, &arp_ip, &arp_nif, &arp_mac) && arp_ip->addr == target) {
+      // Match MAC against station list to get RSSI
+      for (int j = 0; j < stalist.num; j++) {
+        if (memcmp(stalist.sta[j].mac, arp_mac->addr, 6) == 0)
+          return stalist.sta[j].rssi;
+      }
+    }
+  }
+  return 0;  // not found — allow through
+}
+
 // ─── Local HTTP (WiFi proxy for Attendance Device page) ──────────────────────
 static void registerLocalHttp() {
   localHttp.on("/status", HTTP_GET, []() {
@@ -2552,23 +2585,6 @@ static void registerLocalHttp() {
     localHttp.sendHeader("Access-Control-Allow-Origin", "*");
     localHttp.send(200, "application/json", s);
   });
-
-  // Returns the RSSI (dBm) of the station whose IP matches clientIp.
-  // Uses the softAP station list + tcpip ARP table for IP→MAC→RSSI mapping.
-  // Returns 0 if the station cannot be found (treated as "signal OK" to avoid
-  // false rejections on platforms where ARP lookup is unavailable).
-  auto getClientRSSI = [](const String& clientIp) -> int8_t {
-    wifi_sta_list_t stalist;
-    if (esp_wifi_ap_get_sta_list(&stalist) != ESP_OK || stalist.num == 0) return 0;
-    tcpip_adapter_sta_list_t iplist;
-    if (tcpip_adapter_get_sta_list(&stalist, &iplist) != ESP_OK) return 0;
-    for (int i = 0; i < (int)iplist.num && i < (int)stalist.num; i++) {
-      char ipStr[16];
-      snprintf(ipStr, sizeof(ipStr), IPSTR, IP2STR(&iplist.sta[i].ip));
-      if (clientIp == ipStr) return stalist.sta[i].rssi;
-    }
-    return 0;  // not found — allow through
-  };
 
   // /proof?studentId=<id> — generates a one-time signed attendance proof.
   // Unique random nonce per call; 15-second expiry; replay prevented by server.
