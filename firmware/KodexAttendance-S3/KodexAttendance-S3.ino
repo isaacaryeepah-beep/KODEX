@@ -228,6 +228,7 @@ uint32_t lastHbMs    = 0;
 uint8_t  hbFails     = 0;
 bool     timeSynced  = false;
 bool     forceReconn = false;
+bool     sessionLocallyStarted = false;  // true when session was started on-device (no internet)
 
 // BLE beacon state
 static BLEAdvertising *bleAdv  = nullptr;
@@ -239,7 +240,7 @@ String   pairPendingInst = "";
 String   pairPendingCode = "";
 
 // Screen state machine
-enum Screen { SPLASH, SETUP, WIFI_SCAN, WIFI_RECONFIG, CONNECTING, READY, SESSION, SUMMARY, SETTINGS, DEVICE_INFO, PAIR_SCREEN };
+enum Screen { SPLASH, SETUP, WIFI_SCAN, WIFI_RECONFIG, CONNECTING, READY, SESSION_START, SESSION, SUMMARY, SETTINGS, DEVICE_INFO, PAIR_SCREEN };
 Screen curScreen = SPLASH;
 String statusMsg = "";
 uint32_t splashStart = 0;
@@ -562,6 +563,53 @@ static int postJson(const String& path, const String& body,
   http.setTimeout(30000);
   int code = http.POST(body); out = http.getString(); http.end();
   return code;
+}
+
+// ─── Start a session locally (fully offline) ─────────────────────────────────
+// Generates a local_ prefixed sessionId + seed, writes to /sessions.jsonl,
+// and activates the session on-device. Synced to cloud on next heartbeat.
+static void startLocalSession(uint32_t durationSecs) {
+  // Generate random 16-char hex sessionId suffix
+  uint8_t rndBuf[8]; esp_fill_random(rndBuf, 8);
+  char idHex[17]; idHex[16] = '\0';
+  for (int i = 0; i < 8; i++) snprintf(&idHex[i*2], 3, "%02x", rndBuf[i]);
+  sessionId = String("local_") + idHex;
+
+  // Generate 32-char hex seed (16 random bytes)
+  uint8_t seedBuf[16]; esp_fill_random(seedBuf, 16);
+  char seedHex[33]; seedHex[32] = '\0';
+  for (int i = 0; i < 16; i++) snprintf(&seedHex[i*2], 3, "%02x", seedBuf[i]);
+  sessionSeed = String(seedHex);
+
+  sessionTitle    = "Local Session";
+  sessionCourse   = "";
+  sessionLecturer = "";
+  sessionDuration = durationSecs;
+  studentsMarked  = 0;
+  sessionTotalEnrolled = 0;
+
+  // Use real time if synced, otherwise millis-based fallback epoch
+  time_t nowT = time(nullptr);
+  if (nowT < 1700000000UL) nowT = (time_t)(1700000000UL + millis() / 1000);
+  sessionStartedAt = (uint32_t)nowT;
+
+  sessionLocallyStarted = true;
+
+  // Persist to SD so syncOfflineAttendance() can push it to the cloud
+  if (sdAvailable) {
+    File sf = SD_MMC.open("/sessions.jsonl", FILE_APPEND);
+    if (sf) {
+      String line = "{\"sessionId\":\"" + sessionId +
+                    "\",\"courseCode\":\"\",\"title\":\"Local Session\"" +
+                    ",\"lecturer\":\"\",\"startedAt\":" + String(sessionStartedAt) +
+                    ",\"duration\":" + String(durationSecs) +
+                    ",\"seed\":\"" + sessionSeed + "\",\"synced\":false}";
+      sf.println(line);
+      sf.close();
+    }
+  }
+
+  curScreen = SESSION;
 }
 
 // ─── Offline sync (sessions + attendance records) ─────────────────────────────
@@ -1759,6 +1807,54 @@ static void drawReady() {
       String enr = String(sessionTotalEnrolled) + " enrolled";
       spr.setCursor(140, 264); spr.print(enr);
     }
+  }
+
+  spr.pushSprite(0, 0);
+}
+
+// ── SESSION_START — Duration picker (offline session start) ──────────────────
+static void drawSessionStart() {
+  spr.fillSprite(COL_BG);
+  bool online = (WiFi.status() == WL_CONNECTED);
+  _drawSubHeader(spr, "Start Session", online);
+  drawTabBar(spr, 1);  // Session tab active
+
+  spr.setFont(F_TINY); spr.setTextColor(COL_MUTED, COL_BG);
+  int32_t tw = spr.textWidth("Select session duration:");
+  spr.setCursor((SW - tw) / 2, 58); spr.print("Select session duration:");
+
+  // 2x2 duration button grid
+  // bw=107, bh=76. Columns at x=8 and x=8+107+10=125. Rows at y=72 and y=156.
+  const int32_t bw = 107, bh = 76, gap = 10;
+  const int32_t x0 = 8, x1 = x0 + bw + gap;
+  const int32_t y0 = 72, y1 = y0 + bh + gap;
+
+  struct { int32_t x, y; const char* label; const char* sub; } btns[4] = {
+    { x0, y0, "30 min", "" },
+    { x1, y0, "45 min", "" },
+    { x0, y1, "1 hour", "" },
+    { x1, y1, "2 hours", "" },
+  };
+
+  for (int i = 0; i < 4; i++) {
+    spr.fillRoundRect(btns[i].x, btns[i].y, bw, bh, 8, COL_DIM_CARD);
+    spr.drawRoundRect(btns[i].x, btns[i].y, bw, bh, 8, COL_PRIMARY);
+
+    spr.setFont(F_SMALL); spr.setTextColor(COL_TEXT, COL_DIM_CARD);
+    tw = spr.textWidth(btns[i].label);
+    spr.setCursor(btns[i].x + (bw - tw) / 2, btns[i].y + bh/2 - 8);
+    spr.print(btns[i].label);
+  }
+
+  // Offline note
+  spr.setFont(F_TINY); spr.setTextColor(COL_MUTED, COL_BG);
+  tw = spr.textWidth("Students connect to hotspot — no internet needed");
+  if (tw > SW - 8) {
+    spr.setCursor(4, 242); spr.print("Students connect to hotspot");
+    tw = spr.textWidth("— no internet needed");
+    spr.setCursor((SW - tw) / 2, 256); spr.print("— no internet needed");
+  } else {
+    spr.setCursor((SW - tw) / 2, 248); spr.print("Students connect to hotspot — no internet needed");
   }
 
   spr.pushSprite(0, 0);
@@ -3019,7 +3115,7 @@ static void handlePairedTap(uint16_t tx, uint16_t ty) {
   if (ty >= 280) {
     uint8_t tabIdx = (uint8_t)(tx / 60);
     if      (tabIdx == 0) curScreen = READY;
-    else if (tabIdx == 1) curScreen = sessionId.isEmpty() ? READY : SESSION;
+    else if (tabIdx == 1) curScreen = sessionId.isEmpty() ? SESSION_START : SESSION;
     else if (tabIdx == 2) curScreen = SUMMARY;
     else if (tabIdx == 3) curScreen = SETTINGS;
     return;
@@ -3027,6 +3123,7 @@ static void handlePairedTap(uint16_t tx, uint16_t ty) {
   // Back button (header area, left quarter)
   if (ty < 46 && tx < 50) {
     if (curScreen == PAIR_SCREEN || curScreen == SUMMARY) curScreen = READY;
+    else if (curScreen == SESSION_START)                  curScreen = READY;
     else if (curScreen == SETTINGS)                       curScreen = READY;
     else if (curScreen == DEVICE_INFO)                    curScreen = SETTINGS;
     return;
@@ -3035,6 +3132,20 @@ static void handlePairedTap(uint16_t tx, uint16_t ty) {
   if (curScreen == READY) {
     if      (ty >= 138 && ty <= 168) curScreen = PAIR_SCREEN;  // Pair Lecturer button
     else if (ty >= 250)              curScreen = DEVICE_INFO;  // Device ID row
+  }
+  // SESSION_START — 2×2 duration grid
+  else if (curScreen == SESSION_START) {
+    const int32_t bw = 107, bh = 76, gap = 10;
+    const int32_t x0 = 8, x1 = x0 + bw + gap;
+    const int32_t y0 = 72, y1 = y0 + bh + gap;
+    // Top-left: 30 min
+    if      (tx >= x0 && tx < x0+bw && ty >= y0 && ty < y0+bh) startLocalSession(30*60);
+    // Top-right: 45 min
+    else if (tx >= x1 && tx < x1+bw && ty >= y0 && ty < y0+bh) startLocalSession(45*60);
+    // Bottom-left: 1 hour
+    else if (tx >= x0 && tx < x0+bw && ty >= y1 && ty < y1+bh) startLocalSession(60*60);
+    // Bottom-right: 2 hours
+    else if (tx >= x1 && tx < x1+bw && ty >= y1 && ty < y1+bh) startLocalSession(120*60);
   }
   // SESSION screen
   else if (curScreen == SESSION) {
@@ -3047,6 +3158,7 @@ static void handlePairedTap(uint16_t tx, uint16_t ty) {
       sessionId = ""; sessionSeed = "";
       sessionTitle = ""; sessionCourse = ""; sessionLecturer = "";
       studentsMarked = 0; sessionTotalEnrolled = 0;
+      sessionLocallyStarted = false;
       bleStop();
       curScreen = SUMMARY;
     }
@@ -3395,12 +3507,13 @@ void loop() {
 
   // ── Session state → screen transition ────────────────────────────────────
   static bool wasSessActive = false;
-  bool sessActive = !sessionId.isEmpty() && !sessionSeed.isEmpty() && timeSynced;
+  bool sessActive = !sessionId.isEmpty() && !sessionSeed.isEmpty() && (timeSynced || sessionLocallyStarted);
   if (sessActive && !wasSessActive) {
     // Session just became active — navigate home screens to SESSION
     if (curScreen == READY || curScreen == PAIR_SCREEN) curScreen = SESSION;
   } else if (!sessActive && wasSessActive) {
     // Session just ended via heartbeat (server removed it) — go to READY
+    sessionLocallyStarted = false;
     if (curScreen == SESSION) curScreen = READY;
   }
   wasSessActive = sessActive;
@@ -3411,11 +3524,15 @@ void loop() {
   lastDraw = now;
 
   switch (curScreen) {
+    case SESSION_START: drawSessionStart(); break;
     case SESSION: {
       if (!sessActive) { curScreen = READY; drawReady(); break; }
       time_t unixNow = time(nullptr);
-      uint32_t secsInWin = (uint32_t)unixNow % WINDOW_SECONDS;
-      uint32_t secsLeft  = WINDOW_SECONDS - secsInWin;
+      // Use millis-based time if clock not synced (offline local session)
+      if (unixNow < 1700000000UL) unixNow = (time_t)(1700000000UL + millis() / 1000);
+      // Session duration remaining (for timer bar and countdown)
+      long sessionSecsLeft = (long)(sessionStartedAt + sessionDuration) - (long)unixNow;
+      if (sessionSecsLeft < 0) sessionSecsLeft = 0;
       String code = deriveCode(sessionSeed, (uint32_t)unixNow);
       // Auto-expire: session duration exceeded → show summary
       if (sessionStartedAt && unixNow > (time_t)(sessionStartedAt + sessionDuration)) {
@@ -3427,10 +3544,11 @@ void loop() {
         sessionId = ""; sessionSeed = "";
         sessionTitle = ""; sessionCourse = ""; sessionLecturer = "";
         studentsMarked = 0; sessionTotalEnrolled = 0;
+        sessionLocallyStarted = false;
         bleStop(); curScreen = SUMMARY; drawSummary(); return;
       }
       bleUpdatePayload();
-      drawSession(code, secsLeft, WINDOW_SECONDS);
+      drawSession(code, (uint32_t)sessionSecsLeft, sessionDuration);
       break;
     }
     case SUMMARY:     drawSummary();    break;
