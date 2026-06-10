@@ -11,6 +11,14 @@ const Device  = require("../models/Device");
 const DEVICE_ONLINE_WINDOW_MS = 20_000;   // session start gate
 const DEVICE_MARK_WINDOW_MS   = 15_000;   // mark-attendance gate
 
+// One-time nonce tracking for esp32Proof replay prevention.
+// Key: "sessionId:nonce", Value: expiry timestamp. Cleaned every 60 s.
+const _usedNonces = new Map();
+setInterval(() => {
+  const now = Date.now();
+  for (const [k, exp] of _usedNonces) if (now > exp) _usedNonces.delete(k);
+}, 60_000);
+
 // Finds the device that should handle a session for the given user + course.
 // Priority:
 //   1. Device assigned to the group enrolled in this course (new group model)
@@ -741,6 +749,7 @@ exports.markAttendance = async (req, res) => {
     // ─────────────────────────────────────────────────────────────────────────
     const bleToken        = req.body.bleToken;
     const connectionToken = req.body.connectionToken;
+    const esp32Proof      = req.body.esp32Proof;
 
     let skipCodeCheck = false;
 
@@ -840,6 +849,72 @@ exports.markAttendance = async (req, res) => {
       // Both factors verified — no verbal code needed
       skipCodeCheck = true;
 
+    } else if (esp32Proof && typeof esp32Proof === 'object') {
+      // ── ESP32 one-time proof path (no code needed) ────────────────────────────
+      // The ESP32 generates a unique per-student, per-request proof with a random
+      // nonce. Expires in 15 s. One-time-use prevents replay attacks.
+      const { sessionId: proofSession, studentId: proofStudent, timestamp, nonce, sig } = esp32Proof;
+
+      if (!session.esp32Seed) {
+        return res.status(403).json({ error: 'Session has no device seed. Cannot verify proof.' });
+      }
+
+      // 1. Timestamp — 15-second hard window
+      const proofAgeMs = Date.now() - (Number(timestamp) * 1000);
+      if (!timestamp || proofAgeMs < 0 || proofAgeMs > 15_000) {
+        return res.status(403).json({
+          error: 'Proof expired. Please try again.',
+          proofExpired: true,
+        });
+      }
+
+      // 2. Nonce uniqueness — prevents replay within the TTL window
+      const nonceKey = `${resolvedSessionId}:${nonce}`;
+      if (_usedNonces.has(nonceKey)) {
+        console.warn(`[MARK] Replay attack detected — nonce reuse by ${req.user.name}`);
+        return res.status(403).json({
+          error: 'This proof has already been used. Please tap Mark Attendance again.',
+          replayAttack: true,
+        });
+      }
+      _usedNonces.set(nonceKey, Date.now() + 120_000); // retain for 2 min
+
+      // 3. Student ID binding
+      if (String(proofStudent) !== req.user._id.toString()) {
+        return res.status(403).json({
+          error: 'Proof was issued for a different account.',
+          networkMismatch: true,
+        });
+      }
+
+      // 4. Session binding
+      if (String(proofSession) !== resolvedSessionId) {
+        return res.status(403).json({
+          error: 'Proof is for a different session.',
+          networkMismatch: true,
+        });
+      }
+
+      // 5. HMAC signature
+      const expectedProofSig = crypto
+        .createHmac('sha256', session.esp32Seed)
+        .update(`proof:${proofSession}:${proofStudent}:${timestamp}:${nonce}`)
+        .digest('hex')
+        .slice(0, 32);
+
+      const proofSigClean = String(sig || '').toLowerCase().replace(/[^0-9a-f]/g, '');
+      if (proofSigClean.length !== 32 ||
+          !crypto.timingSafeEqual(Buffer.from(proofSigClean), Buffer.from(expectedProofSig))) {
+        console.warn(`[MARK] Invalid proof sig from ${req.user.name}`);
+        return res.status(403).json({
+          error: 'Invalid proof signature. Make sure you are connected to the classroom device WiFi.',
+          networkMismatch: true,
+        });
+      }
+
+      // Proof verified — proximity confirmed. TOTP code still required as
+      // second factor (student must physically see the device screen).
+
     } else if (connectionToken && typeof connectionToken === 'object') {
       // ── Hotspot token path ──────────────────────────────────────────────────
       const { sessionId: tokenSession, studentId: tokenStudent, issuedAt, sig } = connectionToken;
@@ -893,19 +968,14 @@ exports.markAttendance = async (req, res) => {
       }
 
     } else if (!proximityExempt) {
-      // No BLE token and no hotspot token.
-      // For code_mark with an esp32Seed session the rotating TOTP code IS the
-      // proximity proof — the student must physically read the display. Allow it
-      // through; the code will be verified below.
-      // All other methods (and code_mark on seed-less sessions) are hard-blocked.
-      if (resolvedMethod !== 'code_mark' || !session.esp32Seed) {
-        return res.status(403).json({
-          error: 'You must connect to the classroom device WiFi hotspot to mark attendance. Open the Dikly app while connected to the classroom WiFi.',
-          requiresHotspot: true,
-          networkMismatch: true,
-        });
-      }
-      // code_mark + esp32Seed: fall through — TOTP check below serves as proof.
+      // No connectionToken and no BLE token.
+      // All marking methods require physical connection to the classroom device WiFi —
+      // the connectionToken from ESP32 /session or /mark is the only accepted proof.
+      return res.status(403).json({
+        error: 'You must connect to the classroom device WiFi hotspot to mark attendance. Connect to the Dikly-XXXXXX WiFi, open DIKLY, and tap "Verify WiFi Connection".',
+        requiresHotspot: true,
+        networkMismatch: true,
+      });
     }
 
     // Anyone marking against a course-linked session must be enrolled in that course.

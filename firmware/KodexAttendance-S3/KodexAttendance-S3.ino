@@ -118,7 +118,7 @@ static const char*   FIRMWARE_VERSION     = "s3-2.1.0";
 static const char*   DEFAULT_API_BASE     = "https://dikly.sbs";
 static const uint32_t HEARTBEAT_MS        = 5000;
 static const uint32_t WIFI_TIMEOUT_MS     = 30000;
-static const uint32_t WINDOW_SECONDS      = 300;  // code rotation period (5 minutes)
+static const uint32_t WINDOW_SECONDS      = 120;  // code rotation period (2 minutes)
 
 // ─── Theme selector ──────────────────────────────────────────────────────────
 // Change THEME to switch the whole UI colour scheme without touching anything else.
@@ -2539,6 +2539,88 @@ static void registerLocalHttp() {
 
     localHttp.sendHeader("Access-Control-Allow-Origin", "*");
     localHttp.send(200, "application/json", s);
+  });
+
+  // /proof?studentId=<id> — generates a one-time signed attendance proof.
+  // Unique random nonce per call; 15-second expiry; replay prevented by server.
+  // The Capacitor app calls this automatically — no manual code entry needed.
+  localHttp.on("/proof", HTTP_GET, []() {
+    localHttp.sendHeader("Access-Control-Allow-Origin", "*");
+    if (sessionId.isEmpty() || sessionSeed.isEmpty()) {
+      localHttp.send(503, "application/json", "{\"error\":\"No active session\"}"); return;
+    }
+    if (!timeSynced) {
+      localHttp.send(503, "application/json", "{\"error\":\"Device clock not synced\"}"); return;
+    }
+    String userId = localHttp.arg("studentId");
+    if (userId.isEmpty()) {
+      localHttp.send(400, "application/json", "{\"error\":\"studentId required\"}"); return;
+    }
+    uint8_t nb[8];
+    for (int i = 0; i < 8; i++) nb[i] = (uint8_t)(esp_random() & 0xFF);
+    char nonce[17];
+    for (int i = 0; i < 8; i++) sprintf(nonce + i * 2, "%02x", nb[i]);
+    nonce[16] = '\0';
+    unsigned long ts = (unsigned long)time(nullptr);
+    String msg = "proof:" + sessionId + ":" + userId + ":" + String(ts) + ":" + String(nonce);
+    uint8_t hmacOut[32];
+    hmacSha256((const uint8_t*)sessionSeed.c_str(), sessionSeed.length(),
+               (const uint8_t*)msg.c_str(), msg.length(), hmacOut);
+    char sigHex[33];
+    for (int i = 0; i < 16; i++) sprintf(sigHex + i * 2, "%02x", hmacOut[i]);
+    sigHex[32] = '\0';
+    JsonDocument resp;
+    resp["sessionId"] = sessionId;
+    resp["studentId"] = userId;
+    resp["timestamp"] = (long long)ts;
+    resp["nonce"]     = nonce;
+    resp["sig"]       = sigHex;
+    String s; serializeJson(resp, s);
+    localHttp.sendHeader("Access-Control-Allow-Origin", "*");
+    localHttp.send(200, "application/json", s);
+  });
+
+  // /mark — browser redirect flow: generates connectionToken and redirects to
+  // https://dikly.sbs/?esp32session=...#mark-attendance so the browser can
+  // prove classroom WiFi connection without a JS fetch (mixed-content bypass).
+  localHttp.on("/mark", HTTP_GET, []() {
+    if (sessionId.isEmpty() || sessionSeed.isEmpty()) {
+      localHttp.send(503, "text/html",
+        "<!doctype html><html><head><meta charset='utf-8'></head><body style='font-family:sans-serif;padding:24px'>"
+        "<h2>No active session</h2><p>Ask your lecturer to start a session, then try again.</p></body></html>");
+      return;
+    }
+    String userId = localHttp.arg("studentId");
+    if (userId.isEmpty()) {
+      localHttp.send(400, "text/html",
+        "<!doctype html><html><head><meta charset='utf-8'></head><body style='font-family:sans-serif;padding:24px'>"
+        "<h2>Open DIKLY first</h2><p>Go to Mark Attendance in the DIKLY app or website, then tap 'Verify WiFi Connection'.</p></body></html>");
+      return;
+    }
+    if (!timeSynced) {
+      localHttp.send(503, "text/html",
+        "<!doctype html><html><head><meta charset='utf-8'></head><body style='font-family:sans-serif;padding:24px'>"
+        "<h2>Device clock not synced</h2><p>Please wait a moment and try again.</p></body></html>");
+      return;
+    }
+    unsigned long issuedAt = (unsigned long)time(nullptr);
+    String message = "conn:" + sessionId + ":" + userId + ":" + String(issuedAt);
+    uint8_t hmacOut[32];
+    hmacSha256((const uint8_t*)sessionSeed.c_str(), sessionSeed.length(),
+               (const uint8_t*)message.c_str(), message.length(), hmacOut);
+    char sigHex[33];
+    for (int i = 0; i < 16; i++) sprintf(sigHex + i * 2, "%02x", hmacOut[i]);
+    sigHex[32] = '\0';
+    String url = "https://dikly.sbs/?esp32session=" + sessionId +
+                 "&esp32student=" + userId +
+                 "&esp32issued=" + String(issuedAt) +
+                 "&esp32sig=" + String(sigHex) +
+                 "#mark-attendance";
+    String html = String("<!doctype html><html><head><meta charset='utf-8'>") +
+      "<meta http-equiv='refresh' content='0;url=" + url + "'>" +
+      "<script>window.location.replace('" + url + "')</script>" +
+      "</head><body style='font-family:sans-serif;padding:24px'><p>Verifying classroom connection... redirecting to DIKLY.</p></body></html>";
+    localHttp.send(200, "text/html", html);
   });
 
   // /attend — offline attendance submission (student connected to device AP)

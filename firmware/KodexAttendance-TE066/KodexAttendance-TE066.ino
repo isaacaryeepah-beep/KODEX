@@ -39,7 +39,7 @@
  *
  *  ROTATING CODE FORMULA  (must match src/services/attendanceCodeService.js)
  *  ──────────────────────────────────────────────────────────────────────────
- *    slot   = floor(unixSeconds / 300)          // 300 s = 5-minute window
+ *    slot   = floor(unixSeconds / 120)          // 120 s = 2-minute window
  *    digest = HMAC-SHA256(key=seed, msg=slot)   // ascii(slot) as message
  *    n      = uint32(digest[0..3]) % 1 000 000
  *    code   = zero-pad(n, 6)
@@ -102,7 +102,7 @@
 static const char*    FIRMWARE_VER        = "te066-1.0.0";
 static const char*    DEFAULT_API_BASE    = "https://dikly.sbs";
 static const char*    NVS_NAMESPACE       = "dikly";
-static const uint32_t WINDOW_SECONDS      = 300;   // MUST match backend WINDOW_SECONDS
+static const uint32_t WINDOW_SECONDS      = 120;   // MUST match backend WINDOW_SECONDS
 static const uint32_t HEARTBEAT_INTERVAL  = 5000;  // ms between heartbeats
 static const uint32_t WIFI_CONNECT_TIMEOUT= 30000; // ms to wait for WiFi
 static const uint32_t NTP_TIMEOUT         = 8000;  // ms to wait for NTP
@@ -746,6 +746,130 @@ void registerLocalApi() {
       "{\"status\":\"saved\",\"message\":\"Reconnecting…\"}");
     delay(400);
     ESP.restart();
+  });
+
+  // /proof?studentId=<id> — generates a one-time signed attendance proof.
+  // Unique random nonce per call; 15-second expiry; replay prevented by server.
+  httpServer.on("/proof", HTTP_GET, []() {
+    httpServer.sendHeader("Access-Control-Allow-Origin", "*");
+    if (sessId.isEmpty() || sessSeed.isEmpty()) {
+      httpServer.send(503, "application/json", "{\"error\":\"No active session\"}"); return;
+    }
+    if (!timeSynced) {
+      httpServer.send(503, "application/json", "{\"error\":\"Clock not synced\"}"); return;
+    }
+    String userId = httpServer.arg("studentId");
+    if (userId.isEmpty()) {
+      httpServer.send(400, "application/json", "{\"error\":\"studentId required\"}"); return;
+    }
+    uint8_t nb[8];
+    for (int i = 0; i < 8; i++) nb[i] = (uint8_t)(esp_random() & 0xFF);
+    char nonce[17];
+    for (int i = 0; i < 8; i++) snprintf(nonce + i * 2, 3, "%02x", nb[i]);
+    nonce[16] = '\0';
+    uint32_t ts = (uint32_t)time(nullptr);
+    String msg = "proof:" + sessId + ":" + userId + ":" + String(ts) + ":" + String(nonce);
+    uint8_t digest[32];
+    const mbedtls_md_info_t* info = mbedtls_md_info_from_type(MBEDTLS_MD_SHA256);
+    mbedtls_md_context_t ctx; mbedtls_md_init(&ctx);
+    mbedtls_md_setup(&ctx, info, 1);
+    mbedtls_md_hmac_starts(&ctx, reinterpret_cast<const uint8_t*>(sessSeed.c_str()), sessSeed.length());
+    mbedtls_md_hmac_update(&ctx, reinterpret_cast<const uint8_t*>(msg.c_str()), msg.length());
+    mbedtls_md_hmac_finish(&ctx, digest);
+    mbedtls_md_free(&ctx);
+    char sig[33];
+    for (int i = 0; i < 16; i++) snprintf(sig + i * 2, 3, "%02x", digest[i]);
+    sig[32] = '\0';
+    StaticJsonDocument<512> resp;
+    resp["sessionId"] = sessId;
+    resp["studentId"] = userId;
+    resp["timestamp"] = (long long)ts;
+    resp["nonce"]     = nonce;
+    resp["sig"]       = sig;
+    String s; serializeJson(resp, s);
+    httpServer.send(200, "application/json", s);
+  });
+
+  // /session?studentId=<id> — returns HMAC connectionToken proving classroom WiFi
+  httpServer.on("/session", HTTP_GET, []() {
+    httpServer.sendHeader("Access-Control-Allow-Origin", "*");
+    if (sessId.isEmpty() || sessSeed.isEmpty()) {
+      httpServer.send(503, "application/json", "{\"error\":\"No active session\"}"); return;
+    }
+    if (!timeSynced) {
+      httpServer.send(503, "application/json", "{\"error\":\"Clock not synced\"}"); return;
+    }
+    String userId = httpServer.arg("studentId");
+    if (userId.isEmpty()) {
+      httpServer.send(400, "application/json", "{\"error\":\"studentId required\"}"); return;
+    }
+    uint32_t issuedAt = (uint32_t)time(nullptr);
+    String msg = "conn:" + sessId + ":" + userId + ":" + String(issuedAt);
+    uint8_t digest[32];
+    const mbedtls_md_info_t* info = mbedtls_md_info_from_type(MBEDTLS_MD_SHA256);
+    mbedtls_md_context_t ctx; mbedtls_md_init(&ctx);
+    mbedtls_md_setup(&ctx, info, 1);
+    mbedtls_md_hmac_starts(&ctx, reinterpret_cast<const uint8_t*>(sessSeed.c_str()), sessSeed.length());
+    mbedtls_md_hmac_update(&ctx, reinterpret_cast<const uint8_t*>(msg.c_str()), msg.length());
+    mbedtls_md_hmac_finish(&ctx, digest);
+    mbedtls_md_free(&ctx);
+    char sig[33];
+    for (int i = 0; i < 16; i++) snprintf(sig + i * 2, 3, "%02x", digest[i]);
+    sig[32] = '\0';
+    StaticJsonDocument<512> resp;
+    resp["sessionId"] = sessId;
+    resp["studentId"] = userId;
+    resp["issuedAt"]  = (long long)issuedAt;
+    resp["sig"]       = sig;
+    String s; serializeJson(resp, s);
+    httpServer.send(200, "application/json", s);
+  });
+
+  // /mark?studentId=<id> — browser redirect flow: generates connectionToken and
+  // redirects to https://dikly.sbs/?esp32session=...#mark-attendance
+  httpServer.on("/mark", HTTP_GET, []() {
+    if (sessId.isEmpty() || sessSeed.isEmpty()) {
+      httpServer.send(503, "text/html",
+        "<!doctype html><html><head><meta charset='utf-8'></head><body style='font-family:sans-serif;padding:24px'>"
+        "<h2>No active session</h2><p>Ask your lecturer to start a session, then try again.</p></body></html>");
+      return;
+    }
+    String userId = httpServer.arg("studentId");
+    if (userId.isEmpty()) {
+      httpServer.send(400, "text/html",
+        "<!doctype html><html><head><meta charset='utf-8'></head><body style='font-family:sans-serif;padding:24px'>"
+        "<h2>Open DIKLY first</h2><p>Go to Mark Attendance, then tap 'Verify WiFi Connection'.</p></body></html>");
+      return;
+    }
+    if (!timeSynced) {
+      httpServer.send(503, "text/html",
+        "<!doctype html><html><head><meta charset='utf-8'></head><body style='font-family:sans-serif;padding:24px'>"
+        "<h2>Clock not synced</h2><p>Please wait a moment and try again.</p></body></html>");
+      return;
+    }
+    uint32_t issuedAt = (uint32_t)time(nullptr);
+    String msg = "conn:" + sessId + ":" + userId + ":" + String(issuedAt);
+    uint8_t digest[32];
+    const mbedtls_md_info_t* info = mbedtls_md_info_from_type(MBEDTLS_MD_SHA256);
+    mbedtls_md_context_t ctx; mbedtls_md_init(&ctx);
+    mbedtls_md_setup(&ctx, info, 1);
+    mbedtls_md_hmac_starts(&ctx, reinterpret_cast<const uint8_t*>(sessSeed.c_str()), sessSeed.length());
+    mbedtls_md_hmac_update(&ctx, reinterpret_cast<const uint8_t*>(msg.c_str()), msg.length());
+    mbedtls_md_hmac_finish(&ctx, digest);
+    mbedtls_md_free(&ctx);
+    char sig[33];
+    for (int i = 0; i < 16; i++) snprintf(sig + i * 2, 3, "%02x", digest[i]);
+    sig[32] = '\0';
+    String url = "https://dikly.sbs/?esp32session=" + sessId +
+                 "&esp32student=" + userId +
+                 "&esp32issued=" + String(issuedAt) +
+                 "&esp32sig=" + String(sig) +
+                 "#mark-attendance";
+    String html = String("<!doctype html><html><head><meta charset='utf-8'>") +
+      "<meta http-equiv='refresh' content='0;url=" + url + "'>" +
+      "<script>window.location.replace('" + url + "')</script>" +
+      "</head><body style='font-family:sans-serif;padding:24px'><p>Verifying classroom connection... redirecting to DIKLY.</p></body></html>";
+    httpServer.send(200, "text/html", html);
   });
 }
 
