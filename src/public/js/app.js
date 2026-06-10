@@ -12763,10 +12763,11 @@ async function renderMarkAttendance() {
   {
     const p = new URLSearchParams(window.location.search);
     const s = p.get('esp32session'), u = p.get('esp32student'),
-          t = p.get('esp32issued'),  g = p.get('esp32sig');
+          t = p.get('esp32issued'),  g = p.get('esp32sig'),
+          n = p.get('esp32nonce'),   mk = p.get('esp32marked'), dp = p.get('esp32dup');
     if (s && u && t && g) {
       window.history.replaceState({}, '', window.location.pathname + '#mark-attendance');
-      return _handleEsp32ConnToken(content, s, u, t, g);
+      return _handleEsp32ConnToken(content, s, u, t, g, n, mk, dp);
     }
   }
 
@@ -12817,10 +12818,55 @@ function _tryAutoMark(ip, userId) {
   window.location.href = `http://${ip}/mark?studentId=${encodeURIComponent(userId)}`;
 }
 
-// Handles return from ESP32 /mark redirect:
-//   https://dikly.sbs/?esp32session=X&esp32student=Y&esp32issued=Z&esp32sig=W#mark-attendance
-// Verifies the signed connection token server-side and marks attendance.
-async function _handleEsp32ConnToken(content, esp32session, esp32student, esp32issued, esp32sig) {
+/// Handles return from ESP32 /mark redirect:
+//   https://dikly.sbs/?esp32session=X&esp32student=Y&esp32issued=Z&esp32sig=W&esp32nonce=N&esp32marked=1
+// esp32marked=1 → ESP32 already saved locally; show ✅ immediately, sync to cloud in background.
+// esp32dup=1    → student already marked this session on the device.
+async function _handleEsp32ConnToken(content, esp32session, esp32student, esp32issued, esp32sig, esp32nonce, esp32marked, esp32dup) {
+  // ── Already checked in (device dedup) ────────────────────────────────────
+  if (esp32dup === '1') {
+    content.innerHTML = `
+      <div class="card" style="text-align:center;padding:48px 24px;border-left:4px solid var(--success,#22c55e)">
+        <div style="font-size:56px;margin-bottom:16px">✅</div>
+        <div style="font-size:20px;font-weight:800;color:var(--success,#22c55e)">Already Checked In</div>
+        <p style="color:var(--text-light);font-size:13px;margin-top:8px">You have already been marked present for this session.</p>
+        <button class="btn btn-primary" style="margin-top:20px" onclick="navigateTo('my-attendance')">View My Attendance</button>
+      </div>`;
+    // Still attempt cloud sync in background (idempotent — server handles duplicate gracefully)
+    _syncEsp32TokenToCloud(esp32session, esp32student, esp32issued, esp32sig, esp32nonce).catch(() => {});
+    return;
+  }
+
+  // ── ESP32 already recorded locally — show success immediately ─────────────
+  if (esp32marked === '1') {
+    const syncId = 'esp32-sync-status';
+    content.innerHTML = `
+      <div class="card" style="text-align:center;padding:48px 24px;border-left:4px solid var(--success,#22c55e)">
+        <div style="font-size:56px;margin-bottom:16px">✅</div>
+        <div style="font-size:20px;font-weight:800;color:var(--success,#22c55e)">Attendance Marked!</div>
+        <p style="color:var(--text-light);font-size:13px;margin-top:8px">You have been checked in successfully.</p>
+        <div id="${syncId}" style="font-size:12px;color:var(--text-muted);margin-top:8px">Syncing to cloud…</div>
+        <button class="btn btn-primary" style="margin-top:20px" onclick="navigateTo('my-attendance')">View My Attendance</button>
+      </div>`;
+    _syncEsp32TokenToCloud(esp32session, esp32student, esp32issued, esp32sig, esp32nonce)
+      .then(() => {
+        const el = document.getElementById(syncId);
+        if (el) el.textContent = 'Synced ✓';
+      })
+      .catch(e => {
+        const el = document.getElementById(syncId);
+        if (!el) return;
+        const msg = e?.message || '';
+        if (msg.toLowerCase().includes('already')) {
+          el.textContent = 'Synced ✓';
+        } else {
+          el.textContent = 'Saved on device — will sync when online';
+        }
+      });
+    return;
+  }
+
+  // ── Legacy path (no esp32marked param — wait for server response) ─────────
   content.innerHTML = `
     <div class="card" style="text-align:center;padding:48px 24px">
       <div style="font-size:48px;margin-bottom:16px">⏳</div>
@@ -12828,16 +12874,7 @@ async function _handleEsp32ConnToken(content, esp32session, esp32student, esp32i
       <p style="color:var(--text-light);font-size:13px;margin-top:8px">Please wait</p>
     </div>`;
   try {
-    const deviceId = getDeviceFingerprint();
-    await api('/api/attendance-sessions/mark', {
-      method: 'POST',
-      body: JSON.stringify({
-        sessionId: esp32session,
-        method: 'code_mark',
-        connectionToken: { sessionId: esp32session, studentId: esp32student, issuedAt: Number(esp32issued), sig: esp32sig },
-        deviceId,
-      }),
-    });
+    await _syncEsp32TokenToCloud(esp32session, esp32student, esp32issued, esp32sig, esp32nonce);
     content.innerHTML = `
       <div class="card" style="text-align:center;padding:48px 24px;border-left:4px solid var(--success,#22c55e)">
         <div style="font-size:56px;margin-bottom:16px">✅</div>
@@ -12856,6 +12893,21 @@ async function _handleEsp32ConnToken(content, esp32session, esp32student, esp32i
         <button class="btn btn-secondary" style="margin-top:20px" onclick="navigateTo('mark-attendance')">Try Again</button>
       </div>`;
   }
+}
+
+// Submits the ESP32 connection token to the cloud server.
+// Called immediately for esp32marked=1 (background sync) and for the legacy path.
+async function _syncEsp32TokenToCloud(session, student, issuedAt, sig, nonce) {
+  const deviceId = getDeviceFingerprint();
+  await api('/api/attendance-sessions/mark', {
+    method: 'POST',
+    body: JSON.stringify({
+      sessionId: session,
+      method: 'code_mark',
+      connectionToken: { sessionId: session, studentId: student, issuedAt: Number(issuedAt), sig, nonce: nonce || undefined },
+      deviceId,
+    }),
+  });
 }
 
 let _qrScanStream = null;

@@ -917,7 +917,10 @@ exports.markAttendance = async (req, res) => {
 
     } else if (connectionToken && typeof connectionToken === 'object') {
       // ── Hotspot token path ──────────────────────────────────────────────────
-      const { sessionId: tokenSession, studentId: tokenStudent, issuedAt, sig } = connectionToken;
+      // Supports both:
+      //   Old firmware (32-char sig, no nonce): conn:session:student:issuedAt
+      //   New firmware (64-char sig, with nonce): conn:session:student:issuedAt:nonce
+      const { sessionId: tokenSession, studentId: tokenStudent, issuedAt, sig, nonce } = connectionToken;
 
       if (!session.esp32Seed) {
         return res.status(403).json({ error: 'Session has no device seed. Cannot verify hotspot token.' });
@@ -945,14 +948,32 @@ exports.markAttendance = async (req, res) => {
         });
       }
 
+      // Nonce dedup — prevents URL replay if token is intercepted (new firmware only)
+      if (nonce) {
+        const nonceKey = `${resolvedSessionId}:${nonce}`;
+        if (_usedNonces.has(nonceKey)) {
+          console.warn(`[MARK] Hotspot token replay attempt by ${req.user.name}`);
+          return res.status(403).json({
+            error: 'This attendance token has already been used. Please connect to the classroom hotspot again.',
+            replayAttack: true,
+          });
+        }
+        _usedNonces.set(nonceKey, Date.now() + 600_000);
+      }
+
+      // HMAC — new firmware includes nonce (64-char), old firmware doesn't (32-char)
+      const sigLen = nonce ? 64 : 32;
+      const hmacMsg = nonce
+        ? `conn:${tokenSession}:${tokenStudent}:${issuedAt}:${nonce}`
+        : `conn:${tokenSession}:${tokenStudent}:${issuedAt}`;
       const expectedSig = crypto
         .createHmac('sha256', session.esp32Seed)
-        .update(`conn:${tokenSession}:${tokenStudent}:${issuedAt}`)
+        .update(hmacMsg)
         .digest('hex')
-        .slice(0, 32);
+        .slice(0, sigLen);
 
       const sigClean = String(sig || '').toLowerCase().replace(/[^0-9a-f]/g, '');
-      if (sigClean.length !== 32) {
+      if (sigClean.length !== sigLen) {
         return res.status(403).json({
           error: 'Invalid hotspot token. Make sure you are connected to the classroom hotspot.',
           networkMismatch: true,
