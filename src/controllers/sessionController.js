@@ -233,15 +233,28 @@ exports.validateAttendance = async (req, res) => {
 // ─── HEARTBEAT WATCHDOG ───────────────────────────────────────────────────────
 exports.runWatchdog = async () => {
   try {
-    const threshold = new Date(Date.now() - 10000);
+    // 30 s gives 6 missed heartbeats (device sends every 5 s) before killing a
+    // session — enough to ride out brief network hiccups without leaving zombie
+    // sessions alive when the device is genuinely off.
+    const threshold = new Date(Date.now() - 30_000);
     const staleSessions = await AttendanceSession.find({ status: 'active' });
 
     for (const session of staleSessions) {
+      if (!session.deviceId) continue;
       const device = await Device.findOne({ deviceId: session.deviceId });
       if (!device) continue;
 
       const isOnline = device.lastHeartbeat && device.lastHeartbeat > threshold;
       if (!isOnline) {
+        // For offline-ready sessions: only kill if the device actually came
+        // online after the session started and has since gone offline.
+        // If lastHeartbeat is null or predates the session, the device never
+        // connected — leave the session alive so it can sync when device boots.
+        if (session.mode === 'offline-ready') {
+          const cameOnlineDuringSession = device.lastHeartbeat && device.lastHeartbeat >= session.startedAt;
+          if (!cameOnlineDuringSession) continue;
+        }
+
         await Device.updateOne({ deviceId: session.deviceId }, { status: 'offline' });
         await AttendanceSession.updateOne(
           { _id: session._id },

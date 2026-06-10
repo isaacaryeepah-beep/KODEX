@@ -271,6 +271,10 @@ exports.verifyPaystackSubscription = async (req, res) => {
     const userId = meta.userId;
     if (!userId) return res.status(400).json({ error: "Missing userId in payment metadata" });
 
+    if (!meta?.userId || meta.userId.toString() !== req.user._id.toString()) {
+      return res.status(403).json({ error: "Payment does not belong to your account" });
+    }
+
     const user = await User.findById(userId);
     if (!user) return res.status(404).json({ error: "User not found" });
 
@@ -325,6 +329,9 @@ exports.verifyPaystackSubscription = async (req, res) => {
 // ── POST /api/payments/paystack/webhook ──────────────────────────────────────
 exports.paystackWebhook = async (req, res) => {
   try {
+    if (!PAYSTACK_SECRET_KEY) {
+      return res.status(400).json({ error: "Paystack not configured" });
+    }
     const crypto = require("crypto");
     const secret = PAYSTACK_SECRET_KEY;
     const hash   = crypto.createHmac("sha512", secret).update(JSON.stringify(req.body)).digest("hex");

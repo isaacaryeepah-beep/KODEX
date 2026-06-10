@@ -103,7 +103,7 @@ exports.generateQuestions = (req, res) => {
       quiz.totalMarks = allQuestions.reduce((sum, q) => sum + q.marks, 0);
       await quiz.save();
 
-      res.json({
+      return res.json({
         message: `${inserted.length} questions generated successfully`,
         questions: inserted,
         totalMarks: quiz.totalMarks,
@@ -111,7 +111,11 @@ exports.generateQuestions = (req, res) => {
 
     } catch (err) {
       console.error("AI generate error:", err);
-      res.status(500).json({ error: err.message || "AI generation failed" });
+      const status = err.status === 429 ? 429 : err.status === 503 ? 503 : 500;
+      const message = err.status === 429 ? "AI quota exceeded. Please try again later."
+        : err.status === 503 ? "AI service temporarily unavailable."
+        : "AI generation failed";
+      return res.status(status).json({ error: message });
     }
   });
 };

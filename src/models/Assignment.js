@@ -133,15 +133,27 @@ const assignmentSchema = new mongoose.Schema(
       }],
       default: [],
     },
+
+    // ── Group targeting ────────────────────────────────────────────────────
+    // 'all'   → every enrolled student in this course sees the assignment
+    // 'group' → only students whose studentGroup matches targetGroup
+    targetAudience: {
+      type: String,
+      enum: ['all', 'group'],
+      default: 'all',
+      index: true,
+    },
+    targetGroup:             { type: String, default: null, trim: true },
+    targetLevel:             { type: String, default: null, trim: true },
+    targetStudyType:         { type: String, default: null, trim: true },
+    targetQualificationType: { type: String, default: null, trim: true },
   },
   { timestamps: true }
 );
 
 // ── Pre-save: recalculate totalMarks from embedded questions ──────────────────
 assignmentSchema.pre("save", function () {
-  if (this.questions && this.questions.length > 0) {
-    this.totalMarks = this.questions.reduce((sum, q) => sum + (q.marks || 1), 0);
-  }
+  this.totalMarks = (this.questions || []).reduce((sum, q) => sum + (q.marks || 1), 0);
 });
 
 // ── Indexes ───────────────────────────────────────────────────────────────────

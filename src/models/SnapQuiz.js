@@ -40,6 +40,61 @@ const SNAP_QUIZ_TYPES = Object.freeze({
   MOCK:       "mock",        // practice under exam conditions
 });
 
+// Security level presets — applied by the controller when securityLevel is set
+const SECURITY_PRESETS = Object.freeze({
+  low: {
+    maxViolationsBeforeTermination: 0,
+    terminateOnTabSwitch:      false,
+    terminateOnFocusLost:      false,
+    terminateOnFullscreenExit: false,
+    requireFullscreen:         false,
+    preventCopyPaste:          false,
+    preventRightClick:         false,
+    preventPrintScreen:        false,
+    proctoringEnabled:         false,
+    aiProctoringEnabled:       false,
+    snapshotIntervalSeconds:   0,
+    monitoringMode:            "none",
+    enforceSessionLock:        true,
+    heartbeatIntervalSeconds:  30,
+    heartbeatTimeoutSeconds:   120,
+  },
+  medium: {
+    maxViolationsBeforeTermination: 5,
+    terminateOnTabSwitch:      true,
+    terminateOnFocusLost:      false,
+    terminateOnFullscreenExit: false,
+    requireFullscreen:         false,
+    preventCopyPaste:          true,
+    preventRightClick:         true,
+    preventPrintScreen:        false,
+    proctoringEnabled:         false,
+    aiProctoringEnabled:       false,
+    snapshotIntervalSeconds:   0,
+    monitoringMode:            "none",
+    enforceSessionLock:        true,
+    heartbeatIntervalSeconds:  30,
+    heartbeatTimeoutSeconds:   90,
+  },
+  high: {
+    maxViolationsBeforeTermination: 3,
+    terminateOnTabSwitch:      true,
+    terminateOnFocusLost:      true,
+    terminateOnFullscreenExit: true,
+    requireFullscreen:         true,
+    preventCopyPaste:          true,
+    preventRightClick:         true,
+    preventPrintScreen:        true,
+    proctoringEnabled:         true,
+    aiProctoringEnabled:       true,
+    snapshotIntervalSeconds:   12,
+    monitoringMode:            "ai",
+    enforceSessionLock:        true,
+    heartbeatIntervalSeconds:  20,
+    heartbeatTimeoutSeconds:   60,
+  },
+});
+
 const SNAP_QUIZ_STATUSES = Object.freeze({
   DRAFT:     "draft",
   PUBLISHED: "published",
@@ -116,6 +171,17 @@ const snapQuizSchema = new mongoose.Schema(
       default: "snap",
       index: true,
     },
+    // Convenience preset applied at creation time. "custom" means the lecturer
+    // configured individual toggles instead of picking a preset.
+    securityLevel: {
+      type: String,
+      enum: ["low", "medium", "high", "custom"],
+      default: "medium",
+    },
+    // Fine-grained per-feature overrides (used when securityLevel = "custom")
+    mobileMonitoring:    { type: Boolean, default: true  }, // Capacitor pause/resume detection
+    screenshotDetection: { type: Boolean, default: false }, // best-effort on mobile
+    liveAlerts:          { type: Boolean, default: true  }, // real-time alerts to lecturer
 
     // ── Scoring ───────────────────────────────────────────────────────────
     totalMarks: {
@@ -304,6 +370,7 @@ snapQuizSchema.virtual("isOpen").get(function () {
   if (!this.isPublished || !this.isActive) return false;
   const now = new Date();
   if (now < this.startTime) return false;
+  if (!this.endTime) return true;
   const closeTime = new Date(this.endTime.getTime() + (this.gracePeriodSeconds || 0) * 1000);
   return now <= closeTime;
 });
@@ -321,3 +388,4 @@ module.exports = SnapQuiz;
 module.exports.SNAP_QUIZ_TYPES    = SNAP_QUIZ_TYPES;
 module.exports.SNAP_QUIZ_STATUSES = SNAP_QUIZ_STATUSES;
 module.exports.SCORE_POLICIES     = SCORE_POLICIES;
+module.exports.SECURITY_PRESETS   = SECURITY_PRESETS;

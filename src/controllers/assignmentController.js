@@ -75,7 +75,7 @@ function safeDeleteFile(filePath) {
 //  LECTURER — Create assignment
 // ══════════════════════════════════════════════════════════════════════════
 exports.createAssignment = async (req, res) => {
-  const { title, description, courseId, releaseDate, dueDate, allowFileSubmission, allowLateSubmission, latePenaltyPercent } = req.body;
+  const { title, description, courseId, releaseDate, dueDate, allowFileSubmission, allowLateSubmission, latePenaltyPercent, targetAudience, targetGroup, targetLevel, targetStudyType, targetQualificationType } = req.body;
 
   if (!title || !courseId || !releaseDate || !dueDate)
     return res.status(400).json({ error: "title, courseId, releaseDate and dueDate are required" });
@@ -100,6 +100,7 @@ exports.createAssignment = async (req, res) => {
 
   // ── Step 2: create the assignment document ────────────────────────────────
   try {
+    const audience = targetAudience === 'group' ? 'group' : 'all';
     const assignment = await Assignment.create({
       title,
       description:    description || "",
@@ -111,6 +112,11 @@ exports.createAssignment = async (req, res) => {
       latePenaltyPercent: latePenaltyPercent ? Math.min(100, Math.max(0, Number(latePenaltyPercent))) : 0,
       allowFileSubmission: allowFileSubmission !== "false" && allowFileSubmission !== false,
       allowLateSubmission: allowLateSubmission === "true"  || allowLateSubmission === true,
+      targetAudience: audience,
+      targetGroup:             audience === 'group' ? (targetGroup || null) : null,
+      targetLevel:             targetLevel || null,
+      targetStudyType:         targetStudyType || null,
+      targetQualificationType: targetQualificationType || null,
     });
     return res.status(201).json({ assignment });
   } catch (err) {
@@ -522,6 +528,10 @@ exports.studentList = async (req, res) => {
       company:     req.user.company,
       isActive:    true,
       releaseDate: { $lte: now },
+      $or: [
+        { targetAudience: 'all' },
+        { targetAudience: 'group', targetGroup: req.user.studentGroup || '__none__' },
+      ],
     })
       .select("-questions.correctAnswers -questions.explanation -pdfBrief.filePath")
       .populate("course",     "title code")
@@ -572,6 +582,10 @@ exports.studentGet = async (req, res) => {
     const enrolled = assignment.course.enrolledStudents.some((s) => s.toString() === req.user._id.toString());
     if (!enrolled) return res.status(403).json({ error: "Not enrolled in this course" });
 
+    if (assignment.targetAudience === 'group' && assignment.targetGroup && assignment.targetGroup !== req.user.studentGroup) {
+      return res.status(403).json({ error: "This assignment is not assigned to your group" });
+    }
+
     const submission = await AssignmentSubmission.findOne({ assignment: id, student: req.user._id })
       .select("-submittedFile.filePath");
 
@@ -611,10 +625,19 @@ exports.studentSubmit = (req, res) => {
         return res.status(400).json({ error: "Assignment has not been released yet" });
       }
 
+      if (!assignment.course) {
+        safeDeleteFile(req.file?.path);
+        return res.status(404).json({ error: "Course not found" });
+      }
       const enrolled = assignment.course.enrolledStudents.some((s) => s.toString() === req.user._id.toString());
       if (!enrolled) {
         safeDeleteFile(req.file?.path);
         return res.status(403).json({ error: "Not enrolled in this course" });
+      }
+
+      if (assignment.targetAudience === 'group' && assignment.targetGroup && assignment.targetGroup !== req.user.studentGroup) {
+        safeDeleteFile(req.file?.path);
+        return res.status(403).json({ error: "This assignment is not assigned to your group" });
       }
 
       const isLate = now > assignment.dueDate;

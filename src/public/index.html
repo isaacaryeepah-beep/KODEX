@@ -98,20 +98,89 @@
   <link rel="stylesheet" href="/css/style.css">
   <script>window.MathJax = { tex: { inlineMath: [["\\(","\\)"]], displayMath: [["\\[","\\]"]], processEscapes: true }, options: { skipHtmlTags: ["script","noscript","style","textarea"] } };</script>
   <script id="MathJax-script" async src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-chtml.js"></script>
+<style>
+.pw-wrap{position:relative;display:flex;align-items:center}
+.pw-wrap input{flex:1;padding-right:40px!important}
+.pw-toggle{position:absolute;right:10px;background:none;border:none;cursor:pointer;padding:4px;color:var(--text-muted,#94a3b8);display:flex;align-items:center;line-height:1;font-size:18px;user-select:none}
+.pw-toggle:hover{color:var(--text,#1e293b)}
+</style>
 <script>
 // Stubs prevent "X is not defined" if app.js is slow — real functions override these
 function selectMode(m){if(window._appLoaded)window._realSelectMode(m);else window._pendingMode=m;}
 function selectPortal(t){if(window._appLoaded)window._realSelectPortal(t);else window._pendingPortal=t;}
+
+// ── Global password visibility toggle ────────────────────────────────────────
+// Wraps every input[type=password] — including ones injected by app.js later —
+// in a .pw-wrap container and inserts a show/hide button.
+(function() {
+  function _wrapInput(inp) {
+    if (inp._pwWrapped) return;
+    inp._pwWrapped = true;
+    const wrap = document.createElement('div');
+    wrap.className = 'pw-wrap';
+    inp.parentNode.insertBefore(wrap, inp);
+    wrap.appendChild(inp);
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'pw-toggle';
+    btn.setAttribute('tabindex', '-1');
+    btn.setAttribute('aria-label', 'Show password');
+    btn.innerHTML = '👁';
+    btn.addEventListener('click', function(e) {
+      e.preventDefault();
+      const show = inp.type === 'password';
+      inp.type = show ? 'text' : 'password';
+      btn.innerHTML = show ? '🙈' : '👁';
+      btn.setAttribute('aria-label', show ? 'Hide password' : 'Show password');
+    });
+    wrap.appendChild(btn);
+  }
+
+  function _scanForPasswords() {
+    document.querySelectorAll('input[type="password"]').forEach(_wrapInput);
+  }
+
+  // Run on load for static inputs
+  document.addEventListener('DOMContentLoaded', _scanForPasswords);
+
+  // Re-run whenever DOM changes (for inputs injected by app.js dynamically)
+  const obs = new MutationObserver(_scanForPasswords);
+  document.addEventListener('DOMContentLoaded', function() {
+    obs.observe(document.body, { childList: true, subtree: true });
+  });
+})();
 </script>
 </head>
 <body>
+
+<!-- ── Native app splash overlay (Capacitor only, hidden on web) ── -->
+<div id="native-splash" style="display:none;position:fixed;inset:0;z-index:99999;
+  background:#061528 url('/splash-screen.png') center/cover no-repeat;"></div>
+
+<style>
+@keyframes splashFade{0%{opacity:1;pointer-events:auto}80%{opacity:1}100%{opacity:0;pointer-events:none}}
+</style>
+<script>
+(function(){
+  var el=document.getElementById('native-splash');
+  var isNative=navigator.userAgent.includes('DiklyApp/')||
+    (typeof window.Capacitor!=='undefined'&&window.Capacitor.isNativePlatform&&window.Capacitor.isNativePlatform());
+  if(!isNative){el.remove();return;}
+  el.style.display='block';
+  setTimeout(function(){
+    el.style.animation='splashFade 0.6s ease forwards';
+    setTimeout(function(){el.remove();},600);
+  },2400);
+})();
+</script>
+
   <div id="auth-page">
     <div class="auth-watermark">DIKLY</div>
 
     <!-- Brand shown above the workspace card — hidden on login forms -->
     <div id="workspace-brand">
       <div class="brand-logo">
-        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 480 160" style="height:64px;width:auto;display:block;margin:0 auto 6px;">
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 480 148" style="height:64px;width:auto;display:block;margin:0 auto 6px;">
           <defs>
             <linearGradient id="blg" x1="0%" y1="0%" x2="100%" y2="100%">
               <stop offset="0%" stop-color="#60a5fa"/>
@@ -127,13 +196,13 @@ function selectPortal(t){if(window._appLoaded)window._realSelectPortal(t);else w
             <polygon points="8,92 85,14 118,14 42,92" fill="white"/>
             <polygon points="42,146 118,68 85,68 8,146" fill="white"/>
           </g>
-          <text x="152" y="96" font-family="'Plus Jakarta Sans',system-ui,sans-serif" font-size="58" font-weight="800" letter-spacing="-2" fill="#1e1b4b">DIKLY</text>
-          <rect x="154" y="108" width="240" height="1.5" rx="1" fill="#c7d2fe"/>
-          <text x="154" y="127" font-family="'Plus Jakarta Sans',system-ui,sans-serif" font-size="12" font-weight="700" letter-spacing="3.5" fill="#6366f1">INNOVATE  ·  CONNECT  ·  EMPOWER</text>
+          <text x="152" y="96" font-family="'Plus Jakarta Sans',system-ui,sans-serif" font-size="58" font-weight="800" letter-spacing="-2" fill="#ffffff">DIKLY</text>
         </svg>
       </div>
       <p class="workspace-subtitle">Enterprise Attendance Management Platform</p>
+      <p class="workspace-tagline"><span class="wt-dot wt-blue"></span>Innovate<span class="wt-sep">·</span><span class="wt-dot wt-indigo"></span>Connect<span class="wt-sep">·</span><span class="wt-dot wt-teal"></span>Empower</p>
     </div>
+
 
     <div id="portal-selector">
       <div class="portal-main-heading">CHOOSE YOUR WORKSPACE</div>
@@ -243,7 +312,125 @@ function selectPortal(t){if(window._appLoaded)window._realSelectPortal(t);else w
         </div>
 
       </div>
+
+    </div><!-- /portal-selector -->
+
+    <!-- ── Download section — below the workspace card ── -->
+    <div id="app-download-section">
+      <div class="app-dl-header">
+        <span class="app-dl-header-line"></span>
+        <span class="app-dl-header-text">DOWNLOAD DIKLY</span>
+        <span class="app-dl-header-line"></span>
+      </div>
+      <div class="app-dl-sub">Free on Android &amp; Desktop</div>
+
+      <div class="app-dl-cards">
+
+        <a class="app-dl-card android" href="/downloads/android">
+          <div class="app-dl-card-icon android-ic">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor"><path d="M17.6 9.48l1.84-3.18c.16-.31.04-.69-.26-.85a.64.64 0 0 0-.86.27l-1.86 3.22A10.4 10.4 0 0 0 12 8c-1.53 0-2.98.33-4.27.94L5.67 5.72a.64.64 0 0 0-.86-.27.64.64 0 0 0-.26.85L6.4 9.48A9.93 9.93 0 0 0 2 18h20a9.93 9.93 0 0 0-4.4-8.52zM8.5 15a1 1 0 1 1 0-2 1 1 0 0 1 0 2zm7 0a1 1 0 1 1 0-2 1 1 0 0 1 0 2z"/></svg>
+          </div>
+          <div class="app-dl-card-name">Android</div>
+          <div class="app-dl-card-btn android-btn">↓ APK</div>
+        </a>
+
+        <a class="app-dl-card windows" href="/downloads/windows">
+          <div class="app-dl-card-icon windows-ic">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M3 5.557 9.875 4.64V11H3V5.557ZM3 12h6.875v6.385L3 17.443V12ZM10.875 4.5 21 3v8h-10.125V4.5ZM10.875 12H21v8.002l-10.125-1.5V12Z"/></svg>
+          </div>
+          <div class="app-dl-card-name">Windows</div>
+          <div class="app-dl-card-btn windows-btn">↓ EXE</div>
+        </a>
+
+        <a class="app-dl-card mac" href="/downloads/mac">
+          <div class="app-dl-card-icon mac-ic">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M18.71 19.5c-.83 1.24-1.71 2.45-3.05 2.47-1.34.03-1.77-.79-3.29-.79-1.53 0-2 .77-3.27.82-1.31.05-2.3-1.32-3.14-2.53C4.25 17 2.94 12.45 4.7 9.39c.87-1.52 2.43-2.48 4.12-2.51 1.28-.02 2.5.87 3.29.87.78 0 2.26-1.07 3.8-.91.65.03 2.47.26 3.64 1.98-.09.06-2.17 1.28-2.15 3.81.03 3.02 2.65 4.03 2.68 4.04-.03.07-.42 1.44-1.38 2.83M13 3.5c.73-.83 1.94-1.46 2.94-1.5.13 1.17-.34 2.35-1.04 3.19-.69.85-1.83 1.51-2.95 1.42-.15-1.15.41-2.35 1.05-3.11Z"/></svg>
+          </div>
+          <div class="app-dl-card-name">macOS</div>
+          <div class="app-dl-card-btn mac-btn">↓ DMG</div>
+        </a>
+
+      </div>
+
+      <div class="app-dl-ios-note">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor" style="opacity:.5;flex-shrink:0"><path d="M18.71 19.5c-.83 1.24-1.71 2.45-3.05 2.47-1.34.03-1.77-.79-3.29-.79-1.53 0-2 .77-3.27.82-1.31.05-2.3-1.32-3.14-2.53C4.25 17 2.94 12.45 4.7 9.39c.87-1.52 2.43-2.48 4.12-2.51 1.28-.02 2.5.87 3.29.87.78 0 2.26-1.07 3.8-.91.65.03 2.47.26 3.64 1.98-.09.06-2.17 1.28-2.15 3.81.03 3.02 2.65 4.03 2.68 4.04-.03.07-.42 1.44-1.38 2.83M13 3.5c.73-.83 1.94-1.46 2.94-1.5.13 1.17-.34 2.35-1.04 3.19-.69.85-1.83 1.51-2.95 1.42-.15-1.15.41-2.35 1.05-3.11Z"/></svg>
+        iOS — App Store coming soon
+      </div>
     </div>
+
+    <style>
+      #app-download-section{
+        width:100%;max-width:460px;margin:0 auto 20px;
+        padding:18px 14px 14px;
+        background:rgba(8,11,18,.48);
+        backdrop-filter:blur(28px) saturate(1.5);
+        -webkit-backdrop-filter:blur(28px) saturate(1.5);
+        border:1px solid rgba(255,255,255,.1);
+        border-radius:28px;
+        box-shadow:0 16px 48px rgba(0,0,0,.32),inset 0 1px 0 rgba(255,255,255,.07);
+      }
+      /* ── Header ── */
+      .app-dl-header{
+        display:flex;align-items:center;gap:10px;margin-bottom:4px;
+      }
+      .app-dl-header-line{
+        flex:1;height:1px;
+        background:linear-gradient(90deg,transparent,rgba(255,255,255,.2),transparent);
+      }
+      .app-dl-header-text{
+        font-size:10px;font-weight:800;letter-spacing:.2em;
+        color:rgba(255,255,255,.7);white-space:nowrap;
+      }
+      .app-dl-sub{
+        font-size:11px;color:rgba(255,255,255,.38);
+        margin-bottom:14px;font-weight:500;text-align:center;
+      }
+      /* ── 3-column square cards ── */
+      .app-dl-cards{
+        display:grid;grid-template-columns:repeat(3,1fr);gap:10px;
+        margin-bottom:12px;
+      }
+      .app-dl-card{
+        display:flex;flex-direction:column;align-items:center;justify-content:center;
+        gap:8px;padding:16px 8px;border-radius:14px;text-decoration:none;
+        aspect-ratio:1/1;
+        background:#fff;
+        border:1.5px solid #e5e7eb;
+        box-shadow:0 1px 2px rgba(0,0,0,.05);
+        transition:transform .18s,box-shadow .18s;
+        position:relative;overflow:hidden;
+      }
+      .app-dl-card:active{transform:scale(.96);}
+      .app-dl-card:hover{transform:translateY(-3px);box-shadow:0 8px 20px rgba(0,0,0,.12);border-color:transparent;}
+      /* ── Icon rounded square (matches portal-icon style) ── */
+      .app-dl-card-icon{
+        width:44px;height:44px;border-radius:11px;
+        display:grid;place-items:center;
+      }
+      .android-ic{background:#dcfce7;color:#16a34a;}
+      .windows-ic{background:#dbeafe;color:#2563eb;}
+      .mac-ic    {background:#ede9fe;color:#7c3aed;}
+      /* ── Name ── */
+      .app-dl-card-name{
+        font-size:12px;font-weight:700;color:#111827;
+        text-align:center;
+      }
+      /* ── Button ── */
+      .app-dl-card-btn{
+        font-size:10px;font-weight:800;letter-spacing:.06em;
+        padding:5px 12px;border-radius:20px;white-space:nowrap;
+      }
+      .android-btn{background:linear-gradient(135deg,#10b981,#059669);color:#fff;box-shadow:0 2px 8px rgba(16,185,129,.4);}
+      .windows-btn{background:linear-gradient(135deg,#3b82f6,#1d4ed8);color:#fff;box-shadow:0 2px 8px rgba(59,130,246,.4);}
+      .mac-btn    {background:linear-gradient(135deg,#8b5cf6,#6d28d9);color:#fff;box-shadow:0 2px 8px rgba(139,92,246,.4);}
+      /* ── iOS note ── */
+      .app-dl-ios-note{
+        display:flex;align-items:center;justify-content:center;gap:6px;
+        font-size:11px;color:rgba(255,255,255,.3);font-weight:500;
+      }
+      /* Hide when any login form is active */
+      #auth-page:has(.auth-container:not(.hidden)) #app-download-section{display:none!important;}
+    </style>
 
     <!-- Footer shown below workspace card — hidden on login forms -->
     <div id="workspace-foot">
@@ -703,98 +890,7 @@ function selectPortal(t){if(window._appLoaded)window._realSelectPortal(t);else w
         </div>
         <button type="submit" class="btn btn-student">Sign In</button>
         <div class="auth-footer">
-          <p class="auth-footer-row">New student? <a onclick="showStudentRegister()">Register with institution code</a></p>
           <p class="auth-footer-row auth-forgot"><a onclick="showStudentForgot()">Forgot password?</a></p>
-        </div>
-      </form>
-
-      <form id="student-register-form" class="hidden" onsubmit="event.preventDefault(); handleStudentRegister();">
-        <div class="form-group">
-          <label>Full Name <span style="color:red">*</span></label>
-          <input type="text" id="student-reg-name" placeholder="Your full name">
-        </div>
-        <div class="form-group">
-          <label>Institution Code <span style="color:red">*</span></label>
-          <input type="text" id="student-reg-code" placeholder="e.g. ABC123" style="text-transform:uppercase">
-        </div>
-        <div class="form-group">
-          <label>Student ID / Index Number <span style="color:red">*</span></label>
-          <input type="text" id="student-reg-index" placeholder="e.g. UCC/CS/23/0001" style="text-transform:uppercase" autocomplete="off">
-          <p style="font-size:11px;color:#6b7280;margin-top:4px">Must be unique — each student has their own index number assigned by the institution.</p>
-        </div>
-        <div class="form-group">
-          <label>Password <span style="color:red">*</span></label>
-          <input type="password" id="student-reg-password" placeholder="Min 8 characters">
-        </div>
-        <div class="form-group">
-          <label>Confirm Password <span style="color:red">*</span></label>
-          <input type="password" id="student-reg-confirm" placeholder="Confirm your password">
-        </div>
-        <div class="form-group">
-          <label>Department <span style="color:red">*</span></label>
-          <input type="text" id="student-reg-dept" placeholder="e.g. Computer Science">
-          <p style="font-size:11px;color:#6b7280;margin-top:4px">Student will be visible to the HOD of this department.</p>
-        </div>
-        <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
-          <div class="form-group">
-            <label>Programme <span style="color:red">*</span></label>
-            <select id="student-reg-programme">
-              <option value="">— Select —</option>
-              <option value="BSc">BSc</option>
-              <option value="HND">HND</option>
-              <option value="Diploma">Diploma</option>
-              <option value="BTech">BTech</option>
-              <option value="Top-Up">Top-Up</option>
-              <option value="BA">BA</option>
-              <option value="BEd">BEd</option>
-              <option value="MEd">MEd</option>
-              <option value="MSc">MSc</option>
-              <option value="MBA">MBA</option>
-              <option value="PhD">PhD</option>
-            </select>
-          </div>
-          <div class="form-group">
-            <label>Level <span style="color:red">*</span></label>
-            <select id="student-reg-level">
-              <option value="">— Select —</option>
-              <option value="100">100</option>
-              <option value="200">200</option>
-              <option value="300">300</option>
-              <option value="400">400</option>
-              <option value="500">500</option>
-              <option value="600">600</option>
-            </select>
-          </div>
-        </div>
-        <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;">
-          <div class="form-group">
-            <label>Group <span style="color:red">*</span></label>
-            <input type="text" id="student-reg-group" placeholder="E.G. A, B, C">
-          </div>
-          <div class="form-group">
-            <label>Session Type <span style="color:red">*</span></label>
-            <select id="student-reg-session-type">
-              <option value="">— Select —</option>
-              <option value="Regular">Regular</option>
-              <option value="Evening">Evening</option>
-              <option value="Weekend">Weekend</option>
-            </select>
-          </div>
-          <div class="form-group">
-            <label>Semester <span style="color:red">*</span></label>
-            <select id="student-reg-semester">
-              <option value="">— Select —</option>
-              <option value="1">Semester 1</option>
-              <option value="2">Semester 2</option>
-            </select>
-          </div>
-        </div>
-        <div style="background:#eff6ff;border:1px solid #bfdbfe;border-radius:8px;padding:10px 14px;margin-bottom:12px;font-size:12px;color:#1e40af">
-          <strong>Important:</strong> Your Student ID must be added to a class roster by your lecturer before you can register. Each Student ID can only be used once. If registration fails, contact your lecturer.
-        </div>
-        <button type="submit" class="btn btn-student">Create Student Account</button>
-        <div class="auth-toggle">
-          Already have an account? <a onclick="showStudentLogin()">Sign in</a>
         </div>
       </form>
 
@@ -889,7 +985,7 @@ function selectPortal(t){if(window._appLoaded)window._realSelectPortal(t);else w
           </div>
           <div id="notif-panel-list" style="overflow-y:auto;max-height:320px;padding:8px 0"></div>
           <div style="padding:10px 16px;border-top:1px solid var(--border)">
-            <button class="btn btn-secondary btn-sm" style="width:100%" onclick="closeNotifPanel();navigateTo('emp-notifications')">View all notifications</button>
+            <button class="btn btn-secondary btn-sm" style="width:100%" onclick="closeNotifPanel();navigateTo('all-notifications')">View all notifications</button>
           </div>
         </div>
         <button id="faq-panel-toggle-btn" class="fap-topbar-btn" onclick="faqPanelToggle()" title="FAQ Assistant" aria-label="Toggle FAQ Assistant">
@@ -904,6 +1000,7 @@ function selectPortal(t){if(window._appLoaded)window._realSelectPortal(t);else w
 
     <div id="trial-banner" class="trial-banner"></div>
     <div id="trial-expired-banner" class="trial-expired-banner"></div>
+    <div id="class-rep-banner" style="display:none"></div>
 
     <div class="main-layout">
       <div class="sidebar">
@@ -1264,15 +1361,10 @@ function selectPortal(t){if(window._appLoaded)window._realSelectPortal(t);else w
   });
   </script>
 
-  <script src="/js/offline-idb.js"></script>
-  <script src="/js/app.js?v=20260529e"></script>
-  <script src="/js/pages-faq.js"></script>
-  <script src="/js/pages-corporate.js"></script>
-  <script src="/js/pages-academic.js"></script>
-  <script src="/js/pages-device.js"></script>
-  <script src="/js/manager-portal.js"></script>
-  <script src="/js/faq-widget.js"></script>
-  <script src="/js/faq-assistant.js"></script>
+  <script src="/js/offline-idb.js" defer></script>
+  <script src="/js/app.js?v=20260610d" defer></script>
+  <script src="/js/faq-widget.js" defer></script>
+  <script src="/js/faq-assistant.js" defer></script>
 
   <!-- ── Draggable FAQ Bubble ──────────────────────────────────────────────── -->
   <div id="faq-fab" title="FAQ Help" style="
@@ -1303,60 +1395,99 @@ function selectPortal(t){if(window._appLoaded)window._realSelectPortal(t);else w
   <script>
   (function() {
     const fab = document.getElementById('faq-fab');
-    let isDragging = false, dragMoved = false, startX, startY, origRight, origBottom;
+    let isDragging = false, dragMoved = false, startX, startY, startRight, startBottom;
 
-    function saveFabPos(right, bottom) {
-      try { localStorage.setItem('faq_fab_pos', JSON.stringify({ right, bottom })); } catch(e) {}
+    function saveFabPos(r, b) {
+      try { localStorage.setItem('faq_fab_pos', JSON.stringify({ right: r, bottom: b })); } catch(e) {}
     }
     function loadFabPos() {
       try { return JSON.parse(localStorage.getItem('faq_fab_pos')); } catch(e) { return null; }
     }
-    function setFabPos(right, bottom) {
+    function setFabPos(r, b) {
       const vw = window.innerWidth, vh = window.innerHeight;
-      right  = Math.min(Math.max(right,  8), vw - 58);
-      bottom = Math.min(Math.max(bottom, 8), vh - 58);
-      fab.style.right  = right  + 'px';
-      fab.style.bottom = bottom + 'px';
+      r = Math.min(Math.max(r, 8), vw - 58);
+      b = Math.min(Math.max(b, 8), vh - 58);
+      fab.style.right  = r + 'px';
+      fab.style.bottom = b + 'px';
+    }
+    function getPos() {
+      return {
+        r: parseInt(fab.style.right  || '24', 10),
+        b: parseInt(fab.style.bottom || '80', 10),
+      };
     }
 
     const pos = loadFabPos();
     if (pos) setFabPos(pos.right, pos.bottom);
 
-    // Use Pointer Events — works for both mouse and touch,
-    // setPointerCapture keeps tracking even outside the element.
+    // ── Touch (mobile) ────────────────────────────────────────────────────────
+    fab.addEventListener('touchstart', function(e) {
+      const t = e.touches[0];
+      isDragging = true; dragMoved = false;
+      startX = t.clientX; startY = t.clientY;
+      const p = getPos(); startRight = p.r; startBottom = p.b;
+      fab.style.transform = 'scale(1.12)';
+    }, { passive: false });
+
+    fab.addEventListener('touchmove', function(e) {
+      if (!isDragging) return;
+      const t = e.touches[0];
+      const dx = t.clientX - startX;
+      const dy = t.clientY - startY;
+      if (Math.abs(dx) > 4 || Math.abs(dy) > 4) dragMoved = true;
+      if (dragMoved) {
+        setFabPos(startRight - dx, startBottom - dy);
+        e.preventDefault(); // stop page scroll while dragging the button
+      }
+    }, { passive: false });
+
+    fab.addEventListener('touchend', function(e) {
+      if (!isDragging) return;
+      isDragging = false;
+      fab.style.transform = '';
+      window._faqFabDragMoved = dragMoved;
+      if (dragMoved) {
+        const p = getPos(); saveFabPos(p.r, p.b);
+        e.preventDefault(); // suppress the synthetic click after a drag
+      }
+    }, { passive: false });
+
+    fab.addEventListener('touchcancel', function() {
+      isDragging = false;
+      fab.style.transform = '';
+    });
+
+    // ── Pointer / mouse (desktop) ─────────────────────────────────────────────
     fab.addEventListener('pointerdown', function(e) {
-      if (e.pointerType === 'mouse' && e.button !== 0) return;
+      if (e.pointerType !== 'mouse' || e.button !== 0) return;
       isDragging = true; dragMoved = false;
       startX = e.clientX; startY = e.clientY;
-      origRight  = parseInt(fab.style.right  || '24', 10);
-      origBottom = parseInt(fab.style.bottom || '80', 10);
+      const p = getPos(); startRight = p.r; startBottom = p.b;
       fab.setPointerCapture(e.pointerId);
       fab.style.cursor = 'grabbing';
       fab.style.transform = 'scale(1.12)';
       e.preventDefault();
-      e.stopPropagation();
     });
 
     fab.addEventListener('pointermove', function(e) {
-      if (!isDragging) return;
+      if (e.pointerType !== 'mouse' || !isDragging) return;
       const dx = e.clientX - startX;
       const dy = e.clientY - startY;
       if (Math.abs(dx) > 3 || Math.abs(dy) > 3) dragMoved = true;
-      setFabPos(origRight - dx, origBottom - dy);
-      e.preventDefault();
-      e.stopPropagation();
+      setFabPos(startRight - dx, startBottom - dy);
     });
 
     fab.addEventListener('pointerup', function(e) {
-      if (!isDragging) return;
+      if (e.pointerType !== 'mouse' || !isDragging) return;
       isDragging = false;
       fab.style.cursor = 'grab';
       fab.style.transform = '';
       window._faqFabDragMoved = dragMoved;
-      if (dragMoved) saveFabPos(parseInt(fab.style.right, 10), parseInt(fab.style.bottom, 10));
+      if (dragMoved) { const p = getPos(); saveFabPos(p.r, p.b); }
     });
 
-    fab.addEventListener('pointercancel', function() {
+    fab.addEventListener('pointercancel', function(e) {
+      if (e.pointerType !== 'mouse') return;
       isDragging = false;
       fab.style.cursor = 'grab';
       fab.style.transform = '';

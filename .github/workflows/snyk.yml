@@ -1,0 +1,65 @@
+name: Snyk Security Scan
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  schedule:
+    # Run every Monday at 03:00 UTC
+    - cron: "0 3 * * 1"
+  workflow_dispatch:
+
+jobs:
+  snyk:
+    name: Snyk dependency & code scan
+    runs-on: ubuntu-latest
+    permissions:
+      security-events: write
+      contents: read
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      # ── Dependency vulnerability scan ──────────────────────────────────────
+      - name: Snyk — test dependencies
+        uses: snyk/actions/node@master
+        continue-on-error: true        # upload results even if vulns found
+        env:
+          SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
+        with:
+          args: --severity-threshold=medium --sarif-file-output=snyk-deps.sarif
+
+      - name: Upload dependency scan results to GitHub Security
+        uses: github/codeql-action/upload-sarif@v4
+        if: always() && hashFiles('snyk-deps.sarif') != ''
+        with:
+          sarif_file: snyk-deps.sarif
+          category: snyk-dependencies
+
+      # ── Static code analysis (Snyk Code) ──────────────────────────────────
+      - name: Snyk — code analysis
+        uses: snyk/actions/node@master
+        continue-on-error: true
+        env:
+          SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
+        with:
+          command: code test
+          args: --severity-threshold=medium --sarif-file-output=snyk-code.sarif
+
+      - name: Upload code scan results to GitHub Security
+        uses: github/codeql-action/upload-sarif@v4
+        if: always() && hashFiles('snyk-code.sarif') != ''
+        with:
+          sarif_file: snyk-code.sarif
+          category: snyk-code

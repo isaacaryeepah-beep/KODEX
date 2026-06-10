@@ -1,5 +1,13 @@
 'use strict';
-const { StreamClient } = require('@stream-io/node-sdk');
+
+// Guard against missing optional dependency — @stream-io/node-sdk is only
+// needed when STREAM_API_KEY / STREAM_API_SECRET are set.
+let StreamClient;
+try {
+  ({ StreamClient } = require('@stream-io/node-sdk'));
+} catch {
+  StreamClient = null;
+}
 
 const STREAM_API_KEY    = process.env.STREAM_API_KEY;
 const STREAM_API_SECRET = process.env.STREAM_API_SECRET;
@@ -13,6 +21,7 @@ if (configured) {
 
 function getClient() {
   if (!configured) throw new Error('GetStream is not configured. Set STREAM_API_KEY and STREAM_API_SECRET.');
+  if (!StreamClient) throw new Error('GetStream SDK not installed. Run: npm install @stream-io/node-sdk');
   return new StreamClient(STREAM_API_KEY, STREAM_API_SECRET);
 }
 

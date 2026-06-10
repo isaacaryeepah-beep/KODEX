@@ -126,6 +126,11 @@ const userSchema = new mongoose.Schema(
       trim: true,
       default: null, // e.g. "1", "2"
     },
+    academicYear: {
+      type: String,
+      trim: true,
+      default: null, // e.g. "2024/2025"
+    },
     branch: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "Branch",
@@ -357,6 +362,13 @@ userSchema.methods.comparePassword = async function (candidatePassword) {
 userSchema.methods.toJSON = function () {
   const obj = this.toObject();
   delete obj.password;
+  delete obj.passwordResetLog;
+  delete obj.resetPasswordToken;
+  delete obj.resetPasswordExpires;
+  delete obj.devicePairingCode;
+  delete obj.devicePairingExpiry;
+  delete obj.twoFactorCode;
+  delete obj.twoFactorExpiry;
   return obj;
 };
 

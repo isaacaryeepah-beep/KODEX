@@ -2,18 +2,22 @@ const express      = require("express");
 const jwt          = require("jsonwebtoken");
 const authenticate = require("../middleware/auth");
 const { requireRole } = require("../middleware/role");
+const { loginLimiter } = require('../middleware/rateLimiter');
 const Company      = require("../models/Company");
 const User         = require("../models/User");
+const Device       = require("../models/Device");
 const PaymentLog        = require("../models/PaymentLog");
 const PlatformSettings  = require("../models/PlatformSettings");
 
 const bcrypt = require("bcryptjs");
 const emailService = require("../services/emailService");
 
+const escapeRegex = s => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
 const router = express.Router();
 
 // ── POST /api/superadmin/login (public — no auth needed) ─────────────────────
-router.post("/login", async (req, res) => {
+router.post("/login", loginLimiter, async (req, res) => {
   try {
     const { email, password } = req.body;
     if (!email || !password) return res.status(400).json({ error: "Email and password required" });
@@ -304,6 +308,7 @@ router.delete("/companies/:id", async (req, res) => {
     // Delete all related data
     await Promise.all([
       require('../models/User').deleteMany({ company: companyId }),
+      Device.deleteMany({ companyId }),
       require('../models/AttendanceSession').deleteMany({ company: companyId }),
       require('../models/AttendanceRecord').deleteMany({ company: companyId }),
       require('../models/Course').deleteMany({ company: companyId }),
@@ -318,7 +323,7 @@ router.delete("/companies/:id", async (req, res) => {
       require('../models/GradeBook').deleteMany({ company: companyId }),
       require('../models/PaymentLog').deleteMany({ company: companyId }),
       require('../models/JitsiMeeting').deleteMany({ companyId }),
-      require('../models/JitsiAttendance').deleteMany({ }),
+      require('../models/JitsiAttendance').deleteMany({ companyId }),
     ]);
 
     // Hard delete the company document
@@ -344,6 +349,7 @@ router.delete("/companies/by-name/:name", async (req, res) => {
       const id = company._id;
       await Promise.all([
         require('../models/User').deleteMany({ company: id }),
+        Device.deleteMany({ companyId: id }),
         require('../models/AttendanceSession').deleteMany({ company: id }),
         require('../models/AttendanceRecord').deleteMany({ company: id }),
         require('../models/Course').deleteMany({ company: id }),
@@ -384,7 +390,9 @@ router.get("/payments", async (req, res) => {
 });
 
 // ── POST /api/superadmin/impersonate/:companyId ───────────────────────────────
-// Issues a short-lived token scoped to an admin of the given company
+// Issues a short-lived token scoped to an admin of the given company.
+// Token lifetime is reduced to 5 minutes and a one-time nonce is embedded so
+// the same token cannot be replayed if intercepted from URL history/logs.
 router.post("/impersonate/:companyId", async (req, res) => {
   try {
     const company = await Company.findById(req.params.companyId);
@@ -394,18 +402,23 @@ router.post("/impersonate/:companyId", async (req, res) => {
     const admin = await User.findOne({ company: company._id, role: "admin", isActive: true });
     if (!admin) return res.status(404).json({ error: "No active admin found for this company" });
 
-    // Issue a 1-hour impersonation token tagged so it can be identified
+    const crypto = require("crypto");
+    const nonce  = crypto.randomBytes(16).toString("hex");
+
+    // 5-minute impersonation token with nonce for one-time use detection
     const impersonateToken = jwt.sign(
-      { id: admin._id, impersonatedBy: req.user._id, impersonation: true },
+      { id: admin._id, impersonatedBy: req.user._id, impersonation: true, nonce },
       process.env.JWT_SECRET,
-      { expiresIn: "1h" }
+      { expiresIn: "5m" }
     );
+
+    console.log(`[Impersonate] superadmin=${req.user._id} → company=${company._id} admin=${admin._id}`);
 
     res.json({
       token: impersonateToken,
       admin: { id: admin._id, name: admin.name, email: admin.email },
       company: { id: company._id, name: company.name, mode: company.mode },
-      expiresIn: "1 hour",
+      expiresIn: "5 minutes",
     });
   } catch (err) {
     res.status(500).json({ error: "Failed to generate impersonation token" });
@@ -512,8 +525,8 @@ router.get("/users", async (req, res) => {
     const query = { role: { $ne: "superadmin" } };
     if (role) query.role = role;
     if (search) query.$or = [
-      { name: { $regex: search, $options: "i" } },
-      { email: { $regex: search, $options: "i" } },
+      { name: { $regex: escapeRegex(search), $options: "i" } },
+      { email: { $regex: escapeRegex(search), $options: "i" } },
     ];
 
     let companyIds;
@@ -625,6 +638,65 @@ router.patch("/companies/:id/subscription", async (req, res) => {
     res.json({ ok: true, subscriptionActive: company.subscriptionActive, subscriptionStatus: company.subscriptionStatus });
   } catch (err) {
     res.status(500).json({ error: "Failed to update subscription" });
+  }
+});
+
+// ── GET /api/superadmin/devices ───────────────────────────────────────────────
+// Lists all registered devices across all institutions.
+// Orphaned devices (pointing to a deleted company) are surfaced at the top.
+router.get("/devices", async (req, res) => {
+  try {
+    const devices = await Device.find({})
+      .sort({ createdAt: -1 })
+      .lean();
+
+    const companyIds = [...new Set(devices.map(d => d.companyId?.toString()).filter(Boolean))];
+    const companies  = await Company.find({ _id: { $in: companyIds } }).select('name institutionCode mode').lean();
+    const companyMap = {};
+    companies.forEach(c => { companyMap[c._id.toString()] = c; });
+
+    const enriched = devices.map(d => {
+      const company = d.companyId ? companyMap[d.companyId.toString()] : null;
+      return {
+        ...d,
+        companyName:  company?.name || null,
+        companyCode:  company?.institutionCode || null,
+        companyMode:  company?.mode || null,
+        isOrphaned:   !company,
+      };
+    });
+
+    // Orphaned first, then newest
+    enriched.sort((a, b) => (b.isOrphaned ? 1 : 0) - (a.isOrphaned ? 1 : 0));
+
+    res.json({ devices: enriched, total: enriched.length });
+  } catch (err) {
+    console.error('[superadmin devices]', err);
+    res.status(500).json({ error: 'Failed to load devices' });
+  }
+});
+
+// ── DELETE /api/superadmin/devices/:id ────────────────────────────────────────
+// Force-deletes a device record so it can be re-registered.
+// The physical ESP32 will get a 401 on its next heartbeat and auto-reset.
+router.delete("/devices/:id", async (req, res) => {
+  try {
+    const device = await Device.findById(req.params.id);
+    if (!device) return res.status(404).json({ error: 'Device not found' });
+
+    const deviceId   = device.deviceId;
+    const deviceName = device.deviceName || deviceId;
+
+    // Revoke token first so the firmware gets 401 and self-resets
+    device.token = '';
+    await device.save();
+    await Device.deleteOne({ _id: device._id });
+
+    console.log(`[superadmin] Force-deleted device ${deviceId} (${deviceName})`);
+    res.json({ ok: true, message: `Device "${deviceName}" removed. It will factory-reset on next power-on.` });
+  } catch (err) {
+    console.error('[superadmin deleteDevice]', err);
+    res.status(500).json({ error: 'Failed to delete device' });
   }
 });
 

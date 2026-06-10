@@ -11,10 +11,19 @@ const Device  = require("../models/Device");
 const DEVICE_ONLINE_WINDOW_MS = 20_000;   // session start gate
 const DEVICE_MARK_WINDOW_MS   = 15_000;   // mark-attendance gate
 
+// One-time nonce tracking for esp32Proof replay prevention.
+// Key: "sessionId:nonce", Value: expiry timestamp. Cleaned every 60 s.
+const _usedNonces = new Map();
+setInterval(() => {
+  const now = Date.now();
+  for (const [k, exp] of _usedNonces) if (now > exp) _usedNonces.delete(k);
+}, 60_000);
+
 // Finds the device that should handle a session for the given user + course.
 // Priority:
 //   1. Device assigned to the group enrolled in this course (new group model)
-//   2. Any online company device (fallback for admins or unassigned devices)
+//   2. Shared device currently connected to this lecturer by a class rep
+//   3. Any online company device (fallback for admins or unassigned devices)
 async function _resolveSessionDevice(user, courseId, explicitDeviceId) {
   const companyId = user.company;
 
@@ -23,6 +32,18 @@ async function _resolveSessionDevice(user, courseId, explicitDeviceId) {
     return Device.findOne({ deviceId: explicitDeviceId, companyId })
       .populate('assignedLecturers.lecturerId', 'name email')
       .populate('assignedLecturers.courseId',   'title code');
+  }
+
+  // Check if a class rep has connected a shared device to this lecturer
+  if (user.role === 'lecturer') {
+    const classRepDevice = await Device.findOne({
+      companyId,
+      ownershipType: 'shared',
+      activeLecturerId: user._id,
+    })
+      .populate('assignedLecturers.lecturerId', 'name email')
+      .populate('assignedLecturers.courseId',   'title code');
+    if (classRepDevice) return classRepDevice;
   }
 
   // Try to find the device assigned to the group for this course
@@ -93,42 +114,60 @@ exports.startSession = async (req, res) => {
       });
     }
 
+    let deviceOfflineWarning = null;
     if (!freshness.online) {
-      const lastSeenMsg = freshness.lastSeenAt
-        ? `Last seen ${freshness.secondsAgo}s ago.`
-        : "Device has never sent a heartbeat.";
-      return res.status(503).json({
-        error: "ESP32 device is offline",
-        message: `The DIKLY classroom device is not responding. ${lastSeenMsg} Power it on and wait a few seconds, then try again.`,
-        deviceStatus: {
-          online:      false,
-          registered:  true,
-          deviceId:    device.deviceId,
-          lastSeenAt:  freshness.lastSeenAt,
-          secondsAgo:  freshness.secondsAgo,
-        },
-      });
-    }
+      // Device is paired but has no internet WiFi — heartbeats can't reach the server.
+      // Accept the hotspot key as proof the device is physically powered on:
+      // when the lecturer is connected to DIKLY-CLASSROOM the device provides its
+      // token, which the frontend stores and sends as x-esp32-hotspot-key.
+      const inboundHotspotKey = (req.headers['x-esp32-hotspot-key'] || '').trim();
+      const hotspotKeyValid   = inboundHotspotKey.length > 0 &&
+                                device.token && device.token.length > 0 &&
+                                inboundHotspotKey === device.token;
 
-    console.log(`[SESSION START] ✓ Device ${device.deviceId} online (${freshness.secondsAgo}s ago) — allowing start for ${company.name}`);
+      if (!hotspotKeyValid) {
+        const lastSeenMsg = freshness.lastSeenAt
+          ? `last seen ${freshness.secondsAgo}s ago`
+          : 'never sent a heartbeat';
+        return res.status(503).json({
+          error: 'Classroom device is not responding',
+          message: 'The classroom device is powered off or out of range. Power it on, then connect your phone to the DIKLY-CLASSROOM WiFi and try again.',
+          deviceStatus: { online: false, registered: true, lastSeenMsg },
+        });
+      }
+
+      const lastSeenMsg = freshness.lastSeenAt
+        ? `last seen ${freshness.secondsAgo}s ago`
+        : 'never sent a heartbeat';
+      deviceOfflineWarning = `Device is not responding (${lastSeenMsg}). Session started in offline mode — the device will sync codes when it reconnects.`;
+      console.warn(`[SESSION START] Device ${device?.deviceId} offline but hotspot key valid (${lastSeenMsg}) — starting offline session for ${company.name}`);
+    } else {
+      console.log(`[SESSION START] ✓ Device ${device.deviceId} online (${freshness.secondsAgo}s ago) — allowing start for ${company.name}`);
+    }
     // ── End device check ──────────────────────────────────
 
     // ── Device-lecturer assignment check ──────────────────────────────────────
-    // Lecturers must be explicitly assigned to this device for the selected course.
-    // Admin/HOD/superadmin are exempt — they oversee all devices.
+    // Lecturers must be explicitly assigned to this device for the selected course,
+    // OR a class rep must have temporarily connected them via activeLecturerId.
+    // Admin/HOD/superadmin are exempt.
     if (req.user.role === 'lecturer' && req.body.courseId) {
-      const assignment = (device.assignedLecturers || []).find(a => {
-        const assignedLecId  = a.lecturerId?._id ? a.lecturerId._id.toString() : a.lecturerId?.toString();
-        const assignedCrsId  = a.courseId?._id   ? a.courseId._id.toString()   : a.courseId?.toString();
-        return assignedLecId === req.user._id.toString() &&
-               assignedCrsId === req.body.courseId.toString();
-      });
-      if (!assignment) {
-        return res.status(403).json({
-          error: 'Not assigned to this device',
-          message: 'You are not assigned to this attendance device. Please contact your Group Representative, HOD, or use your assigned departmental device.',
-          deviceAssigned: false,
+      const classRepConnected = device.activeLecturerId &&
+        device.activeLecturerId.toString() === req.user._id.toString();
+
+      if (!classRepConnected) {
+        const assignment = (device.assignedLecturers || []).find(a => {
+          const assignedLecId  = a.lecturerId?._id ? a.lecturerId._id.toString() : a.lecturerId?.toString();
+          const assignedCrsId  = a.courseId?._id   ? a.courseId._id.toString()   : a.courseId?.toString();
+          return assignedLecId === req.user._id.toString() &&
+                 assignedCrsId === req.body.courseId.toString();
         });
+        if (!assignment) {
+          return res.status(403).json({
+            error: 'Not assigned to this device',
+            message: 'You are not assigned to this attendance device. Please contact your Group Representative, HOD, or use your assigned departmental device.',
+            deviceAssigned: false,
+          });
+        }
       }
     }
     // ── End device-lecturer assignment check ──────────────────────────────────
@@ -277,6 +316,9 @@ exports.startSession = async (req, res) => {
       durationSeconds: DURATION,
       status: "active",
       startedAt: new Date(),
+      mode: deviceOfflineWarning ? "offline-ready" : "online",
+      requiresDeviceOnline: !deviceOfflineWarning,
+      targetGroup: req.body.targetGroup || null,
     };
 
     if (company.qrSeed)        sessionData.qrSeed        = company.qrSeed;
@@ -290,7 +332,12 @@ exports.startSession = async (req, res) => {
       { path: "course", select: "title code" },
     ]);
 
-    res.status(201).json({ session: populated, ...(courseWarning && { warning: courseWarning }) });
+    const warnings = [courseWarning, deviceOfflineWarning].filter(Boolean);
+    res.status(201).json({
+      session: populated,
+      ...(warnings.length > 0 && { warning: warnings.join(" ") }),
+      ...(deviceOfflineWarning && { offlineMode: true }),
+    });
   } catch (error) {
     if (error.name === "ValidationError") {
       const messages = Object.values(error.errors).map((e) => e.message);
@@ -440,14 +487,24 @@ exports.getActiveSession = async (req, res) => {
       activeFilter.createdBy = req.user._id;
     }
 
-    // Students only see sessions for courses they are enrolled in.
+    // Students: return the most recent active session for this company.
+    // Enrollment/group isolation is enforced at mark time — not at display time.
+    // Showing the session to a student who can't mark it is harmless; blocking
+    // display causes confusing "No Active Session" errors when the session exists.
     if (req.user.role === "student") {
-      const Course = require("../models/Course");
-      const enrolledCourses = await Course.find({
-        companyId: req.user.company,
-        enrolledStudents: req.user._id,
-      }).select("_id").lean();
-      activeFilter.course = { $in: enrolledCourses.map(c => c._id) };
+      const session = await AttendanceSession.findOne(activeFilter)
+        .populate({ path: 'course', select: 'title code level group sessionType semester qualificationType' })
+        .populate('company', 'name')
+        .populate('createdBy', 'name email')
+        .sort({ startedAt: -1 })
+        .lean();
+
+      let deviceLocalIp = null;
+      if (session?.deviceId) {
+        const dev = await Device.findOne({ deviceId: session.deviceId, companyId: req.user.company }).select('localIp').lean();
+        deviceLocalIp = dev?.localIp || null;
+      }
+      return res.json({ session: session || null, deviceLocalIp });
     }
 
     const session = await AttendanceSession.findOne(activeFilter)
@@ -610,21 +667,16 @@ exports.markAttendance = async (req, res) => {
       session = await AttendanceSession.findOne({
         _id: resolvedSessionId,
         company: req.user.company,
-        status: "active",
+        status: { $in: ["active", "live"] },
       });
     } else {
-      // Auto-detect: find the most recent active session for courses the student is enrolled in.
-      const Course = require('../models/Course');
-      const enrolledCourses = await Course.find({
-        companyId: req.user.company,
-        enrolledStudents: req.user._id,
-      }).select("_id").lean();
-      const enrolledCourseIds = enrolledCourses.map(c => c._id);
-
+      // Auto-detect: find the most recent active session for this company.
+      // Enrollment/group isolation is enforced below after we have the session —
+      // filtering here caused "No active session" when the student wasn't enrolled
+      // in the course yet or enrollment data was stale.
       session = await AttendanceSession.findOne({
         company: req.user.company,
-        status: "active",
-        course: { $in: enrolledCourseIds },
+        status: { $in: ["active", "live", "paused", "locked"] },
       }).sort({ startedAt: -1 });
       if (session) {
         resolvedSessionId = session._id.toString();
@@ -635,57 +687,73 @@ exports.markAttendance = async (req, res) => {
       return res.status(404).json({ error: "No active session found. The manager needs to start a session first." });
     }
 
-    // ── Strict device proximity enforcement ──────────────────────────────────
-    // Physical presence is required. All three conditions must pass:
-    //   1. Session must be bound to a paired device (set at startSession).
-    //   2. That device must be online (heartbeat within 15 s).
-    //   3. Student's IP must exactly match one of the IPs the ESP32 has
-    //      reached the server from in the last 10 minutes.
-    // No exceptions — empty deviceIps means the device hasn't reported yet,
-    // which is also a hard block.
-    if (!session.deviceId) {
+    // Resolve method early — needed to decide which proximity checks apply.
+    // (Full attendanceMethod is re-used below for record creation.)
+    const resolvedMethod = method ? (methodMap[method] || method) : "manual";
+
+    // QR scans, manual marks, and meeting-join marks carry their own proof and
+    // do not require device-hotspot proximity. All other paths (code, BLE) must
+    // go through the device.
+    const proximityExempt = ['qr_mark', 'manual', 'jitsi_join'].includes(resolvedMethod);
+
+    // Students cannot self-declare a proximity-exempt method other than QR —
+    // manual and jitsi marks are lecturer/admin-initiated actions only.
+    if (proximityExempt && req.user.role === 'student' && resolvedMethod !== 'qr_mark') {
       return res.status(403).json({
-        error: 'This session has no classroom device. Ask your lecturer to start a new session from a paired device.',
-        esp32Required: true,
+        error: 'Connect to the classroom device WiFi hotspot to mark attendance.',
+        requiresHotspot: true,
       });
     }
 
-    const sessionDevice = await Device.findOne({ deviceId: session.deviceId, companyId: req.user.company });
-
-    if (!sessionDevice) {
-      return res.status(503).json({
-        error: 'The classroom device for this session is no longer paired.',
-        esp32Required: true,
-      });
+    // ── Device required ───────────────────────────────────────────────────────
+    if (!proximityExempt) {
+      if (!session.deviceId) {
+        return res.status(403).json({
+          error: 'This session has no classroom device. Ask your lecturer to start a new session from a paired device.',
+          esp32Required: true,
+        });
+      }
     }
 
-    const fresh = _deviceFreshness(sessionDevice, DEVICE_MARK_WINDOW_MS);
-    if (!fresh.online) {
-      return res.status(503).json({
-        error: 'The classroom device is offline. Ask your lecturer to power it on.',
-        esp32Required: true,
-        esp32Offline: true,
-        secondsAgo:    fresh.secondsAgo,
-      });
+    const sessionDevice = session.deviceId
+      ? await Device.findOne({ deviceId: session.deviceId, companyId: req.user.company })
+      : null;
+
+    if (!proximityExempt) {
+      if (!sessionDevice) {
+        return res.status(503).json({
+          error: 'The classroom device for this session is no longer paired.',
+          esp32Required: true,
+        });
+      }
+
+      const fresh = _deviceFreshness(sessionDevice, DEVICE_MARK_WINDOW_MS);
+      if (!fresh.online && session.requiresDeviceOnline !== false && session.mode !== 'offline-ready') {
+        return res.status(503).json({
+          error: 'The classroom device is offline. Ask your lecturer to power it on.',
+          esp32Required: true,
+          esp32Offline: true,
+          secondsAgo:    fresh.secondsAgo,
+        });
+      }
     }
 
-    // ── Proximity proof — three paths, highest-trust first ────────────────────
+    // ── Proximity proof (only for non-exempt methods) ─────────────────────────
     //
-    //  1. BLE token   — student was within BLE range (device broadcasts slot HMAC).
-    //                   No verbal code required; BLE proximity IS the proof.
-    //  2. Hotspot token — student connected to device AP and got a signed token.
-    //                   Verbal code still required as second factor.
-    //  3. IP match    — legacy same-network check (backward compat only).
-    //                   Verbal code still required.
+    //  1. BLE token    — student within BLE range. No code needed; proximity proven.
+    //  2. Hotspot token — student connected to device WiFi AP. Code required as
+    //                    second factor.
     //
-    // Only one path runs. First match wins.
+    //  The legacy IP-match path has been removed. Students MUST connect to the
+    //  classroom device's WiFi hotspot — no bypass via same-network IP is allowed.
     // ─────────────────────────────────────────────────────────────────────────
     const bleToken        = req.body.bleToken;
     const connectionToken = req.body.connectionToken;
+    const esp32Proof      = req.body.esp32Proof;
 
     let skipCodeCheck = false;
 
-    if (bleToken && typeof bleToken === 'object') {
+    if (!proximityExempt) if (bleToken && typeof bleToken === 'object') {
       // ── BLE + hotspot path (maximum strictness) ──────────────────────────────
       // Both proofs are required together:
       //   Factor 1 — BLE token   : proves student was within Bluetooth range (~10 m)
@@ -781,6 +849,72 @@ exports.markAttendance = async (req, res) => {
       // Both factors verified — no verbal code needed
       skipCodeCheck = true;
 
+    } else if (esp32Proof && typeof esp32Proof === 'object') {
+      // ── ESP32 one-time proof path (no code needed) ────────────────────────────
+      // The ESP32 generates a unique per-student, per-request proof with a random
+      // nonce. Expires in 15 s. One-time-use prevents replay attacks.
+      const { sessionId: proofSession, studentId: proofStudent, timestamp, nonce, sig } = esp32Proof;
+
+      if (!session.esp32Seed) {
+        return res.status(403).json({ error: 'Session has no device seed. Cannot verify proof.' });
+      }
+
+      // 1. Timestamp — 15-second hard window
+      const proofAgeMs = Date.now() - (Number(timestamp) * 1000);
+      if (!timestamp || proofAgeMs < 0 || proofAgeMs > 15_000) {
+        return res.status(403).json({
+          error: 'Proof expired. Please try again.',
+          proofExpired: true,
+        });
+      }
+
+      // 2. Nonce uniqueness — prevents replay within the TTL window
+      const nonceKey = `${resolvedSessionId}:${nonce}`;
+      if (_usedNonces.has(nonceKey)) {
+        console.warn(`[MARK] Replay attack detected — nonce reuse by ${req.user.name}`);
+        return res.status(403).json({
+          error: 'This proof has already been used. Please tap Mark Attendance again.',
+          replayAttack: true,
+        });
+      }
+      _usedNonces.set(nonceKey, Date.now() + 120_000); // retain for 2 min
+
+      // 3. Student ID binding
+      if (String(proofStudent) !== req.user._id.toString()) {
+        return res.status(403).json({
+          error: 'Proof was issued for a different account.',
+          networkMismatch: true,
+        });
+      }
+
+      // 4. Session binding
+      if (String(proofSession) !== resolvedSessionId) {
+        return res.status(403).json({
+          error: 'Proof is for a different session.',
+          networkMismatch: true,
+        });
+      }
+
+      // 5. HMAC signature
+      const expectedProofSig = crypto
+        .createHmac('sha256', session.esp32Seed)
+        .update(`proof:${proofSession}:${proofStudent}:${timestamp}:${nonce}`)
+        .digest('hex')
+        .slice(0, 32);
+
+      const proofSigClean = String(sig || '').toLowerCase().replace(/[^0-9a-f]/g, '');
+      if (proofSigClean.length !== 32 ||
+          !crypto.timingSafeEqual(Buffer.from(proofSigClean), Buffer.from(expectedProofSig))) {
+        console.warn(`[MARK] Invalid proof sig from ${req.user.name}`);
+        return res.status(403).json({
+          error: 'Invalid proof signature. Make sure you are connected to the classroom device WiFi.',
+          networkMismatch: true,
+        });
+      }
+
+      // Proof verified — proximity confirmed. TOTP code still required as
+      // second factor (student must physically see the device screen).
+
     } else if (connectionToken && typeof connectionToken === 'object') {
       // ── Hotspot token path ──────────────────────────────────────────────────
       const { sessionId: tokenSession, studentId: tokenStudent, issuedAt, sig } = connectionToken;
@@ -833,44 +967,50 @@ exports.markAttendance = async (req, res) => {
         });
       }
 
-    } else {
-      // ── Legacy IP path ──────────────────────────────────────────────────────
-      const studentIp = (req.ip || '').replace(/^::ffff:/, '');
-
-      const TEN_MIN_AGO = Date.now() - 10 * 60 * 1000;
-      const deviceIps = (sessionDevice.recentPublicIps || [])
-        .filter(e => e.seenAt && new Date(e.seenAt).getTime() > TEN_MIN_AGO)
-        .map(e => e.ip);
-
-      if (deviceIps.length === 0) {
-        return res.status(503).json({
-          error: 'The classroom device has not reported its network yet. Wait a few seconds and try again.',
-          esp32Required: true,
-          networkNotReady: true,
-        });
-      }
-
-      if (!deviceIps.includes(studentIp)) {
-        console.warn(`[MARK] Blocked ${req.user.name}: IP ${studentIp} not in device IPs [${deviceIps.join(', ')}]`);
-        return res.status(403).json({
-          error: 'You must be connected to the classroom WiFi to mark attendance.',
-          networkMismatch: true,
-        });
-      }
+    } else if (!proximityExempt) {
+      // No connectionToken and no BLE token.
+      // All marking methods require physical connection to the classroom device WiFi —
+      // the connectionToken from ESP32 /session or /mark is the only accepted proof.
+      return res.status(403).json({
+        error: 'You must connect to the classroom device WiFi hotspot to mark attendance. Connect to the Dikly-XXXXXX WiFi, open DIKLY, and tap "Verify WiFi Connection".',
+        requiresHotspot: true,
+        networkMismatch: true,
+      });
     }
 
     // Anyone marking against a course-linked session must be enrolled in that course.
-    if (session.course) {
+    if (session.course && req.user.role === 'student') {
       const Course = require('../models/Course');
-      const enrolled = await Course.findOne({
-        _id: session.course,
-        companyId: req.user.company,
-        enrolledStudents: req.user._id,
-      }).select('_id').lean();
+      const StudentCourseEnrollment = require('../models/StudentCourseEnrollment');
+      const student = req.user;
+      const hasProfile = !!(student.studentLevel || student.studentGroup ||
+                            student.sessionType  || student.semester     || student.programme);
 
-      if (!enrolled) {
+      // Students with no profile attributes are unconfigured — allow them through
+      // rather than blocking them with a false "wrong class" error.
+      if (hasProfile) {
+        const inLegacy = await Course.exists({
+          _id: session.course,
+          companyId: req.user.company,
+          enrolledStudents: req.user._id,
+        });
+        const inSCE = !inLegacy && await StudentCourseEnrollment.exists({
+          course: session.course,
+          student: req.user._id,
+          status: 'active',
+        });
+
+        if (!inLegacy && !inSCE) {
+          return res.status(403).json({
+            error: 'You are not enrolled in this course. This session belongs to a different class.',
+          });
+        }
+      }
+
+      // If the session is group-restricted, only students in that group can mark
+      if (session.targetGroup && req.user.studentGroup && req.user.studentGroup !== session.targetGroup) {
         return res.status(403).json({
-          error: 'You are not enrolled in this course. This session belongs to a different class.',
+          error: `This attendance session is for Group ${session.targetGroup} only.`,
         });
       }
     }
@@ -894,6 +1034,7 @@ exports.markAttendance = async (req, res) => {
     // ── Rotating code verification ─────────────────────────────────────────
     // Required for hotspot-token and IP paths. Skipped for BLE — the slot HMAC
     // already proves physical proximity; a second code would be redundant.
+    let codeAlreadyVerified = false;
     if (!skipCodeCheck && session.esp32Seed) {
       const { verifyCodeForSession } = require('../services/attendanceCodeService');
       const result = verifyCodeForSession(session, code);
@@ -903,6 +1044,7 @@ exports.markAttendance = async (req, res) => {
           codeRequired: true,
         });
       }
+      codeAlreadyVerified = true;
     }
 
     // ── Device lock enforcement ────────────────────────────────────────────
@@ -947,7 +1089,7 @@ exports.markAttendance = async (req, res) => {
       return res.status(409).json({ error: "Attendance already marked for this session" });
     }
 
-    let attendanceMethod = method ? (methodMap[method] || method) : "manual";
+    let attendanceMethod = resolvedMethod;
     let qrTokenRef = null;
 
     if (attendanceMethod === "qr_mark") {
@@ -966,7 +1108,10 @@ exports.markAttendance = async (req, res) => {
         return res.status(410).json({ error: "QR code has expired. Please scan the latest QR code on screen." });
       }
       qrTokenRef = tokenDoc._id;
-    } else if (qrToken || code) {
+    } else if (!codeAlreadyVerified && (qrToken || code)) {
+      // QrToken lookup for verbal/QR codes (QFTK-style tokens in the QrToken collection).
+      // Skipped when the rotating ESP32 code was already verified above — the 6-digit
+      // rotating code is NOT stored in QrToken and would falsely return "Invalid code".
       const query = {
         company: req.user.company,
         session: resolvedSessionId,
@@ -1011,6 +1156,7 @@ exports.markAttendance = async (req, res) => {
       method: attendanceMethod,
       deviceId: clientDeviceId,
       qrToken: qrTokenRef,
+      ...(attendanceMethod === 'code_mark' && code ? { codeUsed: String(code) } : {}),
     });
 
     const populated = await record.populate([
@@ -1041,7 +1187,7 @@ exports.markAttendance = async (req, res) => {
           $set: {
             newDeviceFlag: true,
             flagged:  true,
-            flagNote: `Device fingerprint not in student's trusted-devices list (index: ${req.user.indexNumber || 'N/A'}) — auto-flagged for review`,
+            flagNote: `Device fingerprint not in student's trusted-devices list (index: ${req.user.IndexNumber || 'N/A'}) — auto-flagged for review`,
           },
         });
 
@@ -1053,11 +1199,11 @@ exports.markAttendance = async (req, res) => {
           userId:      req.user._id,
           deviceId:    clientDeviceId,
           eventType:   'new_device_for_user',
-          reason:      `${req.user.name} (index: ${req.user.indexNumber || req.user._id}) marked attendance from a device not in their trusted-devices list.`,
+          reason:      `${req.user.name} (index: ${req.user.IndexNumber || req.user._id}) marked attendance from a device not in their trusted-devices list.`,
           actionTaken: 'flagged',
         });
 
-        console.log(`[MARK] Untrusted device flagged for ${req.user.name} (${req.user.indexNumber}), device=${clientDeviceId}`);
+        console.log(`[MARK] Untrusted device flagged for ${req.user.name} (${req.user.IndexNumber}), device=${clientDeviceId}`);
         populated.newDeviceFlag = true;
         populated.flagged = true;
       }
@@ -1305,6 +1451,119 @@ exports.getFlaggedNewDevices = async (req, res) => {
   } catch (err) {
     console.error('getFlaggedNewDevices error:', err);
     return res.status(500).json({ error: 'Failed to fetch flagged records' });
+  }
+};
+
+// POST /api/attendance-sessions/flagged/:recordId/resolve
+// Dismiss a new-device flag without trusting the device.
+// The attendance record stays; the flag is cleared.
+exports.resolveFlaggedRecord = async (req, res) => {
+  try {
+    const { recordId } = req.params;
+    if (!mongoose.Types.ObjectId.isValid(recordId)) {
+      return res.status(400).json({ error: 'Invalid record ID' });
+    }
+
+    const record = await AttendanceRecord.findOne({
+      _id:     recordId,
+      company: req.user.company,
+    });
+    if (!record) return res.status(404).json({ error: 'Record not found' });
+
+    // Lecturers can only resolve flags from their own sessions
+    if (req.user.role === 'lecturer') {
+      const session = await AttendanceSession.findOne({
+        _id:       record.session,
+        createdBy: req.user._id,
+        company:   req.user.company,
+      }).lean();
+      if (!session) return res.status(403).json({ error: 'Not your session' });
+    }
+
+    await AttendanceRecord.updateOne(
+      { _id: record._id },
+      { $set: { newDeviceFlag: false, flagged: false, flagNote: 'Reviewed and dismissed by ' + req.user.name } }
+    );
+
+    return res.json({ ok: true });
+  } catch (err) {
+    console.error('[resolveFlaggedRecord]', err);
+    return res.status(500).json({ error: 'Failed to resolve flag' });
+  }
+};
+
+// POST /api/attendance-sessions/flagged/:recordId/trust
+// Trust the device: add it to the student's trustedDevices list and clear the flag.
+exports.trustFlaggedDevice = async (req, res) => {
+  try {
+    const { recordId } = req.params;
+    if (!mongoose.Types.ObjectId.isValid(recordId)) {
+      return res.status(400).json({ error: 'Invalid record ID' });
+    }
+
+    const record = await AttendanceRecord.findOne({
+      _id:     recordId,
+      company: req.user.company,
+    }).populate('user', 'name').lean();
+    if (!record) return res.status(404).json({ error: 'Record not found' });
+
+    if (req.user.role === 'lecturer') {
+      const session = await AttendanceSession.findOne({
+        _id:       record.session,
+        createdBy: req.user._id,
+        company:   req.user.company,
+      }).lean();
+      if (!session) return res.status(403).json({ error: 'Not your session' });
+    }
+
+    if (!record.user) {
+      return res.status(410).json({ error: 'Student account no longer exists' });
+    }
+
+    if (!record.deviceId) {
+      return res.status(400).json({ error: 'No device fingerprint on this record' });
+    }
+
+    const userId = record.user._id || record.user;
+
+    // Add to student's trustedDevices (skip if already there)
+    await User.updateOne(
+      {
+        _id:                       userId,
+        'trustedDevices.deviceId': { $ne: record.deviceId },
+      },
+      {
+        $push: {
+          trustedDevices: {
+            deviceId:   record.deviceId,
+            firstSeenAt: record.checkInTime || new Date(),
+            lastSeenAt:  record.checkInTime || new Date(),
+          },
+        },
+      }
+    );
+
+    // Clear the flag on this record
+    await AttendanceRecord.updateOne(
+      { _id: record._id },
+      { $set: { newDeviceFlag: false, flagged: false, flagNote: 'Device trusted by ' + req.user.name } }
+    );
+
+    // Also clear flags on all other records for the same student + device
+    await AttendanceRecord.updateMany(
+      {
+        company:       req.user.company,
+        user:          userId,
+        deviceId:      record.deviceId,
+        newDeviceFlag: true,
+      },
+      { $set: { newDeviceFlag: false, flagged: false, flagNote: 'Device trusted by ' + req.user.name } }
+    );
+
+    return res.json({ ok: true, studentName: record.user?.name || 'Student' });
+  } catch (err) {
+    console.error('[trustFlaggedDevice]', err);
+    return res.status(500).json({ error: 'Failed to trust device' });
   }
 };
 

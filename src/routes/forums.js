@@ -43,6 +43,8 @@ const ForumThread  = require("../models/ForumThread");
 const ForumPost    = require("../models/ForumPost");
 const Course       = require("../models/Course");
 
+const escapeRegex = s => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
 // ── Shared middleware stack ──────────────────────────────────────────────────
 const mw = [authenticate, requireMode("academic"), requireActiveSubscription, companyIsolation];
 
@@ -115,7 +117,7 @@ router.get("/courses/:courseId/threads", ...mw, async (req, res) => {
     const filter = { company, course: courseId, isDeleted: false };
     if (req.query.type) filter.type = req.query.type;
     if (req.query.search) {
-      filter.title = { $regex: req.query.search.trim(), $options: "i" };
+      filter.title = { $regex: escapeRegex(req.query.search.trim()), $options: "i" };
     }
 
     const [threads, total] = await Promise.all([

@@ -52,7 +52,7 @@ const router  = express.Router();
 
 const authenticate               = require("../middleware/auth");
 const { requireCompanyScope }    = require("../middleware/requireCompanyScope");
-const { lecturerOrHod }          = require("../middleware/requireAcademicRole");
+const { lecturerOrHod, hodOrAdmin } = require("../middleware/requireAcademicRole");
 const requireAssessmentOwnership = require("../middleware/requireAssessmentOwnership");
 const SnapQuiz                   = require("../models/SnapQuiz");
 const ctrl                       = require("../controllers/snapQuizLecturerController");
@@ -69,6 +69,10 @@ const ownsQuiz = requireAssessmentOwnership(SnapQuiz, {
   getAssessmentId: (req) => req.params.quizId,
   skipCourseCheck: true, // Courses are assigned via Course.lecturerId, not CourseLecturerAssignment
 });
+
+// ─── HOD / Admin overview (all lecturers' quizzes) ───────────────────────────
+
+router.get("/department-overview", hodOrAdmin, ctrl.listAllCompanyQuizzes);
 
 // ─── Quiz CRUD ────────────────────────────────────────────────────────────────
 
@@ -109,9 +113,10 @@ router.patch("/:quizId/proctoring/:eventId",    ownsQuiz, ctrl.reviewProctoringE
 router.patch("/:quizId/attempts/:attemptId/responses/:responseId/grade", ownsQuiz, ctrl.gradeResponse);
 router.patch("/:quizId/attempts/:attemptId/grade",                        ownsQuiz, ctrl.gradeBulk);
 
-// ─── Dashboard stats ──────────────────────────────────────────────────────────
+// ─── Dashboard stats & live monitor ──────────────────────────────────────────
 
 router.get("/:quizId/stats",             ownsQuiz, ctrl.getQuizStats);
+router.get("/:quizId/live-monitor",      ownsQuiz, ctrl.getLiveMonitor);
 
 // ─── Result release ───────────────────────────────────────────────────────────
 

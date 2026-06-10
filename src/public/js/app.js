@@ -6,6 +6,41 @@ const API = window.location.hostname === 'localhost' || window.location.hostname
   ? ''
   : window.location.origin;
 
+// Lazy script loader — returns a Promise that resolves when the script is ready.
+// Calling it twice for the same URL is a no-op (resolved immediately on 2nd call).
+const _loadedScripts = new Set();
+function _loadScript(src) {
+  if (_loadedScripts.has(src)) return Promise.resolve();
+  return new Promise((resolve, reject) => {
+    const el = document.createElement('script');
+    el.src = src;
+    el.onload  = () => { _loadedScripts.add(src); resolve(); };
+    el.onerror = () => reject(new Error('Script load failed: ' + src));
+    document.head.appendChild(el);
+  });
+}
+// Role → scripts that should be preloaded right after login so first navigation is instant.
+const _ROLE_SCRIPTS = {
+  student:    ['/js/pages-academic.js'],
+  lecturer:   ['/js/pages-academic.js', '/js/pages-device.js'],
+  admin:      ['/js/pages-academic.js', '/js/pages-device.js', '/js/pages-corporate.js'],
+  manager:    ['/js/manager-portal.js', '/js/pages-corporate.js'],
+  hod:        ['/js/manager-portal.js', '/js/pages-academic.js'],
+  employee:   ['/js/pages-corporate.js'],
+  superadmin: ['/js/manager-portal.js', '/js/pages-corporate.js'],
+};
+function _preloadForRole(role) {
+  const scripts = _ROLE_SCRIPTS[role] || [];
+  scripts.forEach(src => _loadScript(src).catch(() => {}));
+}
+// Lazy-aware _safeRender: ensures `scriptSrc` is loaded before calling fn.
+// If the script is already loaded (preloaded for the role), resolves instantly.
+function _lazyRender(content, scriptSrc, fn, label) {
+  _loadScript(scriptSrc)
+    .catch(() => {}) // if CDN/network blip, try calling fn anyway
+    .then(() => _safeRender(content, fn, label));
+}
+
 // Opens external URLs in system browser. Uses Capacitor Browser plugin when
 // running inside the native app so the in-app WebView is not navigated away.
 async function openUrl(url, forceExternal = false) {
@@ -27,7 +62,20 @@ async function openUrl(url, forceExternal = false) {
 // running inside the native app (iOS/Android), falls back to standard browser
 // anchor-click download for web.
 async function downloadBlob(blob, filename) {
-  if (window.Capacitor?.isNativePlatform?.()) {
+  // Detect Capacitor native app (Android/iOS)
+  const isNative = !!(window.Capacitor?.isNativePlatform?.() ||
+                      navigator.userAgent.includes('DiklyApp/'));
+
+  if (isNative) {
+    const FS    = window.Capacitor?.Plugins?.Filesystem;
+    const Share = window.Capacitor?.Plugins?.Share;
+
+    if (!FS || !Share) {
+      // Old APK — native plugins not registered yet
+      toastError('Please reinstall the DIKLY app to enable file downloads.');
+      return;
+    }
+
     try {
       const reader = new FileReader();
       const base64 = await new Promise((res, rej) => {
@@ -35,22 +83,25 @@ async function downloadBlob(blob, filename) {
         reader.onerror = rej;
         reader.readAsDataURL(blob);
       });
-      const result = await window.Capacitor.Plugins.Filesystem.writeFile({
+      const result = await FS.writeFile({
         path:      filename,
         data:      base64,
-        directory: 'DOCUMENTS',
+        directory: 'CACHE',
         recursive: true,
       });
-      await window.Capacitor.Plugins.Share.share({
-        title:      filename,
-        url:        result.uri,
+      await Share.share({
+        title:       filename,
+        url:         result.uri,
         dialogTitle: 'Save or share ' + filename,
       });
       return;
     } catch (e) {
-      console.warn('[downloadBlob] Native failed, using browser fallback:', e.message);
+      console.error('[downloadBlob] Native download failed:', e);
+      toastError('Download failed: ' + (e.message || 'unknown error'));
+      return;
     }
   }
+
   // Standard browser download
   const url = URL.createObjectURL(blob);
   const a   = document.createElement('a');
@@ -207,7 +258,12 @@ function _updateNotifBadge(count) {
   }
 }
 
-function startSSE() {
+let _sseFailures = 0;
+let _sseRetryTimer = null;
+
+function startSSE(isRetry = false) {
+  if (_sseRetryTimer) { clearTimeout(_sseRetryTimer); _sseRetryTimer = null; }
+  if (!isRetry) _sseFailures = 0; // fresh start (login/reload) resets the backoff counter
   if (_sseSource) { _sseSource.close(); _sseSource = null; }
   const token = localStorage.getItem('token');
   if (!token) return;
@@ -215,6 +271,7 @@ function startSSE() {
   _sseSource = new EventSource(`/api/notifications/stream?token=${encodeURIComponent(token)}`);
 
   _sseSource.onmessage = (e) => {
+    _sseFailures = 0; // reset backoff on successful message
     try {
       const msg = JSON.parse(e.data);
       if (msg.event === 'unread_count') {
@@ -223,17 +280,25 @@ function startSSE() {
         const n = msg.notification;
         _updateNotifBadge(_notifUnread + 1);
         _notifSound.playChime('announcement');
-        if (window.toastInfo) toastInfo(n.title + (n.body ? ' — ' + n.body : ''));
+        if (window.toast) {
+          window.toast(n.body || '', 'info', {
+            title: n.title,
+            duration: 6000,
+          });
+        }
         if (_notifPanelOpen) _loadNotifPanel();
       }
     } catch (_) {}
   };
 
   _sseSource.onerror = () => {
-    // EventSource auto-reconnects; close and let it retry after 5 s
-    _sseSource.close();
-    _sseSource = null;
-    setTimeout(() => { if (currentUser) startSSE(); }, 5000);
+    if (_sseSource) { _sseSource.close(); _sseSource = null; }
+    _sseFailures++;
+    // Stop retrying after 5 consecutive failures (likely auth issue or server offline)
+    if (_sseFailures > 5) return;
+    // Exponential backoff: 5s, 10s, 20s, 40s, 60s
+    const delay = Math.min(5000 * Math.pow(2, _sseFailures - 1), 60000);
+    _sseRetryTimer = setTimeout(() => { if (currentUser) startSSE(true); }, delay);
   };
 }
 
@@ -466,10 +531,12 @@ function _timeAgo(date) {
 
     const el = document.createElement('div');
     el.className = `toast toast-${t}`;
+    const title = options.title;
     el.innerHTML = `
       <span class="toast-icon">${ICONS[t]}</span>
       <div class="toast-body">
-        <div class="toast-msg">${message}</div>
+        ${title ? `<div class="toast-title">${title}</div>` : ''}
+        ${message ? `<div class="toast-msg">${message}</div>` : ''}
       </div>
       <span class="toast-close">×</span>
       <div class="toast-progress" style="width:100%"></div>
@@ -669,6 +736,17 @@ async function attemptOfflineLogin(credentials) {
       throw new Error('Wrong email or password.');
     }
 
+    // Check if the cached JWT has expired — expired tokens cause all API calls to silently 401
+    try {
+      const jwtPayload = JSON.parse(atob(profile.token.split('.')[1]));
+      if (jwtPayload.exp && jwtPayload.exp * 1000 < Date.now()) {
+        throw new Error('Your offline session token has expired. Please connect to the internet to sign in again.');
+      }
+    } catch (e) {
+      if (e.message.includes('offline session token')) throw e;
+      // Malformed JWT — continue; the server will reject it on first API call
+    }
+
     // Return a fake login response matching the real API shape
     console.log('[OfflineLogin] Offline login successful for', profileKey);
     return {
@@ -691,6 +769,24 @@ function clearOfflineProfile(userRole, email, indexNumber, institutionCode) {
     localStorage.setItem(OFFLINE_LOGIN_KEY, JSON.stringify(profiles));
   } catch (e) {
     console.warn('[OfflineLogin] Could not clear profile:', e);
+  }
+}
+
+// ── Clear offline profile by user ID (used on logout — no need to reconstruct key) ──
+function clearOfflineProfileById(userId) {
+  try {
+    const profiles = JSON.parse(localStorage.getItem(OFFLINE_LOGIN_KEY) || '{}');
+    let changed = false;
+    for (const key of Object.keys(profiles)) {
+      const uid = profiles[key]?.user?.id || profiles[key]?.user?._id;
+      if (uid && uid.toString() === userId.toString()) {
+        delete profiles[key];
+        changed = true;
+      }
+    }
+    if (changed) localStorage.setItem(OFFLINE_LOGIN_KEY, JSON.stringify(profiles));
+  } catch (e) {
+    console.warn('[OfflineLogin] Could not clear profile by ID:', e);
   }
 }
 
@@ -893,22 +989,20 @@ async function syncOfflineQueue() {
 }
 
 function showToastNotif(msg, type) {
-  const t = document.createElement('div');
-  t.style.cssText = [
-    'position:fixed','bottom:24px','left:50%','transform:translateX(-50%)',
-    'padding:10px 20px','border-radius:8px','font-size:13px','font-weight:600',
-    'z-index:10000','box-shadow:0 4px 16px rgba(0,0,0,0.15)',
-    type === 'success' ? 'background:#dcfce7;color:#166534;border:1px solid #86efac' :
-                         'background:#fef3c7;color:#92400e;border:1px solid #fbbf24'
-  ].join(';');
-  t.textContent = msg;
-  document.body.appendChild(t);
-  setTimeout(() => t.remove(), 3500);
+  if (!msg) return;
+  // Route through the modern stacking toast system so messages never overlap
+  const t = type === 'success' ? 'success'
+          : type === 'error'   ? 'error'
+          : type === 'warn'    ? 'warning'
+          : 'info';
+  if (window.toast) { window.toast(msg, t); return; }
+  // Fallback if called before the modern system is ready
+  console.info('[toast]', type, msg);
 }
 
 // Alias used by Corporate Phase 1 functions (shifts, leave)
 function toast(msg, type) {
-  showToastNotif(msg, type === 'ok' ? 'success' : 'warn');
+  showToastNotif(msg, type === 'ok' ? 'success' : type || 'info');
 }
 
 // Listen for online/offline events
@@ -926,6 +1020,7 @@ window.addEventListener('DOMContentLoaded', () => {
 let currentUser = null;
 let currentUserTrial = null; // mirrors data.userTrial from the last /me response
 let currentView = 'dashboard';
+let _appOfflineMode = false; // true when logged in via cached credentials (no server reachable)
 
 function svgIcon(path, size = 18) {
   return `<svg width="${size}" height="${size}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${path}</svg>`;
@@ -1051,9 +1146,14 @@ async function api(path, options = {}) {
   if (res.headers.get('content-type')?.includes('application/json')) {
     const data = await res.json();
     if (!res.ok) {
-      // Subscription gate — redirect lecturer to subscription page automatically
+      // 402 = institution or personal subscription expired — hard full-screen block
+      if (res.status === 402 && data.subscriptionExpired) {
+        showSubscriptionBlock(data.message, data.isAdmin);
+        throw new Error(data.message || 'Subscription expired');
+      }
+      // Legacy 403 subscription gate (old middleware responses)
       if (res.status === 403 && (data.subscriptionExpired || data.subscriptionRequired)) {
-        showSubscriptionGate(data.message);
+        showSubscriptionBlock(data.message, data.isAdmin);
         throw new Error(data.message || data.error || 'Subscription required');
       }
       const err = new Error(data.message || data.error || 'Request failed');
@@ -1074,9 +1174,9 @@ async function apiUpload(urlPath, formData, method = 'POST') {
   if (res.headers.get('content-type')?.includes('application/json')) {
     const data = await res.json();
     if (!res.ok) {
-      if (res.status === 403 && data.subscriptionRequired) {
-        showSubscriptionGate(data.message);
-        throw new Error(data.error || 'Subscription required');
+      if ((res.status === 402 || res.status === 403) && (data.subscriptionExpired || data.subscriptionRequired)) {
+        showSubscriptionBlock(data.message, data.isAdmin);
+        throw new Error(data.error || 'Subscription expired');
       }
       throw new Error(data.error || data.message || 'Request failed');
     }
@@ -1086,44 +1186,61 @@ async function apiUpload(urlPath, formData, method = 'POST') {
   return res;
 }
 
-let _subGateFired = false;
-function showSubscriptionGate(message) {
-  // HODs never pay — ignore subscription gates for them
-  if (currentUser && currentUser.role === 'hod') return;
+let _subBlockActive = false;
+function showSubscriptionBlock(message, isAdmin) {
+  if (_subBlockActive) return;
+  _subBlockActive = true;
 
-  // If the user already has an active personal subscription, suppress the gate.
-  // This fires when multiple parallel API calls return 403 before the middleware
-  // catches up, or during login before the server fix propagates.
-  if (currentUserTrial?.isSubscribed) return;
-  if (currentUser?.subscriptionExpiry && new Date(currentUser.subscriptionExpiry) > new Date()) return;
+  const msg = message || 'Your subscription has expired. Access is suspended.';
+  const isAdminUser = isAdmin || (currentUser && currentUser.role === 'admin');
+  const institutionName = currentUser?.company?.name || currentUser?.institutionName || '';
 
-  // Deduplicate — multiple concurrent 403s should show only one toast
-  if (_subGateFired) return;
-  _subGateFired = true;
-  setTimeout(() => { _subGateFired = false; }, 3000);
+  // Remove any existing block overlay
+  const existing = document.getElementById('_sub-block-overlay');
+  if (existing) existing.remove();
 
-  // Navigate to subscription page and show a toast if possible
-  try {
-    if (typeof navigateTo === 'function') navigateTo('subscription');
-    const msg = message || 'Your 30-day free trial has expired. Subscribe to continue using DIKLY.';
-    if (typeof toastError === 'function') {
-      toastError(msg);
-    } else {
-      // Fallback if toast not yet available
-      const content = document.getElementById('main-content');
-      if (content) {
-        content.innerHTML = `
-          <div class="card" style="max-width:480px;margin:40px auto;text-align:center;padding:32px">
-            <div style="font-size:40px;margin-bottom:16px">🔒</div>
-            <h3 style="margin-bottom:8px">Subscription Required</h3>
-            <p style="color:var(--text-muted);margin-bottom:20px">${msg}</p>
-            <button class="btn btn-primary" onclick="navigateTo('subscription')">View Subscription</button>
-          </div>`;
+  const overlay = document.createElement('div');
+  overlay.id = '_sub-block-overlay';
+  overlay.style.cssText = [
+    'position:fixed', 'inset:0', 'z-index:99999',
+    'background:rgba(15,23,42,0.97)',
+    'display:flex', 'align-items:center', 'justify-content:center',
+    'padding:24px', 'box-sizing:border-box',
+  ].join(';');
+
+  overlay.innerHTML = `
+    <div style="background:#fff;border-radius:16px;max-width:460px;width:100%;padding:40px 32px;text-align:center;box-shadow:0 25px 60px rgba(0,0,0,.5)">
+      <div style="width:72px;height:72px;border-radius:50%;background:#fef2f2;display:flex;align-items:center;justify-content:center;margin:0 auto 20px;font-size:32px">🔒</div>
+      <h2 style="margin:0 0 8px;font-size:22px;font-weight:700;color:#0f172a">Subscription Expired</h2>
+      ${institutionName ? `<p style="margin:0 0 16px;font-size:13px;font-weight:600;color:#6366f1;letter-spacing:.4px;text-transform:uppercase">${esc(institutionName)}</p>` : ''}
+      <p style="margin:0 0 28px;font-size:14px;color:#475569;line-height:1.6">${esc(msg)}</p>
+      ${isAdminUser
+        ? `<div style="display:flex;flex-direction:column;gap:10px">
+            <button onclick="(function(){var o=document.getElementById('_sub-block-overlay');if(o)o.remove();_subBlockActive=false;document.body.style.overflow='';navigateTo('subscription');})();"
+              style="background:#6366f1;color:#fff;border:none;border-radius:8px;padding:12px 24px;font-size:14px;font-weight:600;cursor:pointer;width:100%">
+              Renew Subscription
+            </button>
+            <p style="margin:0;font-size:12px;color:#94a3b8">Renewing will immediately restore access for all users.</p>
+          </div>`
+        : `<div style="background:#f8fafc;border-radius:8px;padding:14px 16px;text-align:left">
+            <p style="margin:0 0 4px;font-size:13px;font-weight:600;color:#0f172a">What to do</p>
+            <p style="margin:0;font-size:13px;color:#64748b;line-height:1.5">Contact your <strong>institution administrator</strong> and ask them to renew the DIKLY subscription. All features will be restored immediately after renewal.</p>
+          </div>`
       }
-    }
-  } catch(e) {
-    console.warn('showSubscriptionGate:', e.message);
-  }
+      <p style="margin:20px 0 0;font-size:12px;color:#94a3b8">Need help? Contact support at <strong>support@dikly.sbs</strong></p>
+    </div>
+  `;
+
+  document.body.appendChild(overlay);
+
+  // Prevent any interaction with the app behind the overlay
+  document.body.style.overflow = 'hidden';
+}
+
+// Legacy alias — kept for any old callers
+function showSubscriptionGate(message) {
+  const isAdmin = currentUser && currentUser.role === 'admin';
+  showSubscriptionBlock(message, isAdmin);
 }
 
 function timeAgo(dateStr) {
@@ -1174,6 +1291,10 @@ function selectMode(mode) {
   tglCorp.classList.remove('active-corp');
   tglAcad.classList.remove('active-acad');
 
+  // Hide download section once user starts navigating portals
+  const dlSec = document.getElementById('app-download-section');
+  if (dlSec) dlSec.classList.add('hidden');
+
   // Toggle off if same mode tapped again
   if (_selectedMode === mode) { _selectedMode = null; return; }
 
@@ -1194,6 +1315,9 @@ function selectMode(mode) {
 function selectPortal(type) {
   selectedPortalType = type;
   document.getElementById('portal-selector').classList.add('hidden');
+  ['workspace-brand','app-download-section','workspace-foot'].forEach(id => {
+    const el = document.getElementById(id); if (el) el.classList.add('hidden');
+  });
   if (type === 'admin-corporate' || type === 'admin-academic' || type === 'manager') {
     const isAcademic = type === 'admin-academic';
     const isManager  = type === 'manager';
@@ -1232,6 +1356,9 @@ function showPortalSelector() {
   document.getElementById('employee-auth').classList.add('hidden');
   document.getElementById('student-auth').classList.add('hidden');
   document.getElementById('portal-selector').classList.remove('hidden');
+  ['workspace-brand','workspace-foot'].forEach(id => {
+    const el = document.getElementById(id); if (el) el.classList.remove('hidden');
+  });
   const mrf = document.getElementById('manager-register-form'); if (mrf) mrf.classList.add('hidden');
   document.querySelectorAll('.auth-container input').forEach(i => i.value = '');
   document.querySelectorAll('.error-msg').forEach(e => e.style.display = 'none');
@@ -1467,15 +1594,7 @@ function showEmployeeError(msg) {
   el._hideTimer = setTimeout(() => { el.style.display = 'none'; el.classList.remove('shake'); }, 8000);
 }
 
-function showStudentRegister() {
-  document.getElementById('student-login-form').classList.add('hidden');
-  document.getElementById('student-forgot-form').classList.add('hidden');
-  document.getElementById('student-register-form').classList.remove('hidden');
-  document.getElementById('student-auth-error').style.display = 'none';
-}
-
 function showStudentLogin() {
-  document.getElementById('student-register-form').classList.add('hidden');
   document.getElementById('student-forgot-form').classList.add('hidden');
   document.getElementById('student-login-form').classList.remove('hidden');
   document.getElementById('student-auth-error').style.display = 'none';
@@ -1484,7 +1603,6 @@ function showStudentLogin() {
 
 function showStudentForgot() {
   document.getElementById('student-login-form').classList.add('hidden');
-  document.getElementById('student-register-form').classList.add('hidden');
   document.getElementById('student-forgot-form').classList.remove('hidden');
   document.getElementById('student-auth-error').style.display = 'none';
   document.getElementById('student-reset-code-group').classList.add('hidden');
@@ -1554,6 +1672,7 @@ function friendlyError(msg) {
   if (m.includes('too many requests'))            return 'Too many requests. Please slow down and try again.';
   if (m.includes('no offline profile'))           return 'You\'re offline. Please connect to the internet to login for the first time.';
   if (m.includes('offline session expired'))      return 'Offline session expired. Please connect to login again.';
+  if (m.includes('offline session token has expired')) return 'Your offline session has expired. Please connect to the internet to sign in again.';
   if (m.includes('incorrect password'))           return 'Wrong email or password.';
   if (m.includes('network') || m.includes('fetch')) return 'Network error. Please check your connection.';
   return msg; // fallback: show as-is
@@ -2079,59 +2198,6 @@ async function handleStudentLogin() {
   }
 }
 
-async function handleStudentRegister() {
-  try {
-    const name = document.getElementById('student-reg-name').value.trim();
-    const indexNumber = document.getElementById('student-reg-index').value.trim().toUpperCase();
-    const institutionCode = document.getElementById('student-reg-code').value.trim();
-    const password = document.getElementById('student-reg-password').value;
-    const confirm = document.getElementById('student-reg-confirm').value;
-    const department = document.getElementById('student-reg-dept')?.value?.trim();
-    const programme = document.getElementById('student-reg-programme')?.value?.trim();
-    const studentLevel = document.getElementById('student-reg-level')?.value?.trim();
-    const studentGroup = document.getElementById('student-reg-group')?.value?.trim().toUpperCase();
-    const sessionType = document.getElementById('student-reg-session-type')?.value?.trim();
-    const semester = document.getElementById('student-reg-semester')?.value?.trim();
-    if (!name) return showStudentError('Please enter your full name.');
-    if (!institutionCode) return showStudentError('Please enter your Institution Code.');
-    if (!indexNumber) return showStudentError('Student ID / Index Number is required.');
-    if (indexNumber.length < 3) return showStudentError('Student ID looks too short. Please check and enter your full index number.');
-    if (!password) return showStudentError('Please enter a password.');
-    if (password.length < 8) return showStudentError('Password must be at least 8 characters.');
-    if (password !== confirm) return showStudentError('Passwords do not match.');
-    if (!department) return showStudentError('Please enter your department.');
-    if (!programme) return showStudentError('Please select your programme.');
-    if (!studentLevel) return showStudentError('Please select your level.');
-    if (!studentGroup) return showStudentError('Please enter your group (e.g. A, B, C).');
-    if (!sessionType) return showStudentError('Please select your session type.');
-    if (!semester) return showStudentError('Please select your semester.');
-    const data = await api('/api/auth/register-student', { method: 'POST', body: JSON.stringify({ name, indexNumber, password, institutionCode, department, programme, studentLevel, studentGroup, sessionType, semester }) });
-    if (data.token) {
-      token = data.token;
-      localStorage.setItem('token', token);
-      if (data.refreshToken) localStorage.setItem('refreshToken', data.refreshToken);
-      currentUser = data.user;
-      showDashboard(data);
-      if (data.departmentNote) toastWarning(data.departmentNote);
-    } else {
-      const el = document.getElementById('student-auth-error');
-      el.textContent = data.message || 'Registration successful!';
-      el.style.display = 'block';
-      el.style.background = '#f0fdf4';
-      el.style.color = '#15803d';
-      showStudentLogin();
-      document.getElementById('student-auth-error').style.display = 'block';
-      if (data.departmentNote) {
-        const warn = document.createElement('div');
-        warn.style.cssText = 'margin-top:8px;padding:10px 14px;background:#fffbeb;border:1px solid #fde68a;border-radius:8px;font-size:12px;color:#92400e;';
-        warn.textContent = data.departmentNote;
-        el.after(warn);
-      }
-    }
-  } catch (e) {
-    showStudentError(e.message || 'Registration failed');
-  }
-}
 
 let studentForgotStep = 'request';
 let studentForgotIndex = '';
@@ -2188,6 +2254,10 @@ async function handleLogout() {
   } catch (e) {}
   if (window.DiklyIDB) window.DiklyIDB.clearAll().catch(() => {});
   resetBranding();
+  // Clear this user's offline profile so their credentials don't persist on shared devices
+  const _logoutUserId = currentUser?._id || currentUser?.id;
+  if (_logoutUserId) clearOfflineProfileById(_logoutUserId);
+  _appOfflineMode = false;
   token = null;
   currentUser = null;
   currentUserTrial = null;
@@ -2450,8 +2520,29 @@ function showDashboard(data) {
     const roleEl = document.getElementById('user-role');
     roleEl.textContent = currentUser.role || '';
     roleEl.className = `role-badge role-${currentUser.role || 'user'}`;
-    // Mark role on body so CSS can scope role-specific overrides (e.g. hide banners for student)
+    // Mark role on body for CSS scoping
     document.body.setAttribute('data-role', currentUser.role || '');
+
+    // ── Persistent class-rep banner (shown for the whole session, not per-page) ──
+    const _repBannerEl = document.getElementById('class-rep-banner');
+    if (_repBannerEl) {
+      if (currentUser.isClassRep) {
+        _repBannerEl.innerHTML = `
+          <div style="width:32px;height:32px;border-radius:8px;background:linear-gradient(135deg,#7c3aed,#6366f1);display:flex;align-items:center;justify-content:center;flex-shrink:0">
+            ${svgIcon('<path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/><polyline points="9 11 12 14 22 4"/>', 16, '#fff')}
+          </div>
+          <div style="flex:1">
+            <span style="background:#7c3aed;color:#fff;font-size:10px;font-weight:800;padding:2px 7px;border-radius:20px;letter-spacing:.5px;margin-right:8px">CLASS REP</span>
+            <span style="font-weight:700;color:#5b21b6">You are a Class Representative</span>
+            <span style="color:#6d28d9;font-size:12px;margin-left:8px">· Tap to manage the class device</span>
+          </div>
+          <span style="color:#7c3aed;opacity:.7">${svgIcon('<polyline points="9 18 15 12 9 6"/>', 16)}</span>`;
+        _repBannerEl.classList.add('visible');
+        _repBannerEl.onclick = () => navigateTo('class-device');
+      } else {
+        _repBannerEl.classList.remove('visible');
+      }
+    }
 
     const companyName = currentUser.company?.name || '';
     const mode = currentUser.company?.mode || 'corporate';
@@ -2595,7 +2686,7 @@ function showDashboard(data) {
     _notifSound.updateBtn();
     applyBranding(); // async — applies colors/logo in background
     // Show offline banner immediately when logged in via cached credentials
-    if (data?.offlineMode) showOfflineBanner(false);
+    if (data?.offlineMode) { _appOfflineMode = true; showOfflineBanner(false); }
     // If student arrived via QR scan link, go straight to mark-attendance to auto-submit
     if (new URLSearchParams(window.location.search).get('qr_token')) {
       navigateTo('mark-attendance');
@@ -2706,6 +2797,7 @@ function buildSidebar() {
       links.push({ id: 'hod-students',     label: 'Students',       icon: usersIcon() });
       links.push({ sep: true, label: 'INSIGHTS' });
       links.push({ id: 'hod-performance',  label: 'Performance',    icon: svgIcon('<line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/>') });
+      links.push({ id: 'quiz-monitor',     label: 'Quiz Monitor 🔴', icon: svgIcon('<path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7z"/><circle cx="12" cy="12" r="3"/>') });
       links.push({ id: 'hod-alerts',       label: 'Smart Alerts',   icon: svgIcon('<path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/>') });
       links.push({ id: 'hod-reports',      label: 'Reports',        icon: reportsIcon() });
       links.push({ sep: true, label: 'COMMUNICATE' });
@@ -2731,6 +2823,7 @@ function buildSidebar() {
       links.push({ id: 'courses', label: 'Courses', icon: coursesIcon() });
       links.push({ id: 'course-videos', label: 'Course Videos', icon: svgIcon('<polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2" ry="2"/>') });
       links.push({ id: 'quizzes', label: 'Proctored/Snap Quiz', icon: quizzesIcon() });
+      links.push({ id: 'quiz-monitor', label: 'Quiz Monitor 🔴', icon: svgIcon('<path d="M1 6s4-2 11-2 11 2 11 2v3s-4 2-11 2S1 9 1 9V6z"/><path d="M1 6v12s4 2 11 2 11-2 11-2V6"/><line x1="12" y1="12" x2="12" y2="20"/>') });
       links.push({ id: 'timetable', label: 'Timetable', icon: svgIcon('<rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/>') });
       links.push({ id: 'question-bank', label: 'Question Bank', icon: svgIcon('<ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"/><path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"/>') });
       links.push({ id: 'assignments', label: 'Assignment', icon: assignmentsIcon() });
@@ -2823,6 +2916,27 @@ function buildSidebar() {
       if (l.sep) return l.label ? `<div class="nav-section-label">${l.label}</div>` : `<div class="nav-sep"></div>`;
       return `<a onclick="navigateTo('${l.id}')" id="nav-${l.id}" data-tooltip="${l.label}">${l.id==='announcements'?'<div class="ann-line"></div>':''} ${l.icon}<span>${l.label}</span>${l.id==='announcements'?'<span id="ann-badge" style="display:none;position:absolute;top:4px;right:4px;background:#ef4444;color:#fff;font-size:9px;font-weight:700;padding:1px 5px;border-radius:20px;min-width:14px;text-align:center;line-height:14px;"></span>':''}</a>`;
     }).join('');
+
+  // Institution code chip — visible to all roles that belong to an institution
+  const instCode = currentUser.company?.institutionCode || currentUser.company?.code;
+  if (instCode && role !== 'superadmin') {
+    let chip = sidebar && sidebar.querySelector('.sidebar-inst-chip');
+    if (!chip) {
+      chip = document.createElement('div');
+      chip.className = 'sidebar-inst-chip';
+      if (sidebar) sidebar.appendChild(chip);
+    }
+    chip.innerHTML = `
+      <div style="padding:10px 14px 12px;border-top:1px solid rgba(255,255,255,.08);">
+        <div style="font-size:9.5px;font-weight:700;letter-spacing:.8px;text-transform:uppercase;opacity:.5;margin-bottom:4px">Institution Code</div>
+        <div style="display:flex;align-items:center;gap:6px;">
+          <span id="sidebar-inst-code-val" style="font-family:monospace;font-size:13px;font-weight:700;letter-spacing:.5px;background:rgba(255,255,255,.08);padding:4px 9px;border-radius:7px;flex:1;text-align:center;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${instCode}</span>
+          <button onclick="(function(){navigator.clipboard.writeText('${instCode}');const b=document.getElementById('sidebar-copy-btn');if(b){b.textContent='✓';setTimeout(()=>{b.textContent='Copy'},1500);}})();" id="sidebar-copy-btn"
+                  style="font-size:10px;font-weight:700;padding:4px 8px;border-radius:6px;border:1px solid rgba(255,255,255,.18);background:rgba(255,255,255,.1);cursor:pointer;color:inherit;flex-shrink:0;transition:background .15s"
+                  onmouseover="this.style.background='rgba(255,255,255,.2)'" onmouseout="this.style.background='rgba(255,255,255,.1)'">Copy</button>
+        </div>
+      </div>`;
+  }
 }
 
 function navigateTo(view) {
@@ -2830,6 +2944,8 @@ function navigateTo(view) {
   if (window._empClockTimer) { clearInterval(window._empClockTimer); window._empClockTimer = null; }
   // Stop thread poll when leaving messages
   if (view !== 'messages') _stopThreadPoll();
+  // Stop QR camera stream if navigating away from mark-attendance
+  if (view !== 'mark-attendance' && typeof _stopQrScanner === 'function') _stopQrScanner();
   currentView = view;
   document.querySelectorAll('.sidebar-nav a').forEach(a => a.classList.remove('active'));
   const navEl = document.getElementById(`nav-${view}`);
@@ -2845,12 +2961,13 @@ function navigateTo(view) {
   switch (view) {
     case 'dashboard': renderDashboard(); break;
     case 'sessions': renderSessions(); break;
-    case 'attendance-device': _safeRender(content, renderAttendanceDevice, 'Attendance Device'); break;
+    case 'attendance-device': _lazyRender(content, '/js/pages-device.js', renderAttendanceDevice, 'Attendance Device'); break;
     case 'users': renderUsers(); break;
     case 'meetings': renderMeetings(); break;
     case 'courses': renderCourses(); break;
     case 'quizzes': renderQuizzes(); break;
     case 'quiz-history': renderStudentQuizHistory(); break;
+    case 'quiz-monitor': renderQuizMonitorPage(); break;
     case 'lecturer-performance': renderLecturerPerformance(); break;
     case 'timetable': (currentUser.role === 'student' || currentUser.role === 'hod') ? renderStudentTimetable() : renderLecturerTimetable(); break;
     case 'question-bank': renderQuestionBank(); break;
@@ -2858,6 +2975,7 @@ function navigateTo(view) {
     case 'mark-attendance': renderMarkAttendance(); break;
     case 'emp-home': renderEmployeeDashboard(document.getElementById('main-content')); break;
     case 'emp-notifications': renderEmpNotifications(); break;
+    case 'all-notifications': renderAllNotifications(); break;
     case 'emp-assistant': renderEmpAssistant(); break;
     case 'sign-in-out': renderSignInOut(); break;
     case 'corp-attendance': renderCorporateAttendance(); break;
@@ -2874,21 +2992,21 @@ function navigateTo(view) {
     case 'profile':     renderProfile(); break;
     case 'contact':     renderContact(); break;
     case 'about':       renderAbout(); break;
-    case 'superadmin-platform': renderSuperadminDashboard(document.getElementById('main-content')); break;
-    case 'hod-overview':         renderHodDashboard(); break;
-    case 'hod-courses':          renderHodCourses(); break;
-    case 'hod-sessions':         renderHodSessions(); break;
-    case 'hod-lecturers':        renderHodLecturers(); break;
-    case 'hod-students':         renderHodStudents(); break;
-    case 'hod-reports':          renderHodReports(); break;
+    case 'superadmin-platform': _loadScript('/js/manager-portal.js').then(() => renderSuperadminDashboard(document.getElementById('main-content'))).catch(() => {}); break;
+    case 'hod-overview':         _loadScript('/js/manager-portal.js').then(() => renderHodDashboard()).catch(() => {}); break;
+    case 'hod-courses':          _loadScript('/js/manager-portal.js').then(() => renderHodCourses()).catch(() => {}); break;
+    case 'hod-sessions':         _loadScript('/js/manager-portal.js').then(() => renderHodSessions()).catch(() => {}); break;
+    case 'hod-lecturers':        _loadScript('/js/manager-portal.js').then(() => renderHodLecturers()).catch(() => {}); break;
+    case 'hod-students':         _loadScript('/js/manager-portal.js').then(() => renderHodStudents()).catch(() => {}); break;
+    case 'hod-reports':          _loadScript('/js/manager-portal.js').then(() => renderHodReports()).catch(() => {}); break;
 
-    case 'admin-devices':        renderAdminDevices(); break;
-    case 'hod-course-approvals': renderHodCourseApprovals(); break;
-    case 'hod-unlock-students':  renderHodUnlockStudents(); break;
+    case 'admin-devices':        _loadScript('/js/pages-device.js').then(() => renderAdminDevices()).catch(() => {}); break;
+    case 'hod-course-approvals': _loadScript('/js/manager-portal.js').then(() => renderHodCourseApprovals()).catch(() => {}); break;
+    case 'hod-unlock-students':  _loadScript('/js/manager-portal.js').then(() => renderHodUnlockStudents()).catch(() => {}); break;
     case 'class-rep-mgmt':       renderClassRepMgmt(); break;
-    case 'hod-performance':      renderHodPerformance(); break;
-    case 'hod-alerts':           renderHodAlerts(); break;
-    case 'hod-messaging':        renderHodMessaging(); break;
+    case 'hod-performance':      _loadScript('/js/manager-portal.js').then(() => renderHodPerformance()).catch(() => {}); break;
+    case 'hod-alerts':           _loadScript('/js/manager-portal.js').then(() => renderHodAlerts()).catch(() => {}); break;
+    case 'hod-messaging':        _loadScript('/js/manager-portal.js').then(() => renderHodMessaging()).catch(() => {}); break;
     case 'announcements': renderAnnouncements(); break;
     case 'gradebook': renderGradeBook(); break;
     case 'training':       renderTraining(); break;
@@ -2911,18 +3029,18 @@ function navigateTo(view) {
     case 'assets':         renderAssets(); break;
     case 'my-assets':      renderMyAssets(); break;
     case 'messages':      renderMessages(); break;
-    case 'faq-center':    _safeRender(content, renderFAQCenter,    'FAQ Center');    break;
-    case 'support':       _safeRender(content, renderSupport,      'Support');       break;
-    case 'payroll':       _safeRender(content, renderPayroll,      'Payroll');       break;
-    case 'audit-logs':    _safeRender(content, renderAuditLogs,    'Audit Logs');    break;
-    case 'programmes':    _safeRender(content, renderProgrammes,   'Programmes');    break;
-    case 'calendar-events': _safeRender(content, renderCalendarEvents, 'Calendar'); break;
-    case 'forums':        _safeRender(content, renderForums,       'Forums');        break;
-    case 'badges':        _safeRender(content, renderBadges,       'Badges');        break;
-    case 'transcripts':   _safeRender(content, renderTranscripts,  'Transcripts');   break;
-    case 'evaluations':   _safeRender(content, renderEvaluations,  'Evaluations');   break;
-    case 'live-attendance': _safeRender(content, renderLiveAttendance, 'Live Attendance'); break;
-    case 'branches':        _safeRender(content, renderBranches,       'Branches');        break;
+    case 'faq-center':      _lazyRender(content, '/js/pages-faq.js',       () => renderFAQCenter(), 'FAQ Center');      break;
+    case 'support':         _lazyRender(content, '/js/pages-faq.js',       () => renderSupport(),   'Support');         break;
+    case 'payroll':         _lazyRender(content, '/js/pages-corporate.js', renderPayroll,        'Payroll');         break;
+    case 'audit-logs':      _lazyRender(content, '/js/pages-corporate.js', renderAuditLogs,      'Audit Logs');      break;
+    case 'programmes':      _lazyRender(content, '/js/pages-corporate.js', renderProgrammes,     'Programmes');      break;
+    case 'calendar-events': _lazyRender(content, '/js/pages-academic.js',  renderCalendarEvents, 'Calendar');        break;
+    case 'forums':          _lazyRender(content, '/js/pages-academic.js',  renderForums,         'Forums');          break;
+    case 'badges':          _lazyRender(content, '/js/pages-academic.js',  renderBadges,         'Badges');          break;
+    case 'transcripts':     _lazyRender(content, '/js/pages-academic.js',  renderTranscripts,    'Transcripts');     break;
+    case 'evaluations':     _lazyRender(content, '/js/pages-academic.js',  renderEvaluations,    'Evaluations');     break;
+    case 'live-attendance': _lazyRender(content, '/js/manager-portal.js',  renderLiveAttendance, 'Live Attendance'); break;
+    case 'branches':        _lazyRender(content, '/js/manager-portal.js',  renderBranches,       'Branches');        break;
     case 'my-profile':      renderProfile(); break;
     case 'class-device':         renderClassDevice(); break;
     case 'class-announcements':  renderClassAnnouncements(); break;
@@ -2954,6 +3072,7 @@ async function renderDashboard() {
   const content = document.getElementById('main-content');
   if (!content) return;
   const role = currentUser.role;
+  _preloadForRole(role);
 
   // Clear immediately so stale content from a previous role never flashes
   content.innerHTML = `<div class="dashboard-skeleton">
@@ -2968,6 +3087,8 @@ async function renderDashboard() {
   </div>`;
 
   try {
+    const roleScripts = _ROLE_SCRIPTS[role] || [];
+    await Promise.all(roleScripts.map(s => _loadScript(s).catch(() => {})));
     switch (role) {
       case 'admin':
         await renderAdminDashboard(content);
@@ -3190,18 +3311,29 @@ async function renderHodDashboard(content) {
   }
 
   try {
-    const [sessData, userStats] = await Promise.all([
-      api('/api/attendance-sessions?limit=5'),
-      api('/api/users/stats')
-    ]);
-    const sessions   = sessData.sessions   || [];
-    const stats      = userStats           || {};
-    const lecturers  = stats.lecturers     || 0;
-    const students   = stats.students      || 0;
-    const hods       = stats.hods          || 0;
-    const activeSess = sessions.filter(s => s.active).length;
+    const deptQs = currentUser.department ? '&department=' + encodeURIComponent(currentUser.department) : '';
+    let sessions, lecturers, students, activeSess, _offlineBanner = '';
+    const _hc = !isOnline() ? offlineRead('hod_dashboard') : null;
+    if (_hc) {
+      sessions  = _hc.sessions  || [];
+      lecturers = _hc.lecturers || 0;
+      students  = _hc.students  || 0;
+      _offlineBanner = `<div style="display:inline-flex;align-items:center;gap:6px;background:#fef3c7;border:1px solid #fde68a;border-radius:20px;padding:3px 12px;font-size:11.5px;font-weight:600;color:#92400e;margin-bottom:10px">📡 Offline · Cached data</div>`;
+    } else {
+      const [sessData, lecturerData, studentData] = await Promise.all([
+        api('/api/attendance-sessions?limit=5'),
+        api('/api/users?role=lecturer' + deptQs),
+        api('/api/users?role=student' + deptQs),
+      ]);
+      sessions  = sessData.sessions   || [];
+      lecturers = (lecturerData.users || []).length;
+      students  = (studentData.users  || []).length;
+      offlineCache('hod_dashboard', { sessions, lecturers, students });
+    }
+    activeSess = sessions.filter(s => ['active','live','paused','locked'].includes(s.status)).length;
 
-    content.innerHTML = `
+    content.innerHTML = _offlineBanner + `
+
       <div class="page-header" style="display:flex;align-items:flex-start;justify-content:space-between;flex-wrap:wrap;gap:12px;">
         <div>
           <h2>Department Overview</h2>
@@ -3247,7 +3379,7 @@ async function renderHodDashboard(content) {
                   <div style="font-size:13px;font-weight:600;">${s.title || s.courseName || 'Untitled'}</div>
                   <div style="font-size:11px;color:var(--text-muted);">${s.createdBy?.name || '—'} · ${timeAgo(s.createdAt)}</div>
                 </div>
-                <span class="tag ${s.active ? 'tag-green' : 'tag-gray'}">${s.active ? 'Live' : 'Ended'}</span>
+                <span class="tag ${['active','live','paused','locked'].includes(s.status) ? 'tag-green' : 'tag-gray'}">${['active','live','paused','locked'].includes(s.status) ? 'Live' : 'Ended'}</span>
               </div>`).join('')
           }
           <button class="btn btn-secondary btn-sm" style="margin-top:12px;width:100%;" onclick="navigateTo('hod-sessions')">View All Sessions →</button>
@@ -3332,10 +3464,24 @@ async function renderHodDashboard(content) {
 async function renderHodSessions() {
   const content = document.getElementById('main-content');
   content.innerHTML = '<div class="loading">Loading sessions…</div>';
-  try {
-    const dept = currentUser.department ? '&department=' + encodeURIComponent(currentUser.department) : '';
-    const data = await api('/api/attendance-sessions?limit=100' + dept);
-    const sessions = data.sessions || [];
+  let sessions = [], _isOff = false;
+  if (!isOnline()) {
+    const _c = offlineRead('hod_sessions');
+    if (_c) { sessions = _c.sessions || []; _isOff = true; }
+    else { content.innerHTML = `<div style="text-align:center;padding:60px 20px"><div style="font-size:48px;margin-bottom:12px">📡</div><div style="font-size:18px;font-weight:700">You're Offline</div><p style="color:var(--text-muted);margin-top:8px">Connect once while online to cache this page.</p></div>`; return; }
+  } else {
+    try {
+      const dept = currentUser.department ? '&department=' + encodeURIComponent(currentUser.department) : '';
+      const data = await api('/api/attendance-sessions?limit=100' + dept);
+      sessions = data.sessions || [];
+      offlineCache('hod_sessions', data);
+    } catch(e) {
+      const _c = offlineRead('hod_sessions');
+      if (_c) { sessions = _c.sessions || []; _isOff = true; }
+      else { content.innerHTML = `<div class="card"><p style="color:#ef4444;">${e.message}</p></div>`; return; }
+    }
+  }
+  { const data = { sessions }; /* compat */
     content.innerHTML = `
       <div class="page-header" style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:10px;">
         <div><h2>All Sessions</h2><p>Department-wide attendance sessions — ${sessions.length} total</p></div>
@@ -3359,104 +3505,229 @@ async function renderHodSessions() {
                   <td style="padding:10px 12px;color:var(--text-muted);">${s.createdBy?.name || '—'}</td>
                   <td style="padding:10px 12px;">${s.attendanceCount ?? s.records?.length ?? '—'}</td>
                   <td style="padding:10px 12px;color:var(--text-muted);font-size:12px;">${fmtDate(s.createdAt)}</td>
-                  <td style="padding:10px 12px;"><span class="tag ${s.active ? 'tag-green' : 'tag-gray'}">${s.active ? 'Live' : 'Ended'}</span></td>
+                  <td style="padding:10px 12px;"><span class="tag ${['active','live','paused','locked'].includes(s.status) ? 'tag-green' : 'tag-gray'}">${['active','live','paused','locked'].includes(s.status) ? 'Live' : 'Ended'}</span></td>
                 </tr>`).join('')}
           </tbody>
         </table>
-      </div>`;
-  } catch(e) {
-    content.innerHTML = `<div class="card"><p style="color:#ef4444;">${e.message}</p></div>`;
+      </div>`+ (_isOff ? `<div style="display:inline-flex;align-items:center;gap:6px;background:#fef3c7;border:1px solid #fde68a;border-radius:20px;padding:3px 12px;font-size:11.5px;font-weight:600;color:#92400e;margin-bottom:10px">📡 Offline · Cached data</div>` : '');
   }
 }
 
 async function renderHodLecturers() {
   const content = document.getElementById('main-content');
   content.innerHTML = '<div class="loading">Loading lecturers…</div>';
-  try {
-    const dept = currentUser.department ? '&department=' + encodeURIComponent(currentUser.department) : '';
-    const data = await api('/api/users?role=lecturer&limit=200' + dept);
-    const lecturers = data.users || [];
+  let lecturers = [], courses = [], _isOff = false;
+  if (!isOnline()) {
+    const _c = offlineRead('hod_lecturers');
+    if (_c) { lecturers = _c.lecturers || []; courses = _c.courses || []; _isOff = true; }
+    else { content.innerHTML = `<div style="text-align:center;padding:60px 20px"><div style="font-size:48px;margin-bottom:12px">📡</div><div style="font-size:18px;font-weight:700">You're Offline</div><p style="color:var(--text-muted);margin-top:8px">Connect once while online to cache this page.</p></div>`; return; }
+  } else {
+    try {
+      const dept = currentUser.department ? '&department=' + encodeURIComponent(currentUser.department) : '';
+      const [lecturerData, courseData] = await Promise.all([
+        api('/api/users?role=lecturer&limit=200' + dept),
+        api('/api/courses?limit=500'),
+      ]);
+      lecturers = lecturerData.users || [];
+      courses   = courseData.courses || courseData || [];
+      offlineCache('hod_lecturers', { lecturers, courses });
+    } catch(e) {
+      const _c = offlineRead('hod_lecturers');
+      if (_c) { lecturers = _c.lecturers || []; courses = _c.courses || []; _isOff = true; }
+      else { content.innerHTML = `<div class="card"><p style="color:#ef4444;">${e.message}</p></div>`; return; }
+    }
+  }
+  {
+
+    // Build map: lecturerId → [course titles]
+    const coursesByLecturer = {};
+    for (const c of courses) {
+      const lid = c.lecturerId?._id || c.lecturerId;
+      if (!lid) continue;
+      const key = lid.toString();
+      if (!coursesByLecturer[key]) coursesByLecturer[key] = [];
+      coursesByLecturer[key].push(c.title || c.code || 'Untitled');
+    }
+
+    const deptLabel = currentUser.department ? `in ${currentUser.department}` : 'in your institution';
     content.innerHTML = `
       <div class="page-header">
-        <div><h2>Lecturers</h2><p>${lecturers.length} lecturer${lecturers.length !== 1 ? 's' : ''} in your institution</p></div>
+        <div><h2>Lecturers</h2><p>${lecturers.length} lecturer${lecturers.length !== 1 ? 's' : ''} ${deptLabel}</p></div>
         <button class="btn btn-secondary btn-sm" onclick="hodExportCSV('lecturers')">Export CSV</button>
       </div>
       <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:12px;">
         ${lecturers.length === 0 ? '<div class="empty-state"><p>No lecturers found.</p></div>' :
-          lecturers.map(u => `
-            <div class="card" style="display:flex;align-items:center;gap:12px;padding:14px 16px;">
-              <div style="width:38px;height:38px;border-radius:50%;background:#ecfeff;color:#0891b2;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:15px;flex-shrink:0;">
+          lecturers.map(u => {
+            const lecCourses = coursesByLecturer[u._id] || [];
+            const courseChips = lecCourses.slice(0, 3).map(t =>
+              `<span style="font-size:10px;padding:2px 7px;border-radius:20px;background:#f0fdf4;color:#166534;border:1px solid #bbf7d0;font-weight:600;white-space:nowrap;">${esc(t)}</span>`
+            ).join('');
+            const moreTag = lecCourses.length > 3
+              ? `<span style="font-size:10px;color:var(--text-muted)">+${lecCourses.length - 3} more</span>`
+              : '';
+            return `
+            <div class="card" style="display:flex;align-items:flex-start;gap:12px;padding:14px 16px;">
+              <div style="width:38px;height:38px;border-radius:50%;background:#ecfeff;color:#0891b2;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:15px;flex-shrink:0;margin-top:2px;">
                 ${(u.name||'?')[0].toUpperCase()}
               </div>
               <div style="min-width:0;flex:1;">
-                <div style="font-weight:700;font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${u.name}</div>
-                <div style="font-size:11px;color:var(--text-muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${u.email}</div>
+                <div style="font-weight:700;font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${esc(u.name)}</div>
+                <div style="font-size:11px;color:var(--text-muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${esc(u.email)}</div>
                 <div style="display:flex;gap:6px;align-items:center;margin-top:4px;flex-wrap:wrap;">
                   <span class="tag ${u.isApproved ? 'tag-green' : 'tag-amber'}">${u.isApproved ? 'Active' : 'Pending'}</span>
-                  ${u.department ? `<span style="font-size:10px;padding:2px 6px;border-radius:20px;background:#ecfeff;color:#0891b2;font-weight:600;">${u.department}</span>` : ''}
-                  
+                  ${u.department ? `<span style="font-size:10px;padding:2px 6px;border-radius:20px;background:#ecfeff;color:#0891b2;font-weight:600;">${esc(u.department)}</span>` : ''}
                 </div>
+                ${lecCourses.length ? `<div style="display:flex;gap:4px;flex-wrap:wrap;margin-top:6px;">${courseChips}${moreTag}</div>` : '<div style="font-size:11px;color:var(--text-muted);margin-top:5px;">No courses assigned</div>'}
               </div>
-            </div>`).join('')}
+            </div>`;
+          }).join('')}
       </div>`;
-  } catch(e) {
-    content.innerHTML = `<div class="card"><p style="color:#ef4444;">${e.message}</p></div>`;
   }
 }
+
+let _hodCachedStudents = null;
 
 async function renderHodStudents() {
   const content = document.getElementById('main-content');
   content.innerHTML = '<div class="loading">Loading students…</div>';
+  if (!isOnline()) {
+    const _c = offlineRead('hod_students');
+    if (_c) { _hodCachedStudents = _c; _renderHodLevelCards(content, _c); return; }
+    content.innerHTML = `<div style="text-align:center;padding:60px 20px"><div style="font-size:48px;margin-bottom:12px">📡</div><div style="font-size:18px;font-weight:700">You're Offline</div><p style="color:var(--text-muted);margin-top:8px">Connect once while online to cache this page.</p></div>`; return;
+  }
   try {
     const dept = currentUser.department ? '&department=' + encodeURIComponent(currentUser.department) : '';
     const data = await api('/api/users?role=student&limit=500' + dept);
-    const students = data.users || [];
-    content.innerHTML = `
-      <div class="page-header">
-        <div><h2>Students</h2><p>${students.length} student${students.length !== 1 ? 's' : ''} enrolled</p></div>
-        <div style="display:flex;gap:8px;align-items:center;">
-          <button class="btn btn-secondary btn-sm" onclick="hodExportCSV('students')">Export CSV</button>
-          <input id="hod-stu-search" placeholder="Search students…" oninput="hodFilterStudents()" style="padding:8px 12px;border:1.5px solid var(--border);border-radius:8px;font-size:13px;font-family:inherit;outline:none;min-width:200px;">
-        </div>
-      </div>
-      <div id="hod-stu-list" style="overflow-x:auto;">
-        <table style="width:100%;border-collapse:collapse;font-size:13px;">
-          <thead>
-            <tr style="border-bottom:2px solid var(--border);">
-              <th style="text-align:left;padding:10px 12px;font-weight:700;color:var(--text-muted);font-size:11px;text-transform:uppercase;">Name</th>
-              <th style="text-align:left;padding:10px 12px;font-weight:700;color:var(--text-muted);font-size:11px;text-transform:uppercase;">Index No.</th>
-              <th style="text-align:left;padding:10px 12px;font-weight:700;color:var(--text-muted);font-size:11px;text-transform:uppercase;">Programme</th>
-              <th style="text-align:left;padding:10px 12px;font-weight:700;color:var(--text-muted);font-size:11px;text-transform:uppercase;">Level / Group</th>
-              <th style="text-align:left;padding:10px 12px;font-weight:700;color:var(--text-muted);font-size:11px;text-transform:uppercase;">Session</th>
-              <th style="text-align:left;padding:10px 12px;font-weight:700;color:var(--text-muted);font-size:11px;text-transform:uppercase;">Status</th>
-              <th style="text-align:left;padding:10px 12px;font-weight:700;color:var(--text-muted);font-size:11px;text-transform:uppercase;"></th>
-            </tr>
-          </thead>
-          <tbody id="hod-stu-tbody">
-            ${students.length === 0 ? '<tr><td colspan="4" style="padding:24px;text-align:center;color:var(--text-muted);">No students found.</td></tr>' :
-              students.map(u => `
-                <tr class="hod-stu-row" data-name="${(u.name||'').toLowerCase()}" data-index="${(u.indexNumber||'').toLowerCase()}" style="border-bottom:1px solid var(--border);">
-                  <td style="padding:10px 12px;font-weight:600;">${u.name}</td>
-                  <td style="padding:10px 12px;color:var(--text-muted);font-family:monospace;">${u.IndexNumber || u.indexNumber || '—'}</td>
-                  <td style="padding:10px 12px;">${u.programme ? `<span style="background:#ede9fe;color:#7c3aed;padding:2px 8px;border-radius:20px;font-size:11px;font-weight:700">${esc(u.programme)}</span>` : '—'}</td>
-                  <td style="padding:10px 12px;">
-                    ${u.studentLevel ? `<span style="background:#dbeafe;color:#1d4ed8;padding:2px 7px;border-radius:20px;font-size:11px;font-weight:700;margin-right:3px">L${esc(u.studentLevel)}</span>` : ''}
-                    ${u.studentGroup ? `<span style="background:#ecfdf5;color:#059669;padding:2px 7px;border-radius:20px;font-size:11px;font-weight:700">Grp ${esc(u.studentGroup)}</span>` : ''}
-                    ${!u.studentLevel && !u.studentGroup ? '—' : ''}
-                  </td>
-                  <td style="padding:10px 12px;">
-                    ${u.sessionType ? `<span style="background:#fff7ed;color:#c2410c;padding:2px 8px;border-radius:20px;font-size:11px;font-weight:600">${esc(u.sessionType)}</span>` : '—'}
-                    ${u.semester ? `<span style="font-size:11px;color:var(--text-muted);margin-left:4px">Sem ${esc(u.semester)}</span>` : ''}
-                  </td>
-                  <td style="padding:10px 12px;"><span class="tag ${u.isApproved ? 'tag-green' : 'tag-amber'}">${u.isApproved ? 'Active' : 'Pending'}</span></td>
-                  <td style="padding:10px 12px;"><button class="btn btn-xs btn-secondary" onclick="hodViewStudentAttendance('${u._id}','${u.name.replace(/'/g,"\\'")}')">Attendance</button></td>
-                </tr>`).join('')}
-          </tbody>
-        </table>
-      </div>`;
+    _hodCachedStudents = data.users || [];
+    offlineCache('hod_students', _hodCachedStudents);
+    _renderHodLevelCards(content, _hodCachedStudents);
   } catch(e) {
+    const _c = offlineRead('hod_students');
+    if (_c) { _hodCachedStudents = _c; _renderHodLevelCards(content, _c); return; }
     content.innerHTML = `<div class="card"><p style="color:#ef4444;">${e.message}</p></div>`;
   }
+}
+
+function _renderHodLevelCards(content, allStudents) {
+  const levelMap = {};
+  allStudents.forEach(u => {
+    const lv = u.studentLevel ? String(u.studentLevel) : 'Unassigned';
+    if (!levelMap[lv]) levelMap[lv] = [];
+    levelMap[lv].push(u);
+  });
+  const levels = Object.keys(levelMap).sort((a, b) => {
+    if (a === 'Unassigned') return 1;
+    if (b === 'Unassigned') return -1;
+    return Number(a) - Number(b);
+  });
+
+  const cards = levels.map(lv => {
+    const studs = levelMap[lv];
+    const active = studs.filter(u => u.isApproved).length;
+    const accent = _deptColor('Level ' + lv);
+    const lvEnc = encodeURIComponent(lv);
+    return `
+      <div onclick="_renderHodLevelStudents(decodeURIComponent('${lvEnc}'), _hodCachedStudents)"
+           style="background:#fff;border:1.5px solid #e8eaed;border-radius:16px;padding:0;cursor:pointer;overflow:hidden;box-shadow:0 1px 4px rgba(0,0,0,.06);transition:box-shadow .18s;position:relative"
+           onmouseover="this.style.boxShadow='0 6px 24px rgba(0,0,0,.11)'" onmouseout="this.style.boxShadow='0 1px 4px rgba(0,0,0,.06)'">
+        <div style="height:5px;background:${accent};border-radius:16px 16px 0 0"></div>
+        <div style="padding:20px 22px 18px">
+          <div style="display:flex;align-items:center;gap:12px;margin-bottom:14px">
+            <div style="width:42px;height:42px;border-radius:12px;background:${accent}1a;display:flex;align-items:center;justify-content:center;flex-shrink:0">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="${accent}" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+            </div>
+            <div>
+              <div style="font-size:16px;font-weight:800;color:#0f172a">Level ${lv === 'Unassigned' ? '<span style="color:#94a3b8">Unassigned</span>' : lv}</div>
+              <div style="font-size:12px;color:#64748b;margin-top:1px">${studs.length} student${studs.length !== 1 ? 's' : ''}</div>
+            </div>
+          </div>
+          <div style="display:flex;gap:10px;flex-wrap:wrap">
+            <span style="font-size:11px;font-weight:600;background:${accent}15;color:${accent};padding:3px 10px;border-radius:20px">${active} Active</span>
+            ${studs.length - active > 0 ? `<span style="font-size:11px;font-weight:600;background:#fef3c715;color:#b45309;padding:3px 10px;border-radius:20px">${studs.length - active} Pending</span>` : ''}
+          </div>
+        </div>
+      </div>`;
+  }).join('');
+
+  content.innerHTML = `
+    <div class="page-header" style="margin-bottom:24px">
+      <div>
+        <h2 style="font-size:22px;font-weight:800;letter-spacing:-.5px;color:#0f172a;margin-bottom:2px">Students</h2>
+        <p style="color:#64748b;font-size:13px">${allStudents.length} student${allStudents.length !== 1 ? 's' : ''} enrolled${currentUser.department ? ' · ' + esc(currentUser.department) : ''}</p>
+      </div>
+      <button class="btn btn-secondary btn-sm" onclick="hodExportCSV('students')">Export CSV</button>
+    </div>
+    ${levels.length === 0
+      ? `<div style="background:#fff;border:1px solid #e8eaed;border-radius:16px;padding:60px 20px;text-align:center"><p style="color:#64748b">No students found.</p></div>`
+      : `<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:16px">${cards}</div>`}`;
+}
+
+function _renderHodLevelStudents(level, allStudents) {
+  const content = document.getElementById('main-content');
+  const studs = allStudents.filter(u => {
+    const lv = u.studentLevel ? String(u.studentLevel) : 'Unassigned';
+    return lv === level;
+  });
+  const accent = _deptColor('Level ' + level);
+
+  content.innerHTML = `
+    <div class="page-header" style="margin-bottom:20px">
+      <div style="display:flex;align-items:center;gap:10px">
+        <button onclick="_renderHodLevelCards(document.getElementById('main-content'),_hodCachedStudents)"
+                style="background:none;border:none;cursor:pointer;padding:6px 8px;border-radius:8px;color:#64748b;font-size:13px;display:flex;align-items:center;gap:5px;transition:background .15s"
+                onmouseover="this.style.background='#f1f5f9'" onmouseout="this.style.background='none'">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="15 18 9 12 15 6"/></svg>
+          All Levels
+        </button>
+        <span style="color:#cbd5e1">›</span>
+        <span style="font-size:14px;font-weight:700;color:#0f172a">Level ${esc(level)}</span>
+      </div>
+      <div style="display:flex;gap:8px;align-items:center">
+        <button class="btn btn-secondary btn-sm" onclick="hodExportCSV('students')">Export CSV</button>
+        <input id="hod-stu-search" placeholder="Search students…" oninput="hodFilterStudents()"
+               style="padding:8px 12px;border:1.5px solid var(--border);border-radius:8px;font-size:13px;font-family:inherit;outline:none;min-width:200px;">
+      </div>
+    </div>
+    <div id="hod-stu-list" style="overflow-x:auto;">
+      <table style="width:100%;border-collapse:collapse;font-size:13px;background:#fff;border:1px solid #e8eaed;border-radius:14px;overflow:hidden;box-shadow:0 1px 4px rgba(0,0,0,.05)">
+        <thead>
+          <tr style="border-bottom:2px solid var(--border);background:#f8fafc">
+            <th style="text-align:left;padding:12px 14px;font-weight:700;color:var(--text-muted);font-size:11px;text-transform:uppercase;letter-spacing:.5px">Name</th>
+            <th style="text-align:left;padding:12px 14px;font-weight:700;color:var(--text-muted);font-size:11px;text-transform:uppercase;letter-spacing:.5px">Index No.</th>
+            <th style="text-align:left;padding:12px 14px;font-weight:700;color:var(--text-muted);font-size:11px;text-transform:uppercase;letter-spacing:.5px">Programme</th>
+            <th style="text-align:left;padding:12px 14px;font-weight:700;color:var(--text-muted);font-size:11px;text-transform:uppercase;letter-spacing:.5px">Group</th>
+            <th style="text-align:left;padding:12px 14px;font-weight:700;color:var(--text-muted);font-size:11px;text-transform:uppercase;letter-spacing:.5px">Session</th>
+            <th style="text-align:left;padding:12px 14px;font-weight:700;color:var(--text-muted);font-size:11px;text-transform:uppercase;letter-spacing:.5px">Status</th>
+            <th style="text-align:left;padding:12px 14px;font-weight:700;color:var(--text-muted);font-size:11px;text-transform:uppercase;letter-spacing:.5px"></th>
+          </tr>
+        </thead>
+        <tbody id="hod-stu-tbody">
+          ${studs.length === 0 ? `<tr><td colspan="7" style="padding:32px;text-align:center;color:var(--text-muted)">No students in Level ${esc(level)}.</td></tr>` :
+            studs.map(u => `
+              <tr class="hod-stu-row" data-name="${esc((u.name||'').toLowerCase())}" data-index="${esc((u.IndexNumber||u.indexNumber||'').toLowerCase())}" style="border-bottom:1px solid var(--border);">
+                <td style="padding:11px 14px;font-weight:600">${esc(u.name)}</td>
+                <td style="padding:11px 14px;color:var(--text-muted);font-family:monospace">${u.IndexNumber || u.indexNumber || '—'}</td>
+                <td style="padding:11px 14px">${u.programme ? `<span style="background:#ede9fe;color:#7c3aed;padding:2px 9px;border-radius:20px;font-size:11px;font-weight:700">${esc(u.programme)}</span>` : '—'}</td>
+                <td style="padding:11px 14px">${u.studentGroup ? `<span style="background:#ecfdf5;color:#059669;padding:2px 9px;border-radius:20px;font-size:11px;font-weight:700">Grp ${esc(u.studentGroup)}</span>` : '—'}</td>
+                <td style="padding:11px 14px">
+                  ${u.sessionType ? `<span style="background:#fff7ed;color:#c2410c;padding:2px 9px;border-radius:20px;font-size:11px;font-weight:600">${esc(u.sessionType)}</span>` : '—'}
+                  ${u.semester ? `<span style="font-size:11px;color:var(--text-muted);margin-left:4px">Sem ${esc(u.semester)}</span>` : ''}
+                  ${u.academicYear ? `<span style="font-size:10px;color:var(--text-muted);margin-left:4px">${esc(u.academicYear)}</span>` : ''}
+                </td>
+                <td style="padding:11px 14px">
+                  <span class="tag ${u.isApproved ? 'tag-green' : 'tag-amber'}">${u.isApproved ? 'Active' : 'Pending'}</span>
+                  ${u.isClassRep ? '<span class="tag" style="background:#7c3aed;color:#fff;margin-left:4px">Rep</span>' : ''}
+                </td>
+                <td style="padding:11px 14px;display:flex;gap:6px;flex-wrap:wrap">
+                  <button class="btn btn-xs btn-secondary" onclick="hodViewStudentAttendance('${u._id}','${(u.name||'').replace(/'/g,"\\'")}')">Attendance</button>
+                  ${u.isClassRep
+                    ? `<button class="btn btn-xs" style="background:#fee2e2;color:#b91c1c;border:1px solid #fca5a5;" onclick="hodToggleClassRep('${u._id}','${esc(u.name).replace(/'/g,"\\'")}',false)">Remove Rep</button>`
+                    : `<button class="btn btn-xs" style="background:#faf5ff;color:#7c3aed;border:1px solid #d8b4fe;" onclick="hodToggleClassRep('${u._id}','${esc(u.name).replace(/'/g,"\\'")}',true)">Make Rep</button>`}
+                </td>
+              </tr>`).join('')}
+        </tbody>
+      </table>
+    </div>`;
 }
 
 function hodFilterStudents() {
@@ -3465,6 +3736,23 @@ function hodFilterStudents() {
     const match = row.dataset.name.includes(q) || row.dataset.index.includes(q);
     row.style.display = match ? '' : 'none';
   });
+}
+
+async function hodToggleClassRep(studentId, name, assign) {
+  const action = assign ? `Make ${name} a class representative?` : `Remove ${name} as class representative?`;
+  if (!confirm(action)) return;
+  try {
+    if (assign) {
+      await api('/api/class-rep-admin/assign', { method: 'POST', body: JSON.stringify({ studentId }) });
+      toastSuccess(`${name} is now a class representative`);
+    } else {
+      await api(`/api/class-rep-admin/remove/${studentId}`, { method: 'DELETE' });
+      toastSuccess(`${name} removed as class representative`);
+    }
+    renderHodStudents();
+  } catch(e) {
+    toastError(e.message || 'Failed to update class representative');
+  }
 }
 
 async function renderHodReports() {
@@ -3478,7 +3766,7 @@ async function renderHodReports() {
     ]);
     const sessions  = sessData.sessions || [];
     const stats     = userStats || {};
-    const ended     = sessions.filter(s => !s.active);
+    const ended     = sessions.filter(s => !['active','live','paused','locked'].includes(s.status));
     const totalAtt  = ended.reduce((sum, s) => sum + (s.attendanceCount ?? s.records?.length ?? 0), 0);
     const avgAtt    = ended.length ? Math.round(totalAtt / ended.length) : 0;
 
@@ -3584,7 +3872,7 @@ async function renderHodReports() {
     const trendMap = {};
     const now = Date.now();
     const days30 = 30 * 24 * 60 * 60 * 1000;
-    sessions.filter(s => !s.active && new Date(s.createdAt) > now - days30).forEach(s => {
+    sessions.filter(s => !['active','live','paused','locked'].includes(s.status) && new Date(s.createdAt) > now - days30).forEach(s => {
       const d = new Date(s.createdAt).toLocaleDateString('en-GB', { day: '2-digit', month: 'short' });
       trendMap[d] = (trendMap[d] || 0) + (s.attendanceCount ?? s.records?.length ?? 0);
     });
@@ -3772,7 +4060,7 @@ async function hodExportCSV(type) {
       const hodDept = currentUser.department ? '&department=' + encodeURIComponent(currentUser.department) : '';
       const d = await api('/api/attendance-sessions?limit=200' + hodDept);
       headers = ['Session', 'Lecturer', 'Date', 'Attendance', 'Status'];
-      rows = (d.sessions || []).map(s => [s.title || s.courseName || 'Session', s.createdBy?.name || '', fmtDate(s.createdAt), s.attendanceCount ?? s.records?.length ?? 0, s.active ? 'Live' : 'Ended']);
+      rows = (d.sessions || []).map(s => [s.title || s.courseName || 'Session', s.createdBy?.name || '', fmtDate(s.createdAt), s.attendanceCount ?? s.records?.length ?? 0, ['active','live','paused','locked'].includes(s.status) ? 'Live' : 'Ended']);
       filename = 'DIKLY_Attendance_' + (currentUser.department || 'All') + '.csv';
     } else if (type === 'courses') {
       const d = await api('/api/hod/course-overview');
@@ -4096,8 +4384,12 @@ async function renderClassRepMgmt() {
   const content = document.getElementById('main-content');
   content.innerHTML = '<div class="loading">Loading class representatives…</div>';
   try {
-    const repsData = await api('/api/class-rep-admin/list');
-    const reps = repsData.reps || [];
+    const [repsData, devicesData] = await Promise.all([
+      api('/api/class-rep-admin/list'),
+      api('/api/devices/all').catch(() => ({ devices: [] })),
+    ]);
+    const reps    = repsData.reps || [];
+    const devices = devicesData.devices || [];
 
     // Group reps by class key for the 2-rep cap display
     const repsByClass = {};
@@ -4138,6 +4430,7 @@ async function renderClassRepMgmt() {
                   <th style="text-align:left;padding:10px 12px;font-weight:700;color:var(--text-muted);font-size:11px;text-transform:uppercase;">Level / Group</th>
                   <th style="text-align:left;padding:10px 12px;font-weight:700;color:var(--text-muted);font-size:11px;text-transform:uppercase;">Session</th>
                   <th style="text-align:left;padding:10px 12px;font-weight:700;color:var(--text-muted);font-size:11px;text-transform:uppercase;">Department</th>
+                  <th style="text-align:left;padding:10px 12px;font-weight:700;color:var(--text-muted);font-size:11px;text-transform:uppercase;">Device</th>
                   <th style="text-align:left;padding:10px 12px;font-weight:700;color:var(--text-muted);font-size:11px;text-transform:uppercase;"></th>
                 </tr>
               </thead>
@@ -4167,6 +4460,21 @@ async function renderClassRepMgmt() {
                     </td>
                     <td style="padding:10px 12px;color:var(--text-muted);font-size:12px">${esc(r.department||'—')}</td>
                     <td style="padding:10px 12px;">
+                      ${(() => {
+                        const assignedDevice = devices.find(d => d.classRepId && (d.classRepId._id || d.classRepId) === r._id);
+                        const assignedDeviceId = assignedDevice ? (assignedDevice.deviceId || '') : '';
+                        const opts = `<option value="">— None —</option>` +
+                          devices.map(d => {
+                            const did = d.deviceId || '';
+                            const label = esc(d.deviceName || d.deviceId);
+                            const sel = did === assignedDeviceId ? 'selected' : '';
+                            return `<option value="${esc(did)}" ${sel}>${label}</option>`;
+                          }).join('');
+                        return `<select onchange="crAssignDeviceInline(this,'${r._id}','${esc(r.name).replace(/'/g,"\\'")}')"
+                          style="font-size:12px;border:1.5px solid var(--border);border-radius:8px;padding:4px 8px;background:var(--bg,#fff);color:var(--text);max-width:160px">${opts}</select>`;
+                      })()}
+                    </td>
+                    <td style="padding:10px 12px;white-space:nowrap;">
                       <button class="btn btn-xs" style="background:#fee2e2;color:#b91c1c;border:1px solid #fca5a5;" onclick="crRemoveRep('${r._id}','${esc(r.name).replace(/'/g,"\\'")}')">Remove</button>
                     </td>
                   </tr>`).join('')}
@@ -4191,6 +4499,10 @@ async function renderClassRepMgmt() {
               <div style="font-size:11px;color:var(--text-muted);margin-top:4px">Enter the student's index number to look them up. You may also apply filters below to narrow results.</div>
             </div>
             <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(130px,1fr));gap:10px;margin-bottom:16px;">
+              <div>
+                <label style="font-size:11px;font-weight:700;color:var(--text-muted);display:block;margin-bottom:4px">DEPARTMENT</label>
+                <input id="cr-f-dept" type="text" placeholder="e.g. Computer Science" style="width:100%;padding:7px 10px;border:1.5px solid var(--border);border-radius:8px;font-size:13px;font-family:inherit;outline:none;box-sizing:border-box;" />
+              </div>
               <div>
                 <label style="font-size:11px;font-weight:700;color:var(--text-muted);display:block;margin-bottom:4px">LEVEL</label>
                 <select id="cr-f-level" style="width:100%;padding:7px 10px;border:1.5px solid var(--border);border-radius:8px;font-size:13px;font-family:inherit;outline:none;">
@@ -4256,16 +4568,18 @@ window.crFetchStudents = async function() {
 
   listEl.innerHTML = '<div class="loading" style="padding:16px 0;">Loading…</div>';
   try {
-    const level    = document.getElementById('cr-f-level')?.value    || '';
+    const level      = document.getElementById('cr-f-level')?.value    || '';
     const group    = document.getElementById('cr-f-group')?.value    || '';
     const session  = document.getElementById('cr-f-session')?.value  || '';
     const semester = document.getElementById('cr-f-semester')?.value || '';
+    const dept     = document.getElementById('cr-f-dept')?.value.trim() || '';
     const params = new URLSearchParams();
     params.set('indexNumber', indexNumber);
     if (level)    params.set('level', level);
     if (group)    params.set('group', group);
     if (session)  params.set('sessionType', session);
     if (semester) params.set('semester', semester);
+    if (dept)     params.set('department', dept);
 
     const data = await api('/api/class-rep-admin/students?' + params.toString());
     const students = data.students || [];
@@ -4368,6 +4682,38 @@ window.crRemoveRepBrowse = async function(userId, name) {
     }).catch(() => {});
   } catch(e) {
     toastError(e.message || 'Failed to remove class representative');
+  }
+};
+
+window.crAssignDeviceInline = async function(selectEl, repId, repName) {
+  const deviceId = selectEl.value;
+  const prev = selectEl.dataset.prev ?? selectEl.value;
+  selectEl.dataset.prev = deviceId;
+  selectEl.disabled = true;
+  try {
+    if (deviceId) {
+      await api(`/api/devices/${deviceId}/assign-class-rep`, {
+        method: 'PATCH',
+        body: JSON.stringify({ classRepId: repId }),
+      });
+      toastSuccess(`Device assigned to ${repName}`);
+    } else {
+      // "— None —" selected: find the previously assigned device and unassign it
+      const data = await api('/api/devices/all').catch(() => ({ devices: [] }));
+      const assigned = (data.devices || []).find(d => d.classRepId && (d.classRepId._id || d.classRepId) === repId);
+      if (assigned) {
+        await api(`/api/devices/${assigned.deviceId}/assign-class-rep`, {
+          method: 'PATCH',
+          body: JSON.stringify({ classRepId: null }),
+        });
+        toastSuccess('Device unassigned');
+      }
+    }
+  } catch(e) {
+    toastError(e.message || 'Failed to update device assignment');
+    selectEl.value = prev;
+  } finally {
+    selectEl.disabled = false;
   }
 };
 
@@ -4765,12 +5111,17 @@ async function renderSuperadminDashboard(content) {
 
 
 async function renderLecturerDashboard(content) {
-  const [sessionsData, coursesData, quizzesData, meetingsData] = await Promise.all([
+  let _ld = !isOnline() ? offlineRead('lecturer_dashboard') : null;
+  if (!isOnline() && !_ld) { content.innerHTML = `<div style="text-align:center;padding:60px 20px"><div style="font-size:48px;margin-bottom:12px">📡</div><div style="font-size:18px;font-weight:700">You're Offline</div><p style="color:var(--text-muted);margin-top:8px">Connect once while online to cache this page.</p></div>`; return; }
+  const [sessionsData, coursesData, quizzesData, meetingsData] = _ld
+    ? [_ld.sessionsData, _ld.coursesData, _ld.quizzesData, _ld.meetingsData]
+    : await Promise.all([
     api('/api/attendance-sessions?limit=5').catch(() => ({ sessions: [], pagination: { total: 0 } })),
     api('/api/courses').catch(() => ({ courses: [] })),
     api('/api/lecturer/quizzes').catch(() => ({ quizzes: [] })),
     api('/api/meetings?limit=10').catch(() => ({ data: [] })),
   ]);
+  if (!_ld) offlineCache('lecturer_dashboard', { sessionsData, coursesData, quizzesData, meetingsData });
 
   const totalStudents  = coursesData.courses.reduce((sum, c) => sum + (c.enrolledStudents?.length || 0), 0);
   const activeCourses  = coursesData.courses.length;
@@ -4973,12 +5324,23 @@ async function renderEmployeeDashboard(content) {
   const today      = new Date().toISOString().slice(0, 10);
   const monthStart = new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString().slice(0, 10);
 
-  const [todayData, monthData, shiftData, leavesData] = await Promise.all([
-    api(`/api/corporate-attendance/my?from=${today}&to=${today}`).catch(() => ({ records: [] })),
-    api(`/api/corporate-attendance/my?from=${monthStart}&to=${today}`).catch(() => ({ records: [] })),
-    api('/api/shifts/my-shift').catch(() => ({})),
-    api('/api/leaves/my').catch(() => ({ leaves: [] })),
-  ]);
+  let todayData, monthData, shiftData, leavesData, _empOffline = false;
+  const _empCached = offlineRead('employee_dashboard');
+  if (!isOnline() && _empCached) {
+    ({ todayData, monthData, shiftData, leavesData } = _empCached);
+    _empOffline = true;
+  } else if (!isOnline()) {
+    content.innerHTML = '<div class="card"><div class="empty-state"><p>📶 You\'re offline and no cached data is available yet. Please connect and reload.</p></div></div>';
+    return;
+  } else {
+    [todayData, monthData, shiftData, leavesData] = await Promise.all([
+      api(`/api/corporate-attendance/my?from=${today}&to=${today}`).catch(() => ({ records: [] })),
+      api(`/api/corporate-attendance/my?from=${monthStart}&to=${today}`).catch(() => ({ records: [] })),
+      api('/api/shifts/my-shift').catch(() => ({})),
+      api('/api/leaves/my').catch(() => ({ leaves: [] })),
+    ]);
+    offlineCache('employee_dashboard', { todayData, monthData, shiftData, leavesData });
+  }
 
   // ── Today ─────────────────────────────────────────────────────────────────
   const todayRecord  = todayData.records?.[0] || null;
@@ -5059,6 +5421,7 @@ async function renderEmployeeDashboard(content) {
   const statusColors = { present:'#16a34a', late:'#d97706', absent:'#dc2626', half_day:'#7c3aed', on_leave:'#0284c7', remote:'#0891b2' };
 
   content.innerHTML = `
+    ${_empOffline ? '<div style="background:#fef3c7;border:1px solid #fcd34d;border-radius:8px;padding:8px 14px;font-size:12px;font-weight:600;color:#92400e;margin-bottom:12px">📶 Offline — showing cached data</div>' : ''}
     <div class="page-header">
       <div>
         <h2>Welcome back, ${esc(currentUser.name.split(' ')[0])}</h2>
@@ -5631,7 +5994,11 @@ async function viewStudentQuizResult(quizId) {
 }
 
 async function renderStudentDashboard(content) {
-  const [attendance, coursesData, quizzesData, meetingsData, activeSessionData, upcomingAsgData] = await Promise.all([
+  let _sd = !isOnline() ? offlineRead('student_dashboard') : null;
+  if (!isOnline() && !_sd) { content.innerHTML = `<div style="text-align:center;padding:60px 20px"><div style="font-size:48px;margin-bottom:12px">📡</div><div style="font-size:18px;font-weight:700">You're Offline</div><p style="color:var(--text-muted);margin-top:8px">Connect once while online to cache this page.</p></div>`; return; }
+  const [attendance, coursesData, quizzesData, meetingsData, activeSessionData, upcomingAsgData] = _sd
+    ? [_sd.attendance, _sd.coursesData, _sd.quizzesData, _sd.meetingsData, _sd.activeSessionData, _sd.upcomingAsgData]
+    : await Promise.all([
     api('/api/attendance-sessions/my-attendance?limit=5').catch(() => ({ records: [], pagination: { total: 0 } })),
     api('/api/courses').catch(() => ({ courses: [] })),
     api('/api/student/quizzes').catch(() => ({ quizzes: [] })),
@@ -5639,6 +6006,10 @@ async function renderStudentDashboard(content) {
     api('/api/attendance-sessions/active').catch(() => ({ session: null })),
     api('/api/student/assignments/upcoming').catch(() => ({ assignments: [] })),
   ]);
+  if (!_sd) {
+    offlineCache('student_dashboard', { attendance, coursesData, quizzesData, meetingsData, activeSessionData, upcomingAsgData });
+    if (activeSessionData.session) offlineCache('activeSession', activeSessionData.session);
+  }
 
   const totalCheckins = attendance.pagination.total;
   const enrolledCourses = coursesData.courses.length;
@@ -5670,20 +6041,7 @@ async function renderStudentDashboard(content) {
     </div>`;
   })() : '';
 
-  const classRepBanner = currentUser.isClassRep ? `
-    <div style="background:linear-gradient(135deg,#ede9fe,#f5f3ff);border:1.5px solid #c4b5fd;border-radius:12px;padding:16px 20px;margin-bottom:16px;display:flex;gap:14px;align-items:center;cursor:pointer" onclick="navigateTo('class-device')">
-      <div style="width:44px;height:44px;border-radius:12px;background:linear-gradient(135deg,#7c3aed,#6366f1);display:flex;align-items:center;justify-content:center;flex-shrink:0">
-        ${svgIcon('<path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/><polyline points="9 11 12 14 22 4"/>', 20, '#fff')}
-      </div>
-      <div style="flex:1">
-        <div style="font-weight:700;color:#5b21b6;font-size:14px;display:flex;align-items:center;gap:6px">
-          <span style="background:#7c3aed;color:#fff;font-size:10px;font-weight:800;padding:2px 7px;border-radius:20px;letter-spacing:.5px">CLASS REP</span>
-          You are a Class Representative
-        </div>
-        <div style="color:#6d28d9;font-size:12px;margin-top:2px">Tap to manage the class device &amp; connect attendance for your group.</div>
-      </div>
-      <div style="color:#7c3aed;opacity:.7">${svgIcon('<polyline points="9 18 15 12 9 6"/>', 18)}</div>
-    </div>` : '';
+  const classRepBanner = ''; // now rendered as persistent #class-rep-banner, not per-page
 
   content.innerHTML = `
     <div class="page-header">
@@ -5788,12 +6146,17 @@ async function renderStudentDashboard(content) {
 }
 
 async function renderAdminDashboard(content) {
-  const [sessionsData, usersData, pendingData, announcementsData] = await Promise.all([
+  let _ad = !isOnline() ? offlineRead('admin_dashboard') : null;
+  if (!isOnline() && !_ad) { content.innerHTML = `<div style="text-align:center;padding:60px 20px"><div style="font-size:48px;margin-bottom:12px">📡</div><div style="font-size:18px;font-weight:700">You're Offline</div><p style="color:var(--text-muted);margin-top:8px">Connect once while online to cache this page.</p></div>`; return; }
+  const [sessionsData, usersData, pendingData, announcementsData] = _ad
+    ? [_ad.sessionsData, _ad.usersData, _ad.pendingData, _ad.announcementsData]
+    : await Promise.all([
     api('/api/attendance-sessions?limit=5').catch(() => ({ sessions: [], pagination: { total: 0 } })),
     api('/api/users').catch(() => ({ users: [] })),
     api('/api/approvals/pending').catch(() => ({ pending: [] })),
     api('/api/announcements').catch(() => ({ announcements: [] })),
   ]);
+  if (!_ad) offlineCache('admin_dashboard', { sessionsData, usersData, pendingData, announcementsData });
 
   const activeSessions = sessionsData.sessions.filter(s => ['active', 'live', 'paused', 'locked'].includes(s.status)).length;
   // Auto-refresh every 30s if there are active sessions
@@ -6285,11 +6648,20 @@ async function renderManagerDashboard(content) {
 let _sessionsFilterCourseId = '';
 let _sessionsFilterCourseTitle = '';
 
+let _sessionsAutoRefreshTimer = null;
+
 async function renderSessions(courseId, courseTitle) {
   // Allow passing a courseId to pre-filter (e.g. from course page)
   if (courseId) { _sessionsFilterCourseId = courseId; _sessionsFilterCourseTitle = courseTitle || ''; }
   const content = document.getElementById('main-content');
   if (!content) return;
+
+  // Auto-refresh every 30 s so the UI reflects watchdog-killed sessions
+  if (_sessionsAutoRefreshTimer) clearInterval(_sessionsAutoRefreshTimer);
+  _sessionsAutoRefreshTimer = setInterval(() => {
+    if (document.getElementById('main-content')) renderSessions();
+    else { clearInterval(_sessionsAutoRefreshTimer); _sessionsAutoRefreshTimer = null; }
+  }, 30_000);
 
   // Offline: render from cache immediately
   if (!isOnline()) {
@@ -6300,9 +6672,27 @@ async function renderSessions(courseId, courseTitle) {
 
   try {
     const qs = _sessionsFilterCourseId ? `?courseId=${_sessionsFilterCourseId}` : '';
-    const data = await api('/api/attendance-sessions' + qs);
+    const [data, flaggedData, deviceData] = await Promise.allSettled([
+      api('/api/attendance-sessions' + qs),
+      ['lecturer', 'hod', 'admin', 'superadmin'].includes(currentUser.role)
+        ? api('/api/attendance-sessions/flagged/new-devices?limit=200')
+        : Promise.resolve(null),
+      api('/api/devices/my').catch(() => null),
+    ]).then(r => r.map(p => p.status === 'fulfilled' ? p.value : null));
+
     offlineCache('sessions', data);
-    _renderSessionsHTML(content, data.sessions || [], false);
+
+    // Build sessionId → flag count map for row badges
+    const flaggedBySession = {};
+    if (flaggedData?.records) {
+      for (const r of flaggedData.records) {
+        const sid = r.session?._id || r.session;
+        if (sid) flaggedBySession[sid] = (flaggedBySession[sid] || 0) + 1;
+      }
+    }
+    const pendingDeviceRecords = deviceData?.data?.pendingRecordsCount || 0;
+
+    _renderSessionsHTML(content, data?.sessions || [], false, { flaggedBySession, pendingDeviceRecords });
   } catch (e) {
     const cached = offlineRead('sessions');
     if (cached) {
@@ -6313,10 +6703,13 @@ async function renderSessions(courseId, courseTitle) {
   }
 }
 
-function _renderSessionsHTML(content, sessions, isOffline) {
+function _renderSessionsHTML(content, sessions, isOffline, extras) {
   const pendingCount = offlineQueueCount();
   const canStart = ['lecturer', 'manager'].includes(currentUser.role);
   const isLecturer = currentUser.role === 'lecturer';
+  const flaggedBySession = extras?.flaggedBySession || {};
+  const pendingDeviceRecords = extras?.pendingDeviceRecords || 0;
+  const totalFlags = Object.values(flaggedBySession).reduce((a, b) => a + b, 0);
 
   const filterPill = _sessionsFilterCourseId
     ? `<div style="display:flex;align-items:center;gap:6px;background:#eff6ff;border:1px solid #bfdbfe;border-radius:20px;padding:3px 10px 3px 8px;font-size:12px;color:#1e40af;font-weight:600;">
@@ -6325,11 +6718,27 @@ function _renderSessionsHTML(content, sessions, isOffline) {
       </div>`
     : '';
 
+  const newDeviceBanner = totalFlags > 0
+    ? `<div onclick="showFlaggedDevicesModal()" style="background:#fff7ed;border:1px solid #fed7aa;border-radius:8px;padding:10px 14px;margin-bottom:12px;display:flex;align-items:center;gap:10px;font-size:13px;color:#92400e;cursor:pointer;">
+        <span style="font-size:18px">⚠️</span>
+        <span><strong>${totalFlags} new-device flag${totalFlags !== 1 ? 's' : ''}</strong> detected — a student marked attendance from an unrecognised device. <u>Review now</u></span>
+      </div>`
+    : '';
+
+  const pendingDeviceBanner = pendingDeviceRecords > 0
+    ? `<div style="background:#f0f9ff;border:1px solid #bae6fd;border-radius:8px;padding:10px 14px;margin-bottom:12px;display:flex;align-items:center;gap:10px;font-size:13px;color:#0369a1;">
+        <span style="font-size:18px">📴</span>
+        <span><strong>${pendingDeviceRecords} record${pendingDeviceRecords !== 1 ? 's' : ''} pending sync</strong> — the classroom device recorded attendance offline and will sync to the server when it reconnects to the internet.</span>
+      </div>`
+    : '';
+
   content.innerHTML = `
     <div class="page-header">
       <h2>Attendance Sessions</h2>
       <p>Manage attendance sessions${isOffline ? ' <span style="color:#f59e0b;font-weight:600">(Offline — showing cached data)</span>' : ''}</p>
     </div>
+    ${newDeviceBanner}
+    ${pendingDeviceBanner}
     <div class="actions-bar" style="margin-bottom:14px;">
       ${canStart ? `<button class="btn btn-primary btn-sm" onclick="showStartSessionModal()">Start New Session</button>` : ''}
       ${filterPill}
@@ -6343,9 +6752,14 @@ function _renderSessionsHTML(content, sessions, isOffline) {
             ${isLecturer ? '<th>Course</th>' : ''}
             <th>Status</th><th>Started</th><th>Stopped</th><th>Actions</th>
           </tr></thead>
-          <tbody>${sessions.map((s, i) => `
-            <tr>
-              <td>${s.title || 'Untitled'}</td>
+          <tbody>${sessions.map((s, i) => {
+            const flags = flaggedBySession[s._id] || 0;
+            const flagBadge = flags > 0
+              ? `<span onclick="showFlaggedDevicesModal('${s._id}')" title="${flags} new-device flag${flags !== 1 ? 's' : ''} — click to review" style="background:#fef3c7;color:#92400e;border:1px solid #fbbf24;border-radius:4px;padding:1px 6px;font-size:11px;font-weight:700;margin-left:6px;cursor:pointer;">⚠️ ${flags}</span>`
+              : '';
+            return `
+            <tr style="${flags > 0 ? 'background:#fffbeb;' : ''}">
+              <td>${s.title || 'Untitled'}${flagBadge}</td>
               ${isLecturer ? `<td><span style="font-size:11px;font-weight:600;color:#6366f1;">${s.course ? esc(s.course.code || s.course.title || '') : '—'}</span></td>` : ''}
               <td><span class="status-badge status-${s.status}">${s.status}</span></td>
               <td>${new Date(s.startedAt).toLocaleString()}</td>
@@ -6358,8 +6772,8 @@ function _renderSessionsHTML(content, sessions, isOffline) {
               ` : ['active','live','paused','locked'].includes(s.status) ? `
                 <button class="btn btn-sm" style="font-size:11px;background:var(--bg);border:1px solid var(--border)" onclick="viewAttendees('${s._id}', '${(s.title||'Session').replace(/['\''\'']/g,'')}')">Attendees</button>
               ` : ''}</td>
-            </tr>
-          `).join('')}</tbody>
+            </tr>`;
+          }).join('')}</tbody>
         </table>
       ` : `<div class="empty-state"><p>${_sessionsFilterCourseId ? 'No sessions for this course yet.' : 'No sessions found'}</p></div>`}
     </div>
@@ -6367,7 +6781,121 @@ function _renderSessionsHTML(content, sessions, isOffline) {
 }
 
 
-async function showStartSessionModal() {
+// ── Flagged new-device review modal ──────────────────────────────────────────
+async function showFlaggedDevicesModal(sessionId) {
+  const container = document.getElementById('modal-container');
+  if (!container) return;
+  container.classList.remove('hidden');
+  container.innerHTML = `<div class="modal-overlay"><div class="modal"><p style="color:var(--text-muted);text-align:center;padding:16px 0">⏳ Loading flagged records…</p></div></div>`;
+
+  try {
+    const qs = sessionId ? `?sessionId=${encodeURIComponent(sessionId)}&limit=100` : '?limit=100';
+    const data = await api('/api/attendance-sessions/flagged/new-devices' + qs);
+    const records = data.records || [];
+
+    if (!records.length) {
+      container.innerHTML = `
+        <div class="modal-overlay" onclick="closeModal(event)">
+          <div class="modal" onclick="event.stopPropagation()" style="text-align:center;max-width:400px">
+            <div style="font-size:40px;margin-bottom:12px">✅</div>
+            <h3 style="margin-bottom:8px">All Clear</h3>
+            <p style="font-size:13px;color:var(--text-muted);margin-bottom:20px">No unresolved new-device flags.</p>
+            <button class="btn btn-secondary btn-sm" onclick="closeModal()">Close</button>
+          </div>
+        </div>`;
+      return;
+    }
+
+    const rows = records.map(r => {
+      const studentName  = esc(r.user?.name || 'Unknown');
+      const indexNum     = esc(r.user?.indexNumber || '—');
+      const sessionTitle = esc(r.session?.title || 'Session');
+      const deviceId     = esc(r.deviceId || '—');
+      const time         = r.checkInTime ? new Date(r.checkInTime).toLocaleString() : '—';
+      const shortDev     = r.deviceId ? r.deviceId.slice(0, 16) + (r.deviceId.length > 16 ? '…' : '') : '—';
+      return `
+        <tr id="flagrow-${r._id}">
+          <td style="font-size:13px"><strong>${studentName}</strong><br><span style="color:var(--text-muted);font-size:11px">${indexNum}</span></td>
+          <td style="font-size:12px;color:var(--text-muted)">${sessionTitle}</td>
+          <td style="font-size:11px;font-family:monospace;color:#7c3aed" title="${deviceId}">${shortDev}</td>
+          <td style="font-size:11px;color:var(--text-muted)">${time}</td>
+          <td style="white-space:nowrap">
+            <button class="btn btn-sm" style="font-size:11px;background:#dcfce7;color:#166534;border:1px solid #86efac;margin-right:4px"
+              onclick="resolveFlaggedRecord('${r._id}','trust')">Trust Device</button>
+            <button class="btn btn-sm" style="font-size:11px;background:var(--bg);color:var(--text-muted);border:1px solid var(--border)"
+              onclick="resolveFlaggedRecord('${r._id}','dismiss')">Dismiss</button>
+          </td>
+        </tr>`;
+    }).join('');
+
+    container.innerHTML = `
+      <div class="modal-overlay" onclick="closeModal(event)">
+        <div class="modal" onclick="event.stopPropagation()" style="max-width:780px;width:95vw">
+          <h3 style="margin-bottom:4px">⚠️ New-Device Flags</h3>
+          <p style="font-size:12px;color:var(--text-muted);margin-bottom:16px">
+            These students marked attendance from a device not previously seen on their account.
+            <strong>Trust Device</strong> adds it to their trusted list and clears all matching flags.
+            <strong>Dismiss</strong> clears only this flag.
+          </p>
+          <div style="overflow-x:auto">
+            <table style="width:100%;font-size:13px">
+              <thead><tr style="font-size:11px;color:var(--text-muted)">
+                <th style="text-align:left;padding:6px 8px">Student</th>
+                <th style="text-align:left;padding:6px 8px">Session</th>
+                <th style="text-align:left;padding:6px 8px">Device ID</th>
+                <th style="text-align:left;padding:6px 8px">Time</th>
+                <th style="text-align:left;padding:6px 8px">Action</th>
+              </tr></thead>
+              <tbody>${rows}</tbody>
+            </table>
+          </div>
+          <div style="margin-top:16px;text-align:right">
+            <button class="btn btn-secondary btn-sm" onclick="closeModal()">Close</button>
+          </div>
+        </div>
+      </div>`;
+  } catch (e) {
+    container.innerHTML = `
+      <div class="modal-overlay" onclick="closeModal(event)">
+        <div class="modal" onclick="event.stopPropagation()" style="text-align:center;max-width:380px">
+          <p style="color:#dc2626">Failed to load flagged records: ${esc(e.message)}</p>
+          <button class="btn btn-secondary btn-sm" style="margin-top:12px" onclick="closeModal()">Close</button>
+        </div>
+      </div>`;
+  }
+}
+
+async function resolveFlaggedRecord(recordId, action) {
+  const row = document.getElementById('flagrow-' + recordId);
+  if (row) row.style.opacity = '0.4';
+
+  try {
+    const endpoint = action === 'trust'
+      ? `/api/attendance-sessions/flagged/${recordId}/trust`
+      : `/api/attendance-sessions/flagged/${recordId}/resolve`;
+
+    const result = await api(endpoint, { method: 'POST' });
+
+    if (row) row.remove();
+
+    const tbody = document.querySelector('#modal-container tbody');
+    if (tbody && !tbody.children.length) {
+      closeModal();
+      toastSuccess('All flags resolved.');
+    } else if (action === 'trust') {
+      toastSuccess(`Device trusted for ${result.studentName || 'student'} — all matching flags cleared.`);
+    } else {
+      toastSuccess('Flag dismissed.');
+    }
+
+    renderSessions();
+  } catch (e) {
+    if (row) row.style.opacity = '1';
+    toastError('Failed: ' + e.message);
+  }
+}
+
+async function showStartSessionModal(offlineOverride) {
   // Force a fresh connectivity check each time this is opened (covers Retry path)
   _serverCheckTs = 0;
 
@@ -6425,36 +6953,15 @@ async function showStartSessionModal() {
     return;
   }
 
-  // Device registered but offline
-  if (!checkError && deviceStatus && deviceStatus.hasDevice && !deviceStatus.deviceOnline) {
-    const lastSeen = deviceStatus.lastSeenAt
-      ? `Last seen: ${new Date(deviceStatus.lastSeenAt).toLocaleString()}`
-      : 'Last seen: Never';
-    container.innerHTML = `
-      <div class="modal-overlay" onclick="closeModal(event)">
-        <div class="modal" onclick="event.stopPropagation()" style="text-align:center;max-width:400px">
-          <div style="font-size:40px;margin-bottom:12px">📟</div>
-          <h3 style="margin-bottom:8px">Device is Offline</h3>
-          <p style="font-size:13px;color:var(--text-muted);margin-bottom:16px;line-height:1.6">
-            The <strong>DIKLY classroom device</strong> is not responding.<br>
-            Power it on, wait a few seconds, then try again.
-          </p>
-          <div style="background:#fef3c7;border:1px solid #fde68a;border-radius:8px;padding:10px 14px;font-size:12px;color:#92400e;margin-bottom:20px;text-align:left">
-            <strong>${lastSeen}</strong><br>
-            Status: Offline — no heartbeat in last 20s
-          </div>
-          <div style="display:flex;gap:8px;justify-content:center">
-            <button class="btn btn-secondary btn-sm" onclick="closeModal()">Cancel</button>
-            <button class="btn btn-primary btn-sm" onclick="showStartSessionModal()">↻ Retry</button>
-          </div>
-        </div>
-      </div>`;
-    return;
+  // Device registered but offline — automatically proceed in offline mode (no explicit button needed).
+  // The device will sync the rotating code as soon as it reconnects to WiFi.
+  if (!offlineOverride && !checkError && deviceStatus && deviceStatus.hasDevice && !deviceStatus.deviceOnline) {
+    offlineOverride = 'offline';
   }
 
   // Device check failed — network error or server unreachable.
   // BLOCK — never silently proceed. Show retry screen.
-  if (checkError) {
+  if (!offlineOverride && checkError) {
     container.innerHTML = `
       <div class="modal-overlay" onclick="closeModal(event)">
         <div class="modal" onclick="event.stopPropagation()" style="text-align:center;max-width:400px">
@@ -6472,7 +6979,7 @@ async function showStartSessionModal() {
       </div>`;
     return;
   }
-  // ── Device confirmed online — show session form ────────────
+  // ── Device confirmed online (or offline override) — show session form ────────────
 
   // Fetch courses — always from dikly.sbs (hardcoded in API constant)
   // If this fails, it means the server is unreachable — show clear error.
@@ -6531,10 +7038,17 @@ async function showStartSessionModal() {
     }
   } catch(_) { /* non-critical */ }
 
+  const offlineBanner = offlineOverride ? `
+    <div style="background:#fef3c7;border:1px solid #fde68a;border-radius:8px;padding:10px 14px;font-size:12px;color:#92400e;margin-bottom:14px;display:flex;align-items:flex-start;gap:8px">
+      <span style="font-size:16px;flex-shrink:0">📶</span>
+      <div><strong>Offline Mode</strong> — The classroom device has no internet. The session will start and the device will sync the rotating code when WiFi reconnects. Students mark attendance using the code on the device screen.</div>
+    </div>` : '';
+
   container.innerHTML = `
     <div class="modal-overlay" onclick="closeModal(event)">
-      <div class="modal" onclick="event.stopPropagation()">
+      <div class="modal" onclick="event.stopPropagation()" data-offline="${offlineOverride ? '1' : ''}">
         <h3>Start New Session</h3>
+        ${offlineBanner}
         ${groupBadge}
         <div class="form-group">
           <label>Course <span style="color:red">*</span></label>
@@ -6556,6 +7070,11 @@ async function showStartSessionModal() {
         <div class="form-group">
           <label>Session Title <span style="font-weight:400;color:var(--text-muted);font-size:12px">(optional)</span></label>
           <input type="text" id="session-title" placeholder="e.g., Week 5 Lecture">
+        </div>
+        <div class="form-group">
+          <label>Restrict to Group <span style="font-weight:400;color:var(--text-muted);font-size:12px">(optional)</span></label>
+          <input type="text" id="session-target-group" placeholder="e.g. A, B, C — leave blank for all groups">
+          <p style="font-size:11px;color:var(--text-muted);margin-top:4px">Only students in this group will be able to mark attendance.</p>
         </div>
         <div class="modal-actions">
           <button class="btn btn-secondary btn-sm" onclick="closeModal()">Cancel</button>
@@ -6642,13 +7161,16 @@ async function startSession() {
 
   try {
     const hotspotKey = sessionStorage.getItem('dikly_esp32_hotspot_key') || '';
+    const sessionTargetGroup = (document.getElementById('session-target-group')?.value || '').trim() || null;
     const result = await api('/api/attendance-sessions/start', {
       method: 'POST',
       headers: hotspotKey ? { 'x-esp32-hotspot-key': hotspotKey } : {},
-      body: JSON.stringify({ title, courseId, ...(deviceId ? { deviceId } : {}) }),
+      body: JSON.stringify({ title, courseId, ...(deviceId ? { deviceId } : {}), ...(sessionTargetGroup ? { targetGroup: sessionTargetGroup } : {}) }),
     });
     closeModal();
-    if (result.warning) {
+    if (result.offlineMode) {
+      toastInfo('Session started in offline mode — device will sync when it reconnects.');
+    } else if (result.warning) {
       if (container) container.innerHTML = `
         <div class="modal-overlay" onclick="closeModal(event)">
           <div class="modal" onclick="event.stopPropagation()" style="max-width:440px">
@@ -6665,13 +7187,16 @@ async function startSession() {
   } catch (e) {
     // Device offline or not registered — show in-modal block screen
     if (e.status === 503) {
-      const msg = e.data?.message || 'The classroom device is not responding. Power it on and try again.';
+      const msg = e.data?.message || 'The classroom device is not responding. Power it on, connect to DIKLY-CLASSROOM WiFi, then try again.';
       if (container) container.innerHTML = `
         <div class="modal-overlay" onclick="closeModal(event)">
-          <div class="modal" onclick="event.stopPropagation()" style="text-align:center;max-width:400px">
+          <div class="modal" onclick="event.stopPropagation()" style="text-align:center;max-width:420px">
             <div style="font-size:40px;margin-bottom:12px">📟</div>
-            <h3 style="margin-bottom:8px">Device is Offline</h3>
+            <h3 style="margin-bottom:8px">Device Not Detected</h3>
             <p style="font-size:13px;color:var(--text-muted);margin-bottom:16px;line-height:1.6">${esc(msg)}</p>
+            <div style="background:#fef3c7;border:1px solid #fde68a;border-radius:8px;padding:10px 14px;font-size:12px;color:#92400e;margin-bottom:20px;text-align:left">
+              <strong>If the device has no internet:</strong> Connect your phone to <strong>DIKLY-CLASSROOM</strong> WiFi first, then tap Retry.
+            </div>
             <div style="display:flex;gap:8px;justify-content:center">
               <button class="btn btn-secondary btn-sm" onclick="closeModal()">Cancel</button>
               <button class="btn btn-primary btn-sm" onclick="showStartSessionModal()">↻ Retry</button>
@@ -6744,7 +7269,7 @@ async function stopSession(id) {
 // QR auto-rotation state
 let _qrRotateTimer = null;
 let _qrCountdownTimer = null;
-const QR_EXPIRY_SECONDS = 15;
+const QR_EXPIRY_SECONDS = 60;
 
 function _stopQrTimers() {
   if (_qrRotateTimer)   { clearTimeout(_qrRotateTimer);  _qrRotateTimer = null; }
@@ -6810,12 +7335,12 @@ async function generateQR(sessionId) {
                     style="transition:stroke-dashoffset 1s linear,stroke 0.3s"/>
                 </svg>
                 <div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center">
-                  <span id="qr-countdown" style="font-size:16px;font-weight:800;color:var(--primary)">${QR_EXPIRY_SECONDS}</span>
+                  <span id="qr-countdown" style="font-size:16px;font-weight:800;color:var(--primary)">${Math.floor(QR_EXPIRY_SECONDS/60)}:${String(QR_EXPIRY_SECONDS%60).padStart(2,'0')}</span>
                 </div>
               </div>
               <div id="qr-status" style="display:inline-flex;align-items:center;gap:6px;background:rgba(34,197,94,0.1);border:1px solid rgba(34,197,94,0.3);border-radius:999px;padding:5px 14px;font-size:12px;font-weight:600;color:#16a34a">
                 <span style="width:7px;height:7px;border-radius:50%;background:#16a34a;display:inline-block;animation:pulse-green 1.5s infinite"></span>
-                Live · Auto-refreshes every ${QR_EXPIRY_SECONDS}s
+                Live · Auto-refreshes every 1 min
               </div>
             </div>
 
@@ -6831,17 +7356,18 @@ async function generateQR(sessionId) {
       const ring = document.getElementById('qr-ring');
       const countEl = document.getElementById('qr-countdown');
       const circumference = 170;
+      const _fmtTime = s => `${Math.floor(s/60)}:${String(s%60).padStart(2,'0')}`;
 
       _qrCountdownTimer = setInterval(() => {
         remaining--;
-        if (countEl) countEl.textContent = remaining;
+        if (countEl) countEl.textContent = _fmtTime(remaining);
         if (ring) {
           const offset = circumference * (1 - remaining / QR_EXPIRY_SECONDS);
           ring.style.strokeDashoffset = offset;
-          // Turn orange at 5s, red at 3s
-          if (remaining <= 3)       ring.style.stroke = '#ef4444';
-          else if (remaining <= 5)  ring.style.stroke = '#f97316';
-          else                      ring.style.stroke = 'var(--primary)';
+          // Turn orange at 15s, red at 5s
+          if (remaining <= 5)        ring.style.stroke = '#ef4444';
+          else if (remaining <= 15)  ring.style.stroke = '#f97316';
+          else                       ring.style.stroke = 'var(--primary)';
         }
         if (remaining <= 0) {
           clearInterval(_qrCountdownTimer);
@@ -6861,11 +7387,21 @@ async function generateQR(sessionId) {
       }, QR_EXPIRY_SECONDS * 1000);
 
     } catch (e) {
+      _stopQrTimers();
+      const sessionEnded = e.message?.toLowerCase().includes('not active') || e.message?.toLowerCase().includes('not found');
       container.innerHTML = `
-        <div class="modal-overlay" onclick="_stopQrTimers();closeModal(event)">
-          <div class="modal" style="text-align:center">
-            <p style="color:var(--danger)">${e.message}</p>
-            <button class="btn btn-primary btn-sm" onclick="_stopQrTimers();closeModal()">Close</button>
+        <div class="modal-overlay" onclick="closeModal(event)">
+          <div class="modal" style="text-align:center;max-width:360px">
+            <div style="font-size:40px;margin-bottom:12px">${sessionEnded ? '📴' : '⚠️'}</div>
+            <h3 style="margin:0 0 8px">${sessionEnded ? 'Session Ended' : 'QR Error'}</h3>
+            <p style="color:var(--text-light);font-size:14px;margin-bottom:20px">
+              ${sessionEnded
+                ? 'The classroom device went offline and the session was automatically stopped.'
+                : e.message}
+            </p>
+            <div class="modal-actions" style="justify-content:center">
+              <button class="btn btn-primary btn-sm" onclick="closeModal();renderSessions()">Back to Sessions</button>
+            </div>
           </div>
         </div>`;
     }
@@ -6878,34 +7414,68 @@ async function generateVerbalCode(sessionId) {
   const container = document.getElementById('modal-container');
   container.classList.remove('hidden');
 
+  let _verbalTimer = null;
+  let _verbalRefreshTimer = null;
+
+  function _stopVerbalTimers() {
+    if (_verbalTimer)        { clearInterval(_verbalTimer);   _verbalTimer = null; }
+    if (_verbalRefreshTimer) { clearTimeout(_verbalRefreshTimer); _verbalRefreshTimer = null; }
+  }
+
   async function _fetchAndShow() {
+    _stopVerbalTimers();
     try {
-      const data = await api('/api/qr-tokens/generate', {
-        method: 'POST',
-        body: JSON.stringify({ sessionId, codeType: 'verbal', expiryMinutes: 5 })
-      });
-      const { code, expiresAt } = data.qrToken;
-      const expiry = new Date(expiresAt);
-      const totalSecs = Math.round((expiry - Date.now()) / 1000);
+      // Try to get the device code first (same HMAC code the ESP32 screen shows).
+      // Falls back to QR-token verbal code for sessions without a device.
+      let code, totalSecs, isDeviceCode = false, windowSecs = 300;
+
+      try {
+        const dc = await api(`/api/attendance-sessions/${sessionId}/current-code`);
+        code = dc.code;
+        totalSecs = dc.expiresInSeconds;
+        windowSecs = dc.windowSeconds || 300;
+        isDeviceCode = true;
+      } catch (_) {
+        // No device seed on this session — fall back to QR token verbal code
+        const data = await api('/api/qr-tokens/generate', {
+          method: 'POST',
+          body: JSON.stringify({ sessionId, codeType: 'verbal', expiryMinutes: 5 })
+        });
+        const qr = data.qrToken;
+        code = qr.code;
+        totalSecs = Math.round((new Date(qr.expiresAt) - Date.now()) / 1000);
+      }
+
+      const modeWord = currentUser.company?.mode === 'corporate' ? 'employees' : 'students';
+      const subtitle = isDeviceCode
+        ? 'This is the code currently shown on the classroom device screen.'
+        : `Read this code out loud. All ${modeWord} can use it within the time window.`;
+      const badgeText = isDeviceCode
+        ? '📟 Live device code — matches classroom screen'
+        : `Multi-use · All ${modeWord} can enter this code`;
+
+      const fmtTime = s => s >= 60 ? `${Math.floor(s/60)}m ${s%60}s` : `${s}s`;
 
       container.innerHTML = `
-        <div class="modal-overlay" onclick="closeModal(event)">
+        <div class="modal-overlay" onclick="_stopVerbalTimers();closeModal(event)">
           <div class="modal" onclick="event.stopPropagation()" style="text-align:center;max-width:380px">
             <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px">
-              <h3 style="margin:0">Verbal Attendance Code</h3>
-              <button onclick="closeModal()" style="background:none;border:none;font-size:20px;cursor:pointer;color:var(--text-light)">×</button>
+              <h3 style="margin:0">${isDeviceCode ? 'Device Attendance Code' : 'Verbal Attendance Code'}</h3>
+              <button onclick="_stopVerbalTimers();closeModal()" style="background:none;border:none;font-size:20px;cursor:pointer;color:var(--text-light)">×</button>
             </div>
-            <p style="color:var(--text-light);font-size:12px;margin-bottom:16px">Read this code out loud. All ${currentUser.company?.mode === 'corporate' ? 'employees' : 'students'} can use it within the time window.</p>
+            <p style="color:var(--text-light);font-size:12px;margin-bottom:16px">${subtitle}</p>
             <div style="font-size:64px;font-weight:900;color:#7c3aed;letter-spacing:12px;margin-bottom:8px;font-family:monospace">${code}</div>
-            <div style="display:inline-flex;align-items:center;gap:6px;background:rgba(124,58,237,0.1);border:1px solid rgba(124,58,237,0.3);border-radius:999px;padding:5px 14px;font-size:12px;font-weight:600;color:#7c3aed;margin-bottom:6px">
+            <div style="display:inline-flex;align-items:center;gap:6px;background:rgba(124,58,237,0.1);border:1px solid rgba(124,58,237,0.3);border-radius:999px;padding:5px 14px;font-size:12px;font-weight:600;color:#7c3aed;margin-bottom:10px">
               <span style="width:7px;height:7px;border-radius:50%;background:#7c3aed;display:inline-block;animation:pulse-green 1.5s infinite"></span>
-              Multi-use · All ${currentUser.company?.mode === 'corporate' ? 'employees' : 'students'} can enter this code
+              ${badgeText}
             </div>
-            <p style="color:var(--text-light);font-size:12px;margin-bottom:4px">Expires in: <span id="verbal-countdown" style="font-weight:700;color:#7c3aed">${Math.floor(totalSecs/60)}m ${totalSecs%60}s</span></p>
-            <p style="color:var(--text-muted);font-size:11px;margin-bottom:20px">Expires at ${expiry.toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'})}</p>
+            <p style="color:var(--text-light);font-size:12px;margin-bottom:20px">
+              ${isDeviceCode ? 'Rotates in:' : 'Expires in:'}
+              <span id="verbal-countdown" style="font-weight:700;color:#7c3aed">${fmtTime(totalSecs)}</span>
+            </p>
             <div class="modal-actions" style="justify-content:center;gap:8px">
-              <button class="btn btn-sm" style="background:#7c3aed;color:#fff" onclick="generateVerbalCode('${sessionId}')">New Code</button>
-              <button class="btn btn-primary btn-sm" onclick="closeModal()">Close</button>
+              <button class="btn btn-sm" style="background:#7c3aed;color:#fff" onclick="generateVerbalCode('${sessionId}')">Refresh</button>
+              <button class="btn btn-primary btn-sm" onclick="_stopVerbalTimers();closeModal()">Close</button>
             </div>
           </div>
         </div>
@@ -6914,14 +7484,24 @@ async function generateVerbalCode(sessionId) {
       // Countdown timer
       let secs = totalSecs;
       const countEl = () => document.getElementById('verbal-countdown');
-      const timer = setInterval(() => {
+      _verbalTimer = setInterval(() => {
         secs--;
-        if (secs <= 0) { clearInterval(timer); if (countEl()) countEl().textContent = 'Expired'; return; }
-        if (countEl()) countEl().textContent = Math.floor(secs/60) + 'm ' + (secs%60) + 's';
+        if (secs <= 0) {
+          clearInterval(_verbalTimer); _verbalTimer = null;
+          if (countEl()) countEl().textContent = 'Rotating…';
+          return;
+        }
+        if (countEl()) countEl().textContent = fmtTime(secs);
       }, 1000);
 
+      // Auto-refresh when the window rolls over
+      if (isDeviceCode) {
+        _verbalRefreshTimer = setTimeout(() => generateVerbalCode(sessionId), totalSecs * 1000);
+      }
+
     } catch(e) {
-      const msg = e.message || 'Failed to generate code';
+      _stopVerbalTimers();
+      const msg = e.message || 'Failed to get code';
       const isSubError = msg.toLowerCase().includes('subscription') || msg.toLowerCase().includes('trial');
       container.innerHTML = `<div class="modal-overlay" onclick="closeModal(event)"><div class="modal" onclick="event.stopPropagation()" style="text-align:center;padding:24px">
         <div style="font-size:36px;margin-bottom:12px">${isSubError ? '🔒' : '⚠️'}</div>
@@ -6936,132 +7516,473 @@ async function generateVerbalCode(sessionId) {
 }
 
 
+// ── Colour palette for department accent bars ─────────────────────────────────
+let _cachedUsers = null;
+const _DEPT_COLORS = ['#6366f1','#8b5cf6','#ec4899','#f97316','#14b8a6','#22c55e','#3b82f6','#f59e0b','#ef4444','#06b6d4'];
+function _deptColor(name) {
+  let h = 0;
+  for (let i = 0; i < (name||'').length; i++) h = ((h * 31) + name.charCodeAt(i)) | 0;
+  return _DEPT_COLORS[Math.abs(h) % _DEPT_COLORS.length];
+}
+
 async function renderUsers(filterRole='', filterDept='', filterSearch='') {
   const content = document.getElementById('main-content');
   if (!content) return;
-  try {
-    let url = '/api/users';
-    const params = [];
-    if (filterRole) params.push('role=' + encodeURIComponent(filterRole));
-    if (filterDept) params.push('department=' + encodeURIComponent(filterDept));
-    if (params.length) url += '?' + params.join('&');
-
-    const data = await api(url);
-    const mode = currentUser.company?.mode || 'corporate';
-    const isManager = currentUser.role === 'manager';
-    const canManage = ['manager', 'admin', 'superadmin'].includes(currentUser.role);
-    const pageTitle = isManager ? 'Employees' : 'Users';
-    const pageDesc = isManager ? 'Manage your employees' : 'Manage team members';
-    const _roleRank = {superadmin:6,admin:5,manager:4,hod:3,lecturer:3,employee:2,student:1};
-    const _myRank = _roleRank[currentUser.role] || 0;
-    const canActOn = u => (_roleRank[u.role] || 0) < _myRank;
-    const addLabel = isManager ? 'Add Employee' : 'Add User';
-
-    let otherUsers = data.users.filter(u => u._id !== currentUser.id);
-    if (filterSearch) {
-      const q = filterSearch.toLowerCase();
-      otherUsers = otherUsers.filter(u =>
-        u.name?.toLowerCase().includes(q) ||
-        u.email?.toLowerCase().includes(q) ||
-        u.indexNumber?.toLowerCase().includes(q) ||
-        u.department?.toLowerCase().includes(q)
-      );
+  content.innerHTML = '<div style="padding:40px;text-align:center;color:var(--text-muted)">Loading users…</div>';
+  if (!isOnline()) {
+    const _c = offlineRead('users_list');
+    if (_c) {
+      _cachedUsers = _c;
+      window._hodDepts = [...new Set(_c.filter(u => u.role==='hod' && u.department).map(u => u.department))].sort();
+      const mode = currentUser.company?.mode || 'corporate';
+      if (mode === 'academic') _renderUserDeptCards(content, _c, filterSearch);
+      else _renderUsersCorporateTable(content, _c, filterRole, filterDept, filterSearch);
+      return;
     }
-
-    // Collect unique departments for filter dropdown
-    const allDepts = [...new Set((data.users || []).map(u => u.department).filter(Boolean))].sort();
-
-    content.innerHTML = `
-      <div class="page-header"><h2>${pageTitle}</h2><p>${pageDesc} · ${otherUsers.length} shown</p></div>
-      <div class="actions-bar" style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:10px;">
-        ${canManage ? `<button class="btn btn-primary btn-sm" onclick="showCreateUserModal()">${addLabel}</button>` : ''}
-        ${['admin','superadmin'].includes(currentUser.role) && mode === 'academic' ? `<button class="btn btn-sm btn-secondary" onclick="showBulkImportModal()">📥 Bulk Import Students</button>` : ''}
-        ${['admin','superadmin'].includes(currentUser.role) ? `<button class="btn btn-sm" style="background:#f59e0b;color:#fff" onclick="renderResetLogs()">🔐 Password Reset Log</button>` : ''}
-        <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin-left:auto;">
-          <input id="user-search-input" placeholder="Search name / email / ID…" value="${filterSearch}"
-            oninput="renderUsers(document.getElementById('user-role-filter').value, document.getElementById('user-dept-filter').value, this.value)"
-            style="padding:7px 11px;border:1.5px solid var(--border);border-radius:8px;font-size:13px;font-family:inherit;outline:none;min-width:180px;">
-          <select id="user-role-filter" onchange="renderUsers(this.value, document.getElementById('user-dept-filter').value, document.getElementById('user-search-input').value)"
-            style="padding:7px 10px;border:1.5px solid var(--border);border-radius:8px;font-size:13px;font-family:inherit;outline:none;">
-            <option value="" ${!filterRole?'selected':''}>All Roles</option>
-            ${currentUser.role === 'superadmin'
-              ? `<option value="admin"     ${filterRole==='admin'?'selected':''}>Admin</option>
-                 <option value="manager"   ${filterRole==='manager'?'selected':''}>Manager</option>
-                 <option value="hod"       ${filterRole==='hod'?'selected':''}>HOD</option>
-                 <option value="lecturer"  ${filterRole==='lecturer'?'selected':''}>Lecturer</option>
-                 <option value="employee"  ${filterRole==='employee'?'selected':''}>Employee</option>
-                 <option value="student"   ${filterRole==='student'?'selected':''}>Student</option>`
-              : mode === 'academic'
-                ? `<option value="admin"    ${filterRole==='admin'?'selected':''}>Admin</option>
-                   <option value="hod"      ${filterRole==='hod'?'selected':''}>HOD</option>
-                   <option value="lecturer" ${filterRole==='lecturer'?'selected':''}>Lecturer</option>
-                   <option value="student"  ${filterRole==='student'?'selected':''}>Student</option>`
-                : `<option value="admin"    ${filterRole==='admin'?'selected':''}>Admin</option>
-                   <option value="manager"  ${filterRole==='manager'?'selected':''}>Manager</option>
-                   <option value="employee" ${filterRole==='employee'?'selected':''}>Employee</option>`}
-          </select>
-          ${mode === 'academic' && allDepts.length > 0 ? `
-          <select id="user-dept-filter" onchange="renderUsers(document.getElementById('user-role-filter').value, this.value, document.getElementById('user-search-input').value)"
-            style="padding:7px 10px;border:1.5px solid var(--border);border-radius:8px;font-size:13px;font-family:inherit;outline:none;">
-            <option value="" ${!filterDept?'selected':''}>All Departments</option>
-            ${allDepts.map(d => `<option value="${d}" ${filterDept===d?'selected':''}>${d}</option>`).join('')}
-          </select>` : `<select id="user-dept-filter" style="display:none;"></select>`}
-          ${filterRole || filterDept || filterSearch ? `<button class="btn btn-xs btn-secondary" onclick="renderUsers()">✕ Clear</button>` : ''}
-        </div>
-        ${canManage ? `
-          <div id="bulk-actions" style="display:none;gap:8px;align-items:center;margin-left:auto">
-            <span id="selected-count" style="font-size:13px;color:var(--text-light)">0 selected</span>
-            <button class="btn btn-sm" style="background:#22c55e;color:#fff" onclick="bulkUserAction('activate')">Activate</button>
-            <button class="btn btn-sm" style="background:#f59e0b;color:#fff" onclick="bulkUserAction('deactivate')">Deactivate</button>
-            <button class="btn btn-danger btn-sm" onclick="bulkUserAction('delete')">Delete</button>
-          </div>
-        ` : ''}
-      </div>
-      <div class="card">
-        ${otherUsers.length ? `
-          <table>
-            <thead><tr>
-              ${canManage ? '<th style="width:40px"><input type="checkbox" id="select-all-users" onchange="toggleSelectAllUsers()"></th>' : ''}
-              <th>Name</th>${mode === 'corporate' ? '<th>Employee ID</th>' : ''}<th>Email / Index</th><th>Role</th>${mode !== 'corporate' ? '<th>Classification</th>' : ''}<th>Status</th>${canManage ? '<th>Actions</th>' : ''}
-            </tr></thead>
-            <tbody>${otherUsers.map(u => `
-              <tr id="user-row-${u._id}">
-                ${canManage ? `<td>${canActOn(u) ? `<input type="checkbox" class="user-checkbox" value="${u._id}" onchange="updateBulkActions()">` : ''}</td>` : ''}
-                <td>${u.name}</td>
-                ${mode === 'corporate' ? `<td>${u.employeeId || '-'}</td>` : ''}
-                <td>${u.email || u.IndexNumber || u.indexNumber || 'N/A'}</td>
-                <td><span class="role-badge role-${u.role}">${u.role}</span>${u.department ? `<span style="font-size:10px;margin-left:5px;padding:2px 6px;border-radius:20px;background:#ecfeff;color:#0891b2;font-weight:600;">${u.department}</span>` : ''}</td>
-                ${mode !== 'corporate' ? `<td style="font-size:11px;white-space:nowrap">
-                  ${u.role === 'student' ? `
-                    ${u.programme ? `<span style="background:#ede9fe;color:#7c3aed;padding:1px 6px;border-radius:20px;font-weight:700;margin-right:2px">${esc(u.programme)}</span>` : ''}
-                    ${u.studentLevel ? `<span style="background:#dbeafe;color:#1d4ed8;padding:1px 6px;border-radius:20px;font-weight:700;margin-right:2px">L${esc(u.studentLevel)}</span>` : ''}
-                    ${u.studentGroup ? `<span style="background:#ecfdf5;color:#059669;padding:1px 6px;border-radius:20px;font-weight:700;margin-right:2px">Grp ${esc(u.studentGroup)}</span>` : ''}
-                    ${u.sessionType ? `<span style="background:#fff7ed;color:#c2410c;padding:1px 6px;border-radius:20px;font-weight:600;margin-right:2px">${esc(u.sessionType)}</span>` : ''}
-                    ${u.semester ? `<span style="color:var(--text-muted)">Sem ${esc(u.semester)}</span>` : ''}
-                    ${!u.programme && !u.studentLevel ? '<span style="color:var(--text-muted)">—</span>' : ''}
-                  ` : '<span style="color:var(--text-muted)">—</span>'}
-                </td>` : ''}
-                <td><span class="status-badge ${u.isActive ? 'status-active' : 'status-stopped'}">${u.isActive ? 'Active' : 'Inactive'}</span></td>
-                ${canManage ? `<td style="white-space:nowrap">
-                  ${canActOn(u) ? `
-                    ${u.isActive
-                      ? `<button class="btn btn-sm" style="background:#f59e0b;color:#fff;font-size:11px" onclick="deactivateUser('${u._id}')">Deactivate</button>`
-                      : `<button class="btn btn-sm" style="background:#22c55e;color:#fff;font-size:11px" onclick="activateUser('${u._id}')">Activate</button>`}
-                    <button class="btn btn-sm" style="background:#6366f1;color:#fff;font-size:11px" onclick="adminResetStudentPassword('${u._id}', this)">🔑 Reset</button>
-                    ${u.role === 'student' && u.deviceId ? `<button class="btn btn-sm" style="background:#f97316;color:#fff;font-size:11px" onclick="clearStudentDeviceLock('${u._id}', this)">🔓 Unlock</button>` : ''}
-                    <button class="btn btn-danger btn-sm" style="font-size:11px" onclick="deleteUserPermanently('${u._id}', this)">Delete</button>
-                  ` : `<span style="font-size:11px;color:var(--text-muted);font-style:italic">—</span>`}
-                </td>` : ''}
-              </tr>
-            `).join('')}</tbody>
-          </table>
-        ` : '<div class="empty-state"><p>No users found</p></div>'}
-      </div>
-    `;
-  } catch (e) {
-    content.innerHTML = `<div class="card"><p>Error: ${e.message}</p></div>`;
+    content.innerHTML = `<div style="text-align:center;padding:60px 20px"><div style="font-size:48px;margin-bottom:12px">📡</div><div style="font-size:18px;font-weight:700">You're Offline</div><p style="color:var(--text-muted);margin-top:8px">Connect once while online to cache this page.</p></div>`; return;
+  }
+  try {
+    const data = await api('/api/users');
+    _cachedUsers = data.users || [];
+    offlineCache('users_list', _cachedUsers);
+    window._hodDepts = [...new Set(_cachedUsers.filter(u => u.role==='hod' && u.department).map(u => u.department))].sort();
+    const mode = currentUser.company?.mode || 'corporate';
+    if (mode === 'academic') {
+      _renderUserDeptCards(content, _cachedUsers, filterSearch);
+    } else {
+      _renderUsersCorporateTable(content, _cachedUsers, filterRole, filterDept, filterSearch);
+    }
+  } catch(e) {
+    const _c = offlineRead('users_list');
+    if (_c) {
+      _cachedUsers = _c;
+      window._hodDepts = [...new Set(_c.filter(u => u.role==='hod' && u.department).map(u => u.department))].sort();
+      const mode = currentUser.company?.mode || 'corporate';
+      if (mode === 'academic') _renderUserDeptCards(content, _c, filterSearch);
+      else _renderUsersCorporateTable(content, _c, filterRole, filterDept, filterSearch);
+      return;
+    }
+    content.innerHTML = `<div class="card"><p style="color:#ef4444">Error loading users: ${e.message}</p></div>`;
   }
 }
+
+// ── View 1: Department overview cards ─────────────────────────────────────────
+function _renderUserDeptCards(content, allUsers, filterSearch='') {
+  const canManage = ['admin','superadmin'].includes(currentUser.role);
+  const _roleRank = {superadmin:6,admin:5,manager:4,hod:3,lecturer:3,employee:2,student:1};
+  const _myRank = _roleRank[currentUser.role] || 0;
+  const selfId = (currentUser._id || currentUser.id || '').toString();
+
+  const deptMap = {};
+  const staffNoDept = [];
+  allUsers.forEach(u => {
+    if (u._id?.toString() === selfId) return;
+    if (u.role === 'student') {
+      const d = u.department || '—';
+      if (!deptMap[d]) deptMap[d] = { students:[], lecturers:[], hod:null, levels:new Set() };
+      deptMap[d].students.push(u);
+      if (u.studentLevel) deptMap[d].levels.add(u.studentLevel);
+    } else if (u.role === 'lecturer' || u.role === 'hod') {
+      if (u.department) {
+        if (!deptMap[u.department]) deptMap[u.department] = { students:[], lecturers:[], hod:null, levels:new Set() };
+        if (u.role === 'hod') deptMap[u.department].hod = u;
+        else deptMap[u.department].lecturers.push(u);
+      } else { staffNoDept.push(u); }
+    } else { staffNoDept.push(u); }
+  });
+
+  let entries = Object.entries(deptMap);
+  if (filterSearch) {
+    const q = filterSearch.toLowerCase();
+    entries = entries.filter(([dn, d]) =>
+      dn.toLowerCase().includes(q) ||
+      d.hod?.name?.toLowerCase().includes(q) ||
+      d.lecturers.some(l => l.name?.toLowerCase().includes(q)) ||
+      d.students.some(s => s.name?.toLowerCase().includes(q) || (s.indexNumber||s.IndexNumber||'').toLowerCase().includes(q))
+    );
+  }
+  entries.sort(([a],[b]) => a.localeCompare(b));
+  const totalStudents = allUsers.filter(u => u.role==='student' && u._id?.toString()!==selfId).length;
+
+  content.innerHTML = `
+    <div class="page-header">
+      <div>
+        <h2>Users</h2>
+        <p>${totalStudents} students · ${entries.length} department${entries.length!==1?'s':''}</p>
+      </div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap">
+        ${canManage?`<button class="btn btn-primary btn-sm" onclick="showCreateUserModal()">＋ Add User</button>`:''}
+        ${canManage?`<button class="btn btn-sm btn-secondary" onclick="showBulkImportModal()">📥 Bulk Import</button>`:''}
+        ${canManage?`<button class="btn btn-sm" style="background:#f59e0b;color:#fff" onclick="renderResetLogs()">🔐 Reset Log</button>`:''}
+      </div>
+    </div>
+    <div style="margin-bottom:18px">
+      <input id="user-search-input" placeholder="Search departments, names, index numbers…" value="${esc(filterSearch)}"
+        oninput="renderUsers('','',this.value)"
+        style="width:100%;max-width:420px;padding:9px 14px;border:1.5px solid var(--border);border-radius:10px;font-size:13px;font-family:inherit;outline:none;box-sizing:border-box">
+    </div>
+    <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(265px,1fr));gap:16px;margin-bottom:28px">
+      ${entries.map(([deptName, d]) => {
+        const col = _deptColor(deptName);
+        const levArr = Array.from(d.levels).sort();
+        const enc = encodeURIComponent(deptName);
+        return `
+          <div class="card" tabindex="0" role="button"
+            style="padding:0;overflow:hidden;cursor:pointer;border:1.5px solid var(--border);transition:box-shadow .2s,transform .15s;outline:none"
+            onmouseenter="this.style.boxShadow='0 6px 24px rgba(0,0,0,.12)';this.style.transform='translateY(-2px)'"
+            onmouseleave="this.style.boxShadow='';this.style.transform=''"
+            onclick="_renderUserDeptDetail(decodeURIComponent('${enc}'),_cachedUsers)"
+            onkeydown="if(event.key==='Enter')_renderUserDeptDetail(decodeURIComponent('${enc}'),_cachedUsers)">
+            <div style="height:4px;background:${col}"></div>
+            <div style="padding:18px 20px 16px">
+              <div style="display:flex;align-items:flex-start;gap:12px;margin-bottom:14px">
+                <div style="width:46px;height:46px;border-radius:12px;background:${col}1a;display:flex;align-items:center;justify-content:center;font-size:22px;font-weight:800;color:${col};flex-shrink:0">
+                  ${esc(deptName.charAt(0).toUpperCase())}
+                </div>
+                <div style="flex:1;min-width:0">
+                  <div style="font-weight:700;font-size:14px;line-height:1.25;word-break:break-word">${esc(deptName)}</div>
+                  <div style="font-size:11px;color:var(--text-muted);margin-top:3px">
+                    ${d.hod?`HOD: <strong>${esc(d.hod.name)}</strong>`:`<span style="color:#f59e0b">No HOD assigned</span>`}
+                  </div>
+                </div>
+              </div>
+              <div style="display:grid;grid-template-columns:repeat(3,1fr);text-align:center;gap:4px;margin-bottom:12px">
+                <div>
+                  <div style="font-size:22px;font-weight:700;color:${col}">${d.students.length}</div>
+                  <div style="font-size:10px;color:var(--text-muted);text-transform:uppercase;letter-spacing:.4px">Students</div>
+                </div>
+                <div>
+                  <div style="font-size:22px;font-weight:700">${d.lecturers.length}</div>
+                  <div style="font-size:10px;color:var(--text-muted);text-transform:uppercase;letter-spacing:.4px">Lecturers</div>
+                </div>
+                <div>
+                  <div style="font-size:22px;font-weight:700">${levArr.length}</div>
+                  <div style="font-size:10px;color:var(--text-muted);text-transform:uppercase;letter-spacing:.4px">Levels</div>
+                </div>
+              </div>
+              ${levArr.length?`<div style="display:flex;flex-wrap:wrap;gap:4px;margin-bottom:12px">
+                ${levArr.map(lv=>`<span style="padding:2px 9px;border-radius:20px;font-size:11px;font-weight:700;background:${col}1a;color:${col}">${esc(lv)}</span>`).join('')}
+              </div>`:''}
+              <div style="border-top:1px solid var(--border);padding-top:10px;display:flex;justify-content:space-between;align-items:center">
+                <span style="font-size:11px;color:var(--text-muted)">${levArr.length} level${levArr.length!==1?'s':''}</span>
+                <span style="font-size:12px;font-weight:700;color:${col}">Open →</span>
+              </div>
+            </div>
+          </div>`;
+      }).join('')}
+    </div>
+    ${staffNoDept.length?`
+      <div style="font-size:11px;font-weight:700;color:var(--text-muted);letter-spacing:.8px;text-transform:uppercase;margin-bottom:10px">Other Staff</div>
+      <div class="card" style="padding:0;overflow:hidden">
+        <table>
+          <thead><tr><th>Name</th><th>Email</th><th>Role</th><th>Status</th>${canManage?'<th>Actions</th>':''}</tr></thead>
+          <tbody>
+            ${staffNoDept.filter(u => {
+              if (!filterSearch) return true;
+              const q = filterSearch.toLowerCase();
+              return u.name?.toLowerCase().includes(q) || u.email?.toLowerCase().includes(q);
+            }).map(u => {
+              const canAct = (_roleRank[u.role]||0) < _myRank;
+              return `<tr id="user-row-${u._id}">
+                <td style="font-weight:500">${esc(u.name)}</td>
+                <td style="font-size:12px;color:var(--text-muted)">${esc(u.email||'—')}</td>
+                <td><span class="role-badge role-${u.role}">${u.role}</span></td>
+                <td><span class="status-badge ${u.isActive?'status-active':'status-stopped'}">${u.isActive?'Active':'Inactive'}</span></td>
+                ${canManage?`<td style="white-space:nowrap">${canAct?`
+                  ${u.isActive?`<button class="btn btn-sm" style="background:#f59e0b;color:#fff;font-size:11px" onclick="deactivateUser('${u._id}')">Deactivate</button>`:`<button class="btn btn-sm" style="background:#22c55e;color:#fff;font-size:11px" onclick="activateUser('${u._id}')">Activate</button>`}
+                  <button class="btn btn-sm" style="background:#6366f1;color:#fff;font-size:11px" onclick="adminResetStudentPassword('${u._id}',this)">🔑 Reset</button>
+                  <button class="btn btn-danger btn-sm" style="font-size:11px" onclick="deleteUserPermanently('${u._id}',this)">Delete</button>
+                `:'—'}</td>`:''}
+              </tr>`;
+            }).join('')}
+          </tbody>
+        </table>
+      </div>`:''}
+  `;
+}
+
+// ── View 2: Level cards inside a department ────────────────────────────────────
+function _renderUserDeptDetail(deptName, allUsers) {
+  const content = document.getElementById('main-content');
+  if (!content) return;
+  const canManage = ['admin','superadmin'].includes(currentUser.role);
+  const _roleRank = {superadmin:6,admin:5,manager:4,hod:3,lecturer:3,employee:2,student:1};
+  const _myRank = _roleRank[currentUser.role] || 0;
+  const col = _deptColor(deptName);
+  const encDept = encodeURIComponent(deptName);
+
+  const deptStudents = allUsers.filter(u => u.role==='student' && u.department===deptName);
+  const deptLecturers = allUsers.filter(u => u.role==='lecturer' && u.department===deptName);
+  const deptHod = allUsers.find(u => u.role==='hod' && u.department===deptName);
+
+  const levelMap = {};
+  deptStudents.forEach(s => {
+    const lv = s.studentLevel || 'Unclassified';
+    if (!levelMap[lv]) levelMap[lv] = [];
+    levelMap[lv].push(s);
+  });
+
+  const staffList = [...(deptHod?[deptHod]:[]), ...deptLecturers];
+
+  content.innerHTML = `
+    <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;font-size:13px">
+      <span style="color:var(--primary);cursor:pointer;font-weight:500" onclick="renderUsers()">Users</span>
+      <span style="color:var(--text-muted)">›</span>
+      <span style="font-weight:600">${esc(deptName)}</span>
+    </div>
+    <div class="page-header" style="margin-bottom:20px">
+      <div style="display:flex;align-items:center;gap:14px">
+        <div style="width:52px;height:52px;border-radius:14px;background:${col}1a;display:flex;align-items:center;justify-content:center;font-size:24px;font-weight:800;color:${col};flex-shrink:0">
+          ${esc(deptName.charAt(0).toUpperCase())}
+        </div>
+        <div>
+          <h2 style="margin:0">${esc(deptName)}</h2>
+          <p style="margin:0;font-size:13px;color:var(--text-muted)">
+            ${deptStudents.length} students · ${deptLecturers.length} lecturer${deptLecturers.length!==1?'s':''}${deptHod?' · HOD: '+esc(deptHod.name):''}
+          </p>
+        </div>
+      </div>
+      ${canManage?`<button class="btn btn-primary btn-sm" onclick="showCreateUserModal()">＋ Add User</button>`:''}
+    </div>
+    <div style="font-size:11px;font-weight:700;color:var(--text-muted);letter-spacing:.8px;text-transform:uppercase;margin-bottom:12px">Levels</div>
+    <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:14px;margin-bottom:28px">
+      ${Object.entries(levelMap).sort(([a],[b])=>a.localeCompare(b)).map(([lv, students]) => {
+        const groups = {};
+        const sessions = {};
+        students.forEach(s => {
+          groups[s.studentGroup||'Unassigned'] = (groups[s.studentGroup||'Unassigned']||0)+1;
+          sessions[s.sessionType||'Regular'] = (sessions[s.sessionType||'Regular']||0)+1;
+        });
+        const active = students.filter(s=>s.isActive).length;
+        const encLv = encodeURIComponent(lv);
+        return `
+          <div class="card" tabindex="0" role="button"
+            style="padding:18px;cursor:pointer;border:1.5px solid var(--border);transition:box-shadow .2s,transform .15s;outline:none"
+            onmouseenter="this.style.boxShadow='0 6px 24px rgba(0,0,0,.12)';this.style.transform='translateY(-2px)'"
+            onmouseleave="this.style.boxShadow='';this.style.transform=''"
+            onclick="_renderUserLevelDetail(decodeURIComponent('${encDept}'),decodeURIComponent('${encLv}'),_cachedUsers,'')"
+            onkeydown="if(event.key==='Enter')_renderUserLevelDetail(decodeURIComponent('${encDept}'),decodeURIComponent('${encLv}'),_cachedUsers,'')">
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
+              <span style="font-size:26px;font-weight:800;color:${col}">${esc(lv)}</span>
+              <span style="padding:3px 10px;border-radius:20px;background:${col}1a;color:${col};font-size:11px;font-weight:700">${students.length}</span>
+            </div>
+            <div style="display:flex;flex-wrap:wrap;gap:4px;margin-bottom:8px">
+              ${Object.entries(groups).sort().map(([g,c])=>`<span style="padding:2px 8px;border-radius:20px;font-size:11px;background:#f3f4f6;color:#374151;font-weight:600">Grp ${esc(g)}: ${c}</span>`).join('')}
+            </div>
+            <div style="display:flex;flex-wrap:wrap;gap:4px;margin-bottom:10px">
+              ${Object.entries(sessions).map(([st,c])=>`<span style="padding:2px 8px;border-radius:20px;font-size:11px;font-weight:600;background:${st==='Regular'?'#f0fdf4':'#fff7ed'};color:${st==='Regular'?'#166534':'#9a3412'}">${esc(st)}: ${c}</span>`).join('')}
+            </div>
+            <div style="border-top:1px solid var(--border);padding-top:8px;display:flex;justify-content:space-between;align-items:center">
+              <span style="font-size:11px;color:${active===students.length?'#22c55e':'#f59e0b'}">${active}/${students.length} active</span>
+              <span style="font-size:12px;font-weight:700;color:${col}">View →</span>
+            </div>
+          </div>`;
+      }).join('')}
+    </div>
+    <div style="font-size:11px;font-weight:700;color:var(--text-muted);letter-spacing:.8px;text-transform:uppercase;margin-bottom:10px">Department Staff</div>
+    <div class="card" style="padding:0;overflow:hidden">
+      <table>
+        <thead><tr><th>Name</th><th>Email</th><th>Role</th><th>Status</th>${canManage?'<th>Actions</th>':''}</tr></thead>
+        <tbody>
+          ${staffList.length ? staffList.map(u => {
+            const canAct = (_roleRank[u.role]||0) < _myRank;
+            return `<tr id="user-row-${u._id}">
+              <td style="font-weight:500">${esc(u.name)}</td>
+              <td style="font-size:12px;color:var(--text-muted)">${esc(u.email||'—')}</td>
+              <td><span class="role-badge role-${u.role}">${u.role}</span></td>
+              <td><span class="status-badge ${u.isActive?'status-active':'status-stopped'}">${u.isActive?'Active':'Inactive'}</span></td>
+              ${canManage?`<td style="white-space:nowrap">${canAct?`
+                ${u.isActive?`<button class="btn btn-sm" style="background:#f59e0b;color:#fff;font-size:11px" onclick="deactivateUser('${u._id}')">Deactivate</button>`:`<button class="btn btn-sm" style="background:#22c55e;color:#fff;font-size:11px" onclick="activateUser('${u._id}')">Activate</button>`}
+                <button class="btn btn-sm" style="background:#6366f1;color:#fff;font-size:11px" onclick="adminResetStudentPassword('${u._id}',this)">🔑 Reset</button>
+                <button class="btn btn-danger btn-sm" style="font-size:11px" onclick="deleteUserPermanently('${u._id}',this)">Delete</button>
+              `:'—'}</td>`:''}
+            </tr>`;
+          }).join('') : `<tr><td colspan="${canManage?5:4}" style="text-align:center;padding:16px;color:var(--text-muted)">No staff in this department yet</td></tr>`}
+        </tbody>
+      </table>
+    </div>
+  `;
+}
+
+// ── View 3: Student list within a level ────────────────────────────────────────
+function _renderUserLevelDetail(deptName, level, allUsers, groupFilter='') {
+  const content = document.getElementById('main-content');
+  if (!content) return;
+  const canManage = ['admin','superadmin'].includes(currentUser.role);
+  const _roleRank = {superadmin:6,admin:5,manager:4,hod:3,lecturer:3,employee:2,student:1};
+  const _myRank = _roleRank[currentUser.role] || 0;
+  const col = _deptColor(deptName);
+  const encDept = encodeURIComponent(deptName);
+  const encLv = encodeURIComponent(level);
+
+  let students = allUsers.filter(u => u.role==='student' && u.department===deptName && u.studentLevel===level);
+  const allGroups = [...new Set(students.map(s=>s.studentGroup).filter(Boolean))].sort();
+  if (groupFilter) students = students.filter(s=>s.studentGroup===groupFilter);
+  const colCount = canManage ? 7 : 5;
+
+  const studentRow = u => {
+    const canAct = (_roleRank[u.role]||0) < _myRank;
+    return `<tr id="user-row-${u._id}"
+      data-name="${(u.name||'').toLowerCase()}"
+      data-idx="${(u.IndexNumber||u.indexNumber||'').toLowerCase()}"
+      data-email="${(u.email||'').toLowerCase()}">
+      ${canManage?`<td><input type="checkbox" class="user-checkbox" value="${u._id}" onchange="updateBulkActions()"></td>`:''}
+      <td style="font-weight:500">${esc(u.name)}</td>
+      <td style="font-family:monospace;font-size:12px;color:var(--text-muted)">${esc(u.IndexNumber||u.indexNumber||'—')}</td>
+      <td style="font-size:12px;color:var(--text-muted)">${esc(u.email||'—')}</td>
+      <td style="font-size:11px;white-space:nowrap">
+        ${u.programme?`<span style="background:#ede9fe;color:#7c3aed;padding:1px 6px;border-radius:20px;font-weight:700;margin-right:2px">${esc(u.programme)}</span>`:''}
+        ${u.studentGroup?`<span style="background:#ecfdf5;color:#059669;padding:1px 6px;border-radius:20px;font-weight:700;margin-right:2px">Grp ${esc(u.studentGroup)}</span>`:''}
+        ${u.sessionType?`<span style="padding:1px 6px;border-radius:20px;font-weight:600;margin-right:2px;background:${u.sessionType==='Regular'?'#f0fdf4':'#fff7ed'};color:${u.sessionType==='Regular'?'#166534':'#9a3412'}">${esc(u.sessionType)}</span>`:''}
+        ${u.semester?`<span style="color:var(--text-muted)">Sem ${esc(u.semester)}</span>`:''}
+      </td>
+      <td><span class="status-badge ${u.isActive?'status-active':'status-stopped'}">${u.isActive?'Active':'Inactive'}</span></td>
+      ${canManage?`<td style="white-space:nowrap">${canAct?`
+        ${u.isActive?`<button class="btn btn-sm" style="background:#f59e0b;color:#fff;font-size:11px" onclick="deactivateUser('${u._id}')">Deactivate</button>`:`<button class="btn btn-sm" style="background:#22c55e;color:#fff;font-size:11px" onclick="activateUser('${u._id}')">Activate</button>`}
+        <button class="btn btn-sm" style="background:#6366f1;color:#fff;font-size:11px" onclick="adminResetStudentPassword('${u._id}',this)">🔑 Reset</button>
+        ${u.deviceId?`<button class="btn btn-sm" style="background:#f97316;color:#fff;font-size:11px" onclick="clearStudentDeviceLock('${u._id}',this)">🔓 Unlock</button>`:''}
+        <button class="btn btn-danger btn-sm" style="font-size:11px" onclick="deleteUserPermanently('${u._id}',this)">Delete</button>
+      `:'—'}</td>`:''}
+    </tr>`;
+  };
+
+  content.innerHTML = `
+    <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;font-size:13px">
+      <span style="color:var(--primary);cursor:pointer;font-weight:500" onclick="renderUsers()">Users</span>
+      <span style="color:var(--text-muted)">›</span>
+      <span style="color:var(--primary);cursor:pointer;font-weight:500" onclick="_renderUserDeptDetail(decodeURIComponent('${encDept}'),_cachedUsers)">${esc(deptName)}</span>
+      <span style="color:var(--text-muted)">›</span>
+      <span style="font-weight:600">${esc(level)}</span>
+    </div>
+    <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;margin-bottom:16px">
+      <div>
+        <h2 style="margin:0;display:flex;align-items:center;gap:10px">
+          ${esc(deptName)}
+          <span style="padding:3px 12px;border-radius:20px;font-size:14px;background:${col}1a;color:${col};font-weight:800">${esc(level)}</span>
+        </h2>
+        <p style="margin:4px 0 0;font-size:13px;color:var(--text-muted)">${students.length} student${students.length!==1?'s':''}${groupFilter?' · Group '+esc(groupFilter):''}</p>
+      </div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+        ${canManage?`<button class="btn btn-primary btn-sm" onclick="showCreateUserModal()">＋ Add</button>`:''}
+        <input id="level-search" placeholder="Search students…"
+          oninput="_filterLevelRows(this.value)"
+          style="padding:7px 11px;border:1.5px solid var(--border);border-radius:8px;font-size:13px;font-family:inherit;outline:none;min-width:160px">
+        ${allGroups.length>1?`
+          <select onchange="_renderUserLevelDetail(decodeURIComponent('${encDept}'),decodeURIComponent('${encLv}'),_cachedUsers,this.value)"
+            style="padding:7px 10px;border:1.5px solid var(--border);border-radius:8px;font-size:13px;font-family:inherit;outline:none">
+            <option value="">All Groups</option>
+            ${allGroups.map(g=>`<option value="${esc(g)}" ${groupFilter===g?'selected':''}>${esc(g)}</option>`).join('')}
+          </select>`:''}
+      </div>
+    </div>
+    ${canManage?`
+      <div id="bulk-actions" style="display:none;gap:8px;align-items:center;margin-bottom:10px;padding:10px 14px;background:#f8fafc;border-radius:8px;border:1px solid var(--border)">
+        <span id="selected-count" style="font-size:13px;color:var(--text-muted)">0 selected</span>
+        <button class="btn btn-sm" style="background:#22c55e;color:#fff" onclick="bulkUserAction('activate')">Activate</button>
+        <button class="btn btn-sm" style="background:#f59e0b;color:#fff" onclick="bulkUserAction('deactivate')">Deactivate</button>
+        <button class="btn btn-danger btn-sm" onclick="bulkUserAction('delete')">Delete</button>
+      </div>`:''}
+    <div class="card" style="padding:0;overflow:hidden">
+      <table>
+        <thead><tr>
+          ${canManage?`<th style="width:36px"><input type="checkbox" id="select-all-users" onchange="toggleSelectAllUsers()"></th>`:''}
+          <th>Name</th><th>Index No.</th><th>Email</th><th>Classification</th><th>Status</th>
+          ${canManage?'<th>Actions</th>':''}
+        </tr></thead>
+        <tbody id="students-level-tbody">
+          ${students.map(studentRow).join('')}
+          ${students.length===0?`<tr><td colspan="${colCount}" style="text-align:center;padding:24px;color:var(--text-muted)">No students found</td></tr>`:''}
+        </tbody>
+      </table>
+    </div>
+  `;
+}
+
+function _filterLevelRows(searchVal) {
+  const q = (searchVal||'').toLowerCase();
+  document.querySelectorAll('#students-level-tbody tr[data-name]').forEach(row => {
+    const matches = !q || row.dataset.name.includes(q) || row.dataset.idx.includes(q) || row.dataset.email.includes(q);
+    row.style.display = matches ? '' : 'none';
+  });
+}
+
+// ── Corporate table (non-academic fallback) ────────────────────────────────────
+function _renderUsersCorporateTable(content, allUsers, filterRole='', filterDept='', filterSearch='') {
+  const canManage = ['manager','admin','superadmin'].includes(currentUser.role);
+  const isManager = currentUser.role === 'manager';
+  const _roleRank = {superadmin:6,admin:5,manager:4,hod:3,lecturer:3,employee:2,student:1};
+  const _myRank = _roleRank[currentUser.role] || 0;
+  const canActOn = u => (_roleRank[u.role]||0) < _myRank;
+  const selfId = (currentUser._id||currentUser.id||'').toString();
+
+  let users = allUsers.filter(u => u._id?.toString()!==selfId);
+  if (filterRole) users = users.filter(u => u.role===filterRole);
+  if (filterDept) users = users.filter(u => u.department===filterDept);
+  if (filterSearch) {
+    const q = filterSearch.toLowerCase();
+    users = users.filter(u => u.name?.toLowerCase().includes(q) || u.email?.toLowerCase().includes(q) || u.department?.toLowerCase().includes(q));
+  }
+  const allDepts = [...new Set(allUsers.map(u=>u.department).filter(Boolean))].sort();
+
+  content.innerHTML = `
+    <div class="page-header"><h2>${isManager?'Employees':'Users'}</h2><p>Manage team members · ${users.length} shown</p></div>
+    <div class="actions-bar" style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:10px">
+      ${canManage?`<button class="btn btn-primary btn-sm" onclick="showCreateUserModal()">${isManager?'Add Employee':'Add User'}</button>`:''}
+      ${['admin','superadmin'].includes(currentUser.role)?`<button class="btn btn-sm" style="background:#f59e0b;color:#fff" onclick="renderResetLogs()">🔐 Reset Log</button>`:''}
+      <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin-left:auto">
+        <input id="user-search-input" placeholder="Search name / email…" value="${esc(filterSearch)}"
+          oninput="_renderUsersCorporateTable(document.getElementById('main-content'),_cachedUsers,document.getElementById('user-role-filter').value,document.getElementById('user-dept-filter').value,this.value)"
+          style="padding:7px 11px;border:1.5px solid var(--border);border-radius:8px;font-size:13px;font-family:inherit;outline:none;min-width:180px">
+        <select id="user-role-filter" onchange="_renderUsersCorporateTable(document.getElementById('main-content'),_cachedUsers,this.value,document.getElementById('user-dept-filter').value,document.getElementById('user-search-input').value)"
+          style="padding:7px 10px;border:1.5px solid var(--border);border-radius:8px;font-size:13px;font-family:inherit;outline:none">
+          <option value="">All Roles</option>
+          <option value="admin" ${filterRole==='admin'?'selected':''}>Admin</option>
+          <option value="manager" ${filterRole==='manager'?'selected':''}>Manager</option>
+          <option value="employee" ${filterRole==='employee'?'selected':''}>Employee</option>
+        </select>
+        <select id="user-dept-filter" onchange="_renderUsersCorporateTable(document.getElementById('main-content'),_cachedUsers,document.getElementById('user-role-filter').value,this.value,document.getElementById('user-search-input').value)"
+          style="padding:7px 10px;border:1.5px solid var(--border);border-radius:8px;font-size:13px;font-family:inherit;outline:none">
+          <option value="">All Departments</option>
+          ${allDepts.map(d=>`<option value="${esc(d)}" ${filterDept===d?'selected':''}>${esc(d)}</option>`).join('')}
+        </select>
+      </div>
+      ${canManage?`
+        <div id="bulk-actions" style="display:none;gap:8px;align-items:center;margin-left:auto">
+          <span id="selected-count" style="font-size:13px;color:var(--text-muted)">0 selected</span>
+          <button class="btn btn-sm" style="background:#22c55e;color:#fff" onclick="bulkUserAction('activate')">Activate</button>
+          <button class="btn btn-sm" style="background:#f59e0b;color:#fff" onclick="bulkUserAction('deactivate')">Deactivate</button>
+          <button class="btn btn-danger btn-sm" onclick="bulkUserAction('delete')">Delete</button>
+        </div>`:''}
+    </div>
+    <div class="card" style="padding:0;overflow:hidden">
+      ${users.length?`
+        <table>
+          <thead><tr>
+            ${canManage?'<th style="width:40px"><input type="checkbox" id="select-all-users" onchange="toggleSelectAllUsers()"></th>':''}
+            <th>Name</th><th>Employee ID</th><th>Email</th><th>Role</th><th>Status</th>
+            ${canManage?'<th>Actions</th>':''}
+          </tr></thead>
+          <tbody>${users.map(u=>`
+            <tr id="user-row-${u._id}">
+              ${canManage?`<td>${canActOn(u)?`<input type="checkbox" class="user-checkbox" value="${u._id}" onchange="updateBulkActions()">`:''}</td>`:''}
+              <td style="font-weight:500">${esc(u.name)}</td>
+              <td style="font-size:12px;color:var(--text-muted)">${esc(u.employeeId||'—')}</td>
+              <td style="font-size:12px;color:var(--text-muted)">${esc(u.email||'—')}</td>
+              <td><span class="role-badge role-${u.role}">${u.role}</span>${u.department?`<span style="font-size:10px;margin-left:5px;padding:2px 6px;border-radius:20px;background:#ecfeff;color:#0891b2;font-weight:600">${esc(u.department)}</span>`:''}</td>
+              <td><span class="status-badge ${u.isActive?'status-active':'status-stopped'}">${u.isActive?'Active':'Inactive'}</span></td>
+              ${canManage?`<td style="white-space:nowrap">${canActOn(u)?`
+                ${u.isActive?`<button class="btn btn-sm" style="background:#f59e0b;color:#fff;font-size:11px" onclick="deactivateUser('${u._id}')">Deactivate</button>`:`<button class="btn btn-sm" style="background:#22c55e;color:#fff;font-size:11px" onclick="activateUser('${u._id}')">Activate</button>`}
+                <button class="btn btn-sm" style="background:#6366f1;color:#fff;font-size:11px" onclick="adminResetStudentPassword('${u._id}',this)">🔑 Reset</button>
+                <button class="btn btn-danger btn-sm" style="font-size:11px" onclick="deleteUserPermanently('${u._id}',this)">Delete</button>
+              `:'—'}</td>`:''}
+            </tr>`).join('')}
+          </tbody>
+        </table>
+      `:`<div class="empty-state"><p>No users found</p></div>`}
+    </div>
+  `;
+}
+
 
 async function renderResetLogs() {
   const content = document.getElementById('main-content');
@@ -7224,9 +8145,9 @@ async function showCreateUserModal() {
           <label>Role</label>
           <select id="new-user-role" onchange="toggleUserFields(); onCreateUserRoleChange();">${roles}</select>
         </div>` : `<input type="hidden" id="new-user-role" value="${defaultRole}">`}
-        <div class="form-group" id="new-user-email-group" ${defaultRole === 'student' ? 'class="hidden"' : ''}>
-          <label>Email</label>
-          <input type="email" id="new-user-email" placeholder="user@company.com">
+        <div class="form-group" id="new-user-email-group">
+          <label>Email <span style="color:red">*</span></label>
+          <input type="email" id="new-user-email" placeholder="user@example.com">
         </div>
         <div class="form-group ${defaultRole !== 'student' ? 'hidden' : ''}" id="new-user-index-group">
           <label>Student ID / Index Number <span style="color:red">*</span></label>
@@ -7299,6 +8220,17 @@ async function showCreateUserModal() {
               </select>
             </div>
           </div>
+          <div class="form-group">
+            <label>Academic Year <span style="color:red">*</span></label>
+            <select id="new-user-academic-year" style="width:100%;padding:9px 12px;border:1.5px solid var(--border);border-radius:8px;font-size:13px">
+              <option value="">— Select Academic Year —</option>
+              ${(() => {
+                const yr = new Date().getFullYear();
+                return [yr-1, yr, yr+1].map(y => `<option value="${y}/${y+1}" ${y === yr ? 'selected' : ''}>${y}/${y+1}</option>`).join('');
+              })()}
+            </select>
+            <p style="font-size:11px;color:var(--text-light);margin-top:4px">The academic year this student is enrolled in.</p>
+          </div>
         </div>
         <div class="form-group">
           <label>Phone Number <span style="color:red">*</span></label>
@@ -7317,7 +8249,7 @@ async function showCreateUserModal() {
 
 function toggleUserFields() {
   const role = document.getElementById('new-user-role').value;
-  document.getElementById('new-user-email-group').classList.toggle('hidden', role === 'student');
+  // Email is required for ALL roles — never hide it
   document.getElementById('new-user-index-group').classList.toggle('hidden', role !== 'student');
   const deptGroup  = document.getElementById('new-user-dept-group');
   const deptReq    = document.getElementById('new-user-dept-req');
@@ -7345,6 +8277,12 @@ async function createUser() {
       password: document.getElementById('new-user-password').value,
       role,
     };
+    // Email is required for all roles
+    const email = document.getElementById('new-user-email').value.trim();
+    if (!email) { toastWarning('Email address is required.'); return; }
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) { toastWarning('Please enter a valid email address.'); return; }
+    body.email = email;
+
     if (role === 'student') {
       const idx = document.getElementById('new-user-index').value.trim().toUpperCase();
       if (!idx) { toastWarning('Student ID / Index Number is required.'); return; }
@@ -7356,18 +8294,19 @@ async function createUser() {
       const studentGroup= document.getElementById('new-user-group')?.value?.trim().toUpperCase();
       const sessionType = document.getElementById('new-user-session-type')?.value;
       const semester    = document.getElementById('new-user-semester')?.value;
+      const academicYear = document.getElementById('new-user-academic-year')?.value;
       if (!programme)    { toastWarning('Please select the student\'s programme (e.g. BSc, HND).'); return; }
       if (!studentLevel) { toastWarning('Please select the student\'s level.'); return; }
       if (!studentGroup) { toastWarning('Please enter the student\'s group (e.g. A, B, C).'); return; }
       if (!sessionType)  { toastWarning('Please select the session type (Morning, Evening etc.).'); return; }
       if (!semester)     { toastWarning('Please select the semester.'); return; }
+      if (!academicYear) { toastWarning('Please select the academic year.'); return; }
       body.programme    = programme;
       body.studentLevel = studentLevel;
       body.studentGroup = studentGroup;
       body.sessionType  = sessionType;
       body.semester     = semester;
-    } else {
-      body.email = document.getElementById('new-user-email').value;
+      body.academicYear = academicYear;
     }
     const phone = document.getElementById('new-user-phone').value.trim();
     if (!phone) { toastWarning('Phone number is required.'); return; }
@@ -7534,8 +8473,23 @@ async function renderMeetings() {
   const content = document.getElementById('main-content');
   if (!content) return;
   content.innerHTML = '<div style="padding:32px;text-align:center;color:var(--text-muted);">Loading meetings…</div>';
+  if (!isOnline()) {
+    const _c = offlineRead('meetings');
+    if (_c) { /* render below */ Object.assign(arguments, [_c]); }
+    else { content.innerHTML = `<div style="text-align:center;padding:60px 20px"><div style="font-size:48px;margin-bottom:12px">📡</div><div style="font-size:18px;font-weight:700">You're Offline</div><p style="color:var(--text-muted);margin-top:8px">Connect once while online to cache this page.</p></div>`; return; }
+  }
+  const _meetingsCached = !isOnline() ? offlineRead('meetings') : null;
+  let data;
+  if (_meetingsCached) { data = _meetingsCached; }
+  else {
+    try { data = await api('/api/meetings'); offlineCache('meetings', data); }
+    catch(e) {
+      const _c = offlineRead('meetings');
+      if (_c) { data = _c; }
+      else { content.innerHTML = `<div class="card"><p style="color:#ef4444;">${e.message}</p></div>`; return; }
+    }
+  }
   try {
-    const data = await api('/api/meetings');
     const canCreate = ['manager', 'lecturer'].includes(currentUser.role);
     const canManageExisting = ['manager', 'lecturer', 'admin', 'superadmin', 'hod'].includes(currentUser.role);
 
@@ -7709,8 +8663,6 @@ async function showCreateMeetingModal() {
               <option value="meeting">General Meeting</option>
               ${currentUser?.company?.mode !== 'corporate' ? `
               <option value="lecture">Lecture</option>
-              <option value="proctored_quiz">Proctored Quiz</option>
-              <option value="snap_quiz">Snap Quiz</option>
               <option value="oral_exam">Oral Exam</option>
               <option value="live_assessment">Live Assessment</option>
               ` : ''}
@@ -8375,55 +9327,58 @@ function _renderCoursesHTML(content, courses, isOffline) {
     const approved   = !course.needsApproval || course.approvalStatus === 'approved';
     const titleEsc   = esc(course.title).replace(/'/g, "\\'");
     const codeEsc    = esc(course.code).replace(/'/g, "\\'");
-
-    const metaItems = [
-      course.lecturerId?.name ? `<span>👨‍🏫 ${esc(course.lecturerId.name)}</span>` : '',
-      course.level  ? `<span style="background:#ede9fe;color:#7c3aed;padding:2px 7px;border-radius:20px;font-weight:700;">Level ${esc(String(course.level))}</span>` : '',
-      course.group  ? `<span style="background:#ecfdf5;color:#059669;padding:2px 7px;border-radius:20px;font-weight:600;">Group ${esc(course.group)}</span>` : '',
-      `<span>👥 ${course.rosterCount ?? course.enrolledStudents?.length ?? 0} enrolled</span>`,
-    ].filter(Boolean).join('');
+    const accent     = _deptColor(course.code || course.title || '');
+    const enrolled   = course.rosterCount ?? course.enrolledStudents?.length ?? 0;
 
     let actions = '';
     if (!isOffline && canManageRoster) {
       const uploadBtn = approved
-        ? `<button class="btn btn-primary btn-sm" style="display:inline-flex;align-items:center;gap:5px" onclick="showUploadRosterModal('${course._id}','${codeEsc}')"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>Upload Students</button>`
-        : `<span style="font-size:11px;color:var(--text-muted);font-style:italic">${course.approvalStatus === 'pending' ? 'Awaiting HOD approval' : 'Rejected — contact HOD'}</span>`;
+        ? `<button class="btn btn-primary btn-sm" style="display:inline-flex;align-items:center;gap:5px;font-size:11.5px" onclick="showUploadRosterModal('${course._id}','${codeEsc}')"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>Upload</button>`
+        : `<span style="font-size:11px;color:var(--text-muted);font-style:italic">${course.approvalStatus === 'pending' ? 'Awaiting HOD approval' : 'Rejected'}</span>`;
       actions = `
         ${uploadBtn}
-        <button class="btn btn-sm" style="background:#f8fafc;border:1px solid #e2e8f0;color:#475569;display:inline-flex;align-items:center;gap:5px" onclick="viewRoster('${course._id}','${codeEsc}')"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/></svg>View Roster</button>
-        <button class="btn btn-sm" style="background:#ede9fe;color:#6d28d9;border:1px solid #ddd6fe;display:inline-flex;align-items:center;gap:5px" onclick="openBulkEmailModal('${course._id}','${titleEsc}')"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg>Email</button>
-        <button class="btn btn-sm" style="background:#dcfce7;color:#166534;border:1px solid #bbf7d0;display:inline-flex;align-items:center;gap:5px" onclick="openBulkSmsModal('${course._id}','${titleEsc}')"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>SMS</button>`;
+        <button class="btn btn-sm" style="background:#f8fafc;border:1px solid #e2e8f0;color:#475569;display:inline-flex;align-items:center;gap:4px;font-size:11.5px" onclick="viewRoster('${course._id}','${codeEsc}')"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/></svg>Roster</button>
+        <button class="btn btn-sm" style="background:#ede9fe;color:#6d28d9;border:1px solid #ddd6fe;display:inline-flex;align-items:center;gap:4px;font-size:11.5px" onclick="openBulkEmailModal('${course._id}','${titleEsc}')"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg>Email</button>
+        <button class="btn btn-sm" style="background:#dcfce7;color:#166534;border:1px solid #bbf7d0;display:inline-flex;align-items:center;gap:4px;font-size:11.5px" onclick="openBulkSmsModal('${course._id}','${titleEsc}')"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>SMS</button>`;
     } else if (!isOffline && isStudent) {
-      actions = `<button class="btn btn-sm" style="background:#f0fdf4;color:#16a34a;border:1px solid #bbf7d0;" onclick="generateCertificate('${course._id}','${titleEsc}')">🎓 Certificate</button>`;
+      actions = `<button class="btn btn-sm" style="background:#f0fdf4;color:#16a34a;border:1px solid #bbf7d0;font-size:11.5px" onclick="generateCertificate('${course._id}','${titleEsc}')">🎓 Certificate</button>`;
     } else if (!isOffline) {
-      actions = `<button class="btn btn-sm" style="background:var(--bg);border:1px solid var(--border);" onclick="viewRoster('${course._id}','${codeEsc}')">View Roster</button>`;
+      actions = `<button class="btn btn-sm" style="background:var(--bg);border:1px solid var(--border);font-size:11.5px" onclick="viewRoster('${course._id}','${codeEsc}')">View Roster</button>`;
     }
 
     return `
-      <div style="background:#fff;border:1px solid #e8eaed;border-radius:14px;padding:18px 20px;margin-bottom:12px;box-shadow:0 1px 4px rgba(0,0,0,.05);transition:box-shadow .18s" onmouseover="this.style.boxShadow='0 4px 18px rgba(0,0,0,.09)'" onmouseout="this.style.boxShadow='0 1px 4px rgba(0,0,0,.05)'">
-        <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:10px;flex-wrap:wrap;margin-bottom:10px">
-          <div style="display:flex;align-items:center;gap:10px;min-width:0">
-            <div style="width:38px;height:38px;border-radius:10px;background:#eff6ff;display:flex;align-items:center;justify-content:center;flex-shrink:0">
-              <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#2563eb" stroke-width="2"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg>
-            </div>
-            <div>
-              <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
-                <span style="font-family:monospace;font-size:11.5px;font-weight:700;background:#eff6ff;color:#1d4ed8;padding:2px 8px;border-radius:5px">${esc(course.code)}</span>
-                <span style="font-size:15px;font-weight:700;color:#0f172a">${esc(course.title)}</span>
+      <div style="background:#fff;border:1.5px solid #e8eaed;border-radius:16px;overflow:hidden;box-shadow:0 1px 4px rgba(0,0,0,.06);display:flex;flex-direction:column;transition:box-shadow .18s"
+           onmouseover="this.style.boxShadow='0 6px 24px rgba(0,0,0,.11)'" onmouseout="this.style.boxShadow='0 1px 4px rgba(0,0,0,.06)'">
+        <div style="height:5px;background:${accent}"></div>
+        <div style="padding:18px 20px 14px;flex:1;display:flex;flex-direction:column;gap:12px">
+          <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px">
+            <div style="min-width:0">
+              <div style="display:flex;align-items:center;gap:7px;flex-wrap:wrap;margin-bottom:5px">
+                <span style="font-family:monospace;font-size:11px;font-weight:700;background:${accent}18;color:${accent};padding:2px 8px;border-radius:5px;letter-spacing:.3px">${esc(course.code)}</span>
+                ${course.level ? `<span style="background:#dbeafe;color:#1d4ed8;padding:2px 7px;border-radius:20px;font-size:10.5px;font-weight:700">Level ${esc(String(course.level))}</span>` : ''}
+                ${course.group ? `<span style="background:#ecfdf5;color:#059669;padding:2px 7px;border-radius:20px;font-size:10.5px;font-weight:600">Group ${esc(course.group)}</span>` : ''}
               </div>
-              <div style="display:flex;flex-wrap:wrap;gap:6px;align-items:center;font-size:12px;color:#64748b;margin-top:5px">${metaItems}</div>
+              <div style="font-size:14px;font-weight:700;color:#0f172a;line-height:1.3">${esc(course.title)}</div>
+              ${course.lecturerId?.name ? `<div style="font-size:11.5px;color:#64748b;margin-top:3px">👨‍🏫 ${esc(course.lecturerId.name)}</div>` : ''}
             </div>
+            <div style="flex-shrink:0">${statusBadge(course)}</div>
           </div>
-          <div>${statusBadge(course)}</div>
-        </div>
-        <div style="display:flex;flex-wrap:wrap;gap:8px;align-items:center;padding-top:10px;border-top:1px solid #f1f5f9">
-          ${actions}
+          <div style="display:flex;align-items:center;gap:6px;padding:10px 12px;background:#f8fafc;border-radius:10px;border:1px solid #f1f5f9">
+            <div style="width:28px;height:28px;border-radius:8px;background:${accent}18;display:flex;align-items:center;justify-content:center">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="${accent}" stroke-width="2.5"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+            </div>
+            <span style="font-size:13px;font-weight:700;color:#0f172a">${enrolled}</span>
+            <span style="font-size:12px;color:#64748b">student${enrolled !== 1 ? 's' : ''} enrolled</span>
+          </div>
+          <div style="display:flex;flex-wrap:wrap;gap:6px;align-items:center;padding-top:2px">
+            ${actions}
+          </div>
         </div>
       </div>`;
   }
 
   content.innerHTML = `
-    <div style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:10px;margin-bottom:20px">
+    <div style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:10px;margin-bottom:24px">
       <div>
         <h2 style="font-size:22px;font-weight:800;letter-spacing:-.5px;color:#0f172a;margin-bottom:2px">${isStudent ? 'My Courses' : 'Courses'}</h2>
         <p style="color:#64748b;font-size:13px">${isStudent ? 'Your enrolled academic courses' : 'Manage academic courses'}${isOffline ? ' · <span style="color:#f59e0b;font-weight:600">Offline — cached</span>' : ''}</p>
@@ -8431,7 +9386,7 @@ function _renderCoursesHTML(content, courses, isOffline) {
       ${canCreate && !isOffline ? `<button class="btn btn-primary" onclick="showCreateCourseModal()" style="display:flex;align-items:center;gap:6px"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>Create Course</button>` : ''}
     </div>
     ${courses.length
-      ? courses.map(courseCard).join('')
+      ? `<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:16px">${courses.map(courseCard).join('')}</div>`
       : `<div style="background:#fff;border:1px solid #e8eaed;border-radius:16px;padding:60px 20px;text-align:center;box-shadow:0 1px 4px rgba(0,0,0,.05)">
           <div style="width:56px;height:56px;border-radius:16px;background:#eff6ff;display:flex;align-items:center;justify-content:center;margin:0 auto 16px">
             <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#2563eb" stroke-width="1.8"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg>
@@ -8790,6 +9745,18 @@ async function showCreateQuizModal() {
             <option value="">Select a course</option>
             ${courses.map(c => `<option value="${c._id}">${esc(c.title)}${c.level?' · L'+c.level:''}${c.group?' · Grp '+c.group:''}</option>`).join('')}
           </select></div>
+          <div class="form-group">
+            <label>Target Audience</label>
+            <select id="cq-audience" onchange="document.getElementById('cq-group-row').style.display=this.value==='group'?'':'none'" style="width:100%;padding:8px;border:1px solid #d1d5db;border-radius:6px;">
+              <option value="all">All enrolled students</option>
+              <option value="group">Specific group only</option>
+            </select>
+          </div>
+          <div class="form-group" id="cq-group-row" style="display:none">
+            <label>Group <span style="color:#ef4444">*</span></label>
+            <input type="text" id="cq-group" placeholder="e.g. A, B, C" style="width:100%;padding:8px;border:1px solid #d1d5db;border-radius:6px;">
+            <p style="font-size:11px;color:#6b7280;margin-top:4px">Only students whose group matches this value will see the quiz.</p>
+          </div>
           <div class="form-group"><label>Time Limit (minutes)</label><input type="number" id="cq-timelimit" value="30" min="1" style="width:100%;padding:8px;border:1px solid #d1d5db;border-radius:6px;"></div>
           <div class="form-group"><label>Start Time *</label><input type="datetime-local" id="cq-start" style="width:100%;padding:8px;border:1px solid #d1d5db;border-radius:6px;"></div>
           <div class="form-group"><label>End Time *</label><input type="datetime-local" id="cq-end" style="width:100%;padding:8px;border:1px solid #d1d5db;border-radius:6px;"></div>
@@ -8826,10 +9793,17 @@ async function submitCreateQuiz() {
   const endTime = document.getElementById('cq-end').value;
   const maxAttempts = parseInt(document.getElementById('cq-max-attempts')?.value ?? '1');
   const scorePolicy = document.getElementById('cq-score-policy')?.value || 'best';
+  const targetAudience = document.getElementById('cq-audience')?.value || 'all';
+  const targetGroup = (document.getElementById('cq-group')?.value || '').trim();
   const errEl = document.getElementById('cq-error');
 
   if (!title || !courseId || !startTime || !endTime) {
     errEl.textContent = 'Please fill in all required fields.';
+    errEl.style.display = 'block';
+    return;
+  }
+  if (targetAudience === 'group' && !targetGroup) {
+    errEl.textContent = 'Please enter the group name/letter.';
     errEl.style.display = 'block';
     return;
   }
@@ -8839,7 +9813,7 @@ async function submitCreateQuiz() {
   try {
     const data = await api('/api/lecturer/quizzes', {
       method: 'POST',
-      body: JSON.stringify({ title, description, courseId, timeLimit, startTime: new Date(startTime).toISOString(), endTime: new Date(endTime).toISOString(), maxAttempts: isNaN(maxAttempts) ? 1 : maxAttempts, scorePolicy })
+      body: JSON.stringify({ title, description, courseId, timeLimit, startTime: new Date(startTime).toISOString(), endTime: new Date(endTime).toISOString(), maxAttempts: isNaN(maxAttempts) ? 1 : maxAttempts, scorePolicy, targetAudience, targetGroup: targetAudience === 'group' ? targetGroup : null })
     });
     closeQuizModal();
     showAddQuestionsView(data.quiz._id);
@@ -9493,7 +10467,7 @@ async function renderStudentQuizzes(content, showAll) {
           ${q.canAttempt && !q.canContinue ? `<button class="btn btn-primary" style="flex:1;" onclick="startStudentQuiz('${q._id}')">${q.attemptCount > 0 ? '↩ Retake' : '▶ Take Quiz'}</button>` : ''}
           ${q.isSubmitted ? `<button class="btn btn-secondary" style="flex:1;" onclick="viewStudentResult('${q._id}')">📊 View Result</button>` : ''}
           ${q.status === 'closed' && !q.isSubmitted ? `<div style="font-size:12px;color:var(--text-muted);padding:8px 0;">This quiz has closed.</div>` : ''}
-          ${q.status === 'upcoming' && !q.canAttempt ? `<div style="font-size:12px;color:#7c3aed;padding:8px 0;">Not open yet — check back at the start time.</div>` : ''}
+          ${q.status === 'upcoming' && !q.canAttempt ? `<div style="font-size:12px;color:#7c3aed;padding:8px 0;" id="quiz-countdown-${q._id}">Opens at ${new Date(q.startTime).toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'})}</div>` : ''}
         </div>
       </div>`;
     }
@@ -9510,6 +10484,20 @@ async function renderStudentQuizzes(content, showAll) {
         ? quizzes.map(q => quizCard(q)).join('')
         : '<div class="card"><div class="empty-state"><p>No quizzes available right now.</p><p style="font-size:13px;color:var(--text-muted);margin-top:4px;">Check back when your lecturer opens a quiz.</p></div></div>'}
     `;
+
+    // Auto-refresh when the next upcoming quiz opens (within 30 min)
+    if (window._quizOpenTimer) { clearTimeout(window._quizOpenTimer); window._quizOpenTimer = null; }
+    const upcoming = quizzes.filter(q => q.status === 'upcoming');
+    if (upcoming.length > 0) {
+      const next = upcoming.reduce((a, b) => new Date(a.startTime) < new Date(b.startTime) ? a : b);
+      const msUntilOpen = new Date(next.startTime) - Date.now();
+      if (msUntilOpen > 0 && msUntilOpen <= 30 * 60 * 1000) {
+        window._quizOpenTimer = setTimeout(() => {
+          const c = document.getElementById('main-content');
+          if (c && currentView === 'quizzes') renderStudentQuizzes(c, showAll);
+        }, msUntilOpen + 500);
+      }
+    }
   } catch (e) {
     content.innerHTML = `<div class="card"><p style="color:#ef4444;">Error: ${e.message}</p></div>`;
   }
@@ -9527,7 +10515,11 @@ async function startStudentQuiz(quizId) {
     const timeLimit = data.timeLimit || 30;
     const attempt = data.attempt;
     const startedAt = new Date(attempt.startedAt);
-    const endTime = new Date(startedAt.getTime() + timeLimit * 60 * 1000);
+    // Correct for clock drift: use server time offset so timer is accurate
+    const clockOffset = data.serverTime ? (new Date(data.serverTime) - Date.now()) : 0;
+    const attemptEnd = new Date(startedAt.getTime() + timeLimit * 60 * 1000);
+    const quizEnd = data.quizEndTime ? new Date(data.quizEndTime) : null;
+    const endTime = quizEnd && quizEnd < attemptEnd ? quizEnd : attemptEnd;
 
     content.innerHTML = `
       <div class="page-header" style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;">
@@ -9583,7 +10575,7 @@ async function startStudentQuiz(quizId) {
     window._quizQuestions = questions;
 
     function updateTimer() {
-      const now = new Date();
+      const now = new Date(Date.now() + clockOffset);
       const remaining = Math.max(0, endTime - now);
       const mins = Math.floor(remaining / 60000);
       const secs = Math.floor((remaining % 60000) / 1000);
@@ -9620,6 +10612,10 @@ async function submitStudentQuiz(quizId) {
     window._quizTabHandler = null;
   }
   window._quizSubmitting = false;
+  if (_appOfflineMode) {
+    toastError('You are offline. Connect to the internet to submit your quiz.');
+    return;
+  }
   if (quizTimerInterval) { clearInterval(quizTimerInterval); quizTimerInterval = null; }
   const questions = window._quizQuestions || [];
   const answers = questions.map(q => {
@@ -9749,6 +10745,256 @@ async function viewStudentResult(quizId) {
     content.innerHTML = `<div class="card"><p>Error: ${e.message}</p><button class="btn btn-secondary" onclick="renderQuizzes()">← Back</button></div>`;
   }
 }
+
+// ── Snap Quiz Live Monitoring Dashboard ───────────────────────────────────────
+
+async function renderQuizMonitorPage() {
+  const content = document.getElementById('main-content');
+  content.innerHTML = '<div class="loading">Loading quiz list…</div>';
+  try {
+    const isHodOrAdmin = ['hod', 'admin', 'superadmin'].includes(currentUser?.role);
+    const endpoint = isHodOrAdmin
+      ? '/api/lecturer/snap-quizzes/department-overview?status=open&limit=100'
+      : '/api/lecturer/snap-quizzes?status=open&limit=50';
+    const data = await api(endpoint).catch(() => api('/api/lecturer/snap-quizzes?status=open&limit=50'));
+    const quizzes = data.quizzes || [];
+    if (!quizzes.length) {
+      content.innerHTML = `<div class="page-header"><div><h2>Quiz Monitor</h2><p>No open quizzes right now</p></div></div>
+        <div class="card" style="text-align:center;padding:48px">
+          <div style="font-size:36px;margin-bottom:12px">📋</div>
+          <p style="color:var(--text-muted)">Open a quiz from the <a href="#" onclick="navigateTo('quizzes');return false">Quizzes</a> page to see live student status here.</p>
+        </div>`;
+      return;
+    }
+    content.innerHTML = `
+      <div class="page-header"><div><h2>Quiz Monitor</h2><p>Select a quiz to watch live</p></div></div>
+      <div style="display:grid;gap:10px;max-width:800px">
+        ${quizzes.map(q => `
+          <div style="background:var(--card);border:1.5px solid #22c55e;border-radius:12px;padding:14px 18px;display:flex;align-items:center;justify-content:space-between;gap:12px;cursor:pointer" onclick="renderQuizLiveDashboard('${q._id}','${esc(q.title).replace(/'/g,"\\'")}')" onmouseover="this.style.boxShadow='0 4px 16px rgba(0,0,0,.1)'" onmouseout="this.style.boxShadow=''">
+            <div>
+              <div style="font-weight:700;font-size:14px">${esc(q.title)}</div>
+              <div style="font-size:11px;color:var(--text-muted);margin-top:3px">
+                <span style="background:#dcfce7;color:#166534;padding:2px 7px;border-radius:20px;font-size:10px;font-weight:700">LIVE</span>
+                · ${q.timeLimitMinutes} min
+                · Security: <strong>${q.securityLevel || 'medium'}</strong>
+              </div>
+            </div>
+            <button class="btn btn-primary btn-sm">Monitor →</button>
+          </div>`).join('')}
+      </div>`;
+  } catch (e) {
+    content.innerHTML = `<div class="card"><p>Error: ${e.message}</p></div>`;
+  }
+}
+
+let _quizMonitorWs = null;
+let _quizMonitorRefreshTimer = null;
+
+async function renderQuizLiveDashboard(quizId, quizTitle) {
+  const content = document.getElementById('main-content');
+  content.innerHTML = '<div class="loading">Connecting to live monitor…</div>';
+
+  // Cleanup previous ws
+  if (_quizMonitorWs) { try { _quizMonitorWs.close(); } catch(_) {} _quizMonitorWs = null; }
+  if (_quizMonitorRefreshTimer) { clearInterval(_quizMonitorRefreshTimer); _quizMonitorRefreshTimer = null; }
+
+  const render = async () => {
+    try {
+      const d = await api(`/api/lecturer/snap-quizzes/${quizId}/live-monitor`);
+      _renderQuizMonitorUI(d, quizId, quizTitle);
+    } catch (e) {
+      content.innerHTML = `<div class="card"><p>Error: ${e.message}</p><button class="btn btn-secondary btn-sm" onclick="renderQuizMonitorPage()">← Back</button></div>`;
+    }
+  };
+
+  await render();
+
+  // Connect WebSocket for live updates
+  try {
+    const token = localStorage.getItem('diklyToken') || sessionStorage.getItem('diklyToken') || '';
+    const wsUrl = (location.protocol === 'https:' ? 'wss' : 'ws') + '://' + location.host + '/ws/monitor?token=' + encodeURIComponent(token);
+    const ws = new WebSocket(wsUrl);
+    _quizMonitorWs = ws;
+    ws.onopen = () => ws.send(JSON.stringify({ type: 'subscribe', quizId }));
+    ws.onmessage = (ev) => {
+      try {
+        const msg = JSON.parse(ev.data);
+        if (msg.type && msg.type.startsWith('quiz:')) {
+          _handleQuizMonitorEvent(msg.type.replace('quiz:', ''), msg.payload);
+        }
+      } catch (_) {}
+    };
+    ws.onerror = ws.onclose = () => { _quizMonitorWs = null; };
+  } catch (_) {}
+
+  // Fallback: refresh stats every 20s in case WS is unavailable
+  _quizMonitorRefreshTimer = setInterval(render, 20000);
+}
+
+function _handleQuizMonitorEvent(eventType, payload) {
+  const feed = document.getElementById('qm-feed');
+  if (!feed) return;
+  const colors = { violation_logged: '#ef4444', attempt_started: '#22c55e', attempt_submitted: '#3b82f6', attempt_auto_submitted: '#f59e0b', heartbeat_missed: '#f97316', snapshot_analyzed: '#8b5cf6' };
+  const icons  = { violation_logged: '⚠️', attempt_started: '▶️', attempt_submitted: '✅', attempt_auto_submitted: '⏰', heartbeat_missed: '💔', snapshot_analyzed: '🤖' };
+  const labels = { violation_logged: 'Violation', attempt_started: 'Started', attempt_submitted: 'Submitted', attempt_auto_submitted: 'Auto-submitted', heartbeat_missed: 'Missed heartbeat', snapshot_analyzed: 'AI analysis' };
+  const color = colors[eventType] || '#64748b';
+  const icon  = icons[eventType]  || '📌';
+  const label = labels[eventType] || eventType;
+
+  const item = document.createElement('div');
+  item.style.cssText = `display:flex;align-items:flex-start;gap:10px;padding:8px 12px;border-left:3px solid ${color};background:${color}11;border-radius:0 8px 8px 0;margin-bottom:6px`;
+  item.innerHTML = `
+    <span style="font-size:14px;margin-top:1px">${icon}</span>
+    <div style="flex:1;min-width:0">
+      <div style="font-size:12px;font-weight:700;color:${color}">${label}</div>
+      <div style="font-size:11px;color:var(--text-muted);margin-top:1px">${payload.studentId ? 'Student: ...'+String(payload.studentId).slice(-6) : ''}${payload.violationType ? ' · '+payload.violationType : ''}${payload.causedTermination ? ' · <strong style="color:#ef4444">TERMINATED</strong>' : ''}</div>
+    </div>
+    <span style="font-size:10px;color:#94a3b8;white-space:nowrap">${new Date().toLocaleTimeString()}</span>`;
+  feed.prepend(item);
+  while (feed.children.length > 50) feed.removeChild(feed.lastChild);
+
+  // Update student row if present
+  if (payload.attemptId) {
+    const row = document.getElementById('qm-student-' + payload.attemptId);
+    if (row && eventType === 'violation_logged') {
+      const vc = row.querySelector('.qm-vcount');
+      if (vc) vc.textContent = (parseInt(vc.textContent) || 0) + 1;
+    }
+    if (row && (eventType === 'attempt_submitted' || eventType === 'attempt_auto_submitted')) {
+      row.style.opacity = '0.6';
+      const st = row.querySelector('.qm-status');
+      if (st) { st.textContent = eventType === 'attempt_auto_submitted' ? 'Auto-submitted' : 'Submitted'; st.style.color = '#22c55e'; }
+    }
+  }
+}
+
+function _renderQuizMonitorUI(d, quizId, quizTitle) {
+  const content = document.getElementById('main-content');
+  const { quiz, students, recentViolations, summary } = d;
+  const secColors = { low: '#22c55e', medium: '#6366f1', high: '#dc2626' };
+  const secColor = secColors[quiz.securityLevel] || '#6366f1';
+  const fmt = n => n ?? '—';
+
+  const studentRows = students.map(s => {
+    const statusColor = s.status === 'active' ? '#22c55e' : s.isTerminated ? '#ef4444' : '#64748b';
+    const statusLabel = s.isTerminated ? 'Terminated' : s.status === 'active' ? 'Active' : s.status === 'submitted' ? 'Submitted' : s.status === 'auto_submitted' ? 'Auto-submitted' : s.status;
+    const onlineDot = s.online ? '🟢' : s.status === 'active' ? '🔴' : '⚫';
+    const minutes = s.timeRemaining != null ? Math.floor(s.timeRemaining / 60) + ':' + String(s.timeRemaining % 60).padStart(2, '0') : '—';
+    return `<tr id="qm-student-${s.attemptId}" style="border-bottom:1px solid var(--border)">
+      <td style="padding:10px 12px">
+        <div style="font-weight:600;font-size:13px">${esc(s.student.name)}</div>
+        <div style="font-size:10px;color:var(--text-muted)">${esc(s.student.indexNumber || s.student.email)}</div>
+        <div style="font-size:10px;color:#94a3b8">${esc(s.platform)}</div>
+      </td>
+      <td style="padding:10px 12px">
+        ${onlineDot} <span class="qm-status" style="font-size:12px;font-weight:600;color:${statusColor}">${statusLabel}</span>
+      </td>
+      <td style="padding:10px 12px;text-align:center">
+        <span class="qm-vcount" style="font-size:13px;font-weight:700;color:${(s.violationCount||0) > 0 ? '#ef4444' : '#64748b'}">${s.violationCount||0}</span>
+      </td>
+      <td style="padding:10px 12px;text-align:center;font-size:12px;color:var(--text-muted)">${minutes}</td>
+      <td style="padding:10px 12px;text-align:center">
+        ${s.percentageScore != null ? `<span style="font-size:12px;font-weight:700">${s.percentageScore}%</span>` : '<span style="color:#94a3b8;font-size:11px">—</span>'}
+      </td>
+      <td style="padding:10px 12px;text-align:center">
+        <button class="btn btn-xs" style="font-size:10px" onclick="sqForceSubmit('${quizId}','${s.attemptId}','${esc(s.student.name).replace(/'/g,"\\'")}')">Force Submit</button>
+      </td>
+    </tr>`;
+  }).join('');
+
+  content.innerHTML = `
+    <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:18px;flex-wrap:wrap">
+      <div>
+        <div style="display:flex;align-items:center;gap:10px">
+          <button class="btn btn-secondary btn-sm" onclick="renderQuizMonitorPage()">← Back</button>
+          <h2 style="font-size:18px;font-weight:800;margin:0">${esc(quizTitle)}</h2>
+          <span style="background:#dcfce7;color:#166534;padding:3px 10px;border-radius:20px;font-size:11px;font-weight:700">● LIVE</span>
+        </div>
+        <div style="margin-top:4px;font-size:12px;color:var(--text-muted)">
+          Security: <span style="background:${secColor}22;color:${secColor};padding:1px 8px;border-radius:20px;font-size:11px;font-weight:700">${(quiz.securityLevel||'medium').toUpperCase()}</span>
+          · ${quiz.monitoringMode === 'ai' ? '🤖 AI Monitoring ON' : '📋 Standard monitoring'}
+          ${quiz.mobileMonitoring ? ' · 📱 Mobile' : ''}
+        </div>
+      </div>
+      <button class="btn btn-sm" style="background:#f1f5f9;border:1px solid var(--border)" onclick="renderQuizLiveDashboard('${quizId}','${esc(quizTitle).replace(/'/g,"\\'")}')">🔄 Refresh</button>
+    </div>
+
+    <!-- KPI row -->
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:10px;margin-bottom:18px">
+      ${[
+        { label:'Total', value:fmt(summary.total),     color:'#6366f1' },
+        { label:'Active', value:fmt(summary.active),   color:'#22c55e' },
+        { label:'Submitted', value:fmt(summary.submitted), color:'#3b82f6' },
+        { label:'Online now', value:fmt(summary.online),  color:'#10b981' },
+        { label:'Terminated', value:fmt(summary.terminated), color:'#ef4444' },
+      ].map(k => `<div style="background:var(--card);border:1.5px solid ${k.color}33;border-radius:12px;padding:14px;text-align:center">
+        <div style="font-size:22px;font-weight:800;color:${k.color}">${k.value}</div>
+        <div style="font-size:11px;color:var(--text-muted);margin-top:2px">${k.label}</div>
+      </div>`).join('')}
+    </div>
+
+    <div style="display:grid;grid-template-columns:1fr 300px;gap:16px;align-items:start">
+      <!-- Student table -->
+      <div style="background:var(--card);border:1px solid var(--border);border-radius:14px;overflow:hidden">
+        <div style="padding:12px 16px;border-bottom:1px solid var(--border);font-weight:700;font-size:13px">Students (${students.length})</div>
+        <div style="overflow-x:auto">
+          <table style="width:100%;border-collapse:collapse;font-size:12px">
+            <thead><tr style="background:var(--bg);border-bottom:1.5px solid var(--border)">
+              <th style="padding:8px 12px;text-align:left;font-size:11px;color:var(--text-muted);text-transform:uppercase">Student</th>
+              <th style="padding:8px 12px;text-align:left;font-size:11px;color:var(--text-muted);text-transform:uppercase">Status</th>
+              <th style="padding:8px 12px;text-align:center;font-size:11px;color:var(--text-muted);text-transform:uppercase">Violations</th>
+              <th style="padding:8px 12px;text-align:center;font-size:11px;color:var(--text-muted);text-transform:uppercase">Time left</th>
+              <th style="padding:8px 12px;text-align:center;font-size:11px;color:var(--text-muted);text-transform:uppercase">Score</th>
+              <th style="padding:8px 12px;text-align:center;font-size:11px;color:var(--text-muted);text-transform:uppercase">Action</th>
+            </tr></thead>
+            <tbody>${studentRows || '<tr><td colspan="6" style="text-align:center;padding:24px;color:var(--text-muted)">No students yet</td></tr>'}</tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- Live event feed -->
+      <div style="background:var(--card);border:1px solid var(--border);border-radius:14px;overflow:hidden">
+        <div style="padding:12px 16px;border-bottom:1px solid var(--border);font-weight:700;font-size:13px;display:flex;align-items:center;justify-content:space-between">
+          Live Events
+          <span style="width:8px;height:8px;border-radius:50%;background:#22c55e;display:inline-block" title="WebSocket connected"></span>
+        </div>
+        <div id="qm-feed" style="padding:10px;max-height:480px;overflow-y:auto">
+          ${recentViolations.length === 0
+            ? '<p style="font-size:12px;color:#94a3b8;text-align:center;padding:24px 0">No events yet</p>'
+            : recentViolations.map(v => `
+              <div style="display:flex;align-items:flex-start;gap:8px;padding:7px 10px;border-left:3px solid ${v.severity==='critical'?'#ef4444':v.severity==='warning'?'#f59e0b':'#94a3b8'};background:${v.severity==='critical'?'#fef2f2':v.severity==='warning'?'#fffbeb':'#f8fafc'};border-radius:0 8px 8px 0;margin-bottom:5px">
+                <div style="flex:1;min-width:0">
+                  <div style="font-size:11px;font-weight:700;color:${v.severity==='critical'?'#ef4444':'#f59e0b'}">${v.violationType?.replace(/_/g,' ') || 'Event'}</div>
+                  ${v.causedTermination ? '<div style="font-size:10px;color:#ef4444;font-weight:700">SESSION TERMINATED</div>' : ''}
+                </div>
+                <span style="font-size:10px;color:#94a3b8;white-space:nowrap">${v.occurredAt ? new Date(v.occurredAt).toLocaleTimeString() : ''}</span>
+              </div>`).join('')}
+        </div>
+      </div>
+    </div>`;
+}
+
+window.sqForceSubmit = async function(quizId, attemptId, studentName) {
+  if (!confirm(`Force-submit quiz for ${studentName}? This cannot be undone.`)) return;
+  try {
+    await api(`/api/lecturer/snap-quizzes/${quizId}/attempts/${attemptId}/force-submit`, { method: 'POST' });
+    toastSuccess(`Submitted for ${studentName}`);
+    const row = document.getElementById('qm-student-' + attemptId);
+    if (row) {
+      row.style.opacity = '0.6';
+      const st = row.querySelector('.qm-status');
+      if (st) { st.textContent = 'Force-submitted'; st.style.color = '#22c55e'; }
+    }
+  } catch (e) {
+    toastError(e.message);
+  }
+};
+
+// Cleanup ws when navigating away
+document.addEventListener('navigated', () => {
+  if (_quizMonitorWs) { try { _quizMonitorWs.close(); } catch(_) {} _quizMonitorWs = null; }
+  if (_quizMonitorRefreshTimer) { clearInterval(_quizMonitorRefreshTimer); _quizMonitorRefreshTimer = null; }
+});
 
 async function renderAdminQuizzes(content) {
   try {
@@ -9956,9 +11202,6 @@ async function renderMyAttendance() {
     offlineCache('my_attendance', data);
     content.innerHTML = `
       <div class="page-header"><h2>My Attendance</h2><p>Your attendance history</p></div>
-      <div class="actions-bar">
-        <button class="btn btn-primary btn-sm" onclick="showMarkAttendanceModal()">Mark Attendance</button>
-      </div>
       <div class="card">
         ${data.records.length ? `
           <table>
@@ -10775,7 +12018,7 @@ async function exportBankToPDF() {
     }
   });
 
-  doc.save(`DIKLY_QuestionBank_${new Date().toISOString().slice(0,10)}.pdf`);
+  await downloadBlob(doc.output('blob'), `DIKLY_QuestionBank_${new Date().toISOString().slice(0,10)}.pdf`);
   toastSuccess(`PDF saved with ${selected.length} question${selected.length !== 1 ? 's' : ''} ✓`);
 }
 
@@ -10903,6 +12146,8 @@ const ESP32_LOCAL_PORT   = 80;
 let   esp32IP            = localStorage.getItem('dikly_esp32_ip') || null;
 let   bleDetected        = false;
 let   bleScanInterval    = null;
+let   _esp32UrlToken     = null; // connectionToken received via ESP32 /mark redirect
+let   _esp32AutoProof   = null; // one-time proof fetched in background (Capacitor app)
 
 // Save ESP32 IP when found
 function setEsp32IP(ip) {
@@ -10925,19 +12170,55 @@ async function esp32Api(path, options = {}) {
   return data;
 }
 
-// Try to find ESP32 on local network
+// Detect local IPs via WebRTC (works from HTTPS — no HTTP request needed).
+// Returns an array of local IP strings the device has on all interfaces.
+async function _getLocalIPs() {
+  return new Promise(resolve => {
+    const ips = new Set();
+    const pc = new RTCPeerConnection({ iceServers: [] });
+    pc.createDataChannel('');
+    pc.onicecandidate = e => {
+      if (!e.candidate) { pc.close(); return resolve([...ips]); }
+      const m = e.candidate.candidate.match(/(\d{1,3}(?:\.\d{1,3}){3})/);
+      if (m) ips.add(m[1]);
+    };
+    pc.createOffer().then(o => pc.setLocalDescription(o));
+    setTimeout(() => { pc.close(); resolve([...ips]); }, 2500);
+  });
+}
+
+// Try to find ESP32 on local network.
+// Primary (HTTPS-safe): WebRTC reveals the student's local IPs. If any are in
+// the ESP32 AP subnet (192.168.4.x), the student is connected to the hotspot.
+// Fallback: direct HTTP fetch — works in Capacitor WebView, blocked in browsers.
 async function discoverESP32() {
-  // Always try 192.168.4.1 — the fixed AP gateway IP of the ESP32.
-  // The Capacitor WebView allows HTTP requests to local network IPs.
-  // Two-step: first /token (gets key in JSON body), then /status (confirms device).
+  // WebRTC local-IP check — works from HTTPS without any HTTP request.
+  // The ESP32 AP mode always uses 192.168.4.x. A student connected to it
+  // will have a 192.168.4.2–254 address.
+  try {
+    const localIPs = await _getLocalIPs();
+    const onHotspot = localIPs.some(ip => /^192\.168\.4\.[2-9]\d*$|^192\.168\.4\.[1-9]\d+$/.test(ip));
+    if (onHotspot) {
+      setEsp32IP('192.168.4.1');
+      bleDetected = true;
+      // Try to fetch hotspot token while we're on the network (Capacitor / HTTP only)
+      try {
+        const tokenRes = await fetch('http://192.168.4.1/token', { cache: 'no-store', signal: AbortSignal.timeout(2000) });
+        if (tokenRes.ok) {
+          const td = await tokenRes.json();
+          if (td.token) sessionStorage.setItem('dikly_esp32_hotspot_key', td.token);
+        }
+      } catch (_) {}
+      return true;
+    }
+  } catch (_) {}
+
+  // HTTP fallback for Capacitor WebView (no mixed-content restriction)
   const candidates = ['192.168.4.1'];
   if (esp32IP && esp32IP !== '192.168.4.1') candidates.push(esp32IP);
-
   for (const ip of candidates) {
     try {
-      // Step 1: fetch /token — returns { token: "..." } in JSON body.
-      // This is more reliable than reading response headers in a WebView.
-      const tokenRes = await fetch(`http://${ip}/token`, { cache: 'no-store' });
+      const tokenRes = await fetch(`http://${ip}/token`, { cache: 'no-store', signal: AbortSignal.timeout(3000) });
       if (tokenRes.ok) {
         const tokenData = await tokenRes.json();
         if (tokenData.token) {
@@ -10947,10 +12228,8 @@ async function discoverESP32() {
           return true;
         }
       }
-    } catch(e) { /* try /status fallback */ }
-
+    } catch(e) {}
     try {
-      // Step 2 fallback: /status — reads token from response header
       esp32IP = ip;
       const status = await esp32Api('/status');
       if (status.device === 'DIKLY-ESP32') {
@@ -10958,7 +12237,7 @@ async function discoverESP32() {
         bleDetected = true;
         return true;
       }
-    } catch(e) { /* not reachable on this IP */ }
+    } catch(e) {}
   }
   return false;
 }
@@ -11072,6 +12351,7 @@ async function handleQrScan() {
   try {
     await api('/api/attendance-sessions/mark', {
       method: 'POST',
+      signal: AbortSignal.timeout(30000),
       body: JSON.stringify({ qrToken, method: 'qr_mark' }),
     });
     if (content) {
@@ -11086,11 +12366,13 @@ async function handleQrScan() {
   } catch(e) {
     if (content) {
       const expired = e.message?.toLowerCase().includes('expired');
+      const timedOut = e.name === 'TimeoutError' || e.name === 'AbortError';
+      const msg = timedOut ? 'Request timed out. Please check your connection and try again.' : esc(e.message || 'Failed');
       content.innerHTML = `
         <div class="card" style="text-align:center;padding:48px 24px;max-width:400px;margin:40px auto;border-left:4px solid var(--danger)">
           <div style="font-size:56px;margin-bottom:16px">${expired ? '⏰' : '❌'}</div>
           <div style="font-size:20px;font-weight:800;color:var(--danger)">${expired ? 'QR Code Expired' : 'Failed'}</div>
-          <p style="color:var(--text-light);font-size:13px;margin-top:8px">${expired ? 'This QR code has expired. Ask your lecturer/manager for a fresh one.' : e.message}</p>
+          <p style="color:var(--text-light);font-size:13px;margin-top:8px">${expired ? 'This QR code has expired. Ask your lecturer/manager for a fresh one.' : msg}</p>
           <button class="btn btn-secondary" style="margin-top:20px" onclick="navigateTo('mark-attendance')">Go Back</button>
         </div>`;
     }
@@ -11111,8 +12393,12 @@ async function renderClassDevice() {
     const device = devRes.device;
     const lecturers = lecRes.lecturers || [];
 
+    const localIp = device && device.localIp ? device.localIp : null;
+    const currentSsid = device && device.currentNetwork ? device.currentNetwork : null;
+    var deviceOnline = device ? (Date.now() - new Date(device.lastHeartbeat || 0).getTime() < 20000) : false;
+
     const deviceStatus = device
-      ? (Date.now() - new Date(device.lastHeartbeat || 0).getTime() < 30000
+      ? (deviceOnline
         ? '<span style="color:#16a34a;font-weight:700">● Online</span>'
         : '<span style="color:#dc2626;font-weight:700">● Offline</span>')
       : null;
@@ -11124,9 +12410,6 @@ async function renderClassDevice() {
           <br><button onclick="classRepDisconnect()" style="margin-top:10px;padding:7px 16px;background:#dc2626;color:#fff;border:none;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer">End Session &amp; Release Device</button>
          </div>`
       : '';
-
-    const localIp = device && device.localIp ? device.localIp : null;
-    const currentSsid = device && device.wifiSSID ? device.wifiSSID : null;
 
     root.innerHTML = `
       <div style="max-width:560px;margin:0 auto">
@@ -11153,9 +12436,14 @@ async function renderClassDevice() {
           ${!device.activeLecturerId ? `
           <div style="background:#fff;border:1.5px solid #e2e8f0;border-radius:14px;padding:18px;margin-bottom:20px">
             <h3 style="font-size:15px;font-weight:700;margin-bottom:14px">Connect Device to a Lecturer</h3>
-            ${!lecturers.length ? `<p style="color:#64748b;font-size:13px">No lecturers found for your class courses.</p>` : `
+            ${!deviceOnline ? `
+            <div style="background:#fef3c7;border:1px solid #fde68a;border-radius:8px;padding:12px 14px;font-size:13px;color:#92400e;display:flex;align-items:flex-start;gap:8px">
+              <span style="flex-shrink:0;font-size:16px">📶</span>
+              <div><strong>Device is offline.</strong> Power it on and wait for it to connect before linking to a lecturer.</div>
+            </div>` : `
+            ${lecturers.length ? `
             <div style="margin-bottom:12px">
-              <label style="font-size:12px;font-weight:600;text-transform:uppercase;letter-spacing:.5px;color:#64748b;display:block;margin-bottom:6px">Select Lecturer &amp; Course</label>
+              <label style="font-size:12px;font-weight:600;text-transform:uppercase;letter-spacing:.5px;color:#64748b;display:block;margin-bottom:6px">From Your Courses</label>
               <select id="cr-lecturer-select" style="width:100%;padding:10px 12px;border:1.5px solid #e2e8f0;border-radius:8px;font-size:13px">
                 <option value="">&mdash; Choose lecturer / course &mdash;</option>
                 ${lecturers.map(l => `<option value="${l.lecturerId}|${l.courseId}">${esc(l.lecturerName)} — ${esc(l.courseCode)}: ${esc(l.courseTitle)}</option>`).join('')}
@@ -11166,25 +12454,53 @@ async function renderClassDevice() {
               <input id="cr-pin" type="password" inputmode="numeric" maxlength="4" placeholder="4-digit PIN" style="width:100%;padding:10px 12px;border:1.5px solid #e2e8f0;border-radius:8px;font-size:16px;letter-spacing:4px;box-sizing:border-box">
             </div>
             <div id="cr-error" style="color:#dc2626;font-size:13px;margin-bottom:8px;display:none"></div>
-            <button onclick="classRepConnect()" style="width:100%;padding:11px;background:#1e293b;color:#fff;border:none;border-radius:9px;font-size:14px;font-weight:700;cursor:pointer">
+            <button id="cr-connect-btn" onclick="classRepConnect()" style="width:100%;padding:11px;background:#1e293b;color:#fff;border:none;border-radius:9px;font-size:14px;font-weight:700;cursor:pointer">
               Connect &amp; Start Session
-            </button>`}
+            </button>
+            <div style="display:flex;align-items:center;gap:8px;margin:14px 0 10px">
+              <div style="flex:1;height:1px;background:#e2e8f0"></div>
+              <span style="font-size:12px;color:#94a3b8;font-weight:500">or assign manually</span>
+              <div style="flex:1;height:1px;background:#e2e8f0"></div>
+            </div>` : `
+            <div style="background:#f1f5f9;border-radius:8px;padding:10px 14px;font-size:13px;color:#64748b;margin-bottom:14px">
+              No lecturers auto-detected from your enrolled courses — search below to assign one.
+            </div>`}
+            <!-- Manual lecturer search -->
+            <div>
+              <label style="font-size:12px;font-weight:600;text-transform:uppercase;letter-spacing:.5px;color:#64748b;display:block;margin-bottom:6px">Assign Any Lecturer</label>
+              <div style="position:relative;margin-bottom:8px">
+                <input id="cr-lec-search" type="text" placeholder="Search by name or email…"
+                  style="width:100%;padding:10px 12px;border:1.5px solid #e2e8f0;border-radius:8px;font-size:13px;box-sizing:border-box"
+                  oninput="crSearchLecturers(this.value)">
+              </div>
+              <div id="cr-lec-results" style="display:none;border:1.5px solid #e2e8f0;border-radius:8px;overflow:hidden;margin-bottom:10px;max-height:200px;overflow-y:auto"></div>
+              <input id="cr-manual-lecturer-id" type="hidden">
+              <div id="cr-manual-selected" style="display:none;background:#f0fdf4;border:1.5px solid #86efac;border-radius:8px;padding:9px 13px;font-size:13px;font-weight:600;color:#15803d;margin-bottom:10px"></div>
+              <div id="cr-manual-pin-wrap" style="margin-bottom:10px;display:none">
+                <label style="font-size:12px;font-weight:600;text-transform:uppercase;letter-spacing:.5px;color:#64748b;display:block;margin-bottom:5px">Lecturer PIN (if required)</label>
+                <input id="cr-manual-pin" type="password" inputmode="numeric" maxlength="4" placeholder="4-digit PIN" style="width:100%;padding:10px 12px;border:1.5px solid #e2e8f0;border-radius:8px;font-size:16px;letter-spacing:4px;box-sizing:border-box">
+              </div>
+              <div id="cr-manual-error" style="color:#dc2626;font-size:13px;margin-bottom:8px;display:none"></div>
+              <button id="cr-manual-connect-btn" onclick="classRepConnectManual()" disabled
+                style="width:100%;padding:11px;background:#cbd5e1;color:#94a3b8;border:none;border-radius:9px;font-size:14px;font-weight:700;cursor:not-allowed">
+                Assign &amp; Connect
+              </button>
+            </div>`}
           </div>` : ''}
 
-          <!-- WiFi Management -->
-          ${localIp ? `
+          <!-- WiFi Info -->
+          ${(localIp || currentSsid) ? `
           <div style="background:#fff;border:1.5px solid #e2e8f0;border-radius:14px;padding:18px">
-            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px">
-              <h3 style="font-size:15px;font-weight:700;margin:0">Device WiFi</h3>
+            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
+              <h3 style="font-size:15px;font-weight:700;margin:0">Device Network</h3>
               ${currentSsid ? `<span style="font-size:12px;color:#16a34a;font-weight:600;background:#f0fdf4;padding:3px 10px;border-radius:20px;border:1px solid #86efac">&#9679; ${esc(currentSsid)}</span>` : ''}
             </div>
-            <p style="font-size:12px;color:#64748b;margin-bottom:14px">Change the WiFi network the device is connected to — useful when moving between campus branches.</p>
-            <button onclick="crScanWifi('${localIp}')" id="cr-wifi-scan-btn"
-              style="width:100%;padding:10px;background:#f8fafc;color:#1e293b;border:1.5px solid #e2e8f0;border-radius:9px;font-size:13px;font-weight:700;cursor:pointer;margin-bottom:14px">
-              Scan for Networks
-            </button>
-            <div id="cr-wifi-list" style="display:none"></div>
-            <div id="cr-wifi-msg" style="font-size:13px;margin-top:8px"></div>
+            <div style="display:flex;align-items:flex-start;gap:10px;background:#f8fafc;border-radius:8px;padding:12px 14px;font-size:13px;color:#475569">
+              <span style="flex-shrink:0;font-size:16px">ℹ️</span>
+              <div>To change the device WiFi, ask your <strong>admin</strong> to update it from the Admin portal.
+              ${localIp ? `<br><span style="font-size:12px;color:#94a3b8;margin-top:4px;display:block">Device IP: <span style="font-family:monospace">${esc(localIp)}</span></span>` : ''}
+              </div>
+            </div>
           </div>` : ''}
         `}
       </div>
@@ -11206,28 +12522,105 @@ window.classRepConnect = async function() {
   const sel = document.getElementById('cr-lecturer-select');
   const pin = document.getElementById('cr-pin') ? document.getElementById('cr-pin').value : '';
   const errEl = document.getElementById('cr-error');
+  const btn = document.getElementById('cr-connect-btn');
   if (!sel || !sel.value) { if (errEl) { errEl.textContent = 'Please select a lecturer'; errEl.style.display = 'block'; } return; }
   const parts = sel.value.split('|');
   const lecturerId = parts[0];
   const courseId = parts[1];
+  if (btn) { btn.disabled = true; btn.textContent = 'Connecting…'; }
+  if (errEl) errEl.style.display = 'none';
   try {
     await api('/api/class-rep/connect', { method: 'POST', body: JSON.stringify({ lecturerId, courseId, lecturerPin: pin }) });
     showToastNotif('Device connected successfully', 'success');
     renderClassDevice();
   } catch (e) {
-    const msg = (e.data && e.data.requiresPin) ? 'Incorrect PIN — ask the lecturer for their 4-digit PIN' : (e.message || 'Failed to connect');
+    const requiresPin = e.data && e.data.requiresPin;
+    const msg = requiresPin ? 'Incorrect PIN — ask the lecturer for their 4-digit PIN' : (e.message || 'Failed to connect');
     if (errEl) { errEl.textContent = msg; errEl.style.display = 'block'; }
-    if (e.data && e.data.requiresPin) { const pw = document.getElementById('cr-pin-wrap'); if (pw) pw.style.display = 'block'; }
+    if (requiresPin) { const pw = document.getElementById('cr-pin-wrap'); if (pw) pw.style.display = 'block'; }
+    if (btn) { btn.disabled = false; btn.textContent = 'Connect & Start Session'; }
+  }
+};
+
+let _crSearchTimer = null;
+window.crSearchLecturers = function(query) {
+  clearTimeout(_crSearchTimer);
+  const resultsEl = document.getElementById('cr-lec-results');
+  if (!query || query.trim().length < 2) {
+    if (resultsEl) resultsEl.style.display = 'none';
+    return;
+  }
+  _crSearchTimer = setTimeout(async () => {
+    if (resultsEl) { resultsEl.style.display = 'block'; resultsEl.innerHTML = '<div style="padding:10px 14px;color:#64748b;font-size:13px">Searching…</div>'; }
+    try {
+      const data = await api(`/api/class-rep/search-lecturers?q=${encodeURIComponent(query.trim())}`);
+      const list = data.users || data.data || data || [];
+      if (!list.length) {
+        if (resultsEl) resultsEl.innerHTML = '<div style="padding:10px 14px;color:#64748b;font-size:13px">No lecturers found</div>';
+        return;
+      }
+      if (resultsEl) resultsEl.innerHTML = list.map(l =>
+        `<div data-id="${l._id||l.id}" data-name="${(l.name||l.fullName||'').replace(/"/g,'&quot;')}"
+          style="padding:10px 14px;font-size:13px;cursor:pointer;border-bottom:1px solid #f1f5f9"
+          onmouseover="this.style.background='#f8fafc'" onmouseout="this.style.background=''"
+          onclick="crSelectLecturer('${l._id||l.id}','${(l.name||l.fullName||'').replace(/'/g,"\\'")}')">
+          <span style="font-weight:600">${l.name||l.fullName||'Unknown'}</span>
+          <span style="color:#64748b;margin-left:8px;font-size:12px">${l.email||''}</span>
+        </div>`
+      ).join('');
+    } catch (e) {
+      if (resultsEl) resultsEl.innerHTML = '<div style="padding:10px 14px;color:#dc2626;font-size:13px">Search failed</div>';
+    }
+  }, 350);
+};
+
+window.crSelectLecturer = function(id, name) {
+  const idEl = document.getElementById('cr-manual-lecturer-id');
+  const selEl = document.getElementById('cr-manual-selected');
+  const pinWrap = document.getElementById('cr-manual-pin-wrap');
+  const btn = document.getElementById('cr-manual-connect-btn');
+  const resultsEl = document.getElementById('cr-lec-results');
+  const searchEl = document.getElementById('cr-lec-search');
+  if (idEl) idEl.value = id;
+  if (selEl) { selEl.textContent = '✓ ' + name; selEl.style.display = 'block'; }
+  if (pinWrap) pinWrap.style.display = 'block';
+  if (btn) { btn.disabled = false; btn.style.background = '#4f6ef7'; btn.style.color = '#fff'; btn.style.cursor = 'pointer'; }
+  if (resultsEl) resultsEl.style.display = 'none';
+  if (searchEl) searchEl.value = name;
+};
+
+window.classRepConnectManual = async function() {
+  const idEl = document.getElementById('cr-manual-lecturer-id');
+  const pin = document.getElementById('cr-manual-pin') ? document.getElementById('cr-manual-pin').value : '';
+  const errEl = document.getElementById('cr-manual-error');
+  const btn = document.getElementById('cr-manual-connect-btn');
+  if (!idEl || !idEl.value) { if (errEl) { errEl.textContent = 'Please select a lecturer first'; errEl.style.display = 'block'; } return; }
+  if (btn) { btn.disabled = true; btn.textContent = 'Connecting…'; btn.style.opacity = '.7'; }
+  if (errEl) errEl.style.display = 'none';
+  try {
+    await api('/api/class-rep/connect', { method: 'POST', body: JSON.stringify({ lecturerId: idEl.value, lecturerPin: pin }) });
+    showToastNotif('Lecturer assigned and device connected', 'success');
+    renderClassDevice();
+  } catch (e) {
+    const requiresPin = e.data && e.data.requiresPin;
+    const msg = requiresPin ? 'Incorrect PIN — ask the lecturer for their 4-digit PIN' : (e.message || 'Failed to connect');
+    if (errEl) { errEl.textContent = msg; errEl.style.display = 'block'; }
+    if (btn) { btn.disabled = false; btn.textContent = 'Assign & Connect'; btn.style.background = '#4f6ef7'; btn.style.color = '#fff'; btn.style.cursor = 'pointer'; }
   }
 };
 
 window.classRepDisconnect = async function() {
   if (!confirm('End the session and release the device?')) return;
+  const btn = event && event.target;
+  if (btn) { btn.disabled = true; btn.textContent = 'Releasing…'; }
   try {
     await api('/api/class-rep/disconnect', { method: 'POST', body: '{}' });
     showToastNotif('Device released', 'success');
     renderClassDevice();
-  } catch (e) { showToastNotif(e.message || 'Failed to disconnect', 'error'); }
+  } catch (e) {
+    showToastNotif(e.message || 'Failed to disconnect', 'error');
+    if (btn) { btn.disabled = false; btn.textContent = 'End Session & Release Device'; }
+  }
 };
 
 window.saveLecturerPin = async function() {
@@ -11236,7 +12629,19 @@ window.saveLecturerPin = async function() {
   try {
     await api('/api/class-rep/set-pin', { method: 'POST', body: JSON.stringify({ pin }) });
     showToastNotif('PIN saved', 'success');
+    const input = document.getElementById('lecturer-pin-input');
+    if (input) input.value = '';
   } catch (e) { showToastNotif(e.message || 'Failed to save PIN', 'error'); }
+};
+
+window.clearLecturerPin = async function() {
+  if (!confirm('Remove your Class Rep PIN? Class reps will be able to connect the device without entering a PIN.')) return;
+  try {
+    await api('/api/class-rep/set-pin', { method: 'DELETE' });
+    showToastNotif('PIN cleared — class reps can now connect freely', 'success');
+    const input = document.getElementById('lecturer-pin-input');
+    if (input) input.value = '';
+  } catch (e) { showToastNotif(e.message || 'Failed to clear PIN', 'error'); }
 };
 
 // ─── Class Rep WiFi Management ────────────────────────────────────────────────
@@ -11252,10 +12657,8 @@ window.crScanWifi = async function(localIp) {
   msgEl.textContent = '';
 
   try {
-    const res = await fetch(`http://${localIp}/wifi/scan`, { signal: AbortSignal.timeout(12000) });
-    if (!res.ok) throw new Error('Device returned an error');
-    const nets = await res.json();
-    const list = Array.isArray(nets) ? nets : (nets.networks || []);
+    const data = await api('/api/class-rep/scan-wifi');
+    const list = data.networks || [];
     list.sort((a, b) => (b.rssi || 0) - (a.rssi || 0));
 
     if (!list.length) {
@@ -11306,10 +12709,7 @@ window.crScanWifi = async function(localIp) {
     listEl.style.cssText = 'display:block;border:1.5px solid #e2e8f0;border-radius:10px;overflow:hidden';
 
   } catch (e) {
-    const isBlocked = e.message && (e.message.includes('Failed to fetch') || e.message.includes('NetworkError'));
-    msgEl.innerHTML = isBlocked
-      ? `<span style="color:#dc2626">Could not reach device. Make sure you're on the same WiFi network as the device.</span>`
-      : `<span style="color:#dc2626">Scan failed: ${esc(e.message)}</span>`;
+    msgEl.innerHTML = `<span style="color:#dc2626">${esc(e.message || 'Scan failed')}</span>`;
   } finally {
     btn.disabled = false;
     btn.textContent = 'Scan for Networks';
@@ -11338,22 +12738,15 @@ window.crConnectWifi = async function(localIp, ssid, idx, isOpen = false) {
   if (msgEl) { msgEl.innerHTML = `<span style="color:#64748b">Connecting to <strong>${esc(ssid)}</strong>…</span>`; }
 
   try {
-    const res = await fetch(`http://${localIp}/wifi/reconfigure`, {
+    const data = await api('/api/class-rep/configure-wifi', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ ssid, password }),
-      signal: AbortSignal.timeout(35000),
     });
-    const json = await res.json().catch(() => ({}));
-    if (!res.ok) throw new Error(json.error || 'Connection failed');
     if (msgEl) msgEl.innerHTML = `<span style="color:#16a34a;font-weight:600">✓ Connected to <strong>${esc(ssid)}</strong>. Device is restarting…</span>`;
     showToastNotif(`Device switching to ${ssid}`, 'success');
-    // Refresh after device reboots (~3s)
     setTimeout(() => renderClassDevice(), 4000);
   } catch (e) {
-    const msg = e.message.includes('aborted') || e.message.includes('timeout')
-      ? 'Timed out — device may be rebooting on the new network'
-      : (e.message || 'Failed to connect');
+    const msg = e.message || 'Failed to connect';
     if (msgEl) msgEl.innerHTML = `<span style="color:#dc2626">${esc(msg)}</span>`;
     showToastNotif(msg, 'error');
   }
@@ -11363,176 +12756,284 @@ async function renderMarkAttendance() {
   const content = document.getElementById('main-content');
   if (!content) return;
 
-  // Capture esp32key from URL if redirected from ESP32 captive portal
   handleEsp32KeyParam();
-
-  // Check if arriving via QR scan deep link
   if (await handleQrScan()) return;
 
-  // Offline: show queued state and cached session info
-  if (!isOnline()) {
-    const cachedSession = offlineRead('activeSession');
-    const pendingCount  = offlineQueueCount();
+  const deviceIp = esp32IP || '192.168.4.1';
+  const isInApp  = /DiklyApp/i.test(navigator.userAgent);
+  const userId   = currentUser?._id || currentUser?.id || '';
 
-    // SVG icons
-    const wifiOffIcon  = svgIcon('<line x1="1" y1="1" x2="23" y2="23"/><path d="M16.72 11.06A10.94 10.94 0 0 1 19 12.55"/><path d="M5 12.55a10.94 10.94 0 0 1 5.17-2.39"/><path d="M10.71 5.05A16 16 0 0 1 22.56 9"/><path d="M1.42 9a15.91 15.91 0 0 1 4.7-2.88"/><path d="M8.53 16.11a6 6 0 0 1 6.95 0"/><line x1="12" y1="20" x2="12.01" y2="20"/>', 22);
-    const radarIcon    = svgIcon('<circle cx="12" cy="12" r="2"/><path d="M16.24 7.76a6 6 0 0 1 0 8.49m-8.48-.01a6 6 0 0 1 0-8.49m11.31-2.82a10 10 0 0 1 0 14.14m-14.14 0a10 10 0 0 1 0-14.14"/>', 48);
+  // Check for connectionToken returned by ESP32 /mark redirect (browser flow).
+  const urlParams = new URLSearchParams(window.location.search);
+  if (urlParams.get('esp32session')) {
+    _esp32UrlToken = {
+      sessionId: urlParams.get('esp32session'),
+      studentId: urlParams.get('esp32student'),
+      issuedAt:  Number(urlParams.get('esp32issued')),
+      sig:       urlParams.get('esp32sig'),
+    };
+    history.replaceState({}, '', window.location.pathname + '#mark-attendance');
+  }
 
+  const esp32MarkUrl = `http://${deviceIp}/mark?studentId=${encodeURIComponent(userId)}`;
+
+  if (isInApp) {
+    // ── Capacitor app: show code form + fetch proof silently in background ──────
+    // The proof proves WiFi presence (anti-replay, 15 s expiry).
+    // The code proves the student can see the physical device screen.
+    // Both are submitted together for double-factor security.
+    _esp32AutoProof = null; // reset from any previous page visit
     content.innerHTML = `
       <div class="page-header"><h2>Mark Attendance</h2><p>Check in to active sessions</p></div>
-
-      <!-- Offline status bar -->
-      <div class="card" style="border-left:4px solid #f59e0b;background:#fffbeb;padding:14px 16px;margin-bottom:16px">
-        <div style="display:flex;align-items:center;gap:12px">
-          <div style="flex-shrink:0;width:36px;height:36px;border-radius:50%;background:#fef3c7;display:flex;align-items:center;justify-content:center;color:#92400e">
-            ${wifiOffIcon}
-          </div>
-          <div style="flex:1;min-width:0">
-            <div style="font-weight:700;font-size:15px;color:#92400e">No Internet Connection</div>
-            <div style="font-size:12px;color:#b45309;margin-top:2px">
-              ${pendingCount > 0
-                ? `${pendingCount} pending action${pendingCount !== 1 ? 's' : ''} will sync automatically when you reconnect`
-                : 'Reconnect to submit attendance and access live sessions'}
-            </div>
-          </div>
-          ${pendingCount > 0 ? `
-            <div style="flex-shrink:0;background:#f59e0b;color:#fff;font-size:12px;font-weight:700;padding:4px 10px;border-radius:999px">
-              ${pendingCount} pending
-            </div>
-          ` : ''}
-        </div>
+      <div id="proof-status-bar" style="display:flex;align-items:center;gap:10px;padding:10px 14px;background:#1e293b;border-radius:10px;margin-bottom:14px;font-size:13px;color:#94a3b8">
+        <span id="proof-status-icon" style="font-size:18px">📡</span>
+        <span id="proof-status-text">Connecting to classroom device…</span>
       </div>
+      <div class="card">
+        <div class="card-title">Enter Attendance Code</div>
+        <p style="font-size:13px;color:var(--text-muted);margin-bottom:14px">
+          Type the 6-digit code shown on the classroom device screen.
+        </p>
+        <div class="form-group">
+          <label>6-Digit Code</label>
+          <input type="text" id="mark-code-input" placeholder="000000" maxlength="6" inputmode="numeric"
+            style="font-size:28px;text-align:center;letter-spacing:10px;font-weight:700" autofocus
+            onkeydown="if(event.key==='Enter') submitCodeMark('${deviceIp}')">
+        </div>
+        <div id="mark-code-msg" style="display:none;padding:10px 14px;border-radius:8px;font-size:13px;margin-bottom:12px"></div>
+        <button class="btn btn-primary" onclick="submitCodeMark('${deviceIp}')" style="width:100%;margin-bottom:10px">Mark Attendance</button>
+        <button class="btn btn-secondary" onclick="openQrScanner()" style="width:100%">📷 Scan QR Code Instead</button>
+        <div id="qr-scanner-area" style="display:none;margin-top:14px"></div>
+      </div>`;
+    document.getElementById('mark-code-input')?.focus();
+    _fetchProofInBackground(deviceIp, userId);
+  } else {
+    // ── Browser: connection verification banner + code form ────────────────────
+    let proximityBanner = '';
+    if (_esp32UrlToken?.sessionId) {
+      proximityBanner = `
+        <div style="display:flex;align-items:center;gap:8px;padding:10px 14px;background:#f0fdf4;border:1px solid #86efac;border-radius:8px;margin-bottom:14px;font-size:13px;color:#15803d;font-weight:600">
+          ✓ Classroom WiFi verified — enter the code shown on the device screen
+        </div>`;
+    } else {
+      proximityBanner = `
+        <div style="padding:12px 14px;background:#fef3c7;border:1px solid #fde68a;border-radius:8px;margin-bottom:14px;font-size:13px;color:#92400e">
+          <div style="font-weight:700;margin-bottom:6px">Connect to classroom WiFi first</div>
+          <div style="margin-bottom:10px">Connect your phone to the <strong>Dikly-XXXXXX</strong> WiFi, then tap the button below to verify your connection.</div>
+          <a href="${esc(esp32MarkUrl)}" style="display:inline-block;padding:8px 16px;background:#d97706;color:white;border-radius:8px;text-decoration:none;font-weight:600;font-size:13px">Verify WiFi Connection →</a>
+        </div>`;
+    }
+    content.innerHTML = `
+      <div class="page-header"><h2>Mark Attendance</h2><p>Check in to active sessions</p></div>
+      <div class="card">
+        <div class="card-title">Enter Attendance Code</div>
+        ${proximityBanner}
+        <p style="font-size:13px;color:var(--text-muted);margin-bottom:14px">
+          Type the 6-digit code shown on the classroom device screen.
+        </p>
+        <div class="form-group">
+          <label>6-Digit Code</label>
+          <input type="text" id="mark-code-input" placeholder="000000" maxlength="6" inputmode="numeric"
+            style="font-size:28px;text-align:center;letter-spacing:10px;font-weight:700" autofocus
+            onkeydown="if(event.key==='Enter') submitCodeMark('${deviceIp}')">
+        </div>
+        <div id="mark-code-msg" style="display:none;padding:10px 14px;border-radius:8px;font-size:13px;margin-bottom:12px"></div>
+        <button class="btn btn-primary" onclick="submitCodeMark('${deviceIp}')" style="width:100%;margin-bottom:10px">Mark Attendance</button>
+        <button class="btn btn-secondary" onclick="openQrScanner()" style="width:100%">📷 Scan QR Code Instead</button>
+        <div id="qr-scanner-area" style="display:none;margin-top:14px"></div>
+      </div>`;
+    document.getElementById('mark-code-input')?.focus();
+  }
 
-      ${cachedSession ? `
-        <!-- Cached session -->
-        <div class="card" style="border-left:4px solid var(--success);background:#f0fdf4;padding:16px;margin-bottom:16px">
-          <div style="font-size:11px;text-transform:uppercase;letter-spacing:.6px;font-weight:700;color:var(--success);margin-bottom:6px">Last Known Active Session</div>
-          <div style="font-size:17px;font-weight:700;color:var(--text-primary)">${cachedSession.title || 'Untitled Session'}</div>
-          ${cachedSession.course ? `<div style="font-size:13px;color:var(--text-light);margin-top:3px">${cachedSession.course.code ? cachedSession.course.code + ' — ' : ''}${cachedSession.course.title || ''}</div>` : ''}
-          <div style="font-size:12px;color:var(--text-muted);margin-top:4px">Started ${new Date(cachedSession.startedAt).toLocaleString()}</div>
-        </div>
+  if (isOnline()) {
+    api('/api/attendance-sessions/active').then(data => {
+      const session = data?.session;
+      if (!session) return;
+      const infoEl = document.createElement('div');
+      infoEl.className = 'card';
+      infoEl.style.cssText = 'border-left:4px solid var(--primary);margin-top:14px';
+      infoEl.innerHTML = `
+        <div style="font-size:11px;text-transform:uppercase;color:var(--primary);font-weight:700;letter-spacing:0.5px">Active Session</div>
+        <div style="font-size:17px;font-weight:700;margin-top:4px">${esc(session.title || 'Attendance Session')}</div>
+        ${session.course ? `<div style="font-size:13px;color:var(--text-light);margin-top:2px">${esc(session.course.title || session.course.code || '')}</div>` : ''}
+        <div style="font-size:12px;color:var(--text-muted);margin-top:4px">Started ${new Date(session.startedAt).toLocaleString()}</div>`;
+      content.querySelector('.page-header')?.after(infoEl);
+    }).catch(() => {});
+  }
+}
 
-        <!-- Explain that attendance requires internet (offline queuing disabled to prevent fraud) -->
-        <div class="card" style="text-align:center;padding:28px 20px">
-          <div style="display:inline-flex;align-items:center;justify-content:center;width:56px;height:56px;border-radius:50%;background:#f0f9ff;color:#0369a1;margin-bottom:14px">
-            ${radarIcon}
-          </div>
-          <div style="font-size:16px;font-weight:700;margin-bottom:8px">Internet Required to Mark Attendance</div>
-          <p style="font-size:13px;color:var(--text-light);max-width:300px;margin:0 auto;line-height:1.6">
-            Connect to <strong>classroom WiFi with internet access</strong> to submit your attendance code.
-            Offline marking is disabled to prevent remote fraud.
-          </p>
-        </div>
-      ` : `
-        <!-- No cached data at all -->
-        <div class="card" style="text-align:center;padding:48px 24px">
-          <div style="display:inline-flex;align-items:center;justify-content:center;width:72px;height:72px;border-radius:50%;background:#f0f9ff;color:#0369a1;margin-bottom:16px">
-            ${radarIcon}
-          </div>
-          <div style="font-size:18px;font-weight:700;margin-bottom:8px">No Offline Data Available</div>
-          <p style="font-size:14px;color:var(--text-light);max-width:300px;margin:0 auto;line-height:1.6">
-            Open this page while online at least once so session data can be saved for offline use.
-          </p>
-        </div>
-      `}
-    `;
+// Background proof fetch for Capacitor app.
+// Silently gets a one-time ESP32 proof while the student is typing the code.
+// Updates the status bar without blocking the UI.
+async function _fetchProofInBackground(ip, userId) {
+  const setStatus = (icon, text, color) => {
+    const bar  = document.getElementById('proof-status-bar');
+    const iEl  = document.getElementById('proof-status-icon');
+    const tEl  = document.getElementById('proof-status-text');
+    if (iEl) iEl.textContent = icon;
+    if (tEl) tEl.textContent = text;
+    if (bar && color) bar.style.background = color;
+  };
+
+  try {
+    const r = await fetch(`http://${ip}/proof?studentId=${encodeURIComponent(userId)}`, {
+      cache: 'no-store', signal: AbortSignal.timeout(8000),
+    });
+    if (r.ok) {
+      _esp32AutoProof = await r.json();
+      setStatus('✅', 'Classroom device connected — enter code and submit', '#14532d');
+    } else {
+      const e = await r.json().catch(() => ({}));
+      setStatus('⚠️', e.error || 'Device not ready', '#78350f');
+    }
+  } catch (_) {
+    setStatus('📶', 'Connect to Dikly-XXXXXX WiFi first', '#7f1d1d');
+  }
+}
+
+let _qrScanStream = null;
+let _qrScanRaf = null;
+
+function _stopQrScanner() {
+  if (_qrScanRaf) { cancelAnimationFrame(_qrScanRaf); _qrScanRaf = null; }
+  if (_qrScanStream) { _qrScanStream.getTracks().forEach(t => t.stop()); _qrScanStream = null; }
+}
+
+async function openQrScanner() {
+  const area = document.getElementById('qr-scanner-area');
+  if (!area) return;
+
+  // Toggle off if already open
+  if (area.style.display !== 'none') {
+    _stopQrScanner();
+    area.style.display = 'none';
+    area.innerHTML = '';
     return;
   }
 
-  let activeSession = null;
-  let deviceLocalIp = null;
-  try {
-    const data = await api('/api/attendance-sessions/active');
-    activeSession = data.session;
-    deviceLocalIp = data.deviceLocalIp || null;
-    if (activeSession) offlineCache('activeSession', activeSession);
-    if (deviceLocalIp) offlineCache('deviceLocalIp', deviceLocalIp);
-  } catch (e) {
-    deviceLocalIp = offlineRead('deviceLocalIp');
+  area.style.display = 'block';
+  area.innerHTML = '<div style="text-align:center;padding:20px;font-size:13px;color:var(--text-muted)">Starting camera…</div>';
+
+  // Load jsQR lazily from CDN
+  if (!window.jsQR) {
+    await new Promise((resolve, reject) => {
+      const s = document.createElement('script');
+      s.src = 'https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.min.js';
+      s.onload = resolve; s.onerror = reject;
+      document.head.appendChild(s);
+    }).catch(() => {
+      area.innerHTML = '<div style="color:var(--danger);font-size:13px;padding:12px">Could not load QR scanner. Please enter the code manually.</div>';
+    });
+    if (!window.jsQR) return;
   }
 
-  const alreadyMarked = activeSession ? await api('/api/attendance-sessions/my-attendance?limit=100')
-    .then(d => d.records.some(r => r.session?._id === activeSession._id))
-    .catch(() => false) : false;
+  let stream;
+  try {
+    stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' }, audio: false });
+  } catch (err) {
+    area.innerHTML = '<div style="color:var(--danger);font-size:13px;padding:12px">Camera access denied. Please enter the code manually or allow camera permission.</div>';
+    return;
+  }
+  _qrScanStream = stream;
 
-  content.innerHTML = `
-    <div class="page-header">
-      <h2>Mark Attendance</h2>
-      <p>Check in to active sessions</p>
+  area.innerHTML = `
+    <div style="position:relative;border-radius:10px;overflow:hidden;background:#000;max-width:100%">
+      <video id="qr-video" autoplay playsinline muted style="width:100%;display:block;max-height:260px;object-fit:cover"></video>
+      <canvas id="qr-canvas" style="display:none"></canvas>
+      <div style="position:absolute;inset:0;pointer-events:none;display:flex;align-items:center;justify-content:center">
+        <div style="width:180px;height:180px;border:3px solid rgba(255,255,255,.8);border-radius:12px;box-shadow:0 0 0 4000px rgba(0,0,0,.3)"></div>
+      </div>
     </div>
-    
-    ${activeSession ? `
-      <div class="card" style="border-left: 4px solid var(--success); background: #f0fdf4">
-        <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px">
-          <div>
-            <div style="font-size:12px;text-transform:uppercase;color:var(--success);font-weight:700;letter-spacing:0.5px">Active Session</div>
-            <div style="font-size:18px;font-weight:700;margin-top:4px">${activeSession.title || 'Untitled Session'}</div>
-            <div style="font-size:13px;color:var(--text-light);margin-top:2px">Started ${new Date(activeSession.startedAt).toLocaleString()} by ${activeSession.createdBy?.name || 'Unknown'}</div>
-            ${activeSession.course ? `<div style="font-size:13px;color:var(--text-light)">Course: ${activeSession.course.title || activeSession.course.code || ''}</div>` : ''}
-          </div>
-          <span class="status-badge status-active" style="font-size:13px;padding:6px 14px">LIVE</span>
-        </div>
-      </div>
-      
-      ${alreadyMarked ? `
-        <div class="card" style="text-align:center;border-left:4px solid var(--primary)">
-          <div style="font-size:48px;margin-bottom:8px">${svgIcon('<polyline points="9 11 12 14 22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/>', 48)}</div>
-          <div style="font-size:18px;font-weight:700;color:var(--success)">Attendance Already Marked</div>
-          <p style="font-size:13px;color:var(--text-light);margin-top:4px">You have already checked in for this session.</p>
-        </div>
-      ` : `
-        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:16px;margin-bottom:16px">
-          
-          <div class="card mark-method-card" onclick="showCodeEntry('${deviceLocalIp || ''}')" style="cursor:pointer;text-align:center;transition:all 0.2s">
-            <div style="font-size:36px;margin-bottom:12px">${svgIcon('<rect x="3" y="3" width="18" height="18" rx="2"/><path d="M7 7h.01M7 12h.01M12 7h.01M12 12h.01M17 7h.01M7 17h.01M12 17h.01M17 12h.01M17 17h.01"/>', 42)}</div>
-            <div style="font-size:16px;font-weight:700">Enter Code</div>
-            <p style="font-size:12px;color:var(--text-light);margin-top:4px">Type the verbal code read out by your lecturer</p>
-          </div>
+    <p style="font-size:12px;color:var(--text-muted);text-align:center;margin-top:8px">Point at the QR code on the classroom screen</p>
+    <button class="btn btn-secondary btn-sm" onclick="openQrScanner()" style="width:100%;margin-top:6px">Cancel</button>`;
 
-          <div class="card mark-method-card" onclick="showQrEntry()" style="cursor:pointer;text-align:center;transition:all 0.2s">
-            <div style="font-size:36px;margin-bottom:12px">${svgIcon('<rect x="2" y="2" width="8" height="8" rx="1"/><rect x="14" y="2" width="8" height="8" rx="1"/><rect x="2" y="14" width="8" height="8" rx="1"/><rect x="14" y="14" width="4" height="4"/><path d="M18 14h4v4M14 18h4v4"/>', 42)}</div>
-            <div style="font-size:16px;font-weight:700">QR Code</div>
-            <p style="font-size:12px;color:var(--text-light);margin-top:4px">Enter QR token from your lecturer's screen</p>
-          </div>
-          
-          <div class="card mark-method-card" onclick="showJitsiJoin()" style="cursor:pointer;text-align:center;transition:all 0.2s">
-            <div style="font-size:36px;margin-bottom:12px">${svgIcon('<path d="M23 7l-7 5 7 5V7z"/><rect x="1" y="5" width="15" height="14" rx="2" ry="2"/>', 42)}</div>
-            <div style="font-size:16px;font-weight:700">Join Meeting</div>
-            <p style="font-size:12px;color:var(--text-light);margin-top:4px">Mark attendance by joining the session meeting</p>
-          </div>
-        </div>
-        
-        <div id="mark-input-area"></div>
-      `}
-    ` : `
-      <div class="card" style="text-align:center;padding:40px 20px">
-        <div style="margin-bottom:16px">${svgIcon('<circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>', 48)}</div>
-        <div style="font-size:18px;font-weight:700;margin-bottom:8px">No Active Session</div>
-        <p style="font-size:14px;color:var(--text-light)">There are no active attendance sessions right now.</p>
-        <p style="font-size:13px;color:var(--text-light);margin-top:8px">Your lecturer will start a session when it's time to mark attendance.</p>
-        <button class="btn btn-secondary btn-sm" style="margin-top:16px" onclick="navigateTo('mark-attendance')">Refresh</button>
-      </div>
-    `}
-  `;
+  const video = document.getElementById('qr-video');
+  const canvas = document.getElementById('qr-canvas');
+  video.srcObject = stream;
+  await video.play().catch(() => {});
+
+  const scan = () => {
+    if (!video.videoWidth) { _qrScanRaf = requestAnimationFrame(scan); return; }
+    canvas.width = video.videoWidth;
+    canvas.height = video.videoHeight;
+    const ctx = canvas.getContext('2d');
+    ctx.drawImage(video, 0, 0);
+    const img = ctx.getImageData(0, 0, canvas.width, canvas.height);
+    const result = window.jsQR(img.data, img.width, img.height, { inversionAttempts: 'dontInvert' });
+    if (result?.data) {
+      _stopQrScanner();
+      area.style.display = 'none';
+      area.innerHTML = '';
+      // Extract qr_token from the encoded URL
+      try {
+        const url = new URL(result.data);
+        const qrToken = url.searchParams.get('qr_token');
+        const qrCode  = url.searchParams.get('qr_code');
+        if (qrToken) {
+          _submitQrToken(qrToken, qrCode);
+        } else {
+          // Maybe raw 6-digit code was encoded
+          const raw = result.data.replace(/\D/g, '');
+          if (raw.length === 6) {
+            const inp = document.getElementById('mark-code-input');
+            if (inp) { inp.value = raw; inp.dispatchEvent(new Event('input')); }
+          } else {
+            toastError('Unrecognised QR code. Enter the code manually.');
+          }
+        }
+      } catch(_) {
+        const raw = result.data.replace(/\D/g, '');
+        if (raw.length === 6) {
+          const inp = document.getElementById('mark-code-input');
+          if (inp) { inp.value = raw; }
+        } else {
+          toastError('Unrecognised QR code. Enter the code manually.');
+        }
+      }
+      return;
+    }
+    _qrScanRaf = requestAnimationFrame(scan);
+  };
+  _qrScanRaf = requestAnimationFrame(scan);
 }
 
-function showCodeEntry(localIp) {
-  const area = document.getElementById('mark-input-area');
-  if (!area) return;
-  area.innerHTML = `
-    <div class="card">
-      <div class="card-title">Enter Attendance Code</div>
-      <p style="font-size:13px;color:var(--text-muted);margin-bottom:14px">Type the 6-digit code shown on the classroom device screen.</p>
-      <div class="form-group">
-        <label>6-Digit Code</label>
-        <input type="text" id="mark-code-input" placeholder="000000" maxlength="6" inputmode="numeric"
-          style="font-size:28px;text-align:center;letter-spacing:10px;font-weight:700" autofocus>
-      </div>
-      <div id="mark-code-msg" style="display:none;padding:10px 14px;border-radius:8px;font-size:13px;margin-bottom:12px"></div>
-      <button class="btn btn-primary" onclick="submitCodeMark('${localIp || ''}')" style="width:100%">Mark Attendance</button>
-    </div>
-  `;
-  document.getElementById('mark-code-input')?.focus();
+async function _submitQrToken(qrToken, qrCode) {
+  const content = document.getElementById('main-content');
+  if (content) {
+    content.innerHTML = `
+      <div class="card" style="text-align:center;padding:48px 24px;max-width:400px;margin:40px auto">
+        <div style="font-size:48px;margin-bottom:16px">⏳</div>
+        <div style="font-size:18px;font-weight:700">Marking your attendance…</div>
+        <p style="color:var(--text-light);font-size:13px;margin-top:8px">Please wait</p>
+      </div>`;
+  }
+  try {
+    await api('/api/attendance-sessions/mark', {
+      method: 'POST',
+      signal: AbortSignal.timeout(30000),
+      body: JSON.stringify({ qrToken, method: 'qr_mark' }),
+    });
+    if (content) {
+      content.innerHTML = `
+        <div class="card" style="text-align:center;padding:48px 24px;max-width:400px;margin:40px auto;border-left:4px solid var(--success)">
+          <div style="font-size:56px;margin-bottom:16px">✅</div>
+          <div style="font-size:20px;font-weight:800;color:var(--success)">Attendance Marked!</div>
+          <p style="color:var(--text-light);font-size:13px;margin-top:8px">You have been checked in successfully.</p>
+          <button class="btn btn-primary" style="margin-top:20px" onclick="navigateTo('my-attendance')">View My Attendance</button>
+        </div>`;
+    }
+  } catch(e) {
+    if (content) {
+      const expired = e.message?.toLowerCase().includes('expired');
+      content.innerHTML = `
+        <div class="card" style="text-align:center;padding:48px 24px;max-width:400px;margin:40px auto;border-left:4px solid var(--danger)">
+          <div style="font-size:56px;margin-bottom:16px">${expired ? '⏰' : '❌'}</div>
+          <div style="font-size:20px;font-weight:800;color:var(--danger)">${expired ? 'QR Code Expired' : 'Failed'}</div>
+          <p style="color:var(--text-light);font-size:13px;margin-top:8px">${expired ? 'This QR code has expired. Ask your lecturer for a fresh one.' : esc(e.message || 'Failed')}</p>
+          <button class="btn btn-secondary" style="margin-top:20px" onclick="navigateTo('mark-attendance')">Go Back</button>
+        </div>`;
+    }
+  }
 }
 
 function showQrEntry() {
@@ -11553,12 +13054,12 @@ function showQrEntry() {
   `;
 }
 
-async function submitCodeMark(localIp) {
+async function submitCodeMark(deviceIp) {
   const code = document.getElementById('mark-code-input')?.value?.trim();
   const msgEl = document.getElementById('mark-code-msg');
   const showMsg = (txt, ok) => {
     if (!msgEl) return;
-    msgEl.textContent = txt;
+    msgEl.innerHTML = txt;
     msgEl.style.background = ok ? '#f0fdf4' : '#fef2f2';
     msgEl.style.color = ok ? '#15803d' : '#dc2626';
     msgEl.style.border = ok ? '1px solid #86efac' : '1px solid #fca5a5';
@@ -11569,81 +13070,156 @@ async function submitCodeMark(localIp) {
     showMsg('Please enter the 6-digit code shown on the classroom device.', false); return;
   }
 
-  const btn = document.querySelector('#mark-input-area .btn-primary');
+  const btn = document.querySelector('.btn-primary[onclick*="submitCodeMark"]');
   if (btn) { btn.textContent = 'Submitting…'; btn.disabled = true; }
-
   const restoreBtn = () => { if (btn) { btn.textContent = 'Mark Attendance'; btn.disabled = false; } };
 
-  // ── Try server first (online path) ──────────────────────────────────────
-  if (isOnline()) {
+  const ip          = deviceIp || esp32IP || '192.168.4.1';
+  const userId      = currentUser?._id || currentUser?.id || '';
+  const indexNumber = currentUser?.indexNumber || currentUser?.IndexNumber || '';
+  const isInApp     = /DiklyApp/i.test(navigator.userAgent);
+
+  if (isInApp) {
+    // ── Capacitor app: proof + code (both factors) ──────────────────────────────
+    // The proof proves WiFi presence (random nonce, 15 s expiry, anti-replay).
+    // The code proves the student can physically see the device screen.
+    // We fetch a fresh proof at submit time so it's never expired.
+
+    // Step A: Try ESP32 /attend first (S3 firmware offline path)
+    try {
+      const r = await fetch(`http://${ip}/attend`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ code, userId, indexNumber }),
+        signal: AbortSignal.timeout(8000),
+      });
+      const result = await r.json();
+      if (r.ok && !result.error) {
+        showMsg('✓ Attendance recorded!', true);
+        _esp32AutoProof = null;
+        setTimeout(() => navigateTo('mark-attendance'), 2200);
+        return;
+      }
+      if (r.status !== 404 && r.status !== 405) {
+        restoreBtn();
+        showMsg(result.error || 'Device rejected the code. Check the screen and try again.', false);
+        return;
+      }
+    } catch (_) {}
+
+    // Step B: Get fresh one-time proof from ESP32
+    showMsg('🔐 Fetching device proof…', true);
+    let proof = null;
+    try {
+      const r = await fetch(`http://${ip}/proof?studentId=${encodeURIComponent(userId)}`, {
+        cache: 'no-store', signal: AbortSignal.timeout(8000),
+      });
+      if (r.ok) proof = await r.json();
+    } catch (_) {}
+
+    if (!proof?.sessionId) {
+      restoreBtn();
+      showMsg('Connect to the classroom WiFi hotspot (Dikly-XXXXXX) to mark attendance.', false);
+      return;
+    }
+
+    // Step C: Submit proof + code to cloud API
     try {
       await api('/api/attendance-sessions/mark', {
         method: 'POST',
-        body: JSON.stringify({ code, method: 'code_mark', deviceId: getDeviceFingerprint() }),
+        body: JSON.stringify({ code, method: 'code_mark', esp32Proof: proof }),
       });
-      showToastNotif('Attendance marked successfully!', 'success');
-      navigateTo('mark-attendance');
-      return;
+      showMsg('✓ Attendance marked!', true);
+      _esp32AutoProof = null;
+      setTimeout(() => navigateTo('mark-attendance'), 2200);
     } catch (e) {
+      if (!e.status) {
+        // Network error (not a server rejection) — queue using connectionToken.
+        // connectionToken is issued by the ESP32 locally, no internet needed.
+        let queueToken = null;
+        try {
+          const r = await fetch(`http://${ip}/session?studentId=${encodeURIComponent(userId)}`, {
+            cache: 'no-store', signal: AbortSignal.timeout(5000),
+          });
+          if (r.ok) queueToken = await r.json();
+        } catch (_) {}
+        if (queueToken?.sessionId) {
+          offlineEnqueue({
+            url: '/api/attendance-sessions/mark',
+            options: {
+              method: 'POST',
+              body: JSON.stringify({ code, method: 'code_mark', connectionToken: queueToken }),
+            },
+            label: 'Mark attendance (offline)',
+          });
+          showMsg('📴 No internet — saved. Will sync automatically when connected.', true);
+          return;
+        }
+      }
       restoreBtn();
-      if (e.data?.networkMismatch) {
-        showMsg('You must be connected to the school WiFi to mark attendance. Switch from mobile data to school WiFi and try again.', false);
-        return;
-      }
-      if (e.data?.esp32Offline) {
-        showMsg('The classroom device is offline. Ask your lecturer to power it on.', false);
-        return;
-      }
-      if (e.data?.attendanceWindowClosed) {
-        showMsg('The attendance window for this session has closed.', false);
-        return;
-      }
-      // Network error (no internet) — fall through to local ESP32 submission
-      if (!e.data && localIp) {
-        // intentional fall-through
-      } else {
-        showMsg(e.message || 'Failed to mark attendance.', false);
-        return;
-      }
+      showMsg(e.message || 'Failed to submit. Check your internet connection.', false);
     }
-  }
-
-  // ── Offline path — submit directly to ESP32 on local network ─────────────
-  if (!localIp) {
-    restoreBtn();
-    showMsg('No internet and no classroom device found on this network. Connect to school WiFi with internet access.', false);
     return;
   }
 
+  // ── Browser: connectionToken + code ──────────────────────────────────────────
+  // Fetch connectionToken from ESP32 (Path 2), or use the URL-redirect token.
+  let connectionToken = null;
   try {
-    const resp = await fetch(`http://${localIp}/attend`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        userId:      currentUser?._id || '',
-        indexNumber: currentUser?.indexNumber || currentUser?.IndexNumber || '',
-        code,
-        sessionId:   '',
-      }),
-      signal: AbortSignal.timeout(6000),
+    const r = await fetch(`http://${ip}/session?studentId=${encodeURIComponent(userId)}`, {
+      cache: 'no-store', signal: AbortSignal.timeout(5000),
     });
-    const result = await resp.json();
-    if (!resp.ok || result.error) throw new Error(result.error || 'Device rejected the code');
-    restoreBtn();
-    showMsg('✓ Attendance recorded offline — will sync when internet returns.', true);
-    setTimeout(() => navigateTo('mark-attendance'), 2200);
-  } catch (e) {
-    restoreBtn();
-    if (e.name === 'TimeoutError' || e.message?.includes('fetch')) {
-      showMsg('Could not reach the classroom device. Make sure you are connected to the school WiFi.', false);
-    } else {
-      showMsg(e.message || 'Failed to mark attendance offline.', false);
-    }
+    if (r.ok) connectionToken = await r.json();
+  } catch (_) {}
+  if (!connectionToken?.sessionId) {
+    try {
+      const r = await fetch(`http://${ip}/token`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId }), signal: AbortSignal.timeout(5000),
+      });
+      if (r.ok) connectionToken = await r.json();
+    } catch (_) {}
   }
+
+  const token = connectionToken?.sessionId ? connectionToken
+              : (_esp32UrlToken?.sessionId  ? _esp32UrlToken : null);
+
+  if (token) {
+    try {
+      await api('/api/attendance-sessions/mark', {
+        method: 'POST',
+        body: JSON.stringify({ code, method: 'code_mark', connectionToken: token }),
+      });
+      showMsg('✓ Attendance marked!', true);
+      _esp32UrlToken = null;
+      setTimeout(() => navigateTo('mark-attendance'), 2200);
+    } catch (e) {
+      if (!e.status) {
+        // Network error — token still valid, queue for auto-sync when online
+        offlineEnqueue({
+          url: '/api/attendance-sessions/mark',
+          options: {
+            method: 'POST',
+            body: JSON.stringify({ code, method: 'code_mark', connectionToken: token }),
+          },
+          label: 'Mark attendance (offline)',
+        });
+        showMsg('📴 No internet — saved. Will sync automatically when connected.', true);
+        _esp32UrlToken = null;
+      } else {
+        restoreBtn();
+        showMsg(e.message || 'Failed to submit. Check your internet connection.', false);
+      }
+    }
+    return;
+  }
+
+  // No token — browser only (app always returns above with proof or error)
+  restoreBtn();
+  const verifyUrl = `http://${ip}/mark?studentId=${encodeURIComponent(userId)}`;
+  showMsg(`You must connect to the classroom WiFi first. <a href="${esc(verifyUrl)}" style="color:#4f6ef7;font-weight:700">Verify WiFi Connection →</a>`, false);
 }
 
-// Offline code entry — BLOCKED. Attendance cannot be queued offline.
-// Students must be physically present on DIKLY-CLASSROOM WiFi with internet.
+// Legacy offline code entry UI — kept for fallback rendering only.
 function showCodeEntryOffline() {
   const area = document.getElementById('mark-input-area');
   if (!area) return;
@@ -11676,13 +13252,16 @@ async function submitQrMark() {
   try {
     await api('/api/attendance-sessions/mark', {
       method: 'POST',
+      signal: AbortSignal.timeout(30000),
       body: JSON.stringify({ qrToken, method: 'qr_mark' }),
     });
     offlineCache('pendingMark', null);
     toastSuccess('Attendance marked successfully!');
     navigateTo('mark-attendance');
   } catch (e) {
-    if (e.data && e.data.esp32Required) {
+    if (e.name === 'TimeoutError' || e.name === 'AbortError') {
+      toastError('Request timed out. Please check your connection and try again.');
+    } else if (e.data && e.data.esp32Required) {
       toastError('You must be connected to the classroom WiFi (DIKLY-CLASSROOM) to mark attendance.');
     } else {
       toastError(e.message);
@@ -11781,17 +13360,28 @@ async function markBLE() {
       });
     } catch (e) {
       // Map server error codes to clear messages
-      const code = e.data?.code;
-      if (code === 'NOT_ON_HOTSPOT')      throw new Error(
+      const errCode = e.data?.code;
+      // ble-verify endpoint has been removed — fall back to code entry
+      if (e.status === 410 || e.message?.includes('BLE verification has been removed')) {
+        if (area) area.innerHTML = `
+          <div class="card" style="text-align:center;padding:28px 20px;border-left:4px solid var(--warning);background:#fffbeb">
+            <div style="font-size:40px;margin-bottom:12px">📟</div>
+            <div style="font-size:15px;font-weight:700;margin-bottom:8px">BLE Check-in Unavailable</div>
+            <p style="font-size:13px;color:var(--text-muted);margin-bottom:16px">Please use the attendance code shown on the classroom device instead.</p>
+            <button class="btn btn-primary btn-sm" onclick="showCodeEntry()">Enter Code</button>
+          </div>`;
+        return;
+      }
+      if (errCode === 'NOT_ON_HOTSPOT')      throw new Error(
         'Connected to DIKLY-CLASSROOM but still failing?\n\n' +
         'Android is routing traffic through mobile data instead of WiFi.\n\n' +
         'Fix: Go to Settings → Wi-Fi → tap & hold DIKLY-CLASSROOM → ' +
         'Network usage → set to \'Always use this network\', then retry.'
       );
-      if (code === 'TOKEN_EXPIRED')       throw new Error('Token expired — move closer to the device and try again.');
-      if (code === 'INVALID_TOKEN')       throw new Error('Invalid token. You must be physically next to the classroom device.');
-      if (code === 'TOKEN_ALREADY_USED')  throw new Error('This token was already used. Each BLE scan is single-use.');
-      if (code === 'DEVICE_OFFLINE')      throw new Error('Classroom device is offline. Ask your lecturer to power it on.');
+      if (errCode === 'TOKEN_EXPIRED')       throw new Error('Token expired — move closer to the device and try again.');
+      if (errCode === 'INVALID_TOKEN')       throw new Error('Invalid token. You must be physically next to the classroom device.');
+      if (errCode === 'TOKEN_ALREADY_USED')  throw new Error('This token was already used. Each BLE scan is single-use.');
+      if (errCode === 'DEVICE_OFFLINE')      throw new Error('Classroom device is offline. Ask your lecturer to power it on.');
       throw e;
     }
 
@@ -11911,10 +13501,10 @@ function showMarkAttendanceModal() {
     <div class="modal-overlay" onclick="closeModal(event)">
       <div class="modal" onclick="event.stopPropagation()">
         <h3>Mark Attendance</h3>
-        <p style="font-size:13px;color:var(--text-light);margin-bottom:16px">Enter the 4-character code shown by your lecturer or manager.</p>
+        <p style="font-size:13px;color:var(--text-light);margin-bottom:16px">Enter the 6-digit code shown on the classroom device screen.</p>
         <div class="form-group">
           <label>Attendance Code</label>
-          <input type="text" id="attend-code" placeholder="Enter code" maxlength="4" style="font-size:22px;text-align:center;letter-spacing:8px;font-weight:700;text-transform:uppercase" autofocus>
+          <input type="text" id="attend-code" placeholder="000000" maxlength="6" inputmode="numeric" style="font-size:22px;text-align:center;letter-spacing:8px;font-weight:700" autofocus>
         </div>
         <div class="modal-actions">
           <button class="btn btn-secondary btn-sm" onclick="closeModal()">Cancel</button>
@@ -11929,7 +13519,7 @@ function showMarkAttendanceModal() {
 async function markAttendance() {
   try {
     const code = document.getElementById('attend-code').value;
-    if (!code || code.length !== 4) { toastWarning('Please enter the 4-character code.'); return; }
+    if (!code || !/^\d{6}$/.test(code)) { toastWarning('Please enter the 6-digit attendance code.'); return; }
     await api('/api/attendance-sessions/mark', {
       method: 'POST',
       body: JSON.stringify({ code, method: 'code_mark' }),
@@ -12476,11 +14066,50 @@ async function downloadReport(type, apiBase = 'reports', e) {
   }
   if (card) card.style.pointerEvents = 'none';
   try {
+    const isNative = !!(window.Capacitor?.isNativePlatform?.() ||
+                        navigator.userAgent.includes('DiklyApp/'));
+
+    if (isNative) {
+      const FS = window.Capacitor?.Plugins?.Filesystem;
+      if (!FS) {
+        toastError('Please reinstall the DIKLY app to enable downloads.');
+        return;
+      }
+      // Fetch PDF bytes directly using JWT bearer token
+      const pdfRes = await fetch(`${API}/api/${apiBase}/${type}`, {
+        headers: { 'Authorization': `Bearer ${token}` },
+      });
+      if (!pdfRes.ok) {
+        let errMsg = 'Failed to generate report';
+        try { const e = await pdfRes.json(); errMsg = e.error || errMsg; } catch(_) {}
+        throw new Error(errMsg);
+      }
+      const blob = await pdfRes.blob();
+      // Convert blob to base64
+      const base64 = await new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload  = () => resolve(reader.result.split(',')[1]);
+        reader.onerror = reject;
+        reader.readAsDataURL(blob);
+      });
+      const filename = `${type}-report.pdf`;
+      // Save to app-specific external storage — no permission needed on any Android version
+      await FS.writeFile({
+        path: `Reports/${filename}`,
+        data: base64,
+        directory: 'EXTERNAL',
+        recursive: true,
+      });
+      toast('Report saved to device storage', 'ok');
+      return;
+    }
+
+    // Web browser: fetch blob and trigger anchor download
     const headers = { 'Authorization': `Bearer ${token}` };
     const res = await fetch(`${API}/api/${apiBase}/${type}`, { headers });
     if (!res.ok) {
       let errMsg = 'Failed to generate report';
-      try { const err = await res.json(); errMsg = err.error; } catch(e) {}
+      try { const err = await res.json(); errMsg = err.error; } catch(_) {}
       throw new Error(errMsg);
     }
     const blob = await res.blob();
@@ -12664,6 +14293,7 @@ async function renderProfile() {
             <input type="password" id="lecturer-pin-input" inputmode="numeric" maxlength="4" placeholder="4-digit PIN" style="width:100%;padding:10px 12px;border:1.5px solid var(--border);border-radius:8px;font-size:18px;letter-spacing:6px;box-sizing:border-box">
           </div>
           <button onclick="saveLecturerPin()" style="padding:10px 18px;background:var(--primary);color:#fff;border:none;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer;white-space:nowrap">Save PIN</button>
+          <button onclick="clearLecturerPin()" style="padding:10px 14px;background:transparent;color:#ef4444;border:1.5px solid #ef4444;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;white-space:nowrap">Clear PIN</button>
         </div>
       </div>` : ''}
 
@@ -12673,11 +14303,12 @@ async function renderProfile() {
         <div id="devices-list"><div style="color:var(--text-muted);font-size:13px">Loading devices…</div></div>
       </div>
 
+      ${currentUser.role !== 'student' ? `
       <div style="margin-top:28px;padding-top:24px;border-top:1px solid var(--border)">
         <h3 style="font-size:14px;font-weight:700;margin-bottom:4px;color:#ef4444">Danger Zone</h3>
         <p style="font-size:12px;color:var(--text-muted);margin-bottom:14px">Permanently delete your account and all associated data.</p>
         <a href="/delete-account" target="_blank" style="display:inline-block;padding:10px 20px;border-radius:8px;border:1.5px solid #ef4444;color:#ef4444;font-size:13px;font-weight:600;text-decoration:none;background:transparent">Delete Account</a>
-      </div>
+      </div>` : ''}
     </div>
   `;
   loadMyDevices();
@@ -13392,7 +15023,7 @@ function annCard(a, canPost, isAdmin) {
   const color = ANN_COLORS[a.type] || '#6366f1';
   const icon  = ANN_ICONS[a.type]  || 'ℹ️';
   const canDelete = isAdmin || (canPost && String(a.author?._id) === String(currentUser._id || currentUser.id));
-  const audienceLabel = { all:'Everyone', students:'Students', employees:'Employees' }[a.audience] || 'Everyone';
+  const audienceLabel = { all:'Everyone', students:'Students', employees:'Employees', lecturers:'Lecturers', hod:'HODs', class_group:'Class Group', department:'Department', programme:'Programme', course:'Course' }[a.audience] || 'Everyone';
   return `
     <div class="card" style="margin-bottom:12px;border-left:4px solid ${color};position:relative;${a.pinned?'background:linear-gradient(135deg,var(--card),#fefce8);':''}" id="ann-${a._id}">
       ${a.pinned ? '<div style="position:absolute;top:10px;right:12px;font-size:11px;color:#92400e;font-weight:700;background:#fef3c7;padding:2px 7px;border-radius:20px;">📌 Pinned</div>' : ''}
@@ -13945,7 +15576,8 @@ async function exportAttendanceToExcel(sessionId, sessionTitle) {
     ws['!cols'] = [{ wch: 25 }, { wch: 15 }, { wch: 12 }, { wch: 15 }, { wch: 22 }, { wch: 20 }];
 
     const filename = `Attendance_${(sessionTitle || 'session').replace(/[^a-z0-9]/gi, '_')}_${new Date().toISOString().slice(0,10)}.xlsx`;
-    window.XLSX.writeFile(wb, filename);
+    const wbout = window.XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
+    await downloadBlob(new Blob([wbout], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }), filename);
     showToastNotif('Excel file downloaded!', 'success');
   } catch(e) {
     showToastNotif('Export failed: ' + e.message, 'error');
@@ -13981,7 +15613,8 @@ async function exportAllAttendanceToExcel() {
     const wb = window.XLSX.utils.book_new();
     window.XLSX.utils.book_append_sheet(wb, ws, 'My Attendance');
     ws['!cols'] = [{ wch: 30 }, { wch: 15 }, { wch: 12 }, { wch: 15 }];
-    window.XLSX.writeFile(wb, `My_Attendance_${new Date().toISOString().slice(0,10)}.xlsx`);
+    const wboutAll = window.XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
+    await downloadBlob(new Blob([wboutAll], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }), `My_Attendance_${new Date().toISOString().slice(0,10)}.xlsx`);
     showToastNotif('Excel file downloaded!', 'success');
   } catch(e) {
     showToastNotif('Export failed: ' + e.message, 'error');
@@ -14102,13 +15735,26 @@ async function renderLecturerTimetable() {
   const content = document.getElementById('main-content');
   if (!content) return;
   content.innerHTML = '<div class="loading">Loading timetable…</div>';
-  try {
-    const [slotData, courseData] = await Promise.all([
-      api('/api/timetable'),
-      api('/api/courses').catch(() => api('/api/lecturer/quizzes').then(d => ({ courses: [] })).catch(() => ({ courses: [] }))),
-    ]);
-    _timetableSlots   = slotData.slots   || [];
-    _timetableCourses = (courseData.courses || courseData || []);
+  if (!isOnline()) {
+    const _c = offlineRead('lecturer_timetable');
+    if (_c) { _timetableSlots = _c.slots || []; _timetableCourses = _c.courses || []; }
+    else { content.innerHTML = `<div style="text-align:center;padding:60px 20px"><div style="font-size:48px;margin-bottom:12px">📡</div><div style="font-size:18px;font-weight:700">You're Offline</div><p style="color:var(--text-muted);margin-top:8px">Connect once while online to cache this page.</p></div>`; return; }
+  } else {
+    try {
+      const [slotData, courseData] = await Promise.all([
+        api('/api/timetable'),
+        api('/api/courses').catch(() => api('/api/lecturer/quizzes').then(d => ({ courses: [] })).catch(() => ({ courses: [] }))),
+      ]);
+      _timetableSlots   = slotData.slots   || [];
+      _timetableCourses = (courseData.courses || courseData || []);
+      offlineCache('lecturer_timetable', { slots: _timetableSlots, courses: _timetableCourses });
+    } catch(e) {
+      const _c = offlineRead('lecturer_timetable');
+      if (_c) { _timetableSlots = _c.slots || []; _timetableCourses = _c.courses || []; }
+      else { content.innerHTML = `<div class="card"><p style="color:var(--danger)">Error: ${e.message}</p></div>`; return; }
+    }
+  }
+  {
 
     const isAdminView = ['admin','superadmin','manager'].includes(currentUser?.role);
     const ttTitle    = isAdminView ? 'All Timetables' : 'My Timetable';
@@ -14147,8 +15793,6 @@ async function renderLecturerTimetable() {
           </div>`
         : `<div style="background:#fff;border:1px solid #e8eaed;border-radius:14px;overflow-x:auto;box-shadow:0 1px 4px rgba(0,0,0,.05)">${_timetableGrid(_timetableSlots, true)}</div>`
       }`;
-  } catch(e) {
-    content.innerHTML = `<div class="card"><p style="color:var(--danger)">Error: ${e.message}</p></div>`;
   }
 }
 
@@ -14156,9 +15800,23 @@ async function renderStudentTimetable() {
   const content = document.getElementById('main-content');
   if (!content) return;
   content.innerHTML = '<div class="loading">Loading timetable…</div>';
-  try {
-    const slotData = await api('/api/timetable');
-    const slots = slotData.slots || [];
+  let slots = [];
+  if (!isOnline()) {
+    const _c = offlineRead('student_timetable');
+    if (_c) { slots = _c.slots || []; }
+    else { content.innerHTML = `<div style="text-align:center;padding:60px 20px"><div style="font-size:48px;margin-bottom:12px">📡</div><div style="font-size:18px;font-weight:700">You're Offline</div><p style="color:var(--text-muted);margin-top:8px">Connect once while online to cache this page.</p></div>`; return; }
+  } else {
+    try {
+      const slotData = await api('/api/timetable');
+      slots = slotData.slots || [];
+      offlineCache('student_timetable', slotData);
+    } catch(e) {
+      const _c = offlineRead('student_timetable');
+      if (_c) { slots = _c.slots || []; }
+      else { content.innerHTML = `<div class="card"><p style="color:var(--danger)">Error: ${e.message}</p></div>`; return; }
+    }
+  }
+  {
     const isClassRep = currentUser.isClassRep;
     const isHod = currentUser.role === 'hod';
     content.innerHTML = `
@@ -14188,8 +15846,6 @@ async function renderStudentTimetable() {
           </div>`
         : `<div style="background:#fff;border:1px solid #e8eaed;border-radius:14px;overflow-x:auto;box-shadow:0 1px 4px rgba(0,0,0,.05)">${_timetableGrid(slots, false)}</div>`
       }`;
-  } catch(e) {
-    content.innerHTML = `<div class="card"><p style="color:var(--danger)">Error: ${e.message}</p></div>`;
   }
 }
 
@@ -14776,7 +16432,7 @@ async function generateAttendanceReportCard() {
 
     doc.setFontSize(8); doc.setTextColor(150,150,150); doc.setFont('helvetica','normal');
     doc.text('Generated automatically by DIKLY — dikly.sbs', M, 285);
-    doc.save('DIKLY_Report_Card_' + (currentUser.indexNumber||'student') + '_' + new Date().toISOString().slice(0,10) + '.pdf');
+    await downloadBlob(doc.output('blob'), 'DIKLY_Report_Card_' + (currentUser.indexNumber||'student') + '_' + new Date().toISOString().slice(0,10) + '.pdf');
     showToastNotif('Report card downloaded!', 'success');
   } catch(e) { showToastNotif('Failed: ' + e.message, 'error'); }
 }
@@ -14849,7 +16505,7 @@ async function generateCertificate(courseId, courseTitle) {
     doc.setFontSize(8); doc.setTextColor(199,210,254);
     doc.text('dikly.sbs', W/2, H-16, { align: 'center' });
 
-    doc.save('DIKLY_Certificate_' + (courseTitle||'course').replace(/[^a-z0-9]/gi,'_') + '.pdf');
+    await downloadBlob(doc.output('blob'), 'DIKLY_Certificate_' + (courseTitle||'course').replace(/[^a-z0-9]/gi,'_') + '.pdf');
     showToastNotif('Certificate downloaded!', 'success');
   } catch(e) { showToastNotif('Failed: ' + e.message, 'error'); }
 }
@@ -14998,6 +16654,7 @@ function buildBottomNav(role) {
     dashboard:       '<rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/>',
     sessions:        '<circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>',
     quizzes:         '<path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><rect x="8" y="2" width="8" height="4" rx="1"/><path d="M9 14l2 2 4-4"/>',
+    'quiz-monitor':  '<path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7z"/><circle cx="12" cy="12" r="3"/><circle cx="12" cy="12" r="1" fill="red"/>',
     reports:         '<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/>',
     subscription:    '<rect x="1" y="4" width="22" height="16" rx="2"/><line x1="1" y1="10" x2="23" y2="10"/>',
     users:           '<path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/>',
@@ -15032,6 +16689,7 @@ function buildBottomNav(role) {
     'mark-attendance': 'Attendance', subscription: 'Subscribe',
     announcements: 'Notices', assignments: 'Assignment',
     quizzes: 'Proctored/Snap Quiz',
+    'quiz-monitor': 'Quiz Monitor',
   };
 
   const priority = PRIORITY[role] || ['dashboard', 'sessions', 'reports'];
@@ -15152,7 +16810,7 @@ function openAIQuizPanel(quizId) {
           </div>
           <div>
             <h3 style="font-size:16px;font-weight:700;margin:0">AI Question Generator</h3>
-            <p style="font-size:12px;color:var(--text-muted);margin:0">Powered by Claude AI</p>
+            <p style="font-size:12px;color:var(--text-muted);margin:0">Powered by Dikly AI</p>
           </div>
         </div>
         <button onclick="document.getElementById('ai-quiz-overlay').remove()" style="width:28px;height:28px;border-radius:7px;border:1px solid var(--border);background:var(--bg);cursor:pointer;font-size:14px;display:flex;align-items:center;justify-content:center">✕</button>
@@ -16875,6 +18533,58 @@ async function renderEmpNotifications() {
                 <div style="font-size:12px;color:var(--text-muted);line-height:1.5">${esc(n.body)}</div>
               </div>
               ${n.action ? `<button class="btn btn-sm" style="background:var(--card);border:1px solid var(--border);flex-shrink:0;font-size:12px" onclick="${n.action.fn}">${n.action.label}</button>` : ''}
+            </div>`;
+          }).join('')}
+    `;
+  } catch(e) {
+    content.innerHTML = `<div class="card"><p style="color:#ef4444">Error: ${e.message}</p></div>`;
+  }
+}
+
+// ── Universal Notifications page (all roles) ─────────────────────────────────
+async function renderAllNotifications() {
+  const content = document.getElementById('main-content');
+  if (!content) return;
+  content.innerHTML = '<div class="loading">Loading notifications…</div>';
+  try {
+    const d = await api('/api/notifications?limit=50');
+    const notifs = d.notifications || [];
+    const typeStyles = {
+      ok:      { bg: '#f0fdf4', border: '#86efac' },
+      success: { bg: '#f0fdf4', border: '#86efac' },
+      warn:    { bg: '#fffbeb', border: '#fde68a' },
+      warning: { bg: '#fffbeb', border: '#fde68a' },
+      error:   { bg: '#fef2f2', border: '#fca5a5' },
+      info:    { bg: '#eff6ff', border: '#bfdbfe' },
+    };
+    const iconFor = t => t === 'ok' || t === 'success' ? '✅' : t === 'warn' || t === 'warning' ? '⚠️' : t === 'error' ? '❌' : '🔔';
+    const timeAgo = iso => {
+      const s = Math.floor((Date.now() - new Date(iso)) / 1000);
+      if (s < 60) return 'Just now';
+      if (s < 3600) return `${Math.floor(s/60)}m ago`;
+      if (s < 86400) return `${Math.floor(s/3600)}h ago`;
+      return new Date(iso).toLocaleDateString('en-GB', { day:'2-digit', month:'short' });
+    };
+    content.innerHTML = `
+      <div class="page-header">
+        <div><h2>Notifications</h2><p>${notifs.length} notification${notifs.length !== 1 ? 's' : ''}</p></div>
+        <button class="btn btn-secondary btn-sm" onclick="markAllNotifsRead();this.disabled=true;this.textContent='Marked'">Mark all read</button>
+      </div>
+      ${notifs.length === 0
+        ? `<div class="card" style="text-align:center;padding:48px 24px">
+            <div style="font-size:40px;margin-bottom:16px">🔔</div>
+            <div style="font-weight:600;font-size:15px;margin-bottom:6px">All clear!</div>
+            <p style="color:var(--text-muted);font-size:13px">No notifications right now.</p>
+          </div>`
+        : notifs.map(n => {
+            const st = typeStyles[n.type] || typeStyles.info;
+            return `<div style="background:${st.bg};border:1px solid ${st.border};border-radius:10px;padding:14px 16px;margin-bottom:10px;display:flex;gap:12px;align-items:flex-start${n.read ? ';opacity:0.7' : ''}">
+              <span style="font-size:20px;flex-shrink:0;margin-top:1px">${iconFor(n.type)}</span>
+              <div style="flex:1;min-width:0">
+                <div style="font-weight:700;font-size:13px;margin-bottom:3px">${esc(n.title || '')}</div>
+                <div style="font-size:12px;color:var(--text-muted);line-height:1.5">${esc(n.body || n.message || '')}</div>
+                <div style="font-size:11px;color:var(--text-light);margin-top:4px">${n.createdAt ? timeAgo(n.createdAt) : ''}</div>
+              </div>
             </div>`;
           }).join('')}
     `;
@@ -20946,6 +22656,14 @@ async function _renderStudentVideos() {
 async function renderClassAnnouncements() {
   const content = document.getElementById('main-content');
   if (!content) return;
+  if (!currentUser.isClassRep) {
+    content.innerHTML = `<div class="card" style="text-align:center;padding:40px 20px">
+      <div style="font-size:36px;margin-bottom:12px">🔒</div>
+      <h3 style="font-size:16px;font-weight:700;margin-bottom:6px">Class Representatives Only</h3>
+      <p style="color:var(--text-muted);font-size:13px">Only designated class representatives can post class announcements.</p>
+    </div>`;
+    return;
+  }
   content.innerHTML = '<div class="loading">Loading…</div>';
 
   try {

@@ -267,6 +267,18 @@ window.MathJax = { tex: { inlineMath: [['\\(','\\)']], displayMath: [['\\[','\\]
       <label>Course <span class="req">*</span></label>
       <select id="a-course"><option value="">Select a course…</option></select>
     </div>
+    <div class="fg">
+      <label>Target Audience</label>
+      <select id="a-audience" onchange="document.getElementById('a-group-row').style.display=this.value==='group'?'block':'none'" style="width:100%">
+        <option value="all">All enrolled students</option>
+        <option value="group">Specific group only</option>
+      </select>
+    </div>
+    <div class="fg" id="a-group-row" style="display:none">
+      <label>Group <span class="req">*</span></label>
+      <input type="text" id="a-group" placeholder="e.g. A, B, C"/>
+      <p style="font-size:11px;color:var(--text-muted);margin-top:4px">Only students in this group will see the assignment.</p>
+    </div>
 
     <!-- Section: Schedule -->
     <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:var(--text-muted);margin:18px 0 10px;padding-bottom:6px;border-bottom:1px solid var(--border)">Schedule</div>
@@ -401,11 +413,24 @@ async function api(method, path, body, isForm){
   const res=await fetch(path,opts);
   if(res.headers.get('content-type')?.includes('application/json')){
     const d=await res.json();
-    if(!res.ok) throw new Error(d.details?`${d.error}: ${d.details}`:(d.error||`HTTP ${res.status}`));
+    if(!res.ok) {
+      if(res.status===402 && d.subscriptionExpired){ _subBlock(d.message, d.isAdmin); }
+      throw new Error(d.details?`${d.error}: ${d.details}`:(d.error||`HTTP ${res.status}`));
+    }
     return d;
   }
   if(!res.ok) throw new Error(`HTTP ${res.status}`);
   return res;
+}
+
+function _subBlock(msg, isAdmin) {
+  if (document.getElementById('_sub-bl')) return;
+  const d = document.createElement('div');
+  d.id = '_sub-bl';
+  d.style.cssText = 'position:fixed;inset:0;z-index:99999;background:rgba(15,23,42,.97);display:flex;align-items:center;justify-content:center;padding:24px;box-sizing:border-box';
+  d.innerHTML = `<div style="background:#fff;border-radius:16px;max-width:440px;width:100%;padding:36px 28px;text-align:center"><div style="font-size:40px;margin-bottom:16px">🔒</div><h2 style="margin:0 0 12px;font-size:20px;color:#0f172a">Subscription Expired</h2><p style="margin:0 0 24px;font-size:14px;color:#475569;line-height:1.6">${msg||"Your institution's subscription has expired."}</p>${isAdmin?`<button onclick="location.href='/'" style="background:#6366f1;color:#fff;border:none;border-radius:8px;padding:11px 22px;font-size:14px;font-weight:600;cursor:pointer;width:100%">Go to Subscription Page</button>`:'<div style="background:#f8fafc;border-radius:8px;padding:14px;font-size:13px;color:#64748b">Contact your <strong>institution administrator</strong> to renew.</div>'}<p style="margin:16px 0 0;font-size:12px;color:#94a3b8">Support: <strong>support@dikly.sbs</strong></p></div>`;
+  document.body.appendChild(d);
+  document.body.style.overflow = 'hidden';
 }
 
 function logout(){ localStorage.removeItem('token'); location.href='/index.html'; }
@@ -543,6 +568,9 @@ function openCreate(){
   $('edit-id').value=''; $('a-title').value=''; $('a-desc').value=''; $('a-course').value='';
   $('a-release').value=''; $('a-due').value='';
   $('a-filesub').checked=true; $('a-late').checked=false;
+  if($('a-audience')){ $('a-audience').value='all'; }
+  if($('a-group')){ $('a-group').value=''; }
+  if(document.getElementById('a-group-row')) document.getElementById('a-group-row').style.display='none';
   $('pdf-preview').style.display='none'; $('pdf-existing').style.display='none'; $('pdf-input').value='';
   $('a-course').innerHTML=`<option value="">Select a course…</option>`+
     S.courses.map(c=>`<option value="${c._id}">${c.code} — ${c.title}</option>`).join('');
@@ -570,6 +598,9 @@ async function openEdit(id){
       S.courses.map(c=>`<option value="${c._id}" ${c._id.toString()===_selCId?'selected':''}>${c.code} — ${c.title}</option>`).join('');
     $('a-release').value=toLocal(a.releaseDate); $('a-due').value=toLocal(a.dueDate);
     $('a-filesub').checked=a.allowFileSubmission; $('a-late').checked=a.allowLateSubmission; if($('a-late-penalty'))$('a-late-penalty').value=a.latePenaltyPercent||0; if(document.getElementById('late-penalty-group'))document.getElementById('late-penalty-group').style.display=a.allowLateSubmission?'flex':'none';
+    if($('a-audience')){ $('a-audience').value=a.targetAudience||'all'; }
+    if($('a-group')){ $('a-group').value=a.targetGroup||''; }
+    if(document.getElementById('a-group-row')) document.getElementById('a-group-row').style.display=(a.targetAudience==='group')?'block':'none';
     const pp=$('pdf-preview'); if(pp) pp.style.display='none';
     const pe=$('pdf-existing'); if(pe) pe.style.display=S.pdfExisting?'block':'none';
     const pen=$('pdf-existing-name'); if(pen) pen.textContent=S.pdfExisting||'';
@@ -595,12 +626,17 @@ async function saveAssignment(){
   try{
     const penaltyEl=$('a-late-penalty');
     const penalty=penaltyEl?Math.min(100,Math.max(0,parseInt(penaltyEl.value,10)||0)):0;
+    const targetAudience=$('a-audience')?.value||'all';
+    const targetGroup=(($('a-group')?.value)||'').trim();
+    if(targetAudience==='group'&&!targetGroup) return toast('Please enter the group name/letter','err');
     const payload={
       title, courseId, description:$('a-desc').value.trim(),
       releaseDate:rdObj.toISOString(), dueDate:ddObj.toISOString(),
       allowFileSubmission:$('a-filesub').checked,
       allowLateSubmission:$('a-late').checked,
-      latePenaltyPercent:penalty
+      latePenaltyPercent:penalty,
+      targetAudience,
+      targetGroup: targetAudience==='group' ? targetGroup : null,
     };
     let saved;
     if(S.editId){ saved=(await api('PUT',`/api/assignments/lecturer/${S.editId}`,payload)).assignment; }
@@ -1689,7 +1725,7 @@ function openCreateQuizModal() {
           <label style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;color:var(--text-light);margin-bottom:5px;display:block">Course <span style="color:#dc2626">*</span></label>
           <select id="qz-m-course" style="width:100%;padding:9px 12px;border:1.5px solid var(--border);border-radius:8px;font-size:14px;font-family:inherit;outline:none">
             <option value="">Select a course…</option>
-            ${S.courses.map(c => `<option value="${c._id}">${c.code} — ${c.title}</option>`).join('')}
+            ${S.courses.map(c => `<option value="${c._id}">${c.code} — ${c.title}${c.level!=null?' · L'+c.level:''}${c.group?' · Grp '+c.group:''}</option>`).join('')}
           </select>
         </div>
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
@@ -1927,6 +1963,8 @@ function openCreateSnapQuizModal() {
               <option value="mid_term">Mid-Semester Exams</option>
               <option value="exam">Exams</option>
               <option value="quiz">Quiz</option>
+              <option value="class_test">Class Test</option>
+              <option value="final">Final Exam</option>
             </select>
           </div>
           <div class="fg"><label>Time Limit (minutes) <span class="req">*</span></label><input id="sq-time" type="number" min="1" placeholder="e.g. 60"/></div>
@@ -1935,15 +1973,54 @@ function openCreateSnapQuizModal() {
           <div class="fg"><label>Start Time <span class="req">*</span></label><input id="sq-start" type="datetime-local"/></div>
           <div class="fg"><label>End Time <span class="req">*</span></label><input id="sq-end" type="datetime-local"/></div>
         </div>
-        <div class="form-row">
-          <div class="fg"><label>Pass Mark</label><input id="sq-pass" type="number" min="0" placeholder="Optional"/></div>
-          <div class="fg"><label>Max Violations</label><input id="sq-violations" type="number" min="0" value="3"/></div>
+
+        <!-- Security Level -->
+        <div>
+          <label style="font-size:12px;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:.5px;display:block;margin-bottom:8px">Security Level</label>
+          <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px" id="sq-sec-group">
+            <label id="sq-sec-low" onclick="sqSetSecurity('low')" style="cursor:pointer;border:2px solid #e2e8f0;border-radius:10px;padding:10px 8px;text-align:center;transition:all .15s">
+              <div style="font-size:18px;margin-bottom:4px">🔓</div>
+              <div style="font-size:12px;font-weight:700;color:#475569">Low</div>
+              <div style="font-size:10px;color:#94a3b8;margin-top:2px">Timer + 1 device</div>
+            </label>
+            <label id="sq-sec-medium" onclick="sqSetSecurity('medium')" style="cursor:pointer;border:2px solid #6366f1;border-radius:10px;padding:10px 8px;text-align:center;background:#eff6ff;transition:all .15s">
+              <div style="font-size:18px;margin-bottom:4px">🔒</div>
+              <div style="font-size:12px;font-weight:700;color:#1d4ed8">Medium</div>
+              <div style="font-size:10px;color:#3b82f6;margin-top:2px">Tab switch + logs</div>
+            </label>
+            <label id="sq-sec-high" onclick="sqSetSecurity('high')" style="cursor:pointer;border:2px solid #e2e8f0;border-radius:10px;padding:10px 8px;text-align:center;transition:all .15s">
+              <div style="font-size:18px;margin-bottom:4px">🛡️</div>
+              <div style="font-size:12px;font-weight:700;color:#7c3aed">High</div>
+              <div style="font-size:10px;color:#8b5cf6;margin-top:2px">AI + camera + mic</div>
+            </label>
+          </div>
+          <input type="hidden" id="sq-security-level" value="medium"/>
+          <!-- Security level description -->
+          <div id="sq-sec-desc" style="margin-top:8px;padding:8px 12px;background:#f8fafc;border-radius:8px;font-size:11px;color:#64748b;line-height:1.5">
+            <strong>Medium:</strong> Tab-switch detection, suspicious activity logging, reconnect monitoring. Good for most quizzes.
+          </div>
         </div>
-        <div style="display:flex;flex-wrap:wrap;gap:12px">
-          <label class="fg-check"><input type="checkbox" id="sq-randomq" checked/> Randomise questions</label>
-          <label class="fg-check"><input type="checkbox" id="sq-randomo" checked/> Randomise options</label>
-          <label class="fg-check"><input type="checkbox" id="sq-nocopy" checked/> Prevent copy/paste</label>
-        </div>
+
+        <!-- Advanced toggles (collapsed by default) -->
+        <details style="border:1px solid var(--border);border-radius:10px;padding:0">
+          <summary style="padding:10px 14px;cursor:pointer;font-size:12px;font-weight:700;color:var(--text-muted);list-style:none;display:flex;align-items:center;justify-content:space-between">
+            Advanced Options
+            <span style="font-size:11px;font-weight:400;color:#94a3b8">Pass mark, violations, randomisation…</span>
+          </summary>
+          <div style="padding:14px;border-top:1px solid var(--border);display:flex;flex-direction:column;gap:12px">
+            <div class="form-row">
+              <div class="fg"><label>Pass Mark</label><input id="sq-pass" type="number" min="0" placeholder="Optional"/></div>
+              <div class="fg"><label>Max Violations before termination</label><input id="sq-violations" type="number" min="0" value="3"/></div>
+            </div>
+            <div style="display:flex;flex-wrap:wrap;gap:12px">
+              <label class="fg-check"><input type="checkbox" id="sq-randomq" checked/> Randomise questions</label>
+              <label class="fg-check"><input type="checkbox" id="sq-randomo" checked/> Randomise options</label>
+              <label class="fg-check"><input type="checkbox" id="sq-nocopy" checked/> Prevent copy/paste</label>
+              <label class="fg-check"><input type="checkbox" id="sq-mobile" checked/> Mobile monitoring</label>
+              <label class="fg-check"><input type="checkbox" id="sq-alerts" checked/> Live alerts to me</label>
+            </div>
+          </div>
+        </details>
       </div>
       <div style="padding:14px 22px;border-top:1px solid var(--border);display:flex;gap:10px;justify-content:flex-end">
         <button class="btn btn-secondary" onclick="document.getElementById('snap-quiz-modal-wrap').remove()">Cancel</button>
@@ -1957,9 +2034,31 @@ function openCreateSnapQuizModal() {
   (S.courses || []).forEach(c => {
     const o = document.createElement('option');
     o.value = c._id;
-    o.textContent = `${c.code} — ${c.title}`;
+    o.textContent = `${c.code} — ${c.title}${c.level!=null?' · L'+c.level:''}${c.group?' · Grp '+c.group:''}`;
     sel.appendChild(o);
   });
+}
+
+const _SQ_SEC_DESCS = {
+  low:    '<strong>Low:</strong> Timer, randomised questions, one device per student. No violation monitoring. Good for low-stakes class activities.',
+  medium: '<strong>Medium:</strong> Tab-switch detection, suspicious activity logging, reconnect monitoring. Good for most quizzes.',
+  high:   '<strong>High:</strong> Full AI monitoring, camera + microphone, live integrity scoring, real-time alerts. For high-stakes exams.',
+};
+function sqSetSecurity(level) {
+  document.getElementById('sq-security-level').value = level;
+  ['low','medium','high'].forEach(l => {
+    const el = document.getElementById('sq-sec-'+l);
+    if (!el) return;
+    const active = l === level;
+    const colors = { low: '#22c55e', medium: '#6366f1', high: '#7c3aed' };
+    el.style.border = active ? `2px solid ${colors[l]}` : '2px solid #e2e8f0';
+    el.style.background = active ? (l==='low'?'#f0fdf4':l==='medium'?'#eff6ff':'#faf5ff') : '';
+  });
+  const desc = document.getElementById('sq-sec-desc');
+  if (desc) desc.innerHTML = _SQ_SEC_DESCS[level] || '';
+  // Auto-set violations field
+  const viol = document.getElementById('sq-violations');
+  if (viol) viol.value = level==='low' ? '0' : level==='high' ? '3' : '5';
 }
 
 async function submitCreateSnapQuiz() {
@@ -1980,9 +2079,11 @@ async function submitCreateSnapQuiz() {
   if (btn) { btn.disabled = true; btn.textContent = 'Creating…'; }
 
   try {
+    const secLevel = document.getElementById('sq-security-level')?.value || 'medium';
     const body = {
       courseId, title,
       quizType:                    document.getElementById('sq-type')?.value || 'exam',
+      securityLevel:               secLevel,
       timeLimitMinutes:            timeLimit,
       startTime:                   new Date(startTime).toISOString(),
       endTime:                     new Date(endTime).toISOString(),
@@ -1991,6 +2092,8 @@ async function submitCreateSnapQuiz() {
       randomizeQuestions:          document.getElementById('sq-randomq')?.checked ?? true,
       randomizeOptions:            document.getElementById('sq-randomo')?.checked ?? true,
       preventCopyPaste:            document.getElementById('sq-nocopy')?.checked ?? true,
+      mobileMonitoring:            document.getElementById('sq-mobile')?.checked ?? true,
+      liveAlerts:                  document.getElementById('sq-alerts')?.checked ?? true,
     };
     const d = await api('POST', '/api/lecturer/snap-quizzes', body);
     toast('Snap quiz created! Now add questions.', 'ok');
@@ -2684,7 +2787,7 @@ function openAIGeneratePanel(quizId, isSnapQuiz) {
           </div>
           <div>
             <h3 style="font-size:16px;font-weight:700;margin:0">AI Question Generator</h3>
-            <p style="font-size:12px;color:var(--text-muted);margin:0">${quizId === '__assignment__' ? 'Adding to Assignment' : 'Adding to Quiz'} · Powered by Claude AI</p>
+            <p style="font-size:12px;color:var(--text-muted);margin:0">${quizId === '__assignment__' ? 'Adding to Assignment' : 'Adding to Quiz'} · Powered by Dikly AI</p>
           </div>
         </div>
         <button onclick="document.getElementById('ai-gen-overlay').remove()" style="width:28px;height:28px;border-radius:7px;border:1px solid var(--border);background:var(--bg);cursor:pointer;font-size:14px;display:flex;align-items:center;justify-content:center">✕</button>

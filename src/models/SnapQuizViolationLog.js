@@ -43,6 +43,10 @@ const VIOLATION_TYPES = Object.freeze({
   MULTIPLE_FACES:    "multiple_faces",    // proctoring
   AUDIO_DETECTED:    "audio_detected",    // proctoring
   MOTION_DETECTED:   "motion_detected",   // proctoring
+  APP_BACKGROUNDED:  "app_backgrounded",  // Capacitor: app sent to background
+  APP_FOREGROUNDED:  "app_foregrounded",  // Capacitor: app returned from background
+  BACK_BUTTON:       "back_button_pressed", // Capacitor: physical back button pressed
+  CAMERA_DISABLED:   "camera_disabled",   // camera track ended mid-exam
   OTHER:             "other",
 });
 

@@ -5,8 +5,12 @@ const ctrl = require('../controllers/classRepController');
 
 router.get('/device',      authenticate, ctrl.getMyDevice);
 router.get('/lecturers',   authenticate, ctrl.getCourseLecturers);
+router.get('/search-lecturers', authenticate, ctrl.searchLecturers);
+router.get('/scan-wifi',        authenticate, ctrl.scanWifi);
+router.post('/configure-wifi',  authenticate, ctrl.configureWifi);
 router.post('/connect',    authenticate, ctrl.connectDevice);
 router.post('/disconnect', authenticate, ctrl.disconnectDevice);
 router.post('/set-pin',    authenticate, ctrl.setLecturerPin);
+router.delete('/set-pin',  authenticate, ctrl.clearLecturerPin);
 
 module.exports = router;

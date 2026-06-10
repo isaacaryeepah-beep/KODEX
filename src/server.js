@@ -57,7 +57,7 @@ const { sanitizeInputs } = require("./middleware/sanitize");
 const app = express();
 const PORT = process.env.PORT || 5000;
 
-app.set("trust proxy", true);
+app.set("trust proxy", 1);
 
 app.use(compression({ level: 4, threshold: 1024 }));
 
@@ -70,7 +70,40 @@ app.use((req, res, next) => {
 });
 
 app.use(helmet({
-  contentSecurityPolicy: false,
+  contentSecurityPolicy: {
+    useDefaults: true,
+    directives: {
+      // Self + CDN scripts (Jitsi, Stream, fonts)
+      "script-src": [
+        "'self'",
+        "https://meet.jit.si",
+        "https://8x8.vc",
+        "https://cdn.jsdelivr.net",
+        "https://unpkg.com",
+        "'unsafe-inline'",   // Required for inline event handlers in legacy HTML pages
+      ],
+      // Helmet 8 useDefaults injects script-src-attr 'none' which blocks ALL onclick
+      // attributes even when script-src has 'unsafe-inline'. The entire app uses inline
+      // event handlers, so this must be explicitly removed.
+      "script-src-attr": ["'unsafe-inline'"],
+      "style-src":  ["'self'", "https://fonts.googleapis.com", "'unsafe-inline'"],
+      "font-src":   ["'self'", "https://fonts.gstatic.com", "data:"],
+      "img-src":    ["'self'", "data:", "blob:", "https:"],
+      "media-src":  ["'self'", "blob:", "https:"],
+      "connect-src": [
+        "'self'",
+        "https://dikly.sbs", "https://api.dikly.sbs",
+        "https://dikly.live", "https://api.dikly.live",
+        "https://getstream.io", "wss://getstream.io",
+        "wss://dikly.sbs", "wss://dikly.live",
+        "https://livekit.cloud", "wss://livekit.cloud",
+      ],
+      "frame-src":  ["'self'", "https://meet.jit.si", "https://8x8.vc"],
+      "object-src": ["'none'"],
+      "base-uri":   ["'self'"],
+      "form-action": ["'self'"],
+    },
+  },
   crossOriginEmbedderPolicy: false,
   referrerPolicy: { policy: "strict-origin-when-cross-origin" },
   hsts: { maxAge: 31536000, includeSubDomains: true },
@@ -205,6 +238,31 @@ app.get('/exam-room', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'exam-room.html'));
 });
 
+// ── App download proxy ───────────────────────────────────────────────────────
+// Streams the app installer directly so the browser downloads it without
+// opening a new tab or redirecting to GitHub.
+const DOWNLOAD_URLS = {
+  android: process.env.ANDROID_DOWNLOAD_URL || 'https://github.com/isaacaryeepah-beep/Dikly_releases/releases/download/apk-latest/dikly.apk',
+  windows: process.env.WINDOWS_DOWNLOAD_URL || 'https://github.com/isaacaryeepah-beep/Dikly_releases/releases/download/windows-latest/dikly-windows-setup.exe',
+  mac:     process.env.MAC_DOWNLOAD_URL     || 'https://github.com/isaacaryeepah-beep/Dikly_releases/releases/download/mac-latest/dikly-mac.dmg',
+};
+const DOWNLOAD_META = {
+  android: { filename: 'dikly.apk',               type: 'application/vnd.android.package-archive' },
+  windows: { filename: 'dikly-windows-setup.exe',  type: 'application/octet-stream' },
+  mac:     { filename: 'dikly-mac.dmg',             type: 'application/octet-stream' },
+};
+
+app.get('/downloads/:platform', (req, res) => {
+  const platform = req.params.platform;
+  const url  = DOWNLOAD_URLS[platform];
+  const meta = DOWNLOAD_META[platform];
+  if (!url || !meta) return res.status(404).json({ error: 'Unknown platform' });
+  // Redirect to GitHub releases — browser follows the redirect chain and
+  // downloads the file directly from the CDN without opening a new tab.
+  res.setHeader('Content-Disposition', `attachment; filename="${meta.filename}"`);
+  res.redirect(302, url);
+});
+
 app.get("/anticheat",      (req, res) => res.sendFile(path.join(__dirname, "public", "anticheat-dashboard.html")));
 app.get("/about",          (req, res) => res.sendFile(path.join(__dirname, "public", "about.html")));
 app.get("/founder",        (req, res) => res.sendFile(path.join(__dirname, "public", "founder.html")));
@@ -231,8 +289,11 @@ app.get('/app/{*path}', (req, res) => {
 app.use(express.static(path.join(__dirname, "public"), {
   setHeaders: (res, filePath) => {
     const ext = path.extname(filePath).toLowerCase();
-    if (['.js', '.css', '.svg', '.png', '.jpg', '.jpeg', '.webp', '.woff', '.woff2'].includes(ext)) {
+    if (['.png', '.jpg', '.jpeg', '.webp', '.woff', '.woff2', '.svg'].includes(ext)) {
       res.setHeader("Cache-Control", "public, max-age=604800, stale-while-revalidate=86400");
+    } else if (['.js', '.css'].includes(ext)) {
+      // Must revalidate on every load — prevents stale JS/CSS in mobile WebViews
+      res.setHeader("Cache-Control", "no-cache, must-revalidate");
     } else {
       res.setHeader("Cache-Control", "no-cache, no-store, must-revalidate");
       res.setHeader("Pragma", "no-cache");
@@ -502,6 +563,13 @@ const start = async () => {
       startScheduler();
     } catch (e) {
       console.error("Scheduler failed to start:", e.message);
+    }
+
+    try {
+      const snapQuizWatchdog = require("./services/snapQuizWatchdog");
+      snapQuizWatchdog.start();
+    } catch (e) {
+      console.error("[SnapQuizWatchdog] Failed to start:", e.message);
     }
 
     try {

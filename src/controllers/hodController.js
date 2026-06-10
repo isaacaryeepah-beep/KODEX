@@ -1,5 +1,6 @@
 "use strict";
 
+const mongoose          = require("mongoose");
 const User              = require("../models/User");
 const Course            = require("../models/Course");
 const AuditLog          = require("../models/AuditLog");
@@ -9,6 +10,8 @@ const AttendanceRecord  = require("../models/AttendanceRecord");
 const Conversation      = require("../models/Conversation");
 const Message           = require("../models/Message");
 
+const isValidObjectId = (id) => mongoose.Types.ObjectId.isValid(id);
+
 // ── Helpers ───────────────────────────────────────────────────────────────────
 function hodDeptFilter(req, base = {}) {
   const filter = { ...base, company: req.user.company };
@@ -16,8 +19,17 @@ function hodDeptFilter(req, base = {}) {
   return filter;
 }
 
+function requireHodDept(req, res) {
+  if (req.user.role === 'hod' && !req.user.department) {
+    res.status(403).json({ error: 'Your HOD account has no department assigned. Contact your admin.' });
+    return false;
+  }
+  return true;
+}
+
 // ─── GET /api/hod/locked-students ────────────────────────────────────────────
 exports.listLockedStudents = async (req, res) => {
+  if (!requireHodDept(req, res)) return;
   try {
     const now = new Date();
     const filter = hodDeptFilter(req, {
@@ -43,6 +55,8 @@ exports.listLockedStudents = async (req, res) => {
 
 // ─── PATCH /api/hod/unlock/:userId ───────────────────────────────────────────
 exports.unlockStudent = async (req, res) => {
+  if (!requireHodDept(req, res)) return;
+  if (!isValidObjectId(req.params.userId)) return res.status(400).json({ error: "Invalid userId" });
   try {
     const now = new Date();
     const filter = hodDeptFilter(req, {
@@ -107,6 +121,7 @@ exports.unlockStudent = async (req, res) => {
 
 // ─── GET /api/hod/pending-courses ────────────────────────────────────────────
 exports.listPendingCourses = async (req, res) => {
+  if (!requireHodDept(req, res)) return;
   try {
     const companyId = req.user.company;
     const filter    = { companyId, approvalStatus: "pending", needsApproval: true };
@@ -135,6 +150,7 @@ exports.listPendingCourses = async (req, res) => {
 
 // ─── PATCH /api/hod/courses/:id/approve ──────────────────────────────────────
 exports.approveCourse = async (req, res) => {
+  if (!isValidObjectId(req.params.id)) return res.status(400).json({ error: "Invalid course id" });
   try {
     const companyId = req.user.company;
     const filter    = { _id: req.params.id, companyId, approvalStatus: "pending" };
@@ -176,6 +192,7 @@ exports.approveCourse = async (req, res) => {
 
 // ─── PATCH /api/hod/courses/:id/reject ───────────────────────────────────────
 exports.rejectCourse = async (req, res) => {
+  if (!isValidObjectId(req.params.id)) return res.status(400).json({ error: "Invalid course id" });
   try {
     const companyId = req.user.company;
     const filter    = { _id: req.params.id, companyId, approvalStatus: "pending" };
@@ -217,6 +234,7 @@ exports.rejectCourse = async (req, res) => {
 
 // ─── GET /api/hod/dashboard-stats ────────────────────────────────────────────
 exports.getDashboardStats = async (req, res) => {
+  if (!requireHodDept(req, res)) return;
   try {
     const company = req.user.company;
     const dept    = req.user.department;
@@ -267,6 +285,7 @@ exports.getDashboardStats = async (req, res) => {
 
 // ─── GET /api/hod/alerts ─────────────────────────────────────────────────────
 exports.getAlerts = async (req, res) => {
+  if (!requireHodDept(req, res)) return;
   try {
     const company = req.user.company;
     const dept    = req.user.department;
@@ -296,8 +315,9 @@ exports.getAlerts = async (req, res) => {
     const inactiveCourses = courses.filter(c => !activeCourseIds.has(String(c._id)));
 
     // Repeated absentees: 3+ absences in last 30 days
+    const companyOid = new mongoose.Types.ObjectId(company.toString());
     const absentAgg = await AttendanceRecord.aggregate([
-      { $match: { company, status: "absent", createdAt: { $gte: since30 } } },
+      { $match: { company: companyOid, status: "absent", createdAt: { $gte: since30 } } },
       { $group: { _id: "$user", count: { $sum: 1 } } },
       { $match: { count: { $gte: 3 } } },
       { $sort: { count: -1 } },
@@ -318,7 +338,7 @@ exports.getAlerts = async (req, res) => {
     let lowAttendanceStudents = [];
     if (deptPast.length >= 5) {
       const attAgg = await AttendanceRecord.aggregate([
-        { $match: { company, session: { $in: deptPast.map(s => s._id) }, status: { $in: ["present", "late"] } } },
+        { $match: { company: companyOid, session: { $in: deptPast.map(s => s._id) }, status: { $in: ["present", "late"] } } },
         { $group: { _id: "$user", attended: { $sum: 1 } } },
         { $match: { attended: { $lt: Math.ceil(deptPast.length * 0.5) } } },
         { $sort: { attended: 1 } },
@@ -344,6 +364,7 @@ exports.getAlerts = async (req, res) => {
 
 // ─── POST /api/hod/bulk-unlock ────────────────────────────────────────────────
 exports.bulkUnlockStudents = async (req, res) => {
+  if (!requireHodDept(req, res)) return;
   try {
     const { userIds, note } = req.body;
     if (!Array.isArray(userIds) || userIds.length === 0) {
@@ -393,6 +414,7 @@ exports.bulkUnlockStudents = async (req, res) => {
 
 // ─── POST /api/hod/send-group-message ────────────────────────────────────────
 exports.sendGroupMessage = async (req, res) => {
+  if (!requireHodDept(req, res)) return;
   try {
     const { target, body: bodyText } = req.body;
     const file = req.file || null;
@@ -445,14 +467,14 @@ exports.sendGroupMessage = async (req, res) => {
           const msg = await Message.create({ ...msgData, conversation: existing._id });
           await Conversation.updateOne(
             { _id: existing._id },
-            { $set: { "lastMessage.body": trimmed || `[${file.originalname}]`, "lastMessage.sender": myId, "lastMessage.sentAt": msg.createdAt }, $inc: { messageCount: 1 } }
+            { $set: { "lastMessage.body": trimmed || `[${file?.originalname || 'attachment'}]`, "lastMessage.sender": myId, "lastMessage.sentAt": msg.createdAt }, $inc: { messageCount: 1 } }
           );
           await Conversation.updateOne(
             { _id: existing._id, "participants.user": recip._id },
             { $inc: { "participants.$.unreadCount": 1 } }
           );
         } else {
-          const lastBody = trimmed || `[${file.originalname}]`;
+          const lastBody = trimmed || `[${file?.originalname || 'attachment'}]`;
           const convo = await Conversation.create({
             company,
             participants: [{ user: myId, unreadCount: 0 }, { user: recip._id, unreadCount: 1 }],
@@ -475,6 +497,7 @@ exports.sendGroupMessage = async (req, res) => {
 
 // ─── GET /api/hod/course-overview ────────────────────────────────────────────
 exports.getCourseOverview = async (req, res) => {
+  if (!requireHodDept(req, res)) return;
   try {
     const company  = req.user.company;
     const dept     = req.user.department;

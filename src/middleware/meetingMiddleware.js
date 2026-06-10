@@ -6,19 +6,45 @@ const CREATOR_ROLES   = ['lecturer', 'manager', 'admin', 'superadmin', 'hod'];
 const CORPORATE_ROLES = ['manager', 'employee', 'corporate_admin'];
 
 // ─── SUBSCRIPTION CHECK ───────────────────────────────────────────────────────
-exports.requireActiveSubscription = (req, res, next) => {
+// Mirrors the logic in middleware/subscription.js:
+//  - admin / superadmin / student / employee are always exempt
+//  - others pass if the company has an active subscription or trial
+//  - lecturer / hod / manager also pass if they have a valid personal subscription
+exports.requireActiveSubscription = async (req, res, next) => {
   const user = req.user;
   const now  = Date.now();
 
-  const inSub   = user.subscriptionExpiry && new Date(user.subscriptionExpiry) > now;
-  const inTrial = user.trialEndDate && new Date(user.trialEndDate) > now;
+  // Roles that never need a subscription to access meetings
+  const exempt = ['superadmin', 'admin', 'student', 'employee'];
+  if (exempt.includes(user.role)) return next();
 
-  if (!inSub && !inTrial) {
+  try {
+    const company = req.company || await Company.findById(user.company);
+
+    if (company && (company.subscriptionActive || company.isTrialActive)) {
+      req.company = req.company || company;
+      return next();
+    }
+
+    // Personal subscription fallback for lecturer / hod / manager
+    const selfPayRoles = ['lecturer', 'hod', 'manager'];
+    if (selfPayRoles.includes(user.role)) {
+      const personalEnd = user.subscriptionExpiry ? new Date(user.subscriptionExpiry) : null;
+      if (personalEnd && personalEnd > now) return next();
+
+      // Legacy per-user trial (trialEndDate field)
+      const trialEnd = user.trialEndDate ? new Date(user.trialEndDate) : null;
+      if (trialEnd && trialEnd > now) return next();
+    }
+
     return res.status(403).json({
-      message: 'Your trial or subscription has expired. Renew to create or host meetings.'
+      subscriptionRequired: true,
+      message: 'Your trial or subscription has expired. Renew to create or host meetings.',
     });
+  } catch (err) {
+    console.error('Meeting subscription check error:', err);
+    return res.status(500).json({ message: 'Failed to verify subscription' });
   }
-  next();
 };
 
 // ─── CAN CREATE MEETINGS ──────────────────────────────────────────────────────
@@ -80,10 +106,8 @@ exports.loadMeeting = async (req, res, next) => {
       isActive: true,
     });
     if (!meeting) {
-      // Check if meeting exists at all (helps diagnose company mismatch vs deleted)
-      const exists = await Meeting.exists({ _id: req.params.id });
-      if (!exists) return res.status(404).json({ message: 'Meeting not found' });
-      return res.status(403).json({ message: 'You do not have access to this meeting' });
+      // Always return 404 — do not reveal whether a meeting exists in another tenant
+      return res.status(404).json({ message: 'Meeting not found' });
     }
     req.meeting = meeting;
     next();

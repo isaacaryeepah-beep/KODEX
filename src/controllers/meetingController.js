@@ -481,6 +481,21 @@ exports.joinMeeting = async (req, res) => {
       return res.status(403).json({ error: 'The room is locked. No new participants can join at this time.' });
     }
 
+    // Participation check: verify user is actually allowed to join this meeting
+    if (!isMod && !meeting.openToCompany) {
+      const uid = user._id.toString();
+      const allowed =
+        (meeting.allowedUsers || []).some(u => String(u) === uid) ||
+        (meeting.allowedCourses || []).some(c =>
+          (user.enrolledCourses || []).map(String).includes(String(c))) ||
+        (meeting.allowedDepartments || []).includes(String(user.department)) ||
+        (meeting.allowedTeams || []).includes(String(user.team));
+      if (!allowed) {
+        console.log(`[Meeting:join] BLOCKED — not a participant, user=${user.email || user._id}`);
+        return res.status(403).json({ error: 'You are not authorised to join this meeting.' });
+      }
+    }
+
     const meetingToken = generateMeetingToken(user._id.toString(), meeting._id.toString(), user.deviceId || null);
 
     let meetingUrl, jitsiToken, jitsiConfig;
@@ -496,10 +511,13 @@ exports.joinMeeting = async (req, res) => {
       meetingUrl  = buildJitsiMeetingUrl(meeting, user, isMod);
     }
 
+    const meetingData = meeting.toObject ? meeting.toObject() : { ...meeting };
+    if (!isMod) delete meetingData.roomPassword;
+
     res.json({
       success: true,
       data: {
-        meeting,
+        meeting: meetingData,
         meetingUrl,
         isModerator: isMod,
         meetingToken,
@@ -558,7 +576,7 @@ exports.validateMeetingToken = async (req, res) => {
         id: meeting._id, title: meeting.title, roomName: meeting.roomName,
         status: meeting.status, settings: meeting.settings, meetingType: meeting.meetingType,
         isLocked: meeting.isLocked,
-        roomPassword: meeting.settings.enablePassword ? meeting.roomPassword : undefined,
+        roomPassword: meeting.settings?.enablePassword ? meeting.roomPassword : undefined,
       },
     });
   } catch (err) { res.status(500).json({ error: err.message }); }

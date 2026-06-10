@@ -1,15 +1,24 @@
+const crypto   = require("crypto");
 const mongoose = require("mongoose");
 const User = require("../models/User");
 const Company = require("../models/Company");
 const Course = require("../models/Course");
 const { ROLE_HIERARCHY } = require("../middleware/role");
 
+const ALLOWED_ROLES = ['student', 'lecturer', 'admin', 'superadmin', 'hod', 'manager', 'employee', 'class_rep'];
+
 exports.listUsers = async (req, res) => {
   try {
     const { role, department } = req.query;
     const filter = { ...req.companyFilter };
-    if (role) filter.role = role;
-    if (department) filter.department = department;
+    if (role) {
+      if (!ALLOWED_ROLES.includes(role)) return res.status(400).json({ error: 'Invalid role filter' });
+      filter.role = role;
+    }
+    if (department) {
+      const dept = String(department).trim().slice(0, 100);
+      filter.department = { $regex: new RegExp(`^${dept.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, 'i') };
+    }
 
     if (req.user.role === "lecturer") {
       const courses = await Course.find({ lecturerId: req.user._id, companyId: req.user.company });
@@ -55,7 +64,10 @@ exports.getUserStats = async (req, res) => {
 
 exports.createUser = async (req, res) => {
   try {
-    const { email, password, name, role, IndexNumber, phone, department, programme, studentLevel, studentGroup, sessionType, semester } = req.body;
+    const { password, role, phone, department, programme, studentLevel, studentGroup, sessionType, semester, academicYear } = req.body;
+    const name        = req.body.name        ? req.body.name.trim()                : req.body.name;
+    const email       = req.body.email       ? req.body.email.trim().toLowerCase() : req.body.email;
+    const IndexNumber = req.body.IndexNumber ? req.body.IndexNumber.trim().toUpperCase() : req.body.IndexNumber;
     const targetRole = role || "employee";
 
     const company = await Company.findById(req.user.company);
@@ -85,7 +97,7 @@ exports.createUser = async (req, res) => {
       const hodExists = await User.findOne({
         company: company._id,
         role: "hod",
-        department: department.trim(),
+        department: { $regex: new RegExp(`^${department.trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, 'i') },
         isApproved: true,
       });
       if (!hodExists) {
@@ -108,8 +120,8 @@ exports.createUser = async (req, res) => {
       }
     }
 
-    // Check for duplicate email across the institution (non-student roles)
-    if (email && targetRole !== 'student') {
+    // Check for duplicate email across the institution (all roles)
+    if (email) {
       const emailExists = await User.findOne({ email: email.toLowerCase().trim(), company: req.user.company });
       if (emailExists) {
         return res.status(400).json({
@@ -136,7 +148,7 @@ exports.createUser = async (req, res) => {
       const existingHod = await User.findOne({
         company: req.user.company,
         role: "hod",
-        department: department.trim(),
+        department: { $regex: new RegExp(`^${department.trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, 'i') },
       });
       if (existingHod) {
         return res.status(400).json({
@@ -153,6 +165,12 @@ exports.createUser = async (req, res) => {
       return res.status(400).json({ error: "Department is required when creating a student." });
     }
 
+    // Email is required for all roles
+    if (!email) {
+      return res.status(400).json({ error: "Email is required" });
+    }
+    userData.email = email;
+
     if (targetRole === "student") {
       if (!IndexNumber) {
         return res.status(400).json({ error: "Index number is required for students" });
@@ -164,11 +182,7 @@ exports.createUser = async (req, res) => {
       if (studentGroup) userData.studentGroup = studentGroup.trim().toUpperCase();
       if (sessionType)  userData.sessionType  = sessionType.trim();
       if (semester)     userData.semester     = semester.trim();
-    } else {
-      if (!email) {
-        return res.status(400).json({ error: "Email is required" });
-      }
-      userData.email = email;
+      if (academicYear) userData.academicYear = academicYear.trim();
     }
 
     if (targetRole === "employee") {
@@ -250,7 +264,7 @@ exports.updateUser = async (req, res) => {
           const clash = await User.findOne({
             company: req.user.company,
             role: "hod",
-            department: update.department,
+            department: { $regex: new RegExp(`^${update.department.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, 'i') },
             _id: { $ne: req.params.id },
           });
           if (clash) {
@@ -299,6 +313,12 @@ exports.deactivateUser = async (req, res) => {
 
     if (ROLE_HIERARCHY[user.role] >= ROLE_HIERARCHY[req.user.role]) {
       return res.status(403).json({ error: "Cannot deactivate user with equal or higher role" });
+    }
+
+    // Prevent deactivating the last active admin
+    if (user.role === 'admin') {
+      const activeAdmins = await User.countDocuments({ ...req.companyFilter, role: 'admin', isActive: true });
+      if (activeAdmins <= 1) return res.status(409).json({ error: "Cannot deactivate the last admin account" });
     }
 
     user.isActive = false;
@@ -350,6 +370,12 @@ exports.deleteUser = async (req, res) => {
       return res.status(403).json({ error: "Cannot delete user with equal or higher role" });
     }
 
+    // Prevent deleting the last admin
+    if (user.role === 'admin') {
+      const activeAdmins = await User.countDocuments({ ...req.companyFilter, role: 'admin', isActive: true });
+      if (activeAdmins <= 1) return res.status(409).json({ error: "Cannot delete the last admin account" });
+    }
+
     await User.findByIdAndDelete(user._id);
     res.json({ message: "User permanently deleted" });
   } catch (error) {
@@ -364,7 +390,17 @@ exports.deleteUser = async (req, res) => {
 // Generates a random password for each student; returns a downloadable results list.
 exports.bulkImportStudents = async (req, res) => {
   const multer = require("multer");
-  const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 2 * 1024 * 1024 } }).single("csv");
+  const upload = multer({
+    storage: multer.memoryStorage(),
+    limits: { fileSize: 2 * 1024 * 1024 },
+    fileFilter: (req, file, cb) => {
+      if (file.mimetype === 'text/csv' || file.mimetype === 'text/plain' || file.originalname.endsWith('.csv')) {
+        cb(null, true);
+      } else {
+        cb(new Error('Only CSV files are allowed'), false);
+      }
+    },
+  }).single("csv");
 
   upload(req, res, async (uploadErr) => {
     if (uploadErr) return res.status(400).json({ error: uploadErr.message });
@@ -452,7 +488,7 @@ exports.bulkImportStudents = async (req, res) => {
         // Generate a readable temp password: first 3 of name + last 3 of IndexNumber + 4-digit random
         const namePart = row.name.replace(/[^a-zA-Z]/g, "").slice(0, 3).toLowerCase();
         const idPart   = row.IndexNumber.replace(/[^a-zA-Z0-9]/g, "").slice(-3).toLowerCase();
-        const numPart  = String(Math.floor(1000 + Math.random() * 9000));
+        const numPart  = String(crypto.randomInt(1000, 9999));
         const tempPassword = namePart + idPart + numPart;
 
         // Build user data — email optional for students
@@ -462,10 +498,19 @@ exports.bulkImportStudents = async (req, res) => {
           password: tempPassword,
           role: "student",
           company: req.user.company,
+          isApproved: true,
+          isActive: true,
           mustChangePassword: true,
         };
 
-        if (row.email) userData.email = row.email.toLowerCase();
+        if (row.email) {
+          if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(row.email)) {
+            results.errors.push({ row: row.IndexNumber, error: `Invalid email: ${row.email}` });
+            results.skipped++;
+            continue;
+          }
+          userData.email = row.email.toLowerCase().trim();
+        }
         if (row.phone) {
           try { userData.phone = normalisePhone(row.phone); } catch (_) {}
         }
@@ -560,9 +605,23 @@ exports.bulkAction = async (req, res) => {
       result = await User.updateMany(filter, { isActive: true });
       res.json({ message: `${result.modifiedCount} user(s) activated` });
     } else if (action === "deactivate") {
+      const adminTargets = users.filter(u => u.role === 'admin' && allowedIds.some(id => id.toString() === u._id.toString()));
+      if (adminTargets.length > 0) {
+        const activeAdmins = await User.countDocuments({ ...req.companyFilter, role: 'admin', isActive: true });
+        if (activeAdmins - adminTargets.length < 1) {
+          return res.status(409).json({ error: 'Cannot deactivate all admin accounts. At least one must remain active.' });
+        }
+      }
       result = await User.updateMany(filter, { isActive: false });
       res.json({ message: `${result.modifiedCount} user(s) deactivated` });
     } else if (action === "delete") {
+      const adminTargets = users.filter(u => u.role === 'admin' && allowedIds.some(id => id.toString() === u._id.toString()));
+      if (adminTargets.length > 0) {
+        const activeAdmins = await User.countDocuments({ ...req.companyFilter, role: 'admin', isActive: true });
+        if (activeAdmins - adminTargets.length < 1) {
+          return res.status(409).json({ error: 'Cannot delete all admin accounts. At least one must remain.' });
+        }
+      }
       result = await User.deleteMany(filter);
       res.json({ message: `${result.deletedCount} user(s) permanently deleted` });
     }
@@ -615,11 +674,10 @@ exports.adminResetStudentPassword = async (req, res) => {
     }
 
     // Generate a memorable temp password: INSTITUTIONCODE-6digits
-    const crypto = require('crypto');
     const digits = String(crypto.randomInt(100000, 999999));
     // req.user.company is an ObjectId — fetch the code separately
     const Company = require('../models/Company');
-    const company = await Company.findById(req.user.company).select('institutionCode').lean().catch(() => null);
+    const company = await Company.findById(req.user.company).select('institutionCode name').lean().catch(() => null);
     const institutionCode = company?.institutionCode || 'DIKLY';
     const tempPassword = `${institutionCode}-${digits}`;
 

@@ -5,7 +5,8 @@ const Company = require("../models/Company");
 const PlatformSettings = require("../models/PlatformSettings");
 const StudentRoster = require("../models/StudentRoster");
 const MeetingIdentity = require("../models/MeetingIdentity");
-const { generateToken, generateRefreshToken, verifyRefreshToken } = require("../utils/jwt");
+const { generateToken, generateRefreshToken, verifyRefreshToken, hashToken } = require("../utils/jwt");
+const RefreshToken = require("../models/RefreshToken");
 const { sendWelcome, sendAdminPasswordResetNotice, sendPasswordReset, sendNewInstitutionAlert, sendLecturerWelcome, sendEmployeeWelcome, sendHodWelcome } = require("../services/emailService");
 const { sendOtp, normalisePhone } = require("../services/smsService");
 const { syncStudentToRoster } = require("../utils/rosterSync");
@@ -35,9 +36,27 @@ async function createMeetingIdentity(user, companyId) {
   }
 }
 
+// Store a newly issued refresh token hash in the DB.
+// Kept in a try/catch so a DB error never blocks login.
+async function persistRefreshToken(token, userId, req) {
+  try {
+    const REFRESH_EXPIRY_DAYS = parseInt(process.env.JWT_REFRESH_EXPIRES_IN) || 30;
+    const expiresAt = new Date(Date.now() + REFRESH_EXPIRY_DAYS * 24 * 60 * 60 * 1000);
+    await RefreshToken.create({
+      userId,
+      tokenHash: hashToken(token),
+      expiresAt,
+      userAgent: req?.headers?.["user-agent"] || null,
+      ipAddress: req?.ip || null,
+    });
+  } catch (e) {
+    console.error("[RefreshToken] Failed to persist token:", e.message);
+  }
+}
+
 const SIX_HOURS_MS = 6 * 60 * 60 * 1000;
-const PAID_ROLES         = ["lecturer", "manager", "admin"];
-const ALL_PAID_ROLES     = ["lecturer", "manager", "admin", "student", "employee"];
+const PAID_ROLES         = ["lecturer", "manager", "admin", "hod"];
+const ALL_PAID_ROLES     = ["lecturer", "manager", "admin", "hod", "student", "employee"];
 const TRIAL_DAYS         = 30;
 const STUDENT_TRIAL_DAYS = 45;
 const SEMESTER_DAYS      = 112;
@@ -100,8 +119,10 @@ function computeUserTrial(user, company, fallbackTrialDays) {
 
 exports.register = async (req, res) => {
   try {
-    const { password, name, companyName, mode, phone } = req.body;
-    const email = req.body.email ? req.body.email.trim().toLowerCase() : null;
+    let { password, mode, phone } = req.body;
+    const name        = req.body.name        ? req.body.name.trim()        : req.body.name;
+    const companyName = req.body.companyName ? req.body.companyName.trim() : req.body.companyName;
+    const email       = req.body.email       ? req.body.email.trim().toLowerCase() : null;
 
     if (!email || !password || !name || !companyName) {
       return res.status(400).json({ error: "Email, password, name, and institution name are required" });
@@ -166,6 +187,7 @@ exports.register = async (req, res) => {
 
     const token        = generateToken(user._id);
     const refreshToken = generateRefreshToken(user._id);
+    await persistRefreshToken(refreshToken, user._id, req);
 
     // Auto-create Jitsi meeting identity for the new admin
     await createMeetingIdentity(user, company._id);
@@ -231,8 +253,10 @@ exports.register = async (req, res) => {
 
 exports.registerLecturer = async (req, res) => {
   try {
-    const { name, email: emailRaw, password, institutionCode, institutionName, department } = req.body;
-    const email = emailRaw ? emailRaw.trim().toLowerCase() : "";
+    const { password, institutionCode, institutionName } = req.body;
+    const name       = req.body.name       ? req.body.name.trim()       : req.body.name;
+    const email      = req.body.email      ? req.body.email.trim().toLowerCase() : "";
+    const department = req.body.department ? req.body.department.trim() : req.body.department;
 
     if (!name || !email || !password) {
       return res.status(400).json({ error: "Name, email, and password are required" });
@@ -268,7 +292,7 @@ exports.registerLecturer = async (req, res) => {
     const hod = await User.findOne({
       company: company._id,
       role: "hod",
-      department: department.trim(),
+      department: { $regex: new RegExp(`^${department.trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, 'i') },
       isApproved: true,
     });
     if (!hod) {
@@ -348,8 +372,11 @@ exports.registerLecturer = async (req, res) => {
 
 exports.registerStudent = async (req, res) => {
   try {
-    const { name, password, institutionCode, department, email: emailRaw, programme, studentLevel, studentGroup, sessionType, semester } = req.body;
-    const email = emailRaw ? emailRaw.trim().toLowerCase() : "";
+    const { password, institutionCode, studentLevel, studentGroup, sessionType, semester } = req.body;
+    const name        = req.body.name        ? req.body.name.trim()        : req.body.name;
+    const email       = req.body.email       ? req.body.email.trim().toLowerCase() : "";
+    const department  = req.body.department  ? req.body.department.trim()  : req.body.department;
+    const programme   = req.body.programme   ? req.body.programme.trim()   : req.body.programme;
     const phone = req.body.phone ? req.body.phone.trim() : "";
     const IndexNumber = req.body.IndexNumber || req.body.indexNumber;
 
@@ -374,7 +401,7 @@ exports.registerStudent = async (req, res) => {
       const hodExists = await User.findOne({
         company: company._id,
         role: "hod",
-        department: department.trim(),
+        department: { $regex: new RegExp(`^${department.trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, 'i') },
         isApproved: true,
       });
       if (!hodExists) {
@@ -440,8 +467,9 @@ exports.registerStudent = async (req, res) => {
 
 exports.registerEmployee = async (req, res) => {
   try {
-    const { name, email: emailRaw, password, institutionCode } = req.body;
-    const email = emailRaw ? emailRaw.trim().toLowerCase() : "";
+    const { password, institutionCode } = req.body;
+    const name  = req.body.name  ? req.body.name.trim()  : req.body.name;
+    const email = req.body.email ? req.body.email.trim().toLowerCase() : "";
 
     if (!name || !email || !password || !institutionCode) {
       return res.status(400).json({ error: "Name, email, password, and institution code are required" });
@@ -529,8 +557,9 @@ exports.registerEmployee = async (req, res) => {
 
 exports.registerManager = async (req, res) => {
   try {
-    const { name, email: emailRaw, password, institutionCode, phone } = req.body;
-    const email = emailRaw ? emailRaw.trim().toLowerCase() : "";
+    const { password, institutionCode, phone } = req.body;
+    const name  = req.body.name  ? req.body.name.trim()  : req.body.name;
+    const email = req.body.email ? req.body.email.trim().toLowerCase() : "";
 
     if (!name || !email || !password || !institutionCode) {
       return res.status(400).json({ error: "Name, email, password, and institution code are required" });
@@ -594,8 +623,10 @@ exports.registerManager = async (req, res) => {
 
 exports.registerHod = async (req, res) => {
   try {
-    const { name, email: emailRaw, password, institutionCode, department, phone } = req.body;
-    const email = emailRaw ? emailRaw.trim().toLowerCase() : '';
+    const { password, institutionCode, phone } = req.body;
+    const name       = req.body.name       ? req.body.name.trim()       : req.body.name;
+    const email      = req.body.email      ? req.body.email.trim().toLowerCase() : '';
+    const department = req.body.department ? req.body.department.trim() : req.body.department;
 
     if (!name || !email || !password || !institutionCode || !department) {
       return res.status(400).json({ error: 'Name, email, password, institution code and department are required' });
@@ -617,7 +648,7 @@ exports.registerHod = async (req, res) => {
       return res.status(400).json({ error: 'A user with this email already exists at this institution' });
     }
 
-    const existingHod = await User.findOne({ company: company._id, role: 'hod', department: department.trim() });
+    const existingHod = await User.findOne({ company: company._id, role: 'hod', department: { $regex: new RegExp(`^${department.trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, 'i') } });
     if (existingHod) {
       return res.status(400).json({ error: `A HOD for "${department.trim()}" already exists. Contact your admin.` });
     }
@@ -738,8 +769,8 @@ exports.login = async (req, res) => {
 
     const isMatch = await user.comparePassword(password);
     if (!isMatch) {
-      // Track failed attempts for students and employees; lock after 5 consecutive failures
-      if (user && ['student', 'employee'].includes(user.role)) {
+      // Track failed attempts for all non-superadmin roles; lock after 5 consecutive failures
+      if (user && user.role !== 'superadmin') {
         user.failedLoginAttempts = (user.failedLoginAttempts || 0) + 1;
         user.lastFailedLoginAt = new Date();
         if (user.failedLoginAttempts >= 5 && !user.isLocked) {
@@ -747,7 +778,9 @@ exports.login = async (req, res) => {
           user.lockedAt = new Date();
           user.lockReason = user.role === 'employee'
             ? 'Account locked after 5 failed login attempts. Contact your manager or admin.'
-            : 'Account locked after 5 failed login attempts. Contact your department HOD.';
+            : user.role === 'student'
+            ? 'Account locked after 5 failed login attempts. Contact your department HOD.'
+            : 'Account locked after 5 failed login attempts. Contact your institution admin.';
         }
         await user.save().catch(() => {});
       }
@@ -939,6 +972,7 @@ exports.login = async (req, res) => {
 
     const token        = generateToken(user._id);
     const refreshToken = generateRefreshToken(user._id);
+    await persistRefreshToken(refreshToken, user._id, req);
 
     res.json({
       token,
@@ -1001,6 +1035,18 @@ exports.logout = async (req, res) => {
       deviceId: null,
     });
 
+    // Revoke the refresh token supplied with this logout request (if any).
+    const { refreshToken } = req.body;
+    if (refreshToken) {
+      try {
+        const hash = hashToken(refreshToken);
+        await RefreshToken.findOneAndUpdate(
+          { tokenHash: hash, userId: req.user._id },
+          { $set: { revoked: true, revokedAt: new Date() } }
+        );
+      } catch (_) {}
+    }
+
     res.json({
       message: "Logged out successfully",
       restrictedUntil: new Date(Date.now() + SIX_HOURS_MS).toISOString(),
@@ -1015,9 +1061,32 @@ exports.refresh = async (req, res) => {
   try {
     const { refreshToken } = req.body;
     if (!refreshToken) return res.status(400).json({ error: "Refresh token required" });
+
     const decoded = verifyRefreshToken(refreshToken);
-    const token   = generateToken(decoded.id);
+    const hash    = hashToken(refreshToken);
+
+    // Check the token exists and has not been revoked.
+    const stored = await RefreshToken.findOne({ tokenHash: hash, userId: decoded.id });
+    if (!stored) {
+      // Token not in store — possible reuse attack. Revoke all tokens for this user.
+      await RefreshToken.updateMany({ userId: decoded.id }, { $set: { revoked: true, revokedAt: new Date() } });
+      console.warn(`[RefreshToken] Unknown token for user ${decoded.id} — all tokens revoked (possible reuse attack)`);
+      return res.status(401).json({ error: "Invalid refresh token" });
+    }
+    if (stored.revoked) {
+      // Revoked token reuse — revoke all tokens for this user (token theft scenario).
+      await RefreshToken.updateMany({ userId: decoded.id }, { $set: { revoked: true, revokedAt: new Date() } });
+      console.warn(`[RefreshToken] Revoked token reused for user ${decoded.id} — all tokens revoked`);
+      return res.status(401).json({ error: "Refresh token has been revoked" });
+    }
+
+    // Rotate: revoke the old token, issue a new one.
+    await RefreshToken.findByIdAndUpdate(stored._id, { $set: { revoked: true, revokedAt: new Date() } });
+
+    const token           = generateToken(decoded.id);
     const newRefreshToken = generateRefreshToken(decoded.id);
+    await persistRefreshToken(newRefreshToken, decoded.id, req);
+
     res.json({ token, refreshToken: newRefreshToken });
   } catch (err) {
     res.status(401).json({ error: "Invalid or expired refresh token" });
@@ -1029,7 +1098,8 @@ exports.getMe = async (req, res) => {
     const user = await User.findById(req.user._id).populate("company", "name mode institutionCode");
     const company = await Company.findById(user.company);
 
-    const isAdmin = ['admin', 'superadmin', 'manager'].includes(user.role);
+    const isAdmin       = ['admin', 'superadmin', 'manager'].includes(user.role);
+    const canSeeQrSeed  = ['admin', 'superadmin'].includes(user.role);
     res.json({
       user: {
         ...user.toJSON(),
@@ -1039,7 +1109,8 @@ exports.getMe = async (req, res) => {
           name: company.name,
           mode: company.mode,
           institutionCode: company.institutionCode,
-          ...(isAdmin ? { qrSeed: company.qrSeed, bleLocationId: company.bleLocationId } : {}),
+          ...(isAdmin ? { bleLocationId: company.bleLocationId } : {}),
+          ...(canSeeQrSeed ? { qrSeed: company.qrSeed } : {}),
         } : user.company,
       },
       trial: company ? {
@@ -1097,11 +1168,14 @@ exports.migrateOrphanUsers = async (req, res) => {
 
 exports.forgotPassword = async (req, res) => {
   try {
-    const IndexNumber = req.body.IndexNumber || req.body.indexNumber;
-    const { institutionCode } = req.body;
+    const IndexNumber = (req.body.IndexNumber || req.body.indexNumber || "").trim();
+    const institutionCode = (req.body.institutionCode || req.body.institution_code || "").trim();
 
-    if (!IndexNumber || !institutionCode) {
-      return res.status(400).json({ error: "Student ID and institution code are required" });
+    if (!IndexNumber) {
+      return res.status(400).json({ error: "Student ID is required" });
+    }
+    if (!institutionCode) {
+      return res.status(400).json({ error: "Institution code is required" });
     }
 
     const company = await Company.findOne({ institutionCode: institutionCode.toUpperCase() });
@@ -1152,10 +1226,7 @@ exports.forgotPassword = async (req, res) => {
       message = "A reset code has been sent to your email address.";
     }
 
-    res.json({
-      message,
-      resetCode: user.email ? undefined : code,
-    });
+    res.json({ message });
   } catch (error) {
     console.error("Forgot password error:", error);
     res.status(500).json({ error: "Failed to generate reset code" });
@@ -1561,6 +1632,7 @@ exports.verify2FACode = async (req, res) => {
 
     const token        = generateToken(user._id);
     const refreshToken = generateRefreshToken(user._id);
+    await persistRefreshToken(refreshToken, user._id, req);
     res.json({ ok: true, token, refreshToken });
   } catch(e) {
     console.error("2FA verify error:", e);

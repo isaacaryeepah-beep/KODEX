@@ -64,9 +64,10 @@ const deviceSchema = new mongoose.Schema({
   token:       { type: String, default: null },
 
   // Hardware status reported by firmware in heartbeats
-  rtcValid:      { type: Boolean, default: null },
-  sdOK:          { type: Boolean, default: null },
-  firmwareVersion: { type: String, default: null },
+  rtcValid:           { type: Boolean, default: null },
+  sdOK:               { type: Boolean, default: null },
+  firmwareVersion:    { type: String,  default: null },
+  pendingRecordsCount:{ type: Number,  default: 0    }, // unsynced offline records on device
 
   // Sliding window of public IPs the device has reached the server from.
   // Used for anti-cheat: a student marking attendance from a different

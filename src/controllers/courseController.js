@@ -18,14 +18,21 @@ exports.createCourse = async (req, res) => {
 
     // Lecturer-created courses enter HOD approval queue.
     // Admin / superadmin courses are immediately approved.
+    const {
+      title, code, description, departmentId, programmeId,
+      academicYear, semester, level, group, sessionType,
+      qualificationType, customQualificationLabel, studyType, lecturerId,
+    } = req.body;
     const data = {
-      ...req.body,
-      lecturerId:     isLecturer ? req.user._id : (req.body.lecturerId || null),
+      title, code, description, programmeId,
+      academicYear, semester, level, group, sessionType,
+      qualificationType, customQualificationLabel, studyType,
+      lecturerId:     isLecturer ? req.user._id : (lecturerId || null),
       needsApproval:  isLecturer,
       approvalStatus: isLecturer ? 'pending' : 'approved',
       // Auto-assign departmentId from the creator's department so HOD course
       // oversight can filter by department correctly
-      departmentId:   req.body.departmentId || req.user.department || null,
+      departmentId:   departmentId || req.user.department || null,
     };
 
     const course = await courseService.createCourse(data, creatorId, companyId);
@@ -73,7 +80,7 @@ exports.getCourseById = async (req, res) => {
     // Access checks
     const role = req.user.role;
     if (role === 'student') {
-      const enrolled = course.enrolledStudents.some(
+      const enrolled = (course.enrolledStudents || []).some(
         s => s._id.toString() === req.user._id.toString()
       );
       if (!enrolled) {
@@ -82,6 +89,8 @@ exports.getCourseById = async (req, res) => {
           message: 'You are not enrolled in this course.',
         });
       }
+      // Strip peer student data — students must not see each other's details
+      course.enrolledStudents = [];
     }
     if (role === 'lecturer') {
       const isOwner = course.lecturerId?._id?.toString() === req.user._id.toString();

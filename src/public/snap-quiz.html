@@ -513,7 +513,6 @@ window.addEventListener('load', () => loadMLLibs().catch(() => {}));
   ═══════════════════════════════════════════════════════════════ */
   #login-screen {
     background: linear-gradient(145deg, #0b1220 0%, #0f2545 45%, #071630 100%);
-    position: relative;
   }
   #login-screen::before {
     content: '';
@@ -964,15 +963,45 @@ window.addEventListener('load', () => loadMLLibs().catch(() => {}));
       </div>
     </div>
 
-    <!-- AI integrity report (shown only for proctored quizzes) -->
-    <div id="ai-report-section" style="display:none;margin-top:16px;text-align:left;border-top:1px solid var(--border);padding-top:14px">
-      <p style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--muted);margin:0 0 8px">AI Integrity Report</p>
-      <div style="background:#f8fafc;border:1.5px solid var(--border);border-radius:10px;padding:12px 16px">
-        <p id="ai-report-summary" style="font-size:13px;color:var(--text);line-height:1.55;margin:0"></p>
+    <!-- AI integrity report (shown for proctored / high-security quizzes) -->
+    <div id="ai-report-section" style="display:none;margin-top:20px;text-align:left;border-top:1.5px solid var(--navy3);padding-top:18px">
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:12px">
+        <span style="font-size:16px">🤖</span>
+        <span style="font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--muted)">AI Integrity Report</span>
+        <span id="ai-integrity-badge" style="margin-left:auto;font-size:11px;font-weight:700;padding:3px 10px;border-radius:20px;background:#dcfce7;color:#166534">Good</span>
+      </div>
+
+      <!-- Integrity score bar -->
+      <div style="margin-bottom:14px">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
+          <span style="font-size:12px;color:var(--muted)">Integrity Score</span>
+          <span id="ai-integrity-score-label" style="font-size:14px;font-weight:800;color:var(--green)">100 / 100</span>
+        </div>
+        <div style="background:var(--navy3);border-radius:6px;height:8px;overflow:hidden">
+          <div id="ai-integrity-bar" style="height:100%;border-radius:6px;background:#22c55e;width:100%;transition:width 1s ease"></div>
+        </div>
+      </div>
+
+      <!-- Summary text -->
+      <div style="background:#f8fafc;border:1.5px solid var(--navy3);border-radius:10px;padding:12px 16px;margin-bottom:14px">
+        <p id="ai-report-summary" style="font-size:13px;line-height:1.6;margin:0;color:var(--white)"></p>
+      </div>
+
+      <!-- Violation breakdown -->
+      <div id="ai-violation-breakdown" style="display:none">
+        <p style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--muted);margin:0 0 8px">Detected Events</p>
+        <div id="ai-violation-list" style="display:flex;flex-direction:column;gap:6px"></div>
+      </div>
+
+      <!-- Flagged note -->
+      <div id="ai-flagged-note" style="display:none;margin-top:12px;padding:10px 14px;background:#fef2f2;border:1.5px solid #fca5a5;border-radius:10px">
+        <p style="font-size:12px;color:#b91c1c;margin:0;line-height:1.5">
+          ⚠️ <strong>Note:</strong> This attempt has been flagged for integrity review. Your lecturer will review the recorded events before finalizing your result. This does not automatically mean you have failed.
+        </p>
       </div>
     </div>
 
-    <button class="btn btn-ghost" id="done-btn" style="margin-top:8px">← Back to Dashboard</button>
+    <button class="btn btn-ghost" id="done-btn" style="margin-top:16px">← Back to Dashboard</button>
   </div>
 </div>
 
@@ -1119,10 +1148,21 @@ async function api(method, path, body, extraHeaders) {
   try { data = await res.json(); } catch (e) { /* non-JSON response */ }
 
   if (!res.ok) {
+    if (res.status === 402 && data.subscriptionExpired) { _subBlock(data.message, data.isAdmin); }
     const msg = data.error || data.message || ('Server error ' + res.status);
     throw new Error(msg);
   }
   return data;
+}
+
+function _subBlock(msg, isAdmin) {
+  if (document.getElementById('_sub-bl')) return;
+  const d = document.createElement('div');
+  d.id = '_sub-bl';
+  d.style.cssText = 'position:fixed;inset:0;z-index:99999;background:rgba(15,23,42,.97);display:flex;align-items:center;justify-content:center;padding:24px;box-sizing:border-box';
+  d.innerHTML = `<div style="background:#fff;border-radius:16px;max-width:440px;width:100%;padding:36px 28px;text-align:center"><div style="font-size:40px;margin-bottom:16px">🔒</div><h2 style="margin:0 0 12px;font-size:20px;color:#0f172a">Subscription Expired</h2><p style="margin:0 0 24px;font-size:14px;color:#475569;line-height:1.6">${msg||"Your institution's subscription has expired."}</p>${isAdmin?`<button onclick="location.href='/'" style="background:#6366f1;color:#fff;border:none;border-radius:8px;padding:11px 22px;font-size:14px;font-weight:600;cursor:pointer;width:100%">Go to Subscription Page</button>`:'<div style="background:#f8fafc;border-radius:8px;padding:14px;font-size:13px;color:#64748b">Contact your <strong>institution administrator</strong> to renew.</div>'}<p style="margin:16px 0 0;font-size:12px;color:#94a3b8">Support: <strong>support@dikly.sbs</strong></p></div>`;
+  document.body.appendChild(d);
+  document.body.style.overflow = 'hidden';
 }
 
 // ══════════════════════════════════════════════════════════════════
@@ -1604,9 +1644,10 @@ async function startExam() {
       ? Math.max(0, Math.round((expiresAt.getTime() - Date.now()) / 1000))
       : (data.quiz?.timeLimitMinutes || 30) * 60;
 
-    state.integrityScore  = 100;
-    state.totalViolations = 0;
-    state.warningsIssued  = 0;
+    state.integrityScore       = 100;
+    state.totalViolations      = 0;
+    state.warningsIssued       = 0;
+    state._violationBreakdown  = {};
 
     // Hide floating camera for snap quizzes — no camera stream
     const floatingCam = document.getElementById('floating-cam');
@@ -1896,9 +1937,20 @@ function startProctoring() {
     if (state.examActive) logEvent('orientation_change').catch(console.warn);
   });
 
-  // ── Copy / cut prevention ─────────────────────────────────────
+  // ── Copy / cut / paste prevention ────────────────────────────
   document.addEventListener('copy', handleCopy);
   document.addEventListener('cut', handleCopy);
+  document.addEventListener('paste', (e) => {
+    if (state.examActive) {
+      e.preventDefault();
+      logEvent('paste_attempt').catch(console.warn);
+      toast('⚠️ Pasting is not allowed during the exam', 'warn');
+    }
+  });
+
+  // ── Drag-and-drop prevention (data exfiltration) ──────────────
+  document.addEventListener('dragstart', (e) => { if (state.examActive) e.preventDefault(); }, true);
+  document.addEventListener('drop',      (e) => { if (state.examActive) e.preventDefault(); }, true);
 
   // ── Back button protection ────────────────────────────────────
   history.pushState(null, '', location.href);
@@ -1930,9 +1982,12 @@ function startProctoring() {
         toast(quiz.terminateOnFullscreenExit
           ? '⛔ Fullscreen required — exiting may terminate your exam'
           : '⚠️ Please return to fullscreen to continue', 'warn');
+        // Re-enforce immediately
+        document.documentElement.requestFullscreen().catch(() => {});
       }
     };
     document.addEventListener('fullscreenchange', state._handleFullscreen);
+    document.addEventListener('webkitfullscreenchange', state._handleFullscreen);
   }
 
   // ── Focus / window-blur enforcement ──────────────────────────
@@ -1954,22 +2009,105 @@ function startProctoring() {
     document.addEventListener('contextmenu', state._handleContextMenu);
   }
 
-  // ── Print-screen prevention ───────────────────────────────────
+  // ── PrintScreen + DevTools key blocking ──────────────────────
   if (quiz.preventPrintScreen) {
     state._handleKeydown = (e) => {
-      if (state.examActive && (e.key === 'PrintScreen' || e.code === 'PrintScreen' || e.keyCode === 44)) {
-        e.preventDefault();
+      if (!state.examActive) return;
+      const ctrl = e.ctrlKey || e.metaKey;
+      const shift = e.shiftKey;
+      const key = e.key;
+      // PrintScreen
+      if (key === 'PrintScreen' || e.code === 'PrintScreen' || e.keyCode === 44) {
+        e.preventDefault(); e.stopPropagation();
         logEvent('print_screen').catch(console.warn);
         toast('⚠️ Screenshots are not allowed during this exam', 'warn');
+        return;
+      }
+      // F12
+      if (key === 'F12') {
+        e.preventDefault(); e.stopPropagation();
+        logEvent('devtools_shortcut', { key: 'F12' }).catch(console.warn);
+        toast('⚠️ Developer Tools are not allowed during this exam', 'warn');
+        return;
+      }
+      // Ctrl+Shift+I/J/C/K/E/M (DevTools in Chrome/Firefox/Edge)
+      if (ctrl && shift && ['I','J','C','K','E','M'].includes(key.toUpperCase())) {
+        e.preventDefault(); e.stopPropagation();
+        logEvent('devtools_shortcut', { key: 'Ctrl+Shift+' + key.toUpperCase() }).catch(console.warn);
+        toast('⚠️ Developer Tools are not allowed during this exam', 'warn');
+        return;
+      }
+      // Ctrl+U (view source)
+      if (ctrl && key.toUpperCase() === 'U') {
+        e.preventDefault(); e.stopPropagation();
+        logEvent('view_source_attempt').catch(console.warn);
+        return;
+      }
+      // Ctrl+P (print dialog)
+      if (ctrl && key.toUpperCase() === 'P') {
+        e.preventDefault(); e.stopPropagation();
+        logEvent('print_attempt').catch(console.warn);
+        return;
+      }
+      // Ctrl+S (save page)
+      if (ctrl && key.toUpperCase() === 'S') {
+        e.preventDefault(); e.stopPropagation();
+        return;
       }
     };
-    document.addEventListener('keydown', state._handleKeydown);
+    document.addEventListener('keydown', state._handleKeydown, true);
   }
+
+  // ── DevTools detection via window size delta ──────────────────
+  state._devToolsOpen = false;
+  state._devToolsInterval = setInterval(() => {
+    if (!state.examActive) return;
+    const wDiff = window.outerWidth - window.innerWidth;
+    const hDiff = window.outerHeight - window.innerHeight;
+    const open = wDiff > 200 || hDiff > 200;
+    if (open && !state._devToolsOpen) {
+      state._devToolsOpen = true;
+      logEvent('devtools_open', { widthDelta: wDiff, heightDelta: hDiff }).catch(console.warn);
+      toast('⚠️ Developer Tools detected and logged', 'warn');
+    } else if (!open) {
+      state._devToolsOpen = false;
+    }
+  }, 2000);
 
   // ── Noise / audio detection ───────────────────────────────────
   const noiseThreshold = quiz.noiseDetectionThreshold ?? 40;
   if (noiseThreshold > 0) {
     startNoiseDetection(noiseThreshold);
+  }
+
+  // ── Capacitor mobile monitoring ───────────────────────────────
+  // Fires when the app is backgrounded/foregrounded on Android & iOS.
+  // The visibilitychange event above also fires on mobile web, but the
+  // Capacitor App plugin provides a more reliable signal in native builds.
+  if (quiz.mobileMonitoring !== false && window.Capacitor?.isNativePlatform?.()) {
+    const { App: CapApp } = window.Capacitor.Plugins;
+    if (CapApp?.addListener) {
+      // App backgrounded (home button, notification shade, incoming call, etc.)
+      state._capAppStateListener = await CapApp.addListener('appStateChange', ({ isActive }) => {
+        if (!state.examActive) return;
+        if (!isActive) {
+          // App went to background
+          logEvent('app_backgrounded', { platform: window.Capacitor.getPlatform() }).catch(console.warn);
+          toast('⚠️ You left the exam app! This has been logged.', 'warn');
+        } else {
+          // App came back to foreground
+          logEvent('app_foregrounded', { platform: window.Capacitor.getPlatform() }).catch(console.warn);
+        }
+      });
+
+      // Back button — prevent navigating away mid-exam
+      state._capBackListener = await CapApp.addListener('backButton', () => {
+        if (state.examActive) {
+          logEvent('back_button_pressed').catch(console.warn);
+          toast('⚠️ Back navigation is disabled during the exam', 'warn');
+        }
+      });
+    }
   }
 }
 
@@ -2105,6 +2243,9 @@ async function logEvent(eventType, metadata = {}) {
     }
 
     if (res.violationCount != null) state.totalViolations = res.violationCount;
+    // Track per-type counts for the integrity report breakdown
+    if (!state._violationBreakdown) state._violationBreakdown = {};
+    state._violationBreakdown[eventType] = (state._violationBreakdown[eventType] || 0) + 1;
   } catch (err) {
     // Network error — event stored offline, will sync later
     if (eventType === 'heartbeat') console.warn('[heartbeat] failed, will retry next interval:', err.message);
@@ -2520,16 +2661,59 @@ function showResult(data) {
   document.getElementById('result-title').textContent = pct >= 70 ? 'Great job!' : pct >= 50 ? 'Well done!' : 'Keep studying!';
   document.getElementById('result-subtitle').textContent = `${data.score ?? 0} / ${data.maxScore ?? 0} points`;
 
-  // Show AI integrity report for proctored quizzes
-  const isProctored = state.selectedQuiz?.quizLevel === 'proctored';
+  // Show AI integrity report for proctored / high-security quizzes
+  const showReport = state.selectedQuiz?.quizLevel === 'proctored'
+    || state.selectedQuiz?.securityLevel === 'high'
+    || (state.totalViolations > 0);
   const aiReportSection = document.getElementById('ai-report-section');
-  if (isProctored && aiReportSection) {
+  if (showReport && aiReportSection) {
     aiReportSection.style.display = 'block';
+
+    const integrityScore = data.integrityScore ?? data.aiReport?.integrityScore ?? state.integrityScore ?? 100;
+    const violations     = state.totalViolations || 0;
+
+    // Score bar & badge
+    const barEl    = document.getElementById('ai-integrity-bar');
+    const scoreEl  = document.getElementById('ai-integrity-score-label');
+    const badgeEl  = document.getElementById('ai-integrity-badge');
+    if (barEl) {
+      setTimeout(() => { barEl.style.width = integrityScore + '%'; }, 100);
+      const color = integrityScore >= 80 ? '#22c55e' : integrityScore >= 60 ? '#f59e0b' : '#ef4444';
+      barEl.style.background = color;
+    }
+    if (scoreEl) { scoreEl.textContent = `${integrityScore} / 100`; scoreEl.style.color = integrityScore >= 80 ? 'var(--green)' : integrityScore >= 60 ? 'var(--yellow)' : 'var(--red)'; }
+    if (badgeEl) {
+      const [label, bg, fg] = integrityScore >= 80 ? ['Good', '#dcfce7', '#166534'] : integrityScore >= 60 ? ['Review', '#fff7ed', '#c2410c'] : ['Flagged', '#fee2e2', '#b91c1c'];
+      badgeEl.textContent = label; badgeEl.style.background = bg; badgeEl.style.color = fg;
+    }
+
+    // Summary
     const summaryEl = document.getElementById('ai-report-summary');
     if (summaryEl) {
       summaryEl.textContent = data.aiReport?.summary
-        || `AI analysis complete. Integrity score: ${data.integrityScore ?? state.integrityScore}/100.`;
+        || (violations === 0
+          ? 'No integrity events detected. Your exam session was clean.'
+          : `${violations} integrity event${violations !== 1 ? 's' : ''} detected during your session. Your lecturer will review these before your final result is confirmed.`);
     }
+
+    // Violation breakdown
+    const breakdownEl = document.getElementById('ai-violation-breakdown');
+    const listEl      = document.getElementById('ai-violation-list');
+    if (violations > 0 && breakdownEl && listEl) {
+      breakdownEl.style.display = 'block';
+      const groups = state._violationBreakdown || {};
+      const items = Object.entries(groups).map(([type, count]) =>
+        `<div style="display:flex;align-items:center;justify-content:space-between;padding:7px 12px;background:#f8fafc;border-radius:8px;font-size:12px">
+          <span style="color:var(--white)">${type.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase())}</span>
+          <span style="font-weight:700;color:${count > 2 ? 'var(--red)' : 'var(--yellow)'}">${count}×</span>
+        </div>`
+      );
+      listEl.innerHTML = items.join('') || `<div style="font-size:12px;color:var(--muted)">${violations} event(s) recorded</div>`;
+    }
+
+    // Flagged warning
+    const flaggedEl = document.getElementById('ai-flagged-note');
+    if (flaggedEl && integrityScore < 70) flaggedEl.style.display = 'block';
   }
 
   show('result-screen');
@@ -2547,6 +2731,7 @@ function stopExamCleanup() {
   document.removeEventListener('cut', handleCopy);
   if (state._handleFullscreen) {
     document.removeEventListener('fullscreenchange', state._handleFullscreen);
+    document.removeEventListener('webkitfullscreenchange', state._handleFullscreen);
     state._handleFullscreen = null;
   }
   if (state._handleBlur) {
@@ -2558,8 +2743,12 @@ function stopExamCleanup() {
     state._handleContextMenu = null;
   }
   if (state._handleKeydown) {
-    document.removeEventListener('keydown', state._handleKeydown);
+    document.removeEventListener('keydown', state._handleKeydown, true);
     state._handleKeydown = null;
+  }
+  if (state._devToolsInterval) {
+    clearInterval(state._devToolsInterval);
+    state._devToolsInterval = null;
   }
   if (document.fullscreenElement) document.exitFullscreen().catch(() => {});
   if (state.audioStream) {
@@ -2569,6 +2758,16 @@ function stopExamCleanup() {
   if (state.audioContext) {
     state.audioContext.close().catch(() => {});
     state.audioContext = null;
+  }
+
+  // ── Capacitor listeners cleanup ──────────────────────────────────
+  if (state._capAppStateListener) {
+    state._capAppStateListener.remove?.();
+    state._capAppStateListener = null;
+  }
+  if (state._capBackListener) {
+    state._capBackListener.remove?.();
+    state._capBackListener = null;
   }
 
   // ── Offline Monitor: final sync + stop ──────────────────────────

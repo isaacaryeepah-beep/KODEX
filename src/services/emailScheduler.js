@@ -258,7 +258,7 @@ const checkLecturerSubscriptions = async () => {
   try {
     const now = Date.now();
     const lecturers = await User.find({
-      role: { $in: ["lecturer", "manager"] },
+      role: { $in: ["lecturer", "hod", "manager"] },
       isActive: true,
     }).select("name email trialEndDate subscriptionExpiry subscriptionStatus createdAt").lean();
 

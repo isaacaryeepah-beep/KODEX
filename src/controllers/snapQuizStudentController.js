@@ -35,6 +35,7 @@ const { QUESTION_TYPES, MANUAL_GRADE_TYPES } = require("../models/SnapQuizQuesti
 const { VIOLATION_TYPES, VIOLATION_SEVERITIES, ACTIONS_TAKEN } = require("../models/SnapQuizViolationLog");
 const { autoGradeAttempt } = require("../services/quizGradingService");
 const { analyzeSnapshot, generateQuizReport } = require("../services/aiProctoringService");
+const { broadcastQuizEvent } = require("../services/snapQuizBroadcast");
 
 // ─── Quiz discovery ───────────────────────────────────────────────────────────
 
@@ -43,6 +44,14 @@ const { analyzeSnapshot, generateQuizReport } = require("../services/aiProctorin
  */
 exports.listQuizzes = async (req, res) => {
   try {
+    const Course = require("../models/Course");
+    const enrolled = await Course.findOne({
+      _id: req.params.courseId,
+      companyId: req.companyId,
+      enrolledStudents: req.user._id,
+    }).select("_id").lean();
+    if (!enrolled) return res.status(403).json({ error: "You are not enrolled in this course" });
+
     const quizzes = await SnapQuiz.find({
       company:     req.companyId,
       course:      req.params.courseId,
@@ -85,11 +94,19 @@ exports.listQuizzes = async (req, res) => {
     submittedCounts.forEach(c => { submittedMap[c._id.toString()] = c.count; });
     qCounts.forEach(c         => { qCountMap[c._id.toString()]    = c.count; });
 
+    const nowMs = Date.now();
     return res.json({
       quizzes: quizzes.map(q => {
         const id          = q._id.toString();
         const isSubmitted = (submittedMap[id] || 0) > 0;
-        const canAttempt  = q.status === "open" && !isSubmitted;
+        // Allow attempts as soon as startTime passes even if watchdog hasn't
+        // flipped status to "open" yet (up to 30s lag).
+        const pastStart   = q.startTime && nowMs >= new Date(q.startTime).getTime();
+        const pastDeadline = q.lockAfterEndTime && q.endTime &&
+          nowMs > new Date(q.endTime).getTime() + (q.gracePeriodSeconds || 0) * 1000;
+        const isInWindow  = !pastDeadline && (q.status === "open" ||
+          (q.status === "published" && pastStart));
+        const canAttempt  = isInWindow && !isSubmitted;
         return {
           ...q,
           questionCount:  qCountMap[id] || 0,
@@ -107,18 +124,25 @@ exports.listQuizzes = async (req, res) => {
 
 /**
  * GET /student/snap-quizzes/quizzes
- * List all published snap quizzes across all courses the student is enrolled in.
+ * List all published snap quizzes for courses the student is enrolled in.
  */
 exports.listAllQuizzes = async (req, res) => {
   try {
-    // Show all published quizzes for this company.
-    // Enrollment is enforced at startAttempt — not here — so students can
-    // see what's available even if their lecturer hasn't enrolled them yet.
+    // Only show quizzes for courses this student is actually enrolled in.
+    const Course = require("../models/Course");
+    const enrolledCourses = await Course.find({
+      companyId: req.companyId,
+      enrolledStudents: req.user._id,
+      // Do not filter by isActive — archived courses may still have open quiz windows
+    }).select("_id").lean();
+    const enrolledIds = enrolledCourses.map(c => c._id);
+
     const showAll = req.query.showAll === "true";
     const filter = {
       company:     req.companyId,
       isPublished: true,
       isActive:    true,
+      course:      { $in: enrolledIds },
     };
     if (!showAll) {
       const now = new Date();
@@ -163,11 +187,17 @@ exports.listAllQuizzes = async (req, res) => {
     submittedCounts.forEach(c => { submittedMap[c._id.toString()] = c.count; });
     qCounts.forEach(c         => { qCountMap[c._id.toString()]    = c.count; });
 
+    const nowMs = Date.now();
     return res.json({
       quizzes: quizzes.map(q => {
         const id          = q._id.toString();
-        const isSubmitted = (submittedMap[id] || 0) > 0;
-        const canAttempt  = q.status === "open" && !isSubmitted;
+        const isSubmitted  = (submittedMap[id] || 0) > 0;
+        const pastStart    = q.startTime && nowMs >= new Date(q.startTime).getTime();
+        const pastDeadline = q.lockAfterEndTime && q.endTime &&
+          nowMs > new Date(q.endTime).getTime() + (q.gracePeriodSeconds || 0) * 1000;
+        const isInWindow   = !pastDeadline && (q.status === "open" ||
+          (q.status === "published" && pastStart));
+        const canAttempt   = isInWindow && !isSubmitted;
         return {
           ...q,
           questionCount:  qCountMap[id] || 0,
@@ -347,6 +377,15 @@ exports.startAttempt = async (req, res) => {
     });
 
     const questions = await _buildQuestionsForAttempt(attempt, quiz);
+
+    // Notify monitoring dashboard that a student started
+    broadcastQuizEvent(String(quiz._id), "attempt_started", {
+      attemptId:   String(attempt._id),
+      studentName: req.user.name,
+      platform:    _detectPlatform(req.headers["user-agent"]),
+      startedAt:   attempt.startedAt.toISOString(),
+      expiresAt:   attempt.expiresAt.toISOString(),
+    });
 
     return res.status(201).json({
       attempt: {
@@ -547,6 +586,16 @@ exports.submitAttempt = async (req, res) => {
 
     const result = await _upsertResult(attempt, quiz);
 
+    // Broadcast submission to monitoring dashboard
+    broadcastQuizEvent(String(attempt.quiz), "attempt_submitted", {
+      attemptId:       String(attempt._id),
+      rawScore:        attempt.rawScore,
+      maxScore:        attempt.maxScore,
+      percentageScore: attempt.percentageScore,
+      gradingStatus:   attempt.gradingStatus,
+      submittedAt:     now.toISOString(),
+    });
+
     return res.json({
       message:        "Attempt submitted",
       score:          attempt.rawScore,
@@ -592,8 +641,13 @@ exports.reportViolation = async (req, res) => {
 
     const { violationType, occurredAt, detail, snapshotUrl } = req.body;
 
+    // Reject unknown violation types to prevent junk data in the log.
+    if (!violationType || !Object.values(VIOLATION_TYPES).includes(violationType)) {
+      return res.status(400).json({ error: "Invalid violationType" });
+    }
+
     // Determine severity and whether this type is enforced.
-    const isCriticalType = _isCriticalViolation(violationType);
+    const isCriticalType = _isCriticalViolation(violationType, quiz);
     const severity = isCriticalType
       ? VIOLATION_SEVERITIES.CRITICAL
       : VIOLATION_SEVERITIES.INFO;
@@ -639,6 +693,16 @@ exports.reportViolation = async (req, res) => {
       await _terminateSession(attempt, `Exceeded violation limit (${newCount}/${maxViolations})`);
     }
 
+    // Real-time broadcast to monitoring dashboard
+    broadcastQuizEvent(String(attempt.quiz), "violation_logged", {
+      attemptId:    String(attempt._id),
+      violationType,
+      severity,
+      newCount,
+      causedTermination,
+      occurredAt:   new Date().toISOString(),
+    });
+
     return res.json({
       acknowledged:               true,
       warned:                     actionTaken === ACTIONS_TAKEN.WARNED,
@@ -673,7 +737,7 @@ exports.reportViolation = async (req, res) => {
 exports.recordSnapshot = async (req, res) => {
   try {
     const attempt = await _loadLockedAttempt(req);
-    if (!attempt) return res.sendStatus(204);
+    if (!attempt) return res.status(403).json({ error: "Session invalid or already submitted" });
 
     const quiz = await SnapQuiz.findById(attempt.quiz)
       .select("proctoringEnabled aiProctoringEnabled").lean();
@@ -868,6 +932,7 @@ async function _loadLockedAttempt(req) {
 }
 
 async function _autoSubmit(attempt) {
+  if (attempt.status !== ATTEMPT_STATUSES.ACTIVE) return;
   attempt.status           = ATTEMPT_STATUSES.AUTO_SUBMITTED;
   attempt.submittedAt      = new Date();
   attempt.timeSpentSeconds = Math.round((new Date() - attempt.startedAt) / 1000);
@@ -1004,6 +1069,8 @@ function _isCriticalViolation(type, quiz) {
   if (type === "copy_paste"      && quiz.preventCopyPaste)          return true;
   if (type === "right_click"     && quiz.preventRightClick)         return true;
   if (type === "print_screen"    && quiz.preventPrintScreen)        return true;
+  // Mobile backgrounding is treated as tab_switch equivalent when mobileMonitoring is on
+  if (type === "app_backgrounded" && quiz.mobileMonitoring !== false && quiz.terminateOnTabSwitch) return true;
   // Always-critical: security and proctoring events (not configurable)
   return [
     "session_conflict", "devtools_open", "multiple_windows",

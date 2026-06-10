@@ -4,10 +4,10 @@
 // FROM address always resolves to the Gmail user so bounces reach a real inbox.
 
 // Always use the real Gmail address as FROM — no-reply@dikly.sbs has no mail server.
-const GMAIL_USER    = process.env.GMAIL_USER || 'nelsonkel78@gmail.com';
+const GMAIL_USER    = process.env.GMAIL_USER || '';
 const SUPPORT_EMAIL = GMAIL_USER;
 const _rawFrom      = process.env.EMAIL_FROM || `DIKLY <${GMAIL_USER}>`;
-const _safeFrom     = _rawFrom.includes('kodex.it.com') || _rawFrom.includes('dikly.it.com')
+const _safeFrom     = _rawFrom.includes('dikly.it.com')
   ? `DIKLY <${GMAIL_USER}>`
   : _rawFrom;
 // If EMAIL_FROM still points at no-reply@dikly.sbs, override with the real Gmail address.
@@ -205,6 +205,12 @@ async function sendViaMailerSend({ toEmail, toName, fromEmail, fromName, subject
 
 // ── Main send() -- tries Gmail first, falls back to MailerSend ─────────────────
 async function send({ to, subject, html, textBody }) {
+  if (!to) {
+    console.error('[EmailService] Missing recipient address');
+    return { ok: false, error: 'Missing recipient' };
+  }
+  if (!subject) subject = '(no subject)';
+
   // GMAIL_USER is already resolved at module level with nelsonkel78@gmail.com fallback.
   const gmailPass = process.env.GMAIL_APP_PASSWORD;
   const mailerKey = process.env.MAILERSEND_API_KEY;

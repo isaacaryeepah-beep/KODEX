@@ -51,7 +51,7 @@ function broadcast(meetingId, type, payload) {
 function attachToServer(httpServer) {
   const wss = new WebSocketServer({ noServer: true });
 
-  httpServer.on('upgrade', (req, socket, head) => {
+  httpServer.on('upgrade', async (req, socket, head) => {
     const url = new URL(req.url, 'http://localhost');
     if (url.pathname !== '/ws/monitor') return;
 
@@ -71,16 +71,29 @@ function attachToServer(httpServer) {
       return;
     }
 
-    // Only moderators/invigilators can connect to the monitor WebSocket
+    const User = require('../models/User');
+    let dbUser;
+    try {
+      dbUser = await User.findById(decoded.id).select('role company isActive').lean();
+    } catch {
+      socket.write('HTTP/1.1 500 Internal Server Error\r\n\r\n');
+      socket.destroy();
+      return;
+    }
+    if (!dbUser || !dbUser.isActive) {
+      socket.write('HTTP/1.1 401 Unauthorized\r\n\r\n');
+      socket.destroy();
+      return;
+    }
     const MONITOR_ROLES = ['lecturer', 'manager', 'admin', 'superadmin', 'hod'];
-    if (!MONITOR_ROLES.includes((decoded.role || '').toLowerCase())) {
+    if (!MONITOR_ROLES.includes((dbUser.role || '').toLowerCase())) {
       socket.write('HTTP/1.1 403 Forbidden\r\n\r\n');
       socket.destroy();
       return;
     }
 
     wss.handleUpgrade(req, socket, head, ws => {
-      ws._user = { id: decoded.id, role: decoded.role, company: decoded.company };
+      ws._user = { id: dbUser._id, role: dbUser.role, company: String(dbUser.company) };
       wss.emit('connection', ws, req);
     });
   });
@@ -106,6 +119,15 @@ function attachToServer(httpServer) {
         _getRoomClients(msg.meetingId).add(ws);
         ws._meetingId = String(msg.meetingId);
         _send(ws, 'subscribed', { meetingId: ws._meetingId });
+      }
+
+      // Quiz monitoring room — keyed as "quiz::<quizId>"
+      if (msg.type === 'subscribe' && msg.quizId) {
+        _removeClient(ws);
+        const roomId = `quiz::${msg.quizId}`;
+        _getRoomClients(roomId).add(ws);
+        ws._quizId = String(msg.quizId);
+        _send(ws, 'subscribed', { quizId: ws._quizId });
       }
     });
 

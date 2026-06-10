@@ -4,7 +4,7 @@
 //  Handles BackgroundSync for offline monitor event uploads.
 // ════════════════════════════════════════════════════════════════════
 
-const CACHE_NAME  = 'dikly-v31';
+const CACHE_NAME  = 'dikly-v32';
 const SYNC_TAG    = 'dikly-offline-sync';
 const BEACON_TAG  = 'dikly-beacon-sync';
 
@@ -13,9 +13,17 @@ const SHELL_FILES = [
   '/',
   '/index.html',
   '/snap-quiz.html',
-  '/js/app.js',
+  '/js/app.js?v=20260602a',
+  '/js/offline-idb.js',
   '/js/offline-monitor.js',
   '/js/offline-recorder.js',
+  '/js/faq-widget.js',
+  '/js/faq-assistant.js',
+  '/js/pages-academic.js',
+  '/js/pages-device.js',
+  '/js/pages-corporate.js',
+  '/js/pages-faq.js',
+  '/js/manager-portal.js',
   '/css/style.css',
 ];
 

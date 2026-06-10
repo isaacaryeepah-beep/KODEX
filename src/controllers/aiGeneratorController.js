@@ -427,12 +427,17 @@ exports.discardDraft = async (req, res) => {
  * Recompute draft.status from per-question draftStatus values.
  */
 function _refreshDraftStatus(draft) {
-  const statuses = draft.questions.map(q => q.draftStatus);
-  const total    = statuses.length;
-  const pending  = statuses.filter(s => s === QUESTION_DRAFT_STATUSES.PENDING).length;
+  const statuses  = draft.questions.map(q => q.draftStatus);
+  const total     = statuses.length;
+  const pending   = statuses.filter(s => s === QUESTION_DRAFT_STATUSES.PENDING).length;
+  const approved  = statuses.filter(s =>
+    s === QUESTION_DRAFT_STATUSES.APPROVED || s === QUESTION_DRAFT_STATUSES.EDITED).length;
 
   if (pending === total) {
     draft.status = DRAFT_STATUSES.PENDING_REVIEW;
+  } else if (pending === 0 && approved === 0) {
+    // All rejected — mark discarded so it doesn't appear as processed in the gradebook
+    draft.status = DRAFT_STATUSES.DISCARDED;
   } else if (pending === 0) {
     draft.status = DRAFT_STATUSES.FULLY_PROCESSED;
   } else {

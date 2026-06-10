@@ -94,6 +94,13 @@ const attendanceSessionSchema = new mongoose.Schema(
       type: String,
       default: null,
     },
+    // Restrict session to a specific student group (e.g. "A", "B", "C").
+    // null means all enrolled students in the course can mark attendance.
+    targetGroup: {
+      type: String,
+      default: null,
+      trim: true,
+    },
     // Room if applicable
     room: {
       type: String,
@@ -123,6 +130,15 @@ const attendanceSessionSchema = new mongoose.Schema(
     totalMarked: {
       type: Number,
       default: 0,
+    },
+    // Original local ID assigned by the device (e.g. "local_AABB_1234567").
+    // Set when a device-initiated session is synced to the server so we can
+    // deduplicate re-syncs of the same session.
+    deviceLocalId: {
+      type: String,
+      default: null,
+      index: true,
+      sparse: true,
     },
 
     // ── Session Dashboard fields ──────────────────────────────────────────────

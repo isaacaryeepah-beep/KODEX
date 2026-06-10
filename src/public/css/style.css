@@ -857,10 +857,19 @@ body {
 /* Trial banners */
 /* ── Subscription / Trial status banner ── */
 /* Students never see subscription banners — guaranteed via body attribute */
-body[data-role="student"] .trial-banner,
-body[data-role="student"] .trial-expired-banner {
-  display: none !important;
+/* class-rep persistent banner */
+#class-rep-banner {
+  display: none;
+  align-items: center;
+  gap: 14px;
+  padding: 10px 24px;
+  background: linear-gradient(135deg, #ede9fe, #f5f3ff);
+  border-bottom: 1px solid #c4b5fd;
+  font-size: 13px;
+  flex-shrink: 0;
+  cursor: pointer;
 }
+#class-rep-banner.visible { display: flex; }
 
 .trial-banner,
 .trial-expired-banner {
@@ -3994,12 +4003,38 @@ table tr:hover td { background: #f8fafc !important; }
   margin-top: 8px !important;
   text-shadow: 0 1px 6px rgba(0,0,0,.35) !important;
 }
+.workspace-tagline {
+  display: none;
+}
+#auth-page:has(#portal-selector:not(.hidden)) .workspace-tagline {
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  gap: 7px !important;
+  margin-top: 10px !important;
+  font-size: 11px !important;
+  font-weight: 700 !important;
+  letter-spacing: 1.5px !important;
+  text-transform: uppercase !important;
+  color: rgba(220,225,255,.75) !important;
+  text-shadow: 0 1px 4px rgba(0,0,0,.3) !important;
+}
+.wt-dot {
+  display: inline-block;
+  width: 6px; height: 6px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+.wt-blue   { background: #60a5fa; box-shadow: 0 0 6px rgba(96,165,250,.7); }
+.wt-indigo { background: #818cf8; box-shadow: 0 0 6px rgba(129,140,248,.7); }
+.wt-teal   { background: #2dd4bf; box-shadow: 0 0 6px rgba(45,212,191,.7); }
+.wt-sep    { color: rgba(200,210,255,.4); margin: 0 1px; }
 
 /* ── Main glass card — premium frosted ── */
 #auth-page:has(#portal-selector:not(.hidden)) #portal-selector {
   max-width: 520px !important;
   width: 100% !important;
-  padding: 30px 26px 24px !important;
+  padding: 0 26px 24px !important;
   background: rgba(255,255,255,0.62) !important;
   backdrop-filter: blur(40px) saturate(2.0) brightness(1.08) !important;
   -webkit-backdrop-filter: blur(40px) saturate(2.0) brightness(1.08) !important;
@@ -4011,6 +4046,18 @@ table tr:hover td { background: #f8fafc !important; }
     0 4px 12px rgba(0,0,0,.10),
     inset 0 1px 0 rgba(255,255,255,.96) !important;
   border-radius: 24px !important;
+  overflow: hidden !important;
+  position: relative !important;
+}
+/* Accent stripe at top of card */
+#auth-page:has(#portal-selector:not(.hidden)) #portal-selector::before {
+  content: '' !important;
+  display: block !important;
+  height: 4px !important;
+  background: linear-gradient(90deg, #60a5fa 0%, #818cf8 50%, #2dd4bf 100%) !important;
+  opacity: 1 !important;
+  width: 100% !important;
+  margin-bottom: 0 !important;
 }
 
 /* ── CHOOSE YOUR WORKSPACE heading ── */
@@ -4021,6 +4068,7 @@ table tr:hover td { background: #f8fafc !important; }
   text-transform: uppercase !important;
   color: rgba(30,27,75,.48) !important;
   text-align: center !important;
+  padding-top: 24px !important;
   margin-bottom: 20px !important;
   padding-bottom: 16px !important;
   border-bottom: 1px solid rgba(79,70,229,.10) !important;
@@ -4257,6 +4305,11 @@ table tr:hover td { background: #f8fafc !important; }
 ══════════════════════════════════════════════════════════════════════ */
 
 /* Photo + dark overlay directly on #auth-page */
+#auth-page:has(.auth-container:not(.hidden)) #app-download-section,
+#auth-page:has(.auth-container:not(.hidden)) #workspace-foot {
+  display: none !important;
+}
+
 #auth-page:has(.auth-container:not(.hidden)) {
   background-image:
     linear-gradient(rgba(6, 14, 36, 0.65), rgba(6, 14, 36, 0.65)),

@@ -13,6 +13,7 @@ const { requireRole }      = require('../middleware/role');
 // where the token was issued by /api/devices/pair.
 router.post('/devices/heartbeat', deviceAuth, deviceCtrl.heartbeat);
 router.post('/devices/sync',      deviceAuth, deviceCtrl.syncOfflineRecords);
+router.get('/devices/roster',     deviceAuth, deviceCtrl.getRoster);
 
 // ─── PAIRING (no JWT — device uses pairingCode + institutionCode) ─────────────
 router.post('/devices/pair',          deviceCtrl.pairDevice);
@@ -35,7 +36,7 @@ router.post('/devices/configure-wifi', authenticate, companyIsolation, deviceCtr
 router.get('/devices/all', authenticate, companyIsolation, requireRole('admin', 'superadmin', 'hod'), deviceCtrl.listAllDevices);
 
 // ─── ADMIN/HOD: ASSIGN DEVICE TO CLASS REP ───────────────────────────────────
-router.patch('/devices/:deviceId/assign-class-rep', authenticate, requireRole('admin', 'superadmin', 'hod'), deviceCtrl.assignClassRep);
+router.patch('/devices/:deviceId/assign-class-rep', authenticate, companyIsolation, requireRole('admin', 'superadmin', 'hod'), deviceCtrl.assignClassRep);
 
 // ─── AVAILABLE DEVICES FOR A COURSE ──────────────────────────────────────────
 router.get('/devices/available', authenticate, companyIsolation, deviceCtrl.getAvailableDevices);
@@ -50,6 +51,7 @@ router.get('/devices/lecturers-for-assignment', authenticate, companyIsolation, 
 router.post('/devices/:deviceId/assign-lecturer',  authenticate, companyIsolation, requireRole('admin', 'superadmin', 'hod', 'class_rep'), deviceCtrl.assignLecturer);
 router.delete('/devices/:deviceId/remove-lecturer', authenticate, companyIsolation, requireRole('admin', 'superadmin', 'hod', 'class_rep'), deviceCtrl.removeLecturer);
 router.delete('/devices/:deviceId/remove',          authenticate, companyIsolation, requireRole('admin', 'superadmin', 'hod'), deviceCtrl.removeDevice);
+router.post('/devices/:deviceId/factory-reset',    authenticate, companyIsolation, requireRole('admin', 'superadmin', 'hod'), deviceCtrl.factoryResetDevice);
 router.get('/devices/:deviceId/lecturers',          authenticate, companyIsolation, deviceCtrl.getDeviceLecturers);
 
 module.exports = router;

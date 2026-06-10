@@ -1,3 +1,4 @@
+const { randomUUID } = require("crypto");
 const PDFDocument = require("pdfkit");
 const AttendanceSession = require("../models/AttendanceSession");
 const AttendanceRecord = require("../models/AttendanceRecord");
@@ -7,6 +8,57 @@ const Quiz = require("../models/Quiz");
 const QuizSubmission = require("../models/QuizSubmission"); // legacy — kept for reference
 const Attempt = require("../models/Attempt");
 const Company = require("../models/Company");
+
+// In-memory store for one-time download tokens (TTL: 3 minutes)
+const _downloadTokens = new Map();
+const _TOKEN_TTL_MS = 3 * 60 * 1000;
+
+function _pruneTokens() {
+  const now = Date.now();
+  for (const [k, v] of _downloadTokens) {
+    if (v.expiresAt < now) _downloadTokens.delete(k);
+  }
+}
+
+exports.createDownloadLink = (req, res) => {
+  _pruneTokens();
+  const { type } = req.params;
+  const allowed = ["attendance", "sessions", "performance"];
+  if (!allowed.includes(type)) {
+    return res.status(400).json({ error: "Invalid report type" });
+  }
+  const uuid = randomUUID();
+  _downloadTokens.set(uuid, {
+    type,
+    user: {
+      _id:     req.user._id,
+      role:    req.user.role,
+      company: req.user.company,
+    },
+    query:     req.query,
+    expiresAt: Date.now() + _TOKEN_TTL_MS,
+  });
+  res.json({ url: `/api/reports/download/${uuid}` });
+};
+
+exports.downloadByToken = async (req, res) => {
+  _pruneTokens();
+  const token = _downloadTokens.get(req.params.uuid);
+  if (!token || token.expiresAt < Date.now()) {
+    return res.status(410).json({ error: "Download link expired or not found. Please try again." });
+  }
+  _downloadTokens.delete(req.params.uuid);
+
+  // Reconstruct a minimal req-like object and delegate to the real handler
+  const fakeReq = { user: token.user, query: token.query };
+  const handler = {
+    attendance:  exports.attendanceReport,
+    sessions:    exports.sessionReport,
+    performance: exports.performanceReport,
+  }[token.type];
+
+  return handler(fakeReq, res);
+};
 
 function drawHeader(doc, title, institution) {
   doc.fontSize(22).font("Helvetica-Bold").text(title, { align: "center" });

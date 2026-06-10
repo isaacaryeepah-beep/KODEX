@@ -49,7 +49,7 @@ const requireActiveSubscription = async (req, res, next) => {
     return res.status(403).json({
       error: "Subscription required",
       subscriptionRequired: true,
-      paymentAvailable: ["lecturer", "manager"].includes(req.user.role),
+      paymentAvailable: ["lecturer", "hod", "manager"].includes(req.user.role),
       message: isLecturer
         ? company.trialUsed
           ? "Your trial has ended. Please subscribe to continue using DIKLY."

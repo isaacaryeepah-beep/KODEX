@@ -33,7 +33,7 @@ const departmentSchema = new mongoose.Schema(
       type: String,
       trim: true,
       uppercase: true,
-      default: "",
+      default: null,
     },
     description: { type: String, default: "" },
 

@@ -12,8 +12,9 @@
  *   GET  /:attemptId/status   — current sync state (lecturer / student poll)
  */
 
-const path = require("path");
-const fs   = require("fs");
+const path     = require("path");
+const fs       = require("fs");
+const mongoose = require("mongoose");
 
 const OfflineSyncLog    = require("../models/OfflineSyncLog");
 const SnapQuizAttempt   = require("../models/SnapQuizAttempt");
@@ -73,12 +74,22 @@ async function verifyAttemptAccess(req, res) {
     return attempt;
   }
 
-  // Lecturers/managers: must belong to the same company as the attempt.
-  const userCompany   = (user.company || "").toString();
+  // Lecturers/managers: must belong to the same company AND be assigned to the quiz.
+  const userCompany    = (user.company || "").toString();
   const attemptCompany = (attempt.company || "").toString();
   if (!userCompany || userCompany !== attemptCompany) {
     res.status(403).json({ error: "Access denied" });
     return null;
+  }
+
+  if (user.role === "lecturer" || user.role === "hod") {
+    const SnapQuiz = require("../models/SnapQuiz");
+    const quiz = await SnapQuiz.findById(attempt.quiz).select("createdBy company").lean();
+    if (!quiz || String(quiz.company) !== userCompany ||
+        String(quiz.createdBy) !== user._id.toString()) {
+      res.status(403).json({ error: "Access denied" });
+      return null;
+    }
   }
 
   return attempt;
@@ -226,7 +237,7 @@ exports.syncEvents = async (req, res) => {
             // SnapQuizViolationLog uses ObjectId refs, but offline events
             // may only carry string IDs — store what we have and let the
             // reviewer panel reconcile.
-            attempt:      syncLog.quizId ? undefined : undefined, // resolved below
+            attempt:      mongoose.Types.ObjectId.isValid(attemptId) ? new mongoose.Types.ObjectId(attemptId) : undefined,
             quiz:         syncLog.quizId || undefined,
             student:      req.user._id,
             company:      req.user.company || undefined,
@@ -360,7 +371,7 @@ exports.handleBeacon = async (req, res) => {
 
   try {
     const { attemptId } = req.params;
-    if (!attemptId) return;
+    if (!attemptId || !mongoose.Types.ObjectId.isValid(attemptId)) return;
 
     // sendBeacon sends Content-Type: text/plain, so the body arrives as a
     // raw string.  express.json() won't parse it — we must do it ourselves.
@@ -371,6 +382,20 @@ exports.handleBeacon = async (req, res) => {
       } else if (typeof req.body === "object") {
         payload = req.body;
       }
+    }
+
+    // Validate the attempt-specific sessionToken embedded in the payload.
+    // The client already holds this token from startAttempt — sendBeacon
+    // can't send headers but can include it in the JSON body.
+    if (payload.sessionToken) {
+      const attempt = await SnapQuizAttempt.findById(attemptId)
+        .select("sessionToken").lean();
+      if (!attempt || attempt.sessionToken !== payload.sessionToken) return;
+    } else {
+      // No token → only allow upsert if the OfflineSyncLog already exists
+      // (i.e., the attempt has already been legitimately synced).
+      const exists = await OfflineSyncLog.exists({ attemptId });
+      if (!exists) return;
     }
 
     const beaconEntry = {
@@ -384,7 +409,7 @@ exports.handleBeacon = async (req, res) => {
     await OfflineSyncLog.findOneAndUpdate(
       { attemptId },
       { $push: { beaconEvents: { $each: [beaconEntry], $slice: -200 } } },
-      { upsert: true }
+      { upsert: false }  // don't create new docs — must exist from a legitimate sync
     );
   } catch (err) {
     // Never throw — response already sent.

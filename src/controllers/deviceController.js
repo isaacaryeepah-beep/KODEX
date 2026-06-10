@@ -136,7 +136,7 @@ exports.registerDevice = async (req, res) => {
     // Block if device already registered to another lecturer
     const existing = await Device.findOne({ deviceId });
     if (existing) {
-      if (existing.lecturerId.toString() !== lecturerId.toString()) {
+      if ((existing.lecturerId?.toString() || '') !== lecturerId.toString()) {
         return res.status(403).json({
           message: 'This ESP32 device is assigned to another lecturer and cannot be used for this session.'
         });
@@ -195,7 +195,7 @@ exports.heartbeat = async (req, res) => {
     const device = req.device;
     if (!device) return res.status(401).json({ message: 'Device authentication missing' });
 
-    const { currentNetwork, mode, localIp, rtcValid, sdOK, firmwareVersion } = req.body || {};
+    const { currentNetwork, mode, localIp, rtcValid, sdOK, firmwareVersion, pendingRecords } = req.body || {};
 
     const wasOffline = device.status === 'offline';
     device.lastHeartbeat  = new Date();
@@ -205,7 +205,8 @@ exports.heartbeat = async (req, res) => {
     if (localIp)                   device.localIp        = localIp;
     if (rtcValid !== undefined)    device.rtcValid       = !!rtcValid;
     if (sdOK     !== undefined)    device.sdOK           = !!sdOK;
-    if (firmwareVersion)           device.firmwareVersion = String(firmwareVersion).slice(0, 32);
+    if (firmwareVersion)           device.firmwareVersion     = String(firmwareVersion).slice(0, 32);
+    if (pendingRecords !== undefined) device.pendingRecordsCount = Math.max(0, Number(pendingRecords) || 0);
 
     // Track the public IP this device is reaching the server from.
     // This is the same NAT IP the school router will hand to students on the
@@ -257,29 +258,110 @@ exports.heartbeat = async (req, res) => {
 // ─── OFFLINE SYNC ────────────────────────────────────────────────────────────
 // ESP32 sends a batch of attendance records collected while it was offline.
 // Authenticated by middleware/deviceAuth (req.device is set).
-// Body: { records: [{ sessionId, userId? , indexNumber?, codeUsed, timestamp }] }
+// Body: {
+//   sessions?: [{ sessionId, courseCode, title, lecturer, startedAt, duration, seed }],
+//   records:   [{ sessionId, userId?, indexNumber?, codeUsed, timestamp }]
+// }
 //
-// For each record, we resolve the user (by _id or institutional indexNumber),
-// verify the session belongs to this device, and create an AttendanceRecord
-// (skipping duplicates and sessions that don't match this device).
+// Sessions are processed first. Local IDs ("local_*") are mapped to real
+// MongoDB session IDs so records can reference either form.
 exports.syncOfflineRecords = async (req, res) => {
   try {
     const device = req.device;
     if (!device) return res.status(401).json({ message: 'Device authentication missing' });
 
-    const { records } = req.body || {};
+    const { records, sessions } = req.body || {};
+
+    // ── Step 1: sync device-initiated sessions ────────────────────────────────
+    const sessionIdMap = {}; // localId → serverSessionId string
+
+    // Defensive size caps — a stolen device JWT must not be able to flood the DB
+    if (Array.isArray(sessions) && sessions.length > 50) {
+      return res.status(400).json({ message: 'Too many sessions in one sync (max 50)' });
+    }
+    if (Array.isArray(records) && records.length > 500) {
+      return res.status(400).json({ message: 'Too many records in one sync (max 500)' });
+    }
+
+    if (Array.isArray(sessions) && sessions.length > 0) {
+      const Course = require('../models/Course');
+
+      for (const s of sessions) {
+        try {
+          if (!s.sessionId) continue;
+
+          // Dedup: if we already synced this local session, return the existing ID
+          if (s.sessionId.startsWith('local_')) {
+            const existing = await AttendanceSession.findOne({
+              deviceLocalId: s.sessionId,
+              company: device.companyId,
+            }).select('_id').lean();
+            if (existing) { sessionIdMap[s.sessionId] = existing._id.toString(); continue; }
+          }
+
+          // Resolve course by code
+          let courseRef = null;
+          if (s.courseCode) {
+            const course = await Course.findOne({ code: s.courseCode, company: device.companyId }).select('_id').lean();
+            if (course) courseRef = course._id;
+          }
+
+          // Resolve creator: device's primary lecturer → any admin of the company
+          let creatorId = device.lecturerId || null;
+          if (!creatorId) {
+            const admin = await User.findOne({ company: device.companyId, role: { $in: ['admin', 'superadmin'] } }).select('_id').lean();
+            if (admin) creatorId = admin._id;
+          }
+          if (!creatorId) { console.warn('[sync] no creator found for device session', s.sessionId); continue; }
+
+          const startedAt = s.startedAt ? new Date(Number(s.startedAt) * 1000) : new Date();
+          const durationSecs = Number(s.duration) || 300;
+          const stoppedAt = new Date(startedAt.getTime() + durationSecs * 1000);
+
+          const newSession = await AttendanceSession.create({
+            company:            device.companyId,
+            createdBy:          creatorId,
+            title:              String(s.title || 'Attendance').slice(0, 120),
+            course:             courseRef,
+            deviceId:           device.deviceId,
+            esp32Seed:          s.seed || '',
+            durationSeconds:    durationSecs,
+            startedAt,
+            stoppedAt,
+            status:             'ended',
+            mode:               'offline-ready',
+            requiresDeviceOnline: false,
+            deviceLocalId:      s.sessionId.startsWith('local_') ? s.sessionId : null,
+          });
+
+          sessionIdMap[s.sessionId] = newSession._id.toString();
+        } catch (e) {
+          if (e.code === 11000) {
+            // Race condition — already exists, look it up
+            const dup = await AttendanceSession.findOne({ deviceLocalId: s.sessionId, company: device.companyId }).select('_id').lean();
+            if (dup) sessionIdMap[s.sessionId] = dup._id.toString();
+          } else {
+            console.error('[sync session]', s.sessionId, e.message);
+          }
+        }
+      }
+    }
+
+    // ── Step 2: sync attendance records ───────────────────────────────────────
     if (!Array.isArray(records) || records.length === 0) {
-      return res.json({ success: true, synced: 0, skipped: 0, errors: [] });
+      return res.json({ success: true, synced: 0, skipped: 0, errors: [], sessionIdMap });
     }
 
     let synced = 0, skipped = 0, errors = [];
 
     for (const rec of records) {
       try {
-        const session = rec.sessionId ? await AttendanceSession.findById(rec.sessionId) : null;
+        // Translate local session ID if needed
+        const resolvedId = sessionIdMap[rec.sessionId] || rec.sessionId;
+        const session = resolvedId ? await AttendanceSession.findById(resolvedId).catch(() => null) : null;
         if (!session || session.deviceId !== device.deviceId) { skipped++; continue; }
 
-        // Resolve user — prefer _id, fall back to indexNumber for offline-only marks
+        // Resolve user — prefer _id, fall back to indexNumber
         let userId = rec.userId || null;
         if (!userId && rec.indexNumber) {
           const idx = String(rec.indexNumber).trim().toUpperCase();
@@ -292,7 +374,8 @@ exports.syncOfflineRecords = async (req, res) => {
         }
         if (!userId) { skipped++; continue; }
 
-        const markedAt = rec.timestamp ? new Date(rec.timestamp) : new Date();
+        // Firmware stores timestamps in Unix seconds; convert to ms
+        const markedAt = rec.timestamp ? new Date(Number(rec.timestamp) * 1000) : new Date();
         const late = (markedAt - new Date(session.startedAt)) > 15 * 60 * 1000;
 
         await AttendanceRecord.create({
@@ -314,9 +397,36 @@ exports.syncOfflineRecords = async (req, res) => {
       }
     }
 
-    res.json({ success: true, synced, skipped, errors });
+    res.json({ success: true, synced, skipped, errors, sessionIdMap });
   } catch (err) {
     console.error('[device sync]', err);
+    res.status(500).json({ message: 'Server error', error: err.message });
+  }
+};
+
+// ─── DEVICE ROSTER ───────────────────────────────────────────────────────────
+// Returns all active students for this device's institution so the device can
+// validate student IDs offline during attendance marking.
+exports.getRoster = async (req, res) => {
+  try {
+    const device = req.device;
+    if (!device) return res.status(401).json({ message: 'Device authentication missing' });
+
+    const students = await User.find({
+      company: device.companyId,
+      role: 'student',
+      isActive: { $ne: false },
+    }).select('_id indexNumber IndexNumber name email').lean();
+
+    const roster = students.map(s => ({
+      id:          s._id.toString(),
+      indexNumber: (s.indexNumber || s.IndexNumber || '').toUpperCase(),
+      name:        s.name || s.email || '',
+    })).filter(s => s.indexNumber || s.id);
+
+    res.json({ ok: true, roster, count: roster.length });
+  } catch (err) {
+    console.error('[device roster]', err);
     res.status(500).json({ message: 'Server error', error: err.message });
   }
 };
@@ -332,7 +442,7 @@ exports.updateNetworks = async (req, res) => {
 
     // Only owner or admin can update networks
     const isAdmin = ['admin', 'superadmin'].includes(req.user.role);
-    if (!isAdmin && device.lecturerId.toString() !== req.user._id.toString()) {
+    if (!isAdmin && (device.lecturerId?.toString() || '') !== req.user._id.toString()) {
       return res.status(403).json({
         message: 'This ESP32 device is assigned to another lecturer and cannot be used for this session.'
       });
@@ -375,8 +485,21 @@ exports.getMyDevice = async (req, res) => {
       return res.status(403).json({ message: 'Not authorized.' });
     }
 
-    let device = await Device.findOne({ companyId: req.user.company })
-      .populate('lecturerId', 'name email');
+    const isAdmin = ['admin', 'superadmin'].includes(req.user.role);
+    const deviceQuery = isAdmin
+      ? { companyId: req.user.company }
+      : { companyId: req.user.company, lecturerId: req.user._id };
+    let device = await Device.findOne(deviceQuery).populate('lecturerId', 'name email');
+
+    // Also check for a shared (class-rep) device currently connected to this lecturer
+    if (!device && req.user.role === 'lecturer') {
+      device = await Device.findOne({
+        companyId: req.user.company,
+        activeLecturerId: req.user._id,
+        ownershipType: 'shared',
+      }).populate('lecturerId', 'name email');
+    }
+
     if (!device) return res.json({ success: true, data: null });
 
     device = await _markStaleOffline(device);
@@ -403,6 +526,7 @@ exports.getMyDevice = async (req, res) => {
         registeredAt:       device.registeredAt,
         activeSession:      activeSession ? { sessionId: activeSession._id, status: activeSession.status } : null,
         allowedNetworks:    device.allowedNetworks.map(n => ({ ssid: n.ssid, priority: n.priority })),
+        pendingRecordsCount: device.pendingRecordsCount || 0,
       }
     });
   } catch (err) {
@@ -507,6 +631,12 @@ exports.assignGroup = async (req, res) => {
     const device = await Device.findOne({ deviceId, companyId: req.user.company });
     if (!device) return res.status(404).json({ message: 'Device not found.' });
 
+    // HOD can only manage devices in their own department (or unassigned ones)
+    if (req.user.role === 'hod' && device.assignedDepartment &&
+        device.assignedDepartment !== req.user.department) {
+      return res.status(403).json({ message: 'You can only manage devices assigned to your department.' });
+    }
+
     device.assignedGroup      = group.trim().toUpperCase();
     device.assignedLevel      = String(level).trim();
     device.assignedDepartment = department ? department.trim() : device.assignedDepartment;
@@ -540,13 +670,13 @@ exports.renameDevice = async (req, res) => {
     const { deviceName } = req.body;
     if (!deviceName?.trim()) return res.status(400).json({ message: 'Device name is required.' });
 
-    const isAdmin = ['admin', 'superadmin'].includes(req.user.role);
-    const query = isAdmin
+    const isPrivileged = ['admin', 'superadmin', 'hod'].includes(req.user.role);
+    const query = isPrivileged
       ? { companyId: req.user.company, ...(req.body.deviceId ? { deviceId: req.body.deviceId } : {}) }
       : { lecturerId: req.user._id, companyId: req.user.company };
 
     const device = await Device.findOneAndUpdate(query, { deviceName: deviceName.trim() }, { new: true });
-    if (!device) return res.status(404).json({ message: 'Device not found or not yours.' });
+    if (!device) return res.status(404).json({ message: 'Device not found or not authorized.' });
 
     res.json({ success: true, deviceName: device.deviceName });
   } catch (err) {
@@ -763,15 +893,17 @@ exports.listAllDevices = async (req, res) => {
       return res.status(403).json({ message: 'Not authorized.' });
     }
 
-    const filter = { companyId };
-    if (req.user.role === 'hod' && req.user.department) {
-      filter.assignedDepartment = req.user.department;
-    }
+    // HOD: only devices explicitly assigned to their department.
+    // Admin/superadmin: everything (including unassigned).
+    const filter = req.user.role === 'hod'
+      ? { companyId, assignedDepartment: req.user.department }
+      : { companyId };
 
     const devices = await Device.find(filter)
       .populate('lecturerId', 'name email role')
       .populate('assignedLecturers.lecturerId', 'name email')
       .populate('assignedLecturers.courseId',   'title code')
+      .populate('classRepId', 'name email IndexNumber studentLevel studentGroup')
       .sort({ createdAt: -1 })
       .lean();
 
@@ -796,6 +928,7 @@ exports.listAllDevices = async (req, res) => {
         courseId:   a.courseId,
         assignedAt: a.assignedAt,
       })),
+      classRepId:    d.classRepId || null,
       createdAt:     d.createdAt,
     }));
 
@@ -930,6 +1063,12 @@ exports.assignLecturer = async (req, res) => {
     const device = await Device.findOne({ deviceId, companyId: req.user.company });
     if (!device) return res.status(404).json({ message: 'Device not found.' });
 
+    // HOD can only manage devices in their own department (or unassigned ones)
+    if (req.user.role === 'hod' && device.assignedDepartment &&
+        device.assignedDepartment !== req.user.department) {
+      return res.status(403).json({ message: 'You can only manage devices assigned to your department.' });
+    }
+
     // Lecturer must exist, belong to company, and be a lecturer
     const lecturer = await User.findOne({ _id: lecturerId, company: req.user.company, role: 'lecturer' });
     if (!lecturer) return res.status(404).json({ message: 'Lecturer not found or is not a lecturer role.' });
@@ -1006,6 +1145,12 @@ exports.removeLecturer = async (req, res) => {
     const device = await Device.findOne({ deviceId, companyId: req.user.company });
     if (!device) return res.status(404).json({ message: 'Device not found.' });
 
+    // HOD can only manage devices in their own department (or unassigned ones)
+    if (req.user.role === 'hod' && device.assignedDepartment &&
+        device.assignedDepartment !== req.user.department) {
+      return res.status(403).json({ message: 'You can only manage devices assigned to your department.' });
+    }
+
     const before = (device.assignedLecturers || []).length;
     device.assignedLecturers = (device.assignedLecturers || []).filter(a =>
       !(a.lecturerId.toString() === lecturerId.toString() && a.courseId.toString() === courseId.toString())
@@ -1039,10 +1184,55 @@ exports.removeDevice = async (req, res) => {
     const { deviceId } = req.params;
     const device = await Device.findOne({ deviceId, companyId });
     if (!device) return res.status(404).json({ message: 'Device not found' });
+
+    // HOD can only remove devices in their own department (or unassigned ones)
+    if (req.user.role === 'hod' && device.assignedDepartment &&
+        device.assignedDepartment !== req.user.department) {
+      return res.status(403).json({ message: 'You can only remove devices assigned to your department.' });
+    }
+
     await Device.deleteOne({ _id: device._id });
     res.json({ message: 'Device removed' });
   } catch (err) {
     console.error('[removeDevice]', err);
+    res.status(500).json({ message: 'Server error', error: err.message });
+  }
+};
+
+// ─── FACTORY RESET DEVICE ────────────────────────────────────────────────────
+// POST /api/devices/:deviceId/factory-reset
+// Revokes the device JWT token so the next heartbeat returns 401, which
+// triggers the firmware's built-in factoryReset() (clears Preferences +
+// ESP.restart()). The DB record is deleted immediately so the device is
+// removed from the institution list and can be re-paired fresh.
+exports.factoryResetDevice = async (req, res) => {
+  try {
+    const companyId = req.user.company;
+    const { deviceId } = req.params;
+    const ALLOWED = ['admin', 'superadmin', 'hod'];
+    if (!ALLOWED.includes(req.user.role)) {
+      return res.status(403).json({ message: 'Not authorized.' });
+    }
+    const device = await Device.findOne({ deviceId, companyId });
+    if (!device) return res.status(404).json({ message: 'Device not found.' });
+
+    // HOD can only factory reset devices in their own department
+    if (req.user.role === 'hod' && device.assignedDepartment &&
+        device.assignedDepartment !== req.user.department) {
+      return res.status(403).json({ message: 'You can only reset devices assigned to your department.' });
+    }
+
+    // Revoke the token first — any in-flight heartbeat will get 401 and
+    // trigger the firmware's factoryReset(). Then delete the record so
+    // the device cannot authenticate again with its old JWT.
+    device.token = '';
+    await device.save();
+    await Device.deleteOne({ _id: device._id });
+
+    _auditDevice(req.user, AUDIT_ACTIONS.DELETE, device, { action: 'factory_reset', deviceName: device.deviceName });
+    res.json({ success: true, message: 'Factory reset initiated. The device will wipe itself on next heartbeat.' });
+  } catch (err) {
+    console.error('[factoryResetDevice]', err);
     res.status(500).json({ message: 'Server error', error: err.message });
   }
 };
@@ -1086,7 +1276,12 @@ exports.getLecturersForAssignment = async (req, res) => {
     const Course = require('../models/Course');
     const CourseLecturerAssignment = require('../models/CourseLecturerAssignment');
 
-    const lecturers = await User.find({ company: companyId, role: 'lecturer' }, 'name email').lean();
+    // HOD sees only lecturers in their own department
+    const lecturerFilter = { company: companyId, role: 'lecturer' };
+    if (req.user.role === 'hod' && req.user.department) {
+      lecturerFilter.department = req.user.department;
+    }
+    const lecturers = await User.find(lecturerFilter, 'name email department').lean();
 
     // Gather courses for each lecturer from both legacy field and CourseLecturerAssignment
     const result = await Promise.all(lecturers.map(async (lec) => {
@@ -1111,10 +1306,11 @@ exports.getLecturersForAssignment = async (req, res) => {
       }
 
       return {
-        _id:     lec._id,
-        name:    lec.name,
-        email:   lec.email,
-        courses: Array.from(courseMap.values()),
+        _id:        lec._id,
+        name:       lec.name,
+        email:      lec.email,
+        department: lec.department || null,
+        courses:    Array.from(courseMap.values()),
       };
     }));
 
@@ -1132,10 +1328,20 @@ exports.transferDevice = async (req, res) => {
       return res.status(403).json({ message: 'Only superadmin can transfer device ownership.' });
     }
 
-    const { deviceId, newLecturerId } = req.body;
+    const { deviceId, newLecturerId, companyId: targetCompanyId } = req.body;
+    // For superadmin, allow specifying a target company; default to their own
+    const scopeCompany = targetCompanyId || req.user.company;
 
-    // Check new lecturer doesn't already own a device
-    const existingOwnership = await Device.findOne({ lecturerId: newLecturerId });
+    // Verify the target lecturer exists and belongs to the same company
+    const newLecturer = await require('../models/User').findOne({
+      _id: newLecturerId, company: scopeCompany, isActive: true,
+    }).select('_id').lean();
+    if (!newLecturer) {
+      return res.status(404).json({ message: 'Target lecturer not found in specified company.' });
+    }
+
+    // Check new lecturer doesn't already own a device in that company
+    const existingOwnership = await Device.findOne({ lecturerId: newLecturerId, companyId: scopeCompany });
     if (existingOwnership) {
       return res.status(400).json({
         message: `The target lecturer already owns device ${existingOwnership.deviceId}.`
@@ -1143,7 +1349,7 @@ exports.transferDevice = async (req, res) => {
     }
 
     const device = await Device.findOneAndUpdate(
-      { deviceId },
+      { deviceId, companyId: scopeCompany },
       { lecturerId: newLecturerId },
       { new: true }
     );

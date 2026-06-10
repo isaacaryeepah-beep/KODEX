@@ -4,8 +4,9 @@ const mongoose = require('mongoose');
 const bcrypt = require('bcryptjs');
 
 const SA_NAME     = 'Isaac Aryeepah';
-const SA_EMAIL    = 'Kellywest251@gmail.com';
-const SA_PASSWORD = process.env.SA_PASSWORD || 'ChangeMe123!';
+const SA_EMAIL    = process.env.SA_EMAIL;
+const SA_PASSWORD = process.env.SA_PASSWORD;
+if (!SA_EMAIL || !SA_PASSWORD) { console.error('Set SA_EMAIL and SA_PASSWORD env vars'); process.exit(1); }
 
 async function run() {
   try {

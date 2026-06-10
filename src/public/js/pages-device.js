@@ -36,7 +36,8 @@ async function renderAttendanceDevice() {
   let device = null;
   try {
     const res = await fetch('/api/devices/my', {
-      headers: { 'Authorization': 'Bearer ' + (localStorage.getItem('token') || '') }
+      headers: { 'Authorization': 'Bearer ' + (localStorage.getItem('token') || '') },
+      signal: AbortSignal.timeout(10000),
     });
     const json = await res.json();
     device = json.data || null;
@@ -209,6 +210,7 @@ function _devPairedHTML(d) {
   <div style="display:flex;gap:8px;align-items:center">
     <input id="lecturer-pin-input" type="password" inputmode="numeric" maxlength="4" placeholder="4 digits" style="width:100px;padding:8px 12px;border:1.5px solid #e2e8f0;border-radius:8px;font-size:16px;letter-spacing:4px">
     <button onclick="saveLecturerPin()" style="padding:8px 16px;background:#1e293b;color:#fff;border:none;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer">Save PIN</button>
+    <button onclick="clearLecturerPin()" style="padding:8px 14px;background:transparent;color:#ef4444;border:1.5px solid #ef4444;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer">Clear</button>
   </div>
 </div>
 
@@ -902,21 +904,25 @@ async function renderAdminDevices() {
     .ad-device-grid{display:flex;flex-direction:column;gap:12px}
     .ad-device-card{background:#fff;border-radius:16px;padding:0;box-shadow:0 1px 4px rgba(0,0,0,.06),0 0 0 1px rgba(0,0,0,.04);overflow:hidden;transition:box-shadow .18s}
     .ad-device-card:hover{box-shadow:0 4px 20px rgba(0,0,0,.1),0 0 0 1px rgba(0,0,0,.06)}
-    .ad-device-card-top{display:flex;align-items:center;gap:14px;padding:16px 20px;border-bottom:1px solid #f1f5f9}
+    .ad-device-card-top{display:flex;align-items:center;gap:14px;padding:16px 20px 12px;border-bottom:none}
     .ad-device-avatar{width:42px;height:42px;border-radius:12px;background:linear-gradient(135deg,#e0e7ff,#ede9fe);display:flex;align-items:center;justify-content:center;flex-shrink:0}
-    .ad-device-name{font-size:15px;font-weight:700;color:#1e293b;margin:0 0 3px}
+    .ad-device-name{font-size:15px;font-weight:700;color:#1e293b;margin:0 0 3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
     .ad-device-meta{font-size:11px;color:#94a3b8;display:flex;align-items:center;gap:10px;flex-wrap:wrap}
     .ad-status-dot{width:7px;height:7px;border-radius:50%;display:inline-block;flex-shrink:0}
     .ad-status-online{background:#22c55e;box-shadow:0 0 0 3px rgba(34,197,94,.2)}
     .ad-status-offline{background:#cbd5e1}
     .ad-status-label-online{color:#16a34a;font-weight:600}
     .ad-status-label-offline{color:#94a3b8}
-    .ad-device-actions{margin-left:auto;display:flex;gap:6px;flex-shrink:0}
-    .ad-act-btn{display:inline-flex;align-items:center;gap:4px;border-radius:8px;padding:5px 11px;font-size:11px;font-weight:600;cursor:pointer;border:none;transition:background .15s}
+    .ad-device-actions{display:flex;gap:6px;flex-wrap:wrap;padding:0 20px 14px;border-bottom:1px solid #f1f5f9}
+    .ad-act-btn{display:inline-flex;align-items:center;gap:4px;border-radius:8px;padding:6px 12px;font-size:11px;font-weight:600;cursor:pointer;border:none;transition:background .15s;white-space:nowrap}
+    .ad-act-rename{background:#f0fdf4;color:#166534}
+    .ad-act-rename:hover{background:#dcfce7}
     .ad-act-setup{background:#f1f5f9;color:#475569}
     .ad-act-setup:hover{background:#e2e8f0}
     .ad-act-remove{background:#fff0f0;color:#dc2626}
     .ad-act-remove:hover{background:#fee2e2}
+    .ad-act-factory{background:#fff7ed;color:#9a3412}
+    .ad-act-factory:hover{background:#ffedd5}
     .ad-device-card-body{padding:14px 20px;display:flex;flex-direction:column;gap:10px}
     .ad-device-dept{font-size:12px;font-weight:600;color:#475569;display:flex;align-items:center;gap:6px}
     .ad-device-dept-icon{color:#94a3b8}
@@ -1065,13 +1071,19 @@ async function adLoadDevices() {
     if (countEl) countEl.textContent = devices.length;
 
     if (!devices.length) {
+      const instCode = (typeof currentUser !== 'undefined' && currentUser?.company?.institutionCode) || null;
       list.innerHTML = `
         <div class="ad-empty">
           <div class="ad-empty-icon">
             <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#94a3b8" stroke-width="1.5"><rect x="5" y="2" width="14" height="20" rx="2"/><line x1="12" y1="18" x2="12.01" y2="18"/><line x1="9" y1="6" x2="15" y2="6"/><line x1="9" y1="10" x2="15" y2="10"/></svg>
           </div>
           <div class="ad-empty-title">No devices paired yet</div>
-          <div class="ad-empty-desc">Generate a pairing code above and have the Class Rep set up the first device.</div>
+          <div class="ad-empty-desc">
+            To pair a device: <strong>1)</strong> Click <em>Generate Pairing Code</em> above.
+            <strong>2)</strong> Give the Class Rep your Institution Code
+            ${instCode ? `(<strong style="color:var(--primary);font-family:monospace;letter-spacing:2px">${instCode}</strong>)` : ''}
+            and the pairing code. <strong>3)</strong> The Class Rep connects to the device hotspot and enters both codes.
+          </div>
         </div>`;
       return;
     }
@@ -1102,6 +1114,15 @@ async function adLoadDevices() {
           </span>`;
         }).join('');
 
+        const classRepName = d.classRepId?.name || null;
+        const classRepPill = classRepName
+          ? `<span class="ad-lec-pill" style="background:#faf5ff;border-color:#d8b4fe;color:#7c3aed">
+              <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><polyline points="17 11 19 13 23 9"/></svg>
+              Rep: ${_esc(classRepName)}
+              <button class="ad-lec-remove" onclick="adRemoveClassRep('${d.deviceId}')" title="Remove class rep">&times;</button>
+            </span>`
+          : '';
+
         const setupData = JSON.stringify({
           name: d.deviceName || '',
           dept: d.assignedDepartment || '',
@@ -1115,7 +1136,7 @@ async function adLoadDevices() {
               <div class="ad-device-avatar">
                 <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#6366f1" stroke-width="1.8"><rect x="5" y="2" width="14" height="20" rx="2"/><line x1="12" y1="18" x2="12.01" y2="18" stroke-width="2.5"/><line x1="9" y1="7" x2="15" y2="7"/><line x1="9" y1="11" x2="15" y2="11"/></svg>
               </div>
-              <div style="min-width:0">
+              <div style="min-width:0;flex:1">
                 <div class="ad-device-name">${d.deviceName}</div>
                 <div class="ad-device-meta">
                   <span class="ad-status-dot ${isOnline ? 'ad-status-online' : 'ad-status-offline'}"></span>
@@ -1124,16 +1145,24 @@ async function adLoadDevices() {
                   <span>${d.deviceId}</span>
                 </div>
               </div>
-              <div class="ad-device-actions">
-                <button class="ad-act-btn ad-act-setup" onclick="adOpenSetupModal('${d.deviceId}', ${setupData})">
-                  <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
-                  Setup
-                </button>
-                <button class="ad-act-btn ad-act-remove" onclick="adRemoveDevice('${d.deviceId}','${d.deviceName}')">
-                  <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6M14 11v6"/><path d="M9 6V4h6v2"/></svg>
-                  Remove
-                </button>
-              </div>
+            </div>
+            <div class="ad-device-actions">
+              <button class="ad-act-btn ad-act-rename" onclick="adRenameDevice('${d.deviceId}','${(d.deviceName||'').replace(/'/g,"&#39;")}')" title="Rename device">
+                <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+                Rename
+              </button>
+              <button class="ad-act-btn ad-act-setup" onclick="adOpenSetupModal('${d.deviceId}', ${setupData})">
+                <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+                Setup
+              </button>
+              <button class="ad-act-btn ad-act-factory" onclick="adFactoryReset('${d.deviceId}','${(d.deviceName||'').replace(/'/g,"&#39;")}')" title="Wipe device to factory defaults">
+                <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+                Factory Reset
+              </button>
+              <button class="ad-act-btn ad-act-remove" onclick="adRemoveDevice('${d.deviceId}','${d.deviceName}')">
+                <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6M14 11v6"/><path d="M9 6V4h6v2"/></svg>
+                Remove
+              </button>
             </div>
             <div class="ad-device-card-body">
               <div class="ad-device-dept">
@@ -1146,6 +1175,9 @@ async function adLoadDevices() {
                   <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
                   Assign Lecturer
                 </button>
+              </div>
+              <div class="ad-lec-row" style="margin-top:6px;border-top:1px dashed var(--border);padding-top:6px">
+                ${classRepPill || '<span style="font-size:11px;color:#94a3b8;font-style:italic">No class rep assigned · use Class Reps page to assign</span>'}
               </div>
             </div>
             <div class="ad-device-footer">
@@ -1186,6 +1218,11 @@ async function adOpenAssignModal(deviceId) {
       <div style="font-size:16px;font-weight:700;margin-bottom:4px;color:var(--text-primary)">Assign Lecturer to Device</div>
       <div style="font-size:12px;color:var(--text-secondary);margin-bottom:20px">Device: <strong>${deviceId}</strong></div>
 
+      <label style="display:block;font-size:12px;font-weight:600;color:var(--text-secondary);margin-bottom:4px">Department</label>
+      <select id="ad-dept-select" style="width:100%;padding:8px 10px;border:1px solid #e2e8f0;border-radius:8px;font-size:13px;margin-bottom:14px;background:var(--surface,#fff);color:var(--text-primary)">
+        <option value="">— All departments —</option>
+      </select>
+
       <label style="display:block;font-size:12px;font-weight:600;color:var(--text-secondary);margin-bottom:4px">Lecturer</label>
       <select id="ad-lec-select" style="width:100%;padding:8px 10px;border:1px solid #e2e8f0;border-radius:8px;font-size:13px;margin-bottom:14px;background:var(--surface,#fff);color:var(--text-primary)">
         <option value="">Loading lecturers…</option>
@@ -1213,9 +1250,26 @@ async function adOpenAssignModal(deviceId) {
     const lecturers = data.lecturers || [];
     window._adLecturerData = lecturers;
 
-    const lecSel = document.getElementById('ad-lec-select');
-    lecSel.innerHTML = `<option value="">— Select lecturer —</option>` +
-      lecturers.map(l => `<option value="${l._id}">${l.name}</option>`).join('');
+    const deptSel = document.getElementById('ad-dept-select');
+    const lecSel  = document.getElementById('ad-lec-select');
+
+    // Populate department filter from unique departments in lecturer list
+    const depts = [...new Set(lecturers.map(l => l.department).filter(Boolean))].sort();
+    deptSel.innerHTML = `<option value="">— All departments —</option>` +
+      depts.map(d => `<option value="${esc(d)}">${esc(d)}</option>`).join('');
+
+    function populateLecturers(filterDept) {
+      const filtered = filterDept ? lecturers.filter(l => l.department === filterDept) : lecturers;
+      lecSel.innerHTML = `<option value="">— Select lecturer —</option>` +
+        filtered.map(l => `<option value="${l._id}">${esc(l.name)}${l.department ? ' · ' + esc(l.department) : ''}</option>`).join('');
+      document.getElementById('ad-crs-select').innerHTML = `<option value="">Select a lecturer first</option>`;
+    }
+
+    populateLecturers('');
+
+    deptSel.addEventListener('change', () => {
+      populateLecturers(deptSel.value);
+    });
 
     lecSel.addEventListener('change', () => {
       const lec = lecturers.find(l => l._id === lecSel.value);
@@ -1275,6 +1329,111 @@ async function adRemoveLecturer(deviceId, lecturerId, courseId) {
     await adLoadDevices();
   } catch (e) {
     alert('Failed to remove lecturer: ' + (e.message || 'Server error'));
+  }
+}
+
+// ─── ASSIGN CLASS REP TO DEVICE ──────────────────────────────────────────────
+async function adOpenClassRepModal(deviceId) {
+  const existing = document.getElementById('ad-classrep-modal-overlay');
+  if (existing) existing.remove();
+
+  const overlay = document.createElement('div');
+  overlay.id = 'ad-classrep-modal-overlay';
+  overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:9000;display:flex;align-items:center;justify-content:center;padding:16px';
+  overlay.innerHTML = `
+    <div style="background:var(--surface,#fff);border-radius:14px;padding:28px;width:100%;max-width:480px;box-shadow:0 20px 60px rgba(0,0,0,.25);position:relative">
+      <button onclick="document.getElementById('ad-classrep-modal-overlay').remove()"
+        style="position:absolute;top:16px;right:16px;background:none;border:none;cursor:pointer;color:var(--text-muted);font-size:18px">✕</button>
+      <div style="font-size:16px;font-weight:800;color:#0f172a;margin-bottom:4px">Assign Class Rep to Device</div>
+      <div style="font-size:12px;color:#64748b;margin-bottom:20px">Search by index number to find the class representative for this device.</div>
+
+      <div style="display:flex;gap:8px;margin-bottom:12px">
+        <input id="cr-dev-index" type="text" placeholder="Student index number (e.g. UCC/CS/23/0001)"
+          style="flex:1;padding:9px 12px;border:1.5px solid var(--border);border-radius:8px;font-size:13px;font-family:inherit;outline:none;text-transform:uppercase"
+          oninput="this.value=this.value.toUpperCase()">
+        <button onclick="adSearchClassRep('${deviceId}')"
+          style="padding:9px 16px;background:#7c3aed;color:#fff;border:none;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer;white-space:nowrap">Search</button>
+      </div>
+      <div id="cr-dev-result" style="min-height:40px"></div>
+    </div>`;
+  document.body.appendChild(overlay);
+  document.getElementById('cr-dev-index')?.focus();
+}
+
+async function adSearchClassRep(deviceId) {
+  const indexInput = document.getElementById('cr-dev-index');
+  const result     = document.getElementById('cr-dev-result');
+  if (!indexInput || !result) return;
+  const idx = indexInput.value.trim().toUpperCase();
+  if (!idx) { indexInput.style.borderColor = '#ef4444'; indexInput.focus(); return; }
+  indexInput.style.borderColor = 'var(--border)';
+  result.innerHTML = '<div style="font-size:13px;color:var(--text-muted)">Searching…</div>';
+  try {
+    const data = await api('/api/class-rep-admin/students?indexNumber=' + encodeURIComponent(idx));
+    const students = data.students || [];
+    if (!students.length) {
+      result.innerHTML = '<div style="font-size:13px;color:#ef4444">No student found with that index number.</div>';
+      return;
+    }
+    const s = students[0];
+    const tags = [
+      s.programme ? `<span style="background:#ede9fe;color:#7c3aed;padding:1px 7px;border-radius:20px;font-size:11px;font-weight:700">${_esc(s.programme)}</span>` : '',
+      s.studentLevel ? `<span style="background:#dbeafe;color:#1d4ed8;padding:1px 7px;border-radius:20px;font-size:11px;font-weight:700">L${_esc(s.studentLevel)}</span>` : '',
+      s.studentGroup ? `<span style="background:#ecfdf5;color:#059669;padding:1px 7px;border-radius:20px;font-size:11px;font-weight:700">Grp ${_esc(s.studentGroup)}</span>` : '',
+      s.sessionType  ? `<span style="background:#fff7ed;color:#c2410c;padding:1px 7px;border-radius:20px;font-size:11px;font-weight:600">${_esc(s.sessionType)}</span>` : '',
+    ].filter(Boolean).join(' ');
+    result.innerHTML = `
+      <div style="border:1.5px solid var(--border);border-radius:10px;padding:14px 16px;display:flex;gap:12px;align-items:center;margin-bottom:14px">
+        <div style="width:40px;height:40px;border-radius:50%;background:linear-gradient(135deg,#7c3aed,#6366f1);display:flex;align-items:center;justify-content:center;font-size:16px;font-weight:800;color:#fff;flex-shrink:0">
+          ${_esc((s.name||'?')[0].toUpperCase())}
+        </div>
+        <div style="min-width:0;flex:1">
+          <div style="font-weight:700;font-size:14px">${_esc(s.name)}</div>
+          <div style="font-size:11px;color:#64748b;margin-bottom:5px">${_esc(s.IndexNumber||s.indexNumber||'')} · ${_esc(s.department||'')}</div>
+          <div style="display:flex;gap:5px;flex-wrap:wrap">${tags}</div>
+          ${s.isClassRep ? '<div style="margin-top:5px;font-size:11px;color:#7c3aed;font-weight:700">⭐ Already a Class Rep</div>' : ''}
+        </div>
+      </div>
+      <div style="display:flex;gap:8px;justify-content:flex-end">
+        <button onclick="document.getElementById('ad-classrep-modal-overlay').remove()"
+          style="padding:9px 16px;background:var(--bg,#f8fafc);border:1.5px solid var(--border);border-radius:8px;font-size:13px;font-weight:600;cursor:pointer">Cancel</button>
+        <button onclick="adConfirmClassRep('${deviceId}','${s._id}','${_esc(s.name).replace(/'/g,"\\'")}','${!s.isClassRep}')"
+          style="padding:9px 16px;background:#7c3aed;color:#fff;border:none;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer">
+          ${s.isClassRep ? 'Assign to This Device' : 'Make Rep & Assign to Device'}
+        </button>
+      </div>`;
+  } catch (e) {
+    result.innerHTML = `<div style="font-size:13px;color:#ef4444">${e.message || 'Search failed'}</div>`;
+  }
+}
+
+async function adConfirmClassRep(deviceId, studentId, name, needsRepRole) {
+  try {
+    if (needsRepRole === 'true') {
+      await api('/api/class-rep-admin/assign', { method: 'POST', body: JSON.stringify({ studentId }) });
+    }
+    await api(`/api/devices/${deviceId}/assign-class-rep`, {
+      method: 'PATCH',
+      body: JSON.stringify({ classRepId: studentId }),
+    });
+    document.getElementById('ad-classrep-modal-overlay')?.remove();
+    typeof toastSuccess === 'function' ? toastSuccess(`${name} assigned as class rep for this device`) : alert(`${name} assigned as class rep`);
+    await adLoadDevices();
+  } catch (e) {
+    typeof toastError === 'function' ? toastError(e.message || 'Failed to assign class rep') : alert('Failed: ' + e.message);
+  }
+}
+
+async function adRemoveClassRep(deviceId) {
+  if (!confirm('Remove the class rep assignment from this device?')) return;
+  try {
+    await api(`/api/devices/${deviceId}/assign-class-rep`, {
+      method: 'PATCH',
+      body: JSON.stringify({ classRepId: null }),
+    });
+    await adLoadDevices();
+  } catch (e) {
+    alert('Failed to remove class rep: ' + (e.message || 'Server error'));
   }
 }
 
@@ -1375,6 +1534,120 @@ async function adSubmitSetup(deviceId) {
 
   document.getElementById('ad-setup-modal-overlay')?.remove();
   await adLoadDevices();
+}
+
+// ─── RENAME DEVICE ───────────────────────────────────────────────────────────
+async function adRenameDevice(deviceId, currentName) {
+  const existing = document.getElementById('ad-rename-modal-overlay');
+  if (existing) existing.remove();
+
+  const overlay = document.createElement('div');
+  overlay.id = 'ad-rename-modal-overlay';
+  overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:9000;display:flex;align-items:center;justify-content:center;padding:16px';
+  overlay.innerHTML = `
+    <div style="background:#fff;border-radius:16px;padding:28px;width:100%;max-width:400px;box-shadow:0 20px 60px rgba(0,0,0,.25);position:relative">
+      <button onclick="document.getElementById('ad-rename-modal-overlay').remove()" style="position:absolute;top:14px;right:14px;background:none;border:none;cursor:pointer;font-size:20px;color:#94a3b8">&times;</button>
+      <div style="font-size:16px;font-weight:700;margin-bottom:4px;color:#0f172a">Rename Device</div>
+      <div style="font-size:12px;color:#94a3b8;margin-bottom:20px">ID: ${deviceId}</div>
+      <label style="display:block;font-size:12px;font-weight:600;color:#475569;margin-bottom:6px">New device name</label>
+      <input id="ad-rename-input" type="text" value="${(currentName || '').replace(/"/g,'&quot;')}"
+        placeholder="e.g. CS-Lab-A, Room-201-Device"
+        style="width:100%;padding:10px 12px;border:1.5px solid #e2e8f0;border-radius:8px;font-size:14px;outline:none;margin-bottom:6px"
+        oninput="this.style.borderColor='#6366f1'"
+        onkeydown="if(event.key==='Enter')adSubmitRename('${deviceId}')"/>
+      <div id="ad-rename-err" style="display:none;color:#dc2626;font-size:12px;margin-bottom:10px"></div>
+      <div style="display:flex;gap:10px;justify-content:flex-end;margin-top:16px">
+        <button onclick="document.getElementById('ad-rename-modal-overlay').remove()" style="padding:9px 18px;border:1px solid #e2e8f0;border-radius:8px;background:none;cursor:pointer;font-size:13px;color:#475569">Cancel</button>
+        <button id="ad-rename-submit" onclick="adSubmitRename('${deviceId}')" style="padding:9px 18px;border:none;border-radius:8px;background:#6366f1;color:#fff;cursor:pointer;font-size:13px;font-weight:600">Save Name</button>
+      </div>
+    </div>`;
+  document.body.appendChild(overlay);
+  overlay.addEventListener('click', e => { if (e.target === overlay) overlay.remove(); });
+  setTimeout(() => document.getElementById('ad-rename-input')?.focus(), 50);
+}
+
+async function adSubmitRename(deviceId) {
+  const input  = document.getElementById('ad-rename-input');
+  const errEl  = document.getElementById('ad-rename-err');
+  const btn    = document.getElementById('ad-rename-submit');
+  const newName = input?.value?.trim();
+  if (!newName) {
+    if (errEl) { errEl.textContent = 'Device name cannot be empty.'; errEl.style.display = 'block'; }
+    return;
+  }
+  if (btn) { btn.disabled = true; btn.textContent = 'Saving…'; }
+  if (errEl) errEl.style.display = 'none';
+  try {
+    await api('/api/devices/my/rename', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ deviceName: newName, deviceId }),
+    });
+    document.getElementById('ad-rename-modal-overlay')?.remove();
+    await adLoadDevices();
+  } catch (e) {
+    if (errEl) { errEl.textContent = e.message || 'Failed to rename device.'; errEl.style.display = 'block'; }
+    if (btn) { btn.disabled = false; btn.textContent = 'Save Name'; }
+  }
+}
+
+// ─── FACTORY RESET DEVICE ────────────────────────────────────────────────────
+function adFactoryReset(deviceId, deviceName) {
+  const existing = document.getElementById('ad-freset-modal-overlay');
+  if (existing) existing.remove();
+
+  const overlay = document.createElement('div');
+  overlay.id = 'ad-freset-modal-overlay';
+  overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:9000;display:flex;align-items:center;justify-content:center;padding:16px';
+  overlay.innerHTML = `
+    <div style="background:#fff;border-radius:16px;padding:32px;width:100%;max-width:420px;box-shadow:0 20px 60px rgba(0,0,0,.3);position:relative">
+      <div style="display:flex;align-items:center;gap:14px;margin-bottom:16px">
+        <div style="width:48px;height:48px;border-radius:12px;background:#fff7ed;border:1.5px solid #fed7aa;display:flex;align-items:center;justify-content:center;flex-shrink:0">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#ea580c" stroke-width="2"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+        </div>
+        <div>
+          <div style="font-size:17px;font-weight:700;color:#0f172a">Factory Reset Device</div>
+          <div style="font-size:12px;color:#94a3b8;margin-top:2px">${deviceId}</div>
+        </div>
+      </div>
+      <p style="font-size:13px;color:#475569;line-height:1.65;margin-bottom:12px">
+        This will <strong>permanently wipe all data</strong> on <strong>${deviceName || deviceId}</strong>:
+      </p>
+      <ul style="font-size:13px;color:#475569;line-height:2;padding-left:18px;margin-bottom:16px">
+        <li>WiFi credentials stored on the device</li>
+        <li>Institution code &amp; pairing token</li>
+        <li>All locally cached attendance records</li>
+        <li>Device configuration and settings</li>
+      </ul>
+      <div style="background:#fef2f2;border:1px solid #fecaca;border-radius:10px;padding:12px 14px;font-size:12px;color:#b91c1c;margin-bottom:20px;line-height:1.5">
+        ⚠️ The device will return to <strong>factory setup mode</strong> on its next heartbeat (within 5 seconds if online). This action cannot be undone.
+      </div>
+      <div id="ad-freset-err" style="display:none;color:#dc2626;font-size:12px;margin-bottom:10px"></div>
+      <div style="display:flex;gap:10px;justify-content:flex-end">
+        <button onclick="document.getElementById('ad-freset-modal-overlay').remove()" style="padding:10px 20px;border:1px solid #e2e8f0;border-radius:8px;background:none;cursor:pointer;font-size:13px;color:#475569;font-weight:500">Cancel</button>
+        <button id="ad-freset-submit" onclick="adSubmitFactoryReset('${deviceId}')"
+          style="padding:10px 20px;border:none;border-radius:8px;background:#dc2626;color:#fff;cursor:pointer;font-size:13px;font-weight:700">
+          Yes, Factory Reset
+        </button>
+      </div>
+    </div>`;
+  document.body.appendChild(overlay);
+  overlay.addEventListener('click', e => { if (e.target === overlay) overlay.remove(); });
+}
+
+async function adSubmitFactoryReset(deviceId) {
+  const errEl = document.getElementById('ad-freset-err');
+  const btn   = document.getElementById('ad-freset-submit');
+  if (btn) { btn.disabled = true; btn.textContent = 'Resetting…'; }
+  if (errEl) errEl.style.display = 'none';
+  try {
+    await api(`/api/devices/${deviceId}/factory-reset`, { method: 'POST' });
+    document.getElementById('ad-freset-modal-overlay')?.remove();
+    await adLoadDevices();
+  } catch (e) {
+    if (errEl) { errEl.textContent = e.message || 'Factory reset failed.'; errEl.style.display = 'block'; }
+    if (btn) { btn.disabled = false; btn.textContent = 'Yes, Factory Reset'; }
+  }
 }
 
 // ─── REMOVE DEVICE ────────────────────────────────────────────────────────────
