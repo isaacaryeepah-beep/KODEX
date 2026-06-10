@@ -206,6 +206,7 @@ WebServer   localHttp(80);
 DNSServer   dns;
 
 String wifiSSID, wifiPass, deviceId, deviceJWT, apiBase, institutionCode;
+int8_t rssiThreshold = -70;  // dBm — students weaker than this are rejected
 
 // Active session (from heartbeat)
 String   sessionId, sessionTitle, sessionSeed, sessionCourse, sessionLecturer;
@@ -522,12 +523,13 @@ static void doWifiScan() {
 // ─── NVS ─────────────────────────────────────────────────────────────────────
 static void loadConfig() {
   prefs.begin("kodex", true);
-  wifiSSID        = prefs.getString("ssid", "");
-  wifiPass        = prefs.getString("pass", "");
-  deviceId        = prefs.getString("did",  "");
-  deviceJWT       = prefs.getString("jwt",  "");
-  apiBase         = prefs.getString("api",  DEFAULT_API_BASE);
-  institutionCode = prefs.getString("inst", "");
+  wifiSSID        = prefs.getString("ssid",  "");
+  wifiPass        = prefs.getString("pass",  "");
+  deviceId        = prefs.getString("did",   "");
+  deviceJWT       = prefs.getString("jwt",   "");
+  apiBase         = prefs.getString("api",   DEFAULT_API_BASE);
+  institutionCode = prefs.getString("inst",  "");
+  rssiThreshold   = (int8_t)prefs.getInt("rssi", -70);
   prefs.end();
   if (deviceId.isEmpty()) deviceId = "esp32s3-" + macSuffix();
 }
@@ -536,6 +538,7 @@ static void saveConfig() {
   prefs.putString("ssid", wifiSSID); prefs.putString("pass", wifiPass);
   prefs.putString("did",  deviceId); prefs.putString("jwt",  deviceJWT);
   prefs.putString("api",  apiBase);  prefs.putString("inst", institutionCode);
+  prefs.putInt("rssi", (int)rssiThreshold);
   prefs.end();
 }
 static void factoryReset() {
@@ -2074,6 +2077,7 @@ static void drawSettings() {
     int32_t iw = spr.textWidth(label[0] == 'W' ? "~" :
                                label[0] == 'S' ? "S" :
                                label[0] == 'B' ? "O" :
+                               label[0] == 'R' ? "R" :
                                label[0] == 'D' ? "i" : "!");
     // Draw simple pixel icon by label type
     if (danger) {
@@ -2100,6 +2104,12 @@ static void drawSettings() {
         int32_t rx = (a == 0 || a == 2) ? 0 : (a == 1 ? 10 : -10);
         int32_t ry = (a == 1 || a == 3) ? 0 : (a == 0 ? -10 : 10);
         spr.fillRect(27 + rx - 1, y + 22 + ry - 1, 2, 2, iconCol);
+      }
+    } else if (label[0] == 'R') {
+      // Signal bars icon for RSSI Range
+      for (int8_t b = 0; b < 4; b++) {
+        int32_t bh = 4 + b * 3;
+        spr.fillRect(20 + b * 4, y + 32 - bh, 3, bh, iconCol);
       }
     } else {
       // Info "i"
@@ -2146,11 +2156,13 @@ static void drawSettings() {
   String brtStr        = (curBrightness >= 220) ? "High" :
                          (curBrightness >= 155) ? "Medium" : "Low";
 
+  String rssiStr = String(rssiThreshold) + " dBm";
   settRow(0, COL_DIM_CARD, COL_PRIMARY,  "Wi-Fi Network",     wfVal.c_str(),  wfCol,    false, false);
   settRow(1, COL_DIM_CARD, COL_TEAL,     "Sync Status",       syncVal,        syncCol2, true,  false);
   settRow(2, COL_DIM_CARD, COL_WARNING,  "Brightness",        brtStr.c_str(), COL_TEXT, false, false);
-  settRow(3, COL_DIM_CARD, COL_INDIGO,   "Device Information","",             COL_MUTED,false, false);
-  settRow(4, 0x2000,       COL_ERROR,    "Factory Reset",     "Hold 3s",      COL_ERROR,false, true);
+  settRow(3, COL_DIM_CARD, COL_CYAN,     "RSSI Range",        rssiStr.c_str(),COL_TEXT, false, false);
+  settRow(4, COL_DIM_CARD, COL_INDIGO,   "Device Information","",             COL_MUTED,false, false);
+  settRow(5, 0x2000,       COL_ERROR,    "Factory Reset",     "Hold 3s",      COL_ERROR,false, true);
 
   spr.pushSprite(0, 0);
 }
@@ -2541,6 +2553,23 @@ static void registerLocalHttp() {
     localHttp.send(200, "application/json", s);
   });
 
+  // Returns the RSSI (dBm) of the station whose IP matches clientIp.
+  // Uses the softAP station list + tcpip ARP table for IP→MAC→RSSI mapping.
+  // Returns 0 if the station cannot be found (treated as "signal OK" to avoid
+  // false rejections on platforms where ARP lookup is unavailable).
+  auto getClientRSSI = [](const String& clientIp) -> int8_t {
+    wifi_sta_list_t stalist;
+    if (esp_wifi_ap_get_sta_list(&stalist) != ESP_OK || stalist.num == 0) return 0;
+    tcpip_adapter_sta_list_t iplist;
+    if (tcpip_adapter_get_sta_list(&stalist, &iplist) != ESP_OK) return 0;
+    for (int i = 0; i < (int)iplist.num && i < (int)stalist.num; i++) {
+      char ipStr[16];
+      snprintf(ipStr, sizeof(ipStr), IPSTR, IP2STR(&iplist.sta[i].ip));
+      if (clientIp == ipStr) return stalist.sta[i].rssi;
+    }
+    return 0;  // not found — allow through
+  };
+
   // /proof?studentId=<id> — generates a one-time signed attendance proof.
   // Unique random nonce per call; 15-second expiry; replay prevented by server.
   // The Capacitor app calls this automatically — no manual code entry needed.
@@ -2555,6 +2584,20 @@ static void registerLocalHttp() {
     String userId = localHttp.arg("studentId");
     if (userId.isEmpty()) {
       localHttp.send(400, "application/json", "{\"error\":\"studentId required\"}"); return;
+    }
+    // ── RSSI proximity check ─────────────────────────────────────────────────
+    // Only issue proofs to students close enough to the device.
+    // rssiThreshold is configurable in Settings (default -70 dBm).
+    // A return of 0 means the lookup failed — allow through to avoid false blocks.
+    String clientIp = localHttp.client().remoteIP().toString();
+    int8_t clientRSSI = getClientRSSI(clientIp);
+    if (clientRSSI != 0 && clientRSSI < rssiThreshold) {
+      String errMsg = "{\"error\":\"Too far from classroom device. Move closer and try again.\","
+                      "\"rssi\":" + String(clientRSSI) + ","
+                      "\"required\":" + String(rssiThreshold) + "}";
+      localHttp.send(403, "application/json", errMsg);
+      LOG("RSSI reject: " + String(clientRSSI) + " dBm (thresh " + String(rssiThreshold) + ")");
+      return;
     }
     uint8_t nb[8];
     for (int i = 0; i < 8; i++) nb[i] = (uint8_t)(esp_random() & 0xFF);
@@ -2905,10 +2948,10 @@ static void handlePairedTap(uint16_t tx, uint16_t ty) {
       curScreen = SUMMARY;
     }
   }
-  // SETTINGS screen — 5 rows × 40 px starting at y=58
+  // SETTINGS screen — 6 rows × 44 px starting at y=56
   else if (curScreen == SETTINGS) {
-    if (ty >= 58 && ty < 58 + 5 * 40) {
-      int32_t rowIdx = ((int32_t)ty - 58) / 40;
+    if (ty >= 56 && ty < 56 + 6 * 44) {
+      int32_t rowIdx = ((int32_t)ty - 56) / 44;
       if (rowIdx == 0) {                           // Wi-Fi Network
         if (wifiNetCount == 0) doWifiScan();
         curScreen = WIFI_SCAN;
@@ -2917,10 +2960,21 @@ static void handlePairedTap(uint16_t tx, uint16_t ty) {
         else if (curBrightness >= 155) curBrightness = 100;
         else                           curBrightness = 255;
         display.setBrightness(curBrightness);
-      } else if (rowIdx == 3) {                    // Device Information
+      } else if (rowIdx == 3) {                    // RSSI Range cycle
+        // Cycles: -50 → -55 → -60 → -65 → -70 → -75 → -80 → -85 → -50
+        if      (rssiThreshold >= -50) rssiThreshold = -55;
+        else if (rssiThreshold >= -55) rssiThreshold = -60;
+        else if (rssiThreshold >= -60) rssiThreshold = -65;
+        else if (rssiThreshold >= -65) rssiThreshold = -70;
+        else if (rssiThreshold >= -70) rssiThreshold = -75;
+        else if (rssiThreshold >= -75) rssiThreshold = -80;
+        else if (rssiThreshold >= -80) rssiThreshold = -85;
+        else                           rssiThreshold = -50;
+        saveConfig();
+      } else if (rowIdx == 4) {                    // Device Information
         curScreen = DEVICE_INFO;
       }
-      // rowIdx == 4 (Factory Reset) requires long-press — handled in loop()
+      // rowIdx == 5 (Factory Reset) requires long-press — handled in loop()
     }
   }
 }
@@ -3224,9 +3278,9 @@ void loop() {
       if (!touchActive) {
         touchActive = true; touchDownMs = millis(); touchHandled = false;
       }
-      // Factory reset: 3-second hold on row 4 of Settings (y 218-258)
+      // Factory reset: 3-second hold on row 5 of Settings (y 276-320)
       if (curScreen == SETTINGS && !touchHandled &&
-          touchY >= 218 && touchY < 258 &&
+          touchY >= 276 && touchY < 320 &&
           millis() - touchDownMs >= 3000) {
         touchHandled = true; factoryReset();
       }

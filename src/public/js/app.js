@@ -12839,6 +12839,8 @@ async function _tryAutoMark(ip, userId) {
       const msg = e.error || 'Device not ready';
       if (msg.toLowerCase().includes('no active session') || msg.toLowerCase().includes('no session')) {
         setStatus('⏳', 'No active session', 'Ask your lecturer to start the attendance session', null);
+      } else if (msg.toLowerCase().includes('too far')) {
+        setStatus('📡', 'Too far from device', 'Move closer to the classroom device and tap Try Again', 'rgba(220,38,38,.1)');
       } else {
         setStatus('⚠️', msg, 'Tap Try Again to retry', null);
       }
