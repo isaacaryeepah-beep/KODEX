@@ -12993,9 +12993,16 @@ async function _flushEsp32Queue() {
     const q = JSON.parse(localStorage.getItem('_dikly_esp32_q') || '[]');
     if (!q.length) return;
     localStorage.removeItem('_dikly_esp32_q');
-    for (const { p } of q) {
+    const now = Date.now();
+    for (const { p, t } of q) {
+      // Discard tokens older than 10 min — server nonce TTL is 10 min, replaying after that creates duplicates
+      if (now - (t || 0) > 600_000) continue;
       try { await api('/api/attendance-sessions/mark', { method: 'POST', body: JSON.stringify(p) }); }
-      catch (_) {}
+      catch (e) {
+        // 404 = session gone, 409 = already marked, 403 replay = nonce reused — all unretriable, discard silently
+        if (e.status === 404 || e.status === 409 || e.status === 403) continue;
+        // Any other error (5xx, network) — silently discard too since token may expire
+      }
     }
   } catch (_) {}
 }

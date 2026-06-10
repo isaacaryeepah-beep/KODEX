@@ -895,15 +895,16 @@ exports.markAttendance = async (req, res) => {
         });
       }
 
-      // 5. HMAC signature
+      // 5. HMAC signature — new firmware outputs 64 hex chars (32 bytes), old outputs 32
+      const proofSigClean = String(sig || '').toLowerCase().replace(/[^0-9a-f]/g, '');
+      const proofSigLen = proofSigClean.length === 64 ? 64 : 32;
       const expectedProofSig = crypto
         .createHmac('sha256', session.esp32Seed)
         .update(`proof:${proofSession}:${proofStudent}:${timestamp}:${nonce}`)
         .digest('hex')
-        .slice(0, 32);
+        .slice(0, proofSigLen);
 
-      const proofSigClean = String(sig || '').toLowerCase().replace(/[^0-9a-f]/g, '');
-      if (proofSigClean.length !== 32 ||
+      if (proofSigClean.length !== proofSigLen ||
           !crypto.timingSafeEqual(Buffer.from(proofSigClean), Buffer.from(expectedProofSig))) {
         console.warn(`[MARK] Invalid proof sig from ${req.user.name}`);
         return res.status(403).json({
@@ -948,21 +949,25 @@ exports.markAttendance = async (req, res) => {
         });
       }
 
-      // Nonce dedup — prevents URL replay if token is intercepted (new firmware only)
-      if (nonce) {
-        const nonceKey = `${resolvedSessionId}:${nonce}`;
-        if (_usedNonces.has(nonceKey)) {
-          console.warn(`[MARK] Hotspot token replay attempt by ${req.user.name}`);
-          return res.status(403).json({
-            error: 'This attendance token has already been used. Please connect to the classroom hotspot again.',
-            replayAttack: true,
-          });
-        }
-        _usedNonces.set(nonceKey, Date.now() + 600_000);
+      // Nonce dedup — required; prevents URL replay if token is intercepted
+      if (!nonce) {
+        return res.status(403).json({
+          error: 'Hotspot token missing nonce. Please update device firmware.',
+          networkMismatch: true,
+        });
       }
+      const nonceKey = `${resolvedSessionId}:${nonce}`;
+      if (_usedNonces.has(nonceKey)) {
+        console.warn(`[MARK] Hotspot token replay attempt by ${req.user.name}`);
+        return res.status(403).json({
+          error: 'This attendance token has already been used. Please connect to the classroom hotspot again.',
+          replayAttack: true,
+        });
+      }
+      _usedNonces.set(nonceKey, Date.now() + 600_000);
 
-      // HMAC — new firmware includes nonce (64-char), old firmware doesn't (32-char)
-      const sigLen = nonce ? 64 : 32;
+      // HMAC — always 64-char now (nonce always present)
+      const sigLen = 64;
       const hmacMsg = nonce
         ? `conn:${tokenSession}:${tokenStudent}:${issuedAt}:${nonce}`
         : `conn:${tokenSession}:${tokenStudent}:${issuedAt}`;
