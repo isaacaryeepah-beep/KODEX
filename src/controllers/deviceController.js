@@ -234,7 +234,13 @@ exports.heartbeat = async (req, res) => {
     const session = await AttendanceSession.findOne({
       deviceId: device.deviceId,
       status:   'active',
-    }).select('_id title esp32Seed durationSeconds startedAt').lean();
+    }).select('_id title esp32Seed durationSeconds startedAt courseCode lecturer').lean();
+
+    let studentsMarked = 0;
+    let totalEnrolled  = 0;
+    if (session) {
+      studentsMarked = await AttendanceRecord.countDocuments({ session: session._id });
+    }
 
     return res.json({
       ok:         true,
@@ -247,6 +253,10 @@ exports.heartbeat = async (req, res) => {
         esp32Seed:       session.esp32Seed,
         durationSeconds: session.durationSeconds || 300,
         startedAt:       session.startedAt,
+        courseCode:      session.courseCode || '',
+        lecturer:        session.lecturer   || '',
+        studentsMarked,
+        totalEnrolled,
       } : null,
     });
   } catch (err) {
