@@ -912,8 +912,8 @@ exports.markAttendance = async (req, res) => {
         });
       }
 
-      // Proof verified — no TOTP code required
-      skipCodeCheck = true;
+      // Proof verified — proximity confirmed. TOTP code still required as
+      // second factor (student must physically see the device screen).
 
     } else if (connectionToken && typeof connectionToken === 'object') {
       // ── Hotspot token path ──────────────────────────────────────────────────

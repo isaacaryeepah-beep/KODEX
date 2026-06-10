@@ -12147,6 +12147,7 @@ let   esp32IP            = localStorage.getItem('dikly_esp32_ip') || null;
 let   bleDetected        = false;
 let   bleScanInterval    = null;
 let   _esp32UrlToken     = null; // connectionToken received via ESP32 /mark redirect
+let   _esp32AutoProof   = null; // one-time proof fetched in background (Capacitor app)
 
 // Save ESP32 IP when found
 function setEsp32IP(ip) {
@@ -12777,35 +12778,35 @@ async function renderMarkAttendance() {
   const esp32MarkUrl = `http://${deviceIp}/mark?studentId=${encodeURIComponent(userId)}`;
 
   if (isInApp) {
-    // ── Capacitor app: auto-proof flow (no code entry needed) ──────────────────
+    // ── Capacitor app: show code form + fetch proof silently in background ──────
+    // The proof proves WiFi presence (anti-replay, 15 s expiry).
+    // The code proves the student can see the physical device screen.
+    // Both are submitted together for double-factor security.
+    _esp32AutoProof = null; // reset from any previous page visit
     content.innerHTML = `
       <div class="page-header"><h2>Mark Attendance</h2><p>Check in to active sessions</p></div>
-      <div class="card" id="auto-mark-card">
-        <div style="text-align:center;padding:12px 0 6px">
-          <div id="auto-mark-icon" style="font-size:36px;margin-bottom:10px">📡</div>
-          <div id="auto-mark-status" style="font-size:15px;font-weight:600;color:var(--text)">Checking classroom device…</div>
-          <div id="auto-mark-sub" style="font-size:13px;color:var(--text-muted);margin-top:6px"></div>
-        </div>
+      <div id="proof-status-bar" style="display:flex;align-items:center;gap:10px;padding:10px 14px;background:#1e293b;border-radius:10px;margin-bottom:14px;font-size:13px;color:#94a3b8">
+        <span id="proof-status-icon" style="font-size:18px">📡</span>
+        <span id="proof-status-text">Connecting to classroom device…</span>
       </div>
-      <div id="manual-form-area" style="display:none">
-        <div class="card">
-          <div class="card-title">Enter Attendance Code</div>
-          <p style="font-size:13px;color:var(--text-muted);margin-bottom:14px">
-            Could not connect to the classroom device automatically. Enter the 6-digit code shown on the device screen.
-          </p>
-          <div class="form-group">
-            <label>6-Digit Code</label>
-            <input type="text" id="mark-code-input" placeholder="000000" maxlength="6" inputmode="numeric"
-              style="font-size:28px;text-align:center;letter-spacing:10px;font-weight:700"
-              onkeydown="if(event.key==='Enter') submitCodeMark('${deviceIp}')">
-          </div>
-          <div id="mark-code-msg" style="display:none;padding:10px 14px;border-radius:8px;font-size:13px;margin-bottom:12px"></div>
-          <button class="btn btn-primary" onclick="submitCodeMark('${deviceIp}')" style="width:100%;margin-bottom:10px">Mark Attendance</button>
-          <button class="btn btn-secondary" onclick="openQrScanner()" style="width:100%">📷 Scan QR Code Instead</button>
-          <div id="qr-scanner-area" style="display:none;margin-top:14px"></div>
+      <div class="card">
+        <div class="card-title">Enter Attendance Code</div>
+        <p style="font-size:13px;color:var(--text-muted);margin-bottom:14px">
+          Type the 6-digit code shown on the classroom device screen.
+        </p>
+        <div class="form-group">
+          <label>6-Digit Code</label>
+          <input type="text" id="mark-code-input" placeholder="000000" maxlength="6" inputmode="numeric"
+            style="font-size:28px;text-align:center;letter-spacing:10px;font-weight:700" autofocus
+            onkeydown="if(event.key==='Enter') submitCodeMark('${deviceIp}')">
         </div>
+        <div id="mark-code-msg" style="display:none;padding:10px 14px;border-radius:8px;font-size:13px;margin-bottom:12px"></div>
+        <button class="btn btn-primary" onclick="submitCodeMark('${deviceIp}')" style="width:100%;margin-bottom:10px">Mark Attendance</button>
+        <button class="btn btn-secondary" onclick="openQrScanner()" style="width:100%">📷 Scan QR Code Instead</button>
+        <div id="qr-scanner-area" style="display:none;margin-top:14px"></div>
       </div>`;
-    _tryAutoProofMark(deviceIp, userId);
+    document.getElementById('mark-code-input')?.focus();
+    _fetchProofInBackground(deviceIp, userId);
   } else {
     // ── Browser: connection verification banner + code form ────────────────────
     let proximityBanner = '';
@@ -12861,63 +12862,33 @@ async function renderMarkAttendance() {
   }
 }
 
-// Auto-proof mark for Capacitor app — no user interaction required.
-// 1. Fetch one-time proof from ESP32 (/proof endpoint)
-// 2. POST proof to cloud API
-// 3. Show status + navigate to dashboard on success
-// Falls back to manual code form if any step fails.
-async function _tryAutoProofMark(ip, userId) {
-  const statusEl = document.getElementById('auto-mark-status');
-  const subEl    = document.getElementById('auto-mark-sub');
-  const iconEl   = document.getElementById('auto-mark-icon');
-  const update   = (icon, txt, sub = '') => {
-    if (iconEl) iconEl.textContent = icon;
-    if (statusEl) statusEl.textContent = txt;
-    if (subEl) subEl.textContent = sub;
-  };
-  const fallback = (msg) => {
-    update('📶', 'Connect to classroom WiFi', msg);
-    const card = document.getElementById('auto-mark-card');
-    const form = document.getElementById('manual-form-area');
-    if (card) card.style.cssText = 'border-left:4px solid #f59e0b;background:#fffbeb';
-    if (form) { form.style.display = 'block'; document.getElementById('mark-code-input')?.focus(); }
+// Background proof fetch for Capacitor app.
+// Silently gets a one-time ESP32 proof while the student is typing the code.
+// Updates the status bar without blocking the UI.
+async function _fetchProofInBackground(ip, userId) {
+  const setStatus = (icon, text, color) => {
+    const bar  = document.getElementById('proof-status-bar');
+    const iEl  = document.getElementById('proof-status-icon');
+    const tEl  = document.getElementById('proof-status-text');
+    if (iEl) iEl.textContent = icon;
+    if (tEl) tEl.textContent = text;
+    if (bar && color) bar.style.background = color;
   };
 
-  // Step 1: get proof from ESP32
-  update('📡', 'Checking classroom device…');
-  let proof = null;
   try {
     const r = await fetch(`http://${ip}/proof?studentId=${encodeURIComponent(userId)}`, {
       cache: 'no-store', signal: AbortSignal.timeout(8000),
     });
-    if (!r.ok) {
+    if (r.ok) {
+      _esp32AutoProof = await r.json();
+      setStatus('✅', 'Classroom device connected — enter code and submit', '#14532d');
+    } else {
       const e = await r.json().catch(() => ({}));
-      fallback(e.error || 'Device not ready. Enter code manually.');
-      return;
+      setStatus('⚠️', e.error || 'Device not ready', '#78350f');
     }
-    proof = await r.json();
   } catch (_) {
-    fallback('Not connected to classroom WiFi (Dikly-XXXXXX).');
-    return;
+    setStatus('📶', 'Connect to Dikly-XXXXXX WiFi first', '#7f1d1d');
   }
-
-  // Step 2: submit proof to backend
-  update('🔐', 'Generating secure proof…', 'Verifying with server…');
-  try {
-    await api('/api/attendance-sessions/mark', {
-      method: 'POST',
-      body: JSON.stringify({ method: 'proof_mark', esp32Proof: proof }),
-    });
-  } catch (e) {
-    fallback(e.message || 'Submission failed. Enter code manually.');
-    return;
-  }
-
-  // Step 3: success
-  update('✅', 'Attendance marked!', 'Redirecting…');
-  const card = document.getElementById('auto-mark-card');
-  if (card) card.style.cssText = 'border-left:4px solid #22c55e;background:#f0fdf4';
-  setTimeout(() => navigateTo('dashboard'), 1800);
 }
 
 let _qrScanStream = null;
@@ -13088,7 +13059,7 @@ async function submitCodeMark(deviceIp) {
   const msgEl = document.getElementById('mark-code-msg');
   const showMsg = (txt, ok) => {
     if (!msgEl) return;
-    msgEl.textContent = txt;
+    msgEl.innerHTML = txt;
     msgEl.style.background = ok ? '#f0fdf4' : '#fef2f2';
     msgEl.style.color = ok ? '#15803d' : '#dc2626';
     msgEl.style.border = ok ? '1px solid #86efac' : '1px solid #fca5a5';
@@ -13099,59 +13070,96 @@ async function submitCodeMark(deviceIp) {
     showMsg('Please enter the 6-digit code shown on the classroom device.', false); return;
   }
 
-  const btn = document.querySelector('#mark-input-area .btn-primary');
+  const btn = document.querySelector('.btn-primary[onclick*="submitCodeMark"]');
   if (btn) { btn.textContent = 'Submitting…'; btn.disabled = true; }
   const restoreBtn = () => { if (btn) { btn.textContent = 'Mark Attendance'; btn.disabled = false; } };
 
-  const ip = deviceIp || esp32IP || '192.168.4.1';
+  const ip          = deviceIp || esp32IP || '192.168.4.1';
   const userId      = currentUser?._id || currentUser?.id || '';
   const indexNumber = currentUser?.indexNumber || currentUser?.IndexNumber || '';
+  const isInApp     = /DiklyApp/i.test(navigator.userAgent);
 
-  // ── Path 1: ESP32 /attend — offline, anti-cheat (S3 firmware) ────────────────
-  // 192.168.4.1 is a private LAN IP only reachable on the classroom hotspot.
-  // Works in the Capacitor app (allowMixedContent:true). Silently skipped in
-  // Chrome where mixed-content blocks HTTP from HTTPS pages.
-  try {
-    const resp = await fetch(`http://${ip}/attend`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ code, userId, indexNumber }),
-      signal: AbortSignal.timeout(8000),
-    });
-    const result = await resp.json();
-    if (resp.ok && !result.error) {
-      showMsg('✓ Attendance recorded!', true);
-      setTimeout(() => navigateTo('mark-attendance'), 2200);
-      return;
-    }
-    if (resp.status !== 404 && resp.status !== 405) {
+  if (isInApp) {
+    // ── Capacitor app: proof + code (both factors) ──────────────────────────────
+    // The proof proves WiFi presence (random nonce, 15 s expiry, anti-replay).
+    // The code proves the student can physically see the device screen.
+    // We fetch a fresh proof at submit time so it's never expired.
+
+    // Step A: Try ESP32 /attend first (S3 firmware offline path)
+    try {
+      const r = await fetch(`http://${ip}/attend`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ code, userId, indexNumber }),
+        signal: AbortSignal.timeout(8000),
+      });
+      const result = await r.json();
+      if (r.ok && !result.error) {
+        showMsg('✓ Attendance recorded!', true);
+        _esp32AutoProof = null;
+        setTimeout(() => navigateTo('mark-attendance'), 2200);
+        return;
+      }
+      if (r.status !== 404 && r.status !== 405) {
+        restoreBtn();
+        showMsg(result.error || 'Device rejected the code. Check the screen and try again.', false);
+        return;
+      }
+    } catch (_) {}
+
+    // Step B: Get fresh one-time proof from ESP32
+    showMsg('🔐 Fetching device proof…', true);
+    let proof = null;
+    try {
+      const r = await fetch(`http://${ip}/proof?studentId=${encodeURIComponent(userId)}`, {
+        cache: 'no-store', signal: AbortSignal.timeout(8000),
+      });
+      if (r.ok) proof = await r.json();
+    } catch (_) {}
+
+    if (!proof?.sessionId) {
       restoreBtn();
-      showMsg(result.error || 'Device rejected the code. Check the screen and try again.', false);
+      showMsg('Connect to the classroom WiFi hotspot (Dikly-XXXXXX) to mark attendance.', false);
       return;
     }
-  } catch (_) {}
 
-  // ── Path 2: connectionToken from ESP32, then cloud API (standard firmware) ───
+    // Step C: Submit proof + code to cloud API
+    try {
+      await api('/api/attendance-sessions/mark', {
+        method: 'POST',
+        body: JSON.stringify({ code, method: 'code_mark', esp32Proof: proof }),
+      });
+      showMsg('✓ Attendance marked!', true);
+      _esp32AutoProof = null;
+      setTimeout(() => navigateTo('mark-attendance'), 2200);
+    } catch (e) {
+      restoreBtn();
+      showMsg(e.message || 'Failed to submit. Check your internet connection.', false);
+    }
+    return;
+  }
+
+  // ── Browser: connectionToken + code ──────────────────────────────────────────
+  // Fetch connectionToken from ESP32 (Path 2), or use the URL-redirect token.
   let connectionToken = null;
   try {
-    const tokenRes = await fetch(`http://${ip}/session?studentId=${encodeURIComponent(userId)}`, {
+    const r = await fetch(`http://${ip}/session?studentId=${encodeURIComponent(userId)}`, {
       cache: 'no-store', signal: AbortSignal.timeout(5000),
     });
-    if (tokenRes.ok) connectionToken = await tokenRes.json();
+    if (r.ok) connectionToken = await r.json();
   } catch (_) {}
   if (!connectionToken?.sessionId) {
     try {
-      const tokenRes = await fetch(`http://${ip}/token`, {
+      const r = await fetch(`http://${ip}/token`, {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ userId }), signal: AbortSignal.timeout(5000),
       });
-      if (tokenRes.ok) connectionToken = await tokenRes.json();
+      if (r.ok) connectionToken = await r.json();
     } catch (_) {}
   }
 
-  // ── Path 3: Cloud API with connectionToken ────────────────────────────────
-  // Use whichever token is available: Path 2 result or URL-redirect result.
-  const token = connectionToken?.sessionId ? connectionToken : (_esp32UrlToken?.sessionId ? _esp32UrlToken : null);
+  const token = connectionToken?.sessionId ? connectionToken
+              : (_esp32UrlToken?.sessionId  ? _esp32UrlToken : null);
+
   if (token) {
     try {
       await api('/api/attendance-sessions/mark', {
@@ -13163,25 +13171,15 @@ async function submitCodeMark(deviceIp) {
       setTimeout(() => navigateTo('mark-attendance'), 2200);
     } catch (e) {
       restoreBtn();
-      showMsg(e.message || 'Failed to submit. Check your internet connection and try again.', false);
+      showMsg(e.message || 'Failed to submit. Check your internet connection.', false);
     }
     return;
   }
 
-  // No connectionToken — student is not on classroom WiFi
+  // No token at all
   restoreBtn();
-  const isInAppCtx = /DiklyApp/i.test(navigator.userAgent);
-  if (isInAppCtx) {
-    showMsg('Connect to the classroom WiFi hotspot (Dikly-XXXXXX) to mark attendance.', false);
-  } else {
-    const uid2 = currentUser?._id || currentUser?.id || '';
-    const verifyUrl = `http://${ip}/mark?studentId=${encodeURIComponent(uid2)}`;
-    const msgEl2 = document.getElementById('mark-code-msg');
-    if (msgEl2) {
-      msgEl2.innerHTML = `You must connect to the classroom WiFi first. <a href="${esc(verifyUrl)}" style="color:#4f6ef7;font-weight:700">Verify WiFi Connection →</a>`;
-      msgEl2.style.cssText = 'display:block;padding:10px 14px;border-radius:8px;font-size:13px;margin-bottom:12px;background:#fef2f2;color:#dc2626;border:1px solid #fca5a5';
-    }
-  }
+  const verifyUrl = `http://${ip}/mark?studentId=${encodeURIComponent(userId)}`;
+  showMsg(`You must connect to the classroom WiFi first. <a href="${esc(verifyUrl)}" style="color:#4f6ef7;font-weight:700">Verify WiFi Connection →</a>`, false);
 }
 
 // Offline code entry — BLOCKED. Attendance cannot be queued offline.
