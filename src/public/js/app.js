@@ -13132,6 +13132,29 @@ async function submitCodeMark(deviceIp) {
       _esp32AutoProof = null;
       setTimeout(() => navigateTo('mark-attendance'), 2200);
     } catch (e) {
+      if (!e.status) {
+        // Network error (not a server rejection) — queue using connectionToken.
+        // connectionToken is issued by the ESP32 locally, no internet needed.
+        let queueToken = null;
+        try {
+          const r = await fetch(`http://${ip}/session?studentId=${encodeURIComponent(userId)}`, {
+            cache: 'no-store', signal: AbortSignal.timeout(5000),
+          });
+          if (r.ok) queueToken = await r.json();
+        } catch (_) {}
+        if (queueToken?.sessionId) {
+          offlineEnqueue({
+            url: '/api/attendance-sessions/mark',
+            options: {
+              method: 'POST',
+              body: JSON.stringify({ code, method: 'code_mark', connectionToken: queueToken }),
+            },
+            label: 'Mark attendance (offline)',
+          });
+          showMsg('📴 No internet — saved. Will sync automatically when connected.', true);
+          return;
+        }
+      }
       restoreBtn();
       showMsg(e.message || 'Failed to submit. Check your internet connection.', false);
     }
@@ -13170,20 +13193,33 @@ async function submitCodeMark(deviceIp) {
       _esp32UrlToken = null;
       setTimeout(() => navigateTo('mark-attendance'), 2200);
     } catch (e) {
-      restoreBtn();
-      showMsg(e.message || 'Failed to submit. Check your internet connection.', false);
+      if (!e.status) {
+        // Network error — token still valid, queue for auto-sync when online
+        offlineEnqueue({
+          url: '/api/attendance-sessions/mark',
+          options: {
+            method: 'POST',
+            body: JSON.stringify({ code, method: 'code_mark', connectionToken: token }),
+          },
+          label: 'Mark attendance (offline)',
+        });
+        showMsg('📴 No internet — saved. Will sync automatically when connected.', true);
+        _esp32UrlToken = null;
+      } else {
+        restoreBtn();
+        showMsg(e.message || 'Failed to submit. Check your internet connection.', false);
+      }
     }
     return;
   }
 
-  // No token at all
+  // No token — browser only (app always returns above with proof or error)
   restoreBtn();
   const verifyUrl = `http://${ip}/mark?studentId=${encodeURIComponent(userId)}`;
   showMsg(`You must connect to the classroom WiFi first. <a href="${esc(verifyUrl)}" style="color:#4f6ef7;font-weight:700">Verify WiFi Connection →</a>`, false);
 }
 
-// Offline code entry — BLOCKED. Attendance cannot be queued offline.
-// Students must be physically present on DIKLY-CLASSROOM WiFi with internet.
+// Legacy offline code entry UI — kept for fallback rendering only.
 function showCodeEntryOffline() {
   const area = document.getElementById('mark-input-area');
   if (!area) return;
