@@ -2337,6 +2337,22 @@ async function loadUserData() {
     if (!currentUser) throw new Error('No user data');
     showDashboard(data);
   } catch (e) {
+    // When offline with a stored token, auto-login from the cached profile so the
+    // user doesn't have to re-enter credentials (important for the ESP32 return flow).
+    if (token && !isOnline()) {
+      try {
+        const profiles = JSON.parse(localStorage.getItem(OFFLINE_LOGIN_KEY) || '{}');
+        const cached = Object.values(profiles).find(p =>
+          p.token === token && p.user &&
+          (Date.now() - (p.savedAt || 0)) < OFFLINE_LOGIN_MAX_AGE_DAYS * 86400000
+        );
+        if (cached) {
+          currentUser = { ...cached.user, _id: cached.user._id || cached.user.id };
+          showDashboard({ user: currentUser, userTrial: cached.trial, offlineMode: true });
+          return;
+        }
+      } catch (_) {}
+    }
     localStorage.removeItem('token');
     token = null;
     currentUser = null;
@@ -2687,8 +2703,9 @@ function showDashboard(data) {
     applyBranding(); // async — applies colors/logo in background
     // Show offline banner immediately when logged in via cached credentials
     if (data?.offlineMode) { _appOfflineMode = true; showOfflineBanner(false); }
-    // If student arrived via QR scan link, go straight to mark-attendance to auto-submit
-    if (new URLSearchParams(window.location.search).get('qr_token')) {
+    // Navigate directly to mark-attendance for QR scan or ESP32 return flow
+    const _postLoginP = new URLSearchParams(window.location.search);
+    if (_postLoginP.get('qr_token') || _postLoginP.get('esp32session')) {
       navigateTo('mark-attendance');
     } else {
       navigateTo('dashboard');
