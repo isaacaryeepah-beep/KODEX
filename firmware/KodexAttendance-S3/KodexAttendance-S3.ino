@@ -2721,27 +2721,99 @@ static void registerLocalHttp() {
     }
     if (!timeSynced) {
       localHttp.send(503, "text/html",
-        "<!doctype html><html><head><meta charset='utf-8'></head><body style='font-family:sans-serif;padding:24px'>"
-        "<h2>Device clock not synced</h2><p>Please wait a moment and try again.</p></body></html>");
+        "<!doctype html><html><head><meta charset='utf-8'>"
+        "<meta name='viewport' content='width=device-width,initial-scale=1'></head>"
+        "<body style='font-family:sans-serif;padding:24px;background:#0a0f1e;color:#fff'>"
+        "<h2>Device clock not synced</h2><p>Wait a moment and try again.</p>"
+        "<script>setTimeout(()=>history.back(),3000)</script></body></html>");
       return;
     }
     unsigned long issuedAt = (unsigned long)time(nullptr);
-    String message = "conn:" + sessionId + ":" + userId + ":" + String(issuedAt);
+
+    // ── One-time nonce — prevents URL replay even if token is intercepted ────
+    uint8_t nb[8];
+    for (int i = 0; i < 8; i++) nb[i] = (uint8_t)(esp_random() & 0xFF);
+    char nonce[17];
+    for (int i = 0; i < 8; i++) sprintf(nonce + i * 2, "%02x", nb[i]);
+    nonce[16] = '\0';
+
+    // ── HMAC-SHA256 over session + student + timestamp + nonce ───────────────
+    // Server verifies this to confirm student was physically on the hotspot.
+    String message = "conn:" + sessionId + ":" + userId + ":" + String(issuedAt) + ":" + String(nonce);
     uint8_t hmacOut[32];
     hmacSha256((const uint8_t*)sessionSeed.c_str(), sessionSeed.length(),
                (const uint8_t*)message.c_str(), message.length(), hmacOut);
-    char sigHex[33];
-    for (int i = 0; i < 16; i++) sprintf(sigHex + i * 2, "%02x", hmacOut[i]);
-    sigHex[32] = '\0';
+    char sigHex[65];
+    for (int i = 0; i < 32; i++) sprintf(sigHex + i * 2, "%02x", hmacOut[i]);
+    sigHex[64] = '\0';
+
+    // ── Mark locally BEFORE redirecting — fully offline ─────────────────────
+    // ESP32 records attendance to SD/RAM now. Even if the phone never reaches
+    // dikly.sbs, the record is safe and will sync on the next heartbeat.
+    bool alreadyMarked = false;
+    bool stored        = false;
+    if (dedupSession != sessionId) dedupClear(sessionId);
+    const char* dk = userId.c_str();
+    if (dedupCheck(dk)) {
+      alreadyMarked = true;
+    } else {
+      time_t ts = (time_t)issuedAt;
+      if (sdAvailable) {
+        File f = SD_MMC.open(SD_ATT_FILE, FILE_APPEND);
+        if (f) {
+          char recId[40];
+          snprintf(recId, sizeof(recId), "rec_%s_%lu", macSuffix().c_str(), (uint32_t)ts);
+          JsonDocument entry;
+          entry["id"]        = recId;
+          entry["userId"]    = userId;
+          entry["sessionId"] = sessionId;
+          entry["courseId"]  = sessionCourse;
+          entry["timestamp"] = (uint32_t)ts;
+          entry["synced"]    = false;
+          entry["via"]       = "hotspot";
+          String line; serializeJson(entry, line); line += "\n";
+          f.print(line); f.close();
+          sdRecordCount++;
+          stored = true;
+        }
+      }
+      if (!stored) {
+        if (!offlineBuf || offlineCount >= 200) {
+          localHttp.send(507, "text/html",
+            "<!doctype html><html><body style='font-family:sans-serif;padding:24px'>"
+            "<h2>Device buffer full</h2><p>Ask your lecturer to connect to internet to free space.</p>"
+            "<script>setTimeout(()=>history.back(),4000)</script></body></html>");
+          return;
+        }
+        OfflineRec& rec = offlineBuf[offlineCount++];
+        strncpy(rec.userId,    userId.c_str(),         sizeof(rec.userId) - 1);
+        strncpy(rec.sessionId, sessionId.c_str(),      sizeof(rec.sessionId) - 1);
+        strncpy(rec.courseId,  sessionCourse.c_str(),  sizeof(rec.courseId) - 1);
+        rec.ts = (uint32_t)ts;
+        stored = true;
+      }
+      dedupAdd(dk);
+      studentsMarked++;
+      LOG("/mark local record stored for " + userId);
+    }
+
+    // ── Build redirect URL ────────────────────────────────────────────────────
+    // esp32marked=1  → ESP32 has the record; app shows ✅ immediately.
+    // esp32dup=1     → already marked this session; app shows "already checked in".
+    String status = alreadyMarked ? "&esp32dup=1" : "&esp32marked=1";
     String url = "https://dikly.sbs/?esp32session=" + sessionId +
                  "&esp32student=" + userId +
-                 "&esp32issued=" + String(issuedAt) +
-                 "&esp32sig=" + String(sigHex) +
+                 "&esp32issued="  + String(issuedAt) +
+                 "&esp32nonce="   + String(nonce) +
+                 "&esp32sig="     + String(sigHex) +
+                 status +
                  "#mark-attendance";
     String html = String("<!doctype html><html><head><meta charset='utf-8'>") +
+      "<meta name='viewport' content='width=device-width,initial-scale=1'>" +
       "<meta http-equiv='refresh' content='0;url=" + url + "'>" +
       "<script>window.location.replace('" + url + "')</script>" +
-      "</head><body style='font-family:sans-serif;padding:24px'><p>Verifying classroom connection... redirecting to DIKLY.</p></body></html>";
+      "</head><body style='font-family:sans-serif;padding:24px;background:#0a0f1e;color:#fff'>" +
+      "<p>✓ Attendance recorded. Redirecting to DIKLY…</p></body></html>";
     localHttp.send(200, "text/html", html);
   });
 
