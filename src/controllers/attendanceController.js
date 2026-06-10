@@ -859,9 +859,9 @@ exports.markAttendance = async (req, res) => {
         return res.status(403).json({ error: 'Session has no device seed. Cannot verify proof.' });
       }
 
-      // 1. Timestamp — 15-second hard window
+      // 1. Timestamp — 10-minute window (allows offline queue + reconnect)
       const proofAgeMs = Date.now() - (Number(timestamp) * 1000);
-      if (!timestamp || proofAgeMs < 0 || proofAgeMs > 15_000) {
+      if (!timestamp || proofAgeMs < 0 || proofAgeMs > 600_000) {
         return res.status(403).json({
           error: 'Proof expired. Please try again.',
           proofExpired: true,
@@ -877,7 +877,7 @@ exports.markAttendance = async (req, res) => {
           replayAttack: true,
         });
       }
-      _usedNonces.set(nonceKey, Date.now() + 120_000); // retain for 2 min
+      _usedNonces.set(nonceKey, Date.now() + 600_000); // retain for 10 min
 
       // 3. Student ID binding
       if (String(proofStudent) !== req.user._id.toString()) {
@@ -912,8 +912,8 @@ exports.markAttendance = async (req, res) => {
         });
       }
 
-      // Proof verified — proximity confirmed. TOTP code still required as
-      // second factor (student must physically see the device screen).
+      // Proof verified — proximity confirmed. No code needed.
+      skipCodeCheck = true;
 
     } else if (connectionToken && typeof connectionToken === 'object') {
       // ── Hotspot token path ──────────────────────────────────────────────────
@@ -967,16 +967,10 @@ exports.markAttendance = async (req, res) => {
         });
       }
 
-    } else if (!proximityExempt) {
-      // No connectionToken and no BLE token.
-      // All marking methods require physical connection to the classroom device WiFi —
-      // the connectionToken from ESP32 /session or /mark is the only accepted proof.
-      return res.status(403).json({
-        error: 'You must connect to the classroom device WiFi hotspot to mark attendance. Connect to the Dikly-XXXXXX WiFi, open DIKLY, and tap "Verify WiFi Connection".',
-        requiresHotspot: true,
-        networkMismatch: true,
-      });
     }
+    // No proximity token — fall through to TOTP code validation below.
+    // The 2-minute rotating code visible only on the physical device screen
+    // is the proof of presence for the code-only path.
 
     // Anyone marking against a course-linked session must be enrolled in that course.
     if (session.course && req.user.role === 'student') {
