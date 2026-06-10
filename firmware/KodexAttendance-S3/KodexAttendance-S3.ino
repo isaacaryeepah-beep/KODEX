@@ -2778,13 +2778,26 @@ static void registerLocalHttp() {
                  "&esp32sig="     + String(sigHex) +
                  status +
                  "#mark-attendance";
-    // postMessage to opener (popup mode — student stays in the Dikly app).
-    // Falls back to full redirect if there is no opener (direct navigation).
+    // Serve a standalone success page.
+    // If opened as a popup (window.opener available), postMessages the token back and closes.
+    // If opened via direct navigation, shows ✅ + "Return to DIKLY" button — student taps
+    // it when they have mobile data again, which avoids the offline-login race condition.
+    String title  = alreadyMarked ? "Already Checked In" : "Attendance Marked!";
+    String body   = alreadyMarked ? "You were already marked present for this session."
+                                  : "You have been checked in. Tap below to return to DIKLY.";
     String html = String("<!doctype html><html><head><meta charset='utf-8'>") +
       "<meta name='viewport' content='width=device-width,initial-scale=1'>" +
-      "</head><body style='font-family:sans-serif;text-align:center;padding:32px 16px;background:#0a0f1e;color:#fff'>" +
-      "<p style='font-size:22px;margin:0 0 8px'>✅</p>" +
-      "<p style='font-size:14px;color:#9ca3af'>Attendance recorded</p>" +
+      "<style>*{box-sizing:border-box}body{margin:0;min-height:100vh;display:flex;align-items:center;" +
+      "justify-content:center;background:#0a0f1e;color:#fff;font-family:sans-serif;padding:24px;text-align:center}" +
+      ".card{background:#111827;border-radius:20px;padding:40px 24px;max-width:320px;width:100%;}" +
+      ".btn{display:block;width:100%;padding:14px;background:#4f6ef7;color:#fff;border:none;border-radius:10px;" +
+      "font-size:15px;font-weight:700;cursor:pointer;text-decoration:none;margin-top:20px;}</style>" +
+      "</head><body><div class='card'>" +
+      "<div style='font-size:64px;margin-bottom:16px'>&#x2705;</div>" +
+      "<div style='font-size:20px;font-weight:800;color:#22c55e'>" + title + "</div>" +
+      "<p style='color:#9ca3af;font-size:14px;margin-top:8px;line-height:1.6'>" + body + "</p>" +
+      "<a href='" + url + "' class='btn'>Return to DIKLY &#x2192;</a>" +
+      "</div>" +
       "<script>(function(){" +
       "var d={type:'ESP32_MARK'," +
       "session:'" + sessionId + "'," +
@@ -2797,7 +2810,7 @@ static void registerLocalHttp() {
       "if(window.opener&&!window.opener.closed){" +
       "try{window.opener.postMessage(d,'*');}catch(e){}" +
       "setTimeout(function(){try{window.close();}catch(e){}},400);" +
-      "}else{window.location.replace('" + url + "');}" +
+      "}" +
       "})();</script>" +
       "</body></html>";
     localHttp.send(200, "text/html", html);
