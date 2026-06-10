@@ -532,6 +532,16 @@ static void loadConfig() {
   apiBase         = prefs.getString("api",   DEFAULT_API_BASE);
   institutionCode = prefs.getString("inst",  "");
   rssiThreshold   = (int8_t)prefs.getInt("rssi", -70);
+  // Restore locally-started session (survives reboot)
+  String lSessId = prefs.getString("l_sid",  "");
+  String lSeed   = prefs.getString("l_seed", "");
+  if (lSessId.startsWith("local_") && lSeed.length() == 32) {
+    sessionId           = lSessId;
+    sessionSeed         = lSeed;
+    sessionStartedAt    = prefs.getUInt("l_start", 0);
+    sessionDuration     = prefs.getUInt("l_dur",   3600);
+    sessionLocallyStarted = true;
+  }
   prefs.end();
   if (deviceId.isEmpty()) deviceId = "esp32s3-" + macSuffix();
 }
@@ -541,6 +551,23 @@ static void saveConfig() {
   prefs.putString("did",  deviceId); prefs.putString("jwt",  deviceJWT);
   prefs.putString("api",  apiBase);  prefs.putString("inst", institutionCode);
   prefs.putInt("rssi", (int)rssiThreshold);
+  prefs.end();
+}
+
+// Save/clear the active local session to NVS so it survives a reboot
+static void saveLocalSession() {
+  prefs.begin("kodex", false);
+  prefs.putString("l_sid",   sessionId);
+  prefs.putString("l_seed",  sessionSeed);
+  prefs.putUInt  ("l_start", sessionStartedAt);
+  prefs.putUInt  ("l_dur",   sessionDuration);
+  prefs.end();
+}
+
+static void clearLocalSession() {
+  prefs.begin("kodex", false);
+  prefs.remove("l_sid"); prefs.remove("l_seed");
+  prefs.remove("l_start"); prefs.remove("l_dur");
   prefs.end();
 }
 static void factoryReset() {
@@ -594,6 +621,7 @@ static void startLocalSession(uint32_t durationSecs) {
   sessionStartedAt = (uint32_t)nowT;
 
   sessionLocallyStarted = true;
+  saveLocalSession();  // survives device reboot
 
   // Persist to SD so syncOfflineAttendance() can push it to the cloud
   if (sdAvailable) {
@@ -2582,7 +2610,8 @@ static int8_t getClientRSSI(const String& clientIp) {
       }
     }
   }
-  return 0;  // not found — allow through
+  LOG("RSSI: ARP miss for " + clientIp + " — allowing (ARP table may be stale)");
+  return 0;  // not found — allow through (logged for monitoring)
 }
 
 // ─── Local HTTP (WiFi proxy for Attendance Device page) ──────────────────────
@@ -2693,9 +2722,9 @@ static void registerLocalHttp() {
     uint8_t hmacOut[32];
     hmacSha256((const uint8_t*)sessionSeed.c_str(), sessionSeed.length(),
                (const uint8_t*)msg.c_str(), msg.length(), hmacOut);
-    char sigHex[33];
-    for (int i = 0; i < 16; i++) sprintf(sigHex + i * 2, "%02x", hmacOut[i]);
-    sigHex[32] = '\0';
+    char sigHex[65];
+    for (int i = 0; i < 32; i++) sprintf(sigHex + i * 2, "%02x", hmacOut[i]);
+    sigHex[64] = '\0';
     // If &mark=1, also record attendance locally right now so the count
     // updates on screen immediately — no internet or second request needed.
     bool markNow = (localHttp.arg("mark") == "1");
@@ -2978,10 +3007,10 @@ static void registerLocalHttp() {
     if (!valid) {
       localHttp.send(403, "application/json", "{\"error\":\"Incorrect code. Check the screen and try again.\"}"); return;
     }
-    // ── Duplicate guard ───────────────────────────────────────────────────────
+    // ── Duplicate guard — check both indexNumber AND userId to prevent double-marking ──
     if (dedupSession != sessionId) dedupClear(sessionId);
-    const char* dedupKey = indexNum.length() ? indexNum.c_str() : userId.c_str();
-    if (dedupCheck(dedupKey)) {
+    if ((indexNum.length() && dedupCheck(indexNum.c_str())) ||
+        (userId.length()   && dedupCheck(userId.c_str()))) {
       localHttp.send(409, "application/json", "{\"error\":\"Attendance already recorded for this session.\"}"); return;
     }
     // ── Write to SD card (primary) ────────────────────────────────────────────
@@ -3022,7 +3051,8 @@ static void registerLocalHttp() {
       rec.ts = (uint32_t)now;
       LOG("RAM attendance [" + String(offlineCount) + "] idx=" + indexNum);
     }
-    dedupAdd(dedupKey);
+    if (indexNum.length()) dedupAdd(indexNum.c_str());
+    if (userId.length())   dedupAdd(userId.c_str());
     studentsMarked++;  // update count immediately — visible on screen without waiting for server heartbeat
     localHttp.send(200, "application/json", "{\"ok\":true,\"message\":\"Attendance recorded.\"}");
   });
@@ -3163,7 +3193,7 @@ static void handlePairedTap(uint16_t tx, uint16_t ty) {
       sessionId = ""; sessionSeed = "";
       sessionTitle = ""; sessionCourse = ""; sessionLecturer = "";
       studentsMarked = 0; sessionTotalEnrolled = 0;
-      sessionLocallyStarted = false;
+      sessionLocallyStarted = false; clearLocalSession();
       bleStop();
       curScreen = SUMMARY;
     }
@@ -3518,7 +3548,7 @@ void loop() {
     if (curScreen == READY || curScreen == PAIR_SCREEN) curScreen = SESSION;
   } else if (!sessActive && wasSessActive) {
     // Session just ended via heartbeat (server removed it) — go to READY
-    sessionLocallyStarted = false;
+    sessionLocallyStarted = false; clearLocalSession();
     if (curScreen == SESSION) curScreen = READY;
   }
   wasSessActive = sessActive;
@@ -3549,7 +3579,7 @@ void loop() {
         sessionId = ""; sessionSeed = "";
         sessionTitle = ""; sessionCourse = ""; sessionLecturer = "";
         studentsMarked = 0; sessionTotalEnrolled = 0;
-        sessionLocallyStarted = false;
+        sessionLocallyStarted = false; clearLocalSession();
         bleStop(); curScreen = SUMMARY; drawSummary(); return;
       }
       bleUpdatePayload();

@@ -369,7 +369,8 @@ exports.syncOfflineRecords = async (req, res) => {
         // Translate local session ID if needed
         const resolvedId = sessionIdMap[rec.sessionId] || rec.sessionId;
         const session = resolvedId ? await AttendanceSession.findById(resolvedId).catch(() => null) : null;
-        if (!session || session.deviceId !== device.deviceId) { skipped++; continue; }
+        if (!session) { skipped++; continue; }
+        if (session.deviceId !== device.deviceId) { skipped++; continue; }
 
         // Resolve user — prefer _id, fall back to indexNumber
         let userId = rec.userId || null;
