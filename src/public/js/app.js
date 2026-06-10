@@ -12774,6 +12774,22 @@ async function renderMarkAttendance() {
   const deviceIp = esp32IP || '192.168.4.1';
   const userId   = currentUser?._id || currentUser?.id || '';
 
+  // Set up postMessage listener for ESP32 popup response (captures content in closure)
+  if (window._esp32MsgHandler) window.removeEventListener('message', window._esp32MsgHandler);
+  window._esp32MsgHandler = function(e) {
+    if (!e.data || e.data.type !== 'ESP32_MARK') return;
+    window.removeEventListener('message', window._esp32MsgHandler);
+    window._esp32MsgHandler = null;
+    const { session, student, issued, nonce, sig, marked, dup } = e.data;
+    _handleEsp32ConnToken(content,
+      String(session), String(student), String(issued), String(sig),
+      nonce ? String(nonce) : null,
+      marked ? '1' : null,
+      dup    ? '1' : null
+    );
+  };
+  window.addEventListener('message', window._esp32MsgHandler);
+
   content.innerHTML = `
     <div class="page-header"><h2>Mark Attendance</h2><p>Check in to active sessions</p></div>
     <div style="display:flex;align-items:flex-start;gap:10px;padding:12px 14px;background:rgba(79,110,247,.1);border:1px solid rgba(79,110,247,.3);border-radius:10px;margin-bottom:14px;font-size:13px;color:var(--text-light)">
@@ -12785,37 +12801,65 @@ async function renderMarkAttendance() {
       </div>
     </div>
     <div id="proof-status-card" class="card" style="text-align:center;padding:32px 20px">
-      <div id="proof-status-icon" style="font-size:52px;margin-bottom:12px">📡</div>
-      <div id="proof-status-title" style="font-weight:700;font-size:17px;margin-bottom:6px">Connecting to classroom device…</div>
-      <div id="proof-status-sub" style="font-size:13px;color:var(--text-muted);margin-bottom:16px">Once connected to <strong>Dikly-XXXXXX</strong>, tap Try Again below</div>
-      <button id="proof-retry-btn" class="btn btn-primary" onclick="_tryAutoMark('${deviceIp}','${userId}')" style="display:none;width:100%;margin-bottom:10px">Try Again</button>
+      <div id="proof-status-icon" style="font-size:52px;margin-bottom:12px">📶</div>
+      <div id="proof-status-title" style="font-weight:700;font-size:17px;margin-bottom:6px">Ready to mark attendance</div>
+      <div id="proof-status-sub" style="font-size:13px;color:var(--text-muted);margin-bottom:16px">Connect to <strong>Dikly-XXXXXX</strong> WiFi, then tap the button below</div>
+      <button id="proof-mark-btn" class="btn btn-primary" onclick="_tryAutoMark('${deviceIp}','${userId}')" style="width:100%;margin-bottom:10px;font-size:16px;padding:14px">Mark Attendance</button>
       <div id="mark-auto-msg" style="display:none;padding:10px 14px;border-radius:8px;font-size:13px;margin-top:8px"></div>
-    </div>
-    <div id="code-fallback" style="display:none;margin-top:14px">
-      <div class="card" style="text-align:center;padding:20px">
-        <div style="font-size:36px;margin-bottom:10px">📶</div>
-        <div style="font-weight:700;font-size:15px;margin-bottom:8px">Connect to classroom WiFi</div>
-        <p style="font-size:13px;color:var(--text-muted);margin:0 auto;max-width:260px;line-height:1.6">
-          You must be connected to <strong>Dikly-XXXXXX</strong> WiFi to mark attendance.<br><br>
-          Go to your phone <strong>WiFi settings</strong>, connect to <strong>Dikly-XXXXXX</strong>, tap <strong>Stay connected</strong> when prompted, then tap <strong>Try Again</strong> above.
-        </p>
-      </div>
     </div>`;
-
-  _tryAutoMark(deviceIp, userId);
 }
 
 function _tryAutoMark(ip, userId) {
-  // Chrome blocks fetch() from https://dikly.sbs to http://192.168.4.1 (mixed content).
-  // Browser top-level navigation to HTTP is allowed — use the ESP32's /mark endpoint
-  // which validates RSSI proximity, then redirects back to dikly.sbs with a signed token.
-  const iEl = document.getElementById('proof-status-icon');
-  const tEl = document.getElementById('proof-status-title');
-  const sEl = document.getElementById('proof-status-sub');
-  if (iEl) iEl.textContent = '📡';
-  if (tEl) tEl.textContent = 'Connecting to classroom device…';
-  if (sEl) sEl.innerHTML = 'Opening classroom WiFi — please wait…';
-  window.location.href = `http://${ip}/mark?studentId=${encodeURIComponent(userId)}`;
+  const btn  = document.getElementById('proof-mark-btn');
+  const iEl  = document.getElementById('proof-status-icon');
+  const tEl  = document.getElementById('proof-status-title');
+  const sEl  = document.getElementById('proof-status-sub');
+  if (btn)  { btn.disabled = true; btn.textContent = 'Connecting…'; }
+  if (iEl)  iEl.textContent = '📡';
+  if (tEl)  tEl.textContent = 'Connecting to classroom device…';
+  if (sEl)  sEl.innerHTML = 'Stay on this page — do not close the app';
+
+  const markUrl = `http://${ip}/mark?studentId=${encodeURIComponent(userId)}`;
+
+  // Open a small popup so the student stays in the Dikly app.
+  // The ESP32 /mark page will postMessage back to this window then close itself.
+  const popup = window.open(markUrl, 'esp32mark', 'width=320,height=240,left=0,top=0');
+
+  if (!popup || popup.closed) {
+    // Popup blocked (auto-open without gesture) — fall back to full-page navigation
+    window.location.href = markUrl;
+    return;
+  }
+
+  // Timeout: if ESP32 doesn't respond in 12s, re-enable the button
+  const tid = setTimeout(() => {
+    try { if (popup && !popup.closed) popup.close(); } catch (_) {}
+    if (btn)  { btn.disabled = false; btn.textContent = 'Try Again'; }
+    if (iEl)  iEl.textContent = '⚠️';
+    if (tEl)  tEl.textContent = 'No response from classroom device';
+    if (sEl)  sEl.innerHTML = 'Make sure you are connected to <strong>Dikly-XXXXXX</strong> WiFi, then tap Try Again.';
+  }, 12000);
+
+  // Extend the message listener to cancel the timeout on success
+  const prevHandler = window._esp32MsgHandler;
+  if (prevHandler) window.removeEventListener('message', prevHandler);
+  window._esp32MsgHandler = function(e) {
+    if (!e.data || e.data.type !== 'ESP32_MARK') return;
+    clearTimeout(tid);
+    try { if (popup && !popup.closed) popup.close(); } catch (_) {}
+    window.removeEventListener('message', window._esp32MsgHandler);
+    window._esp32MsgHandler = null;
+    const { session, student, issued, nonce, sig, marked, dup } = e.data;
+    // Re-find content in case the DOM was re-rendered
+    const contentEl = document.getElementById('main-content');
+    if (contentEl) _handleEsp32ConnToken(contentEl,
+      String(session), String(student), String(issued), String(sig),
+      nonce ? String(nonce) : null,
+      marked ? '1' : null,
+      dup    ? '1' : null
+    );
+  };
+  window.addEventListener('message', window._esp32MsgHandler);
 }
 
 /// Handles return from ESP32 /mark redirect:
@@ -12897,18 +12941,46 @@ async function _handleEsp32ConnToken(content, esp32session, esp32student, esp32i
 
 // Submits the ESP32 connection token to the cloud server.
 // Called immediately for esp32marked=1 (background sync) and for the legacy path.
+// On network failure, queues the token in localStorage for retry when online.
 async function _syncEsp32TokenToCloud(session, student, issuedAt, sig, nonce) {
   const deviceId = getDeviceFingerprint();
-  await api('/api/attendance-sessions/mark', {
-    method: 'POST',
-    body: JSON.stringify({
-      sessionId: session,
-      method: 'code_mark',
-      connectionToken: { sessionId: session, studentId: student, issuedAt: Number(issuedAt), sig, nonce: nonce || undefined },
-      deviceId,
-    }),
-  });
+  const payload = {
+    sessionId: session,
+    method: 'code_mark',
+    connectionToken: { sessionId: session, studentId: student, issuedAt: Number(issuedAt), sig, nonce: nonce || undefined },
+    deviceId,
+  };
+  try {
+    await api('/api/attendance-sessions/mark', { method: 'POST', body: JSON.stringify(payload) });
+  } catch(e) {
+    if (e.status && e.status >= 400 && e.status < 500) throw e; // 4xx (already marked, bad token) — don't queue
+    _queueEsp32Sync(payload);  // network / 5xx — queue for retry
+    throw e;
+  }
 }
+
+function _queueEsp32Sync(payload) {
+  try {
+    const q = JSON.parse(localStorage.getItem('_dikly_esp32_q') || '[]');
+    q.push({ p: payload, t: Date.now() });
+    localStorage.setItem('_dikly_esp32_q', JSON.stringify(q.slice(-20)));
+  } catch (_) {}
+  window.addEventListener('online', _flushEsp32Queue, { once: true });
+}
+
+async function _flushEsp32Queue() {
+  try {
+    const q = JSON.parse(localStorage.getItem('_dikly_esp32_q') || '[]');
+    if (!q.length) return;
+    localStorage.removeItem('_dikly_esp32_q');
+    for (const { p } of q) {
+      try { await api('/api/attendance-sessions/mark', { method: 'POST', body: JSON.stringify(p) }); }
+      catch (_) {}
+    }
+  } catch (_) {}
+}
+// Flush any queued tokens on startup and whenever the browser comes back online
+window.addEventListener('online', _flushEsp32Queue);
 
 let _qrScanStream = null;
 let _qrScanRaf = null;
