@@ -676,7 +676,8 @@ async function saveOfflineProfile(credentials, userData) {
     profiles[profileKey] = {
       passwordHash,
       user: {
-        id: userData.user.id || userData.user._id,
+        _id: userData.user._id || userData.user.id,
+        id:  userData.user._id || userData.user.id,
         name: userData.user.name,
         email: userData.user.email,
         role: userData.user.role,

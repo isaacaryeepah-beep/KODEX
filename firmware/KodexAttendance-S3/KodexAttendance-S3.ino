@@ -2649,7 +2649,7 @@ static void registerLocalHttp() {
     if (sessionId.isEmpty() || sessionSeed.isEmpty()) {
       localHttp.send(503, "application/json", "{\"error\":\"No active session\"}"); return;
     }
-    if (!timeSynced) {
+    if (!timeSynced && !sessionLocallyStarted) {
       localHttp.send(503, "application/json", "{\"error\":\"Device clock not synced\"}"); return;
     }
     String studentId = localHttp.arg("studentId");
@@ -2657,23 +2657,28 @@ static void registerLocalHttp() {
       localHttp.send(400, "application/json", "{\"error\":\"studentId required\"}"); return;
     }
 
-    // Build the message the backend will re-derive to verify the sig.
-    unsigned long issuedAt = (unsigned long)time(nullptr);
-    String message = "conn:" + sessionId + ":" + studentId + ":" + String(issuedAt);
+    // Generate nonce (required by server replay protection)
+    uint8_t nb[8]; for (int i = 0; i < 8; i++) nb[i] = (uint8_t)(esp_random() & 0xFF);
+    char nonce[17]; for (int i = 0; i < 8; i++) sprintf(nonce + i * 2, "%02x", nb[i]); nonce[16] = '\0';
 
-    // HMAC-SHA256(sessionSeed, message) — first 16 bytes = 32 hex chars = 128-bit sig
+    time_t rawT = time(nullptr);
+    unsigned long issuedAt = (unsigned long)(rawT < 1700000000UL
+      ? (time_t)(1700000000UL + millis() / 1000) : rawT);
+
+    // HMAC-SHA256 over conn:session:student:issuedAt:nonce — full 64 hex chars
+    String message = "conn:" + sessionId + ":" + studentId + ":" + String(issuedAt) + ":" + String(nonce);
     uint8_t hmacOut[32];
     hmacSha256((const uint8_t*)sessionSeed.c_str(), sessionSeed.length(),
                (const uint8_t*)message.c_str(),    message.length(), hmacOut);
-
-    char sigHex[33];
-    for (int i = 0; i < 16; i++) sprintf(sigHex + i * 2, "%02x", hmacOut[i]);
-    sigHex[32] = '\0';
+    char sigHex[65];
+    for (int i = 0; i < 32; i++) sprintf(sigHex + i * 2, "%02x", hmacOut[i]);
+    sigHex[64] = '\0';
 
     JsonDocument resp;
     resp["sessionId"] = sessionId;
     resp["studentId"] = studentId;
     resp["issuedAt"]  = issuedAt;
+    resp["nonce"]     = nonce;
     resp["sig"]       = sigHex;
     String s; serializeJson(resp, s);
 
