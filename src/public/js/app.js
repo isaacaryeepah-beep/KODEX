@@ -12868,7 +12868,10 @@ async function _tryAutoMark(ip, userId) {
     setStatus('✅', 'Attendance marked!', 'You have been checked in successfully', 'rgba(20,83,45,.2)');
     showAutoMsg('✓ Attendance recorded successfully!', true);
   } catch (e) {
-    if (!e.status) {
+    // SW returns 503 + {error:'You are offline'} when network is unavailable —
+    // treat that the same as a thrown network error (no e.status).
+    const swOffline = e.status === 503 && (e.data?.error || e.message || '').toLowerCase().includes('offline');
+    if (!e.status || swOffline) {
       offlineEnqueue({
         url: '/api/attendance-sessions/mark',
         options: { method: 'POST', body: JSON.stringify({ method: 'code_mark', esp32Proof: proof }) },
@@ -13079,7 +13082,8 @@ async function submitCodeMark(deviceIp) {
     showMsg('✓ Attendance marked!', true);
     setTimeout(() => navigateTo('mark-attendance'), 2200);
   } catch (e) {
-    if (!e.status) {
+    const swOffline = e.status === 503 && (e.data?.error || e.message || '').toLowerCase().includes('offline');
+    if (!e.status || swOffline) {
       offlineEnqueue({
         url: '/api/attendance-sessions/mark',
         options: { method: 'POST', body: JSON.stringify({ code, method: 'code_mark' }) },
