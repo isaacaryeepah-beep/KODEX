@@ -488,7 +488,7 @@ static bool touchRead(uint16_t& tx, uint16_t& ty) {
   uint16_t rawX = ((xh & 0x0F) << 8) | xl;
   uint16_t rawY = ((yh & 0x0F) << 8) | yl;
   tx = rawX;
-  ty = rawY;
+  ty = (SH - 1) - rawY;  // invert Y — touch chip reports upside-down relative to display
   return true;
 }
 
