@@ -12860,10 +12860,11 @@ async function _tryAutoMark(ip, userId) {
 
   setStatus('✅', 'Connected! Marking attendance…', 'Submitting to server…', 'rgba(20,83,45,.2)');
 
+  const deviceId = getDeviceFingerprint();
   try {
     await api('/api/attendance-sessions/mark', {
       method: 'POST',
-      body: JSON.stringify({ method: 'code_mark', esp32Proof: proof }),
+      body: JSON.stringify({ method: 'code_mark', esp32Proof: proof, deviceId }),
     });
     setStatus('✅', 'Attendance marked!', 'You have been checked in successfully', 'rgba(20,83,45,.2)');
     showAutoMsg('✓ Attendance recorded successfully!', true);
@@ -12874,7 +12875,7 @@ async function _tryAutoMark(ip, userId) {
     if (!e.status || swOffline) {
       offlineEnqueue({
         url: '/api/attendance-sessions/mark',
-        options: { method: 'POST', body: JSON.stringify({ method: 'code_mark', esp32Proof: proof }) },
+        options: { method: 'POST', body: JSON.stringify({ method: 'code_mark', esp32Proof: proof, deviceId }) },
         label: 'Mark attendance (offline)',
       });
       setStatus('📴', 'Attendance saved!', 'No internet right now — will sync automatically when you reconnect', 'rgba(30,58,138,.2)');
@@ -13074,10 +13075,11 @@ async function submitCodeMark(deviceIp) {
   if (btn) { btn.textContent = 'Submitting…'; btn.disabled = true; }
   const restoreBtn = () => { if (btn) { btn.textContent = 'Mark Attendance'; btn.disabled = false; } };
 
+  const deviceId = getDeviceFingerprint();
   try {
     await api('/api/attendance-sessions/mark', {
       method: 'POST',
-      body: JSON.stringify({ code, method: 'code_mark' }),
+      body: JSON.stringify({ code, method: 'code_mark', deviceId }),
     });
     showMsg('✓ Attendance marked!', true);
     setTimeout(() => navigateTo('mark-attendance'), 2200);
@@ -13086,7 +13088,7 @@ async function submitCodeMark(deviceIp) {
     if (!e.status || swOffline) {
       offlineEnqueue({
         url: '/api/attendance-sessions/mark',
-        options: { method: 'POST', body: JSON.stringify({ code, method: 'code_mark' }) },
+        options: { method: 'POST', body: JSON.stringify({ code, method: 'code_mark', deviceId }) },
         label: 'Mark attendance (offline)',
       });
       showMsg('📴 No internet — saved. Will sync automatically when connected.', true);
