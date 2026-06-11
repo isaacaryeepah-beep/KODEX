@@ -76,6 +76,7 @@
       border-radius: 24px;
       padding: 28px 24px;
       display: flex; flex-direction: column; gap: 20px;
+      position: relative;
       box-shadow: 0 24px 64px rgba(0,0,0,.4), inset 0 1px 0 rgba(255,255,255,.06);
     }
 
@@ -195,6 +196,10 @@
     </div>
 
     <div class="meeting-card">
+      <button onclick="history.back()" style="position:absolute;top:14px;left:14px;background:none;border:none;color:rgba(255,255,255,.5);font-size:13px;cursor:pointer;display:flex;align-items:center;gap:5px;padding:4px 6px;border-radius:8px;font-family:inherit;transition:color .15s" onmouseover="this.style.color='rgba(255,255,255,.9)'" onmouseout="this.style.color='rgba(255,255,255,.5)'">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="19" y1="12" x2="5" y2="12"/><polyline points="12 19 5 12 12 5"/></svg>
+        Back
+      </button>
       <div class="host-badge">Host</div>
       <div class="meeting-title" id="meetingTitle">Starting your class…</div>
 
