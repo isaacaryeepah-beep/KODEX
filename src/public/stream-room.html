@@ -228,6 +228,10 @@
   </div>
 </div>
 
+<!-- LiveKit UMD bundle — loaded as a regular script tag so it works on iOS Safari/WKWebView.
+     Dynamic import() from cross-origin URLs is blocked by WebKit with "The operation is insecure". -->
+<script src="https://cdn.jsdelivr.net/npm/livekit-client@2/dist/livekit-client.umd.min.js"></script>
+
 <script>
 window.addEventListener('unhandledrejection', function(e) {
   showError('Error: ' + ((e.reason && e.reason.message) || String(e.reason || 'unknown')));
@@ -267,11 +271,12 @@ var activeSpeakerSids = new Set();
 var encoder = new TextEncoder();
 var decoder = new TextDecoder();
 
-// ── Load LiveKit SDK from CDN ─────────────────────────────────────────────────
+// ── LiveKit SDK — loaded via UMD script tag above; globals on window.LivekitClient ──
 setMsg('Loading…');
 var Room, RoomEvent, Track;
 try {
-  var lk = await import('https://esm.sh/livekit-client@2');
+  var lk = window.LivekitClient;
+  if (!lk || !lk.Room) throw new Error('LiveKit SDK not loaded');
   Room      = lk.Room;
   RoomEvent = lk.RoomEvent;
   Track     = lk.Track;
