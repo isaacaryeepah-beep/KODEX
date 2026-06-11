@@ -42,10 +42,12 @@ exports.broadcastParticipant  = broadcastParticipant;
 // ── Helpers ───────────────────────────────────────────────────────────────────
 function isMeetingModerator(meeting, user) {
   const uid = user._id.toString();
+  // creatorId may be a populated object or a raw ObjectId — handle both
+  const creatorId = (meeting.creatorId?._id || meeting.creatorId)?.toString();
   return (
-    meeting.creatorId.toString() === uid ||
-    ['admin', 'superadmin', 'hod'].includes(user.role) ||
-    (meeting.invigilators || []).some(i => i.toString() === uid)
+    creatorId === uid ||
+    ['admin', 'superadmin', 'hod', 'lecturer'].includes(user.role) ||
+    (meeting.invigilators || []).some(i => (i?._id || i).toString() === uid)
   );
 }
 
