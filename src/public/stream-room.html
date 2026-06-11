@@ -228,19 +228,8 @@
   </div>
 </div>
 
-<!-- Load LiveKit via a module script.
-     iOS Safari/WKWebView blocks dynamic import() inside classic scripts ("The operation is insecure"),
-     but module scripts can import cross-origin modules freely via CORS. -->
-<script type="module">
-  try {
-    const lk = await import('https://esm.sh/livekit-client@2');
-    window.LivekitClient = lk;
-  } catch(e) {
-    window._lkLoadError = e.message;
-  }
-  window._lkLoaded = true;
-  window.dispatchEvent(new Event('lk-loaded'));
-</script>
+<!-- LiveKit SDK — served from the same origin to avoid iOS Safari cross-origin restrictions -->
+<script src="/js/livekit-client.umd.js"></script>
 
 <script>
 window.addEventListener('unhandledrejection', function(e) {
@@ -281,18 +270,12 @@ var activeSpeakerSids = new Set();
 var encoder = new TextEncoder();
 var decoder = new TextDecoder();
 
-// ── LiveKit SDK — wait for module script above to finish, then read globals ──
+// ── LiveKit SDK — loaded from same-origin /js/livekit-client.umd.js ──────────
 setMsg('Loading…');
-await new Promise(function(resolve) {
-  if (window._lkLoaded) return resolve();
-  window.addEventListener('lk-loaded', resolve, { once: true });
-  setTimeout(resolve, 15000); // 15s timeout fallback
-});
 var Room, RoomEvent, Track;
 try {
   var lk = window.LivekitClient;
-  if (window._lkLoadError) throw new Error(window._lkLoadError);
-  if (!lk || !lk.Room) throw new Error('LiveKit SDK not available');
+  if (!lk || !lk.Room) throw new Error('LiveKit SDK not loaded');
   Room      = lk.Room;
   RoomEvent = lk.RoomEvent;
   Track     = lk.Track;

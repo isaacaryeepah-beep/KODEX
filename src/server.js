@@ -80,7 +80,6 @@ app.use(helmet({
         "https://8x8.vc",
         "https://cdn.jsdelivr.net",
         "https://unpkg.com",
-        "https://esm.sh",    // LiveKit SDK — loaded via <script type="module"> (not dynamic import)
         "'unsafe-inline'",   // Required for inline event handlers in legacy HTML pages
       ],
       // Helmet 8 useDefaults injects script-src-attr 'none' which blocks ALL onclick
