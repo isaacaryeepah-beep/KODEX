@@ -15790,13 +15790,97 @@ async function renderLecturerTimetable() {
             </div>
             <h3 style="font-size:16px;font-weight:700;color:#0f172a;margin-bottom:6px">No classes scheduled yet</h3>
             <p style="color:#64748b;font-size:13px;margin-bottom:22px">Add your first class to build out your weekly timetable</p>
-            <button class="btn btn-primary" onclick="openAddSlotModal()" style="display:inline-flex;align-items:center;gap:6px">
-              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
-              Add Your First Class
-            </button>
+            <div style="display:flex;gap:10px;justify-content:center;flex-wrap:wrap">
+              <button class="btn btn-primary" onclick="openAddSlotModal()" style="display:inline-flex;align-items:center;gap:6px">
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+                Add Your First Class
+              </button>
+              ${_timetableCourses.length > 0 ? `
+              <button onclick="openImportCoursesModal()" style="display:inline-flex;align-items:center;gap:6px;padding:9px 16px;background:#f0fdf4;border:1.5px solid #86efac;color:#16a34a;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer">
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="8 17 12 21 16 17"/><line x1="12" y1="12" x2="12" y2="21"/><path d="M20.88 18.09A5 5 0 0 0 18 9h-1.26A8 8 0 1 0 3 16.29"/></svg>
+                Import from My Courses
+              </button>` : ''}
+            </div>
           </div>`
         : `<div style="background:#fff;border:1px solid #e8eaed;border-radius:14px;overflow-x:auto;box-shadow:0 1px 4px rgba(0,0,0,.05)">${_timetableGrid(_timetableSlots, true)}</div>`
       }`;
+  }
+}
+
+function openImportCoursesModal() {
+  const DAYS = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
+  const courses = _timetableCourses.filter(c => c && (c._id || c.id));
+  if (!courses.length) { showToastNotif('No courses found to import.'); return; }
+
+  const rows = courses.map((c, i) => {
+    const id   = c._id || c.id;
+    const name = c.title || c.name || 'Untitled';
+    const code = c.code  || '';
+    return `
+      <div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:10px;padding:14px;margin-bottom:10px" id="import-row-${i}">
+        <div style="font-weight:700;font-size:13px;color:#0f172a;margin-bottom:10px">${code ? code + ' — ' : ''}${name}</div>
+        <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px">
+          <div>
+            <label style="font-size:11px;color:#64748b;font-weight:600;display:block;margin-bottom:4px">DAY</label>
+            <select id="import-day-${i}" style="width:100%;padding:7px 10px;border:1.5px solid #e2e8f0;border-radius:8px;font-size:13px;background:#fff">
+              ${DAYS.map((d,di) => `<option value="${di}"${di===1?' selected':''}>${d}</option>`).join('')}
+            </select>
+          </div>
+          <div>
+            <label style="font-size:11px;color:#64748b;font-weight:600;display:block;margin-bottom:4px">START</label>
+            <input type="time" id="import-start-${i}" value="08:00" style="width:100%;padding:7px 10px;border:1.5px solid #e2e8f0;border-radius:8px;font-size:13px">
+          </div>
+          <div>
+            <label style="font-size:11px;color:#64748b;font-weight:600;display:block;margin-bottom:4px">END</label>
+            <input type="time" id="import-end-${i}" value="10:00" style="width:100%;padding:7px 10px;border:1.5px solid #e2e8f0;border-radius:8px;font-size:13px">
+          </div>
+        </div>
+        <input type="hidden" id="import-cid-${i}" value="${id}">
+      </div>`;
+  }).join('');
+
+  showModal(`
+    <h3 style="margin:0 0 6px;font-size:17px;font-weight:700">Import Courses into Timetable</h3>
+    <p style="color:#64748b;font-size:13px;margin:0 0 16px">Set a day and time for each of your courses. You can edit them after.</p>
+    <div id="import-courses-list" style="max-height:55vh;overflow-y:auto;padding-right:4px">${rows}</div>
+    <div id="import-error" style="color:#ef4444;font-size:13px;margin-top:8px;display:none"></div>
+    <div style="display:flex;gap:10px;margin-top:18px">
+      <button onclick="closeModal()" style="flex:1;padding:10px;background:#f1f5f9;border:none;border-radius:8px;font-size:14px;font-weight:600;cursor:pointer;color:#475569">Cancel</button>
+      <button onclick="_doImportCourses(${courses.length})" style="flex:2;padding:10px;background:#2563eb;border:none;border-radius:8px;font-size:14px;font-weight:700;cursor:pointer;color:#fff">
+        Import ${courses.length} Course${courses.length > 1 ? 's' : ''}
+      </button>
+    </div>
+  `);
+}
+
+async function _doImportCourses(count) {
+  const errEl = document.getElementById('import-error');
+  errEl.style.display = 'none';
+  const btn = document.querySelector('[onclick^="_doImportCourses"]');
+  if (btn) { btn.disabled = true; btn.textContent = 'Importing…'; }
+
+  let created = 0, skipped = 0;
+  for (let i = 0; i < count; i++) {
+    const courseId  = document.getElementById(`import-cid-${i}`)?.value;
+    const dayOfWeek = Number(document.getElementById(`import-day-${i}`)?.value);
+    const startTime = document.getElementById(`import-start-${i}`)?.value;
+    const endTime   = document.getElementById(`import-end-${i}`)?.value;
+    if (!courseId || !startTime || !endTime) continue;
+    if (startTime >= endTime) { skipped++; continue; }
+    try {
+      await api('/api/timetable', { method: 'POST', body: JSON.stringify({ courseId, dayOfWeek, startTime, endTime }) });
+      created++;
+    } catch(e) {
+      skipped++;
+    }
+  }
+
+  closeModal();
+  if (created > 0) {
+    showToastNotif(`✅ ${created} class${created > 1 ? 'es' : ''} added to your timetable${skipped > 0 ? ` (${skipped} skipped due to time clashes)` : ''}`);
+    renderLecturerTimetable();
+  } else {
+    showToastNotif('No classes were imported. Check for time clashes and try again.', 'error');
   }
 }
 
