@@ -210,7 +210,8 @@ function selectPortal(t){if(window._appLoaded)window._realSelectPortal(t);else w
       <!-- Mode selector toggles -->
       <div class="mode-toggles">
 
-        <div class="mode-toggle" id="mode-tgl-corp" onclick="selectMode('corp')">
+        <div class="mode-toggle" id="mode-tgl-corp" onclick="selectMode('corp')" ontouchend="event.preventDefault();selectMode('corp')">
+          <a href="javascript:void(0)" onclick="selectMode('corp')" ontouchend="event.preventDefault();selectMode('corp')" style="position:absolute;inset:0;z-index:10;-webkit-tap-highlight-color:transparent;" aria-label="Select Corporate workspace"></a>
           <div class="mode-toggle-icon">
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"/></svg>
           </div>
@@ -221,7 +222,8 @@ function selectPortal(t){if(window._appLoaded)window._realSelectPortal(t);else w
           </div>
         </div>
 
-        <div class="mode-toggle" id="mode-tgl-acad" onclick="selectMode('acad')">
+        <div class="mode-toggle" id="mode-tgl-acad" onclick="selectMode('acad')" ontouchend="event.preventDefault();selectMode('acad')">
+          <a href="javascript:void(0)" onclick="selectMode('acad')" ontouchend="event.preventDefault();selectMode('acad')" style="position:absolute;inset:0;z-index:10;-webkit-tap-highlight-color:transparent;" aria-label="Select Academic workspace"></a>
           <div class="mode-toggle-icon">
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 10v6M2 10l10-5 10 5-10 5z"/><path d="M6 12v5c0 2 4 3 6 3s6-1 6-3v-5"/></svg>
           </div>
