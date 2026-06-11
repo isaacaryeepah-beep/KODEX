@@ -714,15 +714,18 @@ function buildProfileKey(credentials) {
 }
 
 // ── Attempt offline login ─────────────────────────────────────────────────────
-async function attemptOfflineLogin(credentials) {
+async function attemptOfflineLogin(credentials, formId) {
   try {
     const profiles = JSON.parse(localStorage.getItem(OFFLINE_LOGIN_KEY) || '{}');
     const profileKey = buildProfileKey(credentials);
     const profile = profiles[profileKey];
 
     if (!profile) {
-      throw new Error('No offline profile found. Please login online at least once first.');
+      throw new Error('No offline profile found. Connect to the internet and sign in once to enable offline access.');
     }
+
+    // Profile confirmed — show the notice now (not before)
+    if (formId) showOfflineLoginNotice(formId);
 
     // Check if profile has expired
     const ageMs = Date.now() - profile.savedAt;
@@ -1694,8 +1697,7 @@ async function handleAdminLogin() {
 
     let data;
     if (!(await isOnlineAsync())) {
-      showOfflineLoginNotice('admin-login-form');
-      data = await attemptOfflineLogin(credentials);
+      data = await attemptOfflineLogin(credentials, 'admin-login-form');
     } else {
       removeOfflineLoginNotice();
       data = await initiate2FA(credentials);
@@ -1768,8 +1770,7 @@ async function handleLecturerLogin() {
     let data;
     if (!(await isOnlineAsync())) {
       // ── OFFLINE PATH ──
-      showOfflineLoginNotice('lecturer-login-form');
-      data = await attemptOfflineLogin(credentials);
+      data = await attemptOfflineLogin(credentials, 'lecturer-login-form');
     } else {
       // ── ONLINE PATH ──
       removeOfflineLoginNotice();
@@ -2015,8 +2016,7 @@ async function handleHodLogin() {
     const credentials = { email, password, loginRole: 'hod', portalMode: 'academic', deviceId: getDeviceFingerprint() };
     let data;
     if (!(await isOnlineAsync())) {
-      showOfflineLoginNotice('hod-login-form');
-      data = await attemptOfflineLogin(credentials);
+      data = await attemptOfflineLogin(credentials, 'hod-login-form');
     } else {
       removeOfflineLoginNotice();
       data = await initiate2FA(credentials);
@@ -2092,8 +2092,7 @@ async function handleEmployeeLogin() {
     let data;
     if (!(await isOnlineAsync())) {
       // ── OFFLINE PATH ──
-      showOfflineLoginNotice('employee-login-form');
-      data = await attemptOfflineLogin(credentials);
+      data = await attemptOfflineLogin(credentials, 'employee-login-form');
     } else {
       // ── ONLINE PATH ──
       removeOfflineLoginNotice();
@@ -2165,8 +2164,7 @@ async function handleStudentLogin() {
     let data;
     if (!(await isOnlineAsync())) {
       // ── OFFLINE PATH ──
-      showOfflineLoginNotice('student-login-form');
-      data = await attemptOfflineLogin(credentials);
+      data = await attemptOfflineLogin(credentials, 'student-login-form');
     } else {
       // ── ONLINE PATH ──
       removeOfflineLoginNotice();
