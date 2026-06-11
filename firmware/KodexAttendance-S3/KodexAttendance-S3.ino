@@ -96,6 +96,12 @@ public:
 #include <ESPmDNS.h>       // dikly.local hostname on both AP and STA networks
 #include "lwip/etharp.h"   // ARP table for IP→MAC→RSSI mapping
 
+// lwIP's etharp.h does not always export ARP_TABLE_SIZE publicly.
+// Define a safe upper bound if not already provided by the SDK.
+#ifndef ARP_TABLE_SIZE
+#define ARP_TABLE_SIZE 10
+#endif
+
 // Forward declarations
 static void startWifiReconfigPortal();
 static void drawPairStatus(const char* title, const char* line1, const char* line2, uint8_t step);
@@ -374,6 +380,8 @@ static bool usedMacCheck(const uint8_t mac[6]) {
 
 static void usedMacAdd(const uint8_t mac[6]) {
   if (!usedMacs || usedMacCount >= MON_MAX_STUDENTS) return;
+  // Guard: only add if session hasn't changed under us
+  if (usedMacSession.isEmpty() || usedMacSession != sessionId) return;
   static const uint8_t zero[6] = {0};
   if (memcmp(mac, zero, 6) == 0) return;
   memcpy(usedMacs[usedMacCount++], mac, 6);
@@ -1850,9 +1858,11 @@ static void drawReady() {
   spr.setCursor((SW - tw) / 2, 82); spr.print(subLbl);
 
   // ── Pulse ring animation ──────────────────────────────────────────────────────
+  // Center at y=225 so outer ring (r=65) starts at y=160, clearing the PIN card
+  // which ends at y=150. Bottom info card (drawn after) covers rings in that area.
   uint32_t ms  = millis();
   uint8_t  p   = (uint8_t)((ms / 600) % 4);
-  int32_t  pcx = SW / 2, pcy = 168;
+  int32_t  pcx = SW / 2, pcy = 225;
 
   // Four concentric rings pulsing outward
   uint16_t rc4 = (p == 3) ? COL_PRIMARY : COL_BORDER;
@@ -2613,6 +2623,7 @@ static void drawPairStatus(const char* title, const char* line1, const char* lin
 
 // ── CHECKIN MONITOR — live check-in count + countdown ────────────────────────
 static void drawCheckinMonitor() {
+  if (!monStudents) { drawReady(); return; }
   spr.fillSprite(COL_BG);
   _drawSubHeader(spr, "Check-In Open", WiFi.status() == WL_CONNECTED);
 
@@ -2667,6 +2678,7 @@ static void drawCheckinMonitor() {
 
 // ── PRESENCE MONITOR — live student roster with green/red status ──────────────
 static void drawPresenceMonitor() {
+  if (!monStudents) { drawReady(); return; }
   spr.fillSprite(COL_BG);
   _drawSubHeader(spr, "Presence Monitor", WiFi.status() == WL_CONNECTED);
 
@@ -2865,6 +2877,7 @@ static void deauthStation(const uint8_t mac[6]) {
 
 // Add a newly checked-in student to the monitor list
 static void monAddStudent(const char* indexNum, const uint8_t* mac) {
+  if (!indexNum || indexNum[0] == '\0') return;
   if (!monStudents || monCount >= MON_MAX_STUDENTS) return;
   // Check for duplicate index number
   for (uint16_t i = 0; i < monCount; i++)
@@ -2883,6 +2896,8 @@ static void monAddStudent(const char* indexNum, const uint8_t* mac) {
 static void IRAM_ATTR monPromiscCb(void* buf, wifi_promiscuous_pkt_type_t type) {
   if (type != WIFI_PKT_MGMT) return;
   const wifi_promiscuous_pkt_t* pkt = (const wifi_promiscuous_pkt_t*)buf;
+  // Need at least 16 bytes: 2 (FC) + 2 (duration) + 6 (DA) + 6 (SA) + ...
+  if (pkt->rx_ctrl.sig_len < 16) return;
   const uint8_t* p = pkt->payload;
   // Probe request: frame control byte[0] = 0x40 (type=mgmt subtype=4)
   if (p[0] != 0x40) return;
@@ -3003,11 +3018,19 @@ static void serveAttendPortal() {
   String lecturer = sessionLecturer.isEmpty() ? "Dikly Device" : sessionLecturer;
   if (course.isEmpty()) course = "Attendance";
 
-  // Escape any single-quotes for JS injection safety (course/lecturer come from server)
-  course.replace("'", "\\'");
-  lecturer.replace("'", "\\'");
+  // HTML-encode course/lecturer before inserting into HTML element content.
+  // These strings come from the server but may contain user-entered data.
+  auto htmlEsc = [](String& s) {
+    s.replace("&", "&amp;");
+    s.replace("<", "&lt;");
+    s.replace(">", "&gt;");
+    s.replace("\"", "&quot;");
+    s.replace("'", "&#39;");
+  };
+  htmlEsc(course);
+  htmlEsc(lecturer);
 
-  String html = F(R"RAW(<!doctype html>
+  String html = R"RAW(<!doctype html>
 <html><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1">
 <title>Mark Attendance</title>
@@ -3059,7 +3082,7 @@ button:disabled{opacity:.5}
   html += "<div class=\"course\">" + course + "</div>";
   html += "<div class=\"lect\">" + lecturer + "</div>";
 
-  html += F(R"RAW(
+  html += R"RAW(
 <div id="err" class="err"></div>
 <div id="main">
 <label>Index Number</label>
@@ -3121,7 +3144,7 @@ function go(){
   // Inject check-in countdown end timestamp
   html += "var endUnix=" + String(endUnix) + ";";
 
-  html += F(R"RAW(
+  html += R"RAW(
 function tick(){
   var s=Math.max(0,endUnix-Math.floor(Date.now()/1000));
   var m=Math.floor(s/60),sc=s%60;
@@ -3619,9 +3642,11 @@ static void registerLocalHttp() {
       return;
     }
 
-    // Auto-disconnect outside monitor mode too
-    if (gotMac) { delay(200); deauthStation(clientMac); }
+    // Auto-disconnect outside monitor mode: send response FIRST so the browser
+    // receives the success message before the TCP socket is torn down.
     localHttp.send(200, "application/json", "{\"ok\":true,\"message\":\"Attendance recorded.\"}");
+    delay(200);
+    if (gotMac) deauthStation(clientMac);
   });
 
   // /session/start — lecturer creates a session locally (no internet required)
@@ -3633,8 +3658,15 @@ static void registerLocalHttp() {
     if (!sessionId.isEmpty()) {
       localHttp.send(409, "application/json", "{\"error\":\"Session already active. Stop it first.\"}"); return;
     }
-    // PIN check — required when starting offline (web portal sends pin field)
-    String pin = req["pin"] | "";
+    // PIN check — required when starting offline (web portal sends pin field).
+    // Handle both string ("1234") and integer (1234) JSON types.
+    String pin;
+    JsonVariant pinVar = req["pin"];
+    if (pinVar.is<int>()) {
+      char buf[8]; snprintf(buf, sizeof(buf), "%04d", pinVar.as<int>()); pin = buf;
+    } else {
+      pin = pinVar | "";
+    }
     if (!pin.isEmpty() && pin != String(lecturerPin)) {
       localHttp.send(403, "application/json", "{\"error\":\"Wrong PIN. Check the device screen.\"}"); return;
     }
