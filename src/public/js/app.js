@@ -689,7 +689,8 @@ async function saveOfflineProfile(credentials, userData) {
         profilePhoto: userData.user.profilePhoto || null,
         lastLoginAt: userData.user.lastLoginAt || null,
       },
-      token: userData.token,           // cached JWT (may expire but used for UI)
+      token: userData.token,                   // access JWT (15 min — may expire)
+      refreshToken: userData.refreshToken || null, // refresh token (30 days) for re-auth on reconnect
       trial: userData.trial || null,
       savedAt: Date.now(),
     };
@@ -740,21 +741,14 @@ async function attemptOfflineLogin(credentials, formId) {
       throw new Error('Wrong email or password.');
     }
 
-    // Check if the cached JWT has expired — expired tokens cause all API calls to silently 401
-    try {
-      const jwtPayload = JSON.parse(atob(profile.token.split('.')[1]));
-      if (jwtPayload.exp && jwtPayload.exp * 1000 < Date.now()) {
-        throw new Error('Your offline session token has expired. Please connect to the internet to sign in again.');
-      }
-    } catch (e) {
-      if (e.message.includes('offline session token')) throw e;
-      // Malformed JWT — continue; the server will reject it on first API call
-    }
-
-    // Return a fake login response matching the real API shape
+    // Return a fake login response matching the real API shape.
+    // We intentionally do NOT block on an expired access token here —
+    // in offline mode, no API calls can be made anyway, and the refresh token
+    // will be used to get a fresh access token once connectivity is restored.
     console.log('[OfflineLogin] Offline login successful for', profileKey);
     return {
       token: profile.token,
+      refreshToken: profile.refreshToken || null,
       user: profile.user,
       trial: profile.trial,
       offlineMode: true,   // flag so app knows we're offline
@@ -1706,6 +1700,7 @@ async function handleAdminLogin() {
 
     token = data.token;
     localStorage.setItem('token', token);
+    // Restore refresh token from offline profile if present (so auto-refresh works when reconnected)
     if (data.refreshToken) localStorage.setItem('refreshToken', data.refreshToken);
     currentUser = data.user;
     if (window.DiklyIDB) window.DiklyIDB.saveUserSession(data.user, data.token).catch(() => {});

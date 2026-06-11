@@ -96,6 +96,12 @@ public:
 #include <ESPmDNS.h>       // dikly.local hostname on both AP and STA networks
 #include "lwip/etharp.h"   // ARP table for IP→MAC→RSSI mapping
 
+// lwIP's etharp.h does not always export ARP_TABLE_SIZE publicly.
+// Define a safe upper bound if not already provided by the SDK.
+#ifndef ARP_TABLE_SIZE
+#define ARP_TABLE_SIZE 10
+#endif
+
 // Forward declarations
 static void startWifiReconfigPortal();
 static void drawPairStatus(const char* title, const char* line1, const char* line2, uint8_t step);
@@ -234,13 +240,23 @@ bool     sessionLocallyStarted = false;  // true when session was started on-dev
 static BLEAdvertising *bleAdv  = nullptr;
 static uint32_t        bleSlot = UINT32_MAX;   // slot currently on-air
 
+// Lecturer PIN — 4-digit code shown on device screen; required to start an offline session
+// Regenerated each time the device boots or a session ends. Prevents students accidentally
+// starting sessions by opening the portal before the lecturer does.
+static char  lecturerPin[5] = "0000";
+
+static void regenerateLecturerPin() {
+  uint16_t pin = (uint16_t)(esp_random() % 9000) + 1000;  // 1000..9999
+  snprintf(lecturerPin, sizeof(lecturerPin), "%04u", pin);
+}
+
 // Async pairing (avoids iOS captive-portal dropping the fetch before we respond)
 bool     pairPending     = false;
 String   pairPendingInst = "";
 String   pairPendingCode = "";
 
 // Screen state machine
-enum Screen { SPLASH, SETUP, WIFI_SCAN, WIFI_RECONFIG, CONNECTING, READY, SESSION_START, SESSION, SUMMARY, SETTINGS, DEVICE_INFO, PAIR_SCREEN };
+enum Screen { SPLASH, SETUP, WIFI_SCAN, WIFI_RECONFIG, CONNECTING, READY, SESSION_START, SESSION, SUMMARY, SETTINGS, DEVICE_INFO, PAIR_SCREEN, CHECKIN_MONITOR, PRESENCE_MONITOR };
 Screen curScreen = SPLASH;
 String statusMsg = "";
 uint32_t splashStart = 0;
@@ -306,6 +322,69 @@ static void dedupAdd(const char* id) {
   if (!dedupIds || !id || id[0] == '\0' || dedupCount >= 400) return;
   strncpy(dedupIds[dedupCount++], id, 31);
   dedupIds[dedupCount - 1][31] = '\0';
+}
+
+// ─── Persistent Presence Monitor ─────────────────────────────────────────────
+// After check-in closes the AP, promiscuous probe-request sniffing tracks
+// whether each student's phone is still in range every 30 seconds.
+// ─────────────────────────────────────────────────────────────────────────────
+
+#define MON_MAX_STUDENTS   300    // max students tracked per session
+#define MON_CHECKIN_MIN    15     // check-in window (minutes)
+#define MON_ABSENT_SEC     240    // no probe for 4 min → mark LEFT
+#define MON_SCAN_MS        30000  // presence scan interval (ms)
+
+struct StudentPresenceRecord {
+  char     indexNumber[32];
+  uint8_t  mac[6];
+  uint32_t checkinTime;   // unix timestamp
+  uint32_t lastSeenTime;  // updated by probe sniffer
+  uint32_t leftTime;      // 0 = still here
+  bool     present;
+  bool     synced;
+};
+
+enum MonitorPhase { MON_IDLE, MON_CHECKIN_OPEN, MON_MONITORING, MON_ENDED };
+
+static StudentPresenceRecord* monStudents   = nullptr;  // PSRAM
+static uint16_t  monCount        = 0;
+static MonitorPhase monPhase     = MON_IDLE;
+static uint32_t  monCheckinEndMs = 0;   // millis() when check-in closes
+static uint32_t  monLastScanMs   = 0;
+static char      monCsvPath[48]  = "";
+static uint16_t  monPresentCount = 0;
+static uint16_t  monLeftCount    = 0;
+static int8_t    monScrollOffset = 0;   // scroll position on presence list
+static bool      monPromisc      = false;
+
+// ─── Per-session MAC dedup — one device, one submission ──────────────────────
+// Prevents Student A from submitting Student B's index number: once a MAC
+// has been used to submit, that phone cannot submit again for this session.
+// Allocated from PSRAM alongside dedupIds. 300 slots × 6 bytes = 1.8 KB.
+static uint8_t (*usedMacs)[6] = nullptr;  // PSRAM
+static uint16_t usedMacCount  = 0;
+static String   usedMacSession = "";
+
+static void usedMacClear(const String& sid) {
+  usedMacCount = 0; usedMacSession = sid;
+}
+
+static bool usedMacCheck(const uint8_t mac[6]) {
+  if (!usedMacs) return false;
+  static const uint8_t zero[6] = {0};
+  if (memcmp(mac, zero, 6) == 0) return false;  // unknown MAC — don't block
+  for (uint16_t i = 0; i < usedMacCount; i++)
+    if (memcmp(usedMacs[i], mac, 6) == 0) return true;
+  return false;
+}
+
+static void usedMacAdd(const uint8_t mac[6]) {
+  if (!usedMacs || usedMacCount >= MON_MAX_STUDENTS) return;
+  // Guard: only add if session hasn't changed under us
+  if (usedMacSession.isEmpty() || usedMacSession != sessionId) return;
+  static const uint8_t zero[6] = {0};
+  if (memcmp(mac, zero, 6) == 0) return;
+  memcpy(usedMacs[usedMacCount++], mac, 6);
 }
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
@@ -595,7 +674,9 @@ static int postJson(const String& path, const String& body,
 // ─── Start a session locally (fully offline) ─────────────────────────────────
 // Generates a local_ prefixed sessionId + seed, writes to /sessions.jsonl,
 // and activates the session on-device. Synced to cloud on next heartbeat.
-static void startLocalSession(uint32_t durationSecs) {
+static void startLocalSession(uint32_t durationSecs,
+                              const String& course   = "",
+                              const String& lecturer = "") {
   // Generate random 16-char hex sessionId suffix
   uint8_t rndBuf[8]; esp_fill_random(rndBuf, 8);
   char idHex[17]; idHex[16] = '\0';
@@ -608,9 +689,9 @@ static void startLocalSession(uint32_t durationSecs) {
   for (int i = 0; i < 16; i++) snprintf(&seedHex[i*2], 3, "%02x", seedBuf[i]);
   sessionSeed = String(seedHex);
 
-  sessionTitle    = "Local Session";
-  sessionCourse   = "";
-  sessionLecturer = "";
+  sessionCourse   = course.isEmpty()   ? "" : course;
+  sessionLecturer = lecturer.isEmpty() ? "" : lecturer;
+  sessionTitle    = course.isEmpty()   ? "Local Session" : course;
   sessionDuration = durationSecs;
   studentsMarked  = 0;
   sessionTotalEnrolled = 0;
@@ -628,8 +709,10 @@ static void startLocalSession(uint32_t durationSecs) {
     File sf = SD_MMC.open("/sessions.jsonl", FILE_APPEND);
     if (sf) {
       String line = "{\"sessionId\":\"" + sessionId +
-                    "\",\"courseCode\":\"\",\"title\":\"Local Session\"" +
-                    ",\"lecturer\":\"\",\"startedAt\":" + String(sessionStartedAt) +
+                    "\",\"courseCode\":\"" + sessionCourse +
+                    "\",\"title\":\"" + sessionTitle + "\"" +
+                    ",\"lecturer\":\"" + sessionLecturer +
+                    "\",\"startedAt\":" + String(sessionStartedAt) +
                     ",\"duration\":" + String(durationSecs) +
                     ",\"seed\":\"" + sessionSeed + "\",\"synced\":false}";
       sf.println(line);
@@ -849,7 +932,7 @@ static void sendHeartbeat() {
   JsonVariantConst sess = doc["activeSession"];
   if (sess.isNull()) {
     if (!sessionId.isEmpty()) {
-      LOG("Session ended"); sessionId = ""; sessionSeed = "";
+      LOG("Session ended"); sessionId = ""; sessionSeed = ""; regenerateLecturerPin();
       sessionTitle = ""; sessionCourse = ""; sessionLecturer = "";
       studentsMarked = 0; sessionTotalEnrolled = 0;
       dedupClear("");
@@ -1775,9 +1858,11 @@ static void drawReady() {
   spr.setCursor((SW - tw) / 2, 82); spr.print(subLbl);
 
   // ── Pulse ring animation ──────────────────────────────────────────────────────
+  // Center at y=225 so outer ring (r=65) starts at y=160, clearing the PIN card
+  // which ends at y=150. Bottom info card (drawn after) covers rings in that area.
   uint32_t ms  = millis();
   uint8_t  p   = (uint8_t)((ms / 600) % 4);
-  int32_t  pcx = SW / 2, pcy = 168;
+  int32_t  pcx = SW / 2, pcy = 225;
 
   // Four concentric rings pulsing outward
   uint16_t rc4 = (p == 3) ? COL_PRIMARY : COL_BORDER;
@@ -1796,9 +1881,24 @@ static void drawReady() {
   tw = spr.textWidth("D");
   spr.setCursor(pcx - tw / 2, pcy - 4); spr.print("D");
 
-  // ── Bottom info card (y=238..276) ─────────────────────────────────────────────
-  spr.fillRoundRect(10, 238, SW - 20, 40, 6, COL_CARD);
-  spr.drawRoundRect(10, 238, SW - 20, 40, 6, COL_BORDER);
+  // ── PIN card — shown when no session is active ───────────────────────────────
+  // Lecturer connects their phone to Dikly WiFi, opens 192.168.4.1/start,
+  // and enters this PIN to prove they are the lecturer before starting a session.
+  spr.fillRoundRect(10, 96, SW - 20, 54, 8, COL_DIM_CARD);
+  spr.drawRoundRect(10, 96, SW - 20, 54, 8, COL_BORDER);
+  spr.setFont(F_TINY); spr.setTextColor(COL_MUTED, COL_DIM_CARD);
+  spr.setCursor(18, 102); spr.print("Lecturer PIN");
+  spr.setFont(F_LARGE); spr.setTextColor(COL_WARNING, COL_DIM_CARD);
+  tw = spr.textWidth(lecturerPin);
+  spr.setCursor((SW - tw) / 2, 110); spr.print(lecturerPin);
+  spr.setFont(F_TINY); spr.setTextColor(0x4210, COL_DIM_CARD);
+  const char* pinHint = "Connect to Dikly WiFi  \xE2\x80\xA2  Open 192.168.4.1/start";
+  tw = spr.textWidth("Connect to Dikly WiFi  .  Open 192.168.4.1/start");
+  spr.setCursor((SW - tw) / 2 + 2, 144); spr.print("Connect phone to Dikly \xE2\x86\x92 open /start");
+
+  // ── Bottom info card (y=212..250) ─────────────────────────────────────────────
+  spr.fillRoundRect(10, 212, SW - 20, 40, 6, COL_CARD);
+  spr.drawRoundRect(10, 212, SW - 20, 40, 6, COL_BORDER);
 
   if (!sessionLecturer.isEmpty() || !sessionCourse.isEmpty()) {
     // Show pending session info
@@ -1806,7 +1906,7 @@ static void drawReady() {
     if (spr.textWidth(lbl1) > SW - 40) lbl1 = lbl1.substring(0, 18) + "..";
     spr.setFont(F_SMALL); spr.setTextColor(COL_TEXT, COL_CARD);
     tw = spr.textWidth(lbl1);
-    spr.setCursor((SW - tw) / 2, 246); spr.print(lbl1);
+    spr.setCursor((SW - tw) / 2, 220); spr.print(lbl1);
     if (!sessionCourse.isEmpty() && !sessionLecturer.isEmpty()) {
       spr.setFont(F_TINY); spr.setTextColor(COL_MUTED, COL_CARD);
       String c = sessionCourse;
@@ -2521,6 +2621,129 @@ static void drawPairStatus(const char* title, const char* line1, const char* lin
   spr.pushSprite(0, 0);
 }
 
+// ── CHECKIN MONITOR — live check-in count + countdown ────────────────────────
+static void drawCheckinMonitor() {
+  if (!monStudents) { drawReady(); return; }
+  spr.fillSprite(COL_BG);
+  _drawSubHeader(spr, "Check-In Open", WiFi.status() == WL_CONNECTED);
+
+  // Countdown pill
+  uint32_t msLeft = (monCheckinEndMs > millis()) ? (monCheckinEndMs - millis()) : 0;
+  uint32_t secsLeft = msLeft / 1000;
+  char tBuf[12];
+  snprintf(tBuf, sizeof(tBuf), "%02lu:%02lu", (unsigned long)(secsLeft/60), (unsigned long)(secsLeft%60));
+
+  // Timer arc / bar (y=52..72)
+  uint32_t totalMs = (uint32_t)(MON_CHECKIN_MIN * 60UL * 1000UL);
+  float prog = 1.0f - (float)msLeft / (float)totalMs;
+  if (prog < 0) prog = 0; if (prog > 1) prog = 1;
+  spr.fillRoundRect(10, 52, SW-20, 14, 6, COL_CARD);
+  spr.fillRoundRect(10, 52, (int32_t)((SW-20)*prog), 14, 6, msLeft < 60000 ? COL_ERROR : COL_PRIMARY);
+  spr.setFont(F_TINY); spr.setTextColor(COL_TEXT, COL_BG);
+  spr.setCursor(SW/2 - 14, 70); spr.print(tBuf);
+
+  // Big check-in count
+  char cntBuf[8]; snprintf(cntBuf, sizeof(cntBuf), "%u", (unsigned)monCount);
+  spr.setFont(F_LARGE); spr.setTextColor(COL_SUCCESS, COL_BG);
+  int32_t cw = spr.textWidth(cntBuf);
+  spr.setCursor((SW-cw)/2, 88); spr.print(cntBuf);
+  spr.setFont(F_TINY); spr.setTextColor(COL_MUTED, COL_BG);
+  spr.setCursor((SW - spr.textWidth("students checked in"))/2, 136); spr.print("students checked in");
+
+  // Recent arrivals (last 5)
+  uint16_t start = (monCount > 5) ? monCount-5 : 0;
+  for (uint16_t i = start, row = 0; i < monCount; i++, row++) {
+    int32_t ry = 156 + row * 28;
+    spr.fillRoundRect(10, ry, SW-20, 24, 5, COL_CARD);
+    spr.fillCircle(24, ry+12, 6, COL_SUCCESS);
+    spr.setFont(F_TINY); spr.setTextColor(COL_TEXT, COL_CARD);
+    spr.setCursor(36, ry+5); spr.print(monStudents[i].indexNumber);
+    // Check-in time
+    struct tm ti; time_t t = (time_t)monStudents[i].checkinTime; localtime_r(&t, &ti);
+    char tbuf2[8]; snprintf(tbuf2, sizeof(tbuf2), "%02d:%02d", ti.tm_hour, ti.tm_min);
+    spr.setTextColor(COL_MUTED, COL_CARD);
+    spr.setCursor(SW-46, ry+5); spr.print(tbuf2);
+  }
+
+  // Bottom info bar
+  spr.fillRoundRect(10, SH-34, SW-20, 24, 6, COL_DIM_CARD);
+  spr.setFont(F_TINY); spr.setTextColor(COL_MUTED, COL_DIM_CARD);
+  String apName = "Dikly-" + macSuffix();
+  spr.setCursor(18, SH-26); spr.print("AP: " + apName);
+  char macBuf[6]; snprintf(macBuf, sizeof(macBuf), "%u sta", WiFi.softAPgetStationNum());
+  spr.setCursor(SW-50, SH-26); spr.print(macBuf);
+
+  spr.pushSprite(0, 0);
+}
+
+// ── PRESENCE MONITOR — live student roster with green/red status ──────────────
+static void drawPresenceMonitor() {
+  if (!monStudents) { drawReady(); return; }
+  spr.fillSprite(COL_BG);
+  _drawSubHeader(spr, "Presence Monitor", WiFi.status() == WL_CONNECTED);
+
+  // Summary bar (y=46..66)
+  spr.fillRoundRect(10, 46, (SW-26)/2, 22, 5, COL_CARD);
+  spr.fillRoundRect(18+(SW-26)/2, 46, (SW-26)/2, 22, 5, COL_CARD);
+  spr.setFont(F_TINY);
+  // Present count
+  spr.setTextColor(COL_SUCCESS, COL_CARD);
+  char pb[8]; snprintf(pb, sizeof(pb), "%u PRES", (unsigned)monPresentCount);
+  spr.setCursor(16, 52); spr.print(pb);
+  // Left count
+  spr.setTextColor(COL_ERROR, COL_CARD);
+  char lb[8]; snprintf(lb, sizeof(lb), "%u LEFT", (unsigned)monLeftCount);
+  spr.setCursor(22+(SW-26)/2, 52); spr.print(lb);
+
+  // Student rows — 8 visible at a time (row height 29px, starting y=72)
+  int32_t rowH = 29, startY = 72, visibleRows = 8;
+  for (int32_t row = 0; row < visibleRows; row++) {
+    int32_t idx = monScrollOffset + row;
+    if (idx >= (int32_t)monCount) break;
+    StudentPresenceRecord& s = monStudents[idx];
+    int32_t ry = startY + row * rowH;
+
+    uint16_t bgc = s.present ? 0x0320 : 0x2000;  // very dark green / dark red tint
+    spr.fillRoundRect(10, ry, SW-20, rowH-2, 4, bgc);
+    // Status dot
+    spr.fillCircle(22, ry+12, 5, s.present ? COL_SUCCESS : COL_ERROR);
+    // Index number
+    spr.setFont(F_TINY); spr.setTextColor(COL_TEXT, bgc);
+    spr.setCursor(32, ry+4); spr.print(s.indexNumber);
+    // Status text
+    spr.setTextColor(s.present ? COL_SUCCESS : COL_ERROR, bgc);
+    spr.setCursor(32, ry+15); spr.print(s.present ? "PRESENT" : "LEFT");
+    // Last seen time
+    if (!s.present && s.leftTime > 0) {
+      struct tm ti; time_t t = (time_t)s.leftTime; localtime_r(&t, &ti);
+      char tb[8]; snprintf(tb, sizeof(tb), "%02d:%02d", ti.tm_hour, ti.tm_min);
+      spr.setTextColor(COL_MUTED, bgc);
+      spr.setCursor(SW-46, ry+4); spr.print(tb);
+    }
+  }
+
+  // Scroll indicator (right edge)
+  if ((int32_t)monCount > visibleRows) {
+    int32_t barH = SH - startY - 38;
+    int32_t indicH = max(20, (int32_t)(barH * visibleRows / monCount));
+    int32_t indicY = startY + (int32_t)(barH * monScrollOffset / monCount);
+    spr.fillRect(SW-5, startY, 4, barH, COL_CARD);
+    spr.fillRect(SW-5, indicY, 4, indicH, COL_MUTED);
+  }
+
+  // Bottom bar: next scan countdown + CSV status
+  spr.fillRoundRect(10, SH-34, SW-20, 24, 6, COL_DIM_CARD);
+  spr.setFont(F_TINY); spr.setTextColor(COL_MUTED, COL_DIM_CARD);
+  uint32_t nextScan = (monLastScanMs + MON_SCAN_MS > millis()) ?
+                      (monLastScanMs + MON_SCAN_MS - millis()) / 1000 : 0;
+  char scanBuf[24]; snprintf(scanBuf, sizeof(scanBuf), "Scan in %lus", (unsigned long)nextScan);
+  spr.setCursor(18, SH-26); spr.print(scanBuf);
+  spr.setTextColor(sdAvailable ? COL_SUCCESS : COL_MUTED, COL_DIM_CARD);
+  spr.setCursor(SW-56, SH-26); spr.print(sdAvailable ? "CSV OK" : "No SD");
+
+  spr.pushSprite(0, 0);
+}
+
 // ─── Captive-portal AP startup ────────────────────────────────────────────────
 static void startApPortal() {
   WiFi.mode(WIFI_AP);
@@ -2612,6 +2835,329 @@ static int8_t getClientRSSI(const String& clientIp) {
   }
   LOG("RSSI: ARP miss for " + clientIp + " — allowing (ARP table may be stale)");
   return 0;  // not found — allow through (logged for monitoring)
+}
+
+// ─── Monitor: MAC lookup from client IP (ARP + station list) ─────────────────
+static bool getClientMac(const String& clientIp, uint8_t mac[6]) {
+  wifi_sta_list_t stalist;
+  if (esp_wifi_ap_get_sta_list(&stalist) != ESP_OK || stalist.num == 0) return false;
+
+  uint8_t ip4[4] = {0};
+  int a, b, c, d;
+  if (sscanf(clientIp.c_str(), "%d.%d.%d.%d", &a, &b, &c, &d) != 4) return false;
+  ip4[0]=(uint8_t)a; ip4[1]=(uint8_t)b; ip4[2]=(uint8_t)c; ip4[3]=(uint8_t)d;
+  uint32_t target = (uint32_t)ip4[0] | ((uint32_t)ip4[1]<<8) |
+                    ((uint32_t)ip4[2]<<16) | ((uint32_t)ip4[3]<<24);
+
+  for (size_t i = 0; i < ARP_TABLE_SIZE; i++) {
+    ip4_addr_t* arp_ip; struct netif* arp_nif; struct eth_addr* arp_mac;
+    if (etharp_get_entry(i, &arp_ip, &arp_nif, &arp_mac) && arp_ip->addr == target) {
+      for (int j = 0; j < stalist.num; j++) {
+        if (memcmp(stalist.sta[j].mac, arp_mac->addr, 6) == 0) {
+          memcpy(mac, stalist.sta[j].mac, 6);
+          return true;
+        }
+      }
+    }
+  }
+  return false;
+}
+
+// Deauth a station by MAC (kick off AP after check-in)
+static void deauthStation(const uint8_t mac[6]) {
+  wifi_sta_list_t stalist;
+  if (esp_wifi_ap_get_sta_list(&stalist) != ESP_OK) return;
+  for (int i = 0; i < stalist.num; i++) {
+    if (memcmp(stalist.sta[i].mac, mac, 6) == 0) {
+      esp_wifi_deauth_sta(stalist.sta[i].aid);
+      return;
+    }
+  }
+}
+
+// Add a newly checked-in student to the monitor list
+static void monAddStudent(const char* indexNum, const uint8_t* mac) {
+  if (!indexNum || indexNum[0] == '\0') return;
+  if (!monStudents || monCount >= MON_MAX_STUDENTS) return;
+  // Check for duplicate index number
+  for (uint16_t i = 0; i < monCount; i++)
+    if (strncmp(monStudents[i].indexNumber, indexNum, 31) == 0) return;
+  StudentPresenceRecord& s = monStudents[monCount++];
+  memset(&s, 0, sizeof(s));
+  strncpy(s.indexNumber, indexNum, 31);
+  if (mac) memcpy(s.mac, mac, 6);  // zero MAC = MAC not available (probe tracking won't work for this student)
+  s.checkinTime  = (uint32_t)time(nullptr);
+  s.lastSeenTime = s.checkinTime;
+  s.present      = true;
+  s.synced       = false;
+}
+
+// Promiscuous callback — fires on every management frame (IRAM for speed)
+static void IRAM_ATTR monPromiscCb(void* buf, wifi_promiscuous_pkt_type_t type) {
+  if (type != WIFI_PKT_MGMT) return;
+  const wifi_promiscuous_pkt_t* pkt = (const wifi_promiscuous_pkt_t*)buf;
+  // Need at least 16 bytes: 2 (FC) + 2 (duration) + 6 (DA) + 6 (SA) + ...
+  if (pkt->rx_ctrl.sig_len < 16) return;
+  const uint8_t* p = pkt->payload;
+  // Probe request: frame control byte[0] = 0x40 (type=mgmt subtype=4)
+  if (p[0] != 0x40) return;
+  const uint8_t* src = &p[10];  // source MAC
+  // Skip zero MACs (student whose MAC could not be captured at check-in)
+  static const uint8_t zeroMac[6] = {0};
+  uint32_t nowTs = (uint32_t)time(nullptr);
+  for (uint16_t i = 0; i < monCount; i++) {
+    if (monStudents[i].present &&
+        memcmp(monStudents[i].mac, zeroMac, 6) != 0 &&
+        memcmp(monStudents[i].mac, src, 6) == 0) {
+      monStudents[i].lastSeenTime = nowTs;
+      break;
+    }
+  }
+}
+
+static void monStartSniffer() {
+  if (monPromisc) return;
+  esp_wifi_set_promiscuous_filter(&(wifi_promiscuous_filter_t){ .filter_mask = WIFI_PROMIS_FILTER_MASK_MGMT });
+  esp_wifi_set_promiscuous_rx_cb(monPromiscCb);
+  esp_wifi_set_promiscuous(true);
+  monPromisc = true;
+  LOG("Monitor: probe sniffer ON");
+}
+
+static void monStopSniffer() {
+  if (!monPromisc) return;
+  esp_wifi_set_promiscuous(false);
+  esp_wifi_set_promiscuous_rx_cb(nullptr);
+  monPromisc = false;
+  LOG("Monitor: probe sniffer OFF");
+}
+
+// Write / rewrite the CSV file on SD with current presence data
+static void monWriteCSV() {
+  if (!sdAvailable || monCsvPath[0] == '\0') return;
+  File f = SD_MMC.open(monCsvPath, FILE_WRITE);
+  if (!f) return;
+  f.println("index_number,checkin_time,last_seen,status,left_at,synced");
+  struct tm ti;
+  char tbuf[20];
+  auto fmtTs = [&](uint32_t ts) -> const char* {
+    if (ts == 0) { tbuf[0] = '\0'; return tbuf; }
+    time_t t = (time_t)ts; localtime_r(&t, &ti);
+    snprintf(tbuf, sizeof(tbuf), "%04d-%02d-%02d %02d:%02d:%02d",
+      1900+ti.tm_year,1+ti.tm_mon,ti.tm_mday,ti.tm_hour,ti.tm_min,ti.tm_sec);
+    return tbuf;
+  };
+  char row[120];
+  for (uint16_t i = 0; i < monCount; i++) {
+    StudentPresenceRecord& s = monStudents[i];
+    String chk  = fmtTs(s.checkinTime);
+    String last = fmtTs(s.lastSeenTime);
+    String lft  = fmtTs(s.leftTime);
+    const char* status = s.present ? "PRESENT" : "LEFT";
+    snprintf(row, sizeof(row), "%s,%s,%s,%s,%s,%d",
+      s.indexNumber, chk.c_str(), last.c_str(), status, lft.c_str(), (int)s.synced);
+    f.println(row);
+  }
+  f.close();
+}
+
+// Scan all students: if no probe heard for MON_ABSENT_SEC → mark LEFT
+static void monScanPresence() {
+  uint32_t nowTs = (uint32_t)time(nullptr);
+  monPresentCount = 0; monLeftCount = 0;
+  for (uint16_t i = 0; i < monCount; i++) {
+    StudentPresenceRecord& s = monStudents[i];
+    if (s.present && nowTs - s.lastSeenTime > MON_ABSENT_SEC) {
+      s.present  = false;
+      s.leftTime = s.lastSeenTime;  // last time we saw them
+      LOG("Monitor: LEFT " + String(s.indexNumber));
+    }
+    if (s.present) monPresentCount++; else monLeftCount++;
+  }
+  monWriteCSV();
+}
+
+// Start monitoring session: open check-in window + prepare CSV
+static void monStart(const String& course, const String& sid) {
+  if (!monStudents) return;
+  monCount        = 0;
+  monPhase        = MON_CHECKIN_OPEN;
+  usedMacClear(sid);
+  monCheckinEndMs = millis() + (uint32_t)(MON_CHECKIN_MIN * 60UL * 1000UL);
+  monLastScanMs   = 0;
+  monScrollOffset = 0;
+  monPresentCount = 0;
+  monLeftCount    = 0;
+
+  // CSV filename: /monitor/YYYYMMDD_HHMM_COURSE.csv
+  String safe = course;
+  safe.replace("/","_"); safe.replace(" ","_");
+  if (safe.length() > 12) safe = safe.substring(0, 12);
+  struct tm ti; time_t n = time(nullptr); localtime_r(&n, &ti);
+  snprintf(monCsvPath, sizeof(monCsvPath),
+    "/monitor/%04d%02d%02d_%02d%02d_%s.csv",
+    1900+ti.tm_year,1+ti.tm_mon,ti.tm_mday,ti.tm_hour,ti.tm_min,safe.c_str());
+
+  if (sdAvailable) {
+    if (!SD_MMC.exists("/monitor")) SD_MMC.mkdir("/monitor");
+    File f = SD_MMC.open(monCsvPath, FILE_WRITE);
+    if (f) { f.println("index_number,checkin_time,last_seen,status,left_at,synced"); f.close(); }
+  }
+  LOG("Monitor started. Check-in open " + String(MON_CHECKIN_MIN) + " min. CSV: " + String(monCsvPath));
+}
+
+// ─── Student check-in portal — served by the device AP ──────────────────────
+// Called when any browser opens on the Dikly hotspot during an active session.
+static void serveAttendPortal() {
+  // Countdown seconds until check-in window closes
+  long secsLeft = (long)((monCheckinEndMs - millis()) / 1000);
+  if (secsLeft < 0) secsLeft = 0;
+  uint32_t endUnix = (uint32_t)(time(nullptr) + secsLeft);
+
+  String course   = sessionCourse.isEmpty()   ? sessionTitle   : sessionCourse;
+  String lecturer = sessionLecturer.isEmpty() ? "Dikly Device" : sessionLecturer;
+  if (course.isEmpty()) course = "Attendance";
+
+  // HTML-encode course/lecturer before inserting into HTML element content.
+  // These strings come from the server but may contain user-entered data.
+  auto htmlEsc = [](String& s) {
+    s.replace("&", "&amp;");
+    s.replace("<", "&lt;");
+    s.replace(">", "&gt;");
+    s.replace("\"", "&quot;");
+    s.replace("'", "&#39;");
+  };
+  htmlEsc(course);
+  htmlEsc(lecturer);
+
+  String html = R"RAW(<!doctype html>
+<html><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1">
+<title>Mark Attendance</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{min-height:100vh;background:#0a0f1e;color:#fff;
+  font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;
+  display:flex;align-items:center;justify-content:center;padding:20px}
+.card{background:#111827;border-radius:20px;padding:28px 20px;
+  max-width:360px;width:100%;border:1px solid #1e2d45}
+.logo{text-align:center;font-size:22px;font-weight:900;color:#fff;margin-bottom:2px}
+.logo span{color:#4f6ef7}
+.dot{width:8px;height:8px;background:#22c55e;border-radius:50%;
+  display:inline-block;margin-right:5px;vertical-align:middle}
+.live{text-align:center;font-size:11px;color:#22c55e;margin-bottom:4px}
+.course{text-align:center;font-size:15px;font-weight:700;
+  color:#e2e8f0;margin:10px 0 2px}
+.lect{text-align:center;font-size:12px;color:#64748b;margin-bottom:20px}
+label{display:block;font-size:11px;font-weight:600;color:#94a3b8;
+  text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px}
+input[type=text]{width:100%;padding:13px 14px;background:#0f172a;
+  border:1.5px solid #1e2d45;border-radius:10px;color:#fff;font-size:16px;
+  outline:none;margin-bottom:16px;-webkit-appearance:none}
+input[type=text]:focus{border-color:#4f6ef7}
+.cr{display:flex;gap:7px;margin-bottom:22px}
+.cb{flex:1;padding:12px 0;background:#0f172a;border:1.5px solid #1e2d45;
+  border-radius:10px;color:#fff;font-size:22px;font-weight:700;
+  text-align:center;outline:none;-webkit-appearance:none;caret-color:#4f6ef7}
+.cb:focus{border-color:#4f6ef7}
+button{width:100%;padding:15px;background:#4f6ef7;color:#fff;border:none;
+  border-radius:12px;font-size:15px;font-weight:700;cursor:pointer;
+  -webkit-tap-highlight-color:transparent}
+button:disabled{opacity:.5}
+.err{display:none;background:#450a0a;border:1px solid #991b1b;border-radius:10px;
+  padding:12px 14px;color:#fca5a5;font-size:13px;margin-bottom:14px}
+.ok{display:none;text-align:center;padding:8px 0}
+.ck{font-size:60px;margin-bottom:14px}
+.ok h2{color:#22c55e;font-size:18px;margin-bottom:8px}
+.ok p{color:#64748b;font-size:13px;line-height:1.6}
+.tmr{text-align:center;font-size:11px;color:#475569;margin-top:14px}
+.closed{background:#1c1a10;border:1px solid #713f12;border-radius:10px;
+  padding:12px 14px;color:#fcd34d;font-size:13px;text-align:center;margin-top:4px}
+</style></head>
+<body><div class="card">
+<div class="logo">Di<span>kly</span></div>
+<div class="live"><span class="dot"></span>Session Active</div>
+)RAW");
+
+  html += "<div class=\"course\">" + course + "</div>";
+  html += "<div class=\"lect\">" + lecturer + "</div>";
+
+  html += R"RAW(
+<div id="err" class="err"></div>
+<div id="main">
+<label>Index Number</label>
+<input type="text" id="idx" placeholder="e.g. STU/2021/001"
+  autocomplete="off" autocorrect="off" spellcheck="false" autocapitalize="characters">
+<label>Attendance Code</label>
+<div class="cr">
+  <input class="cb" id="c0" maxlength="1" inputmode="numeric" pattern="[0-9]">
+  <input class="cb" id="c1" maxlength="1" inputmode="numeric" pattern="[0-9]">
+  <input class="cb" id="c2" maxlength="1" inputmode="numeric" pattern="[0-9]">
+  <input class="cb" id="c3" maxlength="1" inputmode="numeric" pattern="[0-9]">
+  <input class="cb" id="c4" maxlength="1" inputmode="numeric" pattern="[0-9]">
+  <input class="cb" id="c5" maxlength="1" inputmode="numeric" pattern="[0-9]">
+</div>
+<button id="btn" onclick="go()">Mark Attendance</button>
+<div class="tmr" id="tmr"></div>
+</div>
+<div class="ok" id="ok">
+  <div class="ck">&#x2705;</div>
+  <h2>Attendance Marked!</h2>
+  <p>You&#39;re checked in.<br>You can now disconnect from Dikly WiFi and use your normal network.</p>
+</div>
+</div>
+<script>
+var boxes=[0,1,2,3,4,5].map(function(i){return document.getElementById('c'+i);});
+boxes.forEach(function(b,i){
+  b.addEventListener('input',function(){if(b.value&&i<5)boxes[i+1].focus();});
+  b.addEventListener('keydown',function(e){if(e.key==='Backspace'&&!b.value&&i>0){e.preventDefault();boxes[i-1].focus();}});
+  b.addEventListener('paste',function(e){
+    e.preventDefault();
+    var t=(e.clipboardData||window.clipboardData).getData('text').replace(/\D/g,'').slice(0,6);
+    t.split('').forEach(function(c,j){if(boxes[i+j])boxes[i+j].value=c;});
+    var last=Math.min(i+t.length,5);boxes[last].focus();
+  });
+});
+function getCode(){return boxes.map(function(b){return b.value;}).join('');}
+function go(){
+  var idx=document.getElementById('idx').value.trim().toUpperCase();
+  var code=getCode();
+  var err=document.getElementById('err');
+  err.style.display='none';
+  if(!idx){err.textContent='Please enter your index number.';err.style.display='block';return;}
+  if(code.length!==6){err.textContent='Enter all 6 digits of the attendance code.';err.style.display='block';return;}
+  var btn=document.getElementById('btn');
+  btn.textContent='Submitting…';btn.disabled=true;
+  fetch('/attend',{method:'POST',headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({indexNumber:idx,code:code})})
+  .then(function(r){return r.json().then(function(d){return{ok:r.ok,d:d};});})
+  .then(function(r){
+    if(r.ok){document.getElementById('main').style.display='none';document.getElementById('ok').style.display='block';}
+    else{err.textContent=r.d.error||'Something went wrong. Try again.';err.style.display='block';btn.textContent='Mark Attendance';btn.disabled=false;}
+  }).catch(function(){
+    err.textContent='Connection lost. Move closer to the device and try again.';
+    err.style.display='block';btn.textContent='Mark Attendance';btn.disabled=false;
+  });
+}
+)RAW");
+
+  // Inject check-in countdown end timestamp
+  html += "var endUnix=" + String(endUnix) + ";";
+
+  html += R"RAW(
+function tick(){
+  var s=Math.max(0,endUnix-Math.floor(Date.now()/1000));
+  var m=Math.floor(s/60),sc=s%60;
+  var el=document.getElementById('tmr');
+  if(s>0){el.textContent='Check-in closes in '+m+':'+(sc<10?'0':'')+sc;setTimeout(tick,1000);}
+  else{el.innerHTML='<div class="closed">&#x26A0; Check-in window is closed</div>';}
+}
+tick();
+document.getElementById('idx').focus();
+</script></body></html>)RAW");
+
+  localHttp.sendHeader("Cache-Control", "no-cache");
+  localHttp.send(200, "text/html", html);
 }
 
 // ─── Local HTTP (WiFi proxy for Attendance Device page) ──────────────────────
@@ -3018,6 +3564,22 @@ static void registerLocalHttp() {
         (userId.length()   && dedupCheck(userId.c_str()))) {
       localHttp.send(409, "application/json", "{\"error\":\"Attendance already recorded for this session.\"}"); return;
     }
+
+    // ── Anti-cheat: one device (MAC) = one submission per session ─────────────
+    // Capture client MAC now — needed for both the MAC dedup check and monitor
+    String clientIp = localHttp.client().remoteIP().toString();
+    uint8_t clientMac[6] = {0};
+    bool gotMac = getClientMac(clientIp, clientMac);
+
+    if (gotMac) {
+      if (usedMacSession != sessionId) usedMacClear(sessionId);
+      if (usedMacCheck(clientMac)) {
+        localHttp.send(409, "application/json",
+          "{\"error\":\"Attendance already submitted from this device. Each phone can only mark one student.\"}");
+        return;
+      }
+    }
+
     // ── Write to SD card (primary) ────────────────────────────────────────────
     bool stored = false;
     if (sdAvailable) {
@@ -3059,7 +3621,32 @@ static void registerLocalHttp() {
     if (indexNum.length()) dedupAdd(indexNum.c_str());
     if (userId.length())   dedupAdd(userId.c_str());
     studentsMarked++;  // update count immediately — visible on screen without waiting for server heartbeat
+
+    // ── Record MAC as used (anti-cheat: one device per submission) ───────────
+    if (gotMac) usedMacAdd(clientMac);
+
+    // ── Persistent presence monitor: record student + auto-disconnect ─────────
+    if (monPhase == MON_CHECKIN_OPEN && indexNum.length()) {
+      monAddStudent(indexNum.c_str(), gotMac ? clientMac : nullptr);
+      // Respond BEFORE deauth so the success message reaches the browser
+      localHttp.send(200, "application/json",
+        "{\"ok\":true,\"message\":\"Attendance recorded. You may disconnect.\"}");
+      delay(200);  // brief grace period for response to flush
+      if (gotMac) deauthStation(clientMac);
+      else {
+        // MAC unknown — kick all stations (blunt fallback)
+        wifi_sta_list_t sl;
+        if (esp_wifi_ap_get_sta_list(&sl) == ESP_OK)
+          for (int i = 0; i < sl.num; i++) esp_wifi_deauth_sta(sl.sta[i].aid);
+      }
+      return;
+    }
+
+    // Auto-disconnect outside monitor mode: send response FIRST so the browser
+    // receives the success message before the TCP socket is torn down.
     localHttp.send(200, "application/json", "{\"ok\":true,\"message\":\"Attendance recorded.\"}");
+    delay(200);
+    if (gotMac) deauthStation(clientMac);
   });
 
   // /session/start — lecturer creates a session locally (no internet required)
@@ -3070,6 +3657,18 @@ static void registerLocalHttp() {
     }
     if (!sessionId.isEmpty()) {
       localHttp.send(409, "application/json", "{\"error\":\"Session already active. Stop it first.\"}"); return;
+    }
+    // PIN check — required when starting offline (web portal sends pin field).
+    // Handle both string ("1234") and integer (1234) JSON types.
+    String pin;
+    JsonVariant pinVar = req["pin"];
+    if (pinVar.is<int>()) {
+      char buf[8]; snprintf(buf, sizeof(buf), "%04d", pinVar.as<int>()); pin = buf;
+    } else {
+      pin = pinVar | "";
+    }
+    if (!pin.isEmpty() && pin != String(lecturerPin)) {
+      localHttp.send(403, "application/json", "{\"error\":\"Wrong PIN. Check the device screen.\"}"); return;
     }
     String courseCode = req["courseCode"] | "";
     String title      = req["title"]      | "Attendance";
@@ -3126,7 +3725,7 @@ static void registerLocalHttp() {
       localHttp.send(409, "application/json", "{\"error\":\"No active session\"}"); return;
     }
     LOG("Session stopped: " + sessionId);
-    sessionId = ""; sessionSeed = "";
+    sessionId = ""; sessionSeed = ""; regenerateLecturerPin();
     sessionTitle = ""; sessionCourse = ""; sessionLecturer = "";
     studentsMarked = 0;
     bleStop();
@@ -3147,6 +3746,130 @@ static void registerLocalHttp() {
     localHttp.send(200, "application/json", "{\"status\":\"saved\",\"message\":\"Reconnecting...\"}");
     delay(300); ESP.restart();
   });
+
+  // Root + 404: serve student check-in portal when session active, else a simple idle page
+  // /start GET — lecturer session setup portal
+  localHttp.on("/start", HTTP_GET, []() {
+    if (!sessionId.isEmpty()) {
+      // Session already running — redirect to attendance portal
+      localHttp.sendHeader("Location", "/"); localHttp.send(302, "text/plain", ""); return;
+    }
+    localHttp.send(200, "text/html", String(
+      "<!doctype html><html><head><meta charset='utf-8'>"
+      "<meta name='viewport' content='width=device-width,initial-scale=1,maximum-scale=1'>"
+      "<title>Start Session</title>"
+      "<style>*{box-sizing:border-box;margin:0;padding:0}"
+      "body{min-height:100vh;background:#0a0f1e;color:#fff;"
+      "font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;"
+      "display:flex;align-items:center;justify-content:center;padding:20px}"
+      ".card{background:#111827;border-radius:20px;padding:28px 20px;"
+      "max-width:360px;width:100%;border:1px solid #1e2d45}"
+      ".logo{text-align:center;font-size:22px;font-weight:900;color:#fff;margin-bottom:2px}"
+      ".logo span{color:#4f6ef7}"
+      ".sub{text-align:center;font-size:12px;color:#64748b;margin-bottom:18px}"
+      "label{display:block;font-size:11px;font-weight:600;color:#94a3b8;"
+      "text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px}"
+      "input[type=text]{width:100%;padding:13px 14px;background:#0f172a;"
+      "border:1.5px solid #1e2d45;border-radius:10px;color:#fff;font-size:16px;"
+      "outline:none;margin-bottom:16px;-webkit-appearance:none}"
+      "input[type=text]:focus{border-color:#4f6ef7}"
+      ".dur{display:flex;gap:7px;flex-wrap:wrap;margin-bottom:22px}"
+      ".dur input[type=radio]{display:none}"
+      ".dur label{flex:1;min-width:66px;background:#0f172a;border:1.5px solid #1e2d45;"
+      "border-radius:10px;padding:12px 4px;text-align:center;cursor:pointer;"
+      "font-size:12px;font-weight:600;color:#94a3b8;letter-spacing:0;text-transform:none}"
+      ".dur input[type=radio]:checked+label{background:#1e3a5f;border-color:#4f6ef7;color:#fff}"
+      "button{width:100%;padding:15px;background:#4f6ef7;color:#fff;border:none;"
+      "border-radius:12px;font-size:15px;font-weight:700;cursor:pointer;"
+      "-webkit-tap-highlight-color:transparent}"
+      "button:disabled{opacity:.5}"
+      ".err{display:none;background:#450a0a;border:1px solid #991b1b;border-radius:10px;"
+      "padding:12px 14px;color:#fca5a5;font-size:13px;margin-bottom:14px}"
+      ".pin-hint{background:#0f2a1a;border:1px solid #166534;border-radius:10px;"
+      "padding:10px 14px;color:#86efac;font-size:12px;margin-bottom:16px;line-height:1.6}"
+      ".ok{display:none;text-align:center;padding:10px 0}"
+      ".ck{font-size:56px;margin-bottom:14px}"
+      ".ok h2{color:#22c55e;font-size:18px;margin-bottom:8px}"
+      ".ok p{color:#64748b;font-size:13px;line-height:1.6}"
+      "</style></head><body><div class='card'>"
+      "<div class='logo'>Di<span>kly</span></div>"
+      "<div class='sub'>Lecturer Session Setup</div>"
+      "<div class='err' id='err'></div>"
+      "<div id='main'>"
+      "<div class='pin-hint'>&#x1F512; Enter the 4-digit PIN shown on the <strong>device screen</strong> to prove you are the lecturer.</div>"
+      "<label>Device PIN</label>"
+      "<input type='text' id='pin' placeholder='4-digit PIN from screen' maxlength='4' inputmode='numeric' autocomplete='off'>"
+      "<label>Course Code</label>"
+      "<input type='text' id='course' placeholder='e.g. CS 301' autocorrect='off' spellcheck='false' autocapitalize='characters'>"
+      "<label>Your Name</label>"
+      "<input type='text' id='name' placeholder='e.g. Dr. Mensah' autocorrect='off'>"
+      "<label>Duration</label>"
+      "<div class='dur'>"
+      "<input type='radio' name='d' id='d30' value='1800'><label for='d30'>30 min</label>"
+      "<input type='radio' name='d' id='d45' value='2700'><label for='d45'>45 min</label>"
+      "<input type='radio' name='d' id='d60' value='3600' checked><label for='d60'>1 hr</label>"
+      "<input type='radio' name='d' id='d90' value='5400'><label for='d90'>1.5 hr</label>"
+      "<input type='radio' name='d' id='d120' value='7200'><label for='d120'>2 hrs</label>"
+      "</div>"
+      "<button id='btn' onclick='go()'>Start Session &#x2192;</button>"
+      "</div>"
+      "<div class='ok' id='ok'>"
+      "<div class='ck'>&#x1F3AB;</div>"
+      "<h2>Session Started!</h2>"
+      "<p>Students can now connect to Dikly WiFi.<br>The attendance code is on the device screen.</p>"
+      "</div>"
+      "</div>"
+      "<script>"
+      "function go(){"
+      "var pin=document.getElementById('pin').value.trim();"
+      "var course=document.getElementById('course').value.trim();"
+      "var nm=document.getElementById('name').value.trim();"
+      "var dur=document.querySelector('input[name=d]:checked');"
+      "var err=document.getElementById('err');err.style.display='none';"
+      "if(pin.length!==4){err.textContent='Enter the 4-digit PIN shown on the device screen.';err.style.display='block';return;}"
+      "if(!course){err.textContent='Enter the course code.';err.style.display='block';return;}"
+      "if(!nm){err.textContent='Enter your name.';err.style.display='block';return;}"
+      "var btn=document.getElementById('btn');btn.textContent='Starting…';btn.disabled=true;"
+      "fetch('/session/start',{method:'POST',headers:{'Content-Type':'application/json'},"
+      "body:JSON.stringify({pin:pin,courseCode:course,lecturer:nm,duration:parseInt(dur.value)})})"
+      ".then(function(r){return r.json().then(function(d){return{ok:r.ok,d:d};});})"
+      ".then(function(r){"
+      "if(r.ok){document.getElementById('main').style.display='none';"
+      "document.getElementById('ok').style.display='block';}"
+      "else{err.textContent=r.d.error||'Failed.';err.style.display='block';"
+      "btn.textContent='Start Session →';btn.disabled=false;}"
+      "}).catch(function(){"
+      "err.textContent='Connection lost. Stay on Dikly WiFi and retry.';"
+      "err.style.display='block';btn.textContent='Start Session →';btn.disabled=false;"
+      "});}"
+      "</script></body></html>"));
+  });
+
+  // Root + 404: student portal when session active; lecturer setup link when idle
+  auto serveRoot = []() {
+    if (!sessionId.isEmpty() && !sessionSeed.isEmpty()) {
+      serveAttendPortal();
+    } else {
+      localHttp.send(200, "text/html",
+        "<!doctype html><html><head><meta charset='utf-8'>"
+        "<meta name='viewport' content='width=device-width,initial-scale=1'>"
+        "<style>body{background:#0a0f1e;color:#fff;font-family:sans-serif;"
+        "display:flex;align-items:center;justify-content:center;min-height:100vh;text-align:center}"
+        ".c{padding:32px 24px;max-width:300px}"
+        ".logo{font-size:24px;font-weight:900;margin-bottom:10px}"
+        ".logo span{color:#4f6ef7}"
+        "p{color:#64748b;font-size:14px;line-height:1.6;margin-bottom:18px}"
+        "a{display:inline-block;padding:12px 24px;background:#4f6ef7;color:#fff;"
+        "border-radius:10px;font-size:14px;font-weight:700;text-decoration:none}"
+        "</style></head><body><div class='c'>"
+        "<div class='logo'>Di<span>kly</span></div>"
+        "<p>No active session.<br>Students &#x2014; wait for your lecturer.</p>"
+        "<a href='/start'>Lecturer? Start Session &#x2192;</a>"
+        "</div></body></html>");
+    }
+  };
+  localHttp.on("/", HTTP_GET, serveRoot);
+  localHttp.onNotFound(serveRoot);
 }
 
 // ─── Paired-screen touch dispatcher ──────────────────────────────────────────
@@ -3166,6 +3889,8 @@ static void handlePairedTap(uint16_t tx, uint16_t ty) {
     else if (curScreen == SESSION_START)                  curScreen = READY;
     else if (curScreen == SETTINGS)                       curScreen = READY;
     else if (curScreen == DEVICE_INFO)                    curScreen = SETTINGS;
+    else if (curScreen == CHECKIN_MONITOR)                curScreen = SESSION;
+    else if (curScreen == PRESENCE_MONITOR)               curScreen = SESSION;
     return;
   }
   // READY screen
@@ -3195,12 +3920,22 @@ static void handlePairedTap(uint16_t tx, uint16_t ty) {
       summaryPct     = (summaryTotal > 0) ?
                        (float)summaryPresent * 100.0f / (float)summaryTotal : 0.0f;
       summaryCourse  = sessionCourse.isEmpty() ? sessionTitle : sessionCourse;
-      sessionId = ""; sessionSeed = "";
+      sessionId = ""; sessionSeed = ""; regenerateLecturerPin();
       sessionTitle = ""; sessionCourse = ""; sessionLecturer = "";
       studentsMarked = 0; sessionTotalEnrolled = 0;
       sessionLocallyStarted = false; clearLocalSession();
       bleStop();
+      if (monPhase == MON_CHECKIN_OPEN || monPhase == MON_MONITORING) {
+        monStopSniffer();
+        monScanPresence();
+        monWriteCSV();
+        monPhase = MON_ENDED;
+      }
       curScreen = SUMMARY;
+    }
+    // Tap the student count area (y 200-240) to open monitor view
+    else if (ty >= 200 && ty <= 240 && monPhase != MON_IDLE) {
+      curScreen = (monPhase == MON_CHECKIN_OPEN) ? CHECKIN_MONITOR : PRESENCE_MONITOR;
     }
   }
   // SETTINGS screen — 6 rows × 44 px starting at y=56
@@ -3232,6 +3967,25 @@ static void handlePairedTap(uint16_t tx, uint16_t ty) {
       // rowIdx == 5 (Factory Reset) requires long-press — handled in loop()
     }
   }
+  // CHECKIN_MONITOR — tap anywhere below header to jump to PRESENCE_MONITOR early
+  else if (curScreen == CHECKIN_MONITOR) {
+    if (ty > 46 && ty < SH - 40) {
+      // "End Check-In" tap in bottom area: close window and switch to sniffer mode
+      if (ty > SH - 40) {
+        monCheckinEndMs = millis();  // force-close check-in window now
+      }
+    }
+  }
+  // PRESENCE_MONITOR — swipe/scroll (up = scroll down in list)
+  else if (curScreen == PRESENCE_MONITOR) {
+    static uint16_t lastTouchY = 0;
+    if (ty > 72 && ty < SH - 40) {
+      // Simple scroll: tap top half scrolls up, bottom half scrolls down
+      int32_t midY = 72 + (SH - 72 - 40) / 2;
+      if (ty < (uint16_t)midY && monScrollOffset > 0) monScrollOffset--;
+      else if (ty >= (uint16_t)midY && monScrollOffset + 8 < (int32_t)monCount) monScrollOffset++;
+    }
+  }
 }
 
 // ═════════════════════════════════════════════════════════════════════════════
@@ -3246,6 +4000,7 @@ void setup() {
 
   Serial.begin(115200); delay(150);
   pinMode(LED_PIN, OUTPUT);
+  regenerateLecturerPin();  // fresh PIN each boot
 
   // Redirect mbedTLS heap allocations to PSRAM so TLS handshakes never fail
   // due to internal SRAM fragmentation (maxBlock ~19KB when WiFi is active).
@@ -3275,6 +4030,10 @@ void setup() {
   if (!offlineBuf) offlineBuf = (OfflineRec*)calloc(200, sizeof(OfflineRec));
   dedupIds = (char (*)[32])heap_caps_calloc(400, 32, MALLOC_CAP_SPIRAM);
   if (!dedupIds) dedupIds = (char (*)[32])calloc(400, 32);
+  monStudents = (StudentPresenceRecord*)heap_caps_calloc(MON_MAX_STUDENTS, sizeof(StudentPresenceRecord), MALLOC_CAP_SPIRAM);
+  if (!monStudents) monStudents = (StudentPresenceRecord*)calloc(MON_MAX_STUDENTS, sizeof(StudentPresenceRecord));
+  usedMacs = (uint8_t (*)[6])heap_caps_calloc(MON_MAX_STUDENTS, 6, MALLOC_CAP_SPIRAM);
+  if (!usedMacs) usedMacs = (uint8_t (*)[6])calloc(MON_MAX_STUDENTS, 6);
 
   // Display + sprite BEFORE BLE/WiFi so the 150 KB sprite buffer is allocated
   // from unfragmented PSRAM. BLE grabs large contiguous chunks; if it runs first
@@ -3549,14 +4308,36 @@ void loop() {
   static bool wasSessActive = false;
   bool sessActive = !sessionId.isEmpty() && !sessionSeed.isEmpty() && (timeSynced || sessionLocallyStarted);
   if (sessActive && !wasSessActive) {
-    // Session just became active — navigate home screens to SESSION
+    // Session just became active — start monitor check-in and navigate to SESSION
+    monStart(sessionCourse, sessionId);
     if (curScreen == READY || curScreen == PAIR_SCREEN) curScreen = SESSION;
   } else if (!sessActive && wasSessActive) {
-    // Session just ended via heartbeat (server removed it) — go to READY
+    // Session just ended via heartbeat (server removed it)
+    if (monPhase == MON_CHECKIN_OPEN || monPhase == MON_MONITORING) {
+      monStopSniffer();
+      monScanPresence();   // final scan
+      monWriteCSV();
+      monPhase = MON_ENDED;
+    }
     sessionLocallyStarted = false; clearLocalSession();
-    if (curScreen == SESSION) curScreen = READY;
+    if (curScreen == SESSION || curScreen == CHECKIN_MONITOR || curScreen == PRESENCE_MONITOR)
+      curScreen = READY;
   }
   wasSessActive = sessActive;
+
+  // ── Monitor phase transitions ─────────────────────────────────────────────
+  if (monPhase == MON_CHECKIN_OPEN && millis() >= monCheckinEndMs) {
+    // Check-in window expired — stop AP client acceptance, start probe sniffer
+    monPhase = MON_MONITORING;
+    monLastScanMs = millis();
+    monStartSniffer();
+    if (curScreen == CHECKIN_MONITOR) curScreen = PRESENCE_MONITOR;
+    LOG("Monitor: check-in closed. Switching to probe sniffer.");
+  }
+  if (monPhase == MON_MONITORING && millis() - monLastScanMs >= MON_SCAN_MS) {
+    monLastScanMs = millis();
+    monScanPresence();
+  }
 
   // Render at ~10 fps
   static uint32_t lastDraw = 0;
@@ -3581,7 +4362,7 @@ void loop() {
         summaryPct     = (summaryTotal > 0) ?
                          (float)summaryPresent * 100.0f / (float)summaryTotal : 0.0f;
         summaryCourse  = sessionCourse.isEmpty() ? sessionTitle : sessionCourse;
-        sessionId = ""; sessionSeed = "";
+        sessionId = ""; sessionSeed = ""; regenerateLecturerPin();
         sessionTitle = ""; sessionCourse = ""; sessionLecturer = "";
         studentsMarked = 0; sessionTotalEnrolled = 0;
         sessionLocallyStarted = false; clearLocalSession();
@@ -3591,10 +4372,12 @@ void loop() {
       drawSession(code, (uint32_t)sessionSecsLeft, sessionDuration);
       break;
     }
-    case SUMMARY:     drawSummary();    break;
-    case PAIR_SCREEN: drawPairScreen(); break;
-    case SETTINGS:    drawSettings();   break;
-    case DEVICE_INFO: drawDeviceInfo(); break;
+    case SUMMARY:          drawSummary();          break;
+    case PAIR_SCREEN:      drawPairScreen();        break;
+    case SETTINGS:         drawSettings();          break;
+    case DEVICE_INFO:      drawDeviceInfo();        break;
+    case CHECKIN_MONITOR:  drawCheckinMonitor();    break;
+    case PRESENCE_MONITOR: drawPresenceMonitor();   break;
     default:
       bleStop();
       curScreen = READY;
