@@ -240,7 +240,7 @@ String   pairPendingInst = "";
 String   pairPendingCode = "";
 
 // Screen state machine
-enum Screen { SPLASH, SETUP, WIFI_SCAN, WIFI_RECONFIG, CONNECTING, READY, SESSION_START, SESSION, SUMMARY, SETTINGS, DEVICE_INFO, PAIR_SCREEN };
+enum Screen { SPLASH, SETUP, WIFI_SCAN, WIFI_RECONFIG, CONNECTING, READY, SESSION_START, SESSION, SUMMARY, SETTINGS, DEVICE_INFO, PAIR_SCREEN, CHECKIN_MONITOR, PRESENCE_MONITOR };
 Screen curScreen = SPLASH;
 String statusMsg = "";
 uint32_t splashStart = 0;
@@ -307,6 +307,39 @@ static void dedupAdd(const char* id) {
   strncpy(dedupIds[dedupCount++], id, 31);
   dedupIds[dedupCount - 1][31] = '\0';
 }
+
+// ─── Persistent Presence Monitor ─────────────────────────────────────────────
+// After check-in closes the AP, promiscuous probe-request sniffing tracks
+// whether each student's phone is still in range every 30 seconds.
+// ─────────────────────────────────────────────────────────────────────────────
+
+#define MON_MAX_STUDENTS   300    // max students tracked per session
+#define MON_CHECKIN_MIN    15     // check-in window (minutes)
+#define MON_ABSENT_SEC     240    // no probe for 4 min → mark LEFT
+#define MON_SCAN_MS        30000  // presence scan interval (ms)
+
+struct StudentPresenceRecord {
+  char     indexNumber[32];
+  uint8_t  mac[6];
+  uint32_t checkinTime;   // unix timestamp
+  uint32_t lastSeenTime;  // updated by probe sniffer
+  uint32_t leftTime;      // 0 = still here
+  bool     present;
+  bool     synced;
+};
+
+enum MonitorPhase { MON_IDLE, MON_CHECKIN_OPEN, MON_MONITORING, MON_ENDED };
+
+static StudentPresenceRecord* monStudents   = nullptr;  // PSRAM
+static uint16_t  monCount        = 0;
+static MonitorPhase monPhase     = MON_IDLE;
+static uint32_t  monCheckinEndMs = 0;   // millis() when check-in closes
+static uint32_t  monLastScanMs   = 0;
+static char      monCsvPath[48]  = "";
+static uint16_t  monPresentCount = 0;
+static uint16_t  monLeftCount    = 0;
+static int8_t    monScrollOffset = 0;   // scroll position on presence list
+static bool      monPromisc      = false;
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 #define LOG(s) do { Serial.print("[Dikly] "); Serial.println(s); } while(0)
@@ -2521,6 +2554,127 @@ static void drawPairStatus(const char* title, const char* line1, const char* lin
   spr.pushSprite(0, 0);
 }
 
+// ── CHECKIN MONITOR — live check-in count + countdown ────────────────────────
+static void drawCheckinMonitor() {
+  spr.fillSprite(COL_BG);
+  _drawSubHeader(spr, "Check-In Open", WiFi.status() == WL_CONNECTED);
+
+  // Countdown pill
+  uint32_t msLeft = (monCheckinEndMs > millis()) ? (monCheckinEndMs - millis()) : 0;
+  uint32_t secsLeft = msLeft / 1000;
+  char tBuf[12];
+  snprintf(tBuf, sizeof(tBuf), "%02lu:%02lu", (unsigned long)(secsLeft/60), (unsigned long)(secsLeft%60));
+
+  // Timer arc / bar (y=52..72)
+  uint32_t totalMs = (uint32_t)(MON_CHECKIN_MIN * 60UL * 1000UL);
+  float prog = 1.0f - (float)msLeft / (float)totalMs;
+  if (prog < 0) prog = 0; if (prog > 1) prog = 1;
+  spr.fillRoundRect(10, 52, SW-20, 14, 6, COL_CARD);
+  spr.fillRoundRect(10, 52, (int32_t)((SW-20)*prog), 14, 6, msLeft < 60000 ? COL_ERROR : COL_PRIMARY);
+  spr.setFont(F_TINY); spr.setTextColor(COL_TEXT, COL_BG);
+  spr.setCursor(SW/2 - 14, 70); spr.print(tBuf);
+
+  // Big check-in count
+  char cntBuf[8]; snprintf(cntBuf, sizeof(cntBuf), "%u", (unsigned)monCount);
+  spr.setFont(F_LARGE); spr.setTextColor(COL_SUCCESS, COL_BG);
+  int32_t cw = spr.textWidth(cntBuf);
+  spr.setCursor((SW-cw)/2, 88); spr.print(cntBuf);
+  spr.setFont(F_TINY); spr.setTextColor(COL_MUTED, COL_BG);
+  spr.setCursor((SW - spr.textWidth("students checked in"))/2, 136); spr.print("students checked in");
+
+  // Recent arrivals (last 5)
+  uint16_t start = (monCount > 5) ? monCount-5 : 0;
+  for (uint16_t i = start, row = 0; i < monCount; i++, row++) {
+    int32_t ry = 156 + row * 28;
+    spr.fillRoundRect(10, ry, SW-20, 24, 5, COL_CARD);
+    spr.fillCircle(24, ry+12, 6, COL_SUCCESS);
+    spr.setFont(F_TINY); spr.setTextColor(COL_TEXT, COL_CARD);
+    spr.setCursor(36, ry+5); spr.print(monStudents[i].indexNumber);
+    // Check-in time
+    struct tm ti; time_t t = (time_t)monStudents[i].checkinTime; localtime_r(&t, &ti);
+    char tbuf2[8]; snprintf(tbuf2, sizeof(tbuf2), "%02d:%02d", ti.tm_hour, ti.tm_min);
+    spr.setTextColor(COL_MUTED, COL_CARD);
+    spr.setCursor(SW-46, ry+5); spr.print(tbuf2);
+  }
+
+  // Bottom info bar
+  spr.fillRoundRect(10, SH-34, SW-20, 24, 6, COL_DIM_CARD);
+  spr.setFont(F_TINY); spr.setTextColor(COL_MUTED, COL_DIM_CARD);
+  String apName = "Dikly-" + macSuffix();
+  spr.setCursor(18, SH-26); spr.print("AP: " + apName);
+  char macBuf[6]; snprintf(macBuf, sizeof(macBuf), "%u sta", WiFi.softAPgetStationNum());
+  spr.setCursor(SW-50, SH-26); spr.print(macBuf);
+
+  spr.pushSprite(0, 0);
+}
+
+// ── PRESENCE MONITOR — live student roster with green/red status ──────────────
+static void drawPresenceMonitor() {
+  spr.fillSprite(COL_BG);
+  _drawSubHeader(spr, "Presence Monitor", WiFi.status() == WL_CONNECTED);
+
+  // Summary bar (y=46..66)
+  spr.fillRoundRect(10, 46, (SW-26)/2, 22, 5, COL_CARD);
+  spr.fillRoundRect(18+(SW-26)/2, 46, (SW-26)/2, 22, 5, COL_CARD);
+  spr.setFont(F_TINY);
+  // Present count
+  spr.setTextColor(COL_SUCCESS, COL_CARD);
+  char pb[8]; snprintf(pb, sizeof(pb), "%u PRES", (unsigned)monPresentCount);
+  spr.setCursor(16, 52); spr.print(pb);
+  // Left count
+  spr.setTextColor(COL_ERROR, COL_CARD);
+  char lb[8]; snprintf(lb, sizeof(lb), "%u LEFT", (unsigned)monLeftCount);
+  spr.setCursor(22+(SW-26)/2, 52); spr.print(lb);
+
+  // Student rows — 8 visible at a time (row height 29px, starting y=72)
+  int32_t rowH = 29, startY = 72, visibleRows = 8;
+  for (int32_t row = 0; row < visibleRows; row++) {
+    int32_t idx = monScrollOffset + row;
+    if (idx >= (int32_t)monCount) break;
+    StudentPresenceRecord& s = monStudents[idx];
+    int32_t ry = startY + row * rowH;
+
+    uint16_t bgc = s.present ? 0x0320 : 0x2000;  // very dark green / dark red tint
+    spr.fillRoundRect(10, ry, SW-20, rowH-2, 4, bgc);
+    // Status dot
+    spr.fillCircle(22, ry+12, 5, s.present ? COL_SUCCESS : COL_ERROR);
+    // Index number
+    spr.setFont(F_TINY); spr.setTextColor(COL_TEXT, bgc);
+    spr.setCursor(32, ry+4); spr.print(s.indexNumber);
+    // Status text
+    spr.setTextColor(s.present ? COL_SUCCESS : COL_ERROR, bgc);
+    spr.setCursor(32, ry+15); spr.print(s.present ? "PRESENT" : "LEFT");
+    // Last seen time
+    if (!s.present && s.leftTime > 0) {
+      struct tm ti; time_t t = (time_t)s.leftTime; localtime_r(&t, &ti);
+      char tb[8]; snprintf(tb, sizeof(tb), "%02d:%02d", ti.tm_hour, ti.tm_min);
+      spr.setTextColor(COL_MUTED, bgc);
+      spr.setCursor(SW-46, ry+4); spr.print(tb);
+    }
+  }
+
+  // Scroll indicator (right edge)
+  if ((int32_t)monCount > visibleRows) {
+    int32_t barH = SH - startY - 38;
+    int32_t indicH = max(20, (int32_t)(barH * visibleRows / monCount));
+    int32_t indicY = startY + (int32_t)(barH * monScrollOffset / monCount);
+    spr.fillRect(SW-5, startY, 4, barH, COL_CARD);
+    spr.fillRect(SW-5, indicY, 4, indicH, COL_MUTED);
+  }
+
+  // Bottom bar: next scan countdown + CSV status
+  spr.fillRoundRect(10, SH-34, SW-20, 24, 6, COL_DIM_CARD);
+  spr.setFont(F_TINY); spr.setTextColor(COL_MUTED, COL_DIM_CARD);
+  uint32_t nextScan = (monLastScanMs + MON_SCAN_MS > millis()) ?
+                      (monLastScanMs + MON_SCAN_MS - millis()) / 1000 : 0;
+  char scanBuf[24]; snprintf(scanBuf, sizeof(scanBuf), "Scan in %lus", (unsigned long)nextScan);
+  spr.setCursor(18, SH-26); spr.print(scanBuf);
+  spr.setTextColor(sdAvailable ? COL_SUCCESS : COL_MUTED, COL_DIM_CARD);
+  spr.setCursor(SW-56, SH-26); spr.print(sdAvailable ? "CSV OK" : "No SD");
+
+  spr.pushSprite(0, 0);
+}
+
 // ─── Captive-portal AP startup ────────────────────────────────────────────────
 static void startApPortal() {
   WiFi.mode(WIFI_AP);
@@ -2612,6 +2766,171 @@ static int8_t getClientRSSI(const String& clientIp) {
   }
   LOG("RSSI: ARP miss for " + clientIp + " — allowing (ARP table may be stale)");
   return 0;  // not found — allow through (logged for monitoring)
+}
+
+// ─── Monitor: MAC lookup from client IP (ARP + station list) ─────────────────
+static bool getClientMac(const String& clientIp, uint8_t mac[6]) {
+  wifi_sta_list_t stalist;
+  if (esp_wifi_ap_get_sta_list(&stalist) != ESP_OK || stalist.num == 0) return false;
+
+  uint8_t ip4[4] = {0};
+  int a, b, c, d;
+  if (sscanf(clientIp.c_str(), "%d.%d.%d.%d", &a, &b, &c, &d) != 4) return false;
+  ip4[0]=(uint8_t)a; ip4[1]=(uint8_t)b; ip4[2]=(uint8_t)c; ip4[3]=(uint8_t)d;
+  uint32_t target = (uint32_t)ip4[0] | ((uint32_t)ip4[1]<<8) |
+                    ((uint32_t)ip4[2]<<16) | ((uint32_t)ip4[3]<<24);
+
+  for (size_t i = 0; i < ARP_TABLE_SIZE; i++) {
+    ip4_addr_t* arp_ip; struct netif* arp_nif; struct eth_addr* arp_mac;
+    if (etharp_get_entry(i, &arp_ip, &arp_nif, &arp_mac) && arp_ip->addr == target) {
+      for (int j = 0; j < stalist.num; j++) {
+        if (memcmp(stalist.sta[j].mac, arp_mac->addr, 6) == 0) {
+          memcpy(mac, stalist.sta[j].mac, 6);
+          return true;
+        }
+      }
+    }
+  }
+  return false;
+}
+
+// Deauth a station by MAC (kick off AP after check-in)
+static void deauthStation(const uint8_t mac[6]) {
+  wifi_sta_list_t stalist;
+  if (esp_wifi_ap_get_sta_list(&stalist) != ESP_OK) return;
+  for (int i = 0; i < stalist.num; i++) {
+    if (memcmp(stalist.sta[i].mac, mac, 6) == 0) {
+      esp_wifi_deauth_sta(stalist.sta[i].aid);
+      return;
+    }
+  }
+}
+
+// Add a newly checked-in student to the monitor list
+static void monAddStudent(const char* indexNum, const uint8_t* mac) {
+  if (!monStudents || monCount >= MON_MAX_STUDENTS) return;
+  // Check for duplicate index number
+  for (uint16_t i = 0; i < monCount; i++)
+    if (strncmp(monStudents[i].indexNumber, indexNum, 31) == 0) return;
+  StudentPresenceRecord& s = monStudents[monCount++];
+  memset(&s, 0, sizeof(s));
+  strncpy(s.indexNumber, indexNum, 31);
+  if (mac) memcpy(s.mac, mac, 6);  // zero MAC = MAC not available (probe tracking won't work for this student)
+  s.checkinTime  = (uint32_t)time(nullptr);
+  s.lastSeenTime = s.checkinTime;
+  s.present      = true;
+  s.synced       = false;
+}
+
+// Promiscuous callback — fires on every management frame (IRAM for speed)
+static void IRAM_ATTR monPromiscCb(void* buf, wifi_promiscuous_pkt_type_t type) {
+  if (type != WIFI_PKT_MGMT) return;
+  const wifi_promiscuous_pkt_t* pkt = (const wifi_promiscuous_pkt_t*)buf;
+  const uint8_t* p = pkt->payload;
+  // Probe request: frame control byte[0] = 0x40 (type=mgmt subtype=4)
+  if (p[0] != 0x40) return;
+  const uint8_t* src = &p[10];  // source MAC
+  // Skip zero MACs (student whose MAC could not be captured at check-in)
+  static const uint8_t zeroMac[6] = {0};
+  uint32_t nowTs = (uint32_t)time(nullptr);
+  for (uint16_t i = 0; i < monCount; i++) {
+    if (monStudents[i].present &&
+        memcmp(monStudents[i].mac, zeroMac, 6) != 0 &&
+        memcmp(monStudents[i].mac, src, 6) == 0) {
+      monStudents[i].lastSeenTime = nowTs;
+      break;
+    }
+  }
+}
+
+static void monStartSniffer() {
+  if (monPromisc) return;
+  esp_wifi_set_promiscuous_filter(&(wifi_promiscuous_filter_t){ .filter_mask = WIFI_PROMIS_FILTER_MASK_MGMT });
+  esp_wifi_set_promiscuous_rx_cb(monPromiscCb);
+  esp_wifi_set_promiscuous(true);
+  monPromisc = true;
+  LOG("Monitor: probe sniffer ON");
+}
+
+static void monStopSniffer() {
+  if (!monPromisc) return;
+  esp_wifi_set_promiscuous(false);
+  esp_wifi_set_promiscuous_rx_cb(nullptr);
+  monPromisc = false;
+  LOG("Monitor: probe sniffer OFF");
+}
+
+// Write / rewrite the CSV file on SD with current presence data
+static void monWriteCSV() {
+  if (!sdAvailable || monCsvPath[0] == '\0') return;
+  File f = SD_MMC.open(monCsvPath, FILE_WRITE);
+  if (!f) return;
+  f.println("index_number,checkin_time,last_seen,status,left_at,synced");
+  struct tm ti;
+  char tbuf[20];
+  auto fmtTs = [&](uint32_t ts) -> const char* {
+    if (ts == 0) { tbuf[0] = '\0'; return tbuf; }
+    time_t t = (time_t)ts; localtime_r(&t, &ti);
+    snprintf(tbuf, sizeof(tbuf), "%04d-%02d-%02d %02d:%02d:%02d",
+      1900+ti.tm_year,1+ti.tm_mon,ti.tm_mday,ti.tm_hour,ti.tm_min,ti.tm_sec);
+    return tbuf;
+  };
+  char row[120];
+  for (uint16_t i = 0; i < monCount; i++) {
+    StudentPresenceRecord& s = monStudents[i];
+    String chk  = fmtTs(s.checkinTime);
+    String last = fmtTs(s.lastSeenTime);
+    String lft  = fmtTs(s.leftTime);
+    const char* status = s.present ? "PRESENT" : "LEFT";
+    snprintf(row, sizeof(row), "%s,%s,%s,%s,%s,%d",
+      s.indexNumber, chk.c_str(), last.c_str(), status, lft.c_str(), (int)s.synced);
+    f.println(row);
+  }
+  f.close();
+}
+
+// Scan all students: if no probe heard for MON_ABSENT_SEC → mark LEFT
+static void monScanPresence() {
+  uint32_t nowTs = (uint32_t)time(nullptr);
+  monPresentCount = 0; monLeftCount = 0;
+  for (uint16_t i = 0; i < monCount; i++) {
+    StudentPresenceRecord& s = monStudents[i];
+    if (s.present && nowTs - s.lastSeenTime > MON_ABSENT_SEC) {
+      s.present  = false;
+      s.leftTime = s.lastSeenTime;  // last time we saw them
+      LOG("Monitor: LEFT " + String(s.indexNumber));
+    }
+    if (s.present) monPresentCount++; else monLeftCount++;
+  }
+  monWriteCSV();
+}
+
+// Start monitoring session: open check-in window + prepare CSV
+static void monStart(const String& course, const String& sid) {
+  if (!monStudents) return;
+  monCount        = 0;
+  monPhase        = MON_CHECKIN_OPEN;
+  monCheckinEndMs = millis() + (uint32_t)(MON_CHECKIN_MIN * 60UL * 1000UL);
+  monLastScanMs   = 0;
+  monScrollOffset = 0;
+  monPresentCount = 0;
+  monLeftCount    = 0;
+
+  // CSV filename: /monitor/YYYYMMDD_HHMM_COURSE.csv
+  String safe = course;
+  safe.replace("/","_"); safe.replace(" ","_");
+  if (safe.length() > 12) safe = safe.substring(0, 12);
+  struct tm ti; time_t n = time(nullptr); localtime_r(&n, &ti);
+  snprintf(monCsvPath, sizeof(monCsvPath),
+    "/monitor/%04d%02d%02d_%02d%02d_%s.csv",
+    1900+ti.tm_year,1+ti.tm_mon,ti.tm_mday,ti.tm_hour,ti.tm_min,safe.c_str());
+
+  if (sdAvailable) {
+    if (!SD_MMC.exists("/monitor")) SD_MMC.mkdir("/monitor");
+    File f = SD_MMC.open(monCsvPath, FILE_WRITE);
+    if (f) { f.println("index_number,checkin_time,last_seen,status,left_at,synced"); f.close(); }
+  }
+  LOG("Monitor started. Check-in open " + String(MON_CHECKIN_MIN) + " min. CSV: " + String(monCsvPath));
 }
 
 // ─── Local HTTP (WiFi proxy for Attendance Device page) ──────────────────────
@@ -3059,6 +3378,30 @@ static void registerLocalHttp() {
     if (indexNum.length()) dedupAdd(indexNum.c_str());
     if (userId.length())   dedupAdd(userId.c_str());
     studentsMarked++;  // update count immediately — visible on screen without waiting for server heartbeat
+
+    // ── Persistent presence monitor: record student + auto-disconnect ─────────
+    if (monPhase == MON_CHECKIN_OPEN && indexNum.length()) {
+      String clientIp = localHttp.client().remoteIP().toString();
+      uint8_t cMac[6] = {0};
+      bool gotMac = getClientMac(clientIp, cMac);
+      monAddStudent(indexNum.c_str(), gotMac ? cMac : nullptr);
+      // Respond BEFORE deauth so the success message reaches the browser
+      localHttp.send(200, "application/json",
+        "{\"ok\":true,\"message\":\"Attendance recorded. You may disconnect.\"}");
+      delay(200);  // brief grace period for response to flush
+      if (gotMac) deauthStation(cMac);
+      else {
+        // MAC unknown — try deauthing by IP: kick all stations sharing this IP
+        wifi_sta_list_t sl;
+        if (esp_wifi_ap_get_sta_list(&sl) == ESP_OK) {
+          uint8_t ip4[4];
+          sscanf(clientIp.c_str(), "%hhu.%hhu.%hhu.%hhu", &ip4[0],&ip4[1],&ip4[2],&ip4[3]);
+          for (int i = 0; i < sl.num; i++) esp_wifi_deauth_sta(sl.sta[i].aid);
+        }
+      }
+      return;
+    }
+
     localHttp.send(200, "application/json", "{\"ok\":true,\"message\":\"Attendance recorded.\"}");
   });
 
@@ -3166,6 +3509,8 @@ static void handlePairedTap(uint16_t tx, uint16_t ty) {
     else if (curScreen == SESSION_START)                  curScreen = READY;
     else if (curScreen == SETTINGS)                       curScreen = READY;
     else if (curScreen == DEVICE_INFO)                    curScreen = SETTINGS;
+    else if (curScreen == CHECKIN_MONITOR)                curScreen = SESSION;
+    else if (curScreen == PRESENCE_MONITOR)               curScreen = SESSION;
     return;
   }
   // READY screen
@@ -3200,7 +3545,17 @@ static void handlePairedTap(uint16_t tx, uint16_t ty) {
       studentsMarked = 0; sessionTotalEnrolled = 0;
       sessionLocallyStarted = false; clearLocalSession();
       bleStop();
+      if (monPhase == MON_CHECKIN_OPEN || monPhase == MON_MONITORING) {
+        monStopSniffer();
+        monScanPresence();
+        monWriteCSV();
+        monPhase = MON_ENDED;
+      }
       curScreen = SUMMARY;
+    }
+    // Tap the student count area (y 200-240) to open monitor view
+    else if (ty >= 200 && ty <= 240 && monPhase != MON_IDLE) {
+      curScreen = (monPhase == MON_CHECKIN_OPEN) ? CHECKIN_MONITOR : PRESENCE_MONITOR;
     }
   }
   // SETTINGS screen — 6 rows × 44 px starting at y=56
@@ -3230,6 +3585,25 @@ static void handlePairedTap(uint16_t tx, uint16_t ty) {
         curScreen = DEVICE_INFO;
       }
       // rowIdx == 5 (Factory Reset) requires long-press — handled in loop()
+    }
+  }
+  // CHECKIN_MONITOR — tap anywhere below header to jump to PRESENCE_MONITOR early
+  else if (curScreen == CHECKIN_MONITOR) {
+    if (ty > 46 && ty < SH - 40) {
+      // "End Check-In" tap in bottom area: close window and switch to sniffer mode
+      if (ty > SH - 40) {
+        monCheckinEndMs = millis();  // force-close check-in window now
+      }
+    }
+  }
+  // PRESENCE_MONITOR — swipe/scroll (up = scroll down in list)
+  else if (curScreen == PRESENCE_MONITOR) {
+    static uint16_t lastTouchY = 0;
+    if (ty > 72 && ty < SH - 40) {
+      // Simple scroll: tap top half scrolls up, bottom half scrolls down
+      int32_t midY = 72 + (SH - 72 - 40) / 2;
+      if (ty < (uint16_t)midY && monScrollOffset > 0) monScrollOffset--;
+      else if (ty >= (uint16_t)midY && monScrollOffset + 8 < (int32_t)monCount) monScrollOffset++;
     }
   }
 }
@@ -3275,6 +3649,8 @@ void setup() {
   if (!offlineBuf) offlineBuf = (OfflineRec*)calloc(200, sizeof(OfflineRec));
   dedupIds = (char (*)[32])heap_caps_calloc(400, 32, MALLOC_CAP_SPIRAM);
   if (!dedupIds) dedupIds = (char (*)[32])calloc(400, 32);
+  monStudents = (StudentPresenceRecord*)heap_caps_calloc(MON_MAX_STUDENTS, sizeof(StudentPresenceRecord), MALLOC_CAP_SPIRAM);
+  if (!monStudents) monStudents = (StudentPresenceRecord*)calloc(MON_MAX_STUDENTS, sizeof(StudentPresenceRecord));
 
   // Display + sprite BEFORE BLE/WiFi so the 150 KB sprite buffer is allocated
   // from unfragmented PSRAM. BLE grabs large contiguous chunks; if it runs first
@@ -3549,14 +3925,36 @@ void loop() {
   static bool wasSessActive = false;
   bool sessActive = !sessionId.isEmpty() && !sessionSeed.isEmpty() && (timeSynced || sessionLocallyStarted);
   if (sessActive && !wasSessActive) {
-    // Session just became active — navigate home screens to SESSION
+    // Session just became active — start monitor check-in and navigate to SESSION
+    monStart(sessionCourse, sessionId);
     if (curScreen == READY || curScreen == PAIR_SCREEN) curScreen = SESSION;
   } else if (!sessActive && wasSessActive) {
-    // Session just ended via heartbeat (server removed it) — go to READY
+    // Session just ended via heartbeat (server removed it)
+    if (monPhase == MON_CHECKIN_OPEN || monPhase == MON_MONITORING) {
+      monStopSniffer();
+      monScanPresence();   // final scan
+      monWriteCSV();
+      monPhase = MON_ENDED;
+    }
     sessionLocallyStarted = false; clearLocalSession();
-    if (curScreen == SESSION) curScreen = READY;
+    if (curScreen == SESSION || curScreen == CHECKIN_MONITOR || curScreen == PRESENCE_MONITOR)
+      curScreen = READY;
   }
   wasSessActive = sessActive;
+
+  // ── Monitor phase transitions ─────────────────────────────────────────────
+  if (monPhase == MON_CHECKIN_OPEN && millis() >= monCheckinEndMs) {
+    // Check-in window expired — stop AP client acceptance, start probe sniffer
+    monPhase = MON_MONITORING;
+    monLastScanMs = millis();
+    monStartSniffer();
+    if (curScreen == CHECKIN_MONITOR) curScreen = PRESENCE_MONITOR;
+    LOG("Monitor: check-in closed. Switching to probe sniffer.");
+  }
+  if (monPhase == MON_MONITORING && millis() - monLastScanMs >= MON_SCAN_MS) {
+    monLastScanMs = millis();
+    monScanPresence();
+  }
 
   // Render at ~10 fps
   static uint32_t lastDraw = 0;
@@ -3591,10 +3989,12 @@ void loop() {
       drawSession(code, (uint32_t)sessionSecsLeft, sessionDuration);
       break;
     }
-    case SUMMARY:     drawSummary();    break;
-    case PAIR_SCREEN: drawPairScreen(); break;
-    case SETTINGS:    drawSettings();   break;
-    case DEVICE_INFO: drawDeviceInfo(); break;
+    case SUMMARY:          drawSummary();          break;
+    case PAIR_SCREEN:      drawPairScreen();        break;
+    case SETTINGS:         drawSettings();          break;
+    case DEVICE_INFO:      drawDeviceInfo();        break;
+    case CHECKIN_MONITOR:  drawCheckinMonitor();    break;
+    case PRESENCE_MONITOR: drawPresenceMonitor();   break;
     default:
       bleStop();
       curScreen = READY;
