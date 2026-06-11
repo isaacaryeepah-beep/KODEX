@@ -351,6 +351,34 @@ static uint16_t  monLeftCount    = 0;
 static int8_t    monScrollOffset = 0;   // scroll position on presence list
 static bool      monPromisc      = false;
 
+// ─── Per-session MAC dedup — one device, one submission ──────────────────────
+// Prevents Student A from submitting Student B's index number: once a MAC
+// has been used to submit, that phone cannot submit again for this session.
+// Allocated from PSRAM alongside dedupIds. 300 slots × 6 bytes = 1.8 KB.
+static uint8_t (*usedMacs)[6] = nullptr;  // PSRAM
+static uint16_t usedMacCount  = 0;
+static String   usedMacSession = "";
+
+static void usedMacClear(const String& sid) {
+  usedMacCount = 0; usedMacSession = sid;
+}
+
+static bool usedMacCheck(const uint8_t mac[6]) {
+  if (!usedMacs) return false;
+  static const uint8_t zero[6] = {0};
+  if (memcmp(mac, zero, 6) == 0) return false;  // unknown MAC — don't block
+  for (uint16_t i = 0; i < usedMacCount; i++)
+    if (memcmp(usedMacs[i], mac, 6) == 0) return true;
+  return false;
+}
+
+static void usedMacAdd(const uint8_t mac[6]) {
+  if (!usedMacs || usedMacCount >= MON_MAX_STUDENTS) return;
+  static const uint8_t zero[6] = {0};
+  if (memcmp(mac, zero, 6) == 0) return;
+  memcpy(usedMacs[usedMacCount++], mac, 6);
+}
+
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 #define LOG(s) do { Serial.print("[Dikly] "); Serial.println(s); } while(0)
 
@@ -2939,6 +2967,7 @@ static void monStart(const String& course, const String& sid) {
   if (!monStudents) return;
   monCount        = 0;
   monPhase        = MON_CHECKIN_OPEN;
+  usedMacClear(sid);
   monCheckinEndMs = millis() + (uint32_t)(MON_CHECKIN_MIN * 60UL * 1000UL);
   monLastScanMs   = 0;
   monScrollOffset = 0;
@@ -3512,6 +3541,22 @@ static void registerLocalHttp() {
         (userId.length()   && dedupCheck(userId.c_str()))) {
       localHttp.send(409, "application/json", "{\"error\":\"Attendance already recorded for this session.\"}"); return;
     }
+
+    // ── Anti-cheat: one device (MAC) = one submission per session ─────────────
+    // Capture client MAC now — needed for both the MAC dedup check and monitor
+    String clientIp = localHttp.client().remoteIP().toString();
+    uint8_t clientMac[6] = {0};
+    bool gotMac = getClientMac(clientIp, clientMac);
+
+    if (gotMac) {
+      if (usedMacSession != sessionId) usedMacClear(sessionId);
+      if (usedMacCheck(clientMac)) {
+        localHttp.send(409, "application/json",
+          "{\"error\":\"Attendance already submitted from this device. Each phone can only mark one student.\"}");
+        return;
+      }
+    }
+
     // ── Write to SD card (primary) ────────────────────────────────────────────
     bool stored = false;
     if (sdAvailable) {
@@ -3554,29 +3599,28 @@ static void registerLocalHttp() {
     if (userId.length())   dedupAdd(userId.c_str());
     studentsMarked++;  // update count immediately — visible on screen without waiting for server heartbeat
 
+    // ── Record MAC as used (anti-cheat: one device per submission) ───────────
+    if (gotMac) usedMacAdd(clientMac);
+
     // ── Persistent presence monitor: record student + auto-disconnect ─────────
     if (monPhase == MON_CHECKIN_OPEN && indexNum.length()) {
-      String clientIp = localHttp.client().remoteIP().toString();
-      uint8_t cMac[6] = {0};
-      bool gotMac = getClientMac(clientIp, cMac);
-      monAddStudent(indexNum.c_str(), gotMac ? cMac : nullptr);
+      monAddStudent(indexNum.c_str(), gotMac ? clientMac : nullptr);
       // Respond BEFORE deauth so the success message reaches the browser
       localHttp.send(200, "application/json",
         "{\"ok\":true,\"message\":\"Attendance recorded. You may disconnect.\"}");
       delay(200);  // brief grace period for response to flush
-      if (gotMac) deauthStation(cMac);
+      if (gotMac) deauthStation(clientMac);
       else {
-        // MAC unknown — try deauthing by IP: kick all stations sharing this IP
+        // MAC unknown — kick all stations (blunt fallback)
         wifi_sta_list_t sl;
-        if (esp_wifi_ap_get_sta_list(&sl) == ESP_OK) {
-          uint8_t ip4[4];
-          sscanf(clientIp.c_str(), "%hhu.%hhu.%hhu.%hhu", &ip4[0],&ip4[1],&ip4[2],&ip4[3]);
+        if (esp_wifi_ap_get_sta_list(&sl) == ESP_OK)
           for (int i = 0; i < sl.num; i++) esp_wifi_deauth_sta(sl.sta[i].aid);
-        }
       }
       return;
     }
 
+    // Auto-disconnect outside monitor mode too
+    if (gotMac) { delay(200); deauthStation(clientMac); }
     localHttp.send(200, "application/json", "{\"ok\":true,\"message\":\"Attendance recorded.\"}");
   });
 
@@ -3956,6 +4000,8 @@ void setup() {
   if (!dedupIds) dedupIds = (char (*)[32])calloc(400, 32);
   monStudents = (StudentPresenceRecord*)heap_caps_calloc(MON_MAX_STUDENTS, sizeof(StudentPresenceRecord), MALLOC_CAP_SPIRAM);
   if (!monStudents) monStudents = (StudentPresenceRecord*)calloc(MON_MAX_STUDENTS, sizeof(StudentPresenceRecord));
+  usedMacs = (uint8_t (*)[6])heap_caps_calloc(MON_MAX_STUDENTS, 6, MALLOC_CAP_SPIRAM);
+  if (!usedMacs) usedMacs = (uint8_t (*)[6])calloc(MON_MAX_STUDENTS, 6);
 
   // Display + sprite BEFORE BLE/WiFi so the 150 KB sprite buffer is allocated
   // from unfragmented PSRAM. BLE grabs large contiguous chunks; if it runs first
