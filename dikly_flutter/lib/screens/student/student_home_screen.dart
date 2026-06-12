@@ -28,6 +28,12 @@ class StudentHomeScreen extends ConsumerWidget {
     final dashAsync = ref.watch(_studentDashProvider);
     final firstName = (user?.name ?? 'Student').split(' ').first;
 
+    // Device lock banner data (derived from user object directly)
+    final isLocked = user?.deviceLocked == true &&
+        user?.deviceLockedUntil != null &&
+        user!.deviceLockedUntil!.isAfter(DateTime.now());
+    final lockUntil = user?.deviceLockedUntil;
+
     return RefreshIndicator(
       onRefresh: () async { ref.invalidate(_studentDashProvider); },
       child: ListView(
@@ -62,6 +68,45 @@ class StudentHomeScreen extends ConsumerWidget {
             ],
           ),
           const SizedBox(height: 20),
+
+          // Device lock banner
+          if (isLocked && lockUntil != null) ...[
+            Builder(builder: (_) {
+              final remaining = lockUntil.difference(DateTime.now());
+              final hrs = remaining.inHours;
+              final mins = remaining.inMinutes % 60;
+              final timeStr = hrs > 0 ? '${hrs}h ${mins}m' : '${mins}m';
+              return Container(
+                padding: const EdgeInsets.all(14),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFFFFBEB),
+                  border: Border.all(color: const Color(0xFFF59E0B), width: 1.5),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text('🔒', style: TextStyle(fontSize: 20)),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Text('Account Temporarily Locked — New Device Detected', style: TextStyle(fontWeight: FontWeight.w700, color: Color(0xFF92400E), fontSize: 13)),
+                          const SizedBox(height: 4),
+                          Text(
+                            'Attendance, quizzes and meetings are blocked for $timeStr (until ${lockUntil.hour.toString().padLeft(2, '0')}:${lockUntil.minute.toString().padLeft(2, '0')}). Contact your admin or HOD to unlock early.',
+                            style: const TextStyle(fontSize: 12, color: Color(0xFF78350F)),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              );
+            }),
+            const SizedBox(height: 16),
+          ],
 
           dashAsync.when(
             loading: () => const Center(child: Padding(padding: EdgeInsets.all(32), child: CircularProgressIndicator(color: DiklyColors.primary))),
