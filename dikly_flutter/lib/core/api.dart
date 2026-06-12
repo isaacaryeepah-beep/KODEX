@@ -268,33 +268,10 @@ class ApiService {
     return (list as List).map((e) => AttendanceSession.fromJson(e as Map<String, dynamic>)).toList();
   }
 
-  Future<Map<String, dynamic>> startAttendanceSession({
-    required String courseId,
-    String? title,
-    String? deviceId,
-  }) async {
-    final body = <String, dynamic>{'courseId': courseId};
-    if (title != null) body['title'] = title;
-    if (deviceId != null) body['deviceId'] = deviceId;
-    final response = await _dio.post('/api/attendance-sessions/start', data: body);
-    return response.data as Map<String, dynamic>;
-  }
-
-  Future<void> endAttendanceSession(String sessionId) async {
-    await _dio.post('/api/attendance-sessions/$sessionId/stop');
-  }
-
   Future<void> markAttendance(String code, {Map<String, dynamic>? connectionToken}) async {
     final body = <String, dynamic>{'code': code, 'method': 'code_mark'};
     if (connectionToken != null) body['connectionToken'] = connectionToken;
     await _queueablePost('/api/attendance-sessions/mark', body);
-  }
-
-  Future<void> markAttendanceQR(String qrToken) async {
-    await _queueablePost('/api/attendance-sessions/mark', {
-      'qrToken': qrToken,
-      'method': 'qr_mark',
-    });
   }
 
   /// Try to reach the ESP32 device on the local classroom WiFi.
@@ -380,57 +357,6 @@ class ApiService {
     return (list as List).map((e) => User.fromJson(e as Map<String, dynamic>)).toList();
   }
 
-  // Admin-level pending approvals
-  Future<Map<String, dynamic>> getAdminDashboardData() async {
-    final today = DateTime.now().toIso8601String().substring(0, 10);
-    final results = await Future.wait([
-      _dio.get('/api/attendance-sessions?limit=5').catchError((_) => Response(requestOptions: RequestOptions(), data: {'sessions': [], 'pagination': {'total': 0}})),
-      _dio.get('/api/users').catchError((_) => Response(requestOptions: RequestOptions(), data: {'users': []})),
-      _dio.get('/api/approvals/pending').catchError((_) => Response(requestOptions: RequestOptions(), data: {'pending': []})),
-      _dio.get('/api/announcements?limit=5').catchError((_) => Response(requestOptions: RequestOptions(), data: {'announcements': []})),
-    ]);
-    final sessions = results[0].data['sessions'] ?? [];
-    final users = results[1].data['users'] ?? [];
-    final pending = results[2].data['pending'] ?? [];
-    final announcements = results[3].data['announcements'] ?? [];
-    final activeSessions = (sessions as List).where((s) => ['active','live','paused','locked'].contains(s['status'])).length;
-    return {
-      'sessions': sessions,
-      'totalSessions': results[0].data['pagination']?['total'] ?? sessions.length,
-      'totalUsers': (users as List).length,
-      'activeSessions': activeSessions,
-      'pendingApprovals': (pending as List).length,
-      'announcements': announcements,
-    };
-  }
-
-  // Manager today attendance + team data
-  Future<Map<String, dynamic>> getManagerDashboardData() async {
-    final results = await Future.wait([
-      _dio.get('/api/corporate-attendance/today').catchError((_) => Response(requestOptions: RequestOptions(), data: {'records': [], 'summary': {}})),
-      _dio.get('/api/performance/team-overview').catchError((_) => Response(requestOptions: RequestOptions(), data: {'overview': []})),
-      _dio.get('/api/approvals/pending').catchError((_) => Response(requestOptions: RequestOptions(), data: {'pending': []})),
-      _dio.get('/api/announcements?limit=5').catchError((_) => Response(requestOptions: RequestOptions(), data: {'announcements': []})),
-    ]);
-    return {
-      'todayRecords': results[0].data['records'] ?? [],
-      'todaySummary': results[0].data['summary'] ?? {},
-      'teamOverview': results[1].data['overview'] ?? [],
-      'pendingApprovals': results[2].data['pending'] ?? [],
-      'announcements': results[3].data['announcements'] ?? [],
-    };
-  }
-
-  // Employee monthly attendance
-  Future<Map<String, dynamic>> getMyMonthlyAttendance() async {
-    final now = DateTime.now();
-    final monthStart = DateTime(now.year, now.month, 1).toIso8601String().substring(0, 10);
-    final today = now.toIso8601String().substring(0, 10);
-    final response = await _dio.get('/api/corporate-attendance/my?from=$monthStart&to=$today');
-    final data = response.data;
-    return {'records': data['records'] ?? data['data'] ?? []};
-  }
-
   Future<User> createUser(Map<String, dynamic> body) async {
     final response = await _dio.post('/api/users/create', data: body);
     final data = response.data;
@@ -439,44 +365,27 @@ class ApiService {
 
   // Quizzes
   Future<List<SnapQuiz>> getQuizzes() async {
-    final response = await _dio.get('/api/student/snap-quizzes/quizzes');
+    final response = await _dio.get('/api/snap-quizzes');
     final data = response.data;
     final list = data['quizzes'] ?? data['data'] ?? [];
     return (list as List).map((e) => SnapQuiz.fromJson(e as Map<String, dynamic>)).toList();
   }
 
   Future<SnapQuiz> getQuizById(String id) async {
-    final response = await _dio.get('/api/student/snap-quizzes/quizzes/$id');
+    final response = await _dio.get('/api/snap-quizzes/$id');
     final data = response.data;
     return SnapQuiz.fromJson(data['quiz'] ?? data['data'] ?? data as Map<String, dynamic>);
   }
 
-  // Messages — conversation-based
-  Future<List<Conversation>> getConversations() async {
-    final response = await _dio.get('/api/messages/conversations');
-    final data = response.data;
-    final list = data['conversations'] ?? data['data'] ?? [];
-    return (list as List).map((e) => Conversation.fromJson(e as Map<String, dynamic>)).toList();
-  }
-
-  Future<List<Message>> getConversationMessages(String conversationId) async {
-    final response = await _dio.get('/api/messages/conversations/$conversationId/messages');
-    final data = response.data;
+  // Messages
+  Future<List<Message>> getMessages() async {
+    final data = await _cachedGet('/api/messages', 'messages');
     final list = data['messages'] ?? data['data'] ?? [];
     return (list as List).map((e) => Message.fromJson(e as Map<String, dynamic>)).toList();
   }
 
-  Future<Conversation> startConversation(String recipientId, String message) async {
-    final response = await _dio.post('/api/messages/conversations', data: {
-      'recipientIds': [recipientId],
-      'message': message,
-    });
-    final data = response.data;
-    return Conversation.fromJson(data['conversation'] ?? data['data'] ?? data as Map<String, dynamic>);
-  }
-
-  Future<void> sendMessageToConversation(String conversationId, String content) async {
-    await _dio.post('/api/messages/conversations/$conversationId/messages', data: {'content': content});
+  Future<void> sendMessage(Map<String, dynamic> body) async {
+    await _dio.post('/api/messages/send', data: body);
   }
 
   // Announcements
@@ -492,24 +401,24 @@ class ApiService {
     return data as Map<String, dynamic>;
   }
 
-  // Leave Requests (manager/admin view)
+  // Leave Requests
   Future<List<dynamic>> getLeaveRequests() async {
-    final data = await _cachedGet('/api/leaves', 'leave_requests');
-    return data['leaveRequests'] ?? data['leaves'] ?? data['data'] ?? [];
+    final data = await _cachedGet('/api/leave-requests', 'leave_requests');
+    return data['leaveRequests'] ?? data['data'] ?? [];
   }
 
   Future<void> approveLeaveRequest(String id) async {
-    await _dio.patch('/api/leaves/$id/review', data: {'action': 'approved'});
+    await _dio.put('/api/leave-requests/$id/approve');
   }
 
   Future<void> rejectLeaveRequest(String id) async {
-    await _dio.patch('/api/leaves/$id/review', data: {'action': 'rejected'});
+    await _dio.put('/api/leave-requests/$id/reject');
   }
 
-  // Timesheets / payroll runs
+  // Timesheets
   Future<List<dynamic>> getTimesheets() async {
-    final data = await _cachedGet('/api/payroll', 'timesheets');
-    return data['payrollRuns'] ?? data['data'] ?? [];
+    final data = await _cachedGet('/api/timesheets', 'timesheets');
+    return data['timesheets'] ?? data['data'] ?? [];
   }
 
   // Shifts
@@ -526,45 +435,27 @@ class ApiService {
 
   // HOD
   Future<Map<String, dynamic>> getHodOverview() async {
-    final results = await Future.wait([
-      _dio.get('/api/hod/lecturers'),
-      _dio.get('/api/hod/students'),
-      _dio.get('/api/hod/dashboard-stats'),
-      _dio.get('/api/attendance-sessions', queryParameters: {'status': 'active', 'limit': '100'}),
-    ]);
-    final lecturers = results[0].data;
-    final students = results[1].data;
-    final stats = results[2].data;
-    final activeSessions = results[3].data;
-    final lecturerList = lecturers['lecturers'] ?? lecturers['data'] ?? [];
-    final studentList = students['students'] ?? students['data'] ?? [];
-    final statsData = (stats['data'] ?? stats) as Map<String, dynamic>;
-    final sessionList = activeSessions['sessions'] ?? activeSessions['data'] ?? [];
-    return {
-      'totalLecturers': (lecturerList as List).length,
-      'totalStudents': (studentList as List).length,
-      'totalSessions': statsData['totalSessions'] ?? 0,
-      'activeSessions': (sessionList as List).length,
-    };
+    final data = await _cachedGet('/api/hod/overview', 'hod_overview');
+    return (data['data'] ?? data) as Map<String, dynamic>;
   }
 
   Future<List<Map<String, dynamic>>> getPendingApprovals() async {
-    final response = await _dio.get('/api/approvals/pending');
+    final response = await _dio.get('/api/hod/pending-approvals');
     final data = response.data;
     final list = data['data'] ?? data['approvals'] ?? data['users'] ?? [];
     return (list as List).cast<Map<String, dynamic>>();
   }
 
   Future<void> approveUser(String id) async {
-    await _dio.patch('/api/approvals/$id/approve');
+    await _dio.post('/api/hod/approve/$id');
   }
 
   Future<void> rejectUser(String id) async {
-    await _dio.patch('/api/approvals/$id/reject');
+    await _dio.post('/api/hod/reject/$id');
   }
 
   Future<void> unlockStudent(String id) async {
-    await _dio.post('/api/users/$id/unlock-account-device');
+    await _dio.post('/api/hod/unlock-student/$id');
   }
 
   Future<List<Map<String, dynamic>>> getDepartmentStudents() async {
@@ -601,52 +492,16 @@ class ApiService {
     return (list as List).cast<Map<String, dynamic>>();
   }
 
-  // Quiz history — fetch all quizzes (including past) and return submitted ones
+  // Quiz history
   Future<List<Map<String, dynamic>>> getQuizHistory() async {
-    final response = await _dio.get('/api/student/snap-quizzes/quizzes', queryParameters: {'showAll': 'true'});
+    final response = await _dio.get('/api/snap-quizzes/history');
     final data = response.data;
-    final list = (data['quizzes'] ?? data['data'] ?? []) as List;
-    return list
-        .cast<Map<String, dynamic>>()
-        .where((q) => q['isSubmitted'] == true)
-        .map((q) => {
-              'quizTitle': q['title']?.toString() ?? '',
-              'score': q['myScore'] ?? 0,
-              'maxScore': q['totalMarks'] ?? 0,
-              'percentage': q['myPercentage'] ?? 0.0,
-              'passed': (q['myPercentage'] as num? ?? 0) >= 50,
-              'completedAt': q['submittedAt']?.toString() ?? '',
-              'timeTaken': '',
-            })
-        .toList();
+    final list = data['history'] ?? data['results'] ?? data['data'] ?? [];
+    return (list as List).cast<Map<String, dynamic>>();
   }
 
-  Future<Map<String, dynamic>> startQuizAttempt(String quizId) async {
-    final response = await _dio.post(
-      '/api/student/snap-quizzes/quizzes/$quizId/attempts/start',
-      data: {'termsAcknowledged': true},
-    );
-    return response.data as Map<String, dynamic>;
-  }
-
-  Future<Map<String, dynamic>> submitQuizAttempt({
-    required String quizId,
-    required String attemptId,
-    required String sessionToken,
-    required List<Map<String, dynamic>> responses,
-  }) async {
-    final headers = {'X-Session-Token': sessionToken};
-    await _dio.put(
-      '/api/student/snap-quizzes/quizzes/$quizId/attempts/$attemptId/responses',
-      data: {'responses': responses},
-      options: Options(headers: headers),
-    );
-    final response = await _dio.post(
-      '/api/student/snap-quizzes/quizzes/$quizId/attempts/$attemptId/submit',
-      data: <String, dynamic>{},
-      options: Options(headers: headers),
-    );
-    return response.data as Map<String, dynamic>;
+  Future<void> submitQuiz(String id, Map<String, dynamic> answers) async {
+    await _dio.post('/api/snap-quizzes/$id/submit', data: answers);
   }
 
   // Performance
@@ -688,42 +543,33 @@ class ApiService {
     return (list as List).cast<Map<String, dynamic>>();
   }
 
-  // Sign-in/out (corporate) — backend at /api/corporate-attendance
+  // Sign-in/out (corporate)
   Future<Map<String, dynamic>> getSignInStatus() async {
-    final response = await _dio.get('/api/corporate-attendance/my', queryParameters: {
-      'from': DateTime.now().toIso8601String().substring(0, 10),
-      'to': DateTime.now().toIso8601String().substring(0, 10),
-    });
+    final response = await _dio.get('/api/sign-in-out/status');
     final data = response.data;
-    final records = data['records'] ?? data['data'] ?? [];
-    final todayRecord = (records as List).isNotEmpty ? records.last as Map<String, dynamic> : <String, dynamic>{};
-    return {
-      'isClockedIn': todayRecord['clockOut'] == null && todayRecord['clockIn'] != null,
-      'clockInTime': todayRecord['clockIn'],
-      'clockOutTime': todayRecord['clockOut'],
-    };
+    return (data['data'] ?? data) as Map<String, dynamic>;
   }
 
   Future<void> signIn() async {
-    await _queueablePost('/api/corporate-attendance/clock-in', {'method': 'manual'});
+    await _queueablePost('/api/sign-in-out/sign-in', {});
   }
 
   Future<void> signOut() async {
-    await _queueablePost('/api/corporate-attendance/clock-out', {'method': 'manual'});
+    await _queueablePost('/api/sign-in-out/sign-out', {});
   }
 
   Future<List<Map<String, dynamic>>> getCorporateAttendance() async {
-    final response = await _dio.get('/api/corporate-attendance');
+    final response = await _dio.get('/api/sign-in-out/attendance');
     final data = response.data;
-    final list = data['records'] ?? data['attendance'] ?? data['data'] ?? [];
+    final list = data['attendance'] ?? data['data'] ?? [];
     return (list as List).cast<Map<String, dynamic>>();
   }
 
   // Employee-specific
   Future<List<Map<String, dynamic>>> getMyAttendance() async {
-    final response = await _dio.get('/api/corporate-attendance/my');
+    final response = await _dio.get('/api/sign-in-out/my-attendance');
     final data = response.data;
-    final list = data['records'] ?? data['attendance'] ?? data['data'] ?? [];
+    final list = data['attendance'] ?? data['data'] ?? [];
     return (list as List).cast<Map<String, dynamic>>();
   }
 
@@ -734,14 +580,14 @@ class ApiService {
   }
 
   Future<List<Map<String, dynamic>>> getMyLeaves() async {
-    final response = await _dio.get('/api/leaves/my');
+    final response = await _dio.get('/api/leave-requests/my');
     final data = response.data;
-    final list = data['leaveRequests'] ?? data['leaves'] ?? data['data'] ?? [];
+    final list = data['leaveRequests'] ?? data['data'] ?? [];
     return (list as List).cast<Map<String, dynamic>>();
   }
 
   Future<void> createLeaveRequest(Map<String, dynamic> body) async {
-    await _queueablePost('/api/leaves', body);
+    await _queueablePost('/api/leave-requests', body);
   }
 
   Future<void> createExpense(Map<String, dynamic> body) async {
@@ -758,7 +604,7 @@ class ApiService {
 
   // Profile management
   Future<User> updateProfile(Map<String, dynamic> body) async {
-    final response = await _dio.put('/api/auth/profile', data: body);
+    final response = await _dio.put('/api/auth/update-profile', data: body);
     final data = response.data;
     final userData = data['user'] ?? data['data'] ?? data;
     return User.fromJson(userData as Map<String, dynamic>);
@@ -768,61 +614,10 @@ class ApiService {
     required String currentPassword,
     required String newPassword,
   }) async {
-    await _dio.put('/api/auth/profile', data: {
+    await _dio.post('/api/auth/change-password', data: {
       'currentPassword': currentPassword,
       'newPassword': newPassword,
     });
-  }
-
-  // Student combined dashboard data
-  Future<Map<String, dynamic>> getStudentDashboardData() async {
-    final results = await Future.wait([
-      _dio.get('/api/attendance-sessions/my-attendance?limit=5').catchError((_) => Response(requestOptions: RequestOptions(), data: {'records': [], 'pagination': {'total': 0}})),
-      _dio.get('/api/courses').catchError((_) => Response(requestOptions: RequestOptions(), data: {'courses': []})),
-      _dio.get('/api/student/snap-quizzes/quizzes?showAll=true').catchError((_) => Response(requestOptions: RequestOptions(), data: {'quizzes': []})),
-      _dio.get('/api/attendance-sessions/active').catchError((_) => Response(requestOptions: RequestOptions(), data: {'session': null})),
-      _dio.get('/api/student/assignments/upcoming').catchError((_) => Response(requestOptions: RequestOptions(), data: {'assignments': []})),
-    ]);
-    final records = (results[0].data['records'] ?? results[0].data['data'] ?? []) as List;
-    final totalCheckins = results[0].data['pagination']?['total'] ?? records.length;
-    final presentCount = records.where((r) => r['status'] == 'present').length;
-    final attendanceRate = records.isNotEmpty ? (presentCount / records.length * 100).round() : 0;
-    return {
-      'totalCheckins': totalCheckins,
-      'attendanceRate': attendanceRate,
-      'attendanceRecords': records,
-      'enrolledCourses': ((results[1].data['courses'] ?? results[1].data['data'] ?? []) as List).length,
-      'quizzesTaken': ((results[2].data['quizzes'] ?? results[2].data['data'] ?? []) as List).length,
-      'activeSession': results[3].data['session'],
-      'upcomingAssignments': (results[4].data['assignments'] ?? results[4].data['data'] ?? []) as List,
-    };
-  }
-
-  // Lecturer combined dashboard data
-  Future<Map<String, dynamic>> getLecturerDashboardData() async {
-    final results = await Future.wait([
-      _dio.get('/api/attendance-sessions?limit=5').catchError((_) => Response(requestOptions: RequestOptions(), data: {'sessions': [], 'pagination': {'total': 0}})),
-      _dio.get('/api/courses').catchError((_) => Response(requestOptions: RequestOptions(), data: {'courses': []})),
-      _dio.get('/api/lecturer/snap-quizzes').catchError((_) => Response(requestOptions: RequestOptions(), data: {'quizzes': []})),
-      _dio.get('/api/meetings?limit=10').catchError((_) => Response(requestOptions: RequestOptions(), data: {'data': []})),
-    ]);
-    final courseList = (results[1].data['courses'] ?? results[1].data['data'] ?? []) as List;
-    final totalStudents = courseList.fold<int>(0, (sum, c) => sum + ((c['enrolledStudents'] as List?)?.length ?? 0));
-    final meetingsList = (results[3].data['data'] ?? results[3].data['meetings'] ?? []) as List;
-    final upcoming = meetingsList.where((m) => m['status'] == 'scheduled' || m['status'] == 'live').toList();
-    upcoming.sort((a, b) {
-      final aDate = DateTime.tryParse(a['scheduledStart']?.toString() ?? '') ?? DateTime(2099);
-      final bDate = DateTime.tryParse(b['scheduledStart']?.toString() ?? '') ?? DateTime(2099);
-      return aDate.compareTo(bDate);
-    });
-    return {
-      'sessions': results[0].data['sessions'] ?? [],
-      'totalSessions': results[0].data['pagination']?['total'] ?? (results[0].data['sessions'] as List?)?.length ?? 0,
-      'activeCourses': courseList.length,
-      'totalStudents': totalStudents,
-      'quizzesCreated': ((results[2].data['quizzes'] ?? results[2].data['data'] ?? []) as List).length,
-      'upcomingMeetings': upcoming.take(5).toList(),
-    };
   }
 
   // Student dashboard stats  (attendance %, active assignments, course count)
