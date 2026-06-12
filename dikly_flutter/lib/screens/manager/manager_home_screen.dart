@@ -138,7 +138,7 @@ class ManagerHomeScreen extends ConsumerWidget {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   // Today's attendance section label
-                  const DiklySectionLabel(label: "Today's Attendance"),
+                  const DiklySectionLabel("Today's Attendance"),
                   const SizedBox(height: 10),
                   SingleChildScrollView(
                     scrollDirection: Axis.horizontal,
