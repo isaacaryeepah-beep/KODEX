@@ -1,5 +1,5 @@
+import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
-import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 import '../../core/api.dart';
 import '../../core/theme.dart';
@@ -24,6 +24,10 @@ class _QuizzesScreenState extends State<QuizzesScreen> {
   int _currentQuestion = 0;
   List<int?> _selectedAnswers = [];
   bool _quizFinished = false;
+  bool _submitting = false;
+  String? _submitError;
+  String? _attemptId;
+  String? _sessionToken;
 
   @override
   void initState() {
@@ -48,16 +52,87 @@ class _QuizzesScreenState extends State<QuizzesScreen> {
         fullQuiz = await apiService.getQuizById(quiz.id);
       } catch (_) {}
     }
+    // Start an attempt on the server first
+    String? attemptId;
+    String? sessionToken;
+    try {
+      final result = await apiService.startQuizAttempt(fullQuiz.id);
+      final attempt = result['attempt'] as Map<String, dynamic>?;
+      attemptId = attempt?['_id']?.toString();
+      sessionToken = attempt?['sessionToken']?.toString();
+    } catch (e) {
+      // 409 = active attempt already exists, extract attemptId
+      if (e is DioException && e.response?.statusCode == 409) {
+        attemptId = e.response?.data?['attemptId']?.toString();
+        // sessionToken not returned on conflict — user must reopen; treat as resumable
+      } else {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Could not start quiz: ${e.toString()}')),
+          );
+        }
+        return;
+      }
+    }
     setState(() {
       _activeQuiz = fullQuiz;
       _currentQuestion = 0;
       _selectedAnswers = List.filled(fullQuiz.questions.length, null);
       _quizFinished = false;
+      _submitting = false;
+      _submitError = null;
+      _attemptId = attemptId;
+      _sessionToken = sessionToken;
     });
   }
 
-  void _finishQuiz() => setState(() => _quizFinished = true);
-  void _closeQuiz() => setState(() { _activeQuiz = null; _quizFinished = false; });
+  Future<void> _finishQuiz() async {
+    final quiz = _activeQuiz!;
+    final attemptId = _attemptId;
+    final sessionToken = _sessionToken;
+
+    if (attemptId == null || sessionToken == null) {
+      // Fallback: show results locally without server submission
+      setState(() => _quizFinished = true);
+      return;
+    }
+
+    setState(() { _submitting = true; _submitError = null; });
+
+    final responses = <Map<String, dynamic>>[];
+    for (int i = 0; i < quiz.questions.length; i++) {
+      final selected = _selectedAnswers[i];
+      responses.add({
+        'questionId': quiz.questions[i].id,
+        'selectedOptionIndex': selected,
+        'isSkipped': selected == null,
+      });
+    }
+
+    try {
+      await apiService.submitQuizAttempt(
+        quizId: quiz.id,
+        attemptId: attemptId,
+        sessionToken: sessionToken,
+        responses: responses,
+      );
+      setState(() { _quizFinished = true; _submitting = false; });
+    } catch (e) {
+      setState(() {
+        _submitting = false;
+        _submitError = 'Submission failed: ${e.toString()}';
+      });
+    }
+  }
+
+  void _closeQuiz() => setState(() {
+    _activeQuiz = null;
+    _quizFinished = false;
+    _attemptId = null;
+    _sessionToken = null;
+    _submitting = false;
+    _submitError = null;
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -275,6 +350,23 @@ class _QuizzesScreenState extends State<QuizzesScreen> {
               ),
             ),
           const SizedBox(height: 20),
+          if (_submitError != null) ...[
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: DiklyColors.errorLight,
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Row(
+                children: [
+                  const Icon(Icons.error_outline, color: DiklyColors.error, size: 18),
+                  const SizedBox(width: 8),
+                  Expanded(child: Text(_submitError!, style: const TextStyle(color: DiklyColors.error, fontSize: 13))),
+                ],
+              ),
+            ),
+            const SizedBox(height: 12),
+          ],
           Row(
             children: [
               if (_currentQuestion > 0)
@@ -287,14 +379,16 @@ class _QuizzesScreenState extends State<QuizzesScreen> {
               if (_currentQuestion > 0) const SizedBox(width: 12),
               Expanded(
                 child: ElevatedButton(
-                  onPressed: _selectedAnswers[_currentQuestion] == null ? null : () {
+                  onPressed: (_selectedAnswers[_currentQuestion] == null || _submitting) ? null : () {
                     if (_currentQuestion < quiz.questions.length - 1) {
                       setState(() => _currentQuestion++);
                     } else {
                       _finishQuiz();
                     }
                   },
-                  child: Text(_currentQuestion < quiz.questions.length - 1 ? 'Next' : 'Finish'),
+                  child: _submitting && _currentQuestion == quiz.questions.length - 1
+                      ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                      : Text(_currentQuestion < quiz.questions.length - 1 ? 'Next' : 'Finish'),
                 ),
               ),
             ],
