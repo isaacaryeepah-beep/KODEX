@@ -1,12 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
+import 'package:mobile_scanner/mobile_scanner.dart';
 import '../../core/api.dart';
 import '../../core/auth.dart';
 import '../../core/theme.dart';
 import '../../models/attendance.dart';
 import '../../widgets/app_shell.dart';
-
 import '../../widgets/ds/dikly_ds.dart';
 
 class AttendanceScreen extends ConsumerStatefulWidget {
@@ -182,12 +182,39 @@ class _AttendanceScreenState extends ConsumerState<AttendanceScreen> {
                   ),
                 ),
               ],
-              const SizedBox(height: 16),
-              Text('Enter the attendance code provided by your lecturer', style: Theme.of(ctx).textTheme.bodyMedium?.copyWith(color: DiklyColors.textSecondary)),
-              const SizedBox(height: 16),
+              const SizedBox(height: 20),
+              // QR Scan button — primary option
+              SizedBox(
+                width: double.infinity,
+                child: ElevatedButton.icon(
+                  onPressed: () {
+                    Navigator.pop(ctx);
+                    _openQRScanner();
+                  },
+                  icon: const Icon(Icons.qr_code_scanner_rounded, size: 20),
+                  label: const Text('Scan QR Code'),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: DiklyColors.primary,
+                    foregroundColor: Colors.white,
+                    padding: const EdgeInsets.symmetric(vertical: 14),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                    elevation: 0,
+                  ),
+                ),
+              ),
+              const SizedBox(height: 12),
+              Row(children: [
+                const Expanded(child: Divider()),
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 12),
+                  child: Text('or enter code manually', style: TextStyle(fontSize: 12, color: DiklyColors.textLight)),
+                ),
+                const Expanded(child: Divider()),
+              ]),
+              const SizedBox(height: 12),
               TextField(
                 controller: _codeController,
-                autofocus: true,
+                autofocus: false,
                 keyboardType: TextInputType.number,
                 maxLength: 6,
                 style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w700, letterSpacing: 6),
@@ -198,18 +225,24 @@ class _AttendanceScreenState extends ConsumerState<AttendanceScreen> {
                   counterText: '',
                 ),
               ),
-              const SizedBox(height: 20),
+              const SizedBox(height: 16),
               SizedBox(
                 width: double.infinity,
-                child: ElevatedButton(
+                child: OutlinedButton(
                   onPressed: _markingAttendance
                       ? null
                       : () {
                           Navigator.pop(ctx);
                           _markAttendance();
                         },
+                  style: OutlinedButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(vertical: 14),
+                    side: const BorderSide(color: DiklyColors.primary),
+                    foregroundColor: DiklyColors.primary,
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                  ),
                   child: _markingAttendance
-                      ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
+                      ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2))
                       : const Text('Submit Code'),
                 ),
               ),
@@ -219,6 +252,42 @@ class _AttendanceScreenState extends ConsumerState<AttendanceScreen> {
         ),
       ),
     );
+  }
+
+  void _openQRScanner() {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.black,
+      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
+      builder: (ctx) => _QRScanSheet(
+        onScanned: (token) {
+          Navigator.pop(ctx);
+          _markAttendanceWithQR(token);
+        },
+      ),
+    );
+  }
+
+  Future<void> _markAttendanceWithQR(String qrToken) async {
+    setState(() => _markingAttendance = true);
+    try {
+      await apiService.markAttendanceQR(qrToken);
+      await _loadData();
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Attendance marked via QR!'), backgroundColor: DiklyColors.success),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error: ${e.toString().replaceAll('Exception: ', '')}'), backgroundColor: DiklyColors.error),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _markingAttendance = false);
+    }
   }
 
   @override
@@ -275,6 +344,122 @@ class _AttendanceScreenState extends ConsumerState<AttendanceScreen> {
                           },
                         ),
                 ),
+    );
+  }
+}
+
+class _QRScanSheet extends StatefulWidget {
+  final void Function(String token) onScanned;
+  const _QRScanSheet({required this.onScanned});
+
+  @override
+  State<_QRScanSheet> createState() => _QRScanSheetState();
+}
+
+class _QRScanSheetState extends State<_QRScanSheet> {
+  final MobileScannerController _controller = MobileScannerController();
+  bool _scanned = false;
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  void _onDetect(BarcodeCapture capture) {
+    if (_scanned) return;
+    final raw = capture.barcodes.firstOrNull?.rawValue;
+    if (raw == null) return;
+
+    // The QR encodes a URL: https://...?qr_token=<token>&qr_code=<code>
+    // Try parsing as URL first, else treat the whole string as the token
+    String? token;
+    try {
+      final uri = Uri.parse(raw);
+      token = uri.queryParameters['qr_token'];
+    } catch (_) {}
+    token ??= raw.trim();
+
+    if (token.isEmpty) return;
+    _scanned = true;
+    widget.onScanned(token);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      height: MediaQuery.of(context).size.height * 0.65,
+      child: Column(
+        children: [
+          // Handle bar
+          Container(
+            width: 40, height: 4,
+            margin: const EdgeInsets.only(top: 12, bottom: 16),
+            decoration: BoxDecoration(color: Colors.white24, borderRadius: BorderRadius.circular(2)),
+          ),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 20),
+            child: Row(
+              children: [
+                const Icon(Icons.qr_code_scanner_rounded, color: Colors.white, size: 22),
+                const SizedBox(width: 10),
+                const Text('Scan QR Code', style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.w700)),
+                const Spacer(),
+                IconButton(
+                  icon: const Icon(Icons.close_rounded, color: Colors.white),
+                  onPressed: () => Navigator.pop(context),
+                  padding: EdgeInsets.zero,
+                  constraints: const BoxConstraints(),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 8),
+          const Text('Point your camera at the QR code on the board', style: TextStyle(color: Colors.white60, fontSize: 13)),
+          const SizedBox(height: 16),
+          Expanded(
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 24),
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(16),
+                child: Stack(
+                  children: [
+                    MobileScanner(
+                      controller: _controller,
+                      onDetect: _onDetect,
+                    ),
+                    // Scan frame overlay
+                    Center(
+                      child: Container(
+                        width: 220,
+                        height: 220,
+                        decoration: BoxDecoration(
+                          border: Border.all(color: DiklyColors.primary, width: 3),
+                          borderRadius: BorderRadius.circular(16),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+          const SizedBox(height: 20),
+          // Torch toggle
+          Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              IconButton(
+                onPressed: () => _controller.toggleTorch(),
+                icon: const Icon(Icons.flashlight_on_rounded, color: Colors.white70, size: 28),
+              ),
+              const SizedBox(width: 8),
+              const Text('Torch', style: TextStyle(color: Colors.white60, fontSize: 13)),
+            ],
+          ),
+          const SizedBox(height: 16),
+        ],
+      ),
     );
   }
 }
