@@ -736,7 +736,7 @@ class ApiService {
     final results = await Future.wait([
       _dio.get('/api/attendance-sessions?limit=5').catchError((_) => Response(requestOptions: RequestOptions(), data: {'sessions': [], 'pagination': {'total': 0}})),
       _dio.get('/api/courses').catchError((_) => Response(requestOptions: RequestOptions(), data: {'courses': []})),
-      _dio.get('/api/lecturer/quizzes').catchError((_) => Response(requestOptions: RequestOptions(), data: {'quizzes': []})),
+      _dio.get('/api/lecturer/snap-quizzes').catchError((_) => Response(requestOptions: RequestOptions(), data: {'quizzes': []})),
       _dio.get('/api/meetings?limit=10').catchError((_) => Response(requestOptions: RequestOptions(), data: {'data': []})),
     ]);
     final courseList = (results[1].data['courses'] ?? results[1].data['data'] ?? []) as List;
