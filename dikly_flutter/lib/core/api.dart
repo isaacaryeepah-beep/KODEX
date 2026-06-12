@@ -274,6 +274,13 @@ class ApiService {
     await _queueablePost('/api/attendance-sessions/mark', body);
   }
 
+  Future<void> markAttendanceQR(String qrToken) async {
+    await _queueablePost('/api/attendance-sessions/mark', {
+      'qrToken': qrToken,
+      'method': 'qr_mark',
+    });
+  }
+
   /// Try to reach the ESP32 device on the local classroom WiFi.
   /// Returns device status map or null if unreachable.
   Future<Map<String, dynamic>?> probeESP32({String ip = '192.168.4.1'}) async {
