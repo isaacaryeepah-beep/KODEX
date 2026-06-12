@@ -1,43 +1,57 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
-import 'package:intl/intl.dart';
 import '../../core/auth.dart';
 import '../../core/api.dart';
 import '../../core/theme.dart';
 import '../../widgets/ds/dikly_ds.dart';
 
-final _adminDashProvider = FutureProvider.autoDispose<Map<String, dynamic>>(
-  (ref) => apiService.getAdminDashboardData(),
-);
-
-class AdminHomeScreen extends ConsumerWidget {
+class AdminHomeScreen extends ConsumerStatefulWidget {
   const AdminHomeScreen({super.key});
 
-  String _greeting() {
-    final h = DateTime.now().hour;
-    if (h < 12) return 'Good morning';
-    if (h < 17) return 'Good afternoon';
-    return 'Good evening';
+  @override
+  ConsumerState<AdminHomeScreen> createState() => _AdminHomeScreenState();
+}
+
+class _AdminHomeScreenState extends ConsumerState<AdminHomeScreen> {
+  Map<String, dynamic>? _reports;
+  bool _loading = true;
+  String? _error;
+
+  @override
+  void initState() {
+    super.initState();
+    _load();
+  }
+
+  Future<void> _load() async {
+    setState(() { _loading = true; _error = null; });
+    try {
+      final data = await apiService.getReports();
+      setState(() {
+        _reports = data;
+        _loading = false;
+      });
+    } catch (e) {
+      setState(() { _loading = false; _error = e.toString(); });
+    }
   }
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  Widget build(BuildContext context) {
     final user = ref.watch(authProvider).user;
-    final dashAsync = ref.watch(_adminDashProvider);
     final firstName = (user?.name ?? 'Admin').split(' ').first;
-    final institution = user?.company ?? 'your institution';
-    final instCode = user?.institutionCode ?? '';
+    final institution = user?.company ?? user?.department ?? 'your institution';
+    final deptBadge = user?.department ?? user?.company ?? '';
 
     return RefreshIndicator(
-      onRefresh: () async => ref.invalidate(_adminDashProvider),
+      onRefresh: _load,
       color: DiklyColors.primary,
       child: ListView(
-        padding: const EdgeInsets.all(16),
+        padding: const EdgeInsets.all(20),
         children: [
-          // Welcome row + institution code card
+          // Greeting header
           Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
@@ -46,9 +60,9 @@ class AdminHomeScreen extends ConsumerWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      '${_greeting()}, $firstName 👋',
+                      'Welcome back, $firstName',
                       style: GoogleFonts.dmSans(
-                        fontSize: 22,
+                        fontSize: 24,
                         fontWeight: FontWeight.w800,
                         color: DiklyColors.text,
                         height: 1.2,
@@ -56,196 +70,156 @@ class AdminHomeScreen extends ConsumerWidget {
                     ),
                     const SizedBox(height: 4),
                     Text(
-                      "Here's what's happening at $institution today.",
-                      style: const TextStyle(fontSize: 13, color: DiklyColors.textLight),
+                      'Admin Portal · $institution',
+                      style: GoogleFonts.dmSans(
+                        fontSize: 13,
+                        color: DiklyColors.textLight,
+                      ),
                     ),
                   ],
                 ),
               ),
-              if (instCode.isNotEmpty) ...[
-                const SizedBox(width: 12),
-                DiklyCard(
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.center,
-                    children: [
-                      const Text('INSTITUTION CODE', style: TextStyle(fontSize: 9, color: DiklyColors.textLight, fontWeight: FontWeight.w700, letterSpacing: 0.5)),
-                      const SizedBox(height: 2),
-                      Text(instCode, style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w800, color: DiklyColors.text, letterSpacing: 1)),
-                      const SizedBox(height: 6),
-                      GestureDetector(
-                        onTap: () {
-                          Clipboard.setData(ClipboardData(text: instCode));
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(content: Text('Code copied!'), duration: Duration(seconds: 2)),
-                          );
-                        },
-                        child: Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                          decoration: BoxDecoration(
-                            color: DiklyColors.grey100,
-                            borderRadius: BorderRadius.circular(6),
-                            border: Border.all(color: DiklyColors.border),
-                          ),
-                          child: const Text('Copy', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: DiklyColors.textSecondary)),
-                        ),
-                      ),
-                    ],
+              if (deptBadge.isNotEmpty) ...[
+                const SizedBox(width: 10),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFFEF3C7),
+                    borderRadius: BorderRadius.circular(20),
+                  ),
+                  child: Text(
+                    deptBadge,
+                    style: GoogleFonts.dmSans(
+                      color: DiklyColors.warning,
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600,
+                    ),
                   ),
                 ),
               ],
             ],
           ),
-          const SizedBox(height: 20),
+          const SizedBox(height: 24),
 
-          dashAsync.when(
-            loading: () => const Center(child: Padding(padding: EdgeInsets.all(32), child: CircularProgressIndicator(color: DiklyColors.primary))),
-            error: (e, _) => DiklyCard(
+          // Stats section
+          Text(
+            'Platform Overview',
+            style: GoogleFonts.dmSans(
+              fontSize: 15,
+              fontWeight: FontWeight.w700,
+              color: DiklyColors.text,
+            ),
+          ),
+          const SizedBox(height: 14),
+          if (_loading)
+            const Center(
+              child: Padding(
+                padding: EdgeInsets.all(32),
+                child: CircularProgressIndicator(color: DiklyColors.primary),
+              ),
+            )
+          else if (_error != null)
+            DiklyCard(
               padding: const EdgeInsets.all(24),
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  const Icon(Icons.wifi_off_rounded, size: 36, color: DiklyColors.textLight),
+                  const Icon(Icons.wifi_off_rounded, size: 36, color: Color(0xFF9CA3AF)),
                   const SizedBox(height: 10),
-                  const Text('Failed to load dashboard', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600)),
+                  const Text(
+                    'Failed to load platform stats',
+                    style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: Color(0xFF111827)),
+                  ),
+                  const SizedBox(height: 6),
+                  Text(
+                    _error!,
+                    textAlign: TextAlign.center,
+                    style: const TextStyle(fontSize: 12, color: Color(0xFF6B7280)),
+                  ),
                   const SizedBox(height: 14),
                   ElevatedButton.icon(
-                    onPressed: () => ref.invalidate(_adminDashProvider),
+                    onPressed: _load,
                     icon: const Icon(Icons.refresh, size: 16),
                     label: const Text('Retry'),
-                    style: ElevatedButton.styleFrom(backgroundColor: DiklyColors.primary, foregroundColor: Colors.white, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8))),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: DiklyColors.primary,
+                      foregroundColor: Colors.white,
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                    ),
                   ),
                 ],
               ),
-            ),
-            data: (data) => Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
+            )
+          else
+            GridView.count(
+              shrinkWrap: true,
+              physics: const NeverScrollableScrollPhysics(),
+              crossAxisCount: 2,
+              crossAxisSpacing: 12,
+              mainAxisSpacing: 12,
+              childAspectRatio: 1.4,
               children: [
-                // 4 stat cards in a row
-                Row(
-                  children: [
-                    _StatCard(
-                      label: 'TOTAL USERS',
-                      value: '${data['totalUsers'] ?? 0}',
-                      subtitle: 'Students, lecturers & staff',
-                      icon: Icons.people_outlined,
-                      color: const Color(0xFF3B82F6),
-                    ),
-                    const SizedBox(width: 8),
-                    _StatCard(
-                      label: 'ACTIVE SESSIONS',
-                      value: '${data['activeSessions'] ?? 0}',
-                      subtitle: (data['activeSessions'] ?? 0) > 0 ? 'Live now' : 'No active sessions',
-                      icon: Icons.circle,
-                      color: DiklyColors.success,
-                    ),
-                    const SizedBox(width: 8),
-                    _StatCard(
-                      label: 'TOTAL SESSIONS',
-                      value: '${data['totalSessions'] ?? 0}',
-                      subtitle: 'All time',
-                      icon: Icons.book_outlined,
-                      color: const Color(0xFFF59E0B),
-                    ),
-                    const SizedBox(width: 8),
-                    _StatCard(
-                      label: 'PENDING APPROVALS',
-                      value: '${data['pendingApprovals'] ?? 0}',
-                      subtitle: (data['pendingApprovals'] ?? 0) > 0 ? 'Action needed' : 'All clear',
-                      icon: Icons.info_outline_rounded,
-                      color: const Color(0xFF7C3AED),
-                    ),
-                  ],
+                _StatCard(
+                  title: 'Total Users',
+                  value: (_reports?['totalUsers'] ?? '—').toString(),
+                  icon: Icons.people_outlined,
+                  color: DiklyColors.primary,
                 ),
-                const SizedBox(height: 20),
-
-                // Quick Actions
-                const Text('QUICK ACTIONS', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: DiklyColors.textLight, letterSpacing: 0.5)),
-                const SizedBox(height: 10),
-                Row(
-                  children: [
-                    Expanded(
-                      child: OutlinedButton.icon(
-                        onPressed: () => context.push('/admin/users'),
-                        icon: const Icon(Icons.person_add_alt_1_outlined, size: 15),
-                        label: const Text('Add user'),
-                        style: OutlinedButton.styleFrom(
-                          foregroundColor: DiklyColors.success,
-                          side: const BorderSide(color: DiklyColors.success),
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                          padding: const EdgeInsets.symmetric(vertical: 10),
-                          textStyle: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
-                        ),
-                      ),
-                    ),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: OutlinedButton.icon(
-                        onPressed: () => context.push('/announcements'),
-                        icon: const Icon(Icons.campaign_outlined, size: 15),
-                        label: const Text('Post announcement'),
-                        style: OutlinedButton.styleFrom(
-                          foregroundColor: const Color(0xFFF59E0B),
-                          side: const BorderSide(color: Color(0xFFF59E0B)),
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                          padding: const EdgeInsets.symmetric(vertical: 10),
-                          textStyle: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
-                        ),
-                      ),
-                    ),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: OutlinedButton.icon(
-                        onPressed: () => context.push('/admin/reports'),
-                        icon: const Icon(Icons.bar_chart_rounded, size: 15),
-                        label: const Text('View reports'),
-                        style: OutlinedButton.styleFrom(
-                          foregroundColor: DiklyColors.textSecondary,
-                          side: const BorderSide(color: DiklyColors.border),
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                          padding: const EdgeInsets.symmetric(vertical: 10),
-                          textStyle: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
-                        ),
-                      ),
-                    ),
-                  ],
+                _StatCard(
+                  title: 'Total Courses',
+                  value: (_reports?['totalCourses'] ?? '—').toString(),
+                  icon: Icons.book_outlined,
+                  color: DiklyColors.success,
                 ),
-                const SizedBox(height: 20),
-
-                // Two-column panels: recent sessions + announcements
-                Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Expanded(
-                      child: _SessionsPanel(
-                        sessions: (data['sessions'] as List? ?? []).cast<Map<String, dynamic>>(),
-                        onViewAll: () => context.push('/admin/sessions'),
-                      ),
-                    ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: _AnnouncementsPanel(
-                        announcements: (data['announcements'] as List? ?? []).cast<Map<String, dynamic>>(),
-                        onPost: () => context.push('/announcements'),
-                      ),
-                    ),
-                  ],
+                _StatCard(
+                  title: 'Active Sessions',
+                  value: (_reports?['activeMeetings'] ?? '—').toString(),
+                  icon: Icons.play_circle_outline,
+                  color: DiklyColors.warning,
                 ),
-                const SizedBox(height: 20),
-
-                // Chart placeholders
-                Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Expanded(child: _ChartPlaceholder(title: 'Attendance Trend (Last 14 Days)')),
-                    const SizedBox(width: 12),
-                    Expanded(child: _ChartPlaceholder(title: 'Users by Role')),
-                  ],
+                _StatCard(
+                  title: 'Reports',
+                  value: (_reports?['totalLecturers'] ?? '—').toString(),
+                  icon: Icons.bar_chart_outlined,
+                  color: const Color(0xFF7C3AED),
                 ),
               ],
             ),
+
+          const SizedBox(height: 28),
+
+          // Quick Actions
+          Text(
+            'Quick Actions',
+            style: GoogleFonts.dmSans(
+              fontSize: 15,
+              fontWeight: FontWeight.w700,
+              color: DiklyColors.text,
+            ),
           ),
-          const SizedBox(height: 24),
+          const SizedBox(height: 14),
+          _QuickActionRow(
+            actions: [
+              _QuickAction(
+                icon: Icons.people_outlined,
+                label: 'Manage Users',
+                color: DiklyColors.primary,
+                onTap: () => context.push('/admin/users'),
+              ),
+              _QuickAction(
+                icon: Icons.business_outlined,
+                label: 'Manage Branches',
+                color: DiklyColors.success,
+                onTap: () => context.push('/admin/branches'),
+              ),
+              _QuickAction(
+                icon: Icons.history_outlined,
+                label: 'Audit Logs',
+                color: DiklyColors.warning,
+                onTap: () => context.push('/admin/audit-logs'),
+              ),
+            ],
+          ),
         ],
       ),
     );
@@ -253,218 +227,130 @@ class AdminHomeScreen extends ConsumerWidget {
 }
 
 class _StatCard extends StatelessWidget {
-  final String label;
+  final String title;
   final String value;
-  final String subtitle;
   final IconData icon;
   final Color color;
 
   const _StatCard({
-    required this.label,
+    required this.title,
     required this.value,
-    required this.subtitle,
     required this.icon,
     required this.color,
   });
 
   @override
   Widget build(BuildContext context) {
-    return Expanded(
-      child: Container(
-        padding: const EdgeInsets.all(10),
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(10),
-          border: Border.all(color: const Color(0xFFE5E7EB)),
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Container(height: 3, decoration: BoxDecoration(color: color, borderRadius: BorderRadius.circular(2))),
-            const SizedBox(height: 8),
-            Text(
-              value,
-              style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800, color: color),
-            ),
-            const SizedBox(height: 2),
-            Text(
-              label,
-              maxLines: 2,
-              overflow: TextOverflow.ellipsis,
-              style: const TextStyle(fontSize: 8, color: Color(0xFF9CA3AF), letterSpacing: 0.2, fontWeight: FontWeight.w600),
-            ),
-            const SizedBox(height: 3),
-            Text(
-              subtitle,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: const TextStyle(fontSize: 8, color: Color(0xFF9CA3AF)),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _SessionsPanel extends StatelessWidget {
-  final List<Map<String, dynamic>> sessions;
-  final VoidCallback onViewAll;
-  const _SessionsPanel({required this.sessions, required this.onViewAll});
-
-  String _timeAgo(dynamic rawDate) {
-    if (rawDate == null) return '';
-    final dt = DateTime.tryParse(rawDate.toString());
-    if (dt == null) return '';
-    final diff = DateTime.now().difference(dt);
-    if (diff.inDays > 0) return '${diff.inDays}d ago';
-    if (diff.inHours > 0) return '${diff.inHours}h ago';
-    if (diff.inMinutes > 0) return '${diff.inMinutes}m ago';
-    return 'just now';
-  }
-
-  @override
-  Widget build(BuildContext context) {
     return DiklyCard(
-      padding: const EdgeInsets.all(14),
+      padding: const EdgeInsets.all(16),
+      border: Border(top: BorderSide(color: color, width: 3)),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          Row(
+          Container(
+            padding: const EdgeInsets.all(8),
+            decoration: BoxDecoration(
+              color: color.withOpacity(0.1),
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: Icon(icon, color: color, size: 20),
+          ),
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const Expanded(child: Text('Recent sessions', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: DiklyColors.text))),
-              GestureDetector(
-                onTap: onViewAll,
-                child: const Text('View all →', style: TextStyle(fontSize: 11, color: DiklyColors.primary, fontWeight: FontWeight.w600)),
+              Text(
+                value,
+                style: GoogleFonts.dmSans(
+                  fontSize: 26,
+                  fontWeight: FontWeight.w800,
+                  color: DiklyColors.text,
+                  height: 1,
+                ),
+              ),
+              const SizedBox(height: 2),
+              Text(
+                title,
+                style: GoogleFonts.dmSans(
+                  fontSize: 12,
+                  color: DiklyColors.textLight,
+                  fontWeight: FontWeight.w500,
+                ),
               ),
             ],
           ),
-          const SizedBox(height: 10),
-          if (sessions.isEmpty)
-            const Padding(
-              padding: EdgeInsets.symmetric(vertical: 20),
-              child: Center(child: Text('No sessions yet', style: TextStyle(fontSize: 12, color: DiklyColors.textLight))),
-            )
-          else
-            ...sessions.take(5).map((s) {
-              final timeAgo = _timeAgo(s['startedAt'] ?? s['createdAt']);
-              return Padding(
-                padding: const EdgeInsets.only(bottom: 10),
-                child: Row(
-                  children: [
-                    Container(
-                      width: 8,
-                      height: 8,
-                      margin: const EdgeInsets.only(right: 8, top: 2),
-                      decoration: const BoxDecoration(
-                        color: Color(0xFFD1D5DB),
-                        shape: BoxShape.circle,
-                      ),
-                    ),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(s['title'] ?? 'Untitled', style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: DiklyColors.text), maxLines: 1, overflow: TextOverflow.ellipsis),
-                          Text(s['createdBy']?['name'] ?? '', style: const TextStyle(fontSize: 11, color: DiklyColors.textLight)),
-                        ],
-                      ),
-                    ),
-                    if (timeAgo.isNotEmpty)
-                      Text(timeAgo, style: const TextStyle(fontSize: 10, color: DiklyColors.textLight)),
-                  ],
-                ),
-              );
-            }),
         ],
       ),
     );
   }
 }
 
-class _AnnouncementsPanel extends StatelessWidget {
-  final List<Map<String, dynamic>> announcements;
-  final VoidCallback onPost;
-  const _AnnouncementsPanel({required this.announcements, required this.onPost});
+class _QuickActionRow extends StatelessWidget {
+  final List<_QuickAction> actions;
+  const _QuickActionRow({required this.actions});
 
   @override
   Widget build(BuildContext context) {
-    return DiklyCard(
-      padding: const EdgeInsets.all(14),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              const Expanded(child: Text('Announcements', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: DiklyColors.text))),
-              GestureDetector(
-                onTap: onPost,
-                child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                  decoration: BoxDecoration(
-                    color: DiklyColors.grey100,
-                    borderRadius: BorderRadius.circular(6),
-                    border: Border.all(color: DiklyColors.border),
-                  ),
-                  child: const Text('+ Post', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: DiklyColors.textSecondary)),
+    return Row(
+      children: actions
+          .map(
+            (a) => Expanded(
+              child: Padding(
+                padding: EdgeInsets.only(
+                  right: a == actions.last ? 0 : 10,
                 ),
+                child: _QuickActionCard(action: a),
               ),
-            ],
-          ),
-          const SizedBox(height: 10),
-          if (announcements.isEmpty)
-            const Padding(
-              padding: EdgeInsets.symmetric(vertical: 20),
-              child: Center(child: Text('No announcements yet', style: TextStyle(fontSize: 12, color: DiklyColors.textLight))),
-            )
-          else
-            ...announcements.map((a) {
-              return Padding(
-                padding: const EdgeInsets.only(bottom: 10),
-                child: Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Container(
-                      width: 8,
-                      height: 8,
-                      margin: const EdgeInsets.only(right: 8, top: 4),
-                      decoration: const BoxDecoration(color: Color(0xFFD1D5DB), shape: BoxShape.circle),
-                    ),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(a['title'] ?? '', style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: DiklyColors.text), maxLines: 1, overflow: TextOverflow.ellipsis),
-                          Text(
-                            a['audience'] == 'all' ? 'Everyone' : (a['audience']?.toString() ?? ''),
-                            style: const TextStyle(fontSize: 10, color: DiklyColors.textLight),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ],
-                ),
-              );
-            }),
-        ],
-      ),
+            ),
+          )
+          .toList(),
     );
   }
 }
 
-class _ChartPlaceholder extends StatelessWidget {
-  final String title;
-  const _ChartPlaceholder({required this.title});
+class _QuickAction {
+  final IconData icon;
+  final String label;
+  final Color color;
+  final VoidCallback onTap;
+  const _QuickAction({
+    required this.icon,
+    required this.label,
+    required this.color,
+    required this.onTap,
+  });
+}
+
+class _QuickActionCard extends StatelessWidget {
+  final _QuickAction action;
+  const _QuickActionCard({required this.action});
 
   @override
   Widget build(BuildContext context) {
     return DiklyCard(
-      padding: const EdgeInsets.all(14),
+      padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 12),
+      onTap: action.onTap,
       child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
         children: [
-          Text(title, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: DiklyColors.text)),
-          const SizedBox(height: 80),
+          Container(
+            padding: const EdgeInsets.all(10),
+            decoration: BoxDecoration(
+              color: action.color.withOpacity(0.1),
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: Icon(action.icon, color: action.color, size: 22),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            action.label,
+            textAlign: TextAlign.center,
+            style: GoogleFonts.dmSans(
+              fontSize: 11,
+              fontWeight: FontWeight.w600,
+              color: DiklyColors.textSecondary,
+            ),
+          ),
         ],
       ),
     );
