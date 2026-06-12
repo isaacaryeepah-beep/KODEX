@@ -564,7 +564,7 @@ class ApiService {
   }
 
   Future<void> unlockStudent(String id) async {
-    await _dio.post('/api/hod/unlock-student/$id');
+    await _dio.post('/api/users/$id/unlock-account-device');
   }
 
   Future<List<Map<String, dynamic>>> getDepartmentStudents() async {
@@ -768,7 +768,7 @@ class ApiService {
     required String currentPassword,
     required String newPassword,
   }) async {
-    await _dio.post('/api/auth/change-password', data: {
+    await _dio.put('/api/auth/profile', data: {
       'currentPassword': currentPassword,
       'newPassword': newPassword,
     });
