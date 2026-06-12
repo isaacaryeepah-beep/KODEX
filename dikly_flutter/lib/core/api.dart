@@ -268,6 +268,22 @@ class ApiService {
     return (list as List).map((e) => AttendanceSession.fromJson(e as Map<String, dynamic>)).toList();
   }
 
+  Future<Map<String, dynamic>> startAttendanceSession({
+    required String courseId,
+    String? title,
+    String? deviceId,
+  }) async {
+    final body = <String, dynamic>{'courseId': courseId};
+    if (title != null) body['title'] = title;
+    if (deviceId != null) body['deviceId'] = deviceId;
+    final response = await _dio.post('/api/attendance-sessions/start', data: body);
+    return response.data as Map<String, dynamic>;
+  }
+
+  Future<void> endAttendanceSession(String sessionId) async {
+    await _dio.post('/api/attendance-sessions/$sessionId/stop');
+  }
+
   Future<void> markAttendance(String code, {Map<String, dynamic>? connectionToken}) async {
     final body = <String, dynamic>{'code': code, 'method': 'code_mark'};
     if (connectionToken != null) body['connectionToken'] = connectionToken;
