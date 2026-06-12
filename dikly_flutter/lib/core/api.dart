@@ -365,14 +365,14 @@ class ApiService {
 
   // Quizzes
   Future<List<SnapQuiz>> getQuizzes() async {
-    final response = await _dio.get('/api/snap-quizzes');
+    final response = await _dio.get('/api/student/snap-quizzes/quizzes');
     final data = response.data;
     final list = data['quizzes'] ?? data['data'] ?? [];
     return (list as List).map((e) => SnapQuiz.fromJson(e as Map<String, dynamic>)).toList();
   }
 
   Future<SnapQuiz> getQuizById(String id) async {
-    final response = await _dio.get('/api/snap-quizzes/$id');
+    final response = await _dio.get('/api/student/snap-quizzes/quizzes/$id');
     final data = response.data;
     return SnapQuiz.fromJson(data['quiz'] ?? data['data'] ?? data as Map<String, dynamic>);
   }
@@ -492,16 +492,52 @@ class ApiService {
     return (list as List).cast<Map<String, dynamic>>();
   }
 
-  // Quiz history
+  // Quiz history — fetch all quizzes (including past) and return submitted ones
   Future<List<Map<String, dynamic>>> getQuizHistory() async {
-    final response = await _dio.get('/api/snap-quizzes/history');
+    final response = await _dio.get('/api/student/snap-quizzes/quizzes', queryParameters: {'showAll': 'true'});
     final data = response.data;
-    final list = data['history'] ?? data['results'] ?? data['data'] ?? [];
-    return (list as List).cast<Map<String, dynamic>>();
+    final list = (data['quizzes'] ?? data['data'] ?? []) as List;
+    return list
+        .cast<Map<String, dynamic>>()
+        .where((q) => q['isSubmitted'] == true)
+        .map((q) => {
+              'quizTitle': q['title']?.toString() ?? '',
+              'score': q['myScore'] ?? 0,
+              'maxScore': q['totalMarks'] ?? 0,
+              'percentage': q['myPercentage'] ?? 0.0,
+              'passed': (q['myPercentage'] as num? ?? 0) >= 50,
+              'completedAt': q['submittedAt']?.toString() ?? '',
+              'timeTaken': '',
+            })
+        .toList();
   }
 
-  Future<void> submitQuiz(String id, Map<String, dynamic> answers) async {
-    await _dio.post('/api/snap-quizzes/$id/submit', data: answers);
+  Future<Map<String, dynamic>> startQuizAttempt(String quizId) async {
+    final response = await _dio.post(
+      '/api/student/snap-quizzes/quizzes/$quizId/attempts/start',
+      data: {'termsAcknowledged': true},
+    );
+    return response.data as Map<String, dynamic>;
+  }
+
+  Future<Map<String, dynamic>> submitQuizAttempt({
+    required String quizId,
+    required String attemptId,
+    required String sessionToken,
+    required List<Map<String, dynamic>> responses,
+  }) async {
+    final headers = {'X-Session-Token': sessionToken};
+    await _dio.put(
+      '/api/student/snap-quizzes/quizzes/$quizId/attempts/$attemptId/responses',
+      data: {'responses': responses},
+      options: Options(headers: headers),
+    );
+    final response = await _dio.post(
+      '/api/student/snap-quizzes/quizzes/$quizId/attempts/$attemptId/submit',
+      data: <String, dynamic>{},
+      options: Options(headers: headers),
+    );
+    return response.data as Map<String, dynamic>;
   }
 
   // Performance
