@@ -70,16 +70,24 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
   final _formKey = GlobalKey<FormState>();
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
+  final _institutionCodeCtrl = TextEditingController();
   bool _obscurePassword = true;
 
   Map<String, dynamic> get _info =>
       (_portalInfo[widget.role] ?? _portalInfo['student'])!
           as Map<String, dynamic>;
 
+  bool get _isStudent => widget.role == 'student';
+  bool get _needsInstitutionCode =>
+      widget.role == 'student' ||
+      widget.role == 'manager' ||
+      widget.role == 'employee';
+
   @override
   void dispose() {
     _emailController.dispose();
     _passwordController.dispose();
+    _institutionCodeCtrl.dispose();
     super.dispose();
   }
 
@@ -88,10 +96,16 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     FocusScope.of(context).unfocus();
 
     final success = await ref.read(authProvider.notifier).login(
-          email: _emailController.text.trim(),
           password: _passwordController.text,
           loginRole: _info['loginRole'] as String,
           portalMode: _info['portalMode'] as String,
+          email: _isStudent ? null : _emailController.text.trim(),
+          indexNumber: _isStudent
+              ? _emailController.text.trim().toUpperCase()
+              : null,
+          institutionCode: _needsInstitutionCode
+              ? _institutionCodeCtrl.text.trim().toUpperCase()
+              : null,
         );
 
     if (!success && mounted) {
@@ -301,9 +315,11 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              // Email label + field
+                              // Identifier label + field (email or student index number)
                               Text(
-                                'Email address',
+                                _isStudent
+                                    ? 'Student ID / Index Number'
+                                    : 'Email address',
                                 style: GoogleFonts.dmSans(
                                   fontSize: 13,
                                   fontWeight: FontWeight.w500,
@@ -313,16 +329,25 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                               const SizedBox(height: 6),
                               TextFormField(
                                 controller: _emailController,
-                                keyboardType: TextInputType.emailAddress,
+                                keyboardType: _isStudent
+                                    ? TextInputType.text
+                                    : TextInputType.emailAddress,
                                 autocorrect: false,
+                                textCapitalization: _isStudent
+                                    ? TextCapitalization.characters
+                                    : TextCapitalization.none,
                                 style: GoogleFonts.dmSans(
                                   fontSize: 14,
                                   color: DiklyColors.text,
                                 ),
                                 decoration: InputDecoration(
-                                  hintText: 'you@example.com',
-                                  prefixIcon: const Icon(
-                                    Icons.email_outlined,
+                                  hintText: _isStudent
+                                      ? 'e.g. STU/2021/001'
+                                      : 'you@example.com',
+                                  prefixIcon: Icon(
+                                    _isStudent
+                                        ? Icons.badge_outlined
+                                        : Icons.email_outlined,
                                     size: 18,
                                   ),
                                   contentPadding: const EdgeInsets.symmetric(
@@ -332,15 +357,61 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                                 ),
                                 validator: (value) {
                                   if (value == null || value.trim().isEmpty) {
-                                    return 'Please enter your email';
+                                    return _isStudent
+                                        ? 'Please enter your student ID'
+                                        : 'Please enter your email';
                                   }
-                                  if (!value.contains('@')) {
+                                  if (!_isStudent && !value.contains('@')) {
                                     return 'Please enter a valid email';
                                   }
                                   return null;
                                 },
                               ),
                               const SizedBox(height: 18),
+
+                              // Institution Code field (student / manager / employee)
+                              if (_needsInstitutionCode) ...[
+                                Text(
+                                  'Institution Code',
+                                  style: GoogleFonts.dmSans(
+                                    fontSize: 13,
+                                    fontWeight: FontWeight.w500,
+                                    color: DiklyColors.textSecondary,
+                                  ),
+                                ),
+                                const SizedBox(height: 6),
+                                TextFormField(
+                                  controller: _institutionCodeCtrl,
+                                  keyboardType: TextInputType.text,
+                                  autocorrect: false,
+                                  textCapitalization:
+                                      TextCapitalization.characters,
+                                  style: GoogleFonts.dmSans(
+                                    fontSize: 14,
+                                    color: DiklyColors.text,
+                                  ),
+                                  decoration: InputDecoration(
+                                    hintText: 'e.g. KNUST2024',
+                                    prefixIcon: const Icon(
+                                      Icons.account_balance_outlined,
+                                      size: 18,
+                                    ),
+                                    contentPadding:
+                                        const EdgeInsets.symmetric(
+                                      horizontal: 14,
+                                      vertical: 12,
+                                    ),
+                                  ),
+                                  validator: (value) {
+                                    if (value == null ||
+                                        value.trim().isEmpty) {
+                                      return 'Please enter your institution code';
+                                    }
+                                    return null;
+                                  },
+                                ),
+                                const SizedBox(height: 18),
+                              ],
 
                               // Password label + field
                               Text(

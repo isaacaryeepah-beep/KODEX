@@ -15,6 +15,7 @@ class _LecturerQuizScreenState extends State<LecturerQuizScreen>
   late final TabController _tabController;
   List<SnapQuiz> _quizzes = [];
   bool _loading = false;
+  String? _error;
 
   @override
   void initState() {
@@ -30,15 +31,15 @@ class _LecturerQuizScreenState extends State<LecturerQuizScreen>
   }
 
   Future<void> _loadQuizzes() async {
-    setState(() => _loading = true);
+    setState(() { _loading = true; _error = null; });
     try {
       final quizzes = await apiService.getQuizzes();
       setState(() {
         _quizzes = quizzes;
         _loading = false;
       });
-    } catch (_) {
-      setState(() => _loading = false);
+    } catch (e) {
+      setState(() { _loading = false; _error = e.toString(); });
     }
   }
 
@@ -112,6 +113,7 @@ class _LecturerQuizScreenState extends State<LecturerQuizScreen>
                 _SnapQuizzesTab(
                   quizzes: _quizzes,
                   loading: _loading,
+                  error: _error,
                   onRefresh: _loadQuizzes,
                   onComingSoon: _showComingSoon,
                 ),
@@ -189,12 +191,14 @@ class _ProctoredTab extends StatelessWidget {
 class _SnapQuizzesTab extends StatelessWidget {
   final List<SnapQuiz> quizzes;
   final bool loading;
+  final String? error;
   final VoidCallback onRefresh;
   final VoidCallback onComingSoon;
 
   const _SnapQuizzesTab({
     required this.quizzes,
     required this.loading,
+    this.error,
     required this.onRefresh,
     required this.onComingSoon,
   });
@@ -266,6 +270,29 @@ class _SnapQuizzesTab extends StatelessWidget {
               child: Padding(
                 padding: EdgeInsets.all(32),
                 child: CircularProgressIndicator(),
+              ),
+            )
+          else if (error != null)
+            DiklyCard(
+              padding: const EdgeInsets.all(24),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Icon(Icons.wifi_off_rounded, size: 36, color: Color(0xFF9CA3AF)),
+                  const SizedBox(height: 10),
+                  const Text(
+                    'Failed to load quizzes',
+                    style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: Color(0xFF111827)),
+                  ),
+                  const SizedBox(height: 6),
+                  Text(
+                    error!,
+                    textAlign: TextAlign.center,
+                    style: const TextStyle(fontSize: 12, color: Color(0xFF6B7280)),
+                  ),
+                  const SizedBox(height: 14),
+                  DiklyPrimaryButton(label: 'Retry', fullWidth: false, onPressed: onRefresh),
+                ],
               ),
             )
           else if (quizzes.isEmpty)

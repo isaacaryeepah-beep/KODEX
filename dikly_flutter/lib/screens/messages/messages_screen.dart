@@ -18,19 +18,24 @@ class MessagesScreen extends ConsumerStatefulWidget {
 }
 
 class _MessagesScreenState extends ConsumerState<MessagesScreen> {
-  List<Message> _messages = [];
-  List<User> _users = [];
+  List<Conversation> _conversations = [];
   bool _loading = true;
   String? _error;
-  String? _activeConversationId;
+
+  Conversation? _activeConversation;
   List<Message> _conversationMessages = [];
+  bool _messagesLoading = false;
   final _messageController = TextEditingController();
   bool _sending = false;
+
+  // For new conversation dialog
+  List<User> _users = [];
+  bool _usersLoaded = false;
 
   @override
   void initState() {
     super.initState();
-    _loadData();
+    _loadConversations();
   }
 
   @override
@@ -39,16 +44,12 @@ class _MessagesScreenState extends ConsumerState<MessagesScreen> {
     super.dispose();
   }
 
-  Future<void> _loadData() async {
+  Future<void> _loadConversations() async {
     setState(() { _loading = true; _error = null; });
     try {
-      final results = await Future.wait([
-        apiService.getMessages(),
-        apiService.getUsers(),
-      ]);
+      final convs = await apiService.getConversations();
       setState(() {
-        _messages = results[0] as List<Message>;
-        _users = results[1] as List<User>;
+        _conversations = convs;
         _loading = false;
       });
     } catch (e) {
@@ -56,106 +57,118 @@ class _MessagesScreenState extends ConsumerState<MessagesScreen> {
     }
   }
 
-  // Group messages into conversations
-  List<Map<String, dynamic>> get _conversations {
-    final currentUser = ref.read(currentUserProvider);
-    final Map<String, Map<String, dynamic>> convMap = {};
-
-    for (final msg in _messages) {
-      final otherId = msg.senderId == currentUser?.id ? msg.receiverId : msg.senderId;
-      final otherName = msg.senderId == currentUser?.id ? (msg.receiverName ?? 'User') : (msg.senderName ?? 'User');
-
-      if (!convMap.containsKey(otherId)) {
-        convMap[otherId] = {
-          'userId': otherId,
-          'name': otherName,
-          'lastMessage': msg.content,
-          'lastTime': msg.createdAt,
-          'unread': 0,
-        };
-      } else {
-        final existing = convMap[otherId]!;
-        if (msg.createdAt != null && (existing['lastTime'] == null || msg.createdAt!.isAfter(existing['lastTime'] as DateTime))) {
-          existing['lastMessage'] = msg.content;
-          existing['lastTime'] = msg.createdAt;
-        }
-      }
-      if (msg.senderId != currentUser?.id && !msg.isRead) {
-        convMap[otherId]!['unread'] = (convMap[otherId]!['unread'] as int) + 1;
-      }
-    }
-
-    final list = convMap.values.toList();
-    list.sort((a, b) {
-      final aTime = a['lastTime'] as DateTime?;
-      final bTime = b['lastTime'] as DateTime?;
-      if (aTime == null) return 1;
-      if (bTime == null) return -1;
-      return bTime.compareTo(aTime);
-    });
-    return list;
-  }
-
-  void _openConversation(String userId, String name) {
-    final currentUser = ref.read(currentUserProvider);
-    final convMessages = _messages.where((m) =>
-      (m.senderId == currentUser?.id && m.receiverId == userId) ||
-      (m.receiverId == currentUser?.id && m.senderId == userId)
-    ).toList();
-    convMessages.sort((a, b) => (a.createdAt ?? DateTime(0)).compareTo(b.createdAt ?? DateTime(0)));
-
+  Future<void> _openConversation(Conversation conv) async {
     setState(() {
-      _activeConversationId = userId;
-      _conversationMessages = convMessages;
+      _activeConversation = conv;
+      _messagesLoading = true;
+      _conversationMessages = [];
     });
+    try {
+      final msgs = await apiService.getConversationMessages(conv.id);
+      if (mounted) {
+        setState(() {
+          _conversationMessages = msgs;
+          _messagesLoading = false;
+        });
+      }
+    } catch (e) {
+      if (mounted) setState(() => _messagesLoading = false);
+    }
   }
 
   Future<void> _sendMessage() async {
-    if (_messageController.text.trim().isEmpty || _activeConversationId == null) return;
+    final text = _messageController.text.trim();
+    if (text.isEmpty || _activeConversation == null) return;
     setState(() => _sending = true);
     try {
-      await apiService.sendMessage({
-        'receiverId': _activeConversationId,
-        'content': _messageController.text.trim(),
-      });
+      await apiService.sendMessageToConversation(_activeConversation!.id, text);
       _messageController.clear();
-      await _loadData();
-      _openConversation(_activeConversationId!, '');
+      final msgs = await apiService.getConversationMessages(_activeConversation!.id);
+      if (mounted) setState(() => _conversationMessages = msgs);
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error: $e'), backgroundColor: DiklyColors.error));
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error: $e'), backgroundColor: DiklyColors.error),
+        );
       }
     } finally {
       if (mounted) setState(() => _sending = false);
     }
   }
 
-  void _showNewMessageDialog() {
+  Future<void> _loadUsersIfNeeded() async {
+    if (_usersLoaded) return;
+    try {
+      final users = await apiService.getUsers();
+      setState(() {
+        _users = users;
+        _usersLoaded = true;
+      });
+    } catch (_) {}
+  }
+
+  void _showNewMessageDialog() async {
+    await _loadUsersIfNeeded();
+    if (!mounted) return;
+
     String? selectedUserId;
+    final msgController = TextEditingController();
+
     showDialog(
       context: context,
       builder: (ctx) => StatefulBuilder(
         builder: (ctx, setDialogState) => AlertDialog(
-          title: const Text('New Message'),
+          backgroundColor: DiklyColors.surface,
+          title: const Text('New Message', style: TextStyle(color: DiklyColors.text)),
           content: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
               DropdownButtonFormField<String>(
-                decoration: const InputDecoration(labelText: 'Select Recipient'),
-                items: _users.map((u) => DropdownMenuItem(value: u.id, child: Text(u.name))).toList(),
+                dropdownColor: DiklyColors.surface,
+                decoration: const InputDecoration(
+                  labelText: 'Select Recipient',
+                  labelStyle: TextStyle(color: DiklyColors.textSecondary),
+                ),
+                items: _users.map((u) => DropdownMenuItem(
+                  value: u.id,
+                  child: Text(u.name, style: const TextStyle(color: DiklyColors.text)),
+                )).toList(),
                 onChanged: (v) => setDialogState(() => selectedUserId = v),
+              ),
+              const SizedBox(height: 12),
+              TextField(
+                controller: msgController,
+                maxLines: 3,
+                decoration: const InputDecoration(
+                  labelText: 'Message',
+                  labelStyle: TextStyle(color: DiklyColors.textSecondary),
+                  hintText: 'Type your message...',
+                  hintStyle: TextStyle(color: DiklyColors.textMuted),
+                ),
               ),
             ],
           ),
           actions: [
-            TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
+            TextButton(
+              onPressed: () => Navigator.pop(ctx),
+              child: const Text('Cancel'),
+            ),
             ElevatedButton(
-              onPressed: selectedUserId == null ? null : () {
+              onPressed: selectedUserId == null || msgController.text.trim().isEmpty ? null : () async {
                 Navigator.pop(ctx);
-                final user = _users.firstWhere((u) => u.id == selectedUserId);
-                _openConversation(user.id, user.name);
+                try {
+                  final conv = await apiService.startConversation(selectedUserId!, msgController.text.trim());
+                  await _loadConversations();
+                  if (mounted) _openConversation(conv);
+                } catch (e) {
+                  if (mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(content: Text('Error: $e'), backgroundColor: DiklyColors.error),
+                    );
+                  }
+                }
               },
-              child: const Text('Start Chat'),
+              child: const Text('Send'),
             ),
           ],
         ),
@@ -165,12 +178,8 @@ class _MessagesScreenState extends ConsumerState<MessagesScreen> {
 
   @override
   Widget build(BuildContext context) {
-    if (_activeConversationId != null) {
-      final convUser = _users.firstWhere(
-        (u) => u.id == _activeConversationId,
-        orElse: () => User(id: _activeConversationId!, name: 'User', email: '', role: ''),
-      );
-      return _buildChatScreen(convUser);
+    if (_activeConversation != null) {
+      return _buildChatScreen(_activeConversation!);
     }
 
     return AppShell(
@@ -183,7 +192,6 @@ class _MessagesScreenState extends ConsumerState<MessagesScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Header
           const Padding(
             padding: EdgeInsets.fromLTRB(16, 16, 16, 0),
             child: DiklyScreenHeader(
@@ -202,12 +210,12 @@ class _MessagesScreenState extends ConsumerState<MessagesScreen> {
                           const Icon(Icons.error_outline, color: DiklyColors.error, size: 48),
                           const SizedBox(height: 12),
                           const Text(
-                            'Unable to load data. Pull down to refresh.',
+                            'Unable to load messages. Pull down to refresh.',
                             style: TextStyle(fontSize: 13, color: DiklyColors.textSecondary),
                             textAlign: TextAlign.center,
                           ),
                           const SizedBox(height: 16),
-                          ElevatedButton(onPressed: _loadData, child: const Text('Retry')),
+                          ElevatedButton(onPressed: _loadConversations, child: const Text('Retry')),
                         ],
                       ))
                     : _conversations.isEmpty
@@ -219,18 +227,18 @@ class _MessagesScreenState extends ConsumerState<MessagesScreen> {
                             onButton: _showNewMessageDialog,
                           )
                         : RefreshIndicator(
-                            onRefresh: _loadData,
+                            onRefresh: _loadConversations,
                             child: ListView.builder(
                               padding: const EdgeInsets.all(16),
                               itemCount: _conversations.length,
                               itemBuilder: (context, index) {
                                 final conv = _conversations[index];
                                 return _ConversationTile(
-                                  name: conv['name'] as String,
-                                  lastMessage: conv['lastMessage'] as String,
-                                  time: conv['lastTime'] as DateTime?,
-                                  unreadCount: conv['unread'] as int,
-                                  onTap: () => _openConversation(conv['userId'] as String, conv['name'] as String),
+                                  name: conv.participantName,
+                                  lastMessage: conv.lastMessage ?? '',
+                                  time: conv.lastMessageAt,
+                                  unreadCount: conv.unreadCount,
+                                  onTap: () => _openConversation(conv),
                                 );
                               },
                             ),
@@ -241,7 +249,7 @@ class _MessagesScreenState extends ConsumerState<MessagesScreen> {
     );
   }
 
-  Widget _buildChatScreen(User convUser) {
+  Widget _buildChatScreen(Conversation conv) {
     final currentUser = ref.watch(currentUserProvider);
 
     return Scaffold(
@@ -250,7 +258,13 @@ class _MessagesScreenState extends ConsumerState<MessagesScreen> {
         backgroundColor: DiklyColors.surface,
         elevation: 0,
         surfaceTintColor: Colors.transparent,
-        leading: BackButton(onPressed: () => setState(() => _activeConversationId = null)),
+        leading: BackButton(onPressed: () {
+          setState(() {
+            _activeConversation = null;
+            _conversationMessages = [];
+          });
+          _loadConversations();
+        }),
         bottom: PreferredSize(
           preferredSize: const Size.fromHeight(1),
           child: Container(color: DiklyColors.border, height: 1),
@@ -259,32 +273,39 @@ class _MessagesScreenState extends ConsumerState<MessagesScreen> {
           children: [
             CircleAvatar(
               radius: 18,
+              backgroundImage: conv.participantAvatar != null
+                  ? NetworkImage(conv.participantAvatar!)
+                  : null,
               backgroundColor: DiklyColors.primary.withOpacity(0.1),
-              child: Text(
-                convUser.name.isNotEmpty ? convUser.name[0].toUpperCase() : 'U',
-                style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: DiklyColors.primary),
-              ),
+              child: conv.participantAvatar == null
+                  ? Text(
+                      conv.participantName.isNotEmpty ? conv.participantName[0].toUpperCase() : 'U',
+                      style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: DiklyColors.primary),
+                    )
+                  : null,
             ),
             const SizedBox(width: 10),
-            Text(convUser.name, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600, color: DiklyColors.text)),
+            Text(conv.participantName, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600, color: DiklyColors.text)),
           ],
         ),
       ),
       body: Column(
         children: [
           Expanded(
-            child: _conversationMessages.isEmpty
-                ? const Center(child: Text('No messages yet. Start the conversation!', style: TextStyle(color: DiklyColors.textSecondary)))
-                : ListView.builder(
-                    padding: const EdgeInsets.all(16),
-                    reverse: true,
-                    itemCount: _conversationMessages.length,
-                    itemBuilder: (ctx, i) {
-                      final msg = _conversationMessages[_conversationMessages.length - 1 - i];
-                      final isMe = msg.senderId == currentUser?.id;
-                      return _MessageBubble(message: msg, isMe: isMe);
-                    },
-                  ),
+            child: _messagesLoading
+                ? const Center(child: CircularProgressIndicator(color: DiklyColors.primary))
+                : _conversationMessages.isEmpty
+                    ? const Center(child: Text('No messages yet. Start the conversation!', style: TextStyle(color: DiklyColors.textSecondary)))
+                    : ListView.builder(
+                        padding: const EdgeInsets.all(16),
+                        reverse: true,
+                        itemCount: _conversationMessages.length,
+                        itemBuilder: (ctx, i) {
+                          final msg = _conversationMessages[_conversationMessages.length - 1 - i];
+                          final isMe = msg.senderId == currentUser?.id;
+                          return _MessageBubble(message: msg, isMe: isMe);
+                        },
+                      ),
           ),
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
@@ -367,7 +388,6 @@ class _ConversationTile extends StatelessWidget {
       onTap: onTap,
       child: Row(
         children: [
-          // Avatar (initials circle)
           CircleAvatar(
             radius: 24,
             backgroundColor: DiklyColors.primary.withOpacity(0.1),
@@ -383,12 +403,20 @@ class _ConversationTile extends StatelessWidget {
               children: [
                 Text(
                   name,
-                  style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w700, color: DiklyColors.text),
+                  style: TextStyle(
+                    fontSize: 15,
+                    fontWeight: unreadCount > 0 ? FontWeight.w700 : FontWeight.w600,
+                    color: DiklyColors.text,
+                  ),
                 ),
                 const SizedBox(height: 3),
                 Text(
-                  lastMessage,
-                  style: const TextStyle(fontSize: 13, color: DiklyColors.textSecondary),
+                  lastMessage.isEmpty ? 'No messages yet' : lastMessage,
+                  style: TextStyle(
+                    fontSize: 13,
+                    color: unreadCount > 0 ? DiklyColors.text : DiklyColors.textSecondary,
+                    fontWeight: unreadCount > 0 ? FontWeight.w500 : FontWeight.normal,
+                  ),
                   overflow: TextOverflow.ellipsis,
                 ),
               ],
@@ -400,15 +428,16 @@ class _ConversationTile extends StatelessWidget {
             children: [
               if (time != null)
                 Text(
-                  DateFormat('h:mm a').format(time!),
+                  _formatTime(time!),
                   style: const TextStyle(fontSize: 11, color: DiklyColors.textMuted),
                 ),
               if (unreadCount > 0) ...[
                 const SizedBox(height: 4),
                 Container(
-                  width: 20,
+                  constraints: const BoxConstraints(minWidth: 20),
                   height: 20,
-                  decoration: const BoxDecoration(color: DiklyColors.primary, shape: BoxShape.circle),
+                  padding: const EdgeInsets.symmetric(horizontal: 5),
+                  decoration: BoxDecoration(color: DiklyColors.primary, borderRadius: BorderRadius.circular(10)),
                   child: Center(
                     child: Text(
                       '$unreadCount',
@@ -422,6 +451,15 @@ class _ConversationTile extends StatelessWidget {
         ],
       ),
     );
+  }
+
+  String _formatTime(DateTime time) {
+    final now = DateTime.now();
+    final diff = now.difference(time);
+    if (diff.inDays == 0) return DateFormat('h:mm a').format(time);
+    if (diff.inDays == 1) return 'Yesterday';
+    if (diff.inDays < 7) return DateFormat('EEE').format(time);
+    return DateFormat('d MMM').format(time);
   }
 }
 
@@ -455,19 +493,13 @@ class _MessageBubble extends StatelessWidget {
           children: [
             Text(
               message.content,
-              style: TextStyle(
-                fontSize: 14,
-                color: isMe ? Colors.white : DiklyColors.text,
-              ),
+              style: TextStyle(fontSize: 14, color: isMe ? Colors.white : DiklyColors.text),
             ),
             if (message.createdAt != null) ...[
               const SizedBox(height: 4),
               Text(
                 DateFormat('h:mm a').format(message.createdAt!),
-                style: TextStyle(
-                  fontSize: 10,
-                  color: isMe ? Colors.white60 : DiklyColors.textMuted,
-                ),
+                style: TextStyle(fontSize: 10, color: isMe ? Colors.white60 : DiklyColors.textMuted),
               ),
             ],
           ],

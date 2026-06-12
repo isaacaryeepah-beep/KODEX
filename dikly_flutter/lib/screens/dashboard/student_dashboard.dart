@@ -24,6 +24,7 @@ class _StudentDashboardState extends ConsumerState<StudentDashboard> {
   List<Assignment> _assignments = [];
   List<AttendanceSession> _sessions = [];
   bool _loading = true;
+  String? _error;
 
   @override
   void initState() {
