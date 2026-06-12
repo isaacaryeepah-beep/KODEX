@@ -13,6 +13,8 @@ class User {
   final bool isClassRep;
   final bool isApproved;
   final DateTime? createdAt;
+  final bool deviceLocked;
+  final DateTime? deviceLockedUntil;
 
   const User({
     required this.id,
@@ -29,6 +31,8 @@ class User {
     this.isClassRep = false,
     this.isApproved = true,
     this.createdAt,
+    this.deviceLocked = false,
+    this.deviceLockedUntil,
   });
 
   factory User.fromJson(Map<String, dynamic> json) {
@@ -49,6 +53,10 @@ class User {
       isApproved: json['isApproved'] != false,
       createdAt: json['createdAt'] != null
           ? DateTime.tryParse(json['createdAt'].toString())
+          : null,
+      deviceLocked: json['accountDeviceLock']?['isLocked'] == true,
+      deviceLockedUntil: json['accountDeviceLock']?['lockedUntil'] != null
+          ? DateTime.tryParse(json['accountDeviceLock']['lockedUntil'].toString())
           : null,
     );
   }
