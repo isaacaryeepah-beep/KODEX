@@ -13,6 +13,9 @@ final _myShiftProvider = FutureProvider.autoDispose<Map<String, dynamic>>((ref) 
 final _myLeavesProvider = FutureProvider.autoDispose<List<Map<String, dynamic>>>((ref) =>
     apiService.getMyLeaves());
 
+final _monthlyAttendanceProvider = FutureProvider.autoDispose<Map<String, dynamic>>((ref) =>
+    apiService.getMyMonthlyAttendance());
+
 class EmployeeHomeScreen extends ConsumerStatefulWidget {
   const EmployeeHomeScreen({super.key});
 
@@ -54,12 +57,14 @@ class _EmployeeHomeScreenState extends ConsumerState<EmployeeHomeScreen> {
     final signInAsync = ref.watch(_signInStatusProvider);
     final shiftAsync = ref.watch(_myShiftProvider);
     final leavesAsync = ref.watch(_myLeavesProvider);
+    final monthlyAsync = ref.watch(_monthlyAttendanceProvider);
 
     return RefreshIndicator(
       onRefresh: () async {
         ref.refresh(_signInStatusProvider);
         ref.refresh(_myShiftProvider);
         ref.refresh(_myLeavesProvider);
+        ref.refresh(_monthlyAttendanceProvider);
       },
       child: ListView(
         padding: const EdgeInsets.all(16),
@@ -82,6 +87,77 @@ class _EmployeeHomeScreenState extends ConsumerState<EmployeeHomeScreen> {
             ),
           ),
           const SizedBox(height: 20),
+          // Monthly stats + leave balance
+          monthlyAsync.when(
+            loading: () => const SizedBox.shrink(),
+            error: (_, __) => const SizedBox.shrink(),
+            data: (monthly) {
+              final records = monthly['records'] as List;
+              final presentDays = records.where((r) => r['status'] == 'present' || r['status'] == 'late').length;
+              final lateDays = records.where((r) => r['status'] == 'late').length;
+              final totalHrs = records.fold<double>(0, (s, r) => s + ((r['hoursWorked'] as num?)?.toDouble() ?? 0));
+              final recordedDays = records.where((r) => r['clockIn']?['time'] != null).length;
+              final attRate = recordedDays > 0 ? (presentDays / recordedDays * 100).round() : 0;
+              return Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  GridView.count(
+                    shrinkWrap: true,
+                    physics: const NeverScrollableScrollPhysics(),
+                    crossAxisCount: 4,
+                    crossAxisSpacing: 8,
+                    mainAxisSpacing: 8,
+                    childAspectRatio: 0.9,
+                    children: [
+                      _MonthStat(value: '$attRate%', label: 'Monthly Rate', color: attRate >= 80 ? const Color(0xFF16A34A) : attRate >= 60 ? const Color(0xFFD97706) : const Color(0xFFDC2626)),
+                      _MonthStat(value: '$lateDays', label: 'Late Days', color: const Color(0xFFD97706)),
+                      _MonthStat(value: '${totalHrs.toStringAsFixed(1)}h', label: 'Hours', color: const Color(0xFF0891B2)),
+                      _MonthStat(value: '—', label: 'Days Left', color: const Color(0xFF7C3AED)),
+                    ],
+                  ),
+                  const SizedBox(height: 16),
+                ],
+              );
+            },
+          ),
+          // Leave balance (from leaves data)
+          leavesAsync.when(
+            loading: () => const SizedBox.shrink(),
+            error: (_, __) => const SizedBox.shrink(),
+            data: (leaves) {
+              final year = DateTime.now().year;
+              final yearLeaves = leaves.where((l) => l['status'] == 'approved' && DateTime.tryParse(l['startDate']?.toString() ?? '')?.year == year).toList();
+              final annualUsed = yearLeaves.where((l) => l['type'] == 'annual').fold<int>(0, (s, l) => s + ((l['days'] as num?)?.toInt() ?? 0));
+              final sickUsed = yearLeaves.where((l) => l['type'] == 'sick').fold<int>(0, (s, l) => s + ((l['days'] as num?)?.toInt() ?? 0));
+              const annualTotal = 21;
+              const sickTotal = 10;
+              final annualLeft = (annualTotal - annualUsed).clamp(0, annualTotal);
+              final sickLeft = (sickTotal - sickUsed).clamp(0, sickTotal);
+              return Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text('Leave Balance', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700, color: DiklyColors.textPrimary)),
+                  const SizedBox(height: 10),
+                  Container(
+                    padding: const EdgeInsets.all(16),
+                    decoration: BoxDecoration(
+                      color: DiklyColors.surface,
+                      borderRadius: BorderRadius.circular(14),
+                      border: Border.all(color: DiklyColors.border),
+                    ),
+                    child: Column(
+                      children: [
+                        _LeaveBalanceRow(label: 'Annual Leave', used: annualUsed, total: annualTotal, left: annualLeft),
+                        const SizedBox(height: 12),
+                        _LeaveBalanceRow(label: 'Sick Leave', used: sickUsed, total: sickTotal, left: sickLeft),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 20),
+                ],
+              );
+            },
+          ),
           // My Shift Summary
           const Text(
             'My Shift',
@@ -703,6 +779,78 @@ class _ErrorCard extends StatelessWidget {
           ),
         ],
       ),
+    );
+  }
+}
+
+class _MonthStat extends StatelessWidget {
+  final String value;
+  final String label;
+  final Color color;
+
+  const _MonthStat({required this.value, required this.label, required this.color});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(10),
+      decoration: BoxDecoration(
+        color: DiklyColors.surface,
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: DiklyColors.border),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Text(value, style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800, color: color, height: 1)),
+          Text(label, style: const TextStyle(fontSize: 9, color: DiklyColors.textSecondary, fontWeight: FontWeight.w600), maxLines: 2, overflow: TextOverflow.ellipsis),
+        ],
+      ),
+    );
+  }
+}
+
+class _LeaveBalanceRow extends StatelessWidget {
+  final String label;
+  final int used;
+  final int total;
+  final int left;
+
+  const _LeaveBalanceRow({required this.label, required this.used, required this.total, required this.left});
+
+  Color get _barColor => left > total * 0.4 ? const Color(0xFF16A34A) : left > total * 0.2 ? const Color(0xFFD97706) : const Color(0xFFDC2626);
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        Expanded(child: Text(label, style: const TextStyle(fontSize: 13, color: DiklyColors.textPrimary))),
+        Column(
+          crossAxisAlignment: CrossAxisAlignment.end,
+          children: [
+            Row(
+              children: [
+                Text('$left', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: _barColor)),
+                Text(' / $total days', style: const TextStyle(fontSize: 11, color: DiklyColors.textSecondary)),
+              ],
+            ),
+            const SizedBox(height: 4),
+            SizedBox(
+              width: 80,
+              height: 4,
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(2),
+                child: LinearProgressIndicator(
+                  value: left / total,
+                  backgroundColor: DiklyColors.border,
+                  color: _barColor,
+                ),
+              ),
+            ),
+          ],
+        ),
+      ],
     );
   }
 }

@@ -8,6 +8,7 @@ class User {
   final String? phone;
   final String? department;
   final String? company;
+  final String? institutionCode;
   final String? indexNumber;
   final bool isClassRep;
   final bool isApproved;
@@ -23,6 +24,7 @@ class User {
     this.phone,
     this.department,
     this.company,
+    this.institutionCode,
     this.indexNumber,
     this.isClassRep = false,
     this.isApproved = true,
@@ -39,7 +41,9 @@ class User {
       avatar: json['avatar']?.toString() ?? json['profilePicture']?.toString(),
       phone: json['phone']?.toString(),
       department: json['department']?.toString(),
-      company: json['company']?.toString(),
+      company: (json['company'] is Map ? json['company']['name'] : json['company'])?.toString(),
+      institutionCode: json['institutionCode']?.toString() ??
+          (json['company'] is Map ? json['company']['institutionCode'] ?? json['company']['code'] : null)?.toString(),
       indexNumber: json['indexNumber']?.toString(),
       isClassRep: json['isClassRep'] == true,
       isApproved: json['isApproved'] != false,

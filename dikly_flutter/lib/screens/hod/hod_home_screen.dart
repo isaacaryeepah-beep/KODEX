@@ -1,265 +1,315 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:google_fonts/google_fonts.dart';
 import '../../core/api.dart';
 import '../../core/auth.dart';
 import '../../core/theme.dart';
-import '../../widgets/stat_card.dart';
+import '../../widgets/ds/dikly_ds.dart';
 
-final _hodOverviewProvider = FutureProvider.autoDispose<Map<String, dynamic>>(
+final _hodDashProvider = FutureProvider.autoDispose<Map<String, dynamic>>(
   (ref) => apiService.getHodOverview(),
 );
 
-final _pendingApprovalsCountProvider =
-    FutureProvider.autoDispose<List<Map<String, dynamic>>>(
-      (ref) => apiService.getPendingApprovals(),
-    );
+final _hodApprovalsProvider = FutureProvider.autoDispose<int>((ref) async {
+  final list = await apiService.getPendingApprovals();
+  return list.length;
+});
 
 class HodHomeScreen extends ConsumerWidget {
   const HodHomeScreen({super.key});
 
-  static const _color = Color(0xFF7C2D12);
-
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final overviewAsync = ref.watch(_hodOverviewProvider);
-    final approvalsAsync = ref.watch(_pendingApprovalsCountProvider);
+    final dashAsync = ref.watch(_hodDashProvider);
+    final approvalsAsync = ref.watch(_hodApprovalsProvider);
     final user = ref.watch(authProvider).user;
+    final department = user?.department ?? '';
+    final institution = user?.company ?? '';
 
     return RefreshIndicator(
       onRefresh: () async {
-        ref.invalidate(_hodOverviewProvider);
-        ref.invalidate(_pendingApprovalsCountProvider);
+        ref.invalidate(_hodDashProvider);
+        ref.invalidate(_hodApprovalsProvider);
       },
       child: ListView(
         padding: const EdgeInsets.all(16),
         children: [
-          _HodWelcomeCard(name: user?.name ?? 'HOD'),
+          // Header
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Department Overview',
+                      style: GoogleFonts.dmSans(fontSize: 22, fontWeight: FontWeight.w800, color: DiklyColors.text, height: 1.2),
+                    ),
+                    const SizedBox(height: 4),
+                    RichText(
+                      text: TextSpan(
+                        style: const TextStyle(fontSize: 13, color: DiklyColors.textLight),
+                        children: [
+                          TextSpan(text: 'Welcome back, ${(user?.name ?? 'HOD').split(' ').first} · '),
+                          TextSpan(
+                            text: department.isNotEmpty ? department : 'No Department Assigned',
+                            style: TextStyle(
+                              color: department.isNotEmpty ? const Color(0xFF0891B2) : DiklyColors.warning,
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                          if (institution.isNotEmpty) TextSpan(text: ' — $institution'),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+
+          if (department.isEmpty) ...[
+            const SizedBox(height: 12),
+            Container(
+              padding: const EdgeInsets.all(14),
+              decoration: BoxDecoration(
+                color: const Color(0xFFFFFBEB),
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(color: const Color(0xFFFDE68A)),
+              ),
+              child: const Row(
+                children: [
+                  Icon(Icons.warning_amber_rounded, color: Color(0xFFD97706), size: 18),
+                  SizedBox(width: 10),
+                  Expanded(
+                    child: Text(
+                      'No department assigned. Ask your admin to update your profile.',
+                      style: TextStyle(fontSize: 12, color: Color(0xFFB45309)),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
           const SizedBox(height: 20),
-          overviewAsync.when(
-            loading:
-                () => const Center(
-                  child: Padding(
-                    padding: EdgeInsets.all(32),
-                    child: CircularProgressIndicator(),
-                  ),
-                ),
-            error:
-                (e, _) => Center(
-                  child: Column(
-                    children: [
-                      const Icon(
-                        Icons.error_outline,
-                        size: 48,
-                        color: DiklyColors.error,
-                      ),
-                      const SizedBox(height: 12),
-                      Text(
-                        'Failed to load overview',
-                        style: Theme.of(context).textTheme.titleMedium,
-                      ),
-                      TextButton(
-                        onPressed: () => ref.invalidate(_hodOverviewProvider),
-                        child: const Text('Retry'),
-                      ),
-                    ],
-                  ),
-                ),
+
+          dashAsync.when(
+            loading: () => const Center(child: Padding(padding: EdgeInsets.all(32), child: CircularProgressIndicator(color: DiklyColors.primary))),
+            error: (e, _) => DiklyCard(
+              padding: const EdgeInsets.all(24),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Icon(Icons.error_outline, size: 36, color: DiklyColors.error),
+                  const SizedBox(height: 10),
+                  const Text('Failed to load overview'),
+                  const SizedBox(height: 10),
+                  TextButton(onPressed: () => ref.invalidate(_hodDashProvider), child: const Text('Retry')),
+                ],
+              ),
+            ),
             data: (overview) {
-              final deptName =
-                  overview['departmentName']?.toString() ?? 'Department';
+              final lecturers = overview['totalLecturers'] ?? 0;
+              final students = overview['totalStudents'] ?? 0;
+              final sessions = overview['totalSessions'] ?? 0;
+              final liveNow = overview['activeSessions'] ?? 0;
+
               return Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Row(children: [
-                    const Icon(
-                      Icons.school,
-                      size: 16,
-                      color: DiklyColors.textSecondary,
-                    ),
-                    const SizedBox(width: 6),
-                    Text(
-                      deptName,
-                      style: const TextStyle(
-                        fontSize: 13,
-                        color: DiklyColors.textSecondary,
-                        fontWeight: FontWeight.w500,
-                      ),
-                    ),
-                  ]),
-                  const SizedBox(height: 12),
-                  const Text(
-                    'Department Overview',
-                    style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700),
-                  ),
-                  const SizedBox(height: 12),
+                  // Stats: Lecturers, Students, Sessions, Live Now
                   GridView.count(
                     shrinkWrap: true,
                     physics: const NeverScrollableScrollPhysics(),
                     crossAxisCount: 2,
                     crossAxisSpacing: 12,
                     mainAxisSpacing: 12,
+                    childAspectRatio: 1.4,
                     children: [
-                      StatCard(
-                        title: 'Total Lecturers',
-                        value:
-                            (overview['totalLecturers'] ?? 0).toString(),
-                        icon: Icons.cast_for_education_outlined,
-                        color: _color,
+                      _HodStatCard(
+                        value: lecturers.toString(),
+                        label: 'LECTURERS',
+                        color: const Color(0xFF0891B2),
+                        onTap: () => context.push('/hod/lecturers'),
                       ),
-                      StatCard(
-                        title: 'Total Students',
-                        value:
-                            (overview['totalStudents'] ?? 0).toString(),
-                        icon: Icons.people_outlined,
-                        color: DiklyColors.primary,
+                      _HodStatCard(
+                        value: students.toString(),
+                        label: 'STUDENTS',
+                        color: const Color(0xFF0891B2),
+                        onTap: () => context.push('/hod/students'),
                       ),
-                      StatCard(
-                        title: 'Total Courses',
-                        value:
-                            (overview['totalCourses'] ?? 0).toString(),
-                        icon: Icons.book_outlined,
-                        color: DiklyColors.success,
+                      _HodStatCard(
+                        value: sessions.toString(),
+                        label: 'SESSIONS (RECENT)',
+                        color: const Color(0xFF0891B2),
+                        onTap: () => context.push('/sessions'),
                       ),
-                      StatCard(
-                        title: 'Active Sessions',
-                        value:
-                            (overview['activeSessions'] ?? 0).toString(),
-                        icon: Icons.videocam_outlined,
-                        color: DiklyColors.warning,
+                      _HodStatCard(
+                        value: liveNow.toString(),
+                        label: 'LIVE NOW',
+                        color: liveNow > 0 ? DiklyColors.success : DiklyColors.textLight,
+                        onTap: () => context.push('/sessions'),
                       ),
                     ],
+                  ),
+                  const SizedBox(height: 20),
+
+                  // Quick Actions + header buttons
+                  Row(
+                    children: [
+                      Expanded(
+                        child: OutlinedButton.icon(
+                          onPressed: () => context.push('/announcements'),
+                          icon: const Icon(Icons.notifications_outlined, size: 15),
+                          label: const Text('Announcements'),
+                          style: OutlinedButton.styleFrom(
+                            foregroundColor: const Color(0xFF0891B2),
+                            side: const BorderSide(color: Color(0xFF0891B2)),
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: ElevatedButton.icon(
+                          onPressed: () => context.push('/subscription'),
+                          icon: const Icon(Icons.star_outlined, size: 15),
+                          label: const Text('Subscription'),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: DiklyColors.primary,
+                            foregroundColor: Colors.white,
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                            elevation: 0,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 16),
+
+                  // Quick Actions card
+                  DiklyCard(
+                    padding: const EdgeInsets.all(14),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text('Quick Actions', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: DiklyColors.text)),
+                        const SizedBox(height: 10),
+                        _hodAction(context, Icons.cast_for_education_outlined, 'View Lecturers', () => context.push('/hod/lecturers')),
+                        _hodAction(context, Icons.people_outlined, 'View Students', () => context.push('/hod/students')),
+                        _hodAction(context, Icons.description_outlined, 'Department Reports', () => context.push('/hod/reports')),
+                        _hodAction(context, Icons.bar_chart_rounded, 'Performance Dashboard', () => context.push('/hod/performance')),
+                        _hodAction(context, Icons.warning_amber_outlined, 'Smart Alerts', () => context.push('/hod/alerts')),
+                        _hodAction(context, Icons.message_outlined, 'Dept. Messaging', () => context.push('/messages')),
+                        _hodAction(context, Icons.notifications_outlined, 'Post Announcement', () => context.push('/announcements')),
+                        approvalsAsync.when(
+                          loading: () => _hodAction(context, Icons.pending_actions_outlined, 'Pending Approvals', () => context.push('/hod/approvals')),
+                          error: (_, __) => _hodAction(context, Icons.pending_actions_outlined, 'Pending Approvals', () => context.push('/hod/approvals')),
+                          data: (count) => _hodAction(
+                            context, Icons.pending_actions_outlined,
+                            'Pending Approvals',
+                            () => context.push('/hod/approvals'),
+                            badge: count > 0 ? count : null,
+                          ),
+                        ),
+                        _hodAction(context, Icons.check_circle_outline, 'Course Approvals', () => context.push('/hod/course-approvals')),
+                        _hodAction(context, Icons.lock_open_outlined, 'Locked Students', () => context.push('/hod/locked-students')),
+                        const Divider(height: 20),
+                        const Text('Export', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: DiklyColors.textLight, letterSpacing: 0.4)),
+                        const SizedBox(height: 8),
+                        Wrap(
+                          spacing: 6,
+                          children: [
+                            _exportChip('Students CSV'),
+                            _exportChip('Lecturers CSV'),
+                            _exportChip('Attendance CSV'),
+                          ],
+                        ),
+                      ],
+                    ),
                   ),
                 ],
               );
             },
           ),
-          const SizedBox(height: 16),
-          approvalsAsync.when(
-            loading: () => const SizedBox.shrink(),
-            error: (_, __) => const SizedBox.shrink(),
-            data: (approvals) {
-              if (approvals.isEmpty) return const SizedBox.shrink();
-              return GestureDetector(
-                onTap: () => context.push('/hod/approvals'),
-                child: Container(
-                  padding: const EdgeInsets.all(16),
-                  decoration: BoxDecoration(
-                    color: _color.withOpacity(0.05),
-                    borderRadius: BorderRadius.circular(12),
-                    border: Border.all(color: _color.withOpacity(0.3)),
-                  ),
-                  child: Row(children: [
-                    Container(
-                      width: 40,
-                      height: 40,
-                      decoration: BoxDecoration(
-                        color: _color.withOpacity(0.1),
-                        borderRadius: BorderRadius.circular(10),
-                      ),
-                      child: const Icon(
-                        Icons.pending_actions,
-                        color: _color,
-                        size: 22,
-                      ),
-                    ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            '${approvals.length} Pending Approval${approvals.length == 1 ? '' : 's'}',
-                            style: const TextStyle(
-                              fontWeight: FontWeight.w700,
-                              fontSize: 14,
-                              color: _color,
-                            ),
-                          ),
-                          const Text(
-                            'Tap to review and approve',
-                            style: TextStyle(
-                              fontSize: 12,
-                              color: DiklyColors.textSecondary,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                    const Icon(
-                      Icons.chevron_right,
-                      color: _color,
-                    ),
-                  ]),
-                ),
-              );
-            },
-          ),
+          const SizedBox(height: 24),
         ],
       ),
     );
   }
+
+  Widget _hodAction(BuildContext context, IconData icon, String label, VoidCallback onTap, {int? badge}) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(8),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 4),
+        child: Row(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(7),
+              decoration: BoxDecoration(
+                color: DiklyColors.grey100,
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Icon(icon, size: 16, color: DiklyColors.textSecondary),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Text(label, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w500, color: DiklyColors.text)),
+            ),
+            if (badge != null)
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+                decoration: BoxDecoration(color: DiklyColors.error, borderRadius: BorderRadius.circular(20)),
+                child: Text('$badge', style: const TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.w700)),
+              ),
+            const SizedBox(width: 4),
+            const Icon(Icons.chevron_right, size: 16, color: DiklyColors.textLight),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _exportChip(String label) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+      decoration: BoxDecoration(
+        color: DiklyColors.grey100,
+        borderRadius: BorderRadius.circular(6),
+        border: Border.all(color: DiklyColors.border),
+      ),
+      child: Text(label, style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: DiklyColors.textSecondary)),
+    );
+  }
 }
 
-class _HodWelcomeCard extends StatelessWidget {
-  final String name;
-  const _HodWelcomeCard({required this.name});
+class _HodStatCard extends StatelessWidget {
+  final String value;
+  final String label;
+  final Color color;
+  final VoidCallback? onTap;
+
+  const _HodStatCard({required this.value, required this.label, required this.color, this.onTap});
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(
-        gradient: const LinearGradient(
-          colors: [Color(0xFF7C2D12), Color(0xFFB45309)],
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
+    return GestureDetector(
+      onTap: onTap,
+      child: DiklyCard(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            Text(value, style: GoogleFonts.dmSans(fontSize: 28, fontWeight: FontWeight.w800, color: color, height: 1)),
+            Text(label, style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: DiklyColors.textLight, letterSpacing: 0.3)),
+          ],
         ),
-        borderRadius: BorderRadius.circular(16),
-        boxShadow: [
-          BoxShadow(
-            color: const Color(0xFF7C2D12).withOpacity(0.25),
-            blurRadius: 16,
-            offset: const Offset(0, 6),
-          ),
-        ],
       ),
-      child: Row(children: [
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const Text(
-                'HOD Portal',
-                style: TextStyle(
-                  color: Colors.white70,
-                  fontSize: 12,
-                  letterSpacing: 0.5,
-                ),
-              ),
-              const SizedBox(height: 4),
-              Text(
-                name.split(' ').first,
-                style: const TextStyle(
-                  color: Colors.white,
-                  fontSize: 22,
-                  fontWeight: FontWeight.w800,
-                ),
-              ),
-              const SizedBox(height: 4),
-              const Text(
-                'Head of Department',
-                style: TextStyle(color: Colors.white60, fontSize: 12),
-              ),
-            ],
-          ),
-        ),
-        const Icon(
-          Icons.account_balance_outlined,
-          color: Colors.white60,
-          size: 40,
-        ),
-      ]),
     );
   }
 }
