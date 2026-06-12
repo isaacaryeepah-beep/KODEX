@@ -357,6 +357,57 @@ class ApiService {
     return (list as List).map((e) => User.fromJson(e as Map<String, dynamic>)).toList();
   }
 
+  // Admin-level pending approvals
+  Future<Map<String, dynamic>> getAdminDashboardData() async {
+    final today = DateTime.now().toIso8601String().substring(0, 10);
+    final results = await Future.wait([
+      _dio.get('/api/attendance-sessions?limit=5').catchError((_) => Response(requestOptions: RequestOptions(), data: {'sessions': [], 'pagination': {'total': 0}})),
+      _dio.get('/api/users').catchError((_) => Response(requestOptions: RequestOptions(), data: {'users': []})),
+      _dio.get('/api/approvals/pending').catchError((_) => Response(requestOptions: RequestOptions(), data: {'pending': []})),
+      _dio.get('/api/announcements?limit=5').catchError((_) => Response(requestOptions: RequestOptions(), data: {'announcements': []})),
+    ]);
+    final sessions = results[0].data['sessions'] ?? [];
+    final users = results[1].data['users'] ?? [];
+    final pending = results[2].data['pending'] ?? [];
+    final announcements = results[3].data['announcements'] ?? [];
+    final activeSessions = (sessions as List).where((s) => ['active','live','paused','locked'].contains(s['status'])).length;
+    return {
+      'sessions': sessions,
+      'totalSessions': results[0].data['pagination']?['total'] ?? sessions.length,
+      'totalUsers': (users as List).length,
+      'activeSessions': activeSessions,
+      'pendingApprovals': (pending as List).length,
+      'announcements': announcements,
+    };
+  }
+
+  // Manager today attendance + team data
+  Future<Map<String, dynamic>> getManagerDashboardData() async {
+    final results = await Future.wait([
+      _dio.get('/api/corporate-attendance/today').catchError((_) => Response(requestOptions: RequestOptions(), data: {'records': [], 'summary': {}})),
+      _dio.get('/api/performance/team-overview').catchError((_) => Response(requestOptions: RequestOptions(), data: {'overview': []})),
+      _dio.get('/api/approvals/pending').catchError((_) => Response(requestOptions: RequestOptions(), data: {'pending': []})),
+      _dio.get('/api/announcements?limit=5').catchError((_) => Response(requestOptions: RequestOptions(), data: {'announcements': []})),
+    ]);
+    return {
+      'todayRecords': results[0].data['records'] ?? [],
+      'todaySummary': results[0].data['summary'] ?? {},
+      'teamOverview': results[1].data['overview'] ?? [],
+      'pendingApprovals': results[2].data['pending'] ?? [],
+      'announcements': results[3].data['announcements'] ?? [],
+    };
+  }
+
+  // Employee monthly attendance
+  Future<Map<String, dynamic>> getMyMonthlyAttendance() async {
+    final now = DateTime.now();
+    final monthStart = DateTime(now.year, now.month, 1).toIso8601String().substring(0, 10);
+    final today = now.toIso8601String().substring(0, 10);
+    final response = await _dio.get('/api/corporate-attendance/my?from=$monthStart&to=$today');
+    final data = response.data;
+    return {'records': data['records'] ?? data['data'] ?? []};
+  }
+
   Future<User> createUser(Map<String, dynamic> body) async {
     final response = await _dio.post('/api/users/create', data: body);
     final data = response.data;
