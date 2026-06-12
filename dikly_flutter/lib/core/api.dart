@@ -435,15 +435,32 @@ class ApiService {
     return SnapQuiz.fromJson(data['quiz'] ?? data['data'] ?? data as Map<String, dynamic>);
   }
 
-  // Messages
-  Future<List<Message>> getMessages() async {
-    final data = await _cachedGet('/api/messages', 'messages');
+  // Messages — conversation-based
+  Future<List<Conversation>> getConversations() async {
+    final response = await _dio.get('/api/messages/conversations');
+    final data = response.data;
+    final list = data['conversations'] ?? data['data'] ?? [];
+    return (list as List).map((e) => Conversation.fromJson(e as Map<String, dynamic>)).toList();
+  }
+
+  Future<List<Message>> getConversationMessages(String conversationId) async {
+    final response = await _dio.get('/api/messages/conversations/$conversationId/messages');
+    final data = response.data;
     final list = data['messages'] ?? data['data'] ?? [];
     return (list as List).map((e) => Message.fromJson(e as Map<String, dynamic>)).toList();
   }
 
-  Future<void> sendMessage(Map<String, dynamic> body) async {
-    await _dio.post('/api/messages/send', data: body);
+  Future<Conversation> startConversation(String recipientId, String message) async {
+    final response = await _dio.post('/api/messages/conversations', data: {
+      'recipientIds': [recipientId],
+      'message': message,
+    });
+    final data = response.data;
+    return Conversation.fromJson(data['conversation'] ?? data['data'] ?? data as Map<String, dynamic>);
+  }
+
+  Future<void> sendMessageToConversation(String conversationId, String content) async {
+    await _dio.post('/api/messages/conversations/$conversationId/messages', data: {'content': content});
   }
 
   // Announcements
@@ -493,23 +510,41 @@ class ApiService {
 
   // HOD
   Future<Map<String, dynamic>> getHodOverview() async {
-    final data = await _cachedGet('/api/hod/overview', 'hod_overview');
-    return (data['data'] ?? data) as Map<String, dynamic>;
+    final results = await Future.wait([
+      _dio.get('/api/hod/lecturers'),
+      _dio.get('/api/hod/students'),
+      _dio.get('/api/hod/dashboard-stats'),
+      _dio.get('/api/attendance-sessions', queryParameters: {'status': 'active', 'limit': '100'}),
+    ]);
+    final lecturers = results[0].data;
+    final students = results[1].data;
+    final stats = results[2].data;
+    final activeSessions = results[3].data;
+    final lecturerList = lecturers['lecturers'] ?? lecturers['data'] ?? [];
+    final studentList = students['students'] ?? students['data'] ?? [];
+    final statsData = (stats['data'] ?? stats) as Map<String, dynamic>;
+    final sessionList = activeSessions['sessions'] ?? activeSessions['data'] ?? [];
+    return {
+      'totalLecturers': (lecturerList as List).length,
+      'totalStudents': (studentList as List).length,
+      'totalSessions': statsData['totalSessions'] ?? 0,
+      'activeSessions': (sessionList as List).length,
+    };
   }
 
   Future<List<Map<String, dynamic>>> getPendingApprovals() async {
-    final response = await _dio.get('/api/hod/pending-approvals');
+    final response = await _dio.get('/api/approvals/pending');
     final data = response.data;
     final list = data['data'] ?? data['approvals'] ?? data['users'] ?? [];
     return (list as List).cast<Map<String, dynamic>>();
   }
 
   Future<void> approveUser(String id) async {
-    await _dio.post('/api/hod/approve/$id');
+    await _dio.patch('/api/approvals/$id/approve');
   }
 
   Future<void> rejectUser(String id) async {
-    await _dio.post('/api/hod/reject/$id');
+    await _dio.patch('/api/approvals/$id/reject');
   }
 
   Future<void> unlockStudent(String id) async {

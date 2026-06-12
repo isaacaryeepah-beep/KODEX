@@ -101,7 +101,7 @@ class _MessagesScreenState extends ConsumerState<MessagesScreen> {
     try {
       final users = await apiService.getUsers();
       setState(() {
-        _users = users;
+        _users = users as List<User>;
         _usersLoaded = true;
       });
     } catch (_) {}
