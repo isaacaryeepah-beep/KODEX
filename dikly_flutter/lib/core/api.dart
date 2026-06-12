@@ -602,6 +602,30 @@ class ApiService {
     await _queueablePost('/api/announcements', body);
   }
 
+  // Profile management
+  Future<User> updateProfile(Map<String, dynamic> body) async {
+    final response = await _dio.put('/api/auth/update-profile', data: body);
+    final data = response.data;
+    final userData = data['user'] ?? data['data'] ?? data;
+    return User.fromJson(userData as Map<String, dynamic>);
+  }
+
+  Future<void> changePassword({
+    required String currentPassword,
+    required String newPassword,
+  }) async {
+    await _dio.post('/api/auth/change-password', data: {
+      'currentPassword': currentPassword,
+      'newPassword': newPassword,
+    });
+  }
+
+  // Student dashboard stats  (attendance %, active assignments, course count)
+  Future<Map<String, dynamic>> getStudentStats() async {
+    final data = await _cachedGet('/api/students/dashboard-stats', 'student_stats');
+    return (data['stats'] ?? data['data'] ?? data) as Map<String, dynamic>;
+  }
+
   Future<void> saveToken(String token) async {
     await _storage.write(key: 'auth_token', value: token);
   }

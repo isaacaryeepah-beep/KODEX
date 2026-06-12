@@ -17,6 +17,7 @@ class AdminHomeScreen extends ConsumerStatefulWidget {
 class _AdminHomeScreenState extends ConsumerState<AdminHomeScreen> {
   Map<String, dynamic>? _reports;
   bool _loading = true;
+  String? _error;
 
   @override
   void initState() {
@@ -25,15 +26,15 @@ class _AdminHomeScreenState extends ConsumerState<AdminHomeScreen> {
   }
 
   Future<void> _load() async {
-    setState(() => _loading = true);
+    setState(() { _loading = true; _error = null; });
     try {
       final data = await apiService.getReports();
       setState(() {
         _reports = data;
         _loading = false;
       });
-    } catch (_) {
-      setState(() => _loading = false);
+    } catch (e) {
+      setState(() { _loading = false; _error = e.toString(); });
     }
   }
 
@@ -115,6 +116,38 @@ class _AdminHomeScreenState extends ConsumerState<AdminHomeScreen> {
               child: Padding(
                 padding: EdgeInsets.all(32),
                 child: CircularProgressIndicator(color: DiklyColors.primary),
+              ),
+            )
+          else if (_error != null)
+            DiklyCard(
+              padding: const EdgeInsets.all(24),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Icon(Icons.wifi_off_rounded, size: 36, color: Color(0xFF9CA3AF)),
+                  const SizedBox(height: 10),
+                  const Text(
+                    'Failed to load platform stats',
+                    style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: Color(0xFF111827)),
+                  ),
+                  const SizedBox(height: 6),
+                  Text(
+                    _error!,
+                    textAlign: TextAlign.center,
+                    style: const TextStyle(fontSize: 12, color: Color(0xFF6B7280)),
+                  ),
+                  const SizedBox(height: 14),
+                  ElevatedButton.icon(
+                    onPressed: _load,
+                    icon: const Icon(Icons.refresh, size: 16),
+                    label: const Text('Retry'),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: DiklyColors.primary,
+                      foregroundColor: Colors.white,
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                    ),
+                  ),
+                ],
               ),
             )
           else

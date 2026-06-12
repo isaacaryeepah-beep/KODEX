@@ -167,7 +167,7 @@ class _CreateSessionScreenState extends ConsumerState<CreateSessionScreen> {
         backgroundColor: DiklyColors.surface,
         elevation: 0,
         surfaceTintColor: Colors.transparent,
-        leading: BackButton(onPressed: () => context.pop()),
+        leading: BackButton(onPressed: () => Navigator.of(context).maybePop()),
         bottom: PreferredSize(
           preferredSize: const Size.fromHeight(1),
           child: Container(color: DiklyColors.border, height: 1),

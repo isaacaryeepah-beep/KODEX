@@ -1,10 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 import '../../core/auth.dart';
 import '../../core/theme.dart';
 import '../../providers/meetings_provider.dart';
 import '../../providers/announcements_provider.dart';
+import '../../providers/courses_provider.dart';
+import '../../providers/assignments_provider.dart';
 import '../../widgets/ds/dikly_ds.dart';
 
 import '../../models/meeting.dart';
@@ -25,52 +28,131 @@ class StudentHomeScreen extends ConsumerWidget {
     final user = ref.watch(authProvider).user;
     final meetingsAsync = ref.watch(upcomingMeetingsProvider);
     final announcementsAsync = ref.watch(announcementsProvider);
+    final coursesAsync = ref.watch(coursesProvider);
+    final assignmentsAsync = ref.watch(assignmentsProvider);
 
     final firstName = (user?.name ?? 'Student').split(' ').first;
+
+    // Derive live stats from loaded providers
+    final courseCount = coursesAsync.valueOrNull?.length;
+    final pendingAssignments = assignmentsAsync.valueOrNull
+        ?.where((a) => !a.isSubmitted && !a.isOverdue)
+        .length;
+    final overdueAssignments = assignmentsAsync.valueOrNull
+        ?.where((a) => a.isOverdue)
+        .length;
+    final upcomingMeetingCount = meetingsAsync.valueOrNull?.length;
 
     return RefreshIndicator(
       onRefresh: () async {
         ref.invalidate(upcomingMeetingsProvider);
         ref.invalidate(announcementsProvider);
+        ref.invalidate(coursesProvider);
+        ref.invalidate(assignmentsProvider);
       },
       child: ListView(
         padding: const EdgeInsets.all(16),
         children: [
-          // ── Greeting ────────────────────────────────────────────────
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                '${_greeting()}, $firstName!',
-                style: const TextStyle(
-                  fontSize: 20,
-                  fontWeight: FontWeight.w700,
-                  color: DiklyColors.text,
-                ),
+          // ── Greeting banner ──────────────────────────────────────────
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 18),
+            decoration: BoxDecoration(
+              gradient: const LinearGradient(
+                colors: DiklyColors.gradientPrimary,
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
               ),
-              const SizedBox(height: 3),
-              const Text(
-                'Student Portal',
-                style: TextStyle(
-                  fontSize: 13,
-                  color: DiklyColors.textLight,
+              borderRadius: BorderRadius.circular(16),
+            ),
+            child: Row(
+              children: [
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        '${_greeting()}, $firstName!',
+                        style: const TextStyle(
+                          fontSize: 20,
+                          fontWeight: FontWeight.w700,
+                          color: Colors.white,
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        DateFormat('EEEE, MMMM d').format(DateTime.now()),
+                        style: const TextStyle(
+                          fontSize: 13,
+                          color: Colors.white70,
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
+                Container(
+                  width: 48,
+                  height: 48,
+                  decoration: BoxDecoration(
+                    color: Colors.white.withOpacity(0.18),
+                    shape: BoxShape.circle,
+                  ),
+                  child: const Icon(Icons.school_outlined, color: Colors.white, size: 26),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 20),
+
+          // ── Stat Cards 2×2 grid ──────────────────────────────────────
+          GridView.count(
+            crossAxisCount: 2,
+            crossAxisSpacing: 12,
+            mainAxisSpacing: 12,
+            childAspectRatio: 1.5,
+            shrinkWrap: true,
+            physics: const NeverScrollableScrollPhysics(),
+            children: [
+              _StatCard(
+                icon: Icons.book_outlined,
+                iconColor: DiklyColors.primary,
+                iconBg: DiklyColors.primaryULight,
+                value: courseCount != null ? '$courseCount' : '—',
+                label: 'Courses Enrolled',
+              ),
+              _StatCard(
+                icon: Icons.assignment_outlined,
+                iconColor: (pendingAssignments != null && pendingAssignments > 0)
+                    ? const Color(0xFFD97706)
+                    : DiklyColors.textLight,
+                iconBg: const Color(0xFFFEF3C7),
+                value: pendingAssignments != null ? '$pendingAssignments' : '—',
+                label: 'Assignments Due',
+              ),
+              _StatCard(
+                icon: Icons.warning_amber_outlined,
+                iconColor: (overdueAssignments != null && overdueAssignments > 0)
+                    ? DiklyColors.error
+                    : DiklyColors.success,
+                iconBg: (overdueAssignments != null && overdueAssignments > 0)
+                    ? DiklyColors.errorLight
+                    : DiklyColors.successLight,
+                value: overdueAssignments != null ? '$overdueAssignments' : '—',
+                label: 'Overdue',
+              ),
+              _StatCard(
+                icon: Icons.video_call_outlined,
+                iconColor: const Color(0xFF7C3AED),
+                iconBg: const Color(0xFFF3E8FF),
+                value: upcomingMeetingCount != null ? '$upcomingMeetingCount' : '—',
+                label: 'Upcoming Classes',
               ),
             ],
           ),
           const SizedBox(height: 20),
 
-          // ── Stat Cards 2×2 grid ──────────────────────────────────────
-          meetingsAsync.when(
-            data: (meetings) => _StatsGrid(meetingCount: meetings.length),
-            loading: () => const _StatsGrid(meetingCount: 0),
-            error: (_, __) => const _StatsGrid(meetingCount: 0),
-          ),
-          const SizedBox(height: 24),
-
-          // ── Upcoming Meetings ────────────────────────────────────────
+          // ── Quick Actions ────────────────────────────────────────────
           const Text(
-            'Upcoming Classes',
+            'Quick Actions',
             style: TextStyle(
               fontSize: 16,
               fontWeight: FontWeight.w700,
@@ -78,6 +160,61 @@ class StudentHomeScreen extends ConsumerWidget {
             ),
           ),
           const SizedBox(height: 12),
+          GridView.count(
+            crossAxisCount: 4,
+            crossAxisSpacing: 10,
+            mainAxisSpacing: 10,
+            childAspectRatio: 0.85,
+            shrinkWrap: true,
+            physics: const NeverScrollableScrollPhysics(),
+            children: [
+              _QuickAction(
+                icon: Icons.fingerprint,
+                label: 'Attendance',
+                color: DiklyColors.primary,
+                onTap: () => context.push('/attendance'),
+              ),
+              _QuickAction(
+                icon: Icons.assignment_outlined,
+                label: 'Assignments',
+                color: const Color(0xFFD97706),
+                onTap: () => context.push('/assignments'),
+              ),
+              _QuickAction(
+                icon: Icons.quiz_outlined,
+                label: 'Quizzes',
+                color: const Color(0xFF7C3AED),
+                onTap: () => context.push('/quizzes'),
+              ),
+              _QuickAction(
+                icon: Icons.calendar_today_outlined,
+                label: 'Timetable',
+                color: const Color(0xFF0D9488),
+                onTap: () => context.push('/timetable'),
+              ),
+            ],
+          ),
+          const SizedBox(height: 24),
+
+          // ── Upcoming Meetings ────────────────────────────────────────
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              const Text(
+                'Upcoming Classes',
+                style: TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.w700,
+                  color: DiklyColors.text,
+                ),
+              ),
+              TextButton(
+                onPressed: () => context.push('/meetings'),
+                child: const Text('See all', style: TextStyle(fontSize: 13, color: DiklyColors.primary)),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
           meetingsAsync.when(
             data: (meetings) => meetings.isEmpty
                 ? DiklyEmptyState(
@@ -102,15 +239,24 @@ class StudentHomeScreen extends ConsumerWidget {
           const SizedBox(height: 24),
 
           // ── Announcements ────────────────────────────────────────────
-          const Text(
-            'Announcements',
-            style: TextStyle(
-              fontSize: 16,
-              fontWeight: FontWeight.w700,
-              color: DiklyColors.text,
-            ),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              const Text(
+                'Announcements',
+                style: TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.w700,
+                  color: DiklyColors.text,
+                ),
+              ),
+              TextButton(
+                onPressed: () => context.push('/announcements'),
+                child: const Text('See all', style: TextStyle(fontSize: 13, color: DiklyColors.primary)),
+              ),
+            ],
           ),
-          const SizedBox(height: 12),
+          const SizedBox(height: 8),
           announcementsAsync.when(
             data: (list) => list.isEmpty
                 ? DiklyEmptyState(
@@ -139,54 +285,7 @@ class StudentHomeScreen extends ConsumerWidget {
   }
 }
 
-// ── 2×2 Stats Grid ─────────────────────────────────────────────────────────
-
-class _StatsGrid extends StatelessWidget {
-  final int meetingCount;
-  const _StatsGrid({required this.meetingCount});
-
-  @override
-  Widget build(BuildContext context) {
-    return GridView.count(
-      crossAxisCount: 2,
-      crossAxisSpacing: 12,
-      mainAxisSpacing: 12,
-      childAspectRatio: 1.5,
-      shrinkWrap: true,
-      physics: const NeverScrollableScrollPhysics(),
-      children: [
-        _StatCard(
-          icon: Icons.book_outlined,
-          iconColor: DiklyColors.primary,
-          iconBg: DiklyColors.primaryULight,
-          value: '—',
-          label: 'Courses Enrolled',
-        ),
-        _StatCard(
-          icon: Icons.assignment_outlined,
-          iconColor: const Color(0xFFD97706),
-          iconBg: const Color(0xFFFEF3C7),
-          value: '—',
-          label: 'Assignments Due',
-        ),
-        _StatCard(
-          icon: Icons.check_circle_outline,
-          iconColor: DiklyColors.success,
-          iconBg: DiklyColors.successLight,
-          value: '—',
-          label: 'Attendance %',
-        ),
-        _StatCard(
-          icon: Icons.quiz_outlined,
-          iconColor: const Color(0xFF7C3AED),
-          iconBg: const Color(0xFFF3E8FF),
-          value: '—',
-          label: 'Quiz Score',
-        ),
-      ],
-    );
-  }
-}
+// ── Stat Card ───────────────────────────────────────────────────────────────
 
 class _StatCard extends StatelessWidget {
   final IconData icon;
@@ -246,6 +345,59 @@ class _StatCard extends StatelessWidget {
             ],
           ),
         ],
+      ),
+    );
+  }
+}
+
+// ── Quick Action Button ─────────────────────────────────────────────────────
+
+class _QuickAction extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final Color color;
+  final VoidCallback onTap;
+
+  const _QuickAction({
+    required this.icon,
+    required this.label,
+    required this.color,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: DiklyCard(
+        padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 8),
+        borderRadius: 10,
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Container(
+              width: 42,
+              height: 42,
+              decoration: BoxDecoration(
+                color: color.withOpacity(0.12),
+                shape: BoxShape.circle,
+              ),
+              child: Icon(icon, color: color, size: 22),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              label,
+              style: const TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.w600,
+                color: DiklyColors.text,
+              ),
+              textAlign: TextAlign.center,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+            ),
+          ],
+        ),
       ),
     );
   }

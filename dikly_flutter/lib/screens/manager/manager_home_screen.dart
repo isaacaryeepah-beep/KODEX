@@ -17,18 +17,25 @@ class _ManagerHomeScreenState extends ConsumerState<ManagerHomeScreen> {
   List<dynamic> _employees = [];
   List<dynamic> _leaveRequests = [];
   bool _loading = true;
+  String? _error;
 
   @override
   void initState() { super.initState(); _load(); }
 
   Future<void> _load() async {
-    setState(() => _loading = true);
+    setState(() { _loading = true; _error = null; });
     try {
-      final users = await apiService.getUsers();
-      final leaves = await apiService.getLeaveRequests();
-      setState(() { _employees = users; _leaveRequests = leaves; _loading = false; });
-    } catch (_) {
-      setState(() => _loading = false);
+      final results = await Future.wait([
+        apiService.getUsers(),
+        apiService.getLeaveRequests(),
+      ]);
+      setState(() {
+        _employees = results[0] as List<dynamic>;
+        _leaveRequests = results[1] as List<dynamic>;
+        _loading = false;
+      });
+    } catch (e) {
+      setState(() { _loading = false; _error = e.toString(); });
     }
   }
 
@@ -97,6 +104,38 @@ class _ManagerHomeScreenState extends ConsumerState<ManagerHomeScreen> {
 
             if (_loading)
               const Center(child: Padding(padding: EdgeInsets.all(32), child: CircularProgressIndicator()))
+            else if (_error != null)
+              DiklyCard(
+                padding: const EdgeInsets.all(24),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const Icon(Icons.wifi_off_rounded, size: 36, color: Color(0xFF9CA3AF)),
+                    const SizedBox(height: 10),
+                    const Text(
+                      'Failed to load team data',
+                      style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: DiklyColors.textPrimary),
+                    ),
+                    const SizedBox(height: 6),
+                    Text(
+                      _error!,
+                      textAlign: TextAlign.center,
+                      style: const TextStyle(fontSize: 12, color: DiklyColors.textSecondary),
+                    ),
+                    const SizedBox(height: 14),
+                    ElevatedButton.icon(
+                      onPressed: _load,
+                      icon: const Icon(Icons.refresh, size: 16),
+                      label: const Text('Retry'),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: DiklyColors.primary,
+                        foregroundColor: Colors.white,
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                      ),
+                    ),
+                  ],
+                ),
+              )
             else ...[
               // 2×2 Stats grid
               const Text(
