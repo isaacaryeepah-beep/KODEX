@@ -90,20 +90,24 @@ class AuthNotifier extends StateNotifier<AuthState> {
   }
 
   Future<bool> login({
-    required String email,
     required String password,
     required String loginRole,
     required String portalMode,
+    String? email,
+    String? indexNumber,
+    String? institutionCode,
   }) async {
     state = state.copyWith(isLoading: true, error: null);
     try {
       final deviceId = await _getDeviceId();
       final result = await _api.login(
-        email: email,
         password: password,
         loginRole: loginRole,
         portalMode: portalMode,
         deviceId: deviceId,
+        email: email,
+        indexNumber: indexNumber,
+        institutionCode: institutionCode,
       );
 
       final token = result['token']?.toString() ?? '';

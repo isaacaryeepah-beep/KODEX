@@ -109,19 +109,24 @@ class ApiService {
 
   // Auth
   Future<Map<String, dynamic>> login({
-    required String email,
     required String password,
     required String loginRole,
     required String portalMode,
     required String deviceId,
+    String? email,
+    String? indexNumber,
+    String? institutionCode,
   }) async {
-    final response = await _dio.post('/api/auth/login', data: {
-      'email': email,
+    final body = <String, dynamic>{
       'password': password,
       'loginRole': loginRole,
       'portalMode': portalMode,
       'deviceId': deviceId,
-    });
+    };
+    if (email != null && email.isNotEmpty) body['email'] = email;
+    if (indexNumber != null && indexNumber.isNotEmpty) body['indexNumber'] = indexNumber;
+    if (institutionCode != null && institutionCode.isNotEmpty) body['institutionCode'] = institutionCode;
+    final response = await _dio.post('/api/auth/login', data: body);
     return response.data as Map<String, dynamic>;
   }
 
