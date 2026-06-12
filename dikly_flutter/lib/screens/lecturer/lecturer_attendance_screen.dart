@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 import '../../core/api.dart';
 import '../../core/theme.dart';
+import '../../models/course.dart';
 import '../../widgets/ds/dikly_ds.dart';
 
 class LecturerAttendanceScreen extends ConsumerStatefulWidget {
@@ -17,6 +18,7 @@ class LecturerAttendanceScreen extends ConsumerStatefulWidget {
 class _LecturerAttendanceScreenState
     extends ConsumerState<LecturerAttendanceScreen> {
   List<dynamic> _sessions = [];
+  List<Course> _courses = [];
   bool _loading = true;
 
   @override
@@ -28,9 +30,13 @@ class _LecturerAttendanceScreenState
   Future<void> _load() async {
     setState(() => _loading = true);
     try {
-      final sessions = await apiService.getAttendanceSessions();
+      final results = await Future.wait([
+        apiService.getAttendanceSessions(),
+        apiService.getCourses(),
+      ]);
       setState(() {
-        _sessions = sessions;
+        _sessions = results[0] as List;
+        _courses = results[1] as List<Course>;
         _loading = false;
       });
     } catch (_) {
@@ -39,88 +45,81 @@ class _LecturerAttendanceScreenState
   }
 
   void _onStartSession() {
+    String? selectedCourseId;
+    bool starting = false;
+
     showDialog(
       context: context,
-      builder: (_) => AlertDialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        contentPadding: const EdgeInsets.fromLTRB(24, 20, 24, 16),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Container(
-              width: 64,
-              height: 64,
-              decoration: BoxDecoration(
-                color: const Color(0xFFF3F4F6),
-                borderRadius: BorderRadius.circular(16),
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setDialogState) => AlertDialog(
+          backgroundColor: DiklyColors.surface,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          title: const Text('Start Session', style: TextStyle(fontWeight: FontWeight.w700, color: DiklyColors.text)),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text('Select a course to start an attendance session.', style: TextStyle(fontSize: 13, color: DiklyColors.textSecondary)),
+              const SizedBox(height: 16),
+              DropdownButtonFormField<String>(
+                dropdownColor: DiklyColors.surface,
+                decoration: const InputDecoration(
+                  labelText: 'Course',
+                  labelStyle: TextStyle(color: DiklyColors.textSecondary),
+                  border: OutlineInputBorder(),
+                ),
+                hint: const Text('Select course', style: TextStyle(color: DiklyColors.textMuted)),
+                items: _courses.map((c) => DropdownMenuItem(
+                  value: c.id,
+                  child: Text(c.title, style: const TextStyle(color: DiklyColors.text, fontSize: 14)),
+                )).toList(),
+                onChanged: (v) => setDialogState(() => selectedCourseId = v),
               ),
-              child: const Icon(Icons.devices_other, size: 32, color: Color(0xFF9CA3AF)),
-            ),
-            const SizedBox(height: 16),
-            const Text(
-              'Device Not Paired',
-              style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800, color: Color(0xFF111827)),
-            ),
-            const SizedBox(height: 8),
-            const Text(
-              "You haven't paired a classroom device yet.\nOpen Attendance Device, generate a pairing code, and enter it on your ESP32.",
-              textAlign: TextAlign.center,
-              style: TextStyle(fontSize: 13, color: Color(0xFF6B7280), height: 1.5),
-            ),
-            const SizedBox(height: 20),
-            Row(
-              children: [
-                Expanded(
-                  child: OutlinedButton(
-                    onPressed: () => Navigator.pop(context),
-                    style: OutlinedButton.styleFrom(
-                      foregroundColor: const Color(0xFF6B7280),
-                      side: const BorderSide(color: Color(0xFFE5E7EB)),
-                      padding: const EdgeInsets.symmetric(vertical: 10),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+              const SizedBox(height: 8),
+              Row(
+                children: [
+                  const Icon(Icons.info_outline, size: 14, color: DiklyColors.textMuted),
+                  const SizedBox(width: 6),
+                  Expanded(
+                    child: Text(
+                      'Students mark attendance with the session code.',
+                      style: const TextStyle(fontSize: 11, color: DiklyColors.textMuted),
                     ),
-                    child: const Text('Cancel'),
                   ),
-                ),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: ElevatedButton(
-                    onPressed: () {
-                      Navigator.pop(context);
-                      context.push('/lecturer/attendance-device');
-                    },
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: DiklyColors.primary,
-                      foregroundColor: Colors.white,
-                      padding: const EdgeInsets.symmetric(vertical: 10),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                      elevation: 0,
-                    ),
-                    child: const Text('Open Pairing', style: TextStyle(fontSize: 13)),
-                  ),
-                ),
-                const SizedBox(width: 8),
-                OutlinedButton(
-                  onPressed: () {
-                    Navigator.pop(context);
-                    _load();
-                  },
-                  style: OutlinedButton.styleFrom(
-                    foregroundColor: const Color(0xFF6B7280),
-                    side: const BorderSide(color: Color(0xFFE5E7EB)),
-                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                  ),
-                  child: const Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Icon(Icons.refresh, size: 14),
-                      SizedBox(width: 4),
-                      Text('Retry', style: TextStyle(fontSize: 13)),
-                    ],
-                  ),
-                ),
-              ],
+                ],
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: starting ? null : () => Navigator.pop(ctx),
+              child: const Text('Cancel'),
+            ),
+            ElevatedButton(
+              onPressed: (selectedCourseId == null || starting) ? null : () async {
+                setDialogState(() => starting = true);
+                try {
+                  await apiService.startAttendanceSession(courseId: selectedCourseId!);
+                  if (ctx.mounted) Navigator.pop(ctx);
+                  await _load();
+                  if (mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(content: Text('Session started — share the code with students'), backgroundColor: DiklyColors.success),
+                    );
+                  }
+                } catch (e) {
+                  setDialogState(() => starting = false);
+                  if (ctx.mounted) {
+                    ScaffoldMessenger.of(ctx).showSnackBar(
+                      SnackBar(content: Text('Error: $e'), backgroundColor: DiklyColors.error),
+                    );
+                  }
+                }
+              },
+              style: ElevatedButton.styleFrom(backgroundColor: DiklyColors.primary, foregroundColor: Colors.white),
+              child: starting
+                  ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
+                  : const Text('Start'),
             ),
           ],
         ),
@@ -165,7 +164,7 @@ class _LecturerAttendanceScreenState
                 ),
               )
             else
-              ..._sessions.map((s) => _SessionCard(session: s)),
+              ..._sessions.map((s) => _SessionCard(session: s, onRefresh: _load)),
           ],
         ),
       ),
@@ -173,54 +172,120 @@ class _LecturerAttendanceScreenState
   }
 }
 
-class _SessionCard extends StatelessWidget {
+class _SessionCard extends StatefulWidget {
   final dynamic session;
-  const _SessionCard({required this.session});
+  final VoidCallback onRefresh;
+  const _SessionCard({required this.session, required this.onRefresh});
+
+  @override
+  State<_SessionCard> createState() => _SessionCardState();
+}
+
+class _SessionCardState extends State<_SessionCard> {
+  bool _ending = false;
 
   @override
   Widget build(BuildContext context) {
-    final present = session['presentCount'] ?? session['present'] ?? 0;
-    final total = session['totalStudents'] ?? session['total'] ?? 0;
-    final title = session['title']?.toString() ??
-        session['meetingTitle']?.toString() ??
-        'Session';
-    final date = session['date'] != null
-        ? DateFormat('MMM d, yyyy').format(
-            DateTime.tryParse(session['date'].toString()) ?? DateTime.now())
+    final s = widget.session;
+    final present = s['presentCount'] ?? s['present'] ?? 0;
+    final total = s['totalStudents'] ?? s['total'] ?? 0;
+    final code = s['code']?.toString() ?? s['sessionCode']?.toString() ?? '';
+    final isActive = s['status']?.toString() == 'active' || s['isActive'] == true;
+    final title = s['title']?.toString() ?? s['course']?['title']?.toString() ?? 'Session';
+    final date = s['createdAt'] != null
+        ? DateFormat('MMM d, h:mm a').format(DateTime.tryParse(s['createdAt'].toString()) ?? DateTime.now())
         : '';
 
     return DiklyCard(
       margin: const EdgeInsets.only(bottom: 10),
       padding: const EdgeInsets.all(14),
-      child: Row(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Container(
-            width: 40,
-            height: 40,
-            decoration: BoxDecoration(
-              color: const Color(0xFF2563EB).withOpacity(0.1),
-              borderRadius: BorderRadius.circular(10),
-            ),
-            child: const Icon(Icons.checklist, color: Color(0xFF2563EB), size: 20),
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  title,
-                  style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 14, color: Color(0xFF111827)),
+          Row(
+            children: [
+              Container(
+                width: 40, height: 40,
+                decoration: BoxDecoration(
+                  color: (isActive ? DiklyColors.success : DiklyColors.primary).withOpacity(0.1),
+                  borderRadius: BorderRadius.circular(10),
                 ),
-                Text(
-                  '$present / $total present',
-                  style: const TextStyle(fontSize: 12, color: Color(0xFF6B7280)),
+                child: Icon(Icons.checklist, color: isActive ? DiklyColors.success : DiklyColors.primary, size: 20),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Expanded(child: Text(title, style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 14, color: DiklyColors.text))),
+                        if (isActive)
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                            decoration: BoxDecoration(color: DiklyColors.success.withOpacity(0.1), borderRadius: BorderRadius.circular(20)),
+                            child: const Text('LIVE', style: TextStyle(fontSize: 10, fontWeight: FontWeight.w700, color: DiklyColors.success)),
+                          ),
+                      ],
+                    ),
+                    Text('$present / $total present${date.isNotEmpty ? "  ·  $date" : ""}',
+                        style: const TextStyle(fontSize: 12, color: DiklyColors.textSecondary)),
+                  ],
                 ),
-              ],
-            ),
+              ),
+            ],
           ),
-          if (date.isNotEmpty)
-            Text(date, style: const TextStyle(fontSize: 12, color: Color(0xFF6B7280))),
+          if (code.isNotEmpty) ...[
+            const SizedBox(height: 10),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+              decoration: BoxDecoration(
+                color: DiklyColors.primary.withOpacity(0.06),
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: DiklyColors.primary.withOpacity(0.2)),
+              ),
+              child: Row(
+                children: [
+                  const Icon(Icons.key_rounded, size: 14, color: DiklyColors.primary),
+                  const SizedBox(width: 6),
+                  Text('Code: ', style: const TextStyle(fontSize: 12, color: DiklyColors.textSecondary)),
+                  Text(code, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w800, color: DiklyColors.primary, letterSpacing: 2)),
+                ],
+              ),
+            ),
+          ],
+          if (isActive) ...[
+            const SizedBox(height: 8),
+            SizedBox(
+              width: double.infinity,
+              child: OutlinedButton(
+                onPressed: _ending ? null : () async {
+                  setState(() => _ending = true);
+                  try {
+                    final id = s['_id']?.toString() ?? s['id']?.toString() ?? '';
+                    await apiService.endAttendanceSession(id);
+                    widget.onRefresh();
+                  } catch (e) {
+                    if (context.mounted) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(content: Text('Error: $e'), backgroundColor: DiklyColors.error),
+                      );
+                    }
+                    setState(() => _ending = false);
+                  }
+                },
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: DiklyColors.error,
+                  side: const BorderSide(color: DiklyColors.error),
+                  padding: const EdgeInsets.symmetric(vertical: 8),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                ),
+                child: _ending
+                    ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2, color: DiklyColors.error))
+                    : const Text('End Session', style: TextStyle(fontSize: 13)),
+              ),
+            ),
+          ],
         ],
       ),
     );
