@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import '../../core/api.dart';
 import '../../core/auth.dart';
 import '../../core/theme.dart';
 import '../../widgets/ds/dikly_ds.dart';
@@ -18,6 +19,10 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
   final _newPwCtrl = TextEditingController();
   final _confirmPwCtrl = TextEditingController();
   bool _saving = false;
+  bool _changingPassword = false;
+  bool _showCurrentPw = false;
+  bool _showNewPw = false;
+  bool _showConfirmPw = false;
 
   @override
   void dispose() {
@@ -49,7 +54,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
               ref.read(authProvider.notifier).logout();
             },
             style: ElevatedButton.styleFrom(backgroundColor: DiklyColors.error),
-            child: const Text('Logout'),
+            child: const Text('Logout', style: TextStyle(color: Colors.white)),
           ),
         ],
       ),
@@ -57,20 +62,90 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
   }
 
   Future<void> _saveChanges() async {
+    final newName = _nameCtrl.text.trim();
+    if (newName.isEmpty) {
+      _showSnack('Name cannot be empty', isError: true);
+      return;
+    }
     setState(() => _saving = true);
-    await Future.delayed(const Duration(milliseconds: 600));
-    if (!mounted) return;
-    setState(() => _saving = false);
+    try {
+      await apiService.updateProfile({'name': newName});
+      // Refresh cached user in auth state
+      ref.read(authProvider.notifier).refreshUser();
+      if (!mounted) return;
+      _showSnack('Profile updated successfully');
+    } catch (e) {
+      if (!mounted) return;
+      _showSnack(
+        e.toString().contains('404')
+            ? 'Profile update is not available — contact your admin.'
+            : 'Failed to update profile. Please try again.',
+        isError: true,
+      );
+    } finally {
+      if (mounted) setState(() => _saving = false);
+    }
+  }
+
+  Future<void> _changePassword() async {
+    final current = _currentPwCtrl.text.trim();
+    final newPw = _newPwCtrl.text.trim();
+    final confirm = _confirmPwCtrl.text.trim();
+
+    if (current.isEmpty || newPw.isEmpty || confirm.isEmpty) {
+      _showSnack('Please fill in all password fields', isError: true);
+      return;
+    }
+    if (newPw.length < 8) {
+      _showSnack('New password must be at least 8 characters', isError: true);
+      return;
+    }
+    if (newPw != confirm) {
+      _showSnack('Passwords do not match', isError: true);
+      return;
+    }
+
+    setState(() => _changingPassword = true);
+    try {
+      await apiService.changePassword(
+        currentPassword: current,
+        newPassword: newPw,
+      );
+      if (!mounted) return;
+      _currentPwCtrl.clear();
+      _newPwCtrl.clear();
+      _confirmPwCtrl.clear();
+      _showSnack('Password changed successfully');
+    } catch (e) {
+      if (!mounted) return;
+      final msg = e.toString();
+      _showSnack(
+        msg.contains('401') || msg.contains('incorrect') || msg.contains('wrong')
+            ? 'Current password is incorrect.'
+            : 'Failed to change password. Please try again.',
+        isError: true,
+      );
+    } finally {
+      if (mounted) setState(() => _changingPassword = false);
+    }
+  }
+
+  void _showSnack(String message, {bool isError = false}) {
     ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Profile updated')),
+      SnackBar(
+        content: Text(message),
+        backgroundColor: isError ? DiklyColors.error : DiklyColors.success,
+        behavior: SnackBarBehavior.floating,
+      ),
     );
   }
 
-  InputDecoration _inputDeco({String? hint, bool readOnly = false}) {
+  InputDecoration _inputDeco({String? hint, bool readOnly = false, Widget? suffixIcon}) {
     return InputDecoration(
       hintText: hint,
       filled: true,
       fillColor: readOnly ? DiklyColors.background : DiklyColors.surface,
+      suffixIcon: suffixIcon,
       border: OutlineInputBorder(
         borderRadius: BorderRadius.circular(8),
         borderSide: const BorderSide(color: DiklyColors.border),
@@ -119,11 +194,10 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
           : ListView(
               padding: const EdgeInsets.all(16),
               children: [
-                // Profile card: large avatar + name + role badge
+                // ── Profile avatar + name + role ─────────────────────────
                 DiklyCard(
                   child: Column(
                     children: [
-                      // Large 80px CircleAvatar with camera overlay badge
                       Stack(
                         children: [
                           CircleAvatar(
@@ -169,6 +243,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                         style: const TextStyle(fontSize: 13, color: DiklyColors.textSecondary),
                       ),
                       const SizedBox(height: 8),
+                      // Role badge
                       Container(
                         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                         decoration: BoxDecoration(
@@ -184,19 +259,74 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                           ),
                         ),
                       ),
+                      // Portal mode chip if set
+                      if (user.portalMode != null) ...[
+                        const SizedBox(height: 6),
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                          decoration: BoxDecoration(
+                            color: DiklyColors.primaryULight,
+                            borderRadius: BorderRadius.circular(20),
+                          ),
+                          child: Text(
+                            user.portalMode!.toUpperCase(),
+                            style: const TextStyle(
+                              fontSize: 11,
+                              fontWeight: FontWeight.w700,
+                              color: DiklyColors.primary,
+                            ),
+                          ),
+                        ),
+                      ],
                     ],
                   ),
                 ),
                 const SizedBox(height: 12),
 
-                // Account Details
+                // ── Account info chips (index no, department, company) ────
+                if (user.indexNumber != null ||
+                    user.department != null ||
+                    user.company != null ||
+                    user.phone != null) ...[
+                  DiklyCard(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text(
+                          'Account Info',
+                          style: TextStyle(
+                            fontSize: 15,
+                            fontWeight: FontWeight.w700,
+                            color: DiklyColors.textPrimary,
+                          ),
+                        ),
+                        const SizedBox(height: 12),
+                        if (user.indexNumber != null)
+                          _InfoRow(icon: Icons.badge_outlined, label: 'Index Number', value: user.indexNumber!),
+                        if (user.department != null)
+                          _InfoRow(icon: Icons.account_tree_outlined, label: 'Department', value: user.department!),
+                        if (user.company != null)
+                          _InfoRow(icon: Icons.business_outlined, label: 'Organisation', value: user.company!),
+                        if (user.phone != null)
+                          _InfoRow(icon: Icons.phone_outlined, label: 'Phone', value: user.phone!),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                ],
+
+                // ── Edit profile ─────────────────────────────────────────
                 DiklyCard(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       const Text(
                         'Account Details',
-                        style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700, color: DiklyColors.textPrimary),
+                        style: TextStyle(
+                          fontSize: 15,
+                          fontWeight: FontWeight.w700,
+                          color: DiklyColors.textPrimary,
+                        ),
                       ),
                       const SizedBox(height: 16),
 
@@ -214,10 +344,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                         initialValue: user.department ?? '',
                         readOnly: true,
                         style: const TextStyle(color: DiklyColors.textSecondary),
-                        decoration: _inputDeco(
-                          hint: 'Not set',
-                          readOnly: true,
-                        ),
+                        decoration: _inputDeco(hint: 'Not set', readOnly: true),
                       ),
                       const SizedBox(height: 4),
                       const Text(
@@ -234,19 +361,30 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                         style: const TextStyle(color: DiklyColors.textSecondary),
                         decoration: _inputDeco(readOnly: true),
                       ),
+                      const SizedBox(height: 20),
+
+                      DiklyPrimaryButton(
+                        label: 'Save Changes',
+                        loading: _saving,
+                        onPressed: _saveChanges,
+                      ),
                     ],
                   ),
                 ),
                 const SizedBox(height: 12),
 
-                // Change Password
+                // ── Change Password ──────────────────────────────────────
                 DiklyCard(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       const Text(
                         'Change Password',
-                        style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700, color: DiklyColors.textPrimary),
+                        style: TextStyle(
+                          fontSize: 15,
+                          fontWeight: FontWeight.w700,
+                          color: DiklyColors.textPrimary,
+                        ),
                       ),
                       const SizedBox(height: 16),
 
@@ -254,8 +392,18 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                       const SizedBox(height: 6),
                       TextFormField(
                         controller: _currentPwCtrl,
-                        obscureText: true,
-                        decoration: _inputDeco(hint: 'Enter current password'),
+                        obscureText: !_showCurrentPw,
+                        decoration: _inputDeco(
+                          hint: 'Enter current password',
+                          suffixIcon: IconButton(
+                            icon: Icon(
+                              _showCurrentPw ? Icons.visibility_off : Icons.visibility,
+                              size: 18,
+                              color: DiklyColors.textLight,
+                            ),
+                            onPressed: () => setState(() => _showCurrentPw = !_showCurrentPw),
+                          ),
+                        ),
                       ),
                       const SizedBox(height: 14),
 
@@ -263,8 +411,18 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                       const SizedBox(height: 6),
                       TextFormField(
                         controller: _newPwCtrl,
-                        obscureText: true,
-                        decoration: _inputDeco(hint: 'Min 8 characters'),
+                        obscureText: !_showNewPw,
+                        decoration: _inputDeco(
+                          hint: 'Min 8 characters',
+                          suffixIcon: IconButton(
+                            icon: Icon(
+                              _showNewPw ? Icons.visibility_off : Icons.visibility,
+                              size: 18,
+                              color: DiklyColors.textLight,
+                            ),
+                            onPressed: () => setState(() => _showNewPw = !_showNewPw),
+                          ),
+                        ),
                       ),
                       const SizedBox(height: 14),
 
@@ -272,22 +430,55 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                       const SizedBox(height: 6),
                       TextFormField(
                         controller: _confirmPwCtrl,
-                        obscureText: true,
-                        decoration: _inputDeco(hint: 'Repeat new password'),
+                        obscureText: !_showConfirmPw,
+                        decoration: _inputDeco(
+                          hint: 'Repeat new password',
+                          suffixIcon: IconButton(
+                            icon: Icon(
+                              _showConfirmPw ? Icons.visibility_off : Icons.visibility,
+                              size: 18,
+                              color: DiklyColors.textLight,
+                            ),
+                            onPressed: () => setState(() => _showConfirmPw = !_showConfirmPw),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 20),
+
+                      SizedBox(
+                        width: double.infinity,
+                        child: ElevatedButton(
+                          onPressed: _changingPassword ? null : _changePassword,
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: const Color(0xFF7C3AED),
+                            foregroundColor: Colors.white,
+                            padding: const EdgeInsets.symmetric(vertical: 14),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                            elevation: 0,
+                          ),
+                          child: _changingPassword
+                              ? const SizedBox(
+                                  width: 18,
+                                  height: 18,
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2,
+                                    valueColor: AlwaysStoppedAnimation(Colors.white),
+                                  ),
+                                )
+                              : const Text(
+                                  'Change Password',
+                                  style: TextStyle(fontWeight: FontWeight.w700, fontSize: 15),
+                                ),
+                        ),
                       ),
                     ],
                   ),
                 ),
                 const SizedBox(height: 20),
 
-                // Save button — full width, blue
-                DiklyPrimaryButton(
-                  label: 'Save Changes',
-                  loading: _saving,
-                  onPressed: _saveChanges,
-                ),
-                const SizedBox(height: 12),
-
+                // ── Logout button ────────────────────────────────────────
                 SizedBox(
                   width: double.infinity,
                   child: OutlinedButton.icon(
@@ -298,13 +489,63 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                       foregroundColor: DiklyColors.error,
                       side: const BorderSide(color: DiklyColors.error),
                       padding: const EdgeInsets.symmetric(vertical: 14),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(8),
+                      ),
                     ),
                   ),
                 ),
                 const SizedBox(height: 32),
               ],
             ),
+    );
+  }
+}
+
+// ── Info Row ────────────────────────────────────────────────────────────────
+
+class _InfoRow extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final String value;
+
+  const _InfoRow({
+    required this.icon,
+    required this.label,
+    required this.value,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 10),
+      child: Row(
+        children: [
+          Icon(icon, size: 16, color: DiklyColors.textLight),
+          const SizedBox(width: 10),
+          SizedBox(
+            width: 110,
+            child: Text(
+              label,
+              style: const TextStyle(
+                fontSize: 13,
+                color: DiklyColors.textLight,
+              ),
+            ),
+          ),
+          Expanded(
+            child: Text(
+              value,
+              style: const TextStyle(
+                fontSize: 13,
+                fontWeight: FontWeight.w600,
+                color: DiklyColors.text,
+              ),
+              overflow: TextOverflow.ellipsis,
+            ),
+          ),
+        ],
+      ),
     );
   }
 }
