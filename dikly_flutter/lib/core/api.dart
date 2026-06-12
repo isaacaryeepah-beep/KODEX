@@ -707,6 +707,57 @@ class ApiService {
     });
   }
 
+  // Student combined dashboard data
+  Future<Map<String, dynamic>> getStudentDashboardData() async {
+    final results = await Future.wait([
+      _dio.get('/api/attendance-sessions/my-attendance?limit=5').catchError((_) => Response(requestOptions: RequestOptions(), data: {'records': [], 'pagination': {'total': 0}})),
+      _dio.get('/api/courses').catchError((_) => Response(requestOptions: RequestOptions(), data: {'courses': []})),
+      _dio.get('/api/student/snap-quizzes/quizzes?showAll=true').catchError((_) => Response(requestOptions: RequestOptions(), data: {'quizzes': []})),
+      _dio.get('/api/attendance-sessions/active').catchError((_) => Response(requestOptions: RequestOptions(), data: {'session': null})),
+      _dio.get('/api/student/assignments/upcoming').catchError((_) => Response(requestOptions: RequestOptions(), data: {'assignments': []})),
+    ]);
+    final records = (results[0].data['records'] ?? results[0].data['data'] ?? []) as List;
+    final totalCheckins = results[0].data['pagination']?['total'] ?? records.length;
+    final presentCount = records.where((r) => r['status'] == 'present').length;
+    final attendanceRate = records.isNotEmpty ? (presentCount / records.length * 100).round() : 0;
+    return {
+      'totalCheckins': totalCheckins,
+      'attendanceRate': attendanceRate,
+      'attendanceRecords': records,
+      'enrolledCourses': ((results[1].data['courses'] ?? results[1].data['data'] ?? []) as List).length,
+      'quizzesTaken': ((results[2].data['quizzes'] ?? results[2].data['data'] ?? []) as List).length,
+      'activeSession': results[3].data['session'],
+      'upcomingAssignments': (results[4].data['assignments'] ?? results[4].data['data'] ?? []) as List,
+    };
+  }
+
+  // Lecturer combined dashboard data
+  Future<Map<String, dynamic>> getLecturerDashboardData() async {
+    final results = await Future.wait([
+      _dio.get('/api/attendance-sessions?limit=5').catchError((_) => Response(requestOptions: RequestOptions(), data: {'sessions': [], 'pagination': {'total': 0}})),
+      _dio.get('/api/courses').catchError((_) => Response(requestOptions: RequestOptions(), data: {'courses': []})),
+      _dio.get('/api/lecturer/quizzes').catchError((_) => Response(requestOptions: RequestOptions(), data: {'quizzes': []})),
+      _dio.get('/api/meetings?limit=10').catchError((_) => Response(requestOptions: RequestOptions(), data: {'data': []})),
+    ]);
+    final courseList = (results[1].data['courses'] ?? results[1].data['data'] ?? []) as List;
+    final totalStudents = courseList.fold<int>(0, (sum, c) => sum + ((c['enrolledStudents'] as List?)?.length ?? 0));
+    final meetingsList = (results[3].data['data'] ?? results[3].data['meetings'] ?? []) as List;
+    final upcoming = meetingsList.where((m) => m['status'] == 'scheduled' || m['status'] == 'live').toList();
+    upcoming.sort((a, b) {
+      final aDate = DateTime.tryParse(a['scheduledStart']?.toString() ?? '') ?? DateTime(2099);
+      final bDate = DateTime.tryParse(b['scheduledStart']?.toString() ?? '') ?? DateTime(2099);
+      return aDate.compareTo(bDate);
+    });
+    return {
+      'sessions': results[0].data['sessions'] ?? [],
+      'totalSessions': results[0].data['pagination']?['total'] ?? (results[0].data['sessions'] as List?)?.length ?? 0,
+      'activeCourses': courseList.length,
+      'totalStudents': totalStudents,
+      'quizzesCreated': ((results[2].data['quizzes'] ?? results[2].data['data'] ?? []) as List).length,
+      'upcomingMeetings': upcoming.take(5).toList(),
+    };
+  }
+
   // Student dashboard stats  (attendance %, active assignments, course count)
   Future<Map<String, dynamic>> getStudentStats() async {
     final data = await _cachedGet('/api/students/dashboard-stats', 'student_stats');
