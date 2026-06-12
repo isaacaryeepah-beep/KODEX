@@ -476,24 +476,24 @@ class ApiService {
     return data as Map<String, dynamic>;
   }
 
-  // Leave Requests
+  // Leave Requests (manager/admin view)
   Future<List<dynamic>> getLeaveRequests() async {
-    final data = await _cachedGet('/api/leave-requests', 'leave_requests');
-    return data['leaveRequests'] ?? data['data'] ?? [];
+    final data = await _cachedGet('/api/leaves', 'leave_requests');
+    return data['leaveRequests'] ?? data['leaves'] ?? data['data'] ?? [];
   }
 
   Future<void> approveLeaveRequest(String id) async {
-    await _dio.put('/api/leave-requests/$id/approve');
+    await _dio.patch('/api/leaves/$id/review', data: {'action': 'approved'});
   }
 
   Future<void> rejectLeaveRequest(String id) async {
-    await _dio.put('/api/leave-requests/$id/reject');
+    await _dio.patch('/api/leaves/$id/review', data: {'action': 'rejected'});
   }
 
-  // Timesheets
+  // Timesheets / payroll runs
   Future<List<dynamic>> getTimesheets() async {
-    final data = await _cachedGet('/api/timesheets', 'timesheets');
-    return data['timesheets'] ?? data['data'] ?? [];
+    final data = await _cachedGet('/api/payroll', 'timesheets');
+    return data['payrollRuns'] ?? data['data'] ?? [];
   }
 
   // Shifts
@@ -672,33 +672,42 @@ class ApiService {
     return (list as List).cast<Map<String, dynamic>>();
   }
 
-  // Sign-in/out (corporate)
+  // Sign-in/out (corporate) — backend at /api/corporate-attendance
   Future<Map<String, dynamic>> getSignInStatus() async {
-    final response = await _dio.get('/api/sign-in-out/status');
+    final response = await _dio.get('/api/corporate-attendance/my', queryParameters: {
+      'from': DateTime.now().toIso8601String().substring(0, 10),
+      'to': DateTime.now().toIso8601String().substring(0, 10),
+    });
     final data = response.data;
-    return (data['data'] ?? data) as Map<String, dynamic>;
+    final records = data['records'] ?? data['data'] ?? [];
+    final todayRecord = (records as List).isNotEmpty ? records.last as Map<String, dynamic> : <String, dynamic>{};
+    return {
+      'isClockedIn': todayRecord['clockOut'] == null && todayRecord['clockIn'] != null,
+      'clockInTime': todayRecord['clockIn'],
+      'clockOutTime': todayRecord['clockOut'],
+    };
   }
 
   Future<void> signIn() async {
-    await _queueablePost('/api/sign-in-out/sign-in', {});
+    await _queueablePost('/api/corporate-attendance/clock-in', {'method': 'manual'});
   }
 
   Future<void> signOut() async {
-    await _queueablePost('/api/sign-in-out/sign-out', {});
+    await _queueablePost('/api/corporate-attendance/clock-out', {'method': 'manual'});
   }
 
   Future<List<Map<String, dynamic>>> getCorporateAttendance() async {
-    final response = await _dio.get('/api/sign-in-out/attendance');
+    final response = await _dio.get('/api/corporate-attendance');
     final data = response.data;
-    final list = data['attendance'] ?? data['data'] ?? [];
+    final list = data['records'] ?? data['attendance'] ?? data['data'] ?? [];
     return (list as List).cast<Map<String, dynamic>>();
   }
 
   // Employee-specific
   Future<List<Map<String, dynamic>>> getMyAttendance() async {
-    final response = await _dio.get('/api/sign-in-out/my-attendance');
+    final response = await _dio.get('/api/corporate-attendance/my');
     final data = response.data;
-    final list = data['attendance'] ?? data['data'] ?? [];
+    final list = data['records'] ?? data['attendance'] ?? data['data'] ?? [];
     return (list as List).cast<Map<String, dynamic>>();
   }
 
@@ -709,14 +718,14 @@ class ApiService {
   }
 
   Future<List<Map<String, dynamic>>> getMyLeaves() async {
-    final response = await _dio.get('/api/leave-requests/my');
+    final response = await _dio.get('/api/leaves/my');
     final data = response.data;
-    final list = data['leaveRequests'] ?? data['data'] ?? [];
+    final list = data['leaveRequests'] ?? data['leaves'] ?? data['data'] ?? [];
     return (list as List).cast<Map<String, dynamic>>();
   }
 
   Future<void> createLeaveRequest(Map<String, dynamic> body) async {
-    await _queueablePost('/api/leave-requests', body);
+    await _queueablePost('/api/leaves', body);
   }
 
   Future<void> createExpense(Map<String, dynamic> body) async {
@@ -733,7 +742,7 @@ class ApiService {
 
   // Profile management
   Future<User> updateProfile(Map<String, dynamic> body) async {
-    final response = await _dio.put('/api/auth/update-profile', data: body);
+    final response = await _dio.put('/api/auth/profile', data: body);
     final data = response.data;
     final userData = data['user'] ?? data['data'] ?? data;
     return User.fromJson(userData as Map<String, dynamic>);
