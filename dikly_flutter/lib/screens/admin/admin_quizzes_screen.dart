@@ -236,7 +236,7 @@ class _QuizRow extends StatelessWidget {
         : (stats['totalQuestions'] as num?)?.toInt() ?? (quiz['totalQuestions'] as num?)?.toInt() ?? 0);
     final submissions = (stats['totalAttempts'] as num?)?.toInt() ?? 0;
     final avgScore = (stats['averageScore'] as num?)?.toDouble() ?? 0.0;
-    final statusRaw = quiz['status']?.toString() ?? quiz['isActive'] == true ? 'active' : 'closed';
+    final statusRaw = quiz['status']?.toString() ?? (quiz['isActive'] == true ? 'active' : 'closed');
 
     Color statusColor;
     String statusLabel;
