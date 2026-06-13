@@ -760,6 +760,25 @@ class ApiService {
     return (data['subscription'] ?? data['data'] ?? data) as Map<String, dynamic>;
   }
 
+  // Lecturer device
+  Future<Map<String, dynamic>?> getLecturerDevice() async {
+    try {
+      final response = await _dio.get('/api/devices/my');
+      final data = response.data;
+      return data['data'] as Map<String, dynamic>?;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  Future<void> unlinkMyDevice() async {
+    await _dio.delete('/api/devices/my');
+  }
+
+  Future<void> renameMyDevice(String name) async {
+    await _dio.patch('/api/devices/my/rename', data: {'deviceName': name});
+  }
+
   // Branches
   Future<List<Map<String, dynamic>>> getAdminDevices() async {
     try {

@@ -248,30 +248,66 @@ class _DaySchedule extends StatelessWidget {
         padding: const EdgeInsets.all(16),
         children: [
           Container(
-            padding: const EdgeInsets.symmetric(vertical: 60, horizontal: 24),
+            padding: const EdgeInsets.symmetric(vertical: 40, horizontal: 24),
             decoration: BoxDecoration(
               color: Colors.white,
               borderRadius: BorderRadius.circular(12),
               border: Border.all(color: DiklyColors.border),
             ),
-            child: const Column(
+            child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                Icon(Icons.calendar_today_outlined, size: 48, color: Color(0xFF9CA3AF)),
-                SizedBox(height: 16),
-                Text(
+                const Icon(Icons.calendar_today_outlined, size: 48, color: Color(0xFF9CA3AF)),
+                const SizedBox(height: 16),
+                const Text(
                   'No classes scheduled yet',
                   style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: Color(0xFF111827)),
                   textAlign: TextAlign.center,
                 ),
-                SizedBox(height: 8),
+                const SizedBox(height: 8),
                 Text(
                   isLecturer
                       ? 'Add your first class to build out your weekly timetable'
                       : "Your lecturers haven't added timetable slots yet. Check back soon.",
-                  style: TextStyle(fontSize: 13, color: Color(0xFF6B7280)),
+                  style: const TextStyle(fontSize: 13, color: Color(0xFF6B7280)),
                   textAlign: TextAlign.center,
                 ),
+                if (isLecturer) ...[
+                  const SizedBox(height: 20),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      ElevatedButton.icon(
+                        onPressed: () => ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(content: Text('Add Class — coming soon')),
+                        ),
+                        icon: const Icon(Icons.add, size: 14),
+                        label: const Text('Add Your First Class', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: DiklyColors.primary,
+                          foregroundColor: Colors.white,
+                          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                          elevation: 0,
+                        ),
+                      ),
+                      const SizedBox(width: 10),
+                      OutlinedButton.icon(
+                        onPressed: () => ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(content: Text('Import from My Courses — coming soon')),
+                        ),
+                        icon: const Icon(Icons.refresh, size: 14),
+                        label: const Text('Import from My Courses', style: TextStyle(fontSize: 13)),
+                        style: OutlinedButton.styleFrom(
+                          foregroundColor: const Color(0xFF374151),
+                          side: const BorderSide(color: Color(0xFFD1D5DB)),
+                          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
               ],
             ),
           ),
