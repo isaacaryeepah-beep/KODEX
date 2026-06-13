@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/api.dart';
 import '../../core/auth.dart';
 import '../../core/theme.dart';
+import '../../widgets/ds/dikly_ds.dart';
 
 final _timetableProvider = FutureProvider.autoDispose<List<Map<String, dynamic>>>(
   (ref) => apiService.getTimetable(),
@@ -82,14 +83,13 @@ class _TimetableScreenState extends ConsumerState<TimetableScreen> {
   Widget build(BuildContext context) {
     final async = ref.watch(_timetableProvider);
     final user = ref.watch(currentUserProvider);
-    final title =
-        user?.role == 'lecturer' ? 'My Timetable' : 'Schedule';
+    final isLecturer = user?.role == 'lecturer';
 
     return Scaffold(
       backgroundColor: DiklyColors.background,
       appBar: AppBar(
-        title: Text(title),
-        leading: BackButton(onPressed: () => Navigator.of(context).maybePop()),
+        leading: const BackButton(),
+        title: const Text('Timetable'),
       ),
       body: async.when(
         loading: () => const Center(child: CircularProgressIndicator()),
@@ -110,6 +110,32 @@ class _TimetableScreenState extends ConsumerState<TimetableScreen> {
         ),
         data: (data) => Column(
           children: [
+            // Header
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: DiklyScreenHeader(
+                      title: 'My Timetable',
+                      subtitle: 'Your weekly class timetable based on enrolled courses',
+                    ),
+                  ),
+                  OutlinedButton.icon(
+                    onPressed: () => ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(content: Text('Export .ics — coming soon')),
+                    ),
+                    icon: const Icon(Icons.calendar_today_outlined, size: 14),
+                    label: const Text('Export .ics', style: TextStyle(fontSize: 12)),
+                    style: OutlinedButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                      side: const BorderSide(color: Color(0xFFD1D5DB)),
+                      foregroundColor: const Color(0xFF374151),
+                    ),
+                  ),
+                ],
+              ),
+            ),
             _DayTabBar(
               days: _days,
               selectedIndex: _selectedDayIndex,
@@ -195,28 +221,33 @@ class _DaySchedule extends StatelessWidget {
   Widget build(BuildContext context) {
     if (slots.isEmpty) {
       return ListView(
-        children: const [
-          SizedBox(height: 80),
-          Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Icon(Icons.calendar_today_outlined,
-                  size: 64, color: DiklyColors.textSecondary),
-              SizedBox(height: 16),
-              Text(
-                'No classes scheduled',
-                style: TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.w600,
-                  color: DiklyColors.textSecondary,
+        padding: const EdgeInsets.all(16),
+        children: [
+          Container(
+            padding: const EdgeInsets.symmetric(vertical: 60, horizontal: 24),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: DiklyColors.border),
+            ),
+            child: const Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(Icons.calendar_today_outlined, size: 48, color: Color(0xFF9CA3AF)),
+                SizedBox(height: 16),
+                Text(
+                  'No classes scheduled yet',
+                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: Color(0xFF111827)),
+                  textAlign: TextAlign.center,
                 ),
-              ),
-              SizedBox(height: 8),
-              Text(
-                'Enjoy your free day!',
-                style: TextStyle(color: DiklyColors.textSecondary),
-              ),
-            ],
+                SizedBox(height: 8),
+                Text(
+                  "Your lecturers haven't added timetable slots yet. Check back soon.",
+                  style: TextStyle(fontSize: 13, color: Color(0xFF6B7280)),
+                  textAlign: TextAlign.center,
+                ),
+              ],
+            ),
           ),
         ],
       );

@@ -19,8 +19,8 @@ class GradeBookScreen extends ConsumerWidget {
     return Scaffold(
       backgroundColor: DiklyColors.background,
       appBar: AppBar(
-        title: const Text('Grade Book'),
-        leading: BackButton(onPressed: () => Navigator.of(context).maybePop()),
+        title: const Text('My Grades'),
+        leading: const BackButton(),
       ),
       body: async.when(
         loading: () => const Center(child: CircularProgressIndicator()),
@@ -44,20 +44,10 @@ class GradeBookScreen extends ConsumerWidget {
               padding: const EdgeInsets.fromLTRB(16, 16, 16, 32),
               children: [
                 // ── Header ──────────────────────────────────────────────
-                const Text(
-                  'Grade Book',
-                  style: TextStyle(
-                    fontSize: 26,
-                    fontWeight: FontWeight.w800,
-                    color: DiklyColors.text,
-                  ),
+                DiklyScreenHeader(
+                  title: 'My Grades',
+                  subtitle: 'Your academic performance across all courses',
                 ),
-                const SizedBox(height: 4),
-                const Text(
-                  'Academic performance overview',
-                  style: TextStyle(fontSize: 14, color: DiklyColors.textLight),
-                ),
-                const SizedBox(height: 20),
 
                 // ── Summary stats ────────────────────────────────────────
                 if (gpa != null || totalCredits != null || attendancePct != null) ...[

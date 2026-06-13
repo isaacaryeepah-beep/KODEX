@@ -194,6 +194,10 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
           : ListView(
               padding: const EdgeInsets.all(16),
               children: [
+                DiklyScreenHeader(
+                  title: 'My Profile',
+                  subtitle: 'Manage your account details',
+                ),
                 // ── Profile avatar + name + role ─────────────────────────
                 DiklyCard(
                   child: Column(
@@ -338,18 +342,13 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                       ),
                       const SizedBox(height: 14),
 
-                      const DiklySectionLabel('DEPARTMENT'),
+                      const DiklySectionLabel('DEPARTMENT (CANNOT BE CHANGED HERE — CONTACT ADMIN)'),
                       const SizedBox(height: 6),
                       TextFormField(
-                        initialValue: user.department ?? '',
+                        initialValue: (user.department ?? '').toUpperCase(),
                         readOnly: true,
                         style: const TextStyle(color: DiklyColors.textSecondary),
                         decoration: _inputDeco(hint: 'Not set', readOnly: true),
-                      ),
-                      const SizedBox(height: 4),
-                      const Text(
-                        'Department cannot be changed here — contact your admin.',
-                        style: TextStyle(fontSize: 11, color: DiklyColors.textMuted),
                       ),
                       const SizedBox(height: 14),
 

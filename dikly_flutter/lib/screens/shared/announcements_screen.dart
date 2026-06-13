@@ -97,25 +97,35 @@ class _AnnouncementsScreenState extends State<AnnouncementsScreen> {
                     ],
                   ),
                 )
-              : _announcements.isEmpty
-                  ? const DiklyEmptyState(
-                      icon: Icons.campaign_outlined,
-                      title: 'No announcements',
-                      subtitle: 'Announcements will appear here',
-                    )
-                  : RefreshIndicator(
-                      onRefresh: _loadData,
-                      child: ListView(
-                        padding: const EdgeInsets.fromLTRB(16, 16, 16, 100),
-                        children: [
-                          DiklyScreenHeader(
-                            title: 'Announcements',
-                            subtitle: '${_announcements.length} announcement${_announcements.length == 1 ? '' : 's'}',
-                          ),
-                          ..._announcements.map((a) => _AnnouncementCard(announcement: a)),
-                        ],
+              : RefreshIndicator(
+                  onRefresh: _loadData,
+                  child: ListView(
+                    padding: const EdgeInsets.fromLTRB(16, 16, 16, 100),
+                    children: [
+                      DiklyScreenHeader(
+                        title: 'Announcements',
+                        subtitle: 'Institution-wide notices and updates',
                       ),
-                    ),
+                      if (_announcements.isEmpty)
+                        Container(
+                          padding: const EdgeInsets.symmetric(vertical: 40),
+                          decoration: BoxDecoration(
+                            color: Colors.white,
+                            borderRadius: BorderRadius.circular(12),
+                            border: Border.all(color: DiklyColors.border),
+                          ),
+                          child: const Center(
+                            child: Text(
+                              'No announcements yet.',
+                              style: TextStyle(fontSize: 13, color: Color(0xFF9CA3AF)),
+                            ),
+                          ),
+                        )
+                      else
+                        ..._announcements.map((a) => _AnnouncementCard(announcement: a)),
+                    ],
+                  ),
+                ),
       floatingActionButton: FloatingActionButton.extended(
         onPressed: _showPostSheet,
         backgroundColor: DiklyColors.primary,
