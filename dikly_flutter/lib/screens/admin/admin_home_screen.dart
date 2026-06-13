@@ -219,7 +219,7 @@ class AdminHomeScreen extends ConsumerWidget {
                     Expanded(
                       child: _SessionsPanel(
                         sessions: (data['sessions'] as List? ?? []).cast<Map<String, dynamic>>(),
-                        onViewAll: () => context.push('/sessions'),
+                        onViewAll: () => context.push('/admin/sessions'),
                       ),
                     ),
                     const SizedBox(width: 12),
