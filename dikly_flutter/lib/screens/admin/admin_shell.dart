@@ -27,7 +27,7 @@ class _AdminShellState extends ConsumerState<AdminShell> {
     _index = widget.initialTab;
   }
 
-  static const _accent = Color(0xFF0F172A);
+  static const _accent = Color(0xFFDC2626); // Admin red accent
   static const _labels = ['Dashboard', 'Users', 'Courses', 'Reports'];
   static const _icons = [
     Icons.dashboard_outlined,
