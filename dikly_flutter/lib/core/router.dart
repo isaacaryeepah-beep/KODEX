@@ -68,6 +68,7 @@ import '../screens/admin/admin_class_reps_screen.dart';
 import '../screens/admin/admin_quizzes_screen.dart';
 import '../screens/admin/admin_reports_screen.dart';
 import '../screens/admin/admin_devices_screen.dart';
+import '../screens/admin/admin_sessions_screen.dart';
 import '../screens/lecturer/lecturer_performance_screen.dart';
 import '../screens/lecturer/lecturer_attendance_device_screen.dart';
 import '../screens/lecturer/lecturer_search_screen.dart';
@@ -75,6 +76,7 @@ import '../screens/lecturer/lecturer_quiz_screen.dart';
 import '../screens/lecturer/lecturer_schedule_screen.dart';
 import '../screens/lecturer/lecturer_assignments_screen.dart';
 import '../screens/lecturer/lecturer_question_bank_screen.dart';
+import '../screens/lecturer/lecturer_sessions_screen.dart';
 import '../screens/splash_screen.dart';
 import '../screens/hod/hod_sessions_screen.dart';
 import '../screens/hod/hod_quiz_monitor_screen.dart';
@@ -250,6 +252,7 @@ final routerProvider = Provider<GoRouter>((ref) {
       GoRoute(path: '/hod/dept-messaging',  builder: (context, state) => const HodDeptMessagingScreen()),
 
       // Admin
+      GoRoute(path: '/admin/sessions',          builder: (context, state) => const AdminSessionsScreen()),
       GoRoute(path: '/admin/approvals',        builder: (context, state) => const AdminApprovalsScreen()),
       GoRoute(path: '/admin/search',           builder: (context, state) => const AdminSearchScreen()),
       GoRoute(path: '/admin/course-approvals', builder: (context, state) => const AdminCourseApprovalsScreen()),
@@ -259,6 +262,7 @@ final routerProvider = Provider<GoRouter>((ref) {
       GoRoute(path: '/admin/quizzes',          builder: (context, state) => const AdminQuizzesScreen()),
 
       // Lecturer
+      GoRoute(path: '/lecturer/sessions',         builder: (context, state) => const LecturerSessionsScreen()),
       GoRoute(path: '/lecturer/performance',     builder: (context, state) => const LecturerPerformanceScreen()),
       GoRoute(path: '/lecturer/attendance-device', builder: (context, state) => const LecturerAttendanceDeviceScreen()),
       GoRoute(path: '/lecturer/search',          builder: (context, state) => const LecturerSearchScreen()),
