@@ -16,17 +16,15 @@ class DrawerSection {
   const DrawerSection({this.header, required this.items});
 }
 
-// Dark zinc sidebar palette
-const _bg        = Color(0xFF18181B); // zinc-900
-const _surface   = Color(0xFF27272A); // zinc-800 — active item
-const _border    = Color(0xFF3F3F46); // zinc-700 — divider
-const _textInact = Color(0xFFD4D4D8); // zinc-300 — inactive text
-const _textMuted = Color(0xFF71717A); // zinc-500 — section headers
-const _textWhite = Colors.white;
+// Web-matching light sidebar palette (matches web mobile drawer)
+const _bg        = Colors.white;
+const _surface   = Color(0x0F000000); // rgba(0,0,0,0.06) — active item tint
+const _border    = Color(0x12000000); // rgba(0,0,0,0.07) — item separator
+const _textInact = Color(0xFF6B7280); // gray-500 — inactive text
+const _textMuted = Color(0xFF9CA3AF); // gray-400 — section headers
+const _textDark  = Color(0xFF0D1117); // near-black — logo + name
 
-/// Shared sidebar drawer — dark zinc aesthetic.
-/// Dark #18181B background, section headers in zinc-500,
-/// active item pill in zinc-800 with white text + indigo icon.
+/// Shared sidebar drawer — white/light aesthetic matching the web portal sidebar.
 class DiklyDrawer extends StatelessWidget {
   final String portalTitle;
   final Color accentColor;
@@ -57,8 +55,11 @@ class DiklyDrawer extends StatelessWidget {
         child: Column(
           children: [
             // ── Header ────────────────────────────────────────────────
-            Padding(
+            Container(
               padding: const EdgeInsets.fromLTRB(16, 20, 16, 14),
+              decoration: const BoxDecoration(
+                border: Border(bottom: BorderSide(color: _border)),
+              ),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
@@ -66,15 +67,11 @@ class DiklyDrawer extends StatelessWidget {
                   Row(
                     children: [
                       Container(
-                        width: 36,
-                        height: 36,
+                        width: 34,
+                        height: 34,
                         decoration: BoxDecoration(
-                          gradient: const LinearGradient(
-                            colors: [Color(0xFF6366F1), Color(0xFF4F46E5)],
-                            begin: Alignment.topLeft,
-                            end: Alignment.bottomRight,
-                          ),
-                          borderRadius: BorderRadius.circular(9),
+                          color: _textDark,
+                          borderRadius: BorderRadius.circular(10),
                         ),
                         child: Center(
                           child: Text(
@@ -95,10 +92,10 @@ class DiklyDrawer extends StatelessWidget {
                           Text(
                             'DIKLY',
                             style: GoogleFonts.dmSans(
-                              fontSize: 18,
+                              fontSize: 16,
                               fontWeight: FontWeight.w800,
-                              color: _textWhite,
-                              letterSpacing: 0.5,
+                              color: _textDark,
+                              letterSpacing: -0.2,
                             ),
                           ),
                           Text(
@@ -113,19 +110,19 @@ class DiklyDrawer extends StatelessWidget {
                       ),
                     ],
                   ),
-                  const SizedBox(height: 18),
+                  const SizedBox(height: 16),
                   // User info
                   Row(
                     children: [
                       CircleAvatar(
-                        radius: 20,
-                        backgroundColor: accentColor.withOpacity(0.20),
+                        radius: 18,
+                        backgroundColor: accentColor.withOpacity(0.12),
                         child: Text(
                           userName.isNotEmpty ? userName[0].toUpperCase() : 'U',
                           style: TextStyle(
                             color: accentColor,
                             fontWeight: FontWeight.w700,
-                            fontSize: 15,
+                            fontSize: 14,
                           ),
                         ),
                       ),
@@ -139,7 +136,7 @@ class DiklyDrawer extends StatelessWidget {
                               style: GoogleFonts.dmSans(
                                 fontWeight: FontWeight.w700,
                                 fontSize: 13,
-                                color: _textWhite,
+                                color: _textDark,
                               ),
                               overflow: TextOverflow.ellipsis,
                             ),
@@ -160,7 +157,7 @@ class DiklyDrawer extends StatelessWidget {
                   Container(
                     padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                     decoration: BoxDecoration(
-                      color: accentColor.withOpacity(0.15),
+                      color: accentColor.withOpacity(0.10),
                       borderRadius: BorderRadius.circular(6),
                     ),
                     child: Text(
@@ -176,17 +173,16 @@ class DiklyDrawer extends StatelessWidget {
                 ],
               ),
             ),
-            const Divider(height: 1, color: _border),
 
             // ── Menu items ────────────────────────────────────────────
             Expanded(
               child: ListView(
-                padding: const EdgeInsets.only(top: 8, bottom: 16),
+                padding: const EdgeInsets.only(top: 4, bottom: 16),
                 children: [
                   for (final section in sections) ...[
                     if (section.header != null)
                       Padding(
-                        padding: const EdgeInsets.fromLTRB(16, 16, 16, 4),
+                        padding: const EdgeInsets.fromLTRB(20, 14, 16, 2),
                         child: Text(
                           section.header!,
                           style: GoogleFonts.dmSans(
@@ -208,7 +204,7 @@ class DiklyDrawer extends StatelessWidget {
                         },
                       ),
                   ],
-                  const Divider(height: 24, color: _border),
+                  const Divider(color: _border, height: 1),
                   // Sign out
                   _DrawerTile(
                     item: const DrawerItem(Icons.logout, 'Sign Out', ''),
@@ -241,21 +237,19 @@ class _DrawerTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final iconColor = isActive ? DiklyColors.primary : _textMuted;
-    final textColor = isActive ? _textWhite : _textInact;
+    final iconColor = isActive ? accentColor : _textMuted;
+    final textColor = isActive ? accentColor : _textInact;
 
     return InkWell(
       onTap: onTap,
-      highlightColor: Colors.white.withOpacity(0.04),
-      splashColor: Colors.white.withOpacity(0.06),
-      borderRadius: BorderRadius.circular(8),
+      highlightColor: Colors.black.withOpacity(0.03),
+      splashColor: Colors.black.withOpacity(0.04),
       child: Container(
-        margin: const EdgeInsets.symmetric(horizontal: 8, vertical: 1),
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 11),
         decoration: BoxDecoration(
           color: isActive ? _surface : Colors.transparent,
-          borderRadius: BorderRadius.circular(8),
+          border: const Border(bottom: BorderSide(color: _border)),
         ),
+        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 13),
         child: Row(
           children: [
             Icon(item.icon, size: 18, color: iconColor),
@@ -263,9 +257,10 @@ class _DrawerTile extends StatelessWidget {
             Text(
               item.label,
               style: GoogleFonts.dmSans(
-                fontSize: 14,
-                fontWeight: isActive ? FontWeight.w600 : FontWeight.w400,
+                fontSize: 13,
+                fontWeight: isActive ? FontWeight.w700 : FontWeight.w600,
                 color: textColor,
+                letterSpacing: 0.1,
               ),
             ),
           ],
