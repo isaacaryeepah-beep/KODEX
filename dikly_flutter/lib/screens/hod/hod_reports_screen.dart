@@ -60,15 +60,19 @@ class HodReportsScreen extends ConsumerWidget {
                 subtitle: 'Attendance and activity overview',
               ),
 
-              // 4 stat cards in a row
+              // 4 stat cards
               Row(
                 children: [
                   _StatCard(value: '$totalSessions', label: 'TOTAL SESSIONS', color: const Color(0xFF2563EB)),
-                  const SizedBox(width: 8),
+                  const SizedBox(width: 10),
                   _StatCard(value: '$totalAttendance', label: 'TOTAL ATTENDANCE', color: const Color(0xFF10B981)),
-                  const SizedBox(width: 8),
+                ],
+              ),
+              const SizedBox(height: 10),
+              Row(
+                children: [
                   _StatCard(value: '$avgAttendance', label: 'AVG ATTENDANCE', color: const Color(0xFFF59E0B)),
-                  const SizedBox(width: 8),
+                  const SizedBox(width: 10),
                   _StatCard(value: '${lecturers.length}', label: 'LECTURERS', color: const Color(0xFF7C3AED)),
                 ],
               ),

@@ -27,7 +27,7 @@ class _AdminShellState extends ConsumerState<AdminShell> {
     _index = widget.initialTab;
   }
 
-  static const _accent = Color(0xFFDC2626); // Admin red accent
+  static const _accent = Color(0xFF0F172A);
   static const _labels = ['Dashboard', 'Users', 'Courses', 'Reports'];
   static const _icons = [
     Icons.dashboard_outlined,
@@ -44,13 +44,12 @@ class _AdminShellState extends ConsumerState<AdminShell> {
       DrawerItem(Icons.check_circle_outline, 'Approvals', '/admin/approvals'),
       DrawerItem(Icons.search_outlined, 'Search', '/admin/search'),
       DrawerItem(Icons.people_outlined, 'Users', '/admin/users'),
-      DrawerItem(Icons.play_circle_outline, 'Sessions', '/admin/sessions'),
-      DrawerItem(Icons.devices_outlined, 'Classroom Devices', '/admin/devices'),
+      DrawerItem(Icons.play_circle_outline, 'Sessions', '/sessions'),
     ]),
     DrawerSection(header: 'ACADEMIC', items: [
       DrawerItem(Icons.book_outlined, 'Courses', '/courses'),
       DrawerItem(Icons.task_alt_outlined, 'Course Approvals', '/admin/course-approvals'),
-      DrawerItem(Icons.shield_outlined, 'Proctored/Snap Quiz', '/admin/quizzes'),
+      DrawerItem(Icons.shield_outlined, 'Proctored/Snap Quiz', '/quizzes'),
       DrawerItem(Icons.grade_outlined, 'Grade Book', '/gradebook'),
       DrawerItem(Icons.campaign_outlined, 'Announcements', '/announcements'),
       DrawerItem(Icons.school_outlined, 'Programmes', '/admin/programmes'),
