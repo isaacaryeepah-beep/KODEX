@@ -48,13 +48,13 @@ class _LecturerShellState extends ConsumerState<LecturerShell> {
   static const _sections = [
     DrawerSection(items: [
       DrawerItem(Icons.dashboard_outlined, 'Dashboard', '/dashboard/lecturer'),
-      DrawerItem(Icons.access_time_outlined, 'Sessions', '/lecturer/sessions'),
+      DrawerItem(Icons.access_time_outlined, 'Sessions', '/sessions'),
       DrawerItem(Icons.sensors_outlined, 'Attendance Device', '/lecturer/attendance-device'),
     ]),
     DrawerSection(header: 'CONTENT', items: [
       DrawerItem(Icons.search_outlined, 'Search', '/lecturer/search'),
       DrawerItem(Icons.book_outlined, 'Courses', '/courses'),
-      DrawerItem(Icons.video_library_outlined, 'Course Videos', '/lecturer/course-videos'),
+      DrawerItem(Icons.video_library_outlined, 'Course Videos', '/courses'),
       DrawerItem(Icons.shield_outlined, 'Proctored/Snap Quiz', '/lecturer/quiz'),
       DrawerItem(Icons.visibility_outlined, 'Quiz Monitor', '/lecturer/quiz'),
       DrawerItem(Icons.calendar_today_outlined, 'Timetable', '/lecturer/schedule'),
@@ -68,7 +68,7 @@ class _LecturerShellState extends ConsumerState<LecturerShell> {
     ]),
     DrawerSection(header: 'INSIGHTS', items: [
       DrawerItem(Icons.bar_chart_outlined, 'Performance', '/lecturer/performance'),
-      DrawerItem(Icons.assessment_outlined, 'Reports', '/lecturer/performance'),
+      DrawerItem(Icons.assessment_outlined, 'Reports', '/reports'),
     ]),
     DrawerSection(items: [
       DrawerItem(Icons.campaign_outlined, 'Announcements', '/announcements'),
