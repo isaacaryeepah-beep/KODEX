@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/api.dart';
 import '../../core/theme.dart';
+import '../../widgets/ds/dikly_ds.dart';
 
 final _lecturerPerfProvider =
     FutureProvider.autoDispose<Map<String, dynamic>>(
@@ -22,7 +23,9 @@ class LecturerPerformanceScreen extends ConsumerWidget {
         leading: BackButton(onPressed: () => Navigator.of(context).maybePop()),
       ),
       body: async.when(
-        loading: () => const Center(child: CircularProgressIndicator()),
+        loading: () => const Center(
+          child: Text('Loading performance data...', style: TextStyle(fontSize: 14, color: DiklyColors.textSecondary)),
+        ),
         error: (e, _) => Center(
           child: Column(
             mainAxisSize: MainAxisSize.min,
@@ -106,6 +109,10 @@ class _LecturerPerfBody extends StatelessWidget {
     return ListView(
       padding: const EdgeInsets.all(16),
       children: [
+        DiklyScreenHeader(
+          title: 'Student Performance',
+          subtitle: 'Overview of student results across all your quizzes',
+        ),
         // 2x2 metric grid
         GridView.count(
           crossAxisCount: 2,

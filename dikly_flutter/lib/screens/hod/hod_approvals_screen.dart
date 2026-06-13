@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/api.dart';
+import '../../core/auth.dart';
 import '../../core/theme.dart';
+import '../../widgets/ds/dikly_ds.dart';
 
 final _pendingApprovalsProvider =
     FutureProvider.autoDispose<List<Map<String, dynamic>>>(
@@ -104,11 +106,17 @@ class _HodApprovalsScreenState extends ConsumerState<HodApprovalsScreen> {
   @override
   Widget build(BuildContext context) {
     final asyncData = ref.watch(_pendingApprovalsProvider);
+    final user = ref.watch(authProvider).user;
+    final dept = user?.department ?? user?.company ?? '';
 
     return Scaffold(
+      backgroundColor: DiklyColors.background,
       appBar: AppBar(
-        title: const Text('Approvals'),
-        leading: const BackButton(),
+        backgroundColor: DiklyColors.surface,
+        elevation: 0,
+        surfaceTintColor: Colors.transparent,
+        title: const Text('Pending Approvals'),
+        leading: BackButton(onPressed: () => Navigator.of(context).maybePop()),
       ),
       body: asyncData.when(
         loading: () => const Center(child: CircularProgressIndicator()),
@@ -130,53 +138,33 @@ class _HodApprovalsScreenState extends ConsumerState<HodApprovalsScreen> {
           ),
         ),
         data: (approvals) {
-          if (approvals.isEmpty) {
-            return Center(
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Container(
-                    width: 72,
-                    height: 72,
-                    decoration: BoxDecoration(
-                      color: DiklyColors.success.withOpacity(0.1),
-                      borderRadius: BorderRadius.circular(20),
-                    ),
-                    child: const Icon(
-                      Icons.check_circle_outline,
-                      size: 40,
-                      color: DiklyColors.success,
-                    ),
-                  ),
-                  const SizedBox(height: 16),
-                  const Text(
-                    'No pending approvals',
-                    style: TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.w700,
-                      color: DiklyColors.textPrimary,
-                    ),
-                  ),
-                  const SizedBox(height: 6),
-                  const Text(
-                    'All users have been reviewed',
-                    style: TextStyle(
-                      fontSize: 13,
-                      color: DiklyColors.textSecondary,
-                    ),
-                  ),
-                ],
-              ),
-            );
-          }
-
           return RefreshIndicator(
             onRefresh: () async => ref.invalidate(_pendingApprovalsProvider),
-            child: ListView.builder(
-              padding: const EdgeInsets.all(16),
-              itemCount: approvals.length,
-              itemBuilder: (_, i) {
-                final item = approvals[i];
+            child: ListView(
+              padding: const EdgeInsets.fromLTRB(16, 16, 16, 100),
+              children: [
+                DiklyScreenHeader(
+                  title: 'Pending Approvals',
+                  subtitle: 'Lecturer & student requests for $dept',
+                ),
+                if (approvals.isEmpty)
+                  Container(
+                    padding: const EdgeInsets.symmetric(vertical: 60, horizontal: 24),
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: DiklyColors.border),
+                    ),
+                    child: const Center(
+                      child: Text(
+                        'No pending approval requests — all caught up!',
+                        style: TextStyle(fontSize: 13, color: DiklyColors.textSecondary),
+                        textAlign: TextAlign.center,
+                      ),
+                    ),
+                  )
+                else
+                  ...approvals.map((item) {
                 final id = item['_id']?.toString() ?? item['id']?.toString() ?? '';
                 final name = item['name']?.toString() ?? 'Unknown';
                 final email = item['email']?.toString() ?? '';
@@ -291,7 +279,8 @@ class _HodApprovalsScreenState extends ConsumerState<HodApprovalsScreen> {
                     ),
                   ),
                 );
-              },
+              }).toList(),
+              ],
             ),
           );
         },

@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/api.dart';
+import '../../core/auth.dart';
 import '../../core/theme.dart';
+import '../../widgets/ds/dikly_ds.dart';
 
 final _allDepartmentCoursesProvider =
     FutureProvider.autoDispose<List<Map<String, dynamic>>>(
@@ -82,11 +84,17 @@ class _HodCourseApprovalsScreenState
   @override
   Widget build(BuildContext context) {
     final asyncData = ref.watch(_allDepartmentCoursesProvider);
+    final user = ref.watch(authProvider).user;
+    final dept = user?.department ?? user?.company ?? '';
 
     return Scaffold(
+      backgroundColor: DiklyColors.background,
       appBar: AppBar(
+        backgroundColor: DiklyColors.surface,
+        elevation: 0,
+        surfaceTintColor: Colors.transparent,
         title: const Text('Course Approvals'),
-        leading: const BackButton(),
+        leading: BackButton(onPressed: () => Navigator.of(context).maybePop()),
       ),
       body: asyncData.when(
         loading: () => const Center(child: CircularProgressIndicator()),
@@ -119,53 +127,33 @@ class _HodCourseApprovalsScreenState
               )
               .toList();
 
-          if (pending.isEmpty) {
-            return Center(
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Container(
-                    width: 72,
-                    height: 72,
-                    decoration: BoxDecoration(
-                      color: DiklyColors.success.withOpacity(0.1),
-                      borderRadius: BorderRadius.circular(20),
-                    ),
-                    child: const Icon(
-                      Icons.check_circle_outline,
-                      size: 40,
-                      color: DiklyColors.success,
-                    ),
-                  ),
-                  const SizedBox(height: 16),
-                  const Text(
-                    'No pending course approvals',
-                    style: TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.w700,
-                    ),
-                  ),
-                  const SizedBox(height: 6),
-                  const Text(
-                    'All courses have been reviewed',
-                    style: TextStyle(
-                      fontSize: 13,
-                      color: DiklyColors.textSecondary,
-                    ),
-                  ),
-                ],
-              ),
-            );
-          }
-
           return RefreshIndicator(
-            onRefresh: () async =>
-                ref.invalidate(_allDepartmentCoursesProvider),
-            child: ListView.builder(
-              padding: const EdgeInsets.all(16),
-              itemCount: pending.length,
-              itemBuilder: (_, i) {
-                final course = pending[i];
+            onRefresh: () async => ref.invalidate(_allDepartmentCoursesProvider),
+            child: ListView(
+              padding: const EdgeInsets.fromLTRB(16, 16, 16, 100),
+              children: [
+                DiklyScreenHeader(
+                  title: 'Course Approvals',
+                  subtitle: '${pending.length} course${pending.length == 1 ? '' : 's'} awaiting your review · $dept',
+                ),
+                if (pending.isEmpty)
+                  Container(
+                    padding: const EdgeInsets.symmetric(vertical: 60, horizontal: 24),
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: DiklyColors.border),
+                    ),
+                    child: const Center(
+                      child: Text(
+                        'No courses pending approval. All caught up!',
+                        style: TextStyle(fontSize: 13, color: DiklyColors.textSecondary),
+                        textAlign: TextAlign.center,
+                      ),
+                    ),
+                  )
+                else
+                  ...pending.map((course) {
                 final id =
                     course['_id']?.toString() ?? course['id']?.toString() ?? '';
                 final title = course['title']?.toString() ?? 'Untitled';
@@ -319,7 +307,8 @@ class _HodCourseApprovalsScreenState
                     ),
                   ),
                 );
-              },
+              }).toList(),
+              ],
             ),
           );
         },

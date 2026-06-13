@@ -83,18 +83,15 @@ class LecturerHomeScreen extends ConsumerWidget {
               return Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  // Stats grid
-                  GridView.count(
-                    crossAxisCount: 2,
-                    crossAxisSpacing: 12,
-                    mainAxisSpacing: 12,
-                    childAspectRatio: 1.55,
-                    shrinkWrap: true,
-                    physics: const NeverScrollableScrollPhysics(),
+                  // Stats row — 4 compact cards
+                  Row(
                     children: [
                       _StatCard(value: '$totalStudents', label: 'STUDENTS', color: DiklyColors.primary),
+                      const SizedBox(width: 8),
                       _StatCard(value: '$activeCourses', label: 'COURSES', color: DiklyColors.success),
+                      const SizedBox(width: 8),
                       _StatCard(value: '$totalSessions', label: 'SESSIONS', color: const Color(0xFFF97316)),
+                      const SizedBox(width: 8),
                       _StatCard(value: '$quizzesCreated', label: 'QUIZZES', color: const Color(0xFF7C3AED)),
                     ],
                   ),
@@ -152,15 +149,38 @@ class LecturerHomeScreen extends ConsumerWidget {
                   const Text('Recent Sessions', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700, color: DiklyColors.text)),
                   const SizedBox(height: 8),
                   sessions.isEmpty
-                      ? DiklyEmptyState(
-                          icon: Icons.video_call_outlined,
-                          title: 'No sessions yet',
-                          subtitle: 'Start your first attendance session.',
+                      ? Container(
+                          padding: const EdgeInsets.symmetric(vertical: 40),
+                          decoration: BoxDecoration(
+                            color: Colors.white,
+                            borderRadius: BorderRadius.circular(10),
+                            border: Border.all(color: DiklyColors.border),
+                          ),
+                          child: const Center(
+                            child: Text('No sessions yet.', style: TextStyle(fontSize: 13, color: DiklyColors.textSecondary)),
+                          ),
                         )
                       : DiklyCard(
                           padding: EdgeInsets.zero,
                           child: Column(
-                            children: sessions.take(5).map<Widget>((s) => _SessionRow(s: s as Map)).toList(),
+                            children: [
+                              // Table header
+                              Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                                decoration: const BoxDecoration(
+                                  color: Color(0xFFF9FAFB),
+                                  borderRadius: BorderRadius.vertical(top: Radius.circular(10)),
+                                  border: Border(bottom: BorderSide(color: DiklyColors.border, width: 0.5)),
+                                ),
+                                child: const Row(children: [
+                                  Expanded(flex: 3, child: _TableHeader('TITLE')),
+                                  Expanded(flex: 2, child: _TableHeader('STATUS')),
+                                  Expanded(flex: 3, child: _TableHeader('STARTED')),
+                                  Expanded(flex: 2, child: _TableHeader('CREATED BY')),
+                                ]),
+                              ),
+                              ...sessions.take(5).map<Widget>((s) => _SessionRow(s: s as Map)),
+                            ],
                           ),
                         ),
                   const SizedBox(height: 24),
@@ -228,18 +248,36 @@ class _StatCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return DiklyCard(
-      padding: const EdgeInsets.all(16),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [
-          Text(value, style: GoogleFonts.dmSans(fontSize: 28, fontWeight: FontWeight.w800, color: color, height: 1)),
-          Text(label, style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: DiklyColors.textLight, letterSpacing: 0.3)),
-        ],
+    return Expanded(
+      child: Container(
+        padding: const EdgeInsets.all(10),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(color: const Color(0xFFE5E7EB)),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Container(height: 3, decoration: BoxDecoration(color: color, borderRadius: BorderRadius.circular(2))),
+            const SizedBox(height: 8),
+            Text(value, style: TextStyle(fontSize: 20, fontWeight: FontWeight.w800, color: color)),
+            Text(label, style: const TextStyle(fontSize: 8, color: Color(0xFF9CA3AF), letterSpacing: 0.2)),
+          ],
+        ),
       ),
     );
   }
+}
+
+class _TableHeader extends StatelessWidget {
+  final String text;
+  const _TableHeader(this.text);
+  @override
+  Widget build(BuildContext context) => Text(
+    text,
+    style: const TextStyle(fontSize: 10, fontWeight: FontWeight.w700, color: Color(0xFF9CA3AF)),
+  );
 }
 
 class _SessionRow extends StatelessWidget {
@@ -248,42 +286,38 @@ class _SessionRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final title = s['title']?.toString() ?? 'Untitled';
     final status = s['status']?.toString() ?? '';
     final statusColor = status == 'active' || status == 'live' ? DiklyColors.success
         : status == 'paused' || status == 'locked' ? DiklyColors.warning
         : DiklyColors.textLight;
     final startedAt = s['startedAt'] != null ? DateTime.tryParse(s['startedAt'].toString()) : null;
-    final creatorName = (s['createdBy'] as Map?)?['name']?.toString() ?? '';
+    final creatorName = (s['createdBy'] as Map?)?['name']?.toString() ?? '—';
 
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-      decoration: BoxDecoration(border: Border(bottom: BorderSide(color: DiklyColors.border, width: 0.5))),
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+      decoration: const BoxDecoration(border: Border(bottom: BorderSide(color: DiklyColors.border, width: 0.5))),
       child: Row(
         children: [
-          Container(
-            width: 8,
-            height: 8,
-            margin: const EdgeInsets.only(right: 12, top: 4),
-            decoration: BoxDecoration(color: statusColor, shape: BoxShape.circle),
-          ),
+          Expanded(flex: 3, child: Text(title, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: DiklyColors.text), maxLines: 1, overflow: TextOverflow.ellipsis)),
           Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(s['title']?.toString() ?? 'Untitled', style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 14, color: DiklyColors.text), maxLines: 1, overflow: TextOverflow.ellipsis),
-                if (startedAt != null || creatorName.isNotEmpty)
-                  Text(
-                    [if (startedAt != null) DateFormat('MMM d · h:mm a').format(startedAt), if (creatorName.isNotEmpty) creatorName].join(' · '),
-                    style: const TextStyle(fontSize: 12, color: DiklyColors.textLight),
-                  ),
-              ],
+            flex: 2,
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+              decoration: BoxDecoration(color: statusColor.withOpacity(0.12), borderRadius: BorderRadius.circular(4)),
+              child: Text(status, style: TextStyle(fontSize: 10, color: statusColor, fontWeight: FontWeight.w600)),
             ),
           ),
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-            decoration: BoxDecoration(color: statusColor.withOpacity(0.12), borderRadius: BorderRadius.circular(8)),
-            child: Text(status.toUpperCase(), style: TextStyle(fontSize: 10, color: statusColor, fontWeight: FontWeight.w700)),
+          Expanded(
+            flex: 3,
+            child: Text(
+              startedAt != null ? DateFormat('M/d/yyyy, h:mm a').format(startedAt) : '—',
+              style: const TextStyle(fontSize: 11, color: DiklyColors.textLight),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+            ),
           ),
+          Expanded(flex: 2, child: Text(creatorName, style: const TextStyle(fontSize: 11, color: DiklyColors.textLight), maxLines: 1, overflow: TextOverflow.ellipsis)),
         ],
       ),
     );

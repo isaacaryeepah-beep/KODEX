@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/api.dart';
+import '../../core/auth.dart';
 import '../../core/theme.dart';
+import '../../widgets/ds/dikly_ds.dart';
 
 final _allStudentsForUnlockProvider =
     FutureProvider.autoDispose<List<Map<String, dynamic>>>(
@@ -62,11 +64,16 @@ class _HodUnlockStudentsScreenState
   @override
   Widget build(BuildContext context) {
     final asyncData = ref.watch(_allStudentsForUnlockProvider);
+    ref.watch(authProvider);
 
     return Scaffold(
+      backgroundColor: DiklyColors.background,
       appBar: AppBar(
-        title: const Text('Locked Students'),
-        leading: const BackButton(),
+        backgroundColor: DiklyColors.surface,
+        elevation: 0,
+        surfaceTintColor: Colors.transparent,
+        title: const Text('Locked Student Accounts'),
+        leading: BackButton(onPressed: () => Navigator.of(context).maybePop()),
       ),
       body: asyncData.when(
         loading: () => const Center(child: CircularProgressIndicator()),
@@ -92,57 +99,35 @@ class _HodUnlockStudentsScreenState
           ),
         ),
         data: (allStudents) {
-          final locked = allStudents
-              .where((s) => s['isLocked'] == true)
-              .toList();
-
-          if (locked.isEmpty) {
-            return Center(
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Container(
-                    width: 72,
-                    height: 72,
-                    decoration: BoxDecoration(
-                      color: DiklyColors.success.withOpacity(0.1),
-                      borderRadius: BorderRadius.circular(20),
-                    ),
-                    child: const Icon(
-                      Icons.lock_open_outlined,
-                      size: 40,
-                      color: DiklyColors.success,
-                    ),
-                  ),
-                  const SizedBox(height: 16),
-                  const Text(
-                    'No locked students',
-                    style: TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.w700,
-                    ),
-                  ),
-                  const SizedBox(height: 6),
-                  const Text(
-                    'All students have full access',
-                    style: TextStyle(
-                      fontSize: 13,
-                      color: DiklyColors.textSecondary,
-                    ),
-                  ),
-                ],
-              ),
-            );
-          }
+          final locked = allStudents.where((s) => s['isLocked'] == true).toList();
 
           return RefreshIndicator(
-            onRefresh: () async =>
-                ref.invalidate(_allStudentsForUnlockProvider),
-            child: ListView.builder(
-              padding: const EdgeInsets.all(16),
-              itemCount: locked.length,
-              itemBuilder: (_, i) {
-                final student = locked[i];
+            onRefresh: () async => ref.invalidate(_allStudentsForUnlockProvider),
+            child: ListView(
+              padding: const EdgeInsets.fromLTRB(16, 16, 16, 100),
+              children: [
+                DiklyScreenHeader(
+                  title: 'Locked Student Accounts',
+                  subtitle: '${locked.length} locked account${locked.length == 1 ? '' : 's'} · Failed logins & new device locks',
+                ),
+                if (locked.isEmpty)
+                  Container(
+                    padding: const EdgeInsets.symmetric(vertical: 60, horizontal: 24),
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: DiklyColors.border),
+                    ),
+                    child: const Center(
+                      child: Text(
+                        'No locked student accounts. All clear! ✓',
+                        style: TextStyle(fontSize: 13, color: DiklyColors.textSecondary),
+                        textAlign: TextAlign.center,
+                      ),
+                    ),
+                  )
+                else
+                  ...locked.map((student) {
                 final id = student['_id']?.toString() ??
                     student['id']?.toString() ??
                     '';
@@ -323,7 +308,8 @@ class _HodUnlockStudentsScreenState
                     ),
                   ),
                 );
-              },
+              }).toList(),
+              ],
             ),
           );
         },

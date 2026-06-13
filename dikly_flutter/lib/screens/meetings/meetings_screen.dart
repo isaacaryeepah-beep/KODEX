@@ -55,7 +55,7 @@ class _MeetingsScreenState extends ConsumerState<MeetingsScreen> {
             padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
             child: DiklyScreenHeader(
               title: 'Meetings',
-              subtitle: '${_meetings.length} meeting${_meetings.length == 1 ? '' : 's'}',
+              subtitle: 'Secure video meetings',
               action: canCreate
                   ? ElevatedButton.icon(
                       onPressed: () => context.push('/sessions/create'),
@@ -78,12 +78,23 @@ class _MeetingsScreenState extends ConsumerState<MeetingsScreen> {
             child: _loading
                 ? const Center(child: CircularProgressIndicator(color: DiklyColors.primary))
                 : _meetings.isEmpty
-                        ? DiklyEmptyState(
-                            icon: Icons.groups_outlined,
-                            title: 'No meetings scheduled',
-                            subtitle: 'Meetings will appear here',
-                            buttonLabel: canCreate ? 'Create Meeting' : null,
-                            onButton: canCreate ? () => context.push('/sessions/create') : null,
+                        ? Padding(
+                            padding: const EdgeInsets.all(16),
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(vertical: 60, horizontal: 24),
+                              decoration: BoxDecoration(
+                                color: Colors.white,
+                                borderRadius: BorderRadius.circular(12),
+                                border: Border.all(color: DiklyColors.border),
+                              ),
+                              child: const Center(
+                                child: Text(
+                                  'No meetings scheduled yet.',
+                                  style: TextStyle(fontSize: 13, color: DiklyColors.textSecondary),
+                                  textAlign: TextAlign.center,
+                                ),
+                              ),
+                            ),
                           )
                         : RefreshIndicator(
                             onRefresh: _loadData,

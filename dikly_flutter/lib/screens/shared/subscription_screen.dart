@@ -19,11 +19,11 @@ final _subscriptionProvider = FutureProvider.autoDispose<Map<String, dynamic>>(
 // ── Static plan features ──────────────────────────────────────────────────────
 
 const _features = [
-  'Full platform access',
-  'Attendance marking & session management',
-  'Assessment creation & grading',
-  'Grade book & reports',
-  'Renew any time — days stack up',
+  'Full student portal access',
+  'Attend classes & mark attendance',
+  'Take quizzes & assignments',
+  'View grades & results',
+  'Access the secure exam portal',
 ];
 
 // ── Screen ────────────────────────────────────────────────────────────────────
@@ -127,7 +127,7 @@ class SubscriptionScreen extends ConsumerWidget {
                 Row(
                   crossAxisAlignment: CrossAxisAlignment.center,
                   children: [
-                    const Text('Semester Plan',
+                    const Text('Student Semester Plan',
                         style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: Color(0xFF111827))),
                     const Spacer(),
                     const Text('₵30',
