@@ -71,7 +71,7 @@ class GradeBookScreen extends ConsumerWidget {
                     childAspectRatio: 0.9,
                   ),
                   itemCount: courses.length,
-                  itemBuilder: (_, i) => _CourseGradeCard(course: courses[i]),
+                  itemBuilder: (_, i) => _CourseGradeCard(course: courses[i], isAdmin: isAdmin),
                 ),
               const SizedBox(height: 24),
             ],
@@ -84,7 +84,8 @@ class GradeBookScreen extends ConsumerWidget {
 
 class _CourseGradeCard extends StatelessWidget {
   final Course course;
-  const _CourseGradeCard({required this.course});
+  final bool isAdmin;
+  const _CourseGradeCard({required this.course, this.isAdmin = false});
 
   @override
   Widget build(BuildContext context) {
@@ -113,15 +114,9 @@ class _CourseGradeCard extends StatelessWidget {
             Text(subtitle, style: const TextStyle(fontSize: 12, color: DiklyColors.textSecondary)),
           ],
           const SizedBox(height: 10),
-          Row(
-            children: [
-              const Icon(Icons.people_outline, size: 14, color: DiklyColors.textLight),
-              const SizedBox(width: 5),
-              Text(
-                '$count student${count == 1 ? '' : 's'} enrolled',
-                style: const TextStyle(fontSize: 12, color: DiklyColors.textSecondary),
-              ),
-            ],
+          Text(
+            '$count student${count == 1 ? '' : 's'}',
+            style: const TextStyle(fontSize: 12, color: DiklyColors.textSecondary),
           ),
           const SizedBox(height: 14),
           SizedBox(
@@ -140,7 +135,7 @@ class _CourseGradeCard extends StatelessWidget {
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                 textStyle: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
               ),
-              child: const Text('View Grades →'),
+              child: Text(isAdmin ? 'Open →' : 'View Grades →'),
             ),
           ),
         ],
