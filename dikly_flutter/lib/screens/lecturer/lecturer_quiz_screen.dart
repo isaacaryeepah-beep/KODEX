@@ -321,8 +321,12 @@ class _QuizCard extends StatelessWidget {
 
   const _QuizCard({required this.quiz, required this.onComingSoon});
 
-  String _fmt(DateTime dt) =>
-      '${dt.day}/${dt.month}/${dt.year.toString().substring(2)}';
+  String _fmt(DateTime dt) {
+    const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+    final h = dt.hour.toString().padLeft(2, '0');
+    final m = dt.minute.toString().padLeft(2, '0');
+    return '${dt.day} ${months[dt.month - 1]} ${dt.year}, $h:$m';
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -362,7 +366,7 @@ class _QuizCard extends StatelessWidget {
               if (quiz.startTime != null)
                 DiklyInfoChip(
                   icon: Icons.calendar_today_outlined,
-                  label: '${_fmt(quiz.startTime!)} – ${quiz.endTime != null ? _fmt(quiz.endTime!) : '?'}',
+                  label: '${_fmt(quiz.startTime!)} → ${quiz.endTime != null ? _fmt(quiz.endTime!) : '?'}',
                 ),
             ],
           ),
