@@ -66,14 +66,14 @@ class _AdminCoursesScreenState extends ConsumerState<AdminCoursesScreen> {
                 action: ElevatedButton.icon(
                   onPressed: _showCreateDialog,
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFF2563EB),
+                    backgroundColor: const Color(0xFF16A34A),
                     foregroundColor: Colors.white,
                     padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
                     elevation: 0,
                   ),
-                  icon: const Icon(Icons.add, size: 18),
-                  label: const Text('Create Course', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
+                  icon: const Icon(Icons.add, size: 16),
+                  label: const Text('+ Create Course', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
                 ),
               ),
               if (courses.isEmpty)
@@ -160,7 +160,7 @@ class _CourseCard extends StatelessWidget {
             runSpacing: 8,
             children: [
               _ActionButton(
-                label: 'Upload Students',
+                label: 'Upload',
                 icon: Icons.upload_outlined,
                 color: const Color(0xFFDC2626),
                 filled: true,
@@ -169,7 +169,7 @@ class _CourseCard extends StatelessWidget {
                 ),
               ),
               _ActionButton(
-                label: 'View Roster',
+                label: 'Roster',
                 icon: Icons.people_outline,
                 color: const Color(0xFF6B7280),
                 filled: false,

@@ -48,7 +48,7 @@ class _LecturerShellState extends ConsumerState<LecturerShell> {
   static const _sections = [
     DrawerSection(items: [
       DrawerItem(Icons.dashboard_outlined, 'Dashboard', '/dashboard/lecturer'),
-      DrawerItem(Icons.access_time_outlined, 'Sessions', '/sessions'),
+      DrawerItem(Icons.access_time_outlined, 'Sessions', '/lecturer/sessions'),
       DrawerItem(Icons.sensors_outlined, 'Attendance Device', '/lecturer/attendance-device'),
     ]),
     DrawerSection(header: 'CONTENT', items: [
