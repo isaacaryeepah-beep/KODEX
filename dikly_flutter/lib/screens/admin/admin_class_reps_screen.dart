@@ -51,10 +51,14 @@ class AdminClassRepsScreen extends ConsumerWidget {
                 ),
               ),
               if (reps.isEmpty)
-                const DiklyEmptyState(
+                DiklyEmptyState(
                   icon: Icons.people_outline,
                   title: 'No class reps assigned yet',
-                  subtitle: "Use \"Assign New Rep\" to browse students and appoint up to 2 reps per class group.",
+                  subtitle: 'Use "Assign New Rep" to browse students and appoint up to 2 reps per class group.',
+                  buttonLabel: 'Assign New Rep',
+                  onButton: () => ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('Assign New Rep — coming soon')),
+                  ),
                 )
               else
                 DiklyCard(
