@@ -20,7 +20,6 @@ class _MessagesScreenState extends ConsumerState<MessagesScreen> {
   List<Conversation> _conversations = [];
   bool _loading = true;
   String? _error;
-  String _searchQuery = '';
 
   Conversation? _activeConversation;
   List<Message> _conversationMessages = [];
@@ -291,24 +290,6 @@ class _MessagesScreenState extends ConsumerState<MessagesScreen> {
               ),
             ),
           ),
-          // Search bar
-          Padding(
-            padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
-            child: TextField(
-              onChanged: (v) => setState(() => _searchQuery = v),
-              decoration: InputDecoration(
-                hintText: 'Search conversations...',
-                hintStyle: const TextStyle(fontSize: 13, color: DiklyColors.textMuted),
-                prefixIcon: const Icon(Icons.search, size: 18, color: DiklyColors.textLight),
-                contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-                filled: true,
-                fillColor: Colors.white,
-                border: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: const BorderSide(color: DiklyColors.border)),
-                enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: const BorderSide(color: DiklyColors.border)),
-                focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: const BorderSide(color: DiklyColors.primary, width: 1.5)),
-              ),
-            ),
-          ),
           const SizedBox(height: 8),
           Expanded(
             child: _loading
@@ -336,15 +317,11 @@ class _MessagesScreenState extends ConsumerState<MessagesScreen> {
                           )
                         : RefreshIndicator(
                             onRefresh: _loadConversations,
-                            child: Builder(builder: (context) {
-                              final filtered = _searchQuery.isEmpty
-                                  ? _conversations
-                                  : _conversations.where((c) => c.participantName.toLowerCase().contains(_searchQuery.toLowerCase())).toList();
-                              return ListView.builder(
+                            child: ListView.builder(
                               padding: const EdgeInsets.all(16),
-                              itemCount: filtered.length,
+                              itemCount: _conversations.length,
                               itemBuilder: (context, index) {
-                                final conv = filtered[index];
+                                final conv = _conversations[index];
                                 return _ConversationTile(
                                   name: conv.participantName,
                                   lastMessage: conv.lastMessage ?? '',
@@ -353,8 +330,7 @@ class _MessagesScreenState extends ConsumerState<MessagesScreen> {
                                   onTap: () => _openConversation(conv),
                                 );
                               },
-                            );
-                            }),
+                            ),
                           ),
           ),
         ],

@@ -21,34 +21,37 @@ final _subscriptionProvider = FutureProvider.autoDispose<Map<String, dynamic>>(
 
 class _PlanConfig {
   final String price;
+  final String planName;
   final List<String> features;
-  final String trialBanner;
+  final String Function(int daysLeft) trialBanner;
 
-  const _PlanConfig({required this.price, required this.features, required this.trialBanner});
+  const _PlanConfig({required this.price, required this.planName, required this.features, required this.trialBanner});
 }
 
-const _studentPlan = _PlanConfig(
+final _studentPlan = _PlanConfig(
   price: '₵20',
-  features: [
+  planName: 'Student Semester Plan',
+  features: const [
     'Full student portal access',
     'Attend classes & mark attendance',
     'Take quizzes & assignments',
     'View grades & results',
     'Access the secure exam portal',
   ],
-  trialBanner: 'You received a 45-day free trial on account creation. After it ends, subscribe for ₵20/semester to keep access.',
+  trialBanner: (_) => 'You received a 45-day free trial on account creation. After it ends, subscribe for ₵20/semester to keep access.',
 );
 
-const _staffPlan = _PlanConfig(
+final _staffPlan = _PlanConfig(
   price: '₵120',
-  features: [
+  planName: 'Semester Plan',
+  features: const [
     'Full platform access',
     'Attendance marking & session management',
     'Assessment creation & grading',
     'Grade book & reports',
     'Renew any time — days stack up',
   ],
-  trialBanner: '30-day free trial active. Subscribe before it ends to avoid interruption.',
+  trialBanner: (days) => '30-day free trial active — $days days left. Subscribe before it ends to avoid interruption.',
 );
 
 // ── Screen ────────────────────────────────────────────────────────────────────
@@ -155,8 +158,8 @@ class SubscriptionScreen extends ConsumerWidget {
                 Row(
                   crossAxisAlignment: CrossAxisAlignment.center,
                   children: [
-                    const Text('Student Semester Plan',
-                        style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: Color(0xFF111827))),
+                    Text(plan.planName,
+                        style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: Color(0xFF111827))),
                     const Spacer(),
                     Text(plan.price,
                         style: const TextStyle(fontSize: 28, fontWeight: FontWeight.w800, color: Color(0xFF2563EB))),
@@ -223,7 +226,7 @@ class SubscriptionScreen extends ConsumerWidget {
                       const SizedBox(width: 8),
                       Expanded(
                         child: Text(
-                          plan.trialBanner,
+                          plan.trialBanner(daysLeft),
                           style: const TextStyle(fontSize: 12, color: Color(0xFF92400E), height: 1.5),
                         ),
                       ),
@@ -248,7 +251,7 @@ class SubscriptionScreen extends ConsumerWidget {
                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
                     ),
                     child: Text(
-                      'Pay ${plan.price} with Paystack',
+                      'Pay ${plan.price} with Paystack →',
                       style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w700),
                     ),
                   ),

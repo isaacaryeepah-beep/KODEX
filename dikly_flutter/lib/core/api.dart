@@ -754,6 +754,17 @@ class ApiService {
     return (list as List).cast<Map<String, dynamic>>();
   }
 
+  Future<List<Map<String, dynamic>>> getAdminQuizzes() async {
+    final response = await _dio.get('/api/lecturer/quizzes');
+    final data = response.data;
+    final list = data['quizzes'] ?? data['data'] ?? [];
+    return (list as List).cast<Map<String, dynamic>>();
+  }
+
+  Future<void> deleteQuiz(String quizId) async {
+    await _dio.delete('/api/lecturer/quizzes/$quizId');
+  }
+
   // Subscription
   Future<Map<String, dynamic>> getSubscription() async {
     final data = await _cachedGet('/api/subscription/status', 'subscription');

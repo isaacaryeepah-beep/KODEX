@@ -59,26 +59,33 @@ class AdminClassRepsScreen extends ConsumerWidget {
               else
                 DiklyCard(
                   padding: EdgeInsets.zero,
-                  child: Column(
-                    children: [
-                      Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-                        decoration: const BoxDecoration(
-                          color: Color(0xFFF9FAFB),
-                          border: Border(bottom: BorderSide(color: Color(0xFFE5E7EB))),
-                        ),
-                        child: Row(
-                          children: const [
-                            Expanded(flex: 3, child: Text('NAME', style: TextStyle(fontSize: 10, fontWeight: FontWeight.w700, color: Color(0xFF9CA3AF), letterSpacing: 0.5))),
-                            Expanded(flex: 2, child: Text('INDEX NO.', style: TextStyle(fontSize: 10, fontWeight: FontWeight.w700, color: Color(0xFF9CA3AF), letterSpacing: 0.5))),
-                            Expanded(flex: 2, child: Text('PROGRAMME', style: TextStyle(fontSize: 10, fontWeight: FontWeight.w700, color: Color(0xFF9CA3AF), letterSpacing: 0.5))),
-                            Expanded(flex: 2, child: Text('LEVEL/GROUP', style: TextStyle(fontSize: 10, fontWeight: FontWeight.w700, color: Color(0xFF9CA3AF), letterSpacing: 0.5))),
-                            Expanded(flex: 2, child: Text('DEPARTMENT', style: TextStyle(fontSize: 10, fontWeight: FontWeight.w700, color: Color(0xFF9CA3AF), letterSpacing: 0.5))),
-                          ],
-                        ),
+                  child: SingleChildScrollView(
+                    scrollDirection: Axis.horizontal,
+                    child: IntrinsicWidth(
+                      child: Column(
+                        children: [
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                            decoration: const BoxDecoration(
+                              color: Color(0xFFF9FAFB),
+                              border: Border(bottom: BorderSide(color: Color(0xFFE5E7EB))),
+                            ),
+                            child: const Row(
+                              children: [
+                                SizedBox(width: 180, child: Text('NAME', style: TextStyle(fontSize: 10, fontWeight: FontWeight.w700, color: Color(0xFF9CA3AF), letterSpacing: 0.5))),
+                                SizedBox(width: 90, child: Text('INDEX NO.', style: TextStyle(fontSize: 10, fontWeight: FontWeight.w700, color: Color(0xFF9CA3AF), letterSpacing: 0.5))),
+                                SizedBox(width: 80, child: Text('PROGRAMME', style: TextStyle(fontSize: 10, fontWeight: FontWeight.w700, color: Color(0xFF9CA3AF), letterSpacing: 0.5))),
+                                SizedBox(width: 90, child: Text('LEVEL / GROUP', style: TextStyle(fontSize: 10, fontWeight: FontWeight.w700, color: Color(0xFF9CA3AF), letterSpacing: 0.5))),
+                                SizedBox(width: 100, child: Text('SESSION', style: TextStyle(fontSize: 10, fontWeight: FontWeight.w700, color: Color(0xFF9CA3AF), letterSpacing: 0.5))),
+                                SizedBox(width: 120, child: Text('DEPARTMENT', style: TextStyle(fontSize: 10, fontWeight: FontWeight.w700, color: Color(0xFF9CA3AF), letterSpacing: 0.5))),
+                                SizedBox(width: 120, child: Text('DEVICE', style: TextStyle(fontSize: 10, fontWeight: FontWeight.w700, color: Color(0xFF9CA3AF), letterSpacing: 0.5))),
+                              ],
+                            ),
+                          ),
+                          ...reps.map((r) => _RepRow(rep: r)),
+                        ],
                       ),
-                      ...reps.map((r) => _RepRow(rep: r)),
-                    ],
+                    ),
                   ),
                 ),
             ],
@@ -102,7 +109,9 @@ class _RepRow extends StatelessWidget {
     final programme = rep['programme']?.toString() ?? user['programme']?.toString() ?? '—';
     final level = rep['level']?.toString() ?? '—';
     final group = rep['group']?.toString() ?? '—';
+    final session = rep['session']?.toString() ?? user['session']?.toString() ?? '—';
     final dept = user['department']?.toString() ?? rep['department']?.toString() ?? '—';
+    final deviceId = rep['deviceId']?.toString() ?? rep['device']?.toString() ?? '—';
     final initials = name.isNotEmpty ? name[0].toUpperCase() : '?';
 
     return Container(
@@ -110,8 +119,8 @@ class _RepRow extends StatelessWidget {
       decoration: const BoxDecoration(border: Border(bottom: BorderSide(color: Color(0xFFE5E7EB), width: 0.5))),
       child: Row(
         children: [
-          Expanded(
-            flex: 3,
+          SizedBox(
+            width: 180,
             child: Row(
               children: [
                 CircleAvatar(
@@ -132,10 +141,10 @@ class _RepRow extends StatelessWidget {
               ],
             ),
           ),
-          Expanded(flex: 2, child: Text(index, style: const TextStyle(fontSize: 12, color: Color(0xFF374151)))),
-          Expanded(flex: 2, child: Text(programme, style: const TextStyle(fontSize: 12, color: Color(0xFF374151)), overflow: TextOverflow.ellipsis)),
-          Expanded(
-            flex: 2,
+          SizedBox(width: 90, child: Text(index, style: const TextStyle(fontSize: 12, color: Color(0xFF374151)))),
+          SizedBox(width: 80, child: Text(programme, style: const TextStyle(fontSize: 12, color: Color(0xFF374151)), overflow: TextOverflow.ellipsis)),
+          SizedBox(
+            width: 90,
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
@@ -144,7 +153,9 @@ class _RepRow extends StatelessWidget {
               ],
             ),
           ),
-          Expanded(flex: 2, child: Text(dept, style: const TextStyle(fontSize: 11, color: Color(0xFF374151)), overflow: TextOverflow.ellipsis)),
+          SizedBox(width: 100, child: Text(session, style: const TextStyle(fontSize: 11, color: Color(0xFF374151)), overflow: TextOverflow.ellipsis)),
+          SizedBox(width: 120, child: Text(dept, style: const TextStyle(fontSize: 11, color: Color(0xFF374151)), overflow: TextOverflow.ellipsis)),
+          SizedBox(width: 120, child: Text(deviceId, style: const TextStyle(fontSize: 11, color: Color(0xFF374151)), overflow: TextOverflow.ellipsis)),
         ],
       ),
     );
