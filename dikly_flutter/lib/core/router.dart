@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'auth.dart';
+import 'theme.dart';
 import '../screens/auth/portal_selector.dart';
 import '../screens/auth/login.dart';
 import '../screens/student/student_shell.dart';
@@ -39,6 +40,9 @@ import '../screens/shared/profile_screen.dart';
 import '../screens/shared/timetable_screen.dart';
 import '../screens/shared/subscription_screen.dart';
 import '../screens/shared/faq_screen.dart';
+import '../screens/shared/contact_screen.dart';
+import '../screens/shared/about_screen.dart';
+import '../screens/shared/support_screen.dart';
 import '../screens/shared/sign_in_out_screen.dart';
 import '../screens/shared/corporate_attendance_screen.dart';
 import '../screens/shared/shifts_screen.dart';
@@ -54,6 +58,17 @@ import '../screens/hod/hod_lecturers_screen.dart';
 import '../screens/hod/hod_students_screen.dart';
 import '../screens/hod/hod_courses_screen.dart';
 import '../screens/hod/hod_reports_screen.dart';
+import '../screens/hod/hod_dept_messaging_screen.dart';
+import '../screens/admin/admin_approvals_screen.dart';
+import '../screens/admin/admin_search_screen.dart';
+import '../screens/admin/admin_course_approvals_screen.dart';
+import '../screens/admin/admin_programmes_screen.dart';
+import '../screens/admin/admin_unlock_students_screen.dart';
+import '../screens/admin/admin_class_reps_screen.dart';
+import '../screens/admin/admin_quizzes_screen.dart';
+import '../screens/admin/admin_reports_screen.dart';
+import '../screens/admin/admin_devices_screen.dart';
+import '../screens/admin/admin_sessions_screen.dart';
 import '../screens/lecturer/lecturer_performance_screen.dart';
 import '../screens/lecturer/lecturer_attendance_device_screen.dart';
 import '../screens/lecturer/lecturer_search_screen.dart';
@@ -61,7 +76,13 @@ import '../screens/lecturer/lecturer_quiz_screen.dart';
 import '../screens/lecturer/lecturer_schedule_screen.dart';
 import '../screens/lecturer/lecturer_assignments_screen.dart';
 import '../screens/lecturer/lecturer_question_bank_screen.dart';
+import '../screens/lecturer/lecturer_sessions_screen.dart';
+import '../screens/lecturer/lecturer_course_videos_screen.dart';
 import '../screens/splash_screen.dart';
+import '../screens/hod/hod_sessions_screen.dart';
+import '../screens/hod/hod_quiz_monitor_screen.dart';
+import '../screens/attendance/my_attendance_screen.dart';
+import '../screens/student/student_course_videos_screen.dart';
 
 // Smooth fade+slide transition used for all routes
 Page<void> _fadePage(GoRouterState state, Widget child) {
@@ -140,6 +161,7 @@ final routerProvider = Provider<GoRouter>((ref) {
       GoRoute(path: '/courses/:id', builder: (context, state) => CourseDetailScreen(courseId: state.pathParameters['id']!)),
 
       // Videos
+      GoRoute(path: '/student/course-videos', builder: (context, state) => const StudentCourseVideosScreen()),
       GoRoute(path: '/course-videos/:courseId', builder: (context, state) => CourseVideosScreen(courseId: state.pathParameters['courseId']!)),
       GoRoute(path: '/video-player', builder: (context, state) {
         final extra = state.extra as Map<String, dynamic>?;
@@ -147,7 +169,18 @@ final routerProvider = Provider<GoRouter>((ref) {
       }),
 
       // Attendance
-      GoRoute(path: '/attendance', builder: (context, state) => const AttendanceScreen()),
+      GoRoute(path: '/my-attendance', builder: (context, state) => const MyAttendanceScreen()),
+      GoRoute(
+        path: '/attendance',
+        builder: (context, state) => Scaffold(
+          backgroundColor: DiklyColors.background,
+          appBar: AppBar(
+            leading: const BackButton(),
+            title: const Text('Attendance'),
+          ),
+          body: const AttendanceScreen(),
+        ),
+      ),
 
       // Assignments
       GoRoute(path: '/assignments',     builder: (context, state) => const AssignmentsScreen()),
@@ -168,8 +201,9 @@ final routerProvider = Provider<GoRouter>((ref) {
       GoRoute(path: '/timetable',    builder: (context, state) => const TimetableScreen()),
       GoRoute(path: '/subscription', builder: (context, state) => const SubscriptionScreen()),
       GoRoute(path: '/faq',          builder: (context, state) => const FaqScreen()),
-      GoRoute(path: '/contact',      builder: (context, state) => const FaqScreen()),
-      GoRoute(path: '/about',        builder: (context, state) => const FaqScreen()),
+      GoRoute(path: '/contact',      builder: (context, state) => const ContactScreen()),
+      GoRoute(path: '/about',        builder: (context, state) => const AboutScreen()),
+      GoRoute(path: '/support',      builder: (context, state) => const SupportScreen()),
       GoRoute(path: '/performance',  builder: (context, state) => const PerformanceScreen()),
 
       // Corporate
@@ -180,8 +214,10 @@ final routerProvider = Provider<GoRouter>((ref) {
 
       // Admin
       GoRoute(path: '/admin/users',       builder: (context, state) => const UsersScreen()),
+      GoRoute(path: '/admin/devices',     builder: (context, state) => const AdminDevicesScreen()),
       GoRoute(path: '/admin/branches',    builder: (context, state) => const BranchesScreen()),
       GoRoute(path: '/admin/audit-logs',  builder: (context, state) => const AuditLogsScreen()),
+      GoRoute(path: '/admin/reports',     builder: (context, state) => const AdminReportsScreen()),
 
       // Manager
       GoRoute(path: '/manager/team',          builder: (context, state) => const TeamScreen()),
@@ -193,6 +229,8 @@ final routerProvider = Provider<GoRouter>((ref) {
       GoRoute(path: '/employee/shift',  builder: (context, state) => const EmployeeShiftScreen()),
 
       // HOD
+      GoRoute(path: '/hod/sessions',        builder: (context, state) => const HodSessionsScreen()),
+      GoRoute(path: '/hod/quiz-monitor',    builder: (context, state) => const HodQuizMonitorScreen()),
       GoRoute(path: '/hod/approvals',       builder: (context, state) => const HodApprovalsScreen()),
       GoRoute(path: '/hod/course-approvals',builder: (context, state) => const HodCourseApprovalsScreen()),
       GoRoute(path: '/hod/locked-students', builder: (context, state) => const HodUnlockStudentsScreen()),
@@ -201,9 +239,32 @@ final routerProvider = Provider<GoRouter>((ref) {
       GoRoute(path: '/hod/lecturers',       builder: (context, state) => const HodLecturersScreen()),
       GoRoute(path: '/hod/students',        builder: (context, state) => const HodStudentsScreen()),
       GoRoute(path: '/hod/courses',         builder: (context, state) => const HodCoursesScreen()),
-      GoRoute(path: '/hod/reports',         builder: (context, state) => const HodReportsScreen()),
+      GoRoute(path: '/hod/reports',         builder: (context, state) => Scaffold(
+        backgroundColor: const Color(0xFFF1F5F9),
+        appBar: AppBar(
+          backgroundColor: Colors.white,
+          elevation: 0,
+          surfaceTintColor: Colors.transparent,
+          leading: const BackButton(),
+          title: const Text('Department Reports', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: Color(0xFF111827))),
+        ),
+        body: const HodReportsScreen(),
+      )),
+      GoRoute(path: '/hod/dept-messaging',  builder: (context, state) => const HodDeptMessagingScreen()),
+
+      // Admin
+      GoRoute(path: '/admin/sessions',          builder: (context, state) => const AdminSessionsScreen()),
+      GoRoute(path: '/admin/approvals',        builder: (context, state) => const AdminApprovalsScreen()),
+      GoRoute(path: '/admin/search',           builder: (context, state) => const AdminSearchScreen()),
+      GoRoute(path: '/admin/course-approvals', builder: (context, state) => const AdminCourseApprovalsScreen()),
+      GoRoute(path: '/admin/programmes',       builder: (context, state) => const AdminProgrammesScreen()),
+      GoRoute(path: '/admin/unlock-students',  builder: (context, state) => const AdminUnlockStudentsScreen()),
+      GoRoute(path: '/admin/class-reps',       builder: (context, state) => const AdminClassRepsScreen()),
+      GoRoute(path: '/admin/quizzes',          builder: (context, state) => const AdminQuizzesScreen()),
 
       // Lecturer
+      GoRoute(path: '/lecturer/sessions',         builder: (context, state) => const LecturerSessionsScreen()),
+      GoRoute(path: '/lecturer/course-videos',    builder: (context, state) => const LecturerCourseVideosScreen()),
       GoRoute(path: '/lecturer/performance',     builder: (context, state) => const LecturerPerformanceScreen()),
       GoRoute(path: '/lecturer/attendance-device', builder: (context, state) => const LecturerAttendanceDeviceScreen()),
       GoRoute(path: '/lecturer/search',          builder: (context, state) => const LecturerSearchScreen()),

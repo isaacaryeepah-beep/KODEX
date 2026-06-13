@@ -39,25 +39,32 @@ class _StudentShellState extends ConsumerState<StudentShell> {
   static const _sections = [
     DrawerSection(items: [
       DrawerItem(Icons.dashboard_outlined, 'Dashboard', '/dashboard/student'),
-      DrawerItem(Icons.check_circle_outline, 'Attendance', '/attendance'),
-      DrawerItem(Icons.assignment_outlined, 'Assignments', '/assignments'),
-      DrawerItem(Icons.quiz_outlined, 'Quizzes', '/quizzes'),
     ]),
-    DrawerSection(header: 'CONTENT', items: [
-      DrawerItem(Icons.book_outlined, 'Courses', '/courses'),
-      DrawerItem(Icons.play_circle_outline, 'Videos', '/course-videos/all'),
-      DrawerItem(Icons.schedule_outlined, 'Schedule', '/timetable'),
-      DrawerItem(Icons.grade_outlined, 'Gradebook', '/gradebook'),
-      DrawerItem(Icons.video_call_outlined, 'Meetings', '/meetings'),
+    DrawerSection(header: 'ATTENDANCE', items: [
+      DrawerItem(Icons.check_circle_outline, 'Mark Attendance', '/attendance'),
+      DrawerItem(Icons.history_outlined, 'My Attendance', '/my-attendance'),
+    ]),
+    DrawerSection(header: 'ACADEMIC', items: [
+      DrawerItem(Icons.book_outlined, 'My Courses', '/courses'),
+      DrawerItem(Icons.schedule_outlined, 'Timetable', '/timetable'),
+      DrawerItem(Icons.shield_outlined, 'Proctored/Snap Quiz', '/quizzes'),
+      DrawerItem(Icons.assignment_outlined, 'Assignment', '/assignments'),
+      DrawerItem(Icons.grade_outlined, 'My Grades', '/gradebook'),
+      DrawerItem(Icons.assessment_outlined, 'My Results', '/quiz-history'),
+      DrawerItem(Icons.video_library_outlined, 'Course Videos', '/student/course-videos'),
     ]),
     DrawerSection(header: 'COMMUNICATE', items: [
       DrawerItem(Icons.message_outlined, 'Messages', '/messages'),
+      DrawerItem(Icons.video_call_outlined, 'Meetings', '/meetings'),
       DrawerItem(Icons.campaign_outlined, 'Announcements', '/announcements'),
     ]),
     DrawerSection(header: 'SUPPORT', items: [
-      DrawerItem(Icons.help_outline, 'FAQ', '/faq'),
+      DrawerItem(Icons.support_agent_outlined, 'Support & Helpdesk', '/support'),
+      DrawerItem(Icons.help_outline, 'FAQ Center', '/faq'),
       DrawerItem(Icons.card_membership_outlined, 'Subscription', '/subscription'),
       DrawerItem(Icons.person_outlined, 'Profile', '/profile'),
+      DrawerItem(Icons.phone_outlined, 'Contact Us', '/contact'),
+      DrawerItem(Icons.info_outline, 'About', '/about'),
     ]),
   ];
 

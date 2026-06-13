@@ -48,7 +48,7 @@ class _StudentCoursesScreenState extends ConsumerState<StudentCoursesScreen> {
               // ── Header ──────────────────────────────────────────────
               DiklyScreenHeader(
                 title: 'My Courses',
-                subtitle: '${courses.length} enrolled course${courses.length == 1 ? '' : 's'}',
+                subtitle: 'Your enrolled academic courses',
               ),
 
               // ── Search bar ──────────────────────────────────────────
@@ -141,10 +141,17 @@ class _CourseCardState extends ConsumerState<_CourseCard> {
     }
   }
 
+  static Widget _tag(String text, Color color) => Container(
+    padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+    decoration: BoxDecoration(color: color.withOpacity(0.1), borderRadius: BorderRadius.circular(5)),
+    child: Text(text, style: TextStyle(fontSize: 10, fontWeight: FontWeight.w700, color: color)),
+  );
+
   @override
   Widget build(BuildContext context) {
     final course = widget.course;
-    final isActive = course.status?.toLowerCase() == 'active' || course.status == null;
+    final isApproved = (course.status ?? 'active').toLowerCase() == 'approved' ||
+        (course.status ?? 'active').toLowerCase() == 'active';
 
     return DiklyCard(
       margin: const EdgeInsets.only(bottom: 12),
@@ -158,44 +165,25 @@ class _CourseCardState extends ConsumerState<_CourseCard> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                // Course code chip + status badge row
+                // Code, level, group, status row
                 Row(
                   children: [
-                    if (course.code != null) ...[
-                      Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
-                        decoration: BoxDecoration(
-                          color: DiklyColors.primaryULight,
-                          borderRadius: BorderRadius.circular(999),
-                        ),
-                        child: Text(
-                          course.code!,
-                          style: const TextStyle(
-                            fontSize: 12,
-                            fontWeight: FontWeight.w600,
-                            color: DiklyColors.primary,
-                          ),
-                        ),
-                      ),
-                      const SizedBox(width: 8),
-                    ],
+                    if (course.code != null) _tag(course.code!, const Color(0xFF7C3AED)),
+                    if (course.level != null) ...[const SizedBox(width: 6), _tag('Level ${course.level!}', const Color(0xFF6B7280))],
+                    if (course.group != null) ...[const SizedBox(width: 6), _tag('Group ${course.group!}', const Color(0xFF6B7280))],
                     const Spacer(),
-                    DiklyBadge(
-                      label: isActive ? 'Active' : (course.status ?? 'Active'),
-                      color: isActive ? DiklyColors.success : DiklyColors.textLight,
-                    ),
+                    isApproved ? DiklyBadge.approved() : DiklyBadge.pending(),
                   ],
                 ),
                 const SizedBox(height: 10),
 
                 // Title
                 Text(
-                  course.title.toUpperCase(),
+                  course.title,
                   style: const TextStyle(
                     fontSize: 15,
                     fontWeight: FontWeight.w700,
                     color: DiklyColors.text,
-                    letterSpacing: 0.2,
                   ),
                   maxLines: 2,
                   overflow: TextOverflow.ellipsis,
@@ -206,11 +194,11 @@ class _CourseCardState extends ConsumerState<_CourseCard> {
                 if (course.instructorName != null)
                   Row(
                     children: [
-                      const Icon(Icons.person_outline, size: 15, color: DiklyColors.textLight),
-                      const SizedBox(width: 5),
+                      const Icon(Icons.person_outline, size: 14, color: Color(0xFF6B7280)),
+                      const SizedBox(width: 4),
                       Text(
                         course.instructorName!,
-                        style: const TextStyle(fontSize: 13, color: DiklyColors.textSecondary),
+                        style: const TextStyle(fontSize: 12, color: Color(0xFF6B7280)),
                       ),
                     ],
                   ),
@@ -220,11 +208,11 @@ class _CourseCardState extends ConsumerState<_CourseCard> {
                   const SizedBox(height: 4),
                   Row(
                     children: [
-                      const Icon(Icons.people_outline, size: 15, color: DiklyColors.textLight),
-                      const SizedBox(width: 5),
+                      const Icon(Icons.people_outline, size: 14, color: Color(0xFF6B7280)),
+                      const SizedBox(width: 4),
                       Text(
-                        '${course.studentCount} enrolled',
-                        style: const TextStyle(fontSize: 13, color: DiklyColors.textSecondary),
+                        '${course.studentCount} students enrolled',
+                        style: const TextStyle(fontSize: 12, color: Color(0xFF6B7280)),
                       ),
                     ],
                   ),
@@ -233,37 +221,49 @@ class _CourseCardState extends ConsumerState<_CourseCard> {
             ),
           ),
 
-          // Expand button
-          InkWell(
-            onTap: _loadVideos,
-            borderRadius: const BorderRadius.vertical(bottom: Radius.circular(10)),
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-              decoration: const BoxDecoration(
-                color: Color(0xFFF9FAFB),
-                border: Border(top: BorderSide(color: DiklyColors.border, width: 1)),
-                borderRadius: BorderRadius.vertical(bottom: Radius.circular(10)),
-              ),
-              child: Row(
-                children: [
-                  const Icon(Icons.play_circle_outline, size: 16, color: DiklyColors.primary),
-                  const SizedBox(width: 6),
-                  const Text(
-                    'Course Videos',
-                    style: TextStyle(
-                      fontSize: 13,
-                      fontWeight: FontWeight.w600,
-                      color: DiklyColors.primary,
+          // Bottom row: Videos + Certificate
+          Container(
+            decoration: const BoxDecoration(
+              border: Border(top: BorderSide(color: DiklyColors.border, width: 1)),
+            ),
+            child: Row(
+              children: [
+                Expanded(
+                  child: InkWell(
+                    onTap: _loadVideos,
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                      color: const Color(0xFFF9FAFB),
+                      child: Row(
+                        children: [
+                          const Icon(Icons.play_circle_outline, size: 15, color: DiklyColors.primary),
+                          const SizedBox(width: 5),
+                          const Text('Course Videos', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: DiklyColors.primary)),
+                          const Spacer(),
+                          Icon(_expanded ? Icons.expand_less : Icons.expand_more, size: 16, color: DiklyColors.textLight),
+                        ],
+                      ),
                     ),
                   ),
-                  const Spacer(),
-                  Icon(
-                    _expanded ? Icons.expand_less : Icons.expand_more,
-                    size: 18,
-                    color: DiklyColors.textLight,
+                ),
+                Container(width: 1, height: 38, color: DiklyColors.border),
+                InkWell(
+                  onTap: () => ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('Certificate — coming soon')),
                   ),
-                ],
-              ),
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                    color: const Color(0xFFF9FAFB),
+                    child: const Row(
+                      children: [
+                        Text('🎓', style: TextStyle(fontSize: 14)),
+                        SizedBox(width: 4),
+                        Text('Certificate', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: Color(0xFF6B7280))),
+                      ],
+                    ),
+                  ),
+                ),
+              ],
             ),
           ),
 

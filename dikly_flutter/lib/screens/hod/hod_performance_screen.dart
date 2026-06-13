@@ -1,118 +1,154 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:fl_chart/fl_chart.dart';
 import '../../core/api.dart';
+import '../../core/auth.dart';
 import '../../core/theme.dart';
+import '../../widgets/ds/dikly_ds.dart';
 
-final _departmentPerformanceProvider =
-    FutureProvider.autoDispose<Map<String, dynamic>>(
-      (ref) => apiService.getDepartmentPerformance(),
-    );
+final _hodPerfProvider = FutureProvider.autoDispose<Map<String, dynamic>>(
+  (ref) => apiService.getHodDeptStats(),
+);
 
 class HodPerformanceScreen extends ConsumerWidget {
   const HodPerformanceScreen({super.key});
 
-  static const _color = Color(0xFF7C2D12);
-
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final asyncData = ref.watch(_departmentPerformanceProvider);
+    final async = ref.watch(_hodPerfProvider);
+    final user = ref.watch(currentUserProvider);
+    final dept = user?.department ?? user?.company ?? 'Department';
 
     return Scaffold(
+      backgroundColor: DiklyColors.background,
       appBar: AppBar(
-        title: const Text('Department Performance'),
         leading: const BackButton(),
+        title: const Text('Performance'),
       ),
-      body: asyncData.when(
+      body: async.when(
         loading: () => const Center(child: CircularProgressIndicator()),
         error: (e, _) => Center(
           child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
+            mainAxisSize: MainAxisSize.min,
             children: [
-              const Icon(
-                Icons.error_outline,
-                size: 48,
-                color: DiklyColors.error,
-              ),
+              const Icon(Icons.error_outline, size: 48, color: DiklyColors.error),
               const SizedBox(height: 12),
-              Text(
-                'Failed to load performance data',
-                style: Theme.of(context).textTheme.titleMedium,
-              ),
+              const Text('Failed to load performance data'),
               TextButton(
-                onPressed: () => ref.invalidate(_departmentPerformanceProvider),
+                onPressed: () => ref.refresh(_hodPerfProvider),
                 child: const Text('Retry'),
               ),
             ],
           ),
         ),
         data: (data) {
-          final attendanceRate =
-              (data['attendanceRate'] as num?)?.toDouble() ?? 0.0;
-          final averageGrade =
-              (data['averageGrade'] as num?)?.toDouble() ?? 0.0;
-          final sessionsCompleted = data['sessionsCompleted'] ?? 0;
-          final studentsAtRisk = data['studentsAtRisk'] ?? 0;
-
-          final courseAttendance =
-              data['courseAttendance'] as List<dynamic>? ?? [];
+          final totalSessions = data['totalSessions'] ?? 0;
+          final totalAttendance = data['totalAttendance'] ?? 0;
+          final avgAttendance = (data['avgAttendance'] as num?)?.toDouble() ?? 0.0;
+          final bestCourse = data['bestCourse']?.toString() ?? '';
+          final lecturerSummary = (data['lecturerSummary'] as List?) ?? [];
+          final hasData = totalSessions > 0;
 
           return RefreshIndicator(
-            onRefresh: () async =>
-                ref.invalidate(_departmentPerformanceProvider),
+            onRefresh: () async => ref.refresh(_hodPerfProvider),
             child: ListView(
               padding: const EdgeInsets.all(16),
               children: [
-                GridView.count(
-                  shrinkWrap: true,
-                  physics: const NeverScrollableScrollPhysics(),
-                  crossAxisCount: 2,
-                  crossAxisSpacing: 12,
-                  mainAxisSpacing: 12,
-                  childAspectRatio: 1.4,
+                // Header
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    _MetricCard(
-                      title: 'Attendance Rate',
-                      value: '${attendanceRate.toStringAsFixed(1)}%',
-                      icon: Icons.how_to_reg_outlined,
-                      color: DiklyColors.success,
+                    Expanded(
+                      child: DiklyScreenHeader(
+                        title: 'Performance Dashboard',
+                        subtitle: '$dept · last 30 days',
+                      ),
                     ),
-                    _MetricCard(
-                      title: 'Average Grade',
-                      value: averageGrade.toStringAsFixed(1),
-                      icon: Icons.grade_outlined,
-                      color: DiklyColors.primary,
-                    ),
-                    _MetricCard(
-                      title: 'Sessions Done',
-                      value: sessionsCompleted.toString(),
-                      icon: Icons.videocam_outlined,
-                      color: _color,
-                    ),
-                    _MetricCard(
-                      title: 'At Risk',
-                      value: studentsAtRisk.toString(),
-                      icon: Icons.warning_amber_outlined,
-                      color: DiklyColors.warning,
+                    OutlinedButton(
+                      onPressed: () => ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(content: Text('Export — coming soon')),
+                      ),
+                      style: OutlinedButton.styleFrom(
+                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                        side: const BorderSide(color: Color(0xFFD1D5DB)),
+                        foregroundColor: const Color(0xFF374151),
+                      ),
+                      child: const Text('Export Attendance CSV', style: TextStyle(fontSize: 11)),
                     ),
                   ],
                 ),
-                const SizedBox(height: 24),
-                const Text(
-                  'Attendance by Course',
-                  style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700),
+                // 4 stat cards in a row
+                Row(
+                  children: [
+                    _StatCard(value: '$totalSessions', label: 'TOTAL SESSIONS', color: DiklyColors.primary),
+                    const SizedBox(width: 8),
+                    _StatCard(value: '$totalAttendance', label: 'TOTAL ATTENDANCE', color: DiklyColors.success),
+                    const SizedBox(width: 8),
+                    _StatCard(value: avgAttendance.toStringAsFixed(1), label: 'AVG / SESSION', color: DiklyColors.warning),
+                    const SizedBox(width: 8),
+                    _StatCard(value: bestCourse.isEmpty ? '—' : bestCourse, label: 'BEST COURSE', color: const Color(0xFF7C3AED)),
+                  ],
                 ),
-                const SizedBox(height: 12),
+                const SizedBox(height: 16),
+                // Lecturer Activity Summary
                 Container(
-                  padding: const EdgeInsets.all(16),
                   decoration: BoxDecoration(
-                    color: DiklyColors.surface,
-                    borderRadius: BorderRadius.circular(12),
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(10),
                     border: Border.all(color: DiklyColors.border),
                   ),
-                  child: courseAttendance.isEmpty
-                      ? const _EmptyChartState()
-                      : _AttendanceBarChart(courseData: courseAttendance),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Padding(
+                        padding: EdgeInsets.fromLTRB(16, 14, 16, 10),
+                        child: Text(
+                          'Lecturer Activity Summary',
+                          style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: Color(0xFF111827)),
+                        ),
+                      ),
+                      const Divider(height: 1, color: DiklyColors.border),
+                      if (!hasData || lecturerSummary.isEmpty)
+                        const Padding(
+                          padding: EdgeInsets.symmetric(vertical: 24, horizontal: 16),
+                          child: Text(
+                            'No session data in the last 30 days.',
+                            style: TextStyle(fontSize: 13, color: Color(0xFF9CA3AF)),
+                          ),
+                        )
+                      else
+                        ...lecturerSummary.map((l) {
+                          final m = l as Map;
+                          final name = m['name']?.toString() ?? '—';
+                          final sessions = m['sessions'] ?? m['sessionCount'] ?? 0;
+                          final attendance = m['attendance'] ?? m['totalAttendance'] ?? 0;
+                          return Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                            decoration: const BoxDecoration(
+                              border: Border(top: BorderSide(color: DiklyColors.border)),
+                            ),
+                            child: Row(
+                              children: [
+                                CircleAvatar(
+                                  radius: 18,
+                                  backgroundColor: const Color(0xFF7C2D12).withOpacity(0.1),
+                                  child: Text(
+                                    name.isNotEmpty ? name[0].toUpperCase() : 'L',
+                                    style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: Color(0xFF7C2D12)),
+                                  ),
+                                ),
+                                const SizedBox(width: 12),
+                                Expanded(
+                                  child: Text(name, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: Color(0xFF111827))),
+                                ),
+                                Text('$sessions sessions', style: const TextStyle(fontSize: 12, color: Color(0xFF6B7280))),
+                                const SizedBox(width: 12),
+                                Text('$attendance attend.', style: const TextStyle(fontSize: 12, color: Color(0xFF6B7280))),
+                              ],
+                            ),
+                          );
+                        }),
+                    ],
+                  ),
                 ),
               ],
             ),
@@ -123,205 +159,33 @@ class HodPerformanceScreen extends ConsumerWidget {
   }
 }
 
-class _MetricCard extends StatelessWidget {
-  final String title;
+class _StatCard extends StatelessWidget {
   final String value;
-  final IconData icon;
+  final String label;
   final Color color;
 
-  const _MetricCard({
-    required this.title,
-    required this.value,
-    required this.icon,
-    required this.color,
-  });
+  const _StatCard({required this.value, required this.label, required this.color});
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: DiklyColors.surface,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: DiklyColors.border),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Container(
-            width: 36,
-            height: 36,
-            decoration: BoxDecoration(
-              color: color.withOpacity(0.1),
-              borderRadius: BorderRadius.circular(8),
-            ),
-            child: Icon(icon, color: color, size: 18),
-          ),
-          const Spacer(),
-          Text(
-            value,
-            style: TextStyle(
-              fontSize: 22,
-              fontWeight: FontWeight.w800,
-              color: color,
-            ),
-          ),
-          Text(
-            title,
-            style: const TextStyle(
-              fontSize: 11,
-              fontWeight: FontWeight.w500,
-              color: DiklyColors.textSecondary,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _EmptyChartState extends StatelessWidget {
-  const _EmptyChartState();
-
-  @override
-  Widget build(BuildContext context) {
-    return const SizedBox(
-      height: 140,
-      child: Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(
-              Icons.bar_chart_outlined,
-              size: 40,
-              color: DiklyColors.textSecondary,
-            ),
-            SizedBox(height: 8),
-            Text(
-              'No attendance data available',
-              style: TextStyle(
-                fontSize: 13,
-                color: DiklyColors.textSecondary,
-              ),
-            ),
-          ],
+    return Expanded(
+      child: Container(
+        padding: const EdgeInsets.fromLTRB(10, 10, 10, 10),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(color: const Color(0xFFE5E7EB)),
+          boxShadow: const [BoxShadow(color: Color(0x08000000), blurRadius: 4, offset: Offset(0, 1))],
         ),
-      ),
-    );
-  }
-}
-
-class _AttendanceBarChart extends StatelessWidget {
-  final List<dynamic> courseData;
-
-  const _AttendanceBarChart({required this.courseData});
-
-  @override
-  Widget build(BuildContext context) {
-    final bars = courseData.take(6).toList();
-
-    return SizedBox(
-      height: 200,
-      child: BarChart(
-        BarChartData(
-          alignment: BarChartAlignment.spaceAround,
-          maxY: 100,
-          barTouchData: BarTouchData(
-            touchTooltipData: BarTouchTooltipData(
-              getTooltipItem: (group, groupIndex, rod, rodIndex) {
-                final label = bars.length > groupIndex
-                    ? (bars[groupIndex]['code']?.toString() ??
-                        bars[groupIndex]['course']?.toString() ??
-                        '${groupIndex + 1}')
-                    : '';
-                return BarTooltipItem(
-                  '$label\n${rod.toY.toStringAsFixed(0)}%',
-                  const TextStyle(
-                    color: Colors.white,
-                    fontWeight: FontWeight.w600,
-                    fontSize: 12,
-                  ),
-                );
-              },
-            ),
-          ),
-          titlesData: FlTitlesData(
-            show: true,
-            bottomTitles: AxisTitles(
-              sideTitles: SideTitles(
-                showTitles: true,
-                getTitlesWidget: (value, meta) {
-                  final idx = value.toInt();
-                  if (idx >= bars.length) return const SizedBox.shrink();
-                  final label = bars[idx]['code']?.toString() ??
-                      bars[idx]['course']?.toString() ??
-                      '${idx + 1}';
-                  return Padding(
-                    padding: const EdgeInsets.only(top: 6),
-                    child: Text(
-                      label.length > 6
-                          ? label.substring(0, 6)
-                          : label,
-                      style: const TextStyle(
-                        fontSize: 10,
-                        color: DiklyColors.textSecondary,
-                        fontWeight: FontWeight.w500,
-                      ),
-                    ),
-                  );
-                },
-              ),
-            ),
-            leftTitles: AxisTitles(
-              sideTitles: SideTitles(
-                showTitles: true,
-                reservedSize: 32,
-                getTitlesWidget: (value, meta) => Text(
-                  '${value.toInt()}%',
-                  style: const TextStyle(
-                    fontSize: 10,
-                    color: DiklyColors.textSecondary,
-                  ),
-                ),
-                interval: 25,
-              ),
-            ),
-            topTitles: const AxisTitles(
-              sideTitles: SideTitles(showTitles: false),
-            ),
-            rightTitles: const AxisTitles(
-              sideTitles: SideTitles(showTitles: false),
-            ),
-          ),
-          gridData: FlGridData(
-            show: true,
-            drawVerticalLine: false,
-            horizontalInterval: 25,
-            getDrawingHorizontalLine: (_) => const FlLine(
-              color: DiklyColors.border,
-              strokeWidth: 1,
-            ),
-          ),
-          borderData: FlBorderData(show: false),
-          barGroups: List.generate(bars.length, (i) {
-            final attendance =
-                (bars[i]['attendance'] as num?)?.toDouble() ??
-                    (bars[i]['attendanceRate'] as num?)?.toDouble() ??
-                    0.0;
-            return BarChartGroupData(
-              x: i,
-              barRods: [
-                BarChartRodData(
-                  toY: attendance.clamp(0.0, 100.0),
-                  color: const Color(0xFF7C2D12),
-                  width: 22,
-                  borderRadius: const BorderRadius.vertical(
-                    top: Radius.circular(4),
-                  ),
-                ),
-              ],
-            );
-          }),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Container(height: 3, decoration: BoxDecoration(color: color, borderRadius: BorderRadius.circular(2))),
+            const SizedBox(height: 8),
+            Text(value, style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800, color: color, height: 1)),
+            const SizedBox(height: 2),
+            Text(label, style: const TextStyle(fontSize: 7, fontWeight: FontWeight.w700, color: Color(0xFF9CA3AF), letterSpacing: 0.2)),
+          ],
         ),
       ),
     );

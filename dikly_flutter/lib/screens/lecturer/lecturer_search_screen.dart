@@ -88,6 +88,13 @@ class _LecturerSearchScreenState extends State<LecturerSearchScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: const Color(0xFFF1F5F9),
+      appBar: AppBar(
+        backgroundColor: Colors.white,
+        elevation: 0,
+        surfaceTintColor: Colors.transparent,
+        leading: const BackButton(),
+        title: const Text('Search', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: Color(0xFF111827))),
+      ),
       body: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -110,7 +117,7 @@ class _LecturerSearchScreenState extends State<LecturerSearchScreen> {
                               controller: _searchController,
                               onSubmitted: (_) => _doSearch(),
                               decoration: InputDecoration(
-                                hintText: 'Search by name, email, index...',
+                                hintText: 'Search by name, email, index number...',
                                 prefixIcon: const Icon(Icons.search, color: Color(0xFF9CA3AF)),
                                 filled: true,
                                 fillColor: const Color(0xFFF9FAFB),

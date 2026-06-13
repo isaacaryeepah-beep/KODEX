@@ -63,8 +63,14 @@ class _CoursesScreenState extends ConsumerState<CoursesScreen> {
     final user = ref.watch(currentUserProvider);
     final canCreate = user?.role == 'admin' || user?.role == 'hod';
 
+    final isStudent = user?.role == 'student';
+    final screenTitle = isStudent ? 'My Courses' : 'Courses';
+    final screenSubtitle = isStudent
+        ? 'Your enrolled academic courses'
+        : '${_courses.length} course${_courses.length == 1 ? '' : 's'} available';
+
     return AppShell(
-      title: 'Courses',
+      title: screenTitle,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -72,8 +78,8 @@ class _CoursesScreenState extends ConsumerState<CoursesScreen> {
           Padding(
             padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
             child: DiklyScreenHeader(
-              title: 'Courses',
-              subtitle: '${_courses.length} course${_courses.length == 1 ? '' : 's'} available',
+              title: screenTitle,
+              subtitle: screenSubtitle,
               action: canCreate
                   ? ElevatedButton.icon(
                       onPressed: () => _showCreateCourseDialog(context),
@@ -258,91 +264,96 @@ class _CourseCard extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
+          // Top row: code, level, group, status
+          Wrap(
+            spacing: 6,
+            runSpacing: 4,
+            crossAxisAlignment: WrapCrossAlignment.center,
             children: [
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    // Code badge (blue pill)
-                    if (course.code != null) ...[
-                      Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                        decoration: BoxDecoration(
-                          color: DiklyColors.primaryULight,
-                          borderRadius: BorderRadius.circular(20),
-                        ),
-                        child: Text(
-                          course.code!.toUpperCase(),
-                          style: const TextStyle(
-                            fontSize: 11,
-                            fontWeight: FontWeight.w700,
-                            color: DiklyColors.primary,
-                          ),
-                        ),
-                      ),
-                      const SizedBox(height: 8),
-                    ],
-                    // Title (uppercase)
-                    Text(
-                      course.title.toUpperCase(),
-                      style: const TextStyle(
-                        fontSize: 14,
-                        fontWeight: FontWeight.w700,
-                        color: DiklyColors.text,
-                        height: 1.3,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              const SizedBox(width: 12),
-              // Status badge
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-                decoration: BoxDecoration(
-                  color: _statusBg,
-                  borderRadius: BorderRadius.circular(20),
-                ),
-                child: Text(
-                  status[0].toUpperCase() + status.substring(1),
-                  style: TextStyle(
-                    fontSize: 11,
-                    fontWeight: FontWeight.w700,
-                    color: _statusColor,
-                  ),
-                ),
+              if (course.code != null)
+                _Chip(label: course.code!, color: DiklyColors.primary, bg: DiklyColors.primaryULight),
+              if (course.level != null && course.level!.isNotEmpty)
+                _Chip(label: 'Level ${course.level!}', color: const Color(0xFF0891B2), bg: const Color(0xFFE0F2FE)),
+              if (course.group != null && course.group!.isNotEmpty)
+                _Chip(label: 'Group ${course.group!}', color: const Color(0xFF6B7280), bg: const Color(0xFFF3F4F6)),
+              _Chip(
+                label: '✓ ${status[0].toUpperCase()}${status.substring(1)}',
+                color: _statusColor,
+                bg: _statusBg,
               ),
             ],
           ),
           const SizedBox(height: 10),
-          // Instructor & enrolled count
-          Row(
-            children: [
-              if (course.instructorName != null) ...[
+          // Title
+          Text(
+            course.title,
+            style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: DiklyColors.text, height: 1.3),
+          ),
+          const SizedBox(height: 8),
+          // Instructor
+          if (course.instructorName != null)
+            Row(
+              children: [
                 const Icon(Icons.person_outline_rounded, size: 14, color: DiklyColors.textLight),
                 const SizedBox(width: 4),
                 Expanded(
                   child: Text(
                     course.instructorName!,
-                    style: const TextStyle(fontSize: 13, color: DiklyColors.textSecondary),
+                    style: const TextStyle(fontSize: 12, color: DiklyColors.textSecondary),
                     overflow: TextOverflow.ellipsis,
                   ),
                 ),
               ],
-              if (course.studentCount != null) ...[
+            ),
+          if (course.studentCount != null) ...[
+            const SizedBox(height: 4),
+            Row(
+              children: [
                 const Icon(Icons.people_outline_rounded, size: 14, color: DiklyColors.textLight),
                 const SizedBox(width: 4),
                 Text(
-                  '${course.studentCount} enrolled',
-                  style: const TextStyle(fontSize: 13, color: DiklyColors.textSecondary),
+                  '${course.studentCount} student${course.studentCount == 1 ? '' : 's'} enrolled',
+                  style: const TextStyle(fontSize: 12, color: DiklyColors.textSecondary),
                 ),
               ],
-            ],
+            ),
+          ],
+          const SizedBox(height: 10),
+          // Certificate chip
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+            decoration: BoxDecoration(
+              color: const Color(0xFFF0FDF4),
+              borderRadius: BorderRadius.circular(6),
+              border: Border.all(color: const Color(0xFFBBF7D0)),
+            ),
+            child: const Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(Icons.workspace_premium_outlined, size: 13, color: Color(0xFF16A34A)),
+                SizedBox(width: 4),
+                Text('Certificate', style: TextStyle(fontSize: 11, color: Color(0xFF16A34A), fontWeight: FontWeight.w600)),
+              ],
+            ),
           ),
         ],
       ),
+    );
+  }
+}
+
+class _Chip extends StatelessWidget {
+  final String label;
+  final Color color;
+  final Color bg;
+  const _Chip({required this.label, required this.color, required this.bg});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+      decoration: BoxDecoration(color: bg, borderRadius: BorderRadius.circular(12)),
+      child: Text(label, style: TextStyle(fontSize: 10, fontWeight: FontWeight.w700, color: color)),
     );
   }
 }

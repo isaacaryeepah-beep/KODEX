@@ -27,6 +27,13 @@ class _MeetingsScreenState extends ConsumerState<MeetingsScreen> {
     _loadData();
   }
 
+  String _fmt(DateTime dt) {
+    final h = dt.hour % 12 == 0 ? 12 : dt.hour % 12;
+    final m = dt.minute.toString().padLeft(2, '0');
+    final ampm = dt.hour < 12 ? 'AM' : 'PM';
+    return '$h:$m $ampm';
+  }
+
   Future<void> _loadData() async {
     setState(() { _loading = true; });
     try {
@@ -55,14 +62,14 @@ class _MeetingsScreenState extends ConsumerState<MeetingsScreen> {
             padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
             child: DiklyScreenHeader(
               title: 'Meetings',
-              subtitle: '${_meetings.length} meeting${_meetings.length == 1 ? '' : 's'}',
+              subtitle: 'Secure video meetings',
               action: canCreate
                   ? ElevatedButton.icon(
                       onPressed: () => context.push('/sessions/create'),
                       icon: const Icon(Icons.add, size: 16),
-                      label: const Text('Create Meeting'),
+                      label: const Text('+ Schedule Meeting'),
                       style: ElevatedButton.styleFrom(
-                        backgroundColor: DiklyColors.primary,
+                        backgroundColor: const Color(0xFF7C3AED),
                         foregroundColor: Colors.white,
                         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
                         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
@@ -73,17 +80,57 @@ class _MeetingsScreenState extends ConsumerState<MeetingsScreen> {
                   : null,
             ),
           ),
+          // Device lock banner
+          if (user != null && user.deviceLocked) ...[
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 0, 16, 0),
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFFFFBEB),
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: const Color(0xFFFCD34D)),
+                ),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text('🔒 ', style: TextStyle(fontSize: 14)),
+                    Expanded(
+                      child: Text(
+                        user.deviceLockedUntil != null
+                            ? 'Device Lock Active — Joining meetings is blocked until ${_fmt(user.deviceLockedUntil!)}. Contact your admin or HOD to unlock early.'
+                            : 'Device Lock Active — Joining meetings is currently blocked. Contact your admin or HOD to unlock.',
+                        style: const TextStyle(fontSize: 13, color: Color(0xFF92400E), height: 1.4),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            const SizedBox(height: 8),
+          ],
           const SizedBox(height: 8),
           Expanded(
             child: _loading
                 ? const Center(child: CircularProgressIndicator(color: DiklyColors.primary))
                 : _meetings.isEmpty
-                        ? DiklyEmptyState(
-                            icon: Icons.groups_outlined,
-                            title: 'No meetings scheduled',
-                            subtitle: 'Meetings will appear here',
-                            buttonLabel: canCreate ? 'Create Meeting' : null,
-                            onButton: canCreate ? () => context.push('/sessions/create') : null,
+                        ? Padding(
+                            padding: const EdgeInsets.all(16),
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(vertical: 60, horizontal: 24),
+                              decoration: BoxDecoration(
+                                color: Colors.white,
+                                borderRadius: BorderRadius.circular(12),
+                                border: Border.all(color: DiklyColors.border),
+                              ),
+                              child: const Center(
+                                child: Text(
+                                  'No meetings scheduled yet.',
+                                  style: TextStyle(fontSize: 13, color: DiklyColors.textSecondary),
+                                  textAlign: TextAlign.center,
+                                ),
+                              ),
+                            ),
                           )
                         : RefreshIndicator(
                             onRefresh: _loadData,
@@ -94,8 +141,8 @@ class _MeetingsScreenState extends ConsumerState<MeetingsScreen> {
                                   const Padding(
                                     padding: EdgeInsets.only(bottom: 10),
                                     child: Text(
-                                      'Upcoming & Live',
-                                      style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: DiklyColors.textSecondary),
+                                      'UPCOMING & LIVE',
+                                      style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: DiklyColors.textSecondary, letterSpacing: 0.5),
                                     ),
                                   ),
                                   ...upcomingOrLive.map((m) => _MeetingCard(
@@ -108,8 +155,8 @@ class _MeetingsScreenState extends ConsumerState<MeetingsScreen> {
                                   Padding(
                                     padding: EdgeInsets.only(top: upcomingOrLive.isNotEmpty ? 8 : 0, bottom: 10),
                                     child: const Text(
-                                      'Past Meetings',
-                                      style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: DiklyColors.textSecondary),
+                                      'PAST MEETINGS',
+                                      style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: DiklyColors.textSecondary, letterSpacing: 0.5),
                                     ),
                                   ),
                                   ...past.map((m) => _MeetingCard(
@@ -159,123 +206,136 @@ class _MeetingCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final dateStr = meeting.scheduledStart != null
-        ? DateFormat('EEE, MMM d · h:mm a').format(meeting.scheduledStart!)
-        : '';
+    final startStr = meeting.scheduledStart != null
+        ? DateFormat('EEE, MMM d - h:mm a').format(meeting.scheduledStart!)
+        : '—';
 
-    // Duration in minutes
-    String durationStr = '';
+    String durationStr = '—';
     if (meeting.scheduledStart != null && meeting.scheduledEnd != null) {
       final mins = meeting.scheduledEnd!.difference(meeting.scheduledStart!).inMinutes;
       durationStr = '$mins min';
     }
 
-    return Opacity(
-      opacity: isPast ? 0.7 : 1.0,
-      child: DiklyCard(
-        margin: const EdgeInsets.only(bottom: 12),
-        padding: const EdgeInsets.all(16),
-        onTap: onTap,
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
+    final host = meeting.createdBy ?? '—';
+    final meetingType = meeting.meetingType.isEmpty ? 'Lecture' : meeting.meetingType;
+
+    return DiklyCard(
+      margin: const EdgeInsets.only(bottom: 12),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Title row
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  meeting.title,
+                  style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w700, color: Color(0xFF111827)),
+                ),
+              ),
+              const SizedBox(width: 8),
+              if (isPast)
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                  decoration: BoxDecoration(color: const Color(0xFFF3F4F6), borderRadius: BorderRadius.circular(20)),
+                  child: const Text('Ended', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: Color(0xFF6B7280))),
+                )
+              else if (meeting.isLive)
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                  decoration: BoxDecoration(color: const Color(0xFFDCFCE7), borderRadius: BorderRadius.circular(20)),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
                     children: [
-                      Text(
-                        meeting.title,
-                        style: TextStyle(
-                          fontSize: 15,
-                          fontWeight: FontWeight.w700,
-                          color: isPast ? DiklyColors.textSecondary : DiklyColors.text,
-                        ),
-                      ),
-                      if (meeting.createdBy != null) ...[
-                        const SizedBox(height: 3),
-                        Row(
-                          children: [
-                            const Icon(Icons.person_outline_rounded, size: 13, color: DiklyColors.textLight),
-                            const SizedBox(width: 4),
-                            Text(
-                              meeting.createdBy!,
-                              style: const TextStyle(fontSize: 12, color: DiklyColors.textLight),
-                            ),
-                          ],
-                        ),
-                      ],
+                      Container(width: 6, height: 6, decoration: const BoxDecoration(color: Color(0xFF16A34A), shape: BoxShape.circle)),
+                      const SizedBox(width: 4),
+                      const Text('Live', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: Color(0xFF16A34A))),
                     ],
                   ),
                 ),
-                // Status badge
-                if (isPast)
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-                    decoration: BoxDecoration(
-                      color: DiklyColors.grey100,
-                      borderRadius: BorderRadius.circular(20),
-                    ),
-                    child: const Text(
-                      'Ended',
-                      style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: DiklyColors.textLight),
-                    ),
-                  )
-                else if (meeting.isLive)
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-                    decoration: BoxDecoration(
-                      color: DiklyColors.successLight,
-                      borderRadius: BorderRadius.circular(20),
-                    ),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Container(width: 6, height: 6, decoration: const BoxDecoration(color: DiklyColors.success, shape: BoxShape.circle)),
-                        const SizedBox(width: 5),
-                        const Text('Live', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: DiklyColors.success)),
-                      ],
-                    ),
-                  ),
-              ],
+            ],
+          ),
+          const SizedBox(height: 6),
+          // Type tag
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+            decoration: BoxDecoration(
+              border: Border.all(color: const Color(0xFFD1D5DB)),
+              borderRadius: BorderRadius.circular(5),
             ),
-            const SizedBox(height: 10),
-            // Date/time + duration chips
-            Row(
-              children: [
-                if (dateStr.isNotEmpty) ...[
-                  DiklyInfoChip(
-                    icon: Icons.calendar_today_outlined,
-                    label: dateStr,
-                  ),
-                  const SizedBox(width: 8),
-                ],
-                if (durationStr.isNotEmpty)
-                  DiklyInfoChip(
-                    icon: Icons.timer_outlined,
-                    label: durationStr,
-                  ),
-                const Spacer(),
-                // Join button for live meetings
-                if (!isPast && onJoin != null)
-                  ElevatedButton.icon(
-                    onPressed: onJoin,
-                    icon: const Icon(Icons.video_call_rounded, size: 16),
-                    label: const Text('Join'),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: DiklyColors.primary,
-                      foregroundColor: Colors.white,
-                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                      elevation: 0,
-                      textStyle: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
-                    ),
-                  ),
-              ],
+            child: Text(
+              meetingType.toUpperCase(),
+              style: const TextStyle(fontSize: 10, fontWeight: FontWeight.w700, color: Color(0xFF6B7280), letterSpacing: 0.4),
             ),
-          ],
-        ),
+          ),
+          const SizedBox(height: 12),
+          // Info grid
+          Row(
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text('Host', style: TextStyle(fontSize: 10, fontWeight: FontWeight.w700, color: Color(0xFF9CA3AF))),
+                    const SizedBox(height: 2),
+                    Text(host, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: Color(0xFF111827))),
+                  ],
+                ),
+              ),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text('Duration', style: TextStyle(fontSize: 10, fontWeight: FontWeight.w700, color: Color(0xFF9CA3AF))),
+                    const SizedBox(height: 2),
+                    Text(durationStr, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: Color(0xFF111827))),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text('Start', style: TextStyle(fontSize: 10, fontWeight: FontWeight.w700, color: Color(0xFF9CA3AF))),
+              const SizedBox(height: 2),
+              Text(startStr, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: Color(0xFF111827))),
+            ],
+          ),
+          const SizedBox(height: 14),
+          // Action buttons
+          Row(
+            children: [
+              Expanded(
+                child: OutlinedButton(
+                  onPressed: onTap,
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: const Color(0xFF374151),
+                    side: const BorderSide(color: Color(0xFFD1D5DB)),
+                    padding: const EdgeInsets.symmetric(vertical: 10),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                  ),
+                  child: const Text('Details', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
+                ),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: ElevatedButton(
+                  onPressed: onJoin ?? onTap,
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFF7C3AED),
+                    foregroundColor: Colors.white,
+                    padding: const EdgeInsets.symmetric(vertical: 10),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                    elevation: 0,
+                  ),
+                  child: const Text('Attendance', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
+                ),
+              ),
+            ],
+          ),
+        ],
       ),
     );
   }

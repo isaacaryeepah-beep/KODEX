@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../../core/api.dart';
+import '../../core/auth.dart';
 import '../../core/theme.dart';
 
 // ── Subscription data provider ────────────────────────────────────────────────
@@ -16,14 +17,50 @@ final _subscriptionProvider = FutureProvider.autoDispose<Map<String, dynamic>>(
   },
 );
 
-// ── Static plan features ──────────────────────────────────────────────────────
+// ── Role-based plan config ────────────────────────────────────────────────────
 
-const _features = [
-  'Full platform access',
-  'Attendance marking & session management',
-  'Assessment creation & grading',
-  'Grade book & reports',
-  'Renew any time — days stack up',
+class _PlanConfig {
+  final String price;
+  final String planName;
+  final List<String> features;
+  final String Function(int daysLeft) trialBanner;
+
+  const _PlanConfig({required this.price, required this.planName, required this.features, required this.trialBanner});
+}
+
+final _studentPlan = _PlanConfig(
+  price: '₵20',
+  planName: 'Student Semester Plan',
+  features: const [
+    'Full student portal access',
+    'Attend classes & mark attendance',
+    'Take quizzes & assignments',
+    'View grades & results',
+    'Access the secure exam portal',
+  ],
+  trialBanner: (_) => 'You received a 45-day free trial on account creation. After it ends, subscribe for ₵20/semester to keep access.',
+);
+
+final _staffPlan = _PlanConfig(
+  price: '₵120',
+  planName: 'Semester Plan',
+  features: const [
+    'Full platform access',
+    'Attendance marking & session management',
+    'Assessment creation & grading',
+    'Grade book & reports',
+    'Renew any time — days stack up',
+  ],
+  trialBanner: (days) => '30-day free trial active — $days days left. Subscribe before it ends to avoid interruption.',
+);
+
+const _hodFeatures = [
+  'Full department management access',
+  'Student & lecturer oversight',
+  'Attendance monitoring & reports',
+  'Course approvals & performance analytics',
+  'Class representative management',
+  'Smart alerts & department messaging',
 ];
 
 // ── Screen ────────────────────────────────────────────────────────────────────
@@ -34,16 +71,31 @@ class SubscriptionScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final async = ref.watch(_subscriptionProvider);
+    final user = ref.watch(currentUserProvider);
+    final role = user?.role ?? 'student';
+    final isHod = role == 'hod';
+    final isStaff = ['lecturer', 'admin', 'superadmin', 'manager'].contains(role);
+    final plan = isStaff ? _staffPlan : _studentPlan;
 
     final data = async.maybeWhen(data: (d) => d, orElse: () => <String, dynamic>{});
     final statusRaw = data['status']?.toString() ?? 'trial';
     final planRaw = data['plan']?.toString() ?? 'Free Trial';
-    final daysLeft = (data['daysLeft'] as num?)?.toInt() ?? 25;
+    final daysLeft = (data['daysLeft'] as num?)?.toInt() ?? 30;
     final trialEnds = data['trialEnds']?.toString() ?? '—';
+    final institution = data['institution']?.toString() ?? user?.company ?? user?.department ?? 'Dikly Tech';
 
     final isTrial = statusRaw.toLowerCase() == 'trial' || statusRaw.isEmpty;
     final statusLabel = isTrial ? 'Free Trial' : statusRaw;
     final planLabel = isTrial ? 'Free Trial' : planRaw;
+
+    if (isHod) {
+      return _HodSubscriptionView(
+        statusLabel: statusLabel,
+        daysLeft: daysLeft,
+        trialEnds: trialEnds,
+        institution: institution,
+      );
+    }
 
     return Scaffold(
       backgroundColor: DiklyColors.background,
@@ -62,9 +114,9 @@ class SubscriptionScreen extends ConsumerWidget {
             style: TextStyle(fontSize: 26, fontWeight: FontWeight.w800, color: Color(0xFF111827)),
           ),
           const SizedBox(height: 4),
-          const Text(
-            'Your personal DIKLY access · ₵30 / semester · Paystack only',
-            style: TextStyle(fontSize: 13, color: Color(0xFF6B7280)),
+          Text(
+            'Your personal DIKLY access · ${plan.price} / semester · Paystack only',
+            style: const TextStyle(fontSize: 13, color: Color(0xFF6B7280)),
           ),
 
           const SizedBox(height: 20),
@@ -127,11 +179,11 @@ class SubscriptionScreen extends ConsumerWidget {
                 Row(
                   crossAxisAlignment: CrossAxisAlignment.center,
                   children: [
-                    const Text('Semester Plan',
-                        style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: Color(0xFF111827))),
+                    Text(plan.planName,
+                        style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: Color(0xFF111827))),
                     const Spacer(),
-                    const Text('₵30',
-                        style: TextStyle(fontSize: 28, fontWeight: FontWeight.w800, color: Color(0xFF2563EB))),
+                    Text(plan.price,
+                        style: const TextStyle(fontSize: 28, fontWeight: FontWeight.w800, color: Color(0xFF2563EB))),
                   ],
                 ),
 
@@ -156,7 +208,7 @@ class SubscriptionScreen extends ConsumerWidget {
                 const SizedBox(height: 14),
 
                 // Feature bullets
-                ..._features.map((f) => Padding(
+                ...plan.features.map((f) => Padding(
                   padding: const EdgeInsets.only(bottom: 8),
                   child: Row(
                     crossAxisAlignment: CrossAxisAlignment.start,
@@ -195,8 +247,7 @@ class SubscriptionScreen extends ConsumerWidget {
                       const SizedBox(width: 8),
                       Expanded(
                         child: Text(
-                          '30-day free trial active — $daysLeft days left. '
-                          'Subscribe before it ends to avoid interruption.',
+                          plan.trialBanner(daysLeft),
                           style: const TextStyle(fontSize: 12, color: Color(0xFF92400E), height: 1.5),
                         ),
                       ),
@@ -220,9 +271,9 @@ class SubscriptionScreen extends ConsumerWidget {
                       padding: const EdgeInsets.symmetric(vertical: 14),
                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
                     ),
-                    child: const Text(
-                      'Pay ₵30 with Paystack',
-                      style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700),
+                    child: Text(
+                      'Pay ${plan.price} with Paystack →',
+                      style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w700),
                     ),
                   ),
                 ),
@@ -238,6 +289,181 @@ class SubscriptionScreen extends ConsumerWidget {
                 ),
               ],
             ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// ── HOD Institution Plan View ─────────────────────────────────────────────────
+
+class _HodSubscriptionView extends StatelessWidget {
+  final String statusLabel;
+  final int daysLeft;
+  final String trialEnds;
+  final String institution;
+
+  const _HodSubscriptionView({
+    required this.statusLabel,
+    required this.daysLeft,
+    required this.trialEnds,
+    required this.institution,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: DiklyColors.background,
+      appBar: AppBar(
+        title: const Text('Subscription'),
+        leading: BackButton(onPressed: () => Navigator.of(context).maybePop()),
+      ),
+      body: ListView(
+        padding: const EdgeInsets.fromLTRB(16, 0, 16, 32),
+        children: [
+          const SizedBox(height: 16),
+
+          // Header
+          const Text(
+            'Subscription',
+            style: TextStyle(fontSize: 26, fontWeight: FontWeight.w800, color: Color(0xFF111827)),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            'Institution access plan · $institution',
+            style: const TextStyle(fontSize: 13, color: Color(0xFF6B7280)),
+          ),
+          const SizedBox(height: 20),
+
+          // 4 stat cards in a row (scrollable)
+          SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            child: Row(
+              children: [
+                _HodStatCard(label: 'PLAN STATUS', value: statusLabel),
+                const SizedBox(width: 10),
+                _HodStatCard(label: 'DAYS REMAINING', value: '$daysLeft'),
+                const SizedBox(width: 10),
+                _HodStatCard(label: 'TRIAL ENDS', value: trialEnds),
+                const SizedBox(width: 10),
+                _HodStatCard(label: 'INSTITUTION', value: institution),
+              ],
+            ),
+          ),
+          const SizedBox(height: 20),
+
+          // Institution Plan card
+          Container(
+            padding: const EdgeInsets.all(20),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(14),
+              border: Border.all(color: const Color(0xFFE5E7EB)),
+              boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.04), blurRadius: 8, offset: const Offset(0, 2))],
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text('Institution Plan',
+                    style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700, color: Color(0xFF111827))),
+                const SizedBox(height: 6),
+                const Text(
+                  'Your HOD access is included in your institution\'s subscription',
+                  style: TextStyle(fontSize: 13, color: Color(0xFF6B7280)),
+                ),
+                const SizedBox(height: 14),
+                const Divider(height: 1),
+                const SizedBox(height: 14),
+
+                // Status row
+                Row(
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFFFFBEB),
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(color: const Color(0xFFFCD34D)),
+                      ),
+                      child: Text(
+                        'Status: $statusLabel',
+                        style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: Color(0xFFD97706)),
+                      ),
+                    ),
+                    const Spacer(),
+                    Text(
+                      '$daysLeft days left',
+                      style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: Color(0xFFD97706)),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 16),
+
+                const Text('What\'s Included',
+                    style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: Color(0xFF111827))),
+                const SizedBox(height: 10),
+
+                ..._hodFeatures.map((f) => Padding(
+                  padding: const EdgeInsets.only(bottom: 8),
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Container(
+                        margin: const EdgeInsets.only(top: 4),
+                        width: 6,
+                        height: 6,
+                        decoration: const BoxDecoration(
+                          color: Color(0xFF374151),
+                          shape: BoxShape.circle,
+                        ),
+                      ),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: Text(f, style: const TextStyle(fontSize: 13, color: Color(0xFF374151))),
+                      ),
+                    ],
+                  ),
+                )),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _HodStatCard extends StatelessWidget {
+  final String label;
+  final String value;
+  const _HodStatCard({required this.label, required this.value});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: 120,
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: const Color(0xFFE5E7EB)),
+        boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.03), blurRadius: 6, offset: const Offset(0, 2))],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            value,
+            style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w800, color: Color(0xFF111827)),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+          ),
+          const SizedBox(height: 4),
+          Text(
+            label,
+            style: const TextStyle(fontSize: 9, fontWeight: FontWeight.w600, color: Color(0xFF9CA3AF), letterSpacing: 0.3),
+            maxLines: 2,
           ),
         ],
       ),

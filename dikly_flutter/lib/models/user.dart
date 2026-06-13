@@ -15,6 +15,7 @@ class User {
   final DateTime? createdAt;
   final bool deviceLocked;
   final DateTime? deviceLockedUntil;
+  final String? level;
 
   const User({
     required this.id,
@@ -33,6 +34,7 @@ class User {
     this.createdAt,
     this.deviceLocked = false,
     this.deviceLockedUntil,
+    this.level,
   });
 
   factory User.fromJson(Map<String, dynamic> json) {
@@ -58,6 +60,7 @@ class User {
       deviceLockedUntil: json['accountDeviceLock']?['lockedUntil'] != null
           ? DateTime.tryParse(json['accountDeviceLock']['lockedUntil'].toString())
           : null,
+      level: json['level']?.toString(),
     );
   }
 

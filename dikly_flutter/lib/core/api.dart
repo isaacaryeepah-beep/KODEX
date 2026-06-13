@@ -492,6 +492,14 @@ class ApiService {
     return data as Map<String, dynamic>;
   }
 
+  Future<String> getReportDownloadLink(String type, {bool isAdmin = false}) async {
+    final base = isAdmin ? '/api/admin/reports' : '/api/reports';
+    final res = await _dio.get('$base/download-link/$type');
+    final url = res.data?['url'] ?? res.data?['downloadUrl'] ?? '';
+    if (url.isEmpty) throw Exception('No download URL returned');
+    return url.toString();
+  }
+
   // Leave Requests (manager/admin view)
   Future<List<dynamic>> getLeaveRequests() async {
     final data = await _cachedGet('/api/leaves', 'leave_requests');
@@ -531,20 +539,24 @@ class ApiService {
       _dio.get('/api/hod/students'),
       _dio.get('/api/hod/dashboard-stats'),
       _dio.get('/api/attendance-sessions', queryParameters: {'status': 'active', 'limit': '100'}),
+      _dio.get('/api/attendance-sessions', queryParameters: {'limit': '10', 'sort': '-createdAt'}),
     ]);
     final lecturers = results[0].data;
     final students = results[1].data;
     final stats = results[2].data;
     final activeSessions = results[3].data;
+    final recentSessions = results[4].data;
     final lecturerList = lecturers['lecturers'] ?? lecturers['data'] ?? [];
     final studentList = students['students'] ?? students['data'] ?? [];
     final statsData = (stats['data'] ?? stats) as Map<String, dynamic>;
-    final sessionList = activeSessions['sessions'] ?? activeSessions['data'] ?? [];
+    final activeSessionList = activeSessions['sessions'] ?? activeSessions['data'] ?? [];
+    final recentSessionList = recentSessions['sessions'] ?? recentSessions['data'] ?? [];
     return {
       'totalLecturers': (lecturerList as List).length,
       'totalStudents': (studentList as List).length,
       'totalSessions': statsData['totalSessions'] ?? 0,
-      'activeSessions': (sessionList as List).length,
+      'activeSessions': (activeSessionList as List).length,
+      'recentSessions': recentSessionList,
     };
   }
 
@@ -565,6 +577,79 @@ class ApiService {
 
   Future<void> unlockStudent(String id) async {
     await _dio.post('/api/users/$id/unlock-account-device');
+  }
+
+  Future<List<Map<String, dynamic>>> getLockedStudents() async {
+    final response = await _dio.get('/api/hod/locked-students');
+    final data = response.data;
+    final list = data['students'] ?? data['data'] ?? [];
+    return (list as List).cast<Map<String, dynamic>>();
+  }
+
+  Future<List<Map<String, dynamic>>> getAdminCourseApprovals() async {
+    final response = await _dio.get('/api/hod/pending-courses');
+    final data = response.data;
+    final list = data['courses'] ?? data['data'] ?? [];
+    return (list as List).cast<Map<String, dynamic>>();
+  }
+
+  Future<void> approveCourse(String id) async {
+    await _dio.patch('/api/hod/courses/$id/approve');
+  }
+
+  Future<void> rejectCourse(String id) async {
+    await _dio.patch('/api/hod/courses/$id/reject');
+  }
+
+  Future<List<Map<String, dynamic>>> getProgrammes() async {
+    final response = await _dio.get('/api/programmes');
+    final data = response.data;
+    final list = data['programmes'] ?? data['data'] ?? (data is List ? data : []);
+    return (list as List).cast<Map<String, dynamic>>();
+  }
+
+  Future<void> createProgramme(Map<String, dynamic> body) async {
+    await _dio.post('/api/programmes', data: body);
+  }
+
+  Future<List<Map<String, dynamic>>> getClassReps() async {
+    final response = await _dio.get('/api/class-rep-admin/list');
+    final data = response.data;
+    final list = data['reps'] ?? data['data'] ?? (data is List ? data : []);
+    return (list as List).cast<Map<String, dynamic>>();
+  }
+
+  Future<List<Map<String, dynamic>>> searchUsers(String query, {String? role}) async {
+    final params = <String, dynamic>{'q': query};
+    if (role != null && role != 'all') params['role'] = role;
+    final response = await _dio.get('/api/search', queryParameters: params);
+    final data = response.data;
+    final list = data['users'] ?? data['results'] ?? data['data'] ?? (data is List ? data : []);
+    return (list as List).cast<Map<String, dynamic>>();
+  }
+
+  Future<List<Map<String, dynamic>>> getMyAttendanceHistory() async {
+    final response = await _dio.get('/api/attendance-sessions/my-attendance');
+    final data = response.data;
+    final list = data['records'] ?? data['data'] ?? (data is List ? data : []);
+    return (list as List).cast<Map<String, dynamic>>();
+  }
+
+  Future<List<Map<String, dynamic>>> getHodSessions() async {
+    final response = await _dio.get('/api/hod/sessions');
+    final data = response.data;
+    final list = data['sessions'] ?? data['data'] ?? (data is List ? data : []);
+    return (list as List).cast<Map<String, dynamic>>();
+  }
+
+  Future<Map<String, dynamic>> getHodDeptStats() async {
+    final response = await _dio.get('/api/hod/dashboard-stats');
+    return (response.data as Map<String, dynamic>?) ?? {};
+  }
+
+  Future<Map<String, dynamic>> getHodCourseOverview() async {
+    final response = await _dio.get('/api/hod/course-overview');
+    return (response.data as Map<String, dynamic>?) ?? {};
   }
 
   Future<List<Map<String, dynamic>>> getDepartmentStudents() async {
@@ -662,13 +747,61 @@ class ApiService {
     return (data['data'] ?? data) as Map<String, dynamic>;
   }
 
+  Future<List<Map<String, dynamic>>> getLecturerQuizzesWithStats() async {
+    final response = await _dio.get('/api/lecturer/quizzes');
+    final data = response.data;
+    final list = data['quizzes'] ?? data['data'] ?? [];
+    return (list as List).cast<Map<String, dynamic>>();
+  }
+
+  Future<List<Map<String, dynamic>>> getAdminQuizzes() async {
+    final response = await _dio.get('/api/lecturer/quizzes');
+    final data = response.data;
+    final list = data['quizzes'] ?? data['data'] ?? [];
+    return (list as List).cast<Map<String, dynamic>>();
+  }
+
+  Future<void> deleteQuiz(String quizId) async {
+    await _dio.delete('/api/lecturer/quizzes/$quizId');
+  }
+
   // Subscription
   Future<Map<String, dynamic>> getSubscription() async {
     final data = await _cachedGet('/api/subscription/status', 'subscription');
     return (data['subscription'] ?? data['data'] ?? data) as Map<String, dynamic>;
   }
 
+  // Lecturer device
+  Future<Map<String, dynamic>?> getLecturerDevice() async {
+    try {
+      final response = await _dio.get('/api/devices/my');
+      final data = response.data;
+      return data['data'] as Map<String, dynamic>?;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  Future<void> unlinkMyDevice() async {
+    await _dio.delete('/api/devices/my');
+  }
+
+  Future<void> renameMyDevice(String name) async {
+    await _dio.patch('/api/devices/my/rename', data: {'deviceName': name});
+  }
+
   // Branches
+  Future<List<Map<String, dynamic>>> getAdminDevices() async {
+    try {
+      final response = await _dio.get('/api/devices');
+      final data = response.data;
+      final list = data['devices'] ?? data['data'] ?? [];
+      return (list as List).cast<Map<String, dynamic>>();
+    } catch (_) {
+      return [];
+    }
+  }
+
   Future<List<Map<String, dynamic>>> getBranches() async {
     final response = await _dio.get('/api/branches');
     final data = response.data;

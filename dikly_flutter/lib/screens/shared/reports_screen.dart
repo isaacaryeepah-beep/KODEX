@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
+import '../../core/api.dart';
 import '../../core/theme.dart';
 
 // ── Static report types ───────────────────────────────────────────────────────
@@ -9,14 +10,14 @@ class _ReportType {
   final String description;
   final IconData icon;
   final Color color;
-  final String endpoint;
+  final String type;
 
   const _ReportType({
     required this.title,
     required this.description,
     required this.icon,
     required this.color,
-    required this.endpoint,
+    required this.type,
   });
 }
 
@@ -26,28 +27,21 @@ const _reports = [
     description: 'All attendance records across your sessions',
     icon: Icons.check_box_outlined,
     color: Color(0xFF7C3AED),
-    endpoint: '/reports/attendance/pdf',
+    type: 'attendance',
   ),
   _ReportType(
     title: 'Sessions Report',
     description: 'Summary of your attendance sessions',
     icon: Icons.access_time_rounded,
     color: Color(0xFF0EA5E9),
-    endpoint: '/reports/sessions/pdf',
+    type: 'sessions',
   ),
   _ReportType(
     title: 'Performance Report',
     description: 'Grades and performance across all courses',
     icon: Icons.bar_chart_rounded,
     color: Color(0xFFF97316),
-    endpoint: '/reports/performance/pdf',
-  ),
-  _ReportType(
-    title: 'Grade Report',
-    description: 'Full grade book export for your courses',
-    icon: Icons.grade_rounded,
-    color: Color(0xFF16A34A),
-    endpoint: '/reports/grades/pdf',
+    type: 'performance',
   ),
 ];
 
@@ -104,7 +98,8 @@ class _ReportCardState extends State<_ReportCard> {
   Future<void> _download() async {
     setState(() => _downloading = true);
     try {
-      final uri = Uri.parse('https://dikly.sbs${widget.report.endpoint}');
+      final url = await apiService.getReportDownloadLink(widget.report.type);
+      final uri = Uri.parse(url);
       await launchUrl(uri, mode: LaunchMode.externalApplication);
     } catch (_) {
       if (mounted) {

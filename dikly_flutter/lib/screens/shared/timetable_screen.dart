@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/api.dart';
 import '../../core/auth.dart';
 import '../../core/theme.dart';
+import '../../widgets/ds/dikly_ds.dart';
 
 final _timetableProvider = FutureProvider.autoDispose<List<Map<String, dynamic>>>(
   (ref) => apiService.getTimetable(),
@@ -82,14 +83,14 @@ class _TimetableScreenState extends ConsumerState<TimetableScreen> {
   Widget build(BuildContext context) {
     final async = ref.watch(_timetableProvider);
     final user = ref.watch(currentUserProvider);
-    final title =
-        user?.role == 'lecturer' ? 'My Timetable' : 'Schedule';
+    final isLecturer = user?.role == 'lecturer';
+    final isHod = user?.role == 'hod';
 
     return Scaffold(
       backgroundColor: DiklyColors.background,
       appBar: AppBar(
-        title: Text(title),
-        leading: BackButton(onPressed: () => Navigator.of(context).maybePop()),
+        leading: const BackButton(),
+        title: const Text('Timetable'),
       ),
       body: async.when(
         loading: () => const Center(child: CircularProgressIndicator()),
@@ -110,6 +111,53 @@ class _TimetableScreenState extends ConsumerState<TimetableScreen> {
         ),
         data: (data) => Column(
           children: [
+            // Header
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: DiklyScreenHeader(
+                      title: isHod ? 'Department Timetable' : 'My Timetable',
+                      subtitle: isHod
+                          ? 'Read-only view of all department class slots'
+                          : isLecturer
+                              ? 'Your weekly class timetable — click any slot to edit'
+                              : 'Your weekly class timetable based on enrolled courses',
+                    ),
+                  ),
+                  OutlinedButton.icon(
+                    onPressed: () => ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(content: Text('Export .ics — coming soon')),
+                    ),
+                    icon: const Icon(Icons.calendar_today_outlined, size: 14),
+                    label: const Text('Export .ics', style: TextStyle(fontSize: 12)),
+                    style: OutlinedButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                      side: const BorderSide(color: Color(0xFFD1D5DB)),
+                      foregroundColor: const Color(0xFF374151),
+                    ),
+                  ),
+                  if (isLecturer) ...[
+                    const SizedBox(width: 8),
+                    ElevatedButton.icon(
+                      onPressed: () => ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(content: Text('Add Class — coming soon')),
+                      ),
+                      icon: const Icon(Icons.add, size: 14),
+                      label: const Text('Add Class', style: TextStyle(fontSize: 12)),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: DiklyColors.primary,
+                        foregroundColor: Colors.white,
+                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                        elevation: 0,
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                      ),
+                    ),
+                  ],
+                ],
+              ),
+            ),
             _DayTabBar(
               days: _days,
               selectedIndex: _selectedDayIndex,
@@ -121,6 +169,7 @@ class _TimetableScreenState extends ConsumerState<TimetableScreen> {
                 child: _DaySchedule(
                   slots: _getSlotsForDay(data, _fullDays[_selectedDayIndex]),
                   colorResolver: _resolveColor,
+                  isLecturer: isLecturer,
                 ),
               ),
             ),
@@ -188,35 +237,79 @@ class _DayTabBar extends StatelessWidget {
 class _DaySchedule extends StatelessWidget {
   final List<Map<String, dynamic>> slots;
   final Color Function(Map<String, dynamic>) colorResolver;
+  final bool isLecturer;
 
-  const _DaySchedule({required this.slots, required this.colorResolver});
+  const _DaySchedule({required this.slots, required this.colorResolver, this.isLecturer = false});
 
   @override
   Widget build(BuildContext context) {
     if (slots.isEmpty) {
       return ListView(
-        children: const [
-          SizedBox(height: 80),
-          Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Icon(Icons.calendar_today_outlined,
-                  size: 64, color: DiklyColors.textSecondary),
-              SizedBox(height: 16),
-              Text(
-                'No classes scheduled',
-                style: TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.w600,
-                  color: DiklyColors.textSecondary,
+        padding: const EdgeInsets.all(16),
+        children: [
+          Container(
+            padding: const EdgeInsets.symmetric(vertical: 40, horizontal: 24),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: DiklyColors.border),
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Icon(Icons.calendar_today_outlined, size: 48, color: Color(0xFF9CA3AF)),
+                const SizedBox(height: 16),
+                const Text(
+                  'No classes scheduled yet',
+                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: Color(0xFF111827)),
+                  textAlign: TextAlign.center,
                 ),
-              ),
-              SizedBox(height: 8),
-              Text(
-                'Enjoy your free day!',
-                style: TextStyle(color: DiklyColors.textSecondary),
-              ),
-            ],
+                const SizedBox(height: 8),
+                Text(
+                  isLecturer
+                      ? 'Add your first class to build out your weekly timetable'
+                      : "Your lecturers haven't added timetable slots yet. Check back soon.",
+                  style: const TextStyle(fontSize: 13, color: Color(0xFF6B7280)),
+                  textAlign: TextAlign.center,
+                ),
+                if (isLecturer) ...[
+                  const SizedBox(height: 20),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      ElevatedButton.icon(
+                        onPressed: () => ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(content: Text('Add Class — coming soon')),
+                        ),
+                        icon: const Icon(Icons.add, size: 14),
+                        label: const Text('Add Your First Class', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: DiklyColors.primary,
+                          foregroundColor: Colors.white,
+                          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                          elevation: 0,
+                        ),
+                      ),
+                      const SizedBox(width: 10),
+                      OutlinedButton.icon(
+                        onPressed: () => ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(content: Text('Import from My Courses — coming soon')),
+                        ),
+                        icon: const Icon(Icons.refresh, size: 14),
+                        label: const Text('Import from My Courses', style: TextStyle(fontSize: 13)),
+                        style: OutlinedButton.styleFrom(
+                          foregroundColor: const Color(0xFF374151),
+                          side: const BorderSide(color: Color(0xFFD1D5DB)),
+                          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ],
+            ),
           ),
         ],
       );

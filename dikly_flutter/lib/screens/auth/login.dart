@@ -89,6 +89,12 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
       widget.role == 'manager' ||
       widget.role == 'employee';
 
+  bool get _isStudent => widget.role == 'student';
+  bool get _needsInstitutionCode =>
+      widget.role == 'student' ||
+      widget.role == 'manager' ||
+      widget.role == 'employee';
+
   @override
   void dispose() {
     _emailController.dispose();

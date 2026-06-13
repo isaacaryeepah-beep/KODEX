@@ -2,19 +2,29 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/api.dart';
 import '../../core/theme.dart';
+import '../../widgets/ds/dikly_ds.dart';
 
-final _hodReportsProvider = FutureProvider.autoDispose<Map<String, dynamic>>(
-  (ref) => apiService.getReports(),
+final _hodDeptStatsProvider = FutureProvider.autoDispose<Map<String, dynamic>>(
+  (ref) async {
+    final results = await Future.wait([
+      apiService.getHodDeptStats(),
+      apiService.getHodCourseOverview(),
+      apiService.getDepartmentLecturers(),
+    ]);
+    return {
+      'stats': results[0],
+      'courseOverview': results[1],
+      'lecturers': results[2],
+    };
+  },
 );
 
 class HodReportsScreen extends ConsumerWidget {
   const HodReportsScreen({super.key});
 
-  static const _color = Color(0xFF7C2D12);
-
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final asyncData = ref.watch(_hodReportsProvider);
+    final asyncData = ref.watch(_hodDeptStatsProvider);
 
     return asyncData.when(
       loading: () => const Center(child: CircularProgressIndicator()),
@@ -24,64 +34,168 @@ class HodReportsScreen extends ConsumerWidget {
           children: [
             const Icon(Icons.error_outline, size: 48, color: DiklyColors.error),
             const SizedBox(height: 12),
-            Text(
-              'Failed to load reports',
-              style: Theme.of(context).textTheme.titleMedium,
-            ),
-            TextButton(
-              onPressed: () => ref.invalidate(_hodReportsProvider),
-              child: const Text('Retry'),
-            ),
+            Text('Failed to load reports', style: Theme.of(context).textTheme.titleMedium),
+            TextButton(onPressed: () => ref.invalidate(_hodDeptStatsProvider), child: const Text('Retry')),
           ],
         ),
       ),
-      data: (reports) {
-        final attendance = _extractSection(
-          reports,
-          ['attendance', 'attendanceSummary'],
-        );
-        final grades = _extractSection(
-          reports,
-          ['grades', 'gradeDistribution'],
-        );
-        final sessions = _extractSection(
-          reports,
-          ['sessions', 'sessionStatistics'],
-        );
+      data: (data) {
+        final stats = (data['stats'] as Map<String, dynamic>?) ?? {};
+        final courseOverviewData = (data['courseOverview'] as Map<String, dynamic>?) ?? {};
+        final lecturers = (data['lecturers'] as List?) ?? [];
+        final courses = (courseOverviewData['courses'] as List?)?.cast<Map<String, dynamic>>() ?? [];
+
+        final totalSessions = stats['totalSessions'] ?? 0;
+        final totalAttendance = stats['totalAttendance'] ?? 0;
+        final avgAttendance = stats['avgAttendance'] ?? 0;
+        final lecturerSummary = (stats['lecturerSummary'] as List?)?.cast<Map<String, dynamic>>() ?? [];
 
         return RefreshIndicator(
-          onRefresh: () async => ref.invalidate(_hodReportsProvider),
+          onRefresh: () async => ref.invalidate(_hodDeptStatsProvider),
           child: ListView(
             padding: const EdgeInsets.all(16),
             children: [
-              _SectionHeader(icon: Icons.how_to_reg_outlined, title: 'Attendance Summary', color: DiklyColors.success),
-              const SizedBox(height: 8),
-              _ReportSection(
-                title: 'Attendance Summary',
-                icon: Icons.how_to_reg_outlined,
-                color: DiklyColors.success,
-                data: attendance,
+              DiklyScreenHeader(
+                title: 'Department Reports',
+                subtitle: 'Attendance and activity overview',
               ),
-              const SizedBox(height: 8),
-              _ReportSection(
-                title: 'Grade Distribution',
-                icon: Icons.grade_outlined,
-                color: DiklyColors.primary,
-                data: grades,
+
+              // 4 stat cards in a row
+              Row(
+                children: [
+                  _StatCard(value: '$totalSessions', label: 'TOTAL SESSIONS', color: const Color(0xFF2563EB)),
+                  const SizedBox(width: 8),
+                  _StatCard(value: '$totalAttendance', label: 'TOTAL ATTENDANCE', color: const Color(0xFF10B981)),
+                  const SizedBox(width: 8),
+                  _StatCard(value: '$avgAttendance', label: 'AVG ATTENDANCE', color: const Color(0xFFF59E0B)),
+                  const SizedBox(width: 8),
+                  _StatCard(value: '${lecturers.length}', label: 'LECTURERS', color: const Color(0xFF7C3AED)),
+                ],
               ),
-              const SizedBox(height: 8),
-              _ReportSection(
-                title: 'Session Statistics',
-                icon: Icons.videocam_outlined,
-                color: _color,
-                data: sessions,
+              const SizedBox(height: 20),
+
+              // Attendance Rate by Course
+              DiklyCard(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text('Attendance Rate by Course',
+                      style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: Color(0xFF111827))),
+                    const SizedBox(height: 12),
+                    if (courses.isEmpty)
+                      const Text('No data yet.', style: TextStyle(fontSize: 13, color: Color(0xFF9CA3AF)))
+                    else
+                      ...courses.take(5).map((c) {
+                        final title = c['title']?.toString() ?? 'Untitled';
+                        final totalAtt = c['totalAttendance'] ?? 0;
+                        final sessions30 = c['sessions30'] ?? 0;
+                        final enrolled = c['enrolled'] ?? 1;
+                        final rate = sessions30 > 0 && enrolled > 0
+                          ? ((totalAtt / (sessions30 * enrolled)) * 100).clamp(0, 100).round()
+                          : 0;
+                        return Padding(
+                          padding: const EdgeInsets.only(bottom: 10),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Row(
+                                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                children: [
+                                  Expanded(child: Text(title, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: Color(0xFF374151)), overflow: TextOverflow.ellipsis)),
+                                  Text('$rate%', style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: Color(0xFF111827))),
+                                ],
+                              ),
+                              const SizedBox(height: 4),
+                              ClipRRect(
+                                borderRadius: BorderRadius.circular(3),
+                                child: LinearProgressIndicator(
+                                  value: rate / 100,
+                                  backgroundColor: const Color(0xFFE5E7EB),
+                                  valueColor: const AlwaysStoppedAnimation<Color>(Color(0xFF2563EB)),
+                                  minHeight: 6,
+                                ),
+                              ),
+                            ],
+                          ),
+                        );
+                      }),
+                  ],
+                ),
               ),
-              const SizedBox(height: 8),
-              _ReportSection(
-                title: 'All Report Data',
-                icon: Icons.bar_chart_outlined,
-                color: DiklyColors.warning,
-                data: reports,
+              const SizedBox(height: 12),
+
+              // Attendance by Lecturer
+              DiklyCard(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text('Attendance by Lecturer',
+                      style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: Color(0xFF111827))),
+                    const SizedBox(height: 12),
+                    if (lecturerSummary.isEmpty)
+                      const Text('No data yet.', style: TextStyle(fontSize: 13, color: Color(0xFF9CA3AF)))
+                    else
+                      ...lecturerSummary.take(5).map((l) {
+                        final name = l['name']?.toString() ?? 'Unknown';
+                        final sessions = l['sessions'] ?? 0;
+                        final attendance = l['attendance'] ?? 0;
+                        final initials = name.isNotEmpty ? name[0].toUpperCase() : '?';
+                        return Padding(
+                          padding: const EdgeInsets.only(bottom: 10),
+                          child: Row(
+                            children: [
+                              CircleAvatar(
+                                radius: 16,
+                                backgroundColor: const Color(0xFF7C3AED).withOpacity(0.1),
+                                child: Text(initials, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: Color(0xFF7C3AED))),
+                              ),
+                              const SizedBox(width: 10),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(name, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: Color(0xFF374151))),
+                                    Text('$sessions sessions · $attendance attendance', style: const TextStyle(fontSize: 11, color: Color(0xFF9CA3AF))),
+                                  ],
+                                ),
+                              ),
+                            ],
+                          ),
+                        );
+                      }),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 12),
+
+              // Attendance Trend (Last 30 Days)
+              DiklyCard(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text('Attendance Trend (Last 30 Days)',
+                      style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: Color(0xFF111827))),
+                    const SizedBox(height: 8),
+                    if (totalSessions == 0)
+                      const Padding(
+                        padding: EdgeInsets.symmetric(vertical: 8),
+                        child: Text('No data yet.', style: TextStyle(fontSize: 13, color: Color(0xFF9CA3AF))),
+                      )
+                    else
+                      Padding(
+                        padding: const EdgeInsets.only(top: 4),
+                        child: Row(
+                          children: [
+                            _TrendStat(label: 'Sessions', value: '$totalSessions', color: const Color(0xFF2563EB)),
+                            const SizedBox(width: 16),
+                            _TrendStat(label: 'Total Attendees', value: '$totalAttendance', color: const Color(0xFF10B981)),
+                            const SizedBox(width: 16),
+                            _TrendStat(label: 'Avg per Session', value: '$avgAttendance', color: const Color(0xFFF59E0B)),
+                          ],
+                        ),
+                      ),
+                  ],
+                ),
               ),
             ],
           ),
@@ -89,208 +203,48 @@ class HodReportsScreen extends ConsumerWidget {
       },
     );
   }
-
-  Map<String, dynamic> _extractSection(
-    Map<String, dynamic> reports,
-    List<String> keys,
-  ) {
-    for (final key in keys) {
-      final val = reports[key];
-      if (val is Map<String, dynamic>) return val;
-    }
-    final found = <String, dynamic>{};
-    for (final key in keys) {
-      for (final entry in reports.entries) {
-        if (entry.key.toLowerCase().contains(key.toLowerCase()) &&
-            entry.value != null) {
-          if (entry.value is Map<String, dynamic>) {
-            found.addAll(entry.value as Map<String, dynamic>);
-          } else {
-            found[entry.key] = entry.value;
-          }
-        }
-      }
-    }
-    return found;
-  }
 }
 
-class _SectionHeader extends StatelessWidget {
-  final IconData icon;
-  final String title;
+class _StatCard extends StatelessWidget {
+  final String value;
+  final String label;
   final Color color;
-  const _SectionHeader({
-    required this.icon,
-    required this.title,
-    required this.color,
-  });
 
-  @override
-  Widget build(BuildContext context) => const SizedBox.shrink();
-}
-
-class _ReportSection extends StatelessWidget {
-  final String title;
-  final IconData icon;
-  final Color color;
-  final Map<String, dynamic> data;
-
-  const _ReportSection({
-    required this.title,
-    required this.icon,
-    required this.color,
-    required this.data,
-  });
-
-  String _formatKey(String key) {
-    return key
-        .replaceAllMapped(
-          RegExp(r'([A-Z])'),
-          (m) => ' ${m.group(0)}',
-        )
-        .replaceAll('_', ' ')
-        .trim()
-        .split(' ')
-        .map((w) => w.isEmpty ? '' : '${w[0].toUpperCase()}${w.substring(1)}')
-        .join(' ');
-  }
-
-  String _formatValue(dynamic value) {
-    if (value == null) return '—';
-    if (value is double) {
-      return value == value.truncateToDouble()
-          ? value.toInt().toString()
-          : value.toStringAsFixed(2);
-    }
-    if (value is Map || value is List) return value.toString();
-    return value.toString();
-  }
+  const _StatCard({required this.value, required this.label, required this.color});
 
   @override
   Widget build(BuildContext context) {
-    final pairs = data.entries
-        .where((e) => e.value != null && e.value is! Map && e.value is! List)
-        .toList();
-    final nested = data.entries
-        .where((e) => e.value is Map || e.value is List)
-        .toList();
-
-    return Card(
-      margin: EdgeInsets.zero,
-      child: ExpansionTile(
-        leading: Container(
-          width: 36,
-          height: 36,
-          decoration: BoxDecoration(
-            color: color.withOpacity(0.1),
-            borderRadius: BorderRadius.circular(8),
-          ),
-          child: Icon(icon, color: color, size: 18),
-        ),
-        title: Text(
-          title,
-          style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 14),
-        ),
-        subtitle: data.isEmpty
-            ? const Text(
-                'No data available',
-                style: TextStyle(fontSize: 12, color: DiklyColors.textSecondary),
-              )
-            : Text(
-                '${pairs.length + nested.length} item${(pairs.length + nested.length) == 1 ? '' : 's'}',
-                style: const TextStyle(
-                  fontSize: 12,
-                  color: DiklyColors.textSecondary,
-                ),
-              ),
-        childrenPadding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-        children: [
-          if (data.isEmpty)
-            const Padding(
-              padding: EdgeInsets.symmetric(vertical: 12),
-              child: Row(children: [
-                Icon(
-                  Icons.info_outline,
-                  size: 16,
-                  color: DiklyColors.textSecondary,
-                ),
-                SizedBox(width: 8),
-                Text(
-                  'No data available for this section',
-                  style: TextStyle(
-                    fontSize: 13,
-                    color: DiklyColors.textSecondary,
-                  ),
-                ),
-              ]),
-            )
-          else ...[
-            ...pairs.map(
-              (e) => Padding(
-                padding: const EdgeInsets.symmetric(vertical: 6),
-                child: Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Expanded(
-                      flex: 2,
-                      child: Text(
-                        _formatKey(e.key),
-                        style: const TextStyle(
-                          fontSize: 12,
-                          color: DiklyColors.textSecondary,
-                          fontWeight: FontWeight.w500,
-                        ),
-                      ),
-                    ),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      flex: 3,
-                      child: Text(
-                        _formatValue(e.value),
-                        style: const TextStyle(
-                          fontSize: 13,
-                          fontWeight: FontWeight.w600,
-                          color: DiklyColors.textPrimary,
-                        ),
-                        textAlign: TextAlign.right,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-            if (nested.isNotEmpty) ...[
-              const Divider(),
-              ...nested.map(
-                (e) => Padding(
-                  padding: const EdgeInsets.symmetric(vertical: 4),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        _formatKey(e.key),
-                        style: TextStyle(
-                          fontSize: 12,
-                          color: color,
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                      const SizedBox(height: 4),
-                      Text(
-                        _formatValue(e.value),
-                        style: const TextStyle(
-                          fontSize: 12,
-                          color: DiklyColors.textSecondary,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-            ],
+    return Expanded(
+      child: DiklyCard(
+        padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 14),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(value, style: TextStyle(fontSize: 26, fontWeight: FontWeight.w800, color: color, height: 1)),
+            const SizedBox(height: 4),
+            Text(label, style: const TextStyle(fontSize: 10, fontWeight: FontWeight.w700, color: Color(0xFF9CA3AF), letterSpacing: 0.3)),
           ],
-        ],
+        ),
       ),
+    );
+  }
+}
+
+class _TrendStat extends StatelessWidget {
+  final String label;
+  final String value;
+  final Color color;
+
+  const _TrendStat({required this.label, required this.value, required this.color});
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(value, style: TextStyle(fontSize: 20, fontWeight: FontWeight.w800, color: color)),
+        Text(label, style: const TextStyle(fontSize: 11, color: Color(0xFF9CA3AF))),
+      ],
     );
   }
 }

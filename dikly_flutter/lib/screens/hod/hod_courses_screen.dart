@@ -1,239 +1,202 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/api.dart';
+import '../../core/auth.dart';
 import '../../core/theme.dart';
+import '../../widgets/ds/dikly_ds.dart';
 
-final _departmentCoursesProvider =
-    FutureProvider.autoDispose<List<Map<String, dynamic>>>(
-      (ref) => apiService.getDepartmentCourses(),
-    );
+final _hodCourseOverviewProvider = FutureProvider.autoDispose<Map<String, dynamic>>(
+  (ref) => apiService.getHodCourseOverview(),
+);
 
-class HodCoursesScreen extends ConsumerStatefulWidget {
+class HodCoursesScreen extends ConsumerWidget {
   const HodCoursesScreen({super.key});
 
   @override
-  ConsumerState<HodCoursesScreen> createState() => _HodCoursesScreenState();
-}
+  Widget build(BuildContext context, WidgetRef ref) {
+    final async = ref.watch(_hodCourseOverviewProvider);
 
-class _HodCoursesScreenState extends ConsumerState<HodCoursesScreen> {
-  static const _color = Color(0xFF7C2D12);
-  String _filter = 'all';
-  static const _filters = ['all', 'active', 'pending', 'inactive'];
-
-  Color _statusColor(String status) {
-    switch (status.toLowerCase()) {
-      case 'active':
-        return DiklyColors.success;
-      case 'pending':
-        return DiklyColors.warning;
-      case 'inactive':
-        return DiklyColors.textSecondary;
-      default:
-        return DiklyColors.primary;
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final asyncData = ref.watch(_departmentCoursesProvider);
-
-    return asyncData.when(
+    return async.when(
       loading: () => const Center(child: CircularProgressIndicator()),
       error: (e, _) => Center(
         child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
+          mainAxisSize: MainAxisSize.min,
           children: [
             const Icon(Icons.error_outline, size: 48, color: DiklyColors.error),
             const SizedBox(height: 12),
-            Text(
-              'Failed to load courses',
-              style: Theme.of(context).textTheme.titleMedium,
-            ),
+            const Text('Failed to load courses'),
             TextButton(
-              onPressed: () => ref.invalidate(_departmentCoursesProvider),
+              onPressed: () => ref.refresh(_hodCourseOverviewProvider),
               child: const Text('Retry'),
             ),
           ],
         ),
       ),
-      data: (courses) {
-        final filtered = _filter == 'all'
-            ? courses
-            : courses
-                .where((c) =>
-                    (c['status']?.toString().toLowerCase() ?? '') == _filter)
-                .toList();
+      data: (data) {
+        final courses = (data['courses'] as List?)?.cast<Map<String, dynamic>>() ?? [];
+        final count = courses.length;
+        final dept = ref.watch(currentUserProvider)?.department ?? '';
+        final deptLabel = dept.isNotEmpty ? 'in $dept · ' : '';
 
         return RefreshIndicator(
-          onRefresh: () async => ref.invalidate(_departmentCoursesProvider),
-          child: Column(
+          onRefresh: () async => ref.refresh(_hodCourseOverviewProvider),
+          child: ListView(
+            padding: const EdgeInsets.all(16),
             children: [
-              Padding(
-                padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
-                child: SizedBox(
-                  height: 36,
-                  child: ListView(
-                    scrollDirection: Axis.horizontal,
-                    children: _filters
-                        .map((f) => Padding(
-                              padding: const EdgeInsets.only(right: 8),
-                              child: FilterChip(
-                                label: Text(
-                                  f[0].toUpperCase() + f.substring(1),
-                                  style: const TextStyle(fontSize: 12),
-                                ),
-                                selected: _filter == f,
-                                onSelected: (_) =>
-                                    setState(() => _filter = f),
-                                selectedColor: _color.withOpacity(0.15),
-                                checkmarkColor: _color,
-                              ),
-                            ))
-                        .toList(),
-                  ),
-                ),
-              ),
-              if (filtered.isEmpty)
-                Expanded(
-                  child: Center(
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        const Icon(
-                          Icons.book_outlined,
-                          size: 56,
-                          color: DiklyColors.textSecondary,
-                        ),
-                        const SizedBox(height: 12),
-                        Text(
-                          _filter == 'all'
-                              ? 'No courses found'
-                              : 'No ${_filter} courses',
-                          style: const TextStyle(
-                            color: DiklyColors.textSecondary,
-                          ),
-                        ),
-                      ],
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Expanded(
+                    child: DiklyScreenHeader(
+                      title: 'Course Oversight',
+                      subtitle: '$count course${count == 1 ? '' : 's'} ${deptLabel}last 30 days activity shown',
                     ),
                   ),
-                )
-              else
-                Expanded(
-                  child: ListView.builder(
-                    padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
-                    itemCount: filtered.length,
-                    itemBuilder: (_, i) {
-                      final c = filtered[i];
-                      final title = c['title']?.toString() ?? 'Untitled';
-                      final code = c['code']?.toString() ?? '';
-                      final lecturer = c['lecturer']?.toString() ?? 'Unassigned';
-                      final enrolled = c['studentsEnrolled'] ?? 0;
-                      final status = c['status']?.toString() ?? 'active';
-                      final statusColor = _statusColor(status);
-
-                      return Card(
-                        margin: const EdgeInsets.only(bottom: 10),
-                        child: Padding(
-                          padding: const EdgeInsets.all(14),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Row(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Container(
-                                    padding: const EdgeInsets.symmetric(
-                                      horizontal: 8,
-                                      vertical: 4,
-                                    ),
-                                    decoration: BoxDecoration(
-                                      color: _color.withOpacity(0.1),
-                                      borderRadius: BorderRadius.circular(6),
-                                    ),
-                                    child: Text(
-                                      code.isNotEmpty ? code : 'N/A',
-                                      style: const TextStyle(
-                                        fontSize: 11,
-                                        color: _color,
-                                        fontWeight: FontWeight.w700,
-                                        letterSpacing: 0.3,
-                                      ),
-                                    ),
-                                  ),
-                                  const Spacer(),
-                                  Container(
-                                    padding: const EdgeInsets.symmetric(
-                                      horizontal: 8,
-                                      vertical: 4,
-                                    ),
-                                    decoration: BoxDecoration(
-                                      color: statusColor.withOpacity(0.1),
-                                      borderRadius: BorderRadius.circular(20),
-                                    ),
-                                    child: Text(
-                                      status[0].toUpperCase() +
-                                          status.substring(1),
-                                      style: TextStyle(
-                                        fontSize: 11,
-                                        color: statusColor,
-                                        fontWeight: FontWeight.w600,
-                                      ),
-                                    ),
-                                  ),
-                                ],
-                              ),
-                              const SizedBox(height: 8),
-                              Text(
-                                title,
-                                style: const TextStyle(
-                                  fontWeight: FontWeight.w700,
-                                  fontSize: 15,
-                                ),
-                              ),
-                              const SizedBox(height: 6),
-                              Row(children: [
-                                const Icon(
-                                  Icons.person_outlined,
-                                  size: 14,
-                                  color: DiklyColors.textSecondary,
-                                ),
-                                const SizedBox(width: 4),
-                                Expanded(
-                                  child: Text(
-                                    lecturer,
-                                    style: const TextStyle(
-                                      fontSize: 12,
-                                      color: DiklyColors.textSecondary,
-                                    ),
-                                    overflow: TextOverflow.ellipsis,
-                                  ),
-                                ),
-                                const SizedBox(width: 12),
-                                const Icon(
-                                  Icons.people_outlined,
-                                  size: 14,
-                                  color: DiklyColors.textSecondary,
-                                ),
-                                const SizedBox(width: 4),
-                                Text(
-                                  '$enrolled enrolled',
-                                  style: const TextStyle(
-                                    fontSize: 12,
-                                    color: DiklyColors.textSecondary,
-                                  ),
-                                ),
-                              ]),
-                            ],
+                  OutlinedButton(
+                    onPressed: () => ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(content: Text('Export CSV — coming soon')),
+                    ),
+                    style: OutlinedButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                      side: const BorderSide(color: Color(0xFFD1D5DB)),
+                      foregroundColor: const Color(0xFF374151),
+                    ),
+                    child: const Text('Export CSV', style: TextStyle(fontSize: 12)),
+                  ),
+                ],
+              ),
+              // Table
+              Container(
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(color: DiklyColors.border),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    // Header row
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                      decoration: const BoxDecoration(
+                        color: Color(0xFFF9FAFB),
+                        borderRadius: BorderRadius.vertical(top: Radius.circular(10)),
+                        border: Border(bottom: BorderSide(color: DiklyColors.border)),
+                      ),
+                      child: const Row(
+                        children: [
+                          Expanded(flex: 3, child: _HeaderCell('NAME')),
+                          Expanded(flex: 2, child: _HeaderCell('LECTURER')),
+                          Expanded(flex: 1, child: _HeaderCell('SESSIONS')),
+                          Expanded(flex: 1, child: _HeaderCell('ATTENDANCE')),
+                        ],
+                      ),
+                    ),
+                    if (courses.isEmpty)
+                      const Padding(
+                        padding: EdgeInsets.symmetric(vertical: 32),
+                        child: Center(
+                          child: Text(
+                            'No courses found for this department.',
+                            style: TextStyle(fontSize: 13, color: Color(0xFF9CA3AF)),
                           ),
                         ),
-                      );
-                    },
-                  ),
+                      )
+                    else
+                      ...courses.asMap().entries.map((e) {
+                        final i = e.key;
+                        final c = e.value;
+                        final title = c['title']?.toString() ?? '—';
+                        final code = c['code']?.toString() ?? '';
+                        final lecturer = (c['lecturer'] as Map?)?['name']?.toString() ??
+                            c['lecturerName']?.toString() ?? '—';
+                        final sessions = c['sessions30'] ?? c['sessionCount'] ?? 0;
+                        final attendance = c['totalAttendance'] ?? c['attendance'] ?? 0;
+
+                        return Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                          decoration: BoxDecoration(
+                            color: i.isOdd ? const Color(0xFFFAFAFA) : Colors.white,
+                            border: i < courses.length - 1
+                                ? const Border(bottom: BorderSide(color: DiklyColors.border))
+                                : null,
+                            borderRadius: i == courses.length - 1
+                                ? const BorderRadius.vertical(bottom: Radius.circular(10))
+                                : null,
+                          ),
+                          child: Row(
+                            children: [
+                              Expanded(
+                                flex: 3,
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      title,
+                                      style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: Color(0xFF111827)),
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
+                                    if (code.isNotEmpty)
+                                      Text(
+                                        code,
+                                        style: const TextStyle(fontSize: 10, color: Color(0xFF6B7280)),
+                                      ),
+                                  ],
+                                ),
+                              ),
+                              Expanded(
+                                flex: 2,
+                                child: Text(
+                                  lecturer,
+                                  style: const TextStyle(fontSize: 11, color: Color(0xFF374151)),
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ),
+                              Expanded(
+                                flex: 1,
+                                child: Text(
+                                  '$sessions',
+                                  style: const TextStyle(fontSize: 12, color: Color(0xFF374151), fontWeight: FontWeight.w500),
+                                ),
+                              ),
+                              Expanded(
+                                flex: 1,
+                                child: Text(
+                                  '$attendance',
+                                  style: const TextStyle(fontSize: 12, color: Color(0xFF374151), fontWeight: FontWeight.w500),
+                                ),
+                              ),
+                            ],
+                          ),
+                        );
+                      }),
+                  ],
                 ),
+              ),
             ],
           ),
         );
       },
+    );
+  }
+}
+
+class _HeaderCell extends StatelessWidget {
+  final String label;
+  const _HeaderCell(this.label);
+
+  @override
+  Widget build(BuildContext context) {
+    return Text(
+      label,
+      style: const TextStyle(
+        fontSize: 10,
+        fontWeight: FontWeight.w700,
+        color: Color(0xFF9CA3AF),
+        letterSpacing: 0.4,
+      ),
     );
   }
 }

@@ -84,40 +84,10 @@ class HodAlertsScreen extends ConsumerWidget {
         ),
         data: (alerts) {
           if (alerts.isEmpty) {
-            return Center(
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Container(
-                    width: 72,
-                    height: 72,
-                    decoration: BoxDecoration(
-                      color: DiklyColors.border,
-                      borderRadius: BorderRadius.circular(20),
-                    ),
-                    child: const Icon(
-                      Icons.notifications_none_outlined,
-                      size: 36,
-                      color: DiklyColors.textSecondary,
-                    ),
-                  ),
-                  const SizedBox(height: 16),
-                  const Text(
-                    'No alerts',
-                    style: TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.w700,
-                    ),
-                  ),
-                  const SizedBox(height: 6),
-                  const Text(
-                    'You are all caught up',
-                    style: TextStyle(
-                      fontSize: 13,
-                      color: DiklyColors.textSecondary,
-                    ),
-                  ),
-                ],
+            return const Center(
+              child: Text(
+                'Analysing department data...',
+                style: TextStyle(fontSize: 14, color: DiklyColors.textSecondary),
               ),
             );
           }

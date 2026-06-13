@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:intl/intl.dart';
 import '../../core/auth.dart';
 import '../../core/api.dart';
 import '../../core/theme.dart';
@@ -68,9 +69,9 @@ class AdminHomeScreen extends ConsumerWidget {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.center,
                     children: [
-                      const Text('Institution code', style: TextStyle(fontSize: 10, color: DiklyColors.textLight, fontWeight: FontWeight.w600)),
+                      const Text('INSTITUTION CODE', style: TextStyle(fontSize: 9, color: DiklyColors.textLight, fontWeight: FontWeight.w700, letterSpacing: 0.5)),
                       const SizedBox(height: 2),
-                      Text(instCode, style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w800, color: DiklyColors.text)),
+                      Text(instCode, style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w800, color: DiklyColors.text, letterSpacing: 1)),
                       const SizedBox(height: 6),
                       GestureDetector(
                         onTap: () {
@@ -120,137 +121,125 @@ class AdminHomeScreen extends ConsumerWidget {
             data: (data) => Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                // 4 stat cards
-                GridView.count(
-                  shrinkWrap: true,
-                  physics: const NeverScrollableScrollPhysics(),
-                  crossAxisCount: 2,
-                  crossAxisSpacing: 12,
-                  mainAxisSpacing: 12,
-                  childAspectRatio: 1.45,
+                // 4 stat cards in a row
+                Row(
                   children: [
                     _StatCard(
-                      title: 'Total users',
-                      value: data['totalUsers'].toString(),
+                      label: 'TOTAL USERS',
+                      value: '${data['totalUsers'] ?? 0}',
+                      subtitle: 'Students, lecturers & staff',
                       icon: Icons.people_outlined,
                       color: const Color(0xFF3B82F6),
-                      subtitle: 'Students, lecturers & staff',
-                      onTap: () => context.push('/admin/users'),
                     ),
+                    const SizedBox(width: 8),
                     _StatCard(
-                      title: 'Active sessions',
-                      value: data['activeSessions'].toString(),
+                      label: 'ACTIVE SESSIONS',
+                      value: '${data['activeSessions'] ?? 0}',
+                      subtitle: (data['activeSessions'] ?? 0) > 0 ? 'Live now' : 'No active sessions',
                       icon: Icons.circle,
                       color: DiklyColors.success,
-                      subtitle: data['activeSessions'] > 0 ? '● Live now' : 'No active sessions',
-                      onTap: () => context.push('/sessions'),
                     ),
+                    const SizedBox(width: 8),
                     _StatCard(
-                      title: 'Total sessions',
-                      value: data['totalSessions'].toString(),
+                      label: 'TOTAL SESSIONS',
+                      value: '${data['totalSessions'] ?? 0}',
+                      subtitle: 'All time',
                       icon: Icons.book_outlined,
                       color: const Color(0xFFF59E0B),
-                      subtitle: 'All time',
-                      onTap: () => context.push('/sessions'),
                     ),
+                    const SizedBox(width: 8),
                     _StatCard(
-                      title: 'Pending approvals',
-                      value: data['pendingApprovals'].toString(),
+                      label: 'PENDING APPROVALS',
+                      value: '${data['pendingApprovals'] ?? 0}',
+                      subtitle: (data['pendingApprovals'] ?? 0) > 0 ? 'Action needed' : 'All clear',
                       icon: Icons.info_outline_rounded,
                       color: const Color(0xFF7C3AED),
-                      subtitle: data['pendingApprovals'] > 0 ? 'Action needed' : 'All clear',
-                      onTap: () => context.push('/sessions'),
                     ),
                   ],
                 ),
                 const SizedBox(height: 20),
 
-                // Quick actions
-                const DiklySectionLabel('Quick actions'),
+                // Quick Actions
+                const Text('QUICK ACTIONS', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: DiklyColors.textLight, letterSpacing: 0.5)),
                 const SizedBox(height: 10),
-                Wrap(
-                  spacing: 8,
-                  runSpacing: 8,
+                Row(
                   children: [
-                    _ActionChip(
-                      label: 'Add user',
-                      icon: Icons.person_add_alt_1_outlined,
-                      color: DiklyColors.success,
-                      onTap: () => context.push('/admin/users'),
-                    ),
-                    if (data['pendingApprovals'] > 0)
-                      _ActionChip(
-                        label: 'Review approvals (${data['pendingApprovals']})',
-                        icon: Icons.check_circle_outline,
-                        color: const Color(0xFF7C3AED),
-                        onTap: () => context.push('/sessions'),
+                    Expanded(
+                      child: OutlinedButton.icon(
+                        onPressed: () => context.push('/admin/users'),
+                        icon: const Icon(Icons.person_add_alt_1_outlined, size: 15),
+                        label: const Text('Add user'),
+                        style: OutlinedButton.styleFrom(
+                          foregroundColor: DiklyColors.success,
+                          side: const BorderSide(color: DiklyColors.success),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                          padding: const EdgeInsets.symmetric(vertical: 10),
+                          textStyle: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
+                        ),
                       ),
-                    _ActionChip(
-                      label: 'Post announcement',
-                      icon: Icons.notifications_outlined,
-                      color: const Color(0xFFF59E0B),
-                      onTap: () => context.push('/announcements'),
                     ),
-                    _ActionChip(
-                      label: 'View reports',
-                      icon: Icons.bar_chart_rounded,
-                      color: DiklyColors.textSecondary,
-                      onTap: () => context.push('/reports'),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: OutlinedButton.icon(
+                        onPressed: () => context.push('/announcements'),
+                        icon: const Icon(Icons.campaign_outlined, size: 15),
+                        label: const Text('Post announcement'),
+                        style: OutlinedButton.styleFrom(
+                          foregroundColor: const Color(0xFFF59E0B),
+                          side: const BorderSide(color: Color(0xFFF59E0B)),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                          padding: const EdgeInsets.symmetric(vertical: 10),
+                          textStyle: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: OutlinedButton.icon(
+                        onPressed: () => context.push('/admin/reports'),
+                        icon: const Icon(Icons.bar_chart_rounded, size: 15),
+                        label: const Text('View reports'),
+                        style: OutlinedButton.styleFrom(
+                          foregroundColor: DiklyColors.textSecondary,
+                          side: const BorderSide(color: DiklyColors.border),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                          padding: const EdgeInsets.symmetric(vertical: 10),
+                          textStyle: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
+                        ),
+                      ),
                     ),
                   ],
                 ),
                 const SizedBox(height: 20),
 
-                // 2 panels: recent sessions + announcements
+                // Two-column panels: recent sessions + announcements
                 Row(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Expanded(
                       child: _SessionsPanel(
-                        sessions: (data['sessions'] as List).cast<Map<String, dynamic>>(),
+                        sessions: (data['sessions'] as List? ?? []).cast<Map<String, dynamic>>(),
+                        onViewAll: () => context.push('/admin/sessions'),
                       ),
                     ),
                     const SizedBox(width: 12),
                     Expanded(
                       child: _AnnouncementsPanel(
-                        announcements: (data['announcements'] as List).cast<Map<String, dynamic>>(),
+                        announcements: (data['announcements'] as List? ?? []).cast<Map<String, dynamic>>(),
+                        onPost: () => context.push('/announcements'),
                       ),
                     ),
                   ],
                 ),
                 const SizedBox(height: 20),
 
-                // Admin actions
-                const DiklySectionLabel('Administration'),
-                const SizedBox(height: 10),
+                // Chart placeholders
                 Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Expanded(
-                      child: _AdminActionCard(
-                        icon: Icons.people_outlined,
-                        label: 'Manage Users',
-                        color: DiklyColors.primary,
-                        onTap: () => context.push('/admin/users'),
-                      ),
-                    ),
-                    const SizedBox(width: 10),
-                    Expanded(
-                      child: _AdminActionCard(
-                        icon: Icons.business_outlined,
-                        label: 'Branches',
-                        color: DiklyColors.success,
-                        onTap: () => context.push('/admin/branches'),
-                      ),
-                    ),
-                    const SizedBox(width: 10),
-                    Expanded(
-                      child: _AdminActionCard(
-                        icon: Icons.history_outlined,
-                        label: 'Audit Logs',
-                        color: DiklyColors.warning,
-                        onTap: () => context.push('/admin/audit-logs'),
-                      ),
-                    ),
+                    Expanded(child: _ChartPlaceholder(title: 'Attendance Trend (Last 14 Days)')),
+                    const SizedBox(width: 12),
+                    Expanded(child: _ChartPlaceholder(title: 'Users by Role')),
                   ],
                 ),
               ],
@@ -264,97 +253,53 @@ class AdminHomeScreen extends ConsumerWidget {
 }
 
 class _StatCard extends StatelessWidget {
-  final String title;
+  final String label;
   final String value;
+  final String subtitle;
   final IconData icon;
   final Color color;
-  final String subtitle;
-  final VoidCallback? onTap;
 
-  const _StatCard({required this.title, required this.value, required this.icon, required this.color, required this.subtitle, this.onTap});
+  const _StatCard({
+    required this.label,
+    required this.value,
+    required this.subtitle,
+    required this.icon,
+    required this.color,
+  });
 
   @override
   Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: onTap,
+    return Expanded(
       child: Container(
+        padding: const EdgeInsets.all(10),
         decoration: BoxDecoration(
-          color: DiklyColors.surface,
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: DiklyColors.border),
-          boxShadow: AppTheme.shadowSm,
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(color: const Color(0xFFE5E7EB)),
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Container(
-              height: 3,
-              decoration: BoxDecoration(
-                color: color,
-                borderRadius: const BorderRadius.vertical(top: Radius.circular(12)),
-              ),
+            Container(height: 3, decoration: BoxDecoration(color: color, borderRadius: BorderRadius.circular(2))),
+            const SizedBox(height: 8),
+            Text(
+              value,
+              style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800, color: color),
             ),
-            Expanded(
-              child: Padding(
-                padding: const EdgeInsets.all(14),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Row(
-                      children: [
-                        Expanded(child: Text(title, style: const TextStyle(fontSize: 11, color: DiklyColors.textLight, fontWeight: FontWeight.w600))),
-                        Container(
-                          padding: const EdgeInsets.all(6),
-                          decoration: BoxDecoration(color: color.withOpacity(0.1), borderRadius: BorderRadius.circular(6)),
-                          child: Icon(icon, size: 13, color: color),
-                        ),
-                      ],
-                    ),
-                    Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(value, style: TextStyle(fontSize: 26, fontWeight: FontWeight.w800, color: DiklyColors.text, height: 1)),
-                        const SizedBox(height: 3),
-                        Text(subtitle, style: TextStyle(fontSize: 10, color: color, fontWeight: FontWeight.w600), maxLines: 1, overflow: TextOverflow.ellipsis),
-                      ],
-                    ),
-                  ],
-                ),
-              ),
+            const SizedBox(height: 2),
+            Text(
+              label,
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(fontSize: 8, color: Color(0xFF9CA3AF), letterSpacing: 0.2, fontWeight: FontWeight.w600),
             ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _ActionChip extends StatelessWidget {
-  final String label;
-  final IconData icon;
-  final Color color;
-  final VoidCallback onTap;
-
-  const _ActionChip({required this.label, required this.icon, required this.color, required this.onTap});
-
-  @override
-  Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-        decoration: BoxDecoration(
-          color: color.withOpacity(0.08),
-          borderRadius: BorderRadius.circular(20),
-          border: Border.all(color: color.withOpacity(0.25)),
-        ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(icon, size: 14, color: color),
-            const SizedBox(width: 6),
-            Text(label, style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: color)),
+            const SizedBox(height: 3),
+            Text(
+              subtitle,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(fontSize: 8, color: Color(0xFF9CA3AF)),
+            ),
           ],
         ),
       ),
@@ -364,7 +309,19 @@ class _ActionChip extends StatelessWidget {
 
 class _SessionsPanel extends StatelessWidget {
   final List<Map<String, dynamic>> sessions;
-  const _SessionsPanel({required this.sessions});
+  final VoidCallback onViewAll;
+  const _SessionsPanel({required this.sessions, required this.onViewAll});
+
+  String _timeAgo(dynamic rawDate) {
+    if (rawDate == null) return '';
+    final dt = DateTime.tryParse(rawDate.toString());
+    if (dt == null) return '';
+    final diff = DateTime.now().difference(dt);
+    if (diff.inDays > 0) return '${diff.inDays}d ago';
+    if (diff.inHours > 0) return '${diff.inHours}h ago';
+    if (diff.inMinutes > 0) return '${diff.inMinutes}m ago';
+    return 'just now';
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -377,17 +334,20 @@ class _SessionsPanel extends StatelessWidget {
             children: [
               const Expanded(child: Text('Recent sessions', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: DiklyColors.text))),
               GestureDetector(
-                onTap: () => context.push('/sessions'),
+                onTap: onViewAll,
                 child: const Text('View all →', style: TextStyle(fontSize: 11, color: DiklyColors.primary, fontWeight: FontWeight.w600)),
               ),
             ],
           ),
           const SizedBox(height: 10),
           if (sessions.isEmpty)
-            const Text('No sessions yet', style: TextStyle(fontSize: 12, color: DiklyColors.textLight))
+            const Padding(
+              padding: EdgeInsets.symmetric(vertical: 20),
+              child: Center(child: Text('No sessions yet', style: TextStyle(fontSize: 12, color: DiklyColors.textLight))),
+            )
           else
-            ...sessions.map((s) {
-              final isLive = ['active', 'live', 'paused', 'locked'].contains(s['status']);
+            ...sessions.take(5).map((s) {
+              final timeAgo = _timeAgo(s['startedAt'] ?? s['createdAt']);
               return Padding(
                 padding: const EdgeInsets.only(bottom: 10),
                 child: Row(
@@ -395,9 +355,9 @@ class _SessionsPanel extends StatelessWidget {
                     Container(
                       width: 8,
                       height: 8,
-                      margin: const EdgeInsets.only(right: 8, top: 1),
-                      decoration: BoxDecoration(
-                        color: isLive ? DiklyColors.success : DiklyColors.textLight,
+                      margin: const EdgeInsets.only(right: 8, top: 2),
+                      decoration: const BoxDecoration(
+                        color: Color(0xFFD1D5DB),
                         shape: BoxShape.circle,
                       ),
                     ),
@@ -410,10 +370,8 @@ class _SessionsPanel extends StatelessWidget {
                         ],
                       ),
                     ),
-                    Text(
-                      isLive ? 'Live' : 'Ended',
-                      style: TextStyle(fontSize: 10, fontWeight: FontWeight.w700, color: isLive ? DiklyColors.success : DiklyColors.textLight),
-                    ),
+                    if (timeAgo.isNotEmpty)
+                      Text(timeAgo, style: const TextStyle(fontSize: 10, color: DiklyColors.textLight)),
                   ],
                 ),
               );
@@ -426,17 +384,8 @@ class _SessionsPanel extends StatelessWidget {
 
 class _AnnouncementsPanel extends StatelessWidget {
   final List<Map<String, dynamic>> announcements;
-  const _AnnouncementsPanel({required this.announcements});
-
-  Color _typeColor(String? type) {
-    switch (type) {
-      case 'info': return const Color(0xFF3B82F6);
-      case 'warning': return const Color(0xFFF59E0B);
-      case 'success': return DiklyColors.success;
-      case 'urgent': return DiklyColors.error;
-      default: return DiklyColors.textLight;
-    }
-  }
+  final VoidCallback onPost;
+  const _AnnouncementsPanel({required this.announcements, required this.onPost});
 
   @override
   Widget build(BuildContext context) {
@@ -449,7 +398,7 @@ class _AnnouncementsPanel extends StatelessWidget {
             children: [
               const Expanded(child: Text('Announcements', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: DiklyColors.text))),
               GestureDetector(
-                onTap: () => context.push('/announcements'),
+                onTap: onPost,
                 child: Container(
                   padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                   decoration: BoxDecoration(
@@ -464,10 +413,12 @@ class _AnnouncementsPanel extends StatelessWidget {
           ),
           const SizedBox(height: 10),
           if (announcements.isEmpty)
-            const Text('No announcements yet', style: TextStyle(fontSize: 12, color: DiklyColors.textLight))
+            const Padding(
+              padding: EdgeInsets.symmetric(vertical: 20),
+              child: Center(child: Text('No announcements yet', style: TextStyle(fontSize: 12, color: DiklyColors.textLight))),
+            )
           else
             ...announcements.map((a) {
-              final dotColor = _typeColor(a['type']?.toString());
               return Padding(
                 padding: const EdgeInsets.only(bottom: 10),
                 child: Row(
@@ -477,7 +428,7 @@ class _AnnouncementsPanel extends StatelessWidget {
                       width: 8,
                       height: 8,
                       margin: const EdgeInsets.only(right: 8, top: 4),
-                      decoration: BoxDecoration(color: dotColor, shape: BoxShape.circle),
+                      decoration: const BoxDecoration(color: Color(0xFFD1D5DB), shape: BoxShape.circle),
                     ),
                     Expanded(
                       child: Column(
@@ -501,29 +452,19 @@ class _AnnouncementsPanel extends StatelessWidget {
   }
 }
 
-class _AdminActionCard extends StatelessWidget {
-  final IconData icon;
-  final String label;
-  final Color color;
-  final VoidCallback onTap;
-
-  const _AdminActionCard({required this.icon, required this.label, required this.color, required this.onTap});
+class _ChartPlaceholder extends StatelessWidget {
+  final String title;
+  const _ChartPlaceholder({required this.title});
 
   @override
   Widget build(BuildContext context) {
     return DiklyCard(
-      padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 12),
-      onTap: onTap,
+      padding: const EdgeInsets.all(14),
       child: Column(
-        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Container(
-            padding: const EdgeInsets.all(10),
-            decoration: BoxDecoration(color: color.withOpacity(0.1), borderRadius: BorderRadius.circular(10)),
-            child: Icon(icon, color: color, size: 22),
-          ),
-          const SizedBox(height: 8),
-          Text(label, textAlign: TextAlign.center, style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: DiklyColors.textSecondary)),
+          Text(title, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: DiklyColors.text)),
+          const SizedBox(height: 80),
         ],
       ),
     );

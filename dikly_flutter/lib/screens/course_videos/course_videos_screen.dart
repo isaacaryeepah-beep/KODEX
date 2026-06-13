@@ -146,33 +146,72 @@ class _CourseVideosScreenState extends ConsumerState<CourseVideosScreen> {
                     ElevatedButton(onPressed: _loadData, child: const Text('Retry')),
                   ],
                 ))
-              : _videos.isEmpty
-                  ? DiklyEmptyState(
-                      icon: Icons.video_library_outlined,
-                      title: 'No videos yet',
-                      subtitle: canManage ? 'Add videos for this course' : 'No videos available for this course',
-                      buttonLabel: canManage ? 'Add Video' : null,
-                      onButton: canManage ? _addVideo : null,
-                    )
-                  : RefreshIndicator(
-                      onRefresh: _loadData,
-                      child: ListView.builder(
-                        padding: const EdgeInsets.all(16),
-                        itemCount: _videos.length,
-                        itemBuilder: (context, index) {
-                          final video = _videos[index];
-                          return _VideoCard(
-                            video: video,
-                            canDelete: canManage,
-                            onTap: () => context.push('/video-player', extra: {
-                              'url': video.embedUrl,
-                              'title': video.title,
-                            }),
-                            onDelete: () => _deleteVideo(video),
-                          );
-                        },
+              : RefreshIndicator(
+                  onRefresh: _loadData,
+                  child: ListView(
+                    padding: const EdgeInsets.all(16),
+                    children: [
+                      DiklyScreenHeader(
+                        title: 'Course Videos',
+                        subtitle: canManage
+                            ? 'Manage video resources for this course'
+                            : 'Watch video resources shared by your lecturers',
                       ),
-                    ),
+                      if (_videos.isEmpty)
+                        Container(
+                          padding: const EdgeInsets.symmetric(vertical: 48),
+                          decoration: BoxDecoration(
+                            color: Colors.white,
+                            borderRadius: BorderRadius.circular(12),
+                            border: Border.all(color: DiklyColors.border),
+                          ),
+                          child: Column(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              const Icon(Icons.play_circle_outline, size: 48, color: Color(0xFF9CA3AF)),
+                              const SizedBox(height: 12),
+                              const Text(
+                                'No videos yet',
+                                style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700, color: Color(0xFF111827)),
+                              ),
+                              const SizedBox(height: 6),
+                              Text(
+                                canManage
+                                    ? 'Add your first video for this course'
+                                    : "Your lecturers haven't added any videos for your courses.",
+                                style: const TextStyle(fontSize: 13, color: Color(0xFF6B7280)),
+                                textAlign: TextAlign.center,
+                              ),
+                              if (canManage) ...[
+                                const SizedBox(height: 16),
+                                ElevatedButton.icon(
+                                  onPressed: _addVideo,
+                                  icon: const Icon(Icons.add, size: 16),
+                                  label: const Text('Add Video'),
+                                  style: ElevatedButton.styleFrom(
+                                    backgroundColor: DiklyColors.primary,
+                                    foregroundColor: Colors.white,
+                                    elevation: 0,
+                                  ),
+                                ),
+                              ],
+                            ],
+                          ),
+                        )
+                      else
+                        ..._videos.map((video) => _VideoCard(
+                          video: video,
+                          canDelete: canManage,
+                          onTap: () => context.push('/video-player', extra: {
+                            'url': video.embedUrl,
+                            'title': video.title,
+                          }),
+                          onDelete: () => _deleteVideo(video),
+                        )),
+                      const SizedBox(height: 24),
+                    ],
+                  ),
+                ),
     );
   }
 }

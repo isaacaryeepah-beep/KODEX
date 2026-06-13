@@ -1,12 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:intl/intl.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
 import '../../core/api.dart';
 import '../../core/auth.dart';
 import '../../core/theme.dart';
-import '../../models/attendance.dart';
-import '../../widgets/app_shell.dart';
 import '../../widgets/ds/dikly_ds.dart';
 
 class AttendanceScreen extends ConsumerStatefulWidget {
@@ -17,22 +14,18 @@ class AttendanceScreen extends ConsumerStatefulWidget {
 }
 
 class _AttendanceScreenState extends ConsumerState<AttendanceScreen> {
-  List<AttendanceSession> _sessions = [];
-  bool _loading = true;
-  String? _error;
-  final _codeController = TextEditingController();
+  bool _loading = false;
   bool _markingAttendance = false;
+  final _codeController = TextEditingController();
 
-  // ESP32 device state — detected via native HTTP (no mixed-content restriction)
   bool _esp32Found = false;
   bool _esp32SessionActive = false;
-  String _esp32Ip = '192.168.4.1';
-  Map<String, dynamic>? _esp32Status;
+  final String _esp32Ip = '192.168.4.1';
 
   @override
   void initState() {
     super.initState();
-    _loadData();
+    _probeESP32();
   }
 
   @override
@@ -41,24 +34,11 @@ class _AttendanceScreenState extends ConsumerState<AttendanceScreen> {
     super.dispose();
   }
 
-  Future<void> _loadData() async {
-    setState(() { _loading = true; _error = null; });
-    try {
-      final sessions = await apiService.getAttendanceSessions();
-      setState(() { _sessions = sessions; _loading = false; });
-    } catch (e) {
-      setState(() { _error = e.toString(); _loading = false; });
-    }
-    // Probe ESP32 in parallel — native HTTP, no mixed-content restriction
-    _probeESP32();
-  }
-
   Future<void> _probeESP32() async {
     final status = await apiService.probeESP32(ip: _esp32Ip);
     if (!mounted) return;
     setState(() {
       _esp32Found = status != null;
-      _esp32Status = status;
       _esp32SessionActive = status?['sessionActive'] == true;
     });
   }
@@ -77,7 +57,6 @@ class _AttendanceScreenState extends ConsumerState<AttendanceScreen> {
       final userId = user?.id ?? '';
       final indexNumber = user?.indexNumber ?? '';
 
-      // Path 1: S3 firmware — submit directly to device (works even without internet)
       if (_esp32Found) {
         final ok = await apiService.submitToESP32(
           code,
@@ -89,19 +68,19 @@ class _AttendanceScreenState extends ConsumerState<AttendanceScreen> {
           _codeController.clear();
           if (mounted) {
             ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(content: Text('Attendance recorded! You can now disconnect from classroom WiFi.'), backgroundColor: DiklyColors.success),
+              const SnackBar(
+                content: Text('Attendance recorded! You can now disconnect from classroom WiFi.'),
+                backgroundColor: DiklyColors.success,
+              ),
             );
           }
           return;
         }
-        // false = 404/405 (standard firmware) — fall through to Path 2/3
 
-        // Path 2: standard firmware — get connectionToken from device, then cloud API
         final token = await apiService.getESP32ConnectionToken(userId, ip: _esp32Ip);
         if (token != null) {
           await apiService.markAttendance(code, connectionToken: token);
           _codeController.clear();
-          await _loadData();
           if (mounted) {
             ScaffoldMessenger.of(context).showSnackBar(
               const SnackBar(content: Text('Attendance marked successfully!'), backgroundColor: DiklyColors.success),
@@ -111,10 +90,8 @@ class _AttendanceScreenState extends ConsumerState<AttendanceScreen> {
         }
       }
 
-      // Path 3: code-only cloud API (server validates TOTP as proximity proof)
       await apiService.markAttendance(code);
       _codeController.clear();
-      await _loadData();
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('Attendance marked successfully!'), backgroundColor: DiklyColors.success),
@@ -123,12 +100,53 @@ class _AttendanceScreenState extends ConsumerState<AttendanceScreen> {
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error: ${e.toString().replaceAll('Exception: ', '')}'), backgroundColor: DiklyColors.error),
+          SnackBar(
+            content: Text('Error: ${e.toString().replaceAll('Exception: ', '')}'),
+            backgroundColor: DiklyColors.error,
+          ),
         );
       }
     } finally {
       if (mounted) setState(() => _markingAttendance = false);
     }
+  }
+
+  Future<void> _markAttendanceWithQR(String qrToken) async {
+    setState(() => _markingAttendance = true);
+    try {
+      await apiService.markAttendanceQR(qrToken);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Attendance marked via QR!'), backgroundColor: DiklyColors.success),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error: ${e.toString().replaceAll('Exception: ', '')}'),
+            backgroundColor: DiklyColors.error,
+          ),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _markingAttendance = false);
+    }
+  }
+
+  void _openQRScanner() {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.black,
+      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
+      builder: (ctx) => _QRScanSheet(
+        onScanned: (token) {
+          Navigator.pop(ctx);
+          _markAttendanceWithQR(token);
+        },
+      ),
+    );
   }
 
   void _showMarkAttendanceDialog() {
@@ -149,7 +167,8 @@ class _AttendanceScreenState extends ConsumerState<AttendanceScreen> {
                 children: [
                   const Icon(Icons.fact_check_rounded, color: DiklyColors.primary, size: 24),
                   const SizedBox(width: 10),
-                  Text('Mark Attendance', style: Theme.of(ctx).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w700)),
+                  Text('Mark Attendance',
+                      style: Theme.of(ctx).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w700)),
                   const Spacer(),
                   IconButton(
                     icon: const Icon(Icons.close_rounded),
@@ -175,7 +194,8 @@ class _AttendanceScreenState extends ConsumerState<AttendanceScreen> {
                       Expanded(
                         child: Text(
                           'Connected to classroom device${_esp32SessionActive ? ' — session active' : ''}',
-                          style: const TextStyle(fontSize: 12, color: DiklyColors.success, fontWeight: FontWeight.w600),
+                          style: const TextStyle(
+                              fontSize: 12, color: DiklyColors.success, fontWeight: FontWeight.w600),
                         ),
                       ),
                     ],
@@ -183,7 +203,6 @@ class _AttendanceScreenState extends ConsumerState<AttendanceScreen> {
                 ),
               ],
               const SizedBox(height: 20),
-              // QR Scan button — primary option
               SizedBox(
                 width: double.infinity,
                 child: ElevatedButton.icon(
@@ -207,7 +226,8 @@ class _AttendanceScreenState extends ConsumerState<AttendanceScreen> {
                 const Expanded(child: Divider()),
                 Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 12),
-                  child: Text('or enter code manually', style: TextStyle(fontSize: 12, color: DiklyColors.textLight)),
+                  child: Text('or enter code manually',
+                      style: TextStyle(fontSize: 12, color: DiklyColors.textLight)),
                 ),
                 const Expanded(child: Divider()),
               ]),
@@ -254,99 +274,143 @@ class _AttendanceScreenState extends ConsumerState<AttendanceScreen> {
     );
   }
 
-  void _openQRScanner() {
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.black,
-      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
-      builder: (ctx) => _QRScanSheet(
-        onScanned: (token) {
-          Navigator.pop(ctx);
-          _markAttendanceWithQR(token);
-        },
-      ),
-    );
-  }
-
-  Future<void> _markAttendanceWithQR(String qrToken) async {
-    setState(() => _markingAttendance = true);
-    try {
-      await apiService.markAttendanceQR(qrToken);
-      await _loadData();
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Attendance marked via QR!'), backgroundColor: DiklyColors.success),
-        );
-      }
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error: ${e.toString().replaceAll('Exception: ', '')}'), backgroundColor: DiklyColors.error),
-        );
-      }
-    } finally {
-      if (mounted) setState(() => _markingAttendance = false);
-    }
-  }
-
   @override
   Widget build(BuildContext context) {
-    final user = ref.watch(currentUserProvider);
-    final isLecturer = user?.role == 'lecturer';
-
-    return AppShell(
-      title: 'Attendance',
-      floatingActionButton: !isLecturer
-          ? FloatingActionButton.extended(
-              onPressed: _showMarkAttendanceDialog,
-              icon: const Icon(Icons.fact_check_rounded),
-              label: const Text('Mark Attendance'),
-            )
-          : null,
-      child: _loading
-          ? const Center(child: CircularProgressIndicator(color: DiklyColors.primary))
-          : _error != null
-              ? Center(child: Column(
-                  mainAxisSize: MainAxisSize.min,
+    return ListView(
+      padding: const EdgeInsets.all(16),
+      children: [
+        DiklyScreenHeader(
+          title: 'Mark Attendance',
+          subtitle: 'Check in to active sessions',
+        ),
+        // WiFi instruction banner
+        Container(
+          padding: const EdgeInsets.all(14),
+          decoration: BoxDecoration(
+            color: const Color(0xFFEFF6FF),
+            borderRadius: BorderRadius.circular(10),
+            border: Border.all(color: const Color(0xFFBFDBFE)),
+          ),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Container(
+                margin: const EdgeInsets.only(top: 2),
+                child: const Icon(Icons.wifi_rounded, size: 18, color: Color(0xFF2563EB)),
+              ),
+              const SizedBox(width: 10),
+              const Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const Icon(Icons.error_outline, color: DiklyColors.error, size: 48),
-                    const SizedBox(height: 12),
-                    const Text(
-                      'Unable to load data. Pull down to refresh.',
-                      style: TextStyle(fontSize: 13, color: DiklyColors.textSecondary),
-                      textAlign: TextAlign.center,
+                    Text(
+                      'Connect to classroom WiFi first',
+                      style: TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w700,
+                        color: Color(0xFF1E40AF),
+                      ),
                     ),
-                    const SizedBox(height: 16),
-                    ElevatedButton(onPressed: _loadData, child: const Text('Retry')),
+                    SizedBox(height: 4),
+                    Text(
+                      'Go to phone WiFi settings → connect to Dikly-XXXXXX',
+                      style: TextStyle(fontSize: 12, color: Color(0xFF1D4ED8)),
+                    ),
+                    SizedBox(height: 2),
+                    Text.rich(
+                      TextSpan(
+                        text: "If your phone says 'Internet may not be available' — tap ",
+                        style: TextStyle(fontSize: 12, color: Color(0xFF1D4ED8)),
+                        children: [
+                          TextSpan(
+                            text: 'Stay connected.',
+                            style: TextStyle(fontWeight: FontWeight.w700),
+                          ),
+                        ],
+                      ),
+                    ),
                   ],
-                ))
-              : RefreshIndicator(
-                  onRefresh: _loadData,
-                  child: _sessions.isEmpty
-                      ? DiklyEmptyState(
-                          icon: Icons.fact_check_outlined,
-                          title: 'No attendance sessions',
-                          subtitle: 'Attendance sessions will appear here',
-                          buttonLabel: isLecturer ? null : 'Mark Attendance',
-                          onButton: isLecturer ? null : _showMarkAttendanceDialog,
+                ),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 16),
+        // Ready to mark card
+        Container(
+          padding: const EdgeInsets.symmetric(vertical: 40, horizontal: 24),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: DiklyColors.border),
+            boxShadow: const [
+              BoxShadow(color: Color(0x08000000), blurRadius: 8, offset: Offset(0, 2)),
+            ],
+          ),
+          child: Column(
+            children: [
+              Container(
+                width: 72,
+                height: 72,
+                decoration: BoxDecoration(
+                  color: const Color(0xFFFFF7ED),
+                  borderRadius: BorderRadius.circular(16),
+                ),
+                child: const Icon(
+                  Icons.bar_chart_rounded,
+                  size: 40,
+                  color: Color(0xFFF97316),
+                ),
+              ),
+              const SizedBox(height: 20),
+              const Text(
+                'Ready to mark attendance',
+                style: TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.w700,
+                  color: Color(0xFF111827),
+                ),
+                textAlign: TextAlign.center,
+              ),
+              const SizedBox(height: 8),
+              const Text(
+                'Connect to Dikly-XXXXXX WiFi, then tap the button below',
+                style: TextStyle(fontSize: 13, color: Color(0xFF6B7280)),
+                textAlign: TextAlign.center,
+              ),
+              const SizedBox(height: 28),
+              SizedBox(
+                width: double.infinity,
+                child: ElevatedButton(
+                  onPressed: _markingAttendance ? null : _showMarkAttendanceDialog,
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFF2563EB),
+                    foregroundColor: Colors.white,
+                    padding: const EdgeInsets.symmetric(vertical: 15),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                    elevation: 0,
+                  ),
+                  child: _markingAttendance
+                      ? const SizedBox(
+                          width: 20,
+                          height: 20,
+                          child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
                         )
-                      : ListView.builder(
-                          padding: const EdgeInsets.all(16),
-                          itemCount: _sessions.length,
-                          itemBuilder: (context, index) {
-                            final session = _sessions[index];
-                            return _AttendanceSessionCard(
-                              session: session,
-                              isLecturer: isLecturer,
-                              onMark: _showMarkAttendanceDialog,
-                            );
-                          },
+                      : const Text(
+                          'Mark Attendance',
+                          style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700),
                         ),
                 ),
+              ),
+            ],
+          ),
+        ),
+      ],
     );
   }
 }
+
+// ── QR Scanner sheet ────────────────────────────────────────────────────────
 
 class _QRScanSheet extends StatefulWidget {
   final void Function(String token) onScanned;
@@ -371,8 +435,6 @@ class _QRScanSheetState extends State<_QRScanSheet> {
     final raw = capture.barcodes.firstOrNull?.rawValue;
     if (raw == null) return;
 
-    // The QR encodes a URL: https://...?qr_token=<token>&qr_code=<code>
-    // Try parsing as URL first, else treat the whole string as the token
     String? token;
     try {
       final uri = Uri.parse(raw);
@@ -391,9 +453,9 @@ class _QRScanSheetState extends State<_QRScanSheet> {
       height: MediaQuery.of(context).size.height * 0.65,
       child: Column(
         children: [
-          // Handle bar
           Container(
-            width: 40, height: 4,
+            width: 40,
+            height: 4,
             margin: const EdgeInsets.only(top: 12, bottom: 16),
             decoration: BoxDecoration(color: Colors.white24, borderRadius: BorderRadius.circular(2)),
           ),
@@ -403,7 +465,8 @@ class _QRScanSheetState extends State<_QRScanSheet> {
               children: [
                 const Icon(Icons.qr_code_scanner_rounded, color: Colors.white, size: 22),
                 const SizedBox(width: 10),
-                const Text('Scan QR Code', style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.w700)),
+                const Text('Scan QR Code',
+                    style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.w700)),
                 const Spacer(),
                 IconButton(
                   icon: const Icon(Icons.close_rounded, color: Colors.white),
@@ -415,7 +478,8 @@ class _QRScanSheetState extends State<_QRScanSheet> {
             ),
           ),
           const SizedBox(height: 8),
-          const Text('Point your camera at the QR code on the board', style: TextStyle(color: Colors.white60, fontSize: 13)),
+          const Text('Point your camera at the QR code on the board',
+              style: TextStyle(color: Colors.white60, fontSize: 13)),
           const SizedBox(height: 16),
           Expanded(
             child: Padding(
@@ -428,7 +492,6 @@ class _QRScanSheetState extends State<_QRScanSheet> {
                       controller: _controller,
                       onDetect: _onDetect,
                     ),
-                    // Scan frame overlay
                     Center(
                       child: Container(
                         width: 220,
@@ -445,7 +508,6 @@ class _QRScanSheetState extends State<_QRScanSheet> {
             ),
           ),
           const SizedBox(height: 20),
-          // Torch toggle
           Row(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
@@ -458,139 +520,6 @@ class _QRScanSheetState extends State<_QRScanSheet> {
             ],
           ),
           const SizedBox(height: 16),
-        ],
-      ),
-    );
-  }
-}
-
-class _AttendanceSessionCard extends StatelessWidget {
-  final AttendanceSession session;
-  final bool isLecturer;
-  final VoidCallback onMark;
-
-  const _AttendanceSessionCard({required this.session, required this.isLecturer, required this.onMark});
-
-  @override
-  Widget build(BuildContext context) {
-    final statusColor = session.isOpen ? DiklyColors.success : DiklyColors.textSecondary;
-
-    return Container(
-      margin: const EdgeInsets.only(bottom: 12),
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: DiklyColors.surface,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(
-          color: session.isOpen ? DiklyColors.success.withOpacity(0.3) : DiklyColors.border,
-        ),
-        boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.04), blurRadius: 8, offset: const Offset(0, 2))],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Expanded(
-                child: Text(session.title, style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600)),
-              ),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                decoration: BoxDecoration(
-                  color: statusColor.withOpacity(0.1),
-                  borderRadius: BorderRadius.circular(20),
-                  border: Border.all(color: statusColor.withOpacity(0.3)),
-                ),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    if (session.isOpen)
-                      Container(width: 6, height: 6, margin: const EdgeInsets.only(right: 4), decoration: BoxDecoration(color: statusColor, shape: BoxShape.circle)),
-                    Text(session.isOpen ? 'Open' : 'Closed', style: TextStyle(fontSize: 11, color: statusColor, fontWeight: FontWeight.w600)),
-                  ],
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 8),
-          if (session.courseName != null) ...[
-            Row(
-              children: [
-                const Icon(Icons.school_outlined, size: 14, color: DiklyColors.textSecondary),
-                const SizedBox(width: 4),
-                Text(session.courseName!, style: Theme.of(context).textTheme.bodySmall?.copyWith(color: DiklyColors.textSecondary)),
-              ],
-            ),
-            const SizedBox(height: 4),
-          ],
-          if (session.startTime != null)
-            Row(
-              children: [
-                const Icon(Icons.schedule_outlined, size: 14, color: DiklyColors.textSecondary),
-                const SizedBox(width: 4),
-                Text(DateFormat('MMM d, h:mm a').format(session.startTime!), style: Theme.of(context).textTheme.bodySmall?.copyWith(color: DiklyColors.textSecondary)),
-              ],
-            ),
-          if (isLecturer && session.presentCount != null) ...[
-            const SizedBox(height: 8),
-            Row(
-              children: [
-                const Icon(Icons.people_outline, size: 14, color: DiklyColors.textSecondary),
-                const SizedBox(width: 4),
-                Text('${session.presentCount}/${session.totalStudents ?? '?'} present', style: Theme.of(context).textTheme.bodySmall?.copyWith(color: DiklyColors.textSecondary)),
-              ],
-            ),
-            if (session.code != null) ...[
-              const SizedBox(height: 8),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                decoration: BoxDecoration(
-                  color: DiklyColors.primary.withOpacity(0.08),
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    const Icon(Icons.key_rounded, size: 14, color: DiklyColors.primary),
-                    const SizedBox(width: 6),
-                    Text('Code: ${session.code}', style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: DiklyColors.primary, letterSpacing: 2)),
-                  ],
-                ),
-              ),
-            ],
-          ],
-          if (!isLecturer && session.isOpen && !session.isMarked) ...[
-            const SizedBox(height: 12),
-            SizedBox(
-              width: double.infinity,
-              child: ElevatedButton.icon(
-                onPressed: onMark,
-                icon: const Icon(Icons.fact_check_rounded, size: 16),
-                label: const Text('Mark Attendance'),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: DiklyColors.success,
-                  padding: const EdgeInsets.symmetric(vertical: 10),
-                ),
-              ),
-            ),
-          ],
-          if (!isLecturer && session.isMarked)
-            Container(
-              margin: const EdgeInsets.only(top: 8),
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-              decoration: BoxDecoration(
-                color: DiklyColors.success.withOpacity(0.1),
-                borderRadius: BorderRadius.circular(8),
-              ),
-              child: const Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Icon(Icons.check_circle_outline_rounded, size: 14, color: DiklyColors.success),
-                  SizedBox(width: 6),
-                  Text('Attendance marked', style: TextStyle(fontSize: 12, color: DiklyColors.success, fontWeight: FontWeight.w500)),
-                ],
-              ),
-            ),
         ],
       ),
     );
