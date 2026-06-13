@@ -41,7 +41,7 @@ class StudentHomeScreen extends ConsumerWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      'Welcome back, $firstName 👋',
+                      'Welcome back, $firstName',
                       style: GoogleFonts.dmSans(fontSize: 22, fontWeight: FontWeight.w800, color: DiklyColors.text, height: 1.2),
                     ),
                     const SizedBox(height: 4),
@@ -172,36 +172,36 @@ class StudentHomeScreen extends ConsumerWidget {
                     const SizedBox(height: 16),
                   ],
 
-                  // Stats grid: Total Check-ins, Attendance Rate, Enrolled Courses, Quizzes Taken
-                  GridView.count(
-                    crossAxisCount: 2,
-                    crossAxisSpacing: 12,
-                    mainAxisSpacing: 12,
-                    childAspectRatio: 1.55,
-                    shrinkWrap: true,
-                    physics: const NeverScrollableScrollPhysics(),
-                    children: [
-                      _StatCard(value: '$totalCheckins', label: 'Total Check-ins', color: DiklyColors.primary),
-                      _StatCard(value: '$attendanceRate%', label: 'Attendance Rate', color: (attendanceRate as int) >= 75 ? DiklyColors.success : DiklyColors.warning),
-                      _StatCard(value: '$enrolledCourses', label: 'Enrolled Courses', color: const Color(0xFF7C3AED)),
-                      _StatCard(value: '$quizzesTaken', label: 'Quizzes Taken', color: const Color(0xFF0891B2)),
-                    ],
-                  ),
-                  const SizedBox(height: 20),
-
-                  // Quick Actions
-                  const Text('Quick Actions', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700, color: DiklyColors.text)),
-                  const SizedBox(height: 10),
+                  // Stats row
                   Row(
                     children: [
-                      Expanded(child: _QAButton(label: 'Mark Attendance', icon: Icons.fingerprint, color: DiklyColors.primary, onTap: () => context.push('/attendance'))),
+                      _StatCard(value: '$totalCheckins', label: 'TOTAL CHECK-INS', color: DiklyColors.primary),
                       const SizedBox(width: 8),
-                      Expanded(child: _QAButton(label: 'My Courses', icon: Icons.book_outlined, color: const Color(0xFF7C3AED), onTap: () => context.push('/courses'))),
+                      _StatCard(value: '$attendanceRate%', label: 'ATTENDANCE RATE', color: (attendanceRate as int) >= 75 ? DiklyColors.success : DiklyColors.warning),
                       const SizedBox(width: 8),
-                      Expanded(child: _QAButton(label: 'Quizzes', icon: Icons.quiz_outlined, color: const Color(0xFF0891B2), onTap: () => context.push('/quizzes'))),
+                      _StatCard(value: '$enrolledCourses', label: 'ENROLLED COURSES', color: const Color(0xFF7C3AED)),
                       const SizedBox(width: 8),
-                      Expanded(child: _QAButton(label: 'Timetable', icon: Icons.calendar_today_outlined, color: const Color(0xFF0D9488), onTap: () => context.push('/timetable'))),
+                      _StatCard(value: '$quizzesTaken', label: 'QUIZZES TAKEN', color: const Color(0xFF0891B2)),
                     ],
+                  ),
+                  const SizedBox(height: 16),
+
+                  // Quick Actions
+                  SingleChildScrollView(
+                    scrollDirection: Axis.horizontal,
+                    child: Row(
+                      children: [
+                        _QAButton(label: 'Mark Attendance', filled: true, onTap: () => context.push('/attendance')),
+                        const SizedBox(width: 8),
+                        _QAButton(label: 'View History', onTap: () => context.push('/attendance')),
+                        const SizedBox(width: 8),
+                        _QAButton(label: 'My Courses', onTap: () => context.push('/courses')),
+                        const SizedBox(width: 8),
+                        _QAButton(label: 'Quizzes', onTap: () => context.push('/quizzes')),
+                        const SizedBox(width: 8),
+                        _QAButton(label: 'Report Card', icon: Icons.check_box_outlined, onTap: () => context.push('/quiz-history')),
+                      ],
+                    ),
                   ),
                   const SizedBox(height: 24),
 
@@ -236,7 +236,27 @@ class StudentHomeScreen extends ConsumerWidget {
                       : DiklyCard(
                           padding: EdgeInsets.zero,
                           child: Column(
-                            children: attendanceRecords.take(5).map<Widget>((r) => _AttendanceRow(r: r as Map)).toList(),
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              // Table header
+                              Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 9),
+                                decoration: const BoxDecoration(
+                                  color: Color(0xFFF9FAFB),
+                                  border: Border(bottom: BorderSide(color: DiklyColors.border)),
+                                  borderRadius: BorderRadius.vertical(top: Radius.circular(10)),
+                                ),
+                                child: const Row(
+                                  children: [
+                                    Expanded(flex: 3, child: _TableHeader('SESSION')),
+                                    Expanded(flex: 2, child: _TableHeader('STATUS')),
+                                    Expanded(flex: 2, child: _TableHeader('METHOD')),
+                                    Expanded(flex: 3, child: _TableHeader('CHECK-IN TIME')),
+                                  ],
+                                ),
+                              ),
+                              ...attendanceRecords.take(5).map<Widget>((r) => _AttendanceRow(r: r as Map)),
+                            ],
                           ),
                         ),
                   const SizedBox(height: 24),
@@ -259,15 +279,25 @@ class _StatCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return DiklyCard(
-      padding: const EdgeInsets.all(16),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [
-          Text(value, style: GoogleFonts.dmSans(fontSize: 28, fontWeight: FontWeight.w800, color: color, height: 1)),
-          Text(label, style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: DiklyColors.textLight, letterSpacing: 0.3)),
-        ],
+    return Expanded(
+      child: Container(
+        padding: const EdgeInsets.fromLTRB(10, 10, 10, 10),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(color: const Color(0xFFE5E7EB)),
+          boxShadow: const [BoxShadow(color: Color(0x08000000), blurRadius: 4, offset: Offset(0, 1))],
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Container(height: 3, decoration: BoxDecoration(color: color, borderRadius: BorderRadius.circular(2))),
+            const SizedBox(height: 8),
+            Text(value, style: TextStyle(fontSize: 20, fontWeight: FontWeight.w800, color: color, height: 1)),
+            const SizedBox(height: 2),
+            Text(label, style: const TextStyle(fontSize: 8, fontWeight: FontWeight.w700, color: Color(0xFF9CA3AF), letterSpacing: 0.2)),
+          ],
+        ),
       ),
     );
   }
@@ -275,29 +305,39 @@ class _StatCard extends StatelessWidget {
 
 class _QAButton extends StatelessWidget {
   final String label;
-  final IconData icon;
-  final Color color;
+  final bool filled;
+  final IconData? icon;
   final VoidCallback onTap;
 
-  const _QAButton({required this.label, required this.icon, required this.color, required this.onTap});
+  const _QAButton({required this.label, required this.onTap, this.filled = false, this.icon});
 
   @override
   Widget build(BuildContext context) {
+    const blue = Color(0xFF2563EB);
     return GestureDetector(
       onTap: onTap,
-      child: DiklyCard(
-        padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 8),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 9),
+        decoration: BoxDecoration(
+          color: filled ? blue : Colors.white,
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(color: filled ? blue : const Color(0xFFD1D5DB)),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
           children: [
-            Container(
-              width: 38,
-              height: 38,
-              decoration: BoxDecoration(color: color.withOpacity(0.12), shape: BoxShape.circle),
-              child: Icon(icon, color: color, size: 20),
+            if (icon != null) ...[
+              Icon(icon, size: 14, color: filled ? Colors.white : const Color(0xFF374151)),
+              const SizedBox(width: 5),
+            ],
+            Text(
+              label,
+              style: TextStyle(
+                fontSize: 13,
+                fontWeight: FontWeight.w600,
+                color: filled ? Colors.white : const Color(0xFF374151),
+              ),
             ),
-            const SizedBox(height: 7),
-            Text(label, style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: DiklyColors.text), textAlign: TextAlign.center, maxLines: 2, overflow: TextOverflow.ellipsis),
           ],
         ),
       ),
@@ -373,11 +413,28 @@ class _AssignmentRow extends StatelessWidget {
   }
 }
 
+class _TableHeader extends StatelessWidget {
+  final String label;
+  const _TableHeader(this.label);
+
+  @override
+  Widget build(BuildContext context) {
+    return Text(
+      label,
+      style: const TextStyle(fontSize: 10, fontWeight: FontWeight.w700, color: Color(0xFF9CA3AF), letterSpacing: 0.4),
+    );
+  }
+}
+
 class _AttendanceRow extends StatelessWidget {
   final Map r;
   const _AttendanceRow({required this.r});
 
-  static const _methodLabels = {'qr_mark': 'QR Code', 'code_mark': 'Code', 'ble_mark': 'BLE', 'jitsi_join': 'Meeting', 'manual': 'Manual', 'qr': 'QR Code', 'ble': 'BLE'};
+  static const _methodLabels = {
+    'qr_mark': 'QR Code', 'code_mark': 'Code Entry', 'ble_mark': 'BLE',
+    'esp32_ap': 'esp32_ap', 'jitsi_join': 'Meeting', 'manual': 'Manual',
+    'qr': 'QR Code', 'ble': 'BLE',
+  };
 
   @override
   Widget build(BuildContext context) {
@@ -387,33 +444,53 @@ class _AttendanceRow extends StatelessWidget {
     final checkIn = r['checkInTime'] != null ? DateTime.tryParse(r['checkInTime'].toString()) : null;
     final statusColor = status == 'present' ? DiklyColors.success : status == 'late' ? DiklyColors.warning : DiklyColors.error;
     final sessionTitle = (r['session'] as Map?)?['title']?.toString() ?? 'Session';
+    final checkInStr = checkIn != null ? DateFormat('M/d/yyyy, h:mm:ss a').format(checkIn) : '';
 
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-      decoration: BoxDecoration(border: Border(bottom: BorderSide(color: DiklyColors.border, width: 0.5))),
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 11),
+      decoration: const BoxDecoration(border: Border(bottom: BorderSide(color: DiklyColors.border, width: 0.5))),
       child: Row(
         children: [
           Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(sessionTitle, style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 14, color: DiklyColors.text), maxLines: 1, overflow: TextOverflow.ellipsis),
-                if (checkIn != null)
-                  Text(DateFormat('MMM d · h:mm a').format(checkIn), style: const TextStyle(fontSize: 12, color: DiklyColors.textLight)),
-              ],
+            flex: 3,
+            child: Text(
+              sessionTitle,
+              style: const TextStyle(fontWeight: FontWeight.w500, fontSize: 12, color: DiklyColors.text),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
             ),
           ),
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.end,
-            children: [
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                decoration: BoxDecoration(color: statusColor.withOpacity(0.12), borderRadius: BorderRadius.circular(8)),
-                child: Text(status.toUpperCase(), style: TextStyle(fontSize: 10, color: statusColor, fontWeight: FontWeight.w700)),
+          Expanded(
+            flex: 2,
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+              decoration: BoxDecoration(
+                color: statusColor.withOpacity(0.1),
+                borderRadius: BorderRadius.circular(10),
               ),
-              const SizedBox(height: 2),
-              Text(methodLabel, style: const TextStyle(fontSize: 11, color: DiklyColors.textSecondary)),
-            ],
+              child: Text(
+                status,
+                style: TextStyle(fontSize: 11, color: statusColor, fontWeight: FontWeight.w600),
+              ),
+            ),
+          ),
+          Expanded(
+            flex: 2,
+            child: Text(
+              methodLabel,
+              style: const TextStyle(fontSize: 11, color: Color(0xFF6B7280)),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+            ),
+          ),
+          Expanded(
+            flex: 3,
+            child: Text(
+              checkInStr,
+              style: const TextStyle(fontSize: 11, color: Color(0xFF6B7280)),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+            ),
           ),
         ],
       ),
