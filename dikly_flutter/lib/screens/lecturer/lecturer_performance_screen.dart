@@ -4,9 +4,9 @@ import '../../core/api.dart';
 import '../../core/theme.dart';
 import '../../widgets/ds/dikly_ds.dart';
 
-final _lecturerQuizStatsProvider =
-    FutureProvider.autoDispose<List<Map<String, dynamic>>>(
-  (ref) => apiService.getLecturerQuizzesWithStats(),
+final _lecturerPerfProvider =
+    FutureProvider.autoDispose<Map<String, dynamic>>(
+  (ref) => apiService.getLecturerPerformance(),
 );
 
 class LecturerPerformanceScreen extends ConsumerWidget {
@@ -14,12 +14,12 @@ class LecturerPerformanceScreen extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final async = ref.watch(_lecturerQuizStatsProvider);
+    final async = ref.watch(_lecturerPerfProvider);
 
     return Scaffold(
       backgroundColor: DiklyColors.background,
       appBar: AppBar(
-        title: const Text('Performance'),
+        title: const Text('My Performance'),
         leading: BackButton(onPressed: () => Navigator.of(context).maybePop()),
       ),
       body: async.when(
@@ -35,169 +35,283 @@ class LecturerPerformanceScreen extends ConsumerWidget {
               const Text('Failed to load performance data'),
               const SizedBox(height: 8),
               TextButton(
-                onPressed: () => ref.refresh(_lecturerQuizStatsProvider),
+                onPressed: () => ref.refresh(_lecturerPerfProvider),
                 child: const Text('Retry'),
               ),
             ],
           ),
         ),
-        data: (quizzes) => RefreshIndicator(
-          onRefresh: () async => ref.refresh(_lecturerQuizStatsProvider),
-          child: ListView(
-            padding: const EdgeInsets.all(16),
-            children: [
-              DiklyScreenHeader(
-                title: 'Student Performance',
-                subtitle: 'Overview of student results across all your quizzes',
-              ),
-              if (quizzes.isEmpty)
-                Container(
-                  padding: const EdgeInsets.symmetric(vertical: 60, horizontal: 24),
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.circular(12),
-                    border: Border.all(color: DiklyColors.border),
-                  ),
-                  child: const Center(
-                    child: Text(
-                      'No quizzes yet. Create a quiz to see performance data.',
-                      style: TextStyle(fontSize: 13, color: DiklyColors.textSecondary),
-                      textAlign: TextAlign.center,
-                    ),
-                  ),
-                )
-              else
-                Container(
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.circular(12),
-                    border: Border.all(color: DiklyColors.border),
-                  ),
-                  child: Column(
-                    children: [
-                      // Table header
-                      Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-                        decoration: const BoxDecoration(
-                          color: Color(0xFFF9FAFB),
-                          borderRadius: BorderRadius.vertical(top: Radius.circular(12)),
-                          border: Border(bottom: BorderSide(color: DiklyColors.border, width: 0.5)),
-                        ),
-                        child: const Row(
-                          children: [
-                            Expanded(flex: 3, child: _TableHeader('QUIZ')),
-                            Expanded(flex: 2, child: _TableHeader('COURSE')),
-                            Expanded(flex: 2, child: _TableHeader('SUBMISSIONS')),
-                            Expanded(flex: 2, child: _TableHeader('AVG SCORE')),
-                            Expanded(flex: 3, child: _TableHeader('PASS RATE')),
-                            Expanded(flex: 2, child: _TableHeader('HIGHEST')),
-                            Expanded(flex: 2, child: _TableHeader('LOWEST')),
-                          ],
-                        ),
-                      ),
-                      ...quizzes.map((q) => _QuizRow(quiz: q)),
-                    ],
-                  ),
-                ),
-              const SizedBox(height: 32),
-            ],
-          ),
+        data: (data) => RefreshIndicator(
+          onRefresh: () async => ref.refresh(_lecturerPerfProvider),
+          child: _LecturerPerfBody(data: data),
         ),
       ),
     );
   }
 }
 
-class _TableHeader extends StatelessWidget {
-  final String text;
-  const _TableHeader(this.text);
-  @override
-  Widget build(BuildContext context) => Text(
-    text,
-    style: const TextStyle(fontSize: 10, fontWeight: FontWeight.w700, color: Color(0xFF9CA3AF), letterSpacing: 0.3),
-  );
-}
+class _LecturerPerfBody extends StatelessWidget {
+  final Map<String, dynamic> data;
 
-class _QuizRow extends StatelessWidget {
-  final Map<String, dynamic> quiz;
-  const _QuizRow({required this.quiz});
+  const _LecturerPerfBody({required this.data});
+
+  int get _totalSessions =>
+      (data['totalSessions'] as num?)?.toInt() ?? 0;
+
+  double get _avgAttendance =>
+      (data['avgAttendance'] as num?)?.toDouble() ?? 0.0;
+
+  int get _coursesActive =>
+      (data['coursesActive'] as num?)?.toInt() ?? 0;
+
+  double get _feedbackScore =>
+      (data['studentsFeedbackScore'] as num?)?.toDouble() ?? 0.0;
 
   @override
   Widget build(BuildContext context) {
-    final title = quiz['title']?.toString() ?? 'Untitled';
-    final stats = (quiz['stats'] as Map?) ?? {};
-    final courseTitle = (quiz['course'] is Map ? quiz['course']['title'] : null)?.toString() ?? '—';
-    final totalAttempts = (stats['totalAttempts'] as num?)?.toInt() ?? 0;
-    final avgScore = (stats['averageScore'] as num?)?.toDouble() ?? 0.0;
-    final passRate = (stats['passRate'] as num?)?.toDouble() ?? 0.0;
-    final highest = stats['highest'] != null ? '${(stats['highest'] as num).toStringAsFixed(0)}%' : '—%';
-    final lowest = stats['lowest'] != null ? '${(stats['lowest'] as num).toStringAsFixed(0)}%' : '—%';
+    final theme = Theme.of(context);
 
-    Color scoreColor;
-    if (avgScore >= 70) {
-      scoreColor = const Color(0xFF16A34A);
-    } else if (avgScore >= 50) {
-      scoreColor = const Color(0xFFD97706);
-    } else {
-      scoreColor = const Color(0xFFDC2626);
-    }
-
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 11),
-      decoration: const BoxDecoration(
-        border: Border(bottom: BorderSide(color: DiklyColors.border, width: 0.5)),
+    final metrics = [
+      _LecturerMetric(
+        label: 'Total Sessions Delivered',
+        rawValue: _totalSessions.toDouble(),
+        maxValue: 100,
+        displayValue: '$_totalSessions',
+        icon: Icons.video_library_outlined,
+        color: DiklyColors.primary,
       ),
-      child: Row(
+      _LecturerMetric(
+        label: 'Average Attendance',
+        rawValue: _avgAttendance,
+        maxValue: 100,
+        displayValue: '${_avgAttendance.toStringAsFixed(1)}%',
+        icon: Icons.people_outline_rounded,
+        color: DiklyColors.success,
+      ),
+      _LecturerMetric(
+        label: 'Active Courses',
+        rawValue: _coursesActive.toDouble(),
+        maxValue: 20,
+        displayValue: '$_coursesActive',
+        icon: Icons.book_outlined,
+        color: DiklyColors.warning,
+      ),
+      _LecturerMetric(
+        label: 'Student Feedback Score',
+        rawValue: _feedbackScore,
+        maxValue: 5,
+        displayValue: '${_feedbackScore.toStringAsFixed(1)} / 5',
+        icon: Icons.star_outline_rounded,
+        color: const Color(0xFF7C3AED),
+      ),
+    ];
+
+    return ListView(
+      padding: const EdgeInsets.all(16),
+      children: [
+        DiklyScreenHeader(
+          title: 'Student Performance',
+          subtitle: 'Overview of student results across all your quizzes',
+        ),
+        // 2x2 metric grid
+        GridView.count(
+          crossAxisCount: 2,
+          crossAxisSpacing: 12,
+          mainAxisSpacing: 12,
+          shrinkWrap: true,
+          physics: const NeverScrollableScrollPhysics(),
+          childAspectRatio: 1.4,
+          children: metrics.map((m) => _MetricCard(metric: m)).toList(),
+        ),
+        const SizedBox(height: 24),
+        Text(
+          'Performance Gauges',
+          style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700),
+        ),
+        const SizedBox(height: 12),
+        Container(
+          decoration: BoxDecoration(
+            color: DiklyColors.surface,
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: DiklyColors.border),
+          ),
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            children: metrics.map((m) => _GaugeRow(metric: m)).toList(),
+          ),
+        ),
+        const SizedBox(height: 24),
+        // Feedback stars card
+        Container(
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            color: DiklyColors.surface,
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: DiklyColors.border),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'Student Feedback',
+                style: theme.textTheme.titleSmall
+                    ?.copyWith(fontWeight: FontWeight.w600),
+              ),
+              const SizedBox(height: 12),
+              Row(
+                children: [
+                  ...List.generate(5, (i) {
+                    final filled = i < _feedbackScore.floor();
+                    final halfFilled = !filled &&
+                        i < _feedbackScore &&
+                        _feedbackScore - _feedbackScore.floor() >= 0.5;
+                    return Icon(
+                      halfFilled
+                          ? Icons.star_half_rounded
+                          : (filled ? Icons.star_rounded : Icons.star_border_rounded),
+                      color: DiklyColors.warning,
+                      size: 28,
+                    );
+                  }),
+                  const SizedBox(width: 12),
+                  Text(
+                    '${_feedbackScore.toStringAsFixed(1)} out of 5',
+                    style: theme.textTheme.bodyMedium
+                        ?.copyWith(fontWeight: FontWeight.w600),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 32),
+      ],
+    );
+  }
+}
+
+class _LecturerMetric {
+  final String label;
+  final double rawValue;
+  final double maxValue;
+  final String displayValue;
+  final IconData icon;
+  final Color color;
+
+  const _LecturerMetric({
+    required this.label,
+    required this.rawValue,
+    required this.maxValue,
+    required this.displayValue,
+    required this.icon,
+    required this.color,
+  });
+
+  double get progress => maxValue > 0
+      ? (rawValue / maxValue).clamp(0.0, 1.0)
+      : 0.0;
+}
+
+class _MetricCard extends StatelessWidget {
+  final _LecturerMetric metric;
+
+  const _MetricCard({required this.metric});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      decoration: BoxDecoration(
+        color: DiklyColors.surface,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: DiklyColors.border),
+      ),
+      padding: const EdgeInsets.all(14),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          Expanded(
-            flex: 3,
-            child: Text(title, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: DiklyColors.text), maxLines: 2, overflow: TextOverflow.ellipsis),
-          ),
-          Expanded(
-            flex: 2,
-            child: Text(courseTitle, style: const TextStyle(fontSize: 11, color: DiklyColors.textLight), maxLines: 1, overflow: TextOverflow.ellipsis),
-          ),
-          Expanded(
-            flex: 2,
-            child: Text('$totalAttempts', style: const TextStyle(fontSize: 12, color: DiklyColors.text)),
-          ),
-          Expanded(
-            flex: 2,
-            child: Text(
-              '${avgScore.toStringAsFixed(1)}%',
-              style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: scoreColor),
+          Container(
+            padding: const EdgeInsets.all(8),
+            decoration: BoxDecoration(
+              color: metric.color.withOpacity(0.1),
+              borderRadius: BorderRadius.circular(8),
             ),
+            child: Icon(metric.icon, size: 20, color: metric.color),
           ),
-          Expanded(
-            flex: 3,
-            child: Row(
-              children: [
-                Expanded(
-                  child: ClipRRect(
-                    borderRadius: BorderRadius.circular(3),
-                    child: LinearProgressIndicator(
-                      value: passRate / 100,
-                      backgroundColor: const Color(0xFFE5E7EB),
-                      valueColor: AlwaysStoppedAnimation<Color>(scoreColor),
-                      minHeight: 6,
-                    ),
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                metric.displayValue,
+                style: TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.w700,
+                  color: metric.color,
+                ),
+              ),
+              Text(
+                metric.label,
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(
+                  fontSize: 11,
+                  color: DiklyColors.textSecondary,
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _GaugeRow extends StatelessWidget {
+  final _LecturerMetric metric;
+
+  const _GaugeRow({required this.metric});
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(metric.icon, size: 16, color: metric.color),
+              const SizedBox(width: 6),
+              Expanded(
+                child: Text(
+                  metric.label,
+                  style: const TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w600,
+                    color: DiklyColors.textPrimary,
                   ),
                 ),
-                const SizedBox(width: 6),
-                Text(
-                  '${passRate.toStringAsFixed(0)}%',
-                  style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: scoreColor),
+              ),
+              Text(
+                metric.displayValue,
+                style: TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w700,
+                  color: metric.color,
                 ),
-              ],
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          ClipRRect(
+            borderRadius: BorderRadius.circular(4),
+            child: LinearProgressIndicator(
+              value: metric.progress,
+              backgroundColor: DiklyColors.background,
+              valueColor: AlwaysStoppedAnimation<Color>(metric.color),
+              minHeight: 8,
             ),
-          ),
-          Expanded(
-            flex: 2,
-            child: Text(highest, style: const TextStyle(fontSize: 11, color: Color(0xFF374151))),
-          ),
-          Expanded(
-            flex: 2,
-            child: Text(lowest, style: const TextStyle(fontSize: 11, color: Color(0xFF374151))),
           ),
         ],
       ),

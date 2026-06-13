@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'auth.dart';
+import 'theme.dart';
 import '../screens/auth/portal_selector.dart';
 import '../screens/auth/login.dart';
 import '../screens/student/student_shell.dart';
@@ -39,6 +40,8 @@ import '../screens/shared/profile_screen.dart';
 import '../screens/shared/timetable_screen.dart';
 import '../screens/shared/subscription_screen.dart';
 import '../screens/shared/faq_screen.dart';
+import '../screens/shared/contact_screen.dart';
+import '../screens/shared/about_screen.dart';
 import '../screens/shared/sign_in_out_screen.dart';
 import '../screens/shared/corporate_attendance_screen.dart';
 import '../screens/shared/shifts_screen.dart';
@@ -70,6 +73,10 @@ import '../screens/lecturer/lecturer_schedule_screen.dart';
 import '../screens/lecturer/lecturer_assignments_screen.dart';
 import '../screens/lecturer/lecturer_question_bank_screen.dart';
 import '../screens/splash_screen.dart';
+import '../screens/hod/hod_sessions_screen.dart';
+import '../screens/hod/hod_quiz_monitor_screen.dart';
+import '../screens/attendance/my_attendance_screen.dart';
+import '../screens/student/student_course_videos_screen.dart';
 
 // Smooth fade+slide transition used for all routes
 Page<void> _fadePage(GoRouterState state, Widget child) {
@@ -148,6 +155,7 @@ final routerProvider = Provider<GoRouter>((ref) {
       GoRoute(path: '/courses/:id', builder: (context, state) => CourseDetailScreen(courseId: state.pathParameters['id']!)),
 
       // Videos
+      GoRoute(path: '/student/course-videos', builder: (context, state) => const StudentCourseVideosScreen()),
       GoRoute(path: '/course-videos/:courseId', builder: (context, state) => CourseVideosScreen(courseId: state.pathParameters['courseId']!)),
       GoRoute(path: '/video-player', builder: (context, state) {
         final extra = state.extra as Map<String, dynamic>?;
@@ -155,7 +163,18 @@ final routerProvider = Provider<GoRouter>((ref) {
       }),
 
       // Attendance
-      GoRoute(path: '/attendance', builder: (context, state) => const AttendanceScreen()),
+      GoRoute(path: '/my-attendance', builder: (context, state) => const MyAttendanceScreen()),
+      GoRoute(
+        path: '/attendance',
+        builder: (context, state) => Scaffold(
+          backgroundColor: DiklyColors.background,
+          appBar: AppBar(
+            leading: const BackButton(),
+            title: const Text('Attendance'),
+          ),
+          body: const AttendanceScreen(),
+        ),
+      ),
 
       // Assignments
       GoRoute(path: '/assignments',     builder: (context, state) => const AssignmentsScreen()),
@@ -176,8 +195,8 @@ final routerProvider = Provider<GoRouter>((ref) {
       GoRoute(path: '/timetable',    builder: (context, state) => const TimetableScreen()),
       GoRoute(path: '/subscription', builder: (context, state) => const SubscriptionScreen()),
       GoRoute(path: '/faq',          builder: (context, state) => const FaqScreen()),
-      GoRoute(path: '/contact',      builder: (context, state) => const FaqScreen()),
-      GoRoute(path: '/about',        builder: (context, state) => const FaqScreen()),
+      GoRoute(path: '/contact',      builder: (context, state) => const ContactScreen()),
+      GoRoute(path: '/about',        builder: (context, state) => const AboutScreen()),
       GoRoute(path: '/performance',  builder: (context, state) => const PerformanceScreen()),
 
       // Corporate
@@ -202,6 +221,8 @@ final routerProvider = Provider<GoRouter>((ref) {
       GoRoute(path: '/employee/shift',  builder: (context, state) => const EmployeeShiftScreen()),
 
       // HOD
+      GoRoute(path: '/hod/sessions',        builder: (context, state) => const HodSessionsScreen()),
+      GoRoute(path: '/hod/quiz-monitor',    builder: (context, state) => const HodQuizMonitorScreen()),
       GoRoute(path: '/hod/approvals',       builder: (context, state) => const HodApprovalsScreen()),
       GoRoute(path: '/hod/course-approvals',builder: (context, state) => const HodCourseApprovalsScreen()),
       GoRoute(path: '/hod/locked-students', builder: (context, state) => const HodUnlockStudentsScreen()),
