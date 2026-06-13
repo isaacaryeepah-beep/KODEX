@@ -84,7 +84,6 @@ class _TimetableScreenState extends ConsumerState<TimetableScreen> {
     final async = ref.watch(_timetableProvider);
     final user = ref.watch(currentUserProvider);
     final isLecturer = user?.role == 'lecturer';
-    final isHod = user?.role == 'hod';
 
     return Scaffold(
       backgroundColor: DiklyColors.background,
@@ -118,12 +117,8 @@ class _TimetableScreenState extends ConsumerState<TimetableScreen> {
                 children: [
                   Expanded(
                     child: DiklyScreenHeader(
-                      title: isHod ? 'Department Timetable' : 'My Timetable',
-                      subtitle: isHod
-                          ? 'Read-only view of all department class slots'
-                          : isLecturer
-                              ? 'Your weekly class timetable — click any slot to edit'
-                              : 'Your weekly class timetable based on enrolled courses',
+                      title: 'My Timetable',
+                      subtitle: 'Your weekly class timetable based on enrolled courses',
                     ),
                   ),
                   OutlinedButton.icon(
@@ -138,23 +133,6 @@ class _TimetableScreenState extends ConsumerState<TimetableScreen> {
                       foregroundColor: const Color(0xFF374151),
                     ),
                   ),
-                  if (isLecturer) ...[
-                    const SizedBox(width: 8),
-                    ElevatedButton.icon(
-                      onPressed: () => ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(content: Text('Add Class — coming soon')),
-                      ),
-                      icon: const Icon(Icons.add, size: 14),
-                      label: const Text('Add Class', style: TextStyle(fontSize: 12)),
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: DiklyColors.primary,
-                        foregroundColor: Colors.white,
-                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                        elevation: 0,
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                      ),
-                    ),
-                  ],
                 ],
               ),
             ),
@@ -169,7 +147,6 @@ class _TimetableScreenState extends ConsumerState<TimetableScreen> {
                 child: _DaySchedule(
                   slots: _getSlotsForDay(data, _fullDays[_selectedDayIndex]),
                   colorResolver: _resolveColor,
-                  isLecturer: isLecturer,
                 ),
               ),
             ),
@@ -237,9 +214,8 @@ class _DayTabBar extends StatelessWidget {
 class _DaySchedule extends StatelessWidget {
   final List<Map<String, dynamic>> slots;
   final Color Function(Map<String, dynamic>) colorResolver;
-  final bool isLecturer;
 
-  const _DaySchedule({required this.slots, required this.colorResolver, this.isLecturer = false});
+  const _DaySchedule({required this.slots, required this.colorResolver});
 
   @override
   Widget build(BuildContext context) {
@@ -248,66 +224,28 @@ class _DaySchedule extends StatelessWidget {
         padding: const EdgeInsets.all(16),
         children: [
           Container(
-            padding: const EdgeInsets.symmetric(vertical: 40, horizontal: 24),
+            padding: const EdgeInsets.symmetric(vertical: 60, horizontal: 24),
             decoration: BoxDecoration(
               color: Colors.white,
               borderRadius: BorderRadius.circular(12),
               border: Border.all(color: DiklyColors.border),
             ),
-            child: Column(
+            child: const Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                const Icon(Icons.calendar_today_outlined, size: 48, color: Color(0xFF9CA3AF)),
-                const SizedBox(height: 16),
-                const Text(
+                Icon(Icons.calendar_today_outlined, size: 48, color: Color(0xFF9CA3AF)),
+                SizedBox(height: 16),
+                Text(
                   'No classes scheduled yet',
                   style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: Color(0xFF111827)),
                   textAlign: TextAlign.center,
                 ),
-                const SizedBox(height: 8),
+                SizedBox(height: 8),
                 Text(
-                  isLecturer
-                      ? 'Add your first class to build out your weekly timetable'
-                      : "Your lecturers haven't added timetable slots yet. Check back soon.",
-                  style: const TextStyle(fontSize: 13, color: Color(0xFF6B7280)),
+                  "Your lecturers haven't added timetable slots yet. Check back soon.",
+                  style: TextStyle(fontSize: 13, color: Color(0xFF6B7280)),
                   textAlign: TextAlign.center,
                 ),
-                if (isLecturer) ...[
-                  const SizedBox(height: 20),
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      ElevatedButton.icon(
-                        onPressed: () => ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(content: Text('Add Class — coming soon')),
-                        ),
-                        icon: const Icon(Icons.add, size: 14),
-                        label: const Text('Add Your First Class', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: DiklyColors.primary,
-                          foregroundColor: Colors.white,
-                          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                          elevation: 0,
-                        ),
-                      ),
-                      const SizedBox(width: 10),
-                      OutlinedButton.icon(
-                        onPressed: () => ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(content: Text('Import from My Courses — coming soon')),
-                        ),
-                        icon: const Icon(Icons.refresh, size: 14),
-                        label: const Text('Import from My Courses', style: TextStyle(fontSize: 13)),
-                        style: OutlinedButton.styleFrom(
-                          foregroundColor: const Color(0xFF374151),
-                          side: const BorderSide(color: Color(0xFFD1D5DB)),
-                          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                        ),
-                      ),
-                    ],
-                  ),
-                ],
               ],
             ),
           ),

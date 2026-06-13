@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/api.dart';
-import '../../core/auth.dart';
 import '../../core/theme.dart';
 import '../../widgets/ds/dikly_ds.dart';
 
@@ -35,8 +34,6 @@ class HodCoursesScreen extends ConsumerWidget {
       data: (data) {
         final courses = (data['courses'] as List?)?.cast<Map<String, dynamic>>() ?? [];
         final count = courses.length;
-        final dept = ref.watch(currentUserProvider)?.department ?? '';
-        final deptLabel = dept.isNotEmpty ? 'in $dept · ' : '';
 
         return RefreshIndicator(
           onRefresh: () async => ref.refresh(_hodCourseOverviewProvider),
@@ -49,7 +46,7 @@ class HodCoursesScreen extends ConsumerWidget {
                   Expanded(
                     child: DiklyScreenHeader(
                       title: 'Course Oversight',
-                      subtitle: '$count course${count == 1 ? '' : 's'} ${deptLabel}last 30 days activity shown',
+                      subtitle: '$count course${count == 1 ? '' : 's'} · last 30 days activity shown',
                     ),
                   ),
                   OutlinedButton(
