@@ -38,12 +38,19 @@ class _PortalSelectScreenState extends State<PortalSelectScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFF0F1535),
-      body: SafeArea(
-        child: SingleChildScrollView(
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 32),
-            child: Column(
+      body: Stack(
+        fit: StackFit.expand,
+        children: [
+          // Background photo
+          Image.asset('assets/login-bg.jpg', fit: BoxFit.cover),
+          // Dark overlay matching web app: rgba(20,22,40,0.50)
+          Container(color: const Color(0x80141628)),
+          // Content
+          SafeArea(
+            child: SingleChildScrollView(
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 32),
+                child: Column(
               children: [
                 // Logo + brand
                 _buildBrand(),
@@ -141,10 +148,10 @@ class _PortalSelectScreenState extends State<PortalSelectScreen> {
                     ],
                   ),
                 ),
-              ],
+              ),
             ),
           ),
-        ),
+        ],
       ),
     );
   }
