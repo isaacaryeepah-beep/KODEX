@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/api.dart';
+import '../../core/auth.dart';
 import '../../core/theme.dart';
 import '../../models/course.dart';
 import '../../widgets/ds/dikly_ds.dart';
@@ -15,11 +16,17 @@ class GradeBookScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final async = ref.watch(_gradeBookProvider);
+    final user = ref.watch(currentUserProvider);
+    final isAdmin = ['admin', 'superadmin', 'lecturer', 'hod'].contains(user?.role ?? '');
+    final title = isAdmin ? 'Grade Book' : 'My Grades';
+    final subtitle = isAdmin
+        ? 'Manage grades across your courses'
+        : 'Your academic performance across all courses';
 
     return Scaffold(
       backgroundColor: DiklyColors.background,
       appBar: AppBar(
-        title: const Text('My Grades'),
+        title: Text(title),
         leading: const BackButton(),
       ),
       body: async.when(
@@ -34,8 +41,8 @@ class GradeBookScreen extends ConsumerWidget {
             padding: const EdgeInsets.all(16),
             children: [
               DiklyScreenHeader(
-                title: 'My Grades',
-                subtitle: 'Your academic performance across all courses',
+                title: title,
+                subtitle: subtitle,
               ),
               if (courses.isEmpty)
                 Container(

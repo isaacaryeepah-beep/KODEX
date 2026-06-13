@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../../core/api.dart';
+import '../../core/auth.dart';
 import '../../core/theme.dart';
 
 // ── Subscription data provider ────────────────────────────────────────────────
@@ -16,15 +17,39 @@ final _subscriptionProvider = FutureProvider.autoDispose<Map<String, dynamic>>(
   },
 );
 
-// ── Static plan features ──────────────────────────────────────────────────────
+// ── Role-based plan config ────────────────────────────────────────────────────
 
-const _features = [
-  'Full student portal access',
-  'Attend classes & mark attendance',
-  'Take quizzes & assignments',
-  'View grades & results',
-  'Access the secure exam portal',
-];
+class _PlanConfig {
+  final String price;
+  final List<String> features;
+  final String trialBanner;
+
+  const _PlanConfig({required this.price, required this.features, required this.trialBanner});
+}
+
+const _studentPlan = _PlanConfig(
+  price: '₵20',
+  features: [
+    'Full student portal access',
+    'Attend classes & mark attendance',
+    'Take quizzes & assignments',
+    'View grades & results',
+    'Access the secure exam portal',
+  ],
+  trialBanner: 'You received a 45-day free trial on account creation. After it ends, subscribe for ₵20/semester to keep access.',
+);
+
+const _staffPlan = _PlanConfig(
+  price: '₵120',
+  features: [
+    'Full platform access',
+    'Attendance marking & session management',
+    'Assessment creation & grading',
+    'Grade book & reports',
+    'Renew any time — days stack up',
+  ],
+  trialBanner: '30-day free trial active. Subscribe before it ends to avoid interruption.',
+);
 
 // ── Screen ────────────────────────────────────────────────────────────────────
 
@@ -34,6 +59,9 @@ class SubscriptionScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final async = ref.watch(_subscriptionProvider);
+    final user = ref.watch(currentUserProvider);
+    final isStaff = ['lecturer', 'hod', 'admin', 'superadmin', 'manager'].contains(user?.role ?? '');
+    final plan = isStaff ? _staffPlan : _studentPlan;
 
     final data = async.maybeWhen(data: (d) => d, orElse: () => <String, dynamic>{});
     final statusRaw = data['status']?.toString() ?? 'trial';
@@ -62,9 +90,9 @@ class SubscriptionScreen extends ConsumerWidget {
             style: TextStyle(fontSize: 26, fontWeight: FontWeight.w800, color: Color(0xFF111827)),
           ),
           const SizedBox(height: 4),
-          const Text(
-            'Your personal DIKLY access · ₵20 / semester · Paystack only',
-            style: TextStyle(fontSize: 13, color: Color(0xFF6B7280)),
+          Text(
+            'Your personal DIKLY access · ${plan.price} / semester · Paystack only',
+            style: const TextStyle(fontSize: 13, color: Color(0xFF6B7280)),
           ),
 
           const SizedBox(height: 20),
@@ -130,8 +158,8 @@ class SubscriptionScreen extends ConsumerWidget {
                     const Text('Student Semester Plan',
                         style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: Color(0xFF111827))),
                     const Spacer(),
-                    const Text('₵20',
-                        style: TextStyle(fontSize: 28, fontWeight: FontWeight.w800, color: Color(0xFF2563EB))),
+                    Text(plan.price,
+                        style: const TextStyle(fontSize: 28, fontWeight: FontWeight.w800, color: Color(0xFF2563EB))),
                   ],
                 ),
 
@@ -156,7 +184,7 @@ class SubscriptionScreen extends ConsumerWidget {
                 const SizedBox(height: 14),
 
                 // Feature bullets
-                ..._features.map((f) => Padding(
+                ...plan.features.map((f) => Padding(
                   padding: const EdgeInsets.only(bottom: 8),
                   child: Row(
                     crossAxisAlignment: CrossAxisAlignment.start,
@@ -195,8 +223,7 @@ class SubscriptionScreen extends ConsumerWidget {
                       const SizedBox(width: 8),
                       Expanded(
                         child: Text(
-                          'You received a 45-day free trial on account creation. After it ends, '
-                          'subscribe for ₵20/semester to keep access.',
+                          plan.trialBanner,
                           style: const TextStyle(fontSize: 12, color: Color(0xFF92400E), height: 1.5),
                         ),
                       ),
@@ -220,9 +247,9 @@ class SubscriptionScreen extends ConsumerWidget {
                       padding: const EdgeInsets.symmetric(vertical: 14),
                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
                     ),
-                    child: const Text(
-                      'Pay ₵20 with Paystack',
-                      style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700),
+                    child: Text(
+                      'Pay ${plan.price} with Paystack',
+                      style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w700),
                     ),
                   ),
                 ),

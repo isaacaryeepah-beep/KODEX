@@ -90,6 +90,8 @@ class LecturerPerformanceScreen extends ConsumerWidget {
                             Expanded(flex: 2, child: _TableHeader('SUBMISSIONS')),
                             Expanded(flex: 2, child: _TableHeader('AVG SCORE')),
                             Expanded(flex: 3, child: _TableHeader('PASS RATE')),
+                            Expanded(flex: 2, child: _TableHeader('HIGHEST')),
+                            Expanded(flex: 2, child: _TableHeader('LOWEST')),
                           ],
                         ),
                       ),
@@ -128,6 +130,8 @@ class _QuizRow extends StatelessWidget {
     final totalAttempts = (stats['totalAttempts'] as num?)?.toInt() ?? 0;
     final avgScore = (stats['averageScore'] as num?)?.toDouble() ?? 0.0;
     final passRate = (stats['passRate'] as num?)?.toDouble() ?? 0.0;
+    final highest = stats['highest'] != null ? '${(stats['highest'] as num).toStringAsFixed(0)}%' : '—%';
+    final lowest = stats['lowest'] != null ? '${(stats['lowest'] as num).toStringAsFixed(0)}%' : '—%';
 
     Color scoreColor;
     if (avgScore >= 70) {
@@ -186,6 +190,14 @@ class _QuizRow extends StatelessWidget {
                 ),
               ],
             ),
+          ),
+          Expanded(
+            flex: 2,
+            child: Text(highest, style: const TextStyle(fontSize: 11, color: Color(0xFF374151))),
+          ),
+          Expanded(
+            flex: 2,
+            child: Text(lowest, style: const TextStyle(fontSize: 11, color: Color(0xFF374151))),
           ),
         ],
       ),
