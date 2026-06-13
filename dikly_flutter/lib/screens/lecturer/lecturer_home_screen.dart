@@ -104,7 +104,7 @@ class LecturerHomeScreen extends ConsumerWidget {
                     children: [
                       Expanded(
                         child: ElevatedButton.icon(
-                          onPressed: () => context.push('/sessions'),
+                          onPressed: () => context.push('/lecturer/sessions'),
                           icon: const Icon(Icons.play_circle_outline_rounded, size: 16),
                           label: const Text('Start Session'),
                           style: ElevatedButton.styleFrom(
