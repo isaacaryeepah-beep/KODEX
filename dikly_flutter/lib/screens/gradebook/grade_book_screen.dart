@@ -61,7 +61,18 @@ class GradeBookScreen extends ConsumerWidget {
                   ),
                 )
               else
-                ...courses.map((c) => _CourseGradeCard(course: c)),
+                GridView.builder(
+                  shrinkWrap: true,
+                  physics: const NeverScrollableScrollPhysics(),
+                  gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                    crossAxisCount: 2,
+                    crossAxisSpacing: 12,
+                    mainAxisSpacing: 12,
+                    childAspectRatio: 0.9,
+                  ),
+                  itemCount: courses.length,
+                  itemBuilder: (_, i) => _CourseGradeCard(course: courses[i]),
+                ),
               const SizedBox(height: 24),
             ],
           ),
