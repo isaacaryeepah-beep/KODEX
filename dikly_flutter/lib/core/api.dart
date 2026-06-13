@@ -628,6 +628,20 @@ class ApiService {
     return (list as List).cast<Map<String, dynamic>>();
   }
 
+  Future<List<Map<String, dynamic>>> getMyAttendanceHistory() async {
+    final response = await _dio.get('/api/attendance-sessions/my-attendance');
+    final data = response.data;
+    final list = data['records'] ?? data['data'] ?? (data is List ? data : []);
+    return (list as List).cast<Map<String, dynamic>>();
+  }
+
+  Future<List<Map<String, dynamic>>> getHodSessions() async {
+    final response = await _dio.get('/api/hod/sessions');
+    final data = response.data;
+    final list = data['sessions'] ?? data['data'] ?? (data is List ? data : []);
+    return (list as List).cast<Map<String, dynamic>>();
+  }
+
   Future<Map<String, dynamic>> getHodDeptStats() async {
     final response = await _dio.get('/api/hod/dashboard-stats');
     return (response.data as Map<String, dynamic>?) ?? {};
@@ -731,6 +745,13 @@ class ApiService {
     final response = await _dio.get('/api/performance/lecturer');
     final data = response.data;
     return (data['data'] ?? data) as Map<String, dynamic>;
+  }
+
+  Future<List<Map<String, dynamic>>> getLecturerQuizzesWithStats() async {
+    final response = await _dio.get('/api/lecturer/quizzes');
+    final data = response.data;
+    final list = data['quizzes'] ?? data['data'] ?? [];
+    return (list as List).cast<Map<String, dynamic>>();
   }
 
   // Subscription
