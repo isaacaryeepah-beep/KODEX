@@ -28,7 +28,7 @@ class _HodShellState extends ConsumerState<HodShell> {
     _index = widget.initialTab;
   }
 
-  static const _color = Color(0xFF7C2D12);
+  static const _color = Color(0xFF0891B2); // HOD teal accent
 
   static const _labels = ['Home', 'Courses', 'Staff', 'Reports'];
   static const _icons = [
