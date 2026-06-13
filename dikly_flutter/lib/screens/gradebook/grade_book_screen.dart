@@ -129,7 +129,7 @@ class _CourseGradeCard extends StatelessWidget {
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                 textStyle: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
               ),
-              child: const Text('Open →'),
+              child: const Text('View Grades →'),
             ),
           ),
         ],

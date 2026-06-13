@@ -48,7 +48,7 @@ class _StudentCoursesScreenState extends ConsumerState<StudentCoursesScreen> {
               // ── Header ──────────────────────────────────────────────
               DiklyScreenHeader(
                 title: 'My Courses',
-                subtitle: '${courses.length} enrolled course${courses.length == 1 ? '' : 's'}',
+                subtitle: 'Your enrolled academic courses',
               ),
 
               // ── Search bar ──────────────────────────────────────────
