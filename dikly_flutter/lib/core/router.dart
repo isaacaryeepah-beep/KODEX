@@ -66,6 +66,7 @@ import '../screens/admin/admin_programmes_screen.dart';
 import '../screens/admin/admin_unlock_students_screen.dart';
 import '../screens/admin/admin_class_reps_screen.dart';
 import '../screens/admin/admin_reports_screen.dart';
+import '../screens/admin/admin_devices_screen.dart';
 import '../screens/lecturer/lecturer_performance_screen.dart';
 import '../screens/lecturer/lecturer_attendance_device_screen.dart';
 import '../screens/lecturer/lecturer_search_screen.dart';
@@ -209,6 +210,7 @@ final routerProvider = Provider<GoRouter>((ref) {
 
       // Admin
       GoRoute(path: '/admin/users',       builder: (context, state) => const UsersScreen()),
+      GoRoute(path: '/admin/devices',     builder: (context, state) => const AdminDevicesScreen()),
       GoRoute(path: '/admin/branches',    builder: (context, state) => const BranchesScreen()),
       GoRoute(path: '/admin/audit-logs',  builder: (context, state) => const AuditLogsScreen()),
       GoRoute(path: '/admin/reports',     builder: (context, state) => const AdminReportsScreen()),
