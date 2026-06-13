@@ -448,6 +448,12 @@ class _DeptCard extends StatelessWidget {
     final lecturers = members.where((u) => u.role == 'lecturer').length;
     final hod = members.firstWhere((u) => u.role == 'hod', orElse: () => members.first);
     final hodName = hod.role == 'hod' ? hod.name.toUpperCase() : '—';
+    final levels = members
+        .where((u) => u.role == 'student' && u.level != null && u.level!.isNotEmpty)
+        .map((u) => u.level!)
+        .toSet()
+        .toList()
+      ..sort();
 
     return Container(
       decoration: BoxDecoration(
@@ -493,9 +499,23 @@ class _DeptCard extends StatelessWidget {
               children: [
                 _StatCol(label: 'STUDENTS', value: students),
                 _StatCol(label: 'LECTURERS', value: lecturers),
-                _StatCol(label: 'TOTAL', value: members.length),
+                _StatCol(label: 'LEVELS', value: levels.isEmpty ? 0 : levels.length),
               ],
             ),
+            if (levels.isNotEmpty) ...[
+              const SizedBox(height: 6),
+              Wrap(
+                spacing: 4,
+                children: levels.map((l) => Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                  decoration: BoxDecoration(
+                    color: color.withOpacity(0.1),
+                    borderRadius: BorderRadius.circular(4),
+                  ),
+                  child: Text(l, style: TextStyle(fontSize: 9, fontWeight: FontWeight.w700, color: color)),
+                )).toList(),
+              ),
+            ],
             const Spacer(),
             GestureDetector(
               onTap: onOpen,
