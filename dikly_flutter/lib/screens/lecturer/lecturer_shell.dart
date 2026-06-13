@@ -68,7 +68,7 @@ class _LecturerShellState extends ConsumerState<LecturerShell> {
     ]),
     DrawerSection(header: 'INSIGHTS', items: [
       DrawerItem(Icons.bar_chart_outlined, 'Performance', '/lecturer/performance'),
-      DrawerItem(Icons.assessment_outlined, 'Reports', '/reports'),
+      DrawerItem(Icons.assessment_outlined, 'Reports', '/lecturer/performance'),
     ]),
     DrawerSection(items: [
       DrawerItem(Icons.campaign_outlined, 'Announcements', '/announcements'),

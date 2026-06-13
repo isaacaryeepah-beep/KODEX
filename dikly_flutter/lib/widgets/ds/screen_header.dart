@@ -4,6 +4,8 @@ import 'package:flutter/material.dart';
 class DiklyScreenHeader extends StatelessWidget {
   final String title;
   final String? subtitle;
+  /// Optional rich-text widget to replace [subtitle] when bold/color styling is needed.
+  final Widget? subtitleWidget;
   final Widget? action;
   final EdgeInsetsGeometry padding;
 
@@ -11,6 +13,7 @@ class DiklyScreenHeader extends StatelessWidget {
     super.key,
     required this.title,
     this.subtitle,
+    this.subtitleWidget,
     this.action,
     this.padding = const EdgeInsets.fromLTRB(0, 0, 0, 16),
   });
@@ -35,7 +38,10 @@ class DiklyScreenHeader extends StatelessWidget {
                     height: 1.2,
                   ),
                 ),
-                if (subtitle != null) ...[
+                if (subtitleWidget != null) ...[
+                  const SizedBox(height: 3),
+                  subtitleWidget!,
+                ] else if (subtitle != null) ...[
                   const SizedBox(height: 3),
                   Text(
                     subtitle!,
