@@ -77,6 +77,7 @@ import '../screens/lecturer/lecturer_schedule_screen.dart';
 import '../screens/lecturer/lecturer_assignments_screen.dart';
 import '../screens/lecturer/lecturer_question_bank_screen.dart';
 import '../screens/lecturer/lecturer_sessions_screen.dart';
+import '../screens/lecturer/lecturer_course_videos_screen.dart';
 import '../screens/splash_screen.dart';
 import '../screens/hod/hod_sessions_screen.dart';
 import '../screens/hod/hod_quiz_monitor_screen.dart';
@@ -263,6 +264,7 @@ final routerProvider = Provider<GoRouter>((ref) {
 
       // Lecturer
       GoRoute(path: '/lecturer/sessions',         builder: (context, state) => const LecturerSessionsScreen()),
+      GoRoute(path: '/lecturer/course-videos',    builder: (context, state) => const LecturerCourseVideosScreen()),
       GoRoute(path: '/lecturer/performance',     builder: (context, state) => const LecturerPerformanceScreen()),
       GoRoute(path: '/lecturer/attendance-device', builder: (context, state) => const LecturerAttendanceDeviceScreen()),
       GoRoute(path: '/lecturer/search',          builder: (context, state) => const LecturerSearchScreen()),
