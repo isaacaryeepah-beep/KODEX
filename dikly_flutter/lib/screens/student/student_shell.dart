@@ -42,7 +42,7 @@ class _StudentShellState extends ConsumerState<StudentShell> {
     ]),
     DrawerSection(header: 'ATTENDANCE', items: [
       DrawerItem(Icons.check_circle_outline, 'Mark Attendance', '/attendance'),
-      DrawerItem(Icons.history_outlined, 'My Attendance', '/attendance'),
+      DrawerItem(Icons.history_outlined, 'My Attendance', '/my-attendance'),
     ]),
     DrawerSection(header: 'ACADEMIC', items: [
       DrawerItem(Icons.book_outlined, 'My Courses', '/courses'),
@@ -51,7 +51,7 @@ class _StudentShellState extends ConsumerState<StudentShell> {
       DrawerItem(Icons.assignment_outlined, 'Assignment', '/assignments'),
       DrawerItem(Icons.grade_outlined, 'My Grades', '/gradebook'),
       DrawerItem(Icons.assessment_outlined, 'My Results', '/quiz-history'),
-      DrawerItem(Icons.video_library_outlined, 'Course Videos', '/courses'),
+      DrawerItem(Icons.video_library_outlined, 'Course Videos', '/student/course-videos'),
     ]),
     DrawerSection(header: 'COMMUNICATE', items: [
       DrawerItem(Icons.message_outlined, 'Messages', '/messages'),
@@ -59,6 +59,7 @@ class _StudentShellState extends ConsumerState<StudentShell> {
       DrawerItem(Icons.campaign_outlined, 'Announcements', '/announcements'),
     ]),
     DrawerSection(header: 'SUPPORT', items: [
+      DrawerItem(Icons.support_agent_outlined, 'Support & Helpdesk', '/support'),
       DrawerItem(Icons.help_outline, 'FAQ Center', '/faq'),
       DrawerItem(Icons.card_membership_outlined, 'Subscription', '/subscription'),
       DrawerItem(Icons.person_outlined, 'Profile', '/profile'),
