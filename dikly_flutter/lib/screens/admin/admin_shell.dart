@@ -50,7 +50,7 @@ class _AdminShellState extends ConsumerState<AdminShell> {
     DrawerSection(header: 'ACADEMIC', items: [
       DrawerItem(Icons.book_outlined, 'Courses', '/courses'),
       DrawerItem(Icons.task_alt_outlined, 'Course Approvals', '/admin/course-approvals'),
-      DrawerItem(Icons.shield_outlined, 'Proctored/Snap Quiz', '/quizzes'),
+      DrawerItem(Icons.shield_outlined, 'Proctored/Snap Quiz', '/admin/quizzes'),
       DrawerItem(Icons.grade_outlined, 'Grade Book', '/gradebook'),
       DrawerItem(Icons.campaign_outlined, 'Announcements', '/announcements'),
       DrawerItem(Icons.school_outlined, 'Programmes', '/admin/programmes'),

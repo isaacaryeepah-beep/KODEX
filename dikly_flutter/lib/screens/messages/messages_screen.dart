@@ -7,7 +7,6 @@ import '../../core/theme.dart';
 import '../../models/message.dart';
 import '../../models/user.dart';
 import '../../widgets/app_shell.dart';
-
 import '../../widgets/ds/dikly_ds.dart';
 
 class MessagesScreen extends ConsumerStatefulWidget {
@@ -176,27 +175,119 @@ class _MessagesScreenState extends ConsumerState<MessagesScreen> {
     );
   }
 
+  void _startHodRequest() async {
+    await _loadUsersIfNeeded();
+    if (!mounted) return;
+
+    final hods = _users.where((u) => u.role == 'hod').toList();
+    if (hods.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('No HOD found in your institution')),
+      );
+      return;
+    }
+    final hod = hods.first;
+    final msgController = TextEditingController();
+
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: DiklyColors.surface,
+        title: const Text('HOD Request', style: TextStyle(color: DiklyColors.text)),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('To: ${hod.name}', style: const TextStyle(fontSize: 13, color: DiklyColors.textSecondary)),
+            const SizedBox(height: 12),
+            TextField(
+              controller: msgController,
+              maxLines: 4,
+              decoration: const InputDecoration(
+                labelText: 'Message',
+                labelStyle: TextStyle(color: DiklyColors.textSecondary),
+                hintText: 'Type your request...',
+                hintStyle: TextStyle(color: DiklyColors.textMuted),
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
+          ElevatedButton(
+            onPressed: msgController.text.trim().isEmpty ? null : () async {
+              Navigator.pop(ctx);
+              try {
+                final conv = await apiService.startConversation(hod.id, msgController.text.trim());
+                await _loadConversations();
+                if (mounted) _openConversation(conv);
+              } catch (e) {
+                if (mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(content: Text('Error: $e'), backgroundColor: DiklyColors.error),
+                  );
+                }
+              }
+            },
+            child: const Text('Send Request'),
+          ),
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     if (_activeConversation != null) {
       return _buildChatScreen(_activeConversation!);
     }
 
+    final user = ref.watch(currentUserProvider);
+    final isStudent = user?.role == 'student';
+
     return AppShell(
       title: 'Messages',
-      floatingActionButton: FloatingActionButton(
-        onPressed: _showNewMessageDialog,
-        backgroundColor: DiklyColors.primary,
-        child: const Icon(Icons.edit_rounded, color: Colors.white),
-      ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Padding(
-            padding: EdgeInsets.fromLTRB(16, 16, 16, 0),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
             child: DiklyScreenHeader(
               title: 'Messages',
               subtitle: 'Your conversations',
+              action: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  if (isStudent) ...[
+                    ElevatedButton(
+                      onPressed: _startHodRequest,
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: const Color(0xFFF59E0B),
+                        foregroundColor: Colors.white,
+                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                        elevation: 0,
+                        textStyle: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
+                      ),
+                      child: const Text('HOD Request'),
+                    ),
+                    const SizedBox(width: 8),
+                  ],
+                  ElevatedButton.icon(
+                    onPressed: _showNewMessageDialog,
+                    icon: const Icon(Icons.add, size: 16),
+                    label: const Text('New'),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: DiklyColors.primary,
+                      foregroundColor: Colors.white,
+                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                      elevation: 0,
+                      textStyle: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
+                    ),
+                  ),
+                ],
+              ),
             ),
           ),
           const SizedBox(height: 8),
@@ -222,9 +313,7 @@ class _MessagesScreenState extends ConsumerState<MessagesScreen> {
                         ? DiklyEmptyState(
                             icon: Icons.message_outlined,
                             title: 'No conversations yet',
-                            subtitle: 'Start a conversation',
-                            buttonLabel: 'New Message',
-                            onButton: _showNewMessageDialog,
+                            subtitle: 'Click + New to start one',
                           )
                         : RefreshIndicator(
                             onRefresh: _loadConversations,
