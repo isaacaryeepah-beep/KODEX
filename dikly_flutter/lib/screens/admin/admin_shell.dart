@@ -45,7 +45,6 @@ class _AdminShellState extends ConsumerState<AdminShell> {
       DrawerItem(Icons.search_outlined, 'Search', '/admin/search'),
       DrawerItem(Icons.people_outlined, 'Users', '/admin/users'),
       DrawerItem(Icons.play_circle_outline, 'Sessions', '/admin/sessions'),
-      DrawerItem(Icons.devices_outlined, 'Classroom Devices', '/admin/devices'),
     ]),
     DrawerSection(header: 'ACADEMIC', items: [
       DrawerItem(Icons.book_outlined, 'Courses', '/courses'),
@@ -56,14 +55,16 @@ class _AdminShellState extends ConsumerState<AdminShell> {
       DrawerItem(Icons.school_outlined, 'Programmes', '/admin/programmes'),
       DrawerItem(Icons.lock_open_outlined, 'Unlock Students', '/admin/unlock-students'),
       DrawerItem(Icons.people_alt_outlined, 'Class Reps', '/admin/class-reps'),
+      DrawerItem(Icons.devices_outlined, 'Classroom Devices', '/admin/devices'),
+    ]),
+    DrawerSection(header: 'COMMUNICATE', items: [
+      DrawerItem(Icons.message_outlined, 'Messages', '/messages'),
+      DrawerItem(Icons.video_call_outlined, 'Meetings', '/meetings'),
     ]),
     DrawerSection(header: 'INSIGHTS', items: [
       DrawerItem(Icons.assessment_outlined, 'Reports', '/admin/reports'),
-      DrawerItem(Icons.trending_up_outlined, 'Performance', '/performance'),
     ]),
     DrawerSection(header: 'SUPPORT', items: [
-      DrawerItem(Icons.business_outlined, 'Branches', '/admin/branches'),
-      DrawerItem(Icons.history_outlined, 'Audit Logs', '/admin/audit-logs'),
       DrawerItem(Icons.card_membership_outlined, 'Subscription', '/subscription'),
       DrawerItem(Icons.person_outlined, 'Profile', '/profile'),
       DrawerItem(Icons.help_outline, 'FAQ Center', '/faq'),
