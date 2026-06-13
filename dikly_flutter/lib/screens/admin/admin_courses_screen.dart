@@ -66,7 +66,7 @@ class _AdminCoursesScreenState extends ConsumerState<AdminCoursesScreen> {
                 action: ElevatedButton.icon(
                   onPressed: _showCreateDialog,
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFF16A34A),
+                    backgroundColor: const Color(0xFF2563EB),
                     foregroundColor: Colors.white,
                     padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
