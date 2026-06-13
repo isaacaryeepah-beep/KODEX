@@ -42,6 +42,7 @@ import '../screens/shared/subscription_screen.dart';
 import '../screens/shared/faq_screen.dart';
 import '../screens/shared/contact_screen.dart';
 import '../screens/shared/about_screen.dart';
+import '../screens/shared/support_screen.dart';
 import '../screens/shared/sign_in_out_screen.dart';
 import '../screens/shared/corporate_attendance_screen.dart';
 import '../screens/shared/shifts_screen.dart';
@@ -197,6 +198,7 @@ final routerProvider = Provider<GoRouter>((ref) {
       GoRoute(path: '/faq',          builder: (context, state) => const FaqScreen()),
       GoRoute(path: '/contact',      builder: (context, state) => const ContactScreen()),
       GoRoute(path: '/about',        builder: (context, state) => const AboutScreen()),
+      GoRoute(path: '/support',      builder: (context, state) => const SupportScreen()),
       GoRoute(path: '/performance',  builder: (context, state) => const PerformanceScreen()),
 
       // Corporate
