@@ -29,7 +29,7 @@ class _AdminCoursesScreenState extends ConsumerState<AdminCoursesScreen> {
         actions: [
           TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')),
           ElevatedButton(
-            style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFFDC2626)),
+            style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF2563EB)),
             onPressed: () async {
               Navigator.pop(context);
               try {
@@ -66,14 +66,14 @@ class _AdminCoursesScreenState extends ConsumerState<AdminCoursesScreen> {
                 action: ElevatedButton.icon(
                   onPressed: _showCreateDialog,
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFFDC2626),
+                    backgroundColor: const Color(0xFF2563EB),
                     foregroundColor: Colors.white,
                     padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
                     elevation: 0,
                   ),
                   icon: const Icon(Icons.add, size: 18),
-                  label: const Text('+ Create Course', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
+                  label: const Text('Create Course', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
                 ),
               ),
               if (courses.isEmpty)
