@@ -45,6 +45,7 @@ class _AdminShellState extends ConsumerState<AdminShell> {
       DrawerItem(Icons.search_outlined, 'Search', '/admin/search'),
       DrawerItem(Icons.people_outlined, 'Users', '/admin/users'),
       DrawerItem(Icons.play_circle_outline, 'Sessions', '/sessions'),
+      DrawerItem(Icons.devices_outlined, 'Classroom Devices', '/admin/devices'),
     ]),
     DrawerSection(header: 'ACADEMIC', items: [
       DrawerItem(Icons.book_outlined, 'Courses', '/courses'),
