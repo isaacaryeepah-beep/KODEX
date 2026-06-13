@@ -59,8 +59,9 @@ const _portalInfo = {
 
 class LoginScreen extends ConsumerStatefulWidget {
   final String role;
+  final String? portalModeOverride;
 
-  const LoginScreen({super.key, required this.role});
+  const LoginScreen({super.key, required this.role, this.portalModeOverride});
 
   @override
   ConsumerState<LoginScreen> createState() => _LoginScreenState();
@@ -73,9 +74,14 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
   final _institutionCodeCtrl = TextEditingController();
   bool _obscurePassword = true;
 
-  Map<String, dynamic> get _info =>
-      (_portalInfo[widget.role] ?? _portalInfo['student'])!
-          as Map<String, dynamic>;
+  Map<String, dynamic> get _info {
+    final base = Map<String, dynamic>.from(
+        (_portalInfo[widget.role] ?? _portalInfo['student'])! as Map<String, dynamic>);
+    if (widget.portalModeOverride != null) {
+      base['portalMode'] = widget.portalModeOverride == 'corp' ? 'corporate' : 'academic';
+    }
+    return base;
+  }
 
   bool get _isStudent => widget.role == 'student';
   bool get _needsInstitutionCode =>

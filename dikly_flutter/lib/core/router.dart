@@ -111,7 +111,10 @@ final routerProvider = Provider<GoRouter>((ref) {
         path: '/login/:role',
         pageBuilder: (context, state) => _fadePage(
           state,
-          LoginScreen(role: state.pathParameters['role'] ?? 'student'),
+          LoginScreen(
+            role: state.pathParameters['role'] ?? 'student',
+            portalModeOverride: state.extra as String?,
+          ),
         ),
       ),
 
