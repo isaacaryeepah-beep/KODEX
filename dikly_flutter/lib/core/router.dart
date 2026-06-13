@@ -65,6 +65,7 @@ import '../screens/admin/admin_course_approvals_screen.dart';
 import '../screens/admin/admin_programmes_screen.dart';
 import '../screens/admin/admin_unlock_students_screen.dart';
 import '../screens/admin/admin_class_reps_screen.dart';
+import '../screens/admin/admin_quizzes_screen.dart';
 import '../screens/admin/admin_reports_screen.dart';
 import '../screens/admin/admin_devices_screen.dart';
 import '../screens/lecturer/lecturer_performance_screen.dart';
@@ -255,6 +256,7 @@ final routerProvider = Provider<GoRouter>((ref) {
       GoRoute(path: '/admin/programmes',       builder: (context, state) => const AdminProgrammesScreen()),
       GoRoute(path: '/admin/unlock-students',  builder: (context, state) => const AdminUnlockStudentsScreen()),
       GoRoute(path: '/admin/class-reps',       builder: (context, state) => const AdminClassRepsScreen()),
+      GoRoute(path: '/admin/quizzes',          builder: (context, state) => const AdminQuizzesScreen()),
 
       // Lecturer
       GoRoute(path: '/lecturer/performance',     builder: (context, state) => const LecturerPerformanceScreen()),
