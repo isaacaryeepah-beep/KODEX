@@ -40,23 +40,29 @@ class _AdminShellState extends ConsumerState<AdminShell> {
     DrawerSection(items: [
       DrawerItem(Icons.dashboard_outlined, 'Dashboard', '/dashboard/admin'),
     ]),
-    DrawerSection(header: 'MANAGEMENT', items: [
+    DrawerSection(header: 'MANAGE', items: [
+      DrawerItem(Icons.check_circle_outline, 'Approvals', '/admin/approvals'),
+      DrawerItem(Icons.search_outlined, 'Search', '/admin/search'),
       DrawerItem(Icons.people_outlined, 'Users', '/admin/users'),
-      DrawerItem(Icons.business_outlined, 'Branches', '/admin/branches'),
-      DrawerItem(Icons.history_outlined, 'Audit Logs', '/admin/audit-logs'),
+      DrawerItem(Icons.play_circle_outline, 'Sessions', '/sessions'),
     ]),
     DrawerSection(header: 'ACADEMIC', items: [
       DrawerItem(Icons.book_outlined, 'Courses', '/courses'),
-      DrawerItem(Icons.play_circle_outline, 'Sessions', '/sessions'),
-      DrawerItem(Icons.quiz_outlined, 'Quizzes', '/quizzes'),
-      DrawerItem(Icons.assignment_outlined, 'Assignments', '/assignments'),
-      DrawerItem(Icons.schedule_outlined, 'Timetable', '/timetable'),
+      DrawerItem(Icons.task_alt_outlined, 'Course Approvals', '/admin/course-approvals'),
+      DrawerItem(Icons.shield_outlined, 'Proctored/Snap Quiz', '/quizzes'),
+      DrawerItem(Icons.grade_outlined, 'Grade Book', '/gradebook'),
+      DrawerItem(Icons.campaign_outlined, 'Announcements', '/announcements'),
+      DrawerItem(Icons.school_outlined, 'Programmes', '/admin/programmes'),
+      DrawerItem(Icons.lock_open_outlined, 'Unlock Students', '/admin/unlock-students'),
+      DrawerItem(Icons.people_alt_outlined, 'Class Reps', '/admin/class-reps'),
     ]),
     DrawerSection(header: 'INSIGHTS', items: [
-      DrawerItem(Icons.assessment_outlined, 'Reports', '/reports'),
+      DrawerItem(Icons.assessment_outlined, 'Reports', '/admin/reports'),
       DrawerItem(Icons.trending_up_outlined, 'Performance', '/performance'),
     ]),
     DrawerSection(header: 'SUPPORT', items: [
+      DrawerItem(Icons.business_outlined, 'Branches', '/admin/branches'),
+      DrawerItem(Icons.history_outlined, 'Audit Logs', '/admin/audit-logs'),
       DrawerItem(Icons.card_membership_outlined, 'Subscription', '/subscription'),
       DrawerItem(Icons.person_outlined, 'Profile', '/profile'),
       DrawerItem(Icons.help_outline, 'FAQ Center', '/faq'),

@@ -115,6 +115,7 @@ class HodHomeScreen extends ConsumerWidget {
               final students = overview['totalStudents'] ?? 0;
               final sessions = overview['totalSessions'] ?? 0;
               final liveNow = overview['activeSessions'] ?? 0;
+              final recentSessions = (overview['recentSessions'] as List?) ?? [];
 
               return Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -131,19 +132,19 @@ class HodHomeScreen extends ConsumerWidget {
                       _HodStatCard(
                         value: lecturers.toString(),
                         label: 'LECTURERS',
-                        color: const Color(0xFF0891B2),
+                        color: const Color(0xFF3B82F6),
                         onTap: () => context.push('/hod/lecturers'),
                       ),
                       _HodStatCard(
                         value: students.toString(),
                         label: 'STUDENTS',
-                        color: const Color(0xFF0891B2),
+                        color: const Color(0xFF10B981),
                         onTap: () => context.push('/hod/students'),
                       ),
                       _HodStatCard(
                         value: sessions.toString(),
                         label: 'SESSIONS (RECENT)',
-                        color: const Color(0xFF0891B2),
+                        color: const Color(0xFFF59E0B),
                         onTap: () => context.push('/sessions'),
                       ),
                       _HodStatCard(
@@ -186,6 +187,58 @@ class HodHomeScreen extends ConsumerWidget {
                         ),
                       ),
                     ],
+                  ),
+                  const SizedBox(height: 16),
+
+                  // Recent Sessions
+                  DiklyCard(
+                    padding: const EdgeInsets.all(14),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          children: [
+                            const Expanded(child: Text('Recent Sessions', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: DiklyColors.text))),
+                            GestureDetector(
+                              onTap: () => context.push('/sessions'),
+                              child: const Text('View All →', style: TextStyle(fontSize: 11, color: DiklyColors.primary, fontWeight: FontWeight.w600)),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 10),
+                        if (recentSessions.isEmpty)
+                          const Text('No sessions yet.', style: TextStyle(fontSize: 12, color: DiklyColors.textLight))
+                        else
+                          ...recentSessions.take(5).map<Widget>((s) {
+                            final sm = s as Map;
+                            final status = sm['status']?.toString() ?? '';
+                            final isLive = ['active', 'live'].contains(status);
+                            final statusColor = isLive ? DiklyColors.success : status == 'stopped' ? DiklyColors.error : DiklyColors.textLight;
+                            return Padding(
+                              padding: const EdgeInsets.only(bottom: 8),
+                              child: Row(
+                                children: [
+                                  Container(width: 8, height: 8, margin: const EdgeInsets.only(right: 10, top: 3), decoration: BoxDecoration(color: statusColor, shape: BoxShape.circle)),
+                                  Expanded(
+                                    child: Column(
+                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      children: [
+                                        Text(sm['title']?.toString() ?? 'Untitled', style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: DiklyColors.text), maxLines: 1, overflow: TextOverflow.ellipsis),
+                                        Text((sm['createdBy'] as Map?)?['name']?.toString() ?? '', style: const TextStyle(fontSize: 11, color: DiklyColors.textLight)),
+                                      ],
+                                    ),
+                                  ),
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+                                    decoration: BoxDecoration(color: statusColor.withOpacity(0.1), borderRadius: BorderRadius.circular(6)),
+                                    child: Text(status, style: TextStyle(fontSize: 10, fontWeight: FontWeight.w600, color: statusColor)),
+                                  ),
+                                ],
+                              ),
+                            );
+                          }),
+                      ],
+                    ),
                   ),
                   const SizedBox(height: 16),
 

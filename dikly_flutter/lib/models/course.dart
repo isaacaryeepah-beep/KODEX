@@ -9,6 +9,8 @@ class Course {
   final String? status;
   final DateTime? createdAt;
   final String? thumbnail;
+  final String? level;
+  final String? group;
 
   const Course({
     required this.id,
@@ -21,6 +23,8 @@ class Course {
     this.status,
     this.createdAt,
     this.thumbnail,
+    this.level,
+    this.group,
   });
 
   factory Course.fromJson(Map<String, dynamic> json) {
@@ -44,6 +48,8 @@ class Course {
           ? DateTime.tryParse(json['createdAt'].toString())
           : null,
       thumbnail: json['thumbnail']?.toString(),
+      level: json['level']?.toString(),
+      group: json['group']?.toString(),
     );
   }
 }

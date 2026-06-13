@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/api.dart';
 import '../../core/theme.dart';
+import '../../widgets/ds/dikly_ds.dart';
 
 final _quizHistoryProvider = FutureProvider.autoDispose<List<Map<String, dynamic>>>(
   (ref) => apiService.getQuizHistory(),
@@ -70,137 +71,71 @@ class _QuizHistoryBody extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-
-    if (quizzes.isEmpty) {
-      return ListView(
-        children: const [
-          SizedBox(height: 100),
-          Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Icon(Icons.emoji_events_outlined,
-                  size: 72, color: DiklyColors.textSecondary),
-              SizedBox(height: 16),
-              Text(
-                'No quizzes completed yet',
-                style: TextStyle(
-                  fontSize: 17,
-                  fontWeight: FontWeight.w600,
-                  color: DiklyColors.textSecondary,
-                ),
-              ),
-              SizedBox(height: 8),
-              Text(
-                'Your quiz results will appear here',
-                style: TextStyle(color: DiklyColors.textSecondary),
-              ),
-            ],
-          ),
-        ],
-      );
-    }
+    final pending = quizzes.where((q) => q['passed'] == null).length;
 
     return ListView(
       padding: const EdgeInsets.all(16),
       children: [
-        // Summary row
-        Container(
-          padding: const EdgeInsets.all(16),
-          decoration: BoxDecoration(
-            color: DiklyColors.surface,
-            borderRadius: BorderRadius.circular(12),
-            border: Border.all(color: DiklyColors.border),
-          ),
-          child: Row(
-            children: [
-              _SummaryItem(
-                label: 'Total Quizzes',
-                value: '$_totalQuizzes',
-                icon: Icons.quiz_outlined,
-                color: DiklyColors.primary,
-              ),
-              _VerticalDivider(),
-              _SummaryItem(
-                label: 'Avg Score',
-                value: '${_averageScore.toStringAsFixed(1)}%',
-                icon: Icons.bar_chart_rounded,
-                color: DiklyColors.warning,
-              ),
-              _VerticalDivider(),
-              _SummaryItem(
-                label: 'Pass Rate',
-                value: '${_passRate.toStringAsFixed(0)}%',
-                icon: Icons.check_circle_outline_rounded,
-                color: DiklyColors.success,
-              ),
-            ],
-          ),
+        DiklyScreenHeader(
+          title: 'My Quiz Results',
+          subtitle: 'Your performance across all quizzes',
+        ),
+        // 3 stat cards
+        Row(
+          children: [
+            _StatCard(value: '$_totalQuizzes', label: 'COMPLETED', color: DiklyColors.primary),
+            const SizedBox(width: 10),
+            _StatCard(value: '$pending', label: 'PENDING', color: DiklyColors.success),
+            const SizedBox(width: 10),
+            _StatCard(value: '${_averageScore.toStringAsFixed(0)}%', label: 'AVG SCORE', color: DiklyColors.warning),
+          ],
         ),
         const SizedBox(height: 16),
-        Text(
-          'Completed Quizzes',
-          style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700),
-        ),
-        const SizedBox(height: 12),
-        ...quizzes.map((quiz) => _QuizCard(quiz: quiz)),
+        if (quizzes.isEmpty)
+          DiklyCard(
+            padding: const EdgeInsets.all(32),
+            child: const Center(
+              child: Text('No quizzes completed yet.', style: TextStyle(fontSize: 13, color: Color(0xFF6B7280))),
+            ),
+          )
+        else ...[
+          const Text('Completed Quizzes', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: Color(0xFF111827))),
+          const SizedBox(height: 10),
+          ...quizzes.map((quiz) => _QuizCard(quiz: quiz)),
+        ],
       ],
     );
   }
 }
 
-class _VerticalDivider extends StatelessWidget {
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      height: 40,
-      width: 1,
-      color: DiklyColors.border,
-      margin: const EdgeInsets.symmetric(horizontal: 8),
-    );
-  }
-}
-
-class _SummaryItem extends StatelessWidget {
-  final String label;
+class _StatCard extends StatelessWidget {
   final String value;
-  final IconData icon;
+  final String label;
   final Color color;
 
-  const _SummaryItem({
-    required this.label,
-    required this.value,
-    required this.icon,
-    required this.color,
-  });
+  const _StatCard({required this.value, required this.label, required this.color});
 
   @override
   Widget build(BuildContext context) {
     return Expanded(
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(icon, size: 22, color: color),
-          const SizedBox(height: 6),
-          Text(
-            value,
-            style: TextStyle(
-              fontSize: 18,
-              fontWeight: FontWeight.w700,
-              color: color,
-            ),
-          ),
-          const SizedBox(height: 2),
-          Text(
-            label,
-            textAlign: TextAlign.center,
-            style: const TextStyle(
-              fontSize: 11,
-              color: DiklyColors.textSecondary,
-              fontWeight: FontWeight.w500,
-            ),
-          ),
-        ],
+      child: Container(
+        padding: const EdgeInsets.fromLTRB(14, 14, 14, 14),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(color: const Color(0xFFE5E7EB)),
+          boxShadow: const [BoxShadow(color: Color(0x08000000), blurRadius: 4, offset: Offset(0, 1))],
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Container(height: 3, decoration: BoxDecoration(color: color, borderRadius: BorderRadius.circular(2))),
+            const SizedBox(height: 10),
+            Text(value, style: TextStyle(fontSize: 22, fontWeight: FontWeight.w800, color: color, height: 1)),
+            const SizedBox(height: 2),
+            Text(label, style: const TextStyle(fontSize: 9, fontWeight: FontWeight.w700, color: Color(0xFF9CA3AF), letterSpacing: 0.3)),
+          ],
+        ),
       ),
     );
   }

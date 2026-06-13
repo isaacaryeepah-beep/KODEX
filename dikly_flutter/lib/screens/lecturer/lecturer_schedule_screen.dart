@@ -68,7 +68,7 @@ class _LecturerScheduleScreenState extends State<LecturerScheduleScreen> {
         surfaceTintColor: Colors.transparent,
         leading: BackButton(onPressed: () => Navigator.of(context).maybePop()),
         title: const Text(
-          'My Schedule',
+          'My Timetable',
           style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: Color(0xFF111827)),
         ),
       ),
@@ -78,7 +78,7 @@ class _LecturerScheduleScreenState extends State<LecturerScheduleScreen> {
           padding: const EdgeInsets.all(16),
           children: [
             DiklyScreenHeader(
-              title: 'My Schedule',
+              title: 'My Timetable',
               subtitle: 'Your weekly class timetable — click any slot to edit',
               action: ElevatedButton.icon(
                 onPressed: _showComingSoon,

@@ -15,13 +15,6 @@ final _lecturerDashProvider = FutureProvider.autoDispose<Map<String, dynamic>>(
 class LecturerHomeScreen extends ConsumerWidget {
   const LecturerHomeScreen({super.key});
 
-  String _greeting() {
-    final h = DateTime.now().hour;
-    if (h < 12) return 'Good morning';
-    if (h < 17) return 'Good afternoon';
-    return 'Good evening';
-  }
-
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final user = ref.watch(authProvider).user;
@@ -43,7 +36,7 @@ class LecturerHomeScreen extends ConsumerWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      '${_greeting()}, $firstName!',
+                      'Welcome back, $firstName',
                       style: GoogleFonts.dmSans(fontSize: 22, fontWeight: FontWeight.w800, color: DiklyColors.text, height: 1.2),
                     ),
                     const SizedBox(height: 4),
@@ -51,7 +44,7 @@ class LecturerHomeScreen extends ConsumerWidget {
                       text: TextSpan(
                         style: const TextStyle(fontSize: 13, color: DiklyColors.textLight),
                         children: [
-                          TextSpan(text: 'Workspace at ${user?.company ?? 'your institution'}'),
+                          TextSpan(text: "Here's an overview of your workspace at ${user?.company ?? 'your institution'}"),
                           if (dept.isNotEmpty)
                             TextSpan(text: ' · $dept', style: const TextStyle(fontWeight: FontWeight.w700, color: Color(0xFFD97706))),
                         ],

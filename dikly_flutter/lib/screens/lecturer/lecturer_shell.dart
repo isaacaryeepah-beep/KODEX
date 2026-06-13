@@ -54,8 +54,10 @@ class _LecturerShellState extends ConsumerState<LecturerShell> {
     DrawerSection(header: 'CONTENT', items: [
       DrawerItem(Icons.search_outlined, 'Search', '/lecturer/search'),
       DrawerItem(Icons.book_outlined, 'Courses', '/courses'),
+      DrawerItem(Icons.video_library_outlined, 'Course Videos', '/courses'),
       DrawerItem(Icons.shield_outlined, 'Proctored/Snap Quiz', '/lecturer/quiz'),
-      DrawerItem(Icons.calendar_today_outlined, 'Schedule', '/lecturer/schedule'),
+      DrawerItem(Icons.visibility_outlined, 'Quiz Monitor', '/lecturer/quiz'),
+      DrawerItem(Icons.calendar_today_outlined, 'Timetable', '/lecturer/schedule'),
       DrawerItem(Icons.storage_outlined, 'Question Bank', '/lecturer/question-bank'),
       DrawerItem(Icons.assignment_outlined, 'Assignment', '/lecturer/assignments'),
       DrawerItem(Icons.grade_outlined, 'Grade Book', '/gradebook'),

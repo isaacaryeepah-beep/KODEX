@@ -54,6 +54,14 @@ import '../screens/hod/hod_lecturers_screen.dart';
 import '../screens/hod/hod_students_screen.dart';
 import '../screens/hod/hod_courses_screen.dart';
 import '../screens/hod/hod_reports_screen.dart';
+import '../screens/hod/hod_dept_messaging_screen.dart';
+import '../screens/admin/admin_approvals_screen.dart';
+import '../screens/admin/admin_search_screen.dart';
+import '../screens/admin/admin_course_approvals_screen.dart';
+import '../screens/admin/admin_programmes_screen.dart';
+import '../screens/admin/admin_unlock_students_screen.dart';
+import '../screens/admin/admin_class_reps_screen.dart';
+import '../screens/admin/admin_reports_screen.dart';
 import '../screens/lecturer/lecturer_performance_screen.dart';
 import '../screens/lecturer/lecturer_attendance_device_screen.dart';
 import '../screens/lecturer/lecturer_search_screen.dart';
@@ -182,6 +190,7 @@ final routerProvider = Provider<GoRouter>((ref) {
       GoRoute(path: '/admin/users',       builder: (context, state) => const UsersScreen()),
       GoRoute(path: '/admin/branches',    builder: (context, state) => const BranchesScreen()),
       GoRoute(path: '/admin/audit-logs',  builder: (context, state) => const AuditLogsScreen()),
+      GoRoute(path: '/admin/reports',     builder: (context, state) => const AdminReportsScreen()),
 
       // Manager
       GoRoute(path: '/manager/team',          builder: (context, state) => const TeamScreen()),
@@ -201,7 +210,26 @@ final routerProvider = Provider<GoRouter>((ref) {
       GoRoute(path: '/hod/lecturers',       builder: (context, state) => const HodLecturersScreen()),
       GoRoute(path: '/hod/students',        builder: (context, state) => const HodStudentsScreen()),
       GoRoute(path: '/hod/courses',         builder: (context, state) => const HodCoursesScreen()),
-      GoRoute(path: '/hod/reports',         builder: (context, state) => const HodReportsScreen()),
+      GoRoute(path: '/hod/reports',         builder: (context, state) => Scaffold(
+        backgroundColor: const Color(0xFFF1F5F9),
+        appBar: AppBar(
+          backgroundColor: Colors.white,
+          elevation: 0,
+          surfaceTintColor: Colors.transparent,
+          leading: const BackButton(),
+          title: const Text('Department Reports', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: Color(0xFF111827))),
+        ),
+        body: const HodReportsScreen(),
+      )),
+      GoRoute(path: '/hod/dept-messaging',  builder: (context, state) => const HodDeptMessagingScreen()),
+
+      // Admin
+      GoRoute(path: '/admin/approvals',        builder: (context, state) => const AdminApprovalsScreen()),
+      GoRoute(path: '/admin/search',           builder: (context, state) => const AdminSearchScreen()),
+      GoRoute(path: '/admin/course-approvals', builder: (context, state) => const AdminCourseApprovalsScreen()),
+      GoRoute(path: '/admin/programmes',       builder: (context, state) => const AdminProgrammesScreen()),
+      GoRoute(path: '/admin/unlock-students',  builder: (context, state) => const AdminUnlockStudentsScreen()),
+      GoRoute(path: '/admin/class-reps',       builder: (context, state) => const AdminClassRepsScreen()),
 
       // Lecturer
       GoRoute(path: '/lecturer/performance',     builder: (context, state) => const LecturerPerformanceScreen()),

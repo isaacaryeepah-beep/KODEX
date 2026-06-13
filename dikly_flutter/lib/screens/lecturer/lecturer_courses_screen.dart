@@ -75,6 +75,15 @@ class _CourseCard extends StatelessWidget {
   final Course course;
   const _CourseCard({required this.course});
 
+  static Widget _tag(String text, Color color) => Container(
+        padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+        decoration: BoxDecoration(
+          color: color.withOpacity(0.1),
+          borderRadius: BorderRadius.circular(5),
+        ),
+        child: Text(text, style: TextStyle(fontSize: 10, fontWeight: FontWeight.w700, color: color)),
+      );
+
   @override
   Widget build(BuildContext context) {
     final isApproved = (course.status ?? 'active').toLowerCase() == 'approved' ||
@@ -87,62 +96,45 @@ class _CourseCard extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Course code + title row
+          // Code, level, group, status row
           Row(
             children: [
-              if (course.code != null) ...[
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFF2563EB).withOpacity(0.1),
-                    borderRadius: BorderRadius.circular(6),
-                  ),
-                  child: Text(
-                    course.code!,
-                    style: const TextStyle(
-                      fontSize: 11,
-                      fontWeight: FontWeight.w700,
-                      color: Color(0xFF2563EB),
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 8),
-              ],
-              Expanded(
-                child: Text(
-                  course.title.toUpperCase(),
-                  style: const TextStyle(
-                    fontSize: 15,
-                    fontWeight: FontWeight.w800,
-                    color: Color(0xFF111827),
-                  ),
-                  overflow: TextOverflow.ellipsis,
-                ),
-              ),
+              if (course.code != null) _tag(course.code!, const Color(0xFF2563EB)),
+              if (course.level != null) ...[const SizedBox(width: 6), _tag('Level ${course.level!}', const Color(0xFF6B7280))],
+              if (course.group != null) ...[const SizedBox(width: 6), _tag('Group ${course.group!}', const Color(0xFF6B7280))],
+              const Spacer(),
+              isApproved ? DiklyBadge.approved() : DiklyBadge.pending(),
             ],
           ),
-          const SizedBox(height: 6),
+          const SizedBox(height: 10),
+
+          // Course title
+          Text(
+            course.title,
+            style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w700, color: Color(0xFF111827)),
+            overflow: TextOverflow.ellipsis,
+          ),
+          const SizedBox(height: 4),
 
           if (instructor.isNotEmpty) ...[
             Row(
               children: [
+                const Icon(Icons.person_outline, size: 14, color: Color(0xFF6B7280)),
+                const SizedBox(width: 4),
                 Text(instructor, style: const TextStyle(fontSize: 12, color: Color(0xFF6B7280))),
               ],
             ),
+            const SizedBox(height: 4),
           ],
-          const SizedBox(height: 4),
 
           Row(
             children: [
               const Icon(Icons.people_outlined, size: 14, color: Color(0xFF6B7280)),
               const SizedBox(width: 4),
-              Text('$enrolled enrolled', style: const TextStyle(fontSize: 12, color: Color(0xFF6B7280))),
+              Text('$enrolled students enrolled', style: const TextStyle(fontSize: 12, color: Color(0xFF6B7280))),
             ],
           ),
-          const SizedBox(height: 10),
-
-          isApproved ? DiklyBadge.approved() : DiklyBadge.pending(),
-          const SizedBox(height: 14),
+          const SizedBox(height: 12),
 
           // Action buttons
           Wrap(
