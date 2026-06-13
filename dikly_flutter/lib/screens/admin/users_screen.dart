@@ -245,28 +245,86 @@ class _UsersScreenState extends State<UsersScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final studentCount = _users.where((u) => u.role == 'student').length;
+    final deptCount = _users.map((u) => u.department).where((d) => d != null && d.isNotEmpty).toSet().length;
+
     return Scaffold(
       backgroundColor: DiklyColors.background,
-      floatingActionButton: FloatingActionButton(
-        onPressed: _showAddUserSheet,
-        backgroundColor: DiklyColors.primary,
-        foregroundColor: Colors.white,
-        elevation: 4,
-        child: const Icon(Icons.person_add_outlined),
-      ),
       body: Column(
         children: [
+          // Header + action buttons
+          Container(
+            color: DiklyColors.surface,
+            padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                DiklyScreenHeader(
+                  title: 'Users',
+                  subtitle: '$studentCount student${studentCount == 1 ? '' : 's'} · $deptCount department${deptCount == 1 ? '' : 's'}',
+                ),
+                SingleChildScrollView(
+                  scrollDirection: Axis.horizontal,
+                  child: Row(
+                    children: [
+                      ElevatedButton.icon(
+                        onPressed: _showAddUserSheet,
+                        icon: const Icon(Icons.person_add_alt_1_outlined, size: 15),
+                        label: const Text('Add User'),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: DiklyColors.primary,
+                          foregroundColor: Colors.white,
+                          elevation: 0,
+                          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 9),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                          textStyle: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      OutlinedButton.icon(
+                        onPressed: () => ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Bulk Import — coming soon'))),
+                        icon: const Icon(Icons.upload_outlined, size: 15),
+                        label: const Text('Bulk Import'),
+                        style: OutlinedButton.styleFrom(
+                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
+                          side: const BorderSide(color: Color(0xFFD1D5DB)),
+                          foregroundColor: const Color(0xFF374151),
+                          textStyle: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      OutlinedButton.icon(
+                        onPressed: () => ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Reset Log — coming soon'))),
+                        icon: const Icon(Icons.refresh, size: 15),
+                        label: const Text('Reset Log'),
+                        style: OutlinedButton.styleFrom(
+                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
+                          side: const BorderSide(color: Color(0xFFD1D5DB)),
+                          foregroundColor: const Color(0xFF374151),
+                          textStyle: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 12),
+              ],
+            ),
+          ),
+
           // Search + Filters
           Container(
             color: DiklyColors.surface,
-            padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
+            padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 TextField(
                   controller: _searchController,
                   decoration: InputDecoration(
-                    hintText: 'Search by name or email…',
+                    hintText: 'Search departments, names, index numbers...',
                     hintStyle: GoogleFonts.dmSans(
                       fontSize: 14,
                       color: DiklyColors.textMuted,

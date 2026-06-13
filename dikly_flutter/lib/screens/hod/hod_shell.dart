@@ -66,7 +66,7 @@ class _HodShellState extends ConsumerState<HodShell> {
       DrawerItem(Icons.check_circle_outline, 'Approvals', '/hod/approvals'),
       DrawerItem(Icons.task_alt_outlined, 'Course Approvals', '/hod/course-approvals'),
       DrawerItem(Icons.lock_open_outlined, 'Unlock Students', '/hod/locked-students'),
-      DrawerItem(Icons.devices_outlined, 'Classroom Devices', '/lecturer/attendance-device'),
+      DrawerItem(Icons.devices_outlined, 'Classroom Devices', '/admin/devices'),
       DrawerItem(Icons.supervisor_account_outlined, 'Class Representatives', '/admin/class-reps'),
     ]),
     DrawerSection(header: 'SUPPORT', items: [

@@ -84,6 +84,7 @@ class _TimetableScreenState extends ConsumerState<TimetableScreen> {
     final async = ref.watch(_timetableProvider);
     final user = ref.watch(currentUserProvider);
     final isLecturer = user?.role == 'lecturer';
+    final isHod = user?.role == 'hod';
 
     return Scaffold(
       backgroundColor: DiklyColors.background,
@@ -117,8 +118,12 @@ class _TimetableScreenState extends ConsumerState<TimetableScreen> {
                 children: [
                   Expanded(
                     child: DiklyScreenHeader(
-                      title: 'My Timetable',
-                      subtitle: 'Your weekly class timetable based on enrolled courses',
+                      title: isHod ? 'Department Timetable' : 'My Timetable',
+                      subtitle: isHod
+                          ? 'Read-only view of all department class slots'
+                          : isLecturer
+                              ? 'Your weekly class timetable — click any slot to edit'
+                              : 'Your weekly class timetable based on enrolled courses',
                     ),
                   ),
                   OutlinedButton.icon(
@@ -133,6 +138,23 @@ class _TimetableScreenState extends ConsumerState<TimetableScreen> {
                       foregroundColor: const Color(0xFF374151),
                     ),
                   ),
+                  if (isLecturer) ...[
+                    const SizedBox(width: 8),
+                    ElevatedButton.icon(
+                      onPressed: () => ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(content: Text('Add Class — coming soon')),
+                      ),
+                      icon: const Icon(Icons.add, size: 14),
+                      label: const Text('Add Class', style: TextStyle(fontSize: 12)),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: DiklyColors.primary,
+                        foregroundColor: Colors.white,
+                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                        elevation: 0,
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                      ),
+                    ),
+                  ],
                 ],
               ),
             ),
@@ -147,6 +169,7 @@ class _TimetableScreenState extends ConsumerState<TimetableScreen> {
                 child: _DaySchedule(
                   slots: _getSlotsForDay(data, _fullDays[_selectedDayIndex]),
                   colorResolver: _resolveColor,
+                  isLecturer: isLecturer,
                 ),
               ),
             ),
@@ -214,8 +237,9 @@ class _DayTabBar extends StatelessWidget {
 class _DaySchedule extends StatelessWidget {
   final List<Map<String, dynamic>> slots;
   final Color Function(Map<String, dynamic>) colorResolver;
+  final bool isLecturer;
 
-  const _DaySchedule({required this.slots, required this.colorResolver});
+  const _DaySchedule({required this.slots, required this.colorResolver, this.isLecturer = false});
 
   @override
   Widget build(BuildContext context) {
@@ -242,7 +266,9 @@ class _DaySchedule extends StatelessWidget {
                 ),
                 SizedBox(height: 8),
                 Text(
-                  "Your lecturers haven't added timetable slots yet. Check back soon.",
+                  isLecturer
+                      ? 'Add your first class to build out your weekly timetable'
+                      : "Your lecturers haven't added timetable slots yet. Check back soon.",
                   style: TextStyle(fontSize: 13, color: Color(0xFF6B7280)),
                   textAlign: TextAlign.center,
                 ),

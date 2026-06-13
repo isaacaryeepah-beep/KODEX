@@ -16,7 +16,7 @@ class HodPerformanceScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final async = ref.watch(_hodPerfProvider);
     final user = ref.watch(currentUserProvider);
-    final dept = user?.company ?? 'Department';
+    final dept = user?.department ?? user?.company ?? 'Department';
 
     return Scaffold(
       backgroundColor: DiklyColors.background,

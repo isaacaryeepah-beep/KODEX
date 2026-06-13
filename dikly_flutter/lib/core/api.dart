@@ -761,6 +761,17 @@ class ApiService {
   }
 
   // Branches
+  Future<List<Map<String, dynamic>>> getAdminDevices() async {
+    try {
+      final response = await _dio.get('/api/devices');
+      final data = response.data;
+      final list = data['devices'] ?? data['data'] ?? [];
+      return (list as List).cast<Map<String, dynamic>>();
+    } catch (_) {
+      return [];
+    }
+  }
+
   Future<List<Map<String, dynamic>>> getBranches() async {
     final response = await _dio.get('/api/branches');
     final data = response.data;
