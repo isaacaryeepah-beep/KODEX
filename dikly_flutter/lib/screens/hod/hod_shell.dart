@@ -44,7 +44,7 @@ class _HodShellState extends ConsumerState<HodShell> {
     ]),
     DrawerSection(header: 'DEPARTMENT', items: [
       DrawerItem(Icons.grid_view_outlined, 'Overview', '/dashboard/hod'),
-      DrawerItem(Icons.play_circle_outline, 'Sessions', '/sessions'),
+      DrawerItem(Icons.play_circle_outline, 'Sessions', '/hod/sessions'),
       DrawerItem(Icons.book_outlined, 'Courses', '/courses'),
       DrawerItem(Icons.schedule_outlined, 'Timetable', '/timetable'),
       DrawerItem(Icons.person_outlined, 'Lecturers', '/hod/lecturers'),
@@ -52,7 +52,7 @@ class _HodShellState extends ConsumerState<HodShell> {
     ]),
     DrawerSection(header: 'INSIGHTS', items: [
       DrawerItem(Icons.bar_chart_outlined, 'Performance', '/hod/performance'),
-      DrawerItem(Icons.visibility_outlined, 'Quiz Monitor', '/quizzes'),
+      DrawerItem(Icons.visibility_outlined, 'Quiz Monitor', '/hod/quiz-monitor'),
       DrawerItem(Icons.warning_amber_outlined, 'Smart Alerts', '/hod/alerts'),
       DrawerItem(Icons.assessment_outlined, 'Reports', '/hod/reports'),
     ]),
@@ -66,6 +66,8 @@ class _HodShellState extends ConsumerState<HodShell> {
       DrawerItem(Icons.check_circle_outline, 'Approvals', '/hod/approvals'),
       DrawerItem(Icons.task_alt_outlined, 'Course Approvals', '/hod/course-approvals'),
       DrawerItem(Icons.lock_open_outlined, 'Unlock Students', '/hod/locked-students'),
+      DrawerItem(Icons.devices_outlined, 'Classroom Devices', '/lecturer/attendance-device'),
+      DrawerItem(Icons.supervisor_account_outlined, 'Class Representatives', '/admin/class-reps'),
     ]),
     DrawerSection(header: 'SUPPORT', items: [
       DrawerItem(Icons.card_membership_outlined, 'Subscription', '/subscription'),

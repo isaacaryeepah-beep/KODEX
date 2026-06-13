@@ -145,15 +145,7 @@ class _HodApprovalsScreenState extends ConsumerState<HodApprovalsScreen> {
               children: [
                 DiklyScreenHeader(
                   title: 'Pending Approvals',
-                  subtitleWidget: RichText(
-                    text: TextSpan(
-                      style: const TextStyle(fontSize: 13, color: Color(0xFF6B7280), height: 1.4),
-                      children: [
-                        const TextSpan(text: 'Lecturer & student requests for '),
-                        TextSpan(text: dept, style: const TextStyle(fontWeight: FontWeight.w700)),
-                      ],
-                    ),
-                  ),
+                  subtitle: 'Lecturer & student requests for $dept',
                 ),
                 if (approvals.isEmpty)
                   Container(
