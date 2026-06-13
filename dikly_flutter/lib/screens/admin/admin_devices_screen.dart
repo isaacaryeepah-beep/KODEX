@@ -189,10 +189,29 @@ class AdminDevicesScreen extends ConsumerWidget {
                     ),
                     const Divider(height: 1, color: DiklyColors.border),
                     if (devices.isEmpty)
-                      const Padding(
-                        padding: EdgeInsets.symmetric(vertical: 32),
-                        child: Center(
-                          child: Text('No paired devices yet.', style: TextStyle(fontSize: 13, color: DiklyColors.textSecondary)),
+                      Padding(
+                        padding: const EdgeInsets.symmetric(vertical: 32, horizontal: 16),
+                        child: Column(
+                          children: [
+                            const Icon(Icons.device_hub_outlined, size: 40, color: Color(0xFF9CA3AF)),
+                            const SizedBox(height: 12),
+                            const Text('No devices paired yet', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: Color(0xFF374151))),
+                            const SizedBox(height: 8),
+                            RichText(
+                              textAlign: TextAlign.center,
+                              text: TextSpan(
+                                style: const TextStyle(fontSize: 12, color: Color(0xFF6B7280), height: 1.5),
+                                children: [
+                                  const TextSpan(text: 'To pair a device: 1) Click Generate Pairing Code above. 2) Give the Class Rep your Institution Code '),
+                                  TextSpan(
+                                    text: instCode.isNotEmpty ? '($instCode)' : '',
+                                    style: const TextStyle(fontWeight: FontWeight.w700, color: Color(0xFF374151)),
+                                  ),
+                                  const TextSpan(text: ' and the pairing code. 3) The Class Rep connects to the device hotspot and enters both codes.'),
+                                ],
+                              ),
+                            ),
+                          ],
                         ),
                       )
                     else
