@@ -120,8 +120,14 @@ class HodHomeScreen extends ConsumerWidget {
               return Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  // Stats: Lecturers, Students, Sessions, Live Now — 4-in-a-row
-                  Row(
+                  // Stats: Lecturers, Students, Sessions, Live Now
+                  GridView.count(
+                    shrinkWrap: true,
+                    physics: const NeverScrollableScrollPhysics(),
+                    crossAxisCount: 2,
+                    crossAxisSpacing: 12,
+                    mainAxisSpacing: 12,
+                    childAspectRatio: 1.4,
                     children: [
                       _HodStatCard(
                         value: lecturers.toString(),
@@ -129,26 +135,23 @@ class HodHomeScreen extends ConsumerWidget {
                         color: const Color(0xFF3B82F6),
                         onTap: () => context.push('/hod/lecturers'),
                       ),
-                      const SizedBox(width: 8),
                       _HodStatCard(
                         value: students.toString(),
                         label: 'STUDENTS',
                         color: const Color(0xFF10B981),
                         onTap: () => context.push('/hod/students'),
                       ),
-                      const SizedBox(width: 8),
                       _HodStatCard(
                         value: sessions.toString(),
                         label: 'SESSIONS (RECENT)',
                         color: const Color(0xFFF59E0B),
-                        onTap: () => context.push('/hod/sessions'),
+                        onTap: () => context.push('/sessions'),
                       ),
-                      const SizedBox(width: 8),
                       _HodStatCard(
                         value: liveNow.toString(),
                         label: 'LIVE NOW',
                         color: liveNow > 0 ? DiklyColors.success : DiklyColors.textLight,
-                        onTap: () => context.push('/hod/sessions'),
+                        onTap: () => context.push('/sessions'),
                       ),
                     ],
                   ),
@@ -197,7 +200,7 @@ class HodHomeScreen extends ConsumerWidget {
                           children: [
                             const Expanded(child: Text('Recent Sessions', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: DiklyColors.text))),
                             GestureDetector(
-                              onTap: () => context.push('/hod/sessions'),
+                              onTap: () => context.push('/sessions'),
                               child: const Text('View All →', style: TextStyle(fontSize: 11, color: DiklyColors.primary, fontWeight: FontWeight.w600)),
                             ),
                           ],
@@ -347,30 +350,17 @@ class _HodStatCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Expanded(
-      child: GestureDetector(
-        onTap: onTap,
-        child: Container(
-          padding: const EdgeInsets.all(10),
-          decoration: BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.circular(10),
-            border: Border.all(color: const Color(0xFFE5E7EB)),
-          ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Container(height: 3, decoration: BoxDecoration(color: color, borderRadius: BorderRadius.circular(2))),
-              const SizedBox(height: 8),
-              Text(value, style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800, color: color)),
-              Text(
-                label,
-                maxLines: 2,
-                overflow: TextOverflow.ellipsis,
-                style: const TextStyle(fontSize: 8, color: Color(0xFF9CA3AF), letterSpacing: 0.2, fontWeight: FontWeight.w600),
-              ),
-            ],
-          ),
+    return GestureDetector(
+      onTap: onTap,
+      child: DiklyCard(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            Text(value, style: GoogleFonts.dmSans(fontSize: 28, fontWeight: FontWeight.w800, color: color, height: 1)),
+            Text(label, style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: DiklyColors.textLight, letterSpacing: 0.3)),
+          ],
         ),
       ),
     );

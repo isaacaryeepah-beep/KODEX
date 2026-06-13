@@ -83,7 +83,7 @@ class _QuizHistoryBody extends StatelessWidget {
         // 3 stat cards
         Row(
           children: [
-            _StatCard(value: '$_totalQuizzes', label: 'COMPLETED', color: const Color(0xFF7C3AED)),
+            _StatCard(value: '$_totalQuizzes', label: 'COMPLETED', color: DiklyColors.primary),
             const SizedBox(width: 10),
             _StatCard(value: '$pending', label: 'PENDING', color: DiklyColors.success),
             const SizedBox(width: 10),
