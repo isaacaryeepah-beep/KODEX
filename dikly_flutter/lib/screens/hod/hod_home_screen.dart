@@ -141,14 +141,14 @@ class HodHomeScreen extends ConsumerWidget {
                         value: sessions.toString(),
                         label: 'SESSIONS (RECENT)',
                         color: const Color(0xFFF59E0B),
-                        onTap: () => context.push('/sessions'),
+                        onTap: () => context.push('/hod/sessions'),
                       ),
                       const SizedBox(width: 8),
                       _HodStatCard(
                         value: liveNow.toString(),
                         label: 'LIVE NOW',
                         color: liveNow > 0 ? DiklyColors.success : DiklyColors.textLight,
-                        onTap: () => context.push('/sessions'),
+                        onTap: () => context.push('/hod/sessions'),
                       ),
                     ],
                   ),
@@ -197,7 +197,7 @@ class HodHomeScreen extends ConsumerWidget {
                           children: [
                             const Expanded(child: Text('Recent Sessions', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: DiklyColors.text))),
                             GestureDetector(
-                              onTap: () => context.push('/sessions'),
+                              onTap: () => context.push('/hod/sessions'),
                               child: const Text('View All →', style: TextStyle(fontSize: 11, color: DiklyColors.primary, fontWeight: FontWeight.w600)),
                             ),
                           ],
