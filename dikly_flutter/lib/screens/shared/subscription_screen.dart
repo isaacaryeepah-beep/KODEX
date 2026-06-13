@@ -63,7 +63,7 @@ class SubscriptionScreen extends ConsumerWidget {
           ),
           const SizedBox(height: 4),
           const Text(
-            'Your personal DIKLY access · ₵30 / semester · Paystack only',
+            'Your personal DIKLY access · ₵20 / semester · Paystack only',
             style: TextStyle(fontSize: 13, color: Color(0xFF6B7280)),
           ),
 
@@ -130,7 +130,7 @@ class SubscriptionScreen extends ConsumerWidget {
                     const Text('Student Semester Plan',
                         style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: Color(0xFF111827))),
                     const Spacer(),
-                    const Text('₵30',
+                    const Text('₵20',
                         style: TextStyle(fontSize: 28, fontWeight: FontWeight.w800, color: Color(0xFF2563EB))),
                   ],
                 ),
@@ -195,8 +195,8 @@ class SubscriptionScreen extends ConsumerWidget {
                       const SizedBox(width: 8),
                       Expanded(
                         child: Text(
-                          '30-day free trial active — $daysLeft days left. '
-                          'Subscribe before it ends to avoid interruption.',
+                          'You received a 45-day free trial on account creation. After it ends, '
+                          'subscribe for ₵20/semester to keep access.',
                           style: const TextStyle(fontSize: 12, color: Color(0xFF92400E), height: 1.5),
                         ),
                       ),
@@ -221,7 +221,7 @@ class SubscriptionScreen extends ConsumerWidget {
                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
                     ),
                     child: const Text(
-                      'Pay ₵30 with Paystack',
+                      'Pay ₵20 with Paystack',
                       style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700),
                     ),
                   ),
