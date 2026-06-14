@@ -650,6 +650,7 @@ class DiklyGradientStat extends StatelessWidget {
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(10),
+<<<<<<< HEAD
         border: Border(
           top: BorderSide(color: color, width: 3),
           left: const BorderSide(color: Color(0xFFE5E7EB)),
@@ -657,6 +658,10 @@ class DiklyGradientStat extends StatelessWidget {
           bottom: const BorderSide(color: Color(0xFFE5E7EB)),
         ),
         boxShadow: const [BoxShadow(color: Color(0x0D000000), blurRadius: 4, offset: Offset(0, 2))],
+=======
+        border: Border.all(color: const Color(0xFFE5E7EB)),
+        boxShadow: const [BoxShadow(color: Color(0x0D000000), blurRadius: 2, offset: Offset(0, 1))],
+>>>>>>> origin/main
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -665,7 +670,19 @@ class DiklyGradientStat extends StatelessWidget {
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
+<<<<<<< HEAD
               Icon(icon, size: 18, color: color),
+=======
+              Container(
+                width: 34,
+                height: 34,
+                decoration: BoxDecoration(
+                  color: color.withOpacity(0.10),
+                  borderRadius: BorderRadius.circular(9),
+                ),
+                child: Icon(icon, size: 18, color: color),
+              ),
+>>>>>>> origin/main
               if (trend != null)
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
