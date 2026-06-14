@@ -14,7 +14,7 @@ final _hodDashProvider = FutureProvider.autoDispose<Map<String, dynamic>>(
 final _hodApprovalsProvider = FutureProvider.autoDispose<int>((ref) async {
   try {
     final data = await apiService.getPendingApprovals();
-    return data.length;
+    return (data as List?)?.length ?? 0;
   } catch (_) { return 0; }
 });
 

@@ -517,9 +517,10 @@ class ApiService {
   Future<String> getReportDownloadLink(String type, {bool isAdmin = false}) async {
     final base = isAdmin ? '/api/admin/reports' : '/api/reports';
     final res = await _dio.get('$base/download-link/$type');
-    final url = res.data?['url'] ?? res.data?['downloadUrl'] ?? '';
-    if (url.isEmpty) throw Exception('No download URL returned');
-    return url.toString();
+    final relUrl = res.data?['url'] ?? res.data?['downloadUrl'] ?? '';
+    if (relUrl.isEmpty) throw Exception('No download URL returned');
+    final url = relUrl.toString().startsWith('http') ? relUrl.toString() : 'https://dikly.sbs$relUrl';
+    return url;
   }
 
   // Leave Requests (manager/admin view)
@@ -538,8 +539,8 @@ class ApiService {
 
   // Timesheets / payroll runs
   Future<List<dynamic>> getTimesheets() async {
-    final data = await _cachedGet('/api/payroll', 'timesheets');
-    return data['payrollRuns'] ?? data['data'] ?? [];
+    final data = await _cachedGet('/api/operations/timesheets', 'timesheets');
+    return data['timesheets'] ?? data['data'] ?? [];
   }
 
   // Shifts
@@ -550,7 +551,7 @@ class ApiService {
 
   // Expenses
   Future<List<dynamic>> getExpenses() async {
-    final data = await _cachedGet('/api/expenses', 'expenses');
+    final data = await _cachedGet('/api/operations/expenses/my', 'expenses');
     return data['expenses'] ?? data['data'] ?? [];
   }
 
@@ -900,7 +901,7 @@ class ApiService {
   }
 
   Future<void> createExpense(Map<String, dynamic> body) async {
-    await _queueablePost('/api/expenses', body);
+    await _queueablePost('/api/operations/expenses', body);
   }
 
   Future<void> createShift(Map<String, dynamic> body) async {

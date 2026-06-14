@@ -5,8 +5,8 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
 import '../../core/api.dart';
 import '../../core/auth.dart';
-import '../../core/theme.dart';
 import '../../widgets/ds/home_widgets.dart';
+import '../../core/theme.dart';
 
 final _signInStatusProvider = FutureProvider.autoDispose<Map<String, dynamic>>(
     (ref) => apiService.getSignInStatus());
@@ -253,7 +253,7 @@ class _EmployeeHomeScreenState extends ConsumerState<EmployeeHomeScreen> {
             ),
           ),
         ],
-      );
+    );
   }
 }
 
