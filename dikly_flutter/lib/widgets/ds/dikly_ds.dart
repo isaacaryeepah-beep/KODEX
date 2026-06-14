@@ -7,3 +7,4 @@ export 'section_label.dart';
 export 'primary_button.dart';
 export 'stat_card.dart';
 export 'error_view.dart';
+export 'home_widgets.dart';

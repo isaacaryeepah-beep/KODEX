@@ -111,6 +111,8 @@ class AppShell extends ConsumerWidget {
   final List<Widget>? actions;
   final Widget? floatingActionButton;
   final bool showBackButton;
+  final Color? appBarColor;
+  final Color? appBarForeground;
 
   const AppShell({
     super.key,
@@ -119,6 +121,8 @@ class AppShell extends ConsumerWidget {
     this.actions,
     this.floatingActionButton,
     this.showBackButton = false,
+    this.appBarColor,
+    this.appBarForeground,
   });
 
   @override
@@ -134,6 +138,18 @@ class AppShell extends ConsumerWidget {
 
     return Scaffold(
       appBar: AppBar(
+        backgroundColor: appBarColor ?? Colors.white,
+        foregroundColor: appBarForeground,
+        iconTheme: IconThemeData(color: appBarForeground ?? DiklyColors.text),
+        titleTextStyle: TextStyle(
+          color: appBarForeground ?? DiklyColors.text,
+          fontSize: 17,
+          fontWeight: FontWeight.w700,
+          fontFamily: 'DM Sans',
+        ),
+        elevation: 0,
+        scrolledUnderElevation: 0,
+        surfaceTintColor: Colors.transparent,
         title: Text(title),
         leading: showBackButton
             ? BackButton(onPressed: () => context.pop())
