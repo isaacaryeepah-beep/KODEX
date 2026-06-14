@@ -148,12 +148,14 @@ class _PortalSelectScreenState extends State<PortalSelectScreen> {
                     ],
                   ),
                 ),
-              ),
+              ],
             ),
           ),
-        ],
+        ),
       ),
-    );
+    ],
+  ),
+);
   }
 
   Widget _buildBrand() {
