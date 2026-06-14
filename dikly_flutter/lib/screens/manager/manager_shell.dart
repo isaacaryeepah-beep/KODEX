@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:google_fonts/google_fonts.dart';
 import '../../core/auth.dart';
 import '../../core/theme.dart';
 import '../../widgets/dikly_drawer.dart';
@@ -24,7 +25,7 @@ class _ManagerShellState extends ConsumerState<ManagerShell> {
   @override
   void initState() { super.initState(); _index = widget.initialTab; }
 
-  static const _color = Color(0xFF0891B2); // cyan-600 — manager accent
+  static const _color = Color(0xFF1D4ED8); // blue — manager accent (web design token)
 
   static const _labels = ['Dashboard', 'Team', 'Leave', 'Timesheets'];
   static const _icons = [
@@ -85,17 +86,39 @@ class _ManagerShellState extends ConsumerState<ManagerShell> {
     return Scaffold(
       backgroundColor: DiklyColors.background,
       appBar: AppBar(
-        backgroundColor: const Color(0xFF0E7490),
-        foregroundColor: Colors.white,
+        backgroundColor: Colors.white,
+        foregroundColor: const Color(0xFF0D1117),
         elevation: 0,
+        shadowColor: Colors.transparent,
         surfaceTintColor: Colors.transparent,
+        shape: const Border(bottom: BorderSide(color: Color(0xFFE5E7EB), width: 1)),
         leading: Builder(
           builder: (ctx) => IconButton(
-            icon: const Icon(Icons.menu_outlined, color: Colors.white),
+            icon: const Icon(Icons.menu_outlined, color: Color(0xFF0D1117)),
             onPressed: () => Scaffold.of(ctx).openDrawer(),
           ),
         ),
-        title: const Text('Manager Portal', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w700)),
+        title: Row(
+          children: [
+            Container(
+              width: 3, height: 20,
+              decoration: BoxDecoration(
+                color: _color,
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+            const SizedBox(width: 10),
+            Text(
+              'Manager Portal',
+              style: GoogleFonts.dmSans(
+                fontSize: 17,
+                fontWeight: FontWeight.w700,
+                color: const Color(0xFF0D1117),
+                letterSpacing: -0.3,
+              ),
+            ),
+          ],
+        ),
         actions: [
           PopupMenuButton<String>(
             offset: const Offset(0, 48),
@@ -104,10 +127,10 @@ class _ManagerShellState extends ConsumerState<ManagerShell> {
               padding: const EdgeInsets.symmetric(horizontal: 12),
               child: CircleAvatar(
                 radius: 18,
-                backgroundColor: Colors.white.withOpacity(0.25),
+                backgroundColor: _color.withOpacity(0.12),
                 child: Text(
                   (user?.name ?? 'M').substring(0, 1).toUpperCase(),
-                  style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w700, fontSize: 14),
+                  style: TextStyle(color: _color, fontWeight: FontWeight.w700, fontSize: 14),
                 ),
               ),
             ),

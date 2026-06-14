@@ -27,9 +27,16 @@ class _AdminShellState extends ConsumerState<AdminShell> {
     _index = widget.initialTab;
   }
 
-  static const _accent = Color(0xFFDC2626);
+  static const _accent = Color(0xFFDC2626); // Admin red accent
+  static const _labels = ['Dashboard', 'Users', 'Courses', 'Reports'];
+  static const _icons = [
+    Icons.dashboard_outlined,
+    Icons.people_outlined,
+    Icons.book_outlined,
+    Icons.bar_chart_outlined,
+  ];
 
-  static const _academicSections = [
+  static const _sections = [
     DrawerSection(items: [
       DrawerItem(Icons.dashboard_outlined, 'Dashboard', '/dashboard/admin'),
     ]),
@@ -66,73 +73,51 @@ class _AdminShellState extends ConsumerState<AdminShell> {
     ]),
   ];
 
-  static const _corporateSections = [
-    DrawerSection(items: [
-      DrawerItem(Icons.dashboard_outlined, 'Dashboard', '/dashboard/admin'),
-    ]),
-    DrawerSection(header: 'MANAGE', items: [
-      DrawerItem(Icons.check_circle_outline, 'Approvals', '/admin/approvals'),
-      DrawerItem(Icons.search_outlined, 'Search', '/admin/search'),
-      DrawerItem(Icons.people_outlined, 'Users', '/admin/users'),
-      DrawerItem(Icons.play_circle_outline, 'Sessions', '/admin/sessions'),
-    ]),
-    DrawerSection(header: 'WORKFORCE', items: [
-      DrawerItem(Icons.login_outlined, 'Sign In / Out', '/sign-in-out'),
-      DrawerItem(Icons.groups_outlined, 'Team Attendance', '/corporate-attendance'),
-      DrawerItem(Icons.schedule_outlined, 'Shifts', '/shifts'),
-      DrawerItem(Icons.event_note_outlined, 'Leave Requests', '/manager/leave-requests'),
-      DrawerItem(Icons.trending_up_outlined, 'Performance', '/performance'),
-      DrawerItem(Icons.receipt_long_outlined, 'Timesheets', '/manager/timesheets'),
-      DrawerItem(Icons.attach_money_outlined, 'Expenses', '/expenses'),
-      DrawerItem(Icons.campaign_outlined, 'Announcements', '/announcements'),
-      DrawerItem(Icons.account_balance_outlined, 'Branches', '/admin/branches'),
-    ]),
-    DrawerSection(header: 'INSIGHTS', items: [
-      DrawerItem(Icons.assessment_outlined, 'Reports', '/admin/reports'),
-    ]),
-    DrawerSection(header: 'SUPPORT', items: [
-      DrawerItem(Icons.card_membership_outlined, 'Subscription', '/subscription'),
-      DrawerItem(Icons.person_outlined, 'Profile', '/profile'),
-    ]),
-  ];
-
   @override
   Widget build(BuildContext context) {
     final user = ref.watch(authProvider).user;
-    final isCorporate = user?.isCorporate ?? false;
-
-    final labels = isCorporate
-        ? const ['Dashboard', 'Users', 'Attendance', 'Reports']
-        : const ['Dashboard', 'Users', 'Courses', 'Reports'];
-    final icons = isCorporate
-        ? const [Icons.dashboard_outlined, Icons.people_outlined, Icons.groups_outlined, Icons.bar_chart_outlined]
-        : const [Icons.dashboard_outlined, Icons.people_outlined, Icons.book_outlined, Icons.bar_chart_outlined];
-    final screens = isCorporate
-        ? const [AdminHomeScreen(), AdminUsersScreen(), AdminUsersScreen(), AdminReportsScreen()]
-        : const [AdminHomeScreen(), AdminUsersScreen(), AdminCoursesScreen(), AdminReportsScreen()];
-    final sections = isCorporate ? _corporateSections : _academicSections;
+    final screens = const [
+      AdminHomeScreen(),
+      AdminUsersScreen(),
+      AdminCoursesScreen(),
+      AdminReportsScreen(),
+    ];
 
     return Scaffold(
       backgroundColor: DiklyColors.background,
       appBar: AppBar(
-        backgroundColor: const Color(0xFF3730A3),
-        foregroundColor: Colors.white,
+        backgroundColor: Colors.white,
+        foregroundColor: const Color(0xFF0D1117),
         elevation: 0,
         shadowColor: Colors.transparent,
         surfaceTintColor: Colors.transparent,
+        shape: const Border(bottom: BorderSide(color: Color(0xFFE5E7EB), width: 1)),
         leading: Builder(
           builder: (ctx) => IconButton(
-            icon: const Icon(Icons.menu_outlined, color: Colors.white),
+            icon: const Icon(Icons.menu_outlined, color: Color(0xFF0D1117)),
             onPressed: () => Scaffold.of(ctx).openDrawer(),
           ),
         ),
-        title: Text(
-          'Admin Portal',
-          style: GoogleFonts.dmSans(
-            fontSize: 17,
-            fontWeight: FontWeight.w700,
-            color: Colors.white,
-          ),
+        title: Row(
+          children: [
+            Container(
+              width: 3, height: 20,
+              decoration: BoxDecoration(
+                color: _accent,
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+            const SizedBox(width: 10),
+            Text(
+              'Admin Portal',
+              style: GoogleFonts.dmSans(
+                fontSize: 17,
+                fontWeight: FontWeight.w700,
+                color: const Color(0xFF0D1117),
+                letterSpacing: -0.3,
+              ),
+            ),
+          ],
         ),
         actions: [
           PopupMenuButton<String>(
@@ -143,11 +128,11 @@ class _AdminShellState extends ConsumerState<AdminShell> {
               padding: const EdgeInsets.symmetric(horizontal: 12),
               child: CircleAvatar(
                 radius: 18,
-                backgroundColor: _accent,
+                backgroundColor: _accent.withOpacity(0.12),
                 child: Text(
                   (user?.name ?? 'A').substring(0, 1).toUpperCase(),
                   style: GoogleFonts.dmSans(
-                    color: Colors.white,
+                    color: _accent,
                     fontWeight: FontWeight.w700,
                     fontSize: 14,
                   ),
@@ -228,8 +213,8 @@ class _AdminShellState extends ConsumerState<AdminShell> {
         accentColor: _accent,
         userName: user?.name ?? '',
         userEmail: user?.email ?? '',
-        userRole: isCorporate ? 'Company Admin' : 'Administrator',
-        sections: sections,
+        userRole: 'Administrator',
+        sections: _sections,
         onSignOut: () async {
           Navigator.pop(context);
           await ref.read(authProvider.notifier).logout();
@@ -250,7 +235,7 @@ class _AdminShellState extends ConsumerState<AdminShell> {
         elevation: 8,
         items: List.generate(
           4,
-          (i) => BottomNavigationBarItem(icon: Icon(icons[i]), label: labels[i]),
+          (i) => BottomNavigationBarItem(icon: Icon(_icons[i]), label: _labels[i]),
         ),
       ),
     );

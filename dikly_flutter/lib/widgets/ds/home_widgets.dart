@@ -27,19 +27,19 @@ class DiklyRoleTheme {
     gradient: [Color(0xFF92400E), Color(0xFFD97706)],
   );
   static const admin = DiklyRoleTheme(
-    primary: Color(0xFF4F46E5),
-    dark:    Color(0xFF3730A3),
-    gradient: [Color(0xFF312E81), Color(0xFF4F46E5)],
+    primary: Color(0xFFDC2626),
+    dark:    Color(0xFFB91C1C),
+    gradient: [Color(0xFF991B1B), Color(0xFFDC2626)],
   );
   static const hod = DiklyRoleTheme(
-    primary: Color(0xFF6366F1),
-    dark:    Color(0xFF4F46E5),
-    gradient: [Color(0xFF312E81), Color(0xFF6366F1)],
+    primary: Color(0xFF0891B2),
+    dark:    Color(0xFF0E7490),
+    gradient: [Color(0xFF155E75), Color(0xFF0891B2)],
   );
   static const manager = DiklyRoleTheme(
-    primary: Color(0xFF4F6EF7),
-    dark:    Color(0xFF3B55D6),
-    gradient: [Color(0xFF3730A3), Color(0xFF4F6EF7)],
+    primary: Color(0xFF1D4ED8),
+    dark:    Color(0xFF1E40AF),
+    gradient: [Color(0xFF1E3A8A), Color(0xFF2563EB)],
   );
   static const employee = DiklyRoleTheme(
     primary: Color(0xFF059669),
@@ -197,8 +197,8 @@ class DiklyPageBody extends StatelessWidget {
     return Expanded(
       child: Container(
         decoration: const BoxDecoration(
-          color: Color(0xFFF8FAFC),
-          borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+          color: Color(0xFFF4F6F9),
+          borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
         ),
         clipBehavior: Clip.hardEdge,
         child: child,
@@ -358,7 +358,7 @@ class DiklyListTile extends StatelessWidget {
         decoration: BoxDecoration(
           color: Colors.white,
           borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: const Color(0xFFE4E4E7)),
+          border: Border.all(color: const Color(0xFFE5E7EB)),
           boxShadow: [
             BoxShadow(
               color: Colors.black.withOpacity(0.04),
@@ -548,7 +548,7 @@ class DiklyShimmerCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Shimmer.fromColors(
-      baseColor: const Color(0xFFE4E4E7),
+      baseColor: const Color(0xFFE5E7EB),
       highlightColor: const Color(0xFFF4F4F5),
       child: Container(
         height: height,
@@ -666,19 +666,10 @@ class DiklyGradientStat extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-        gradient: LinearGradient(
-          colors: [color, color.withOpacity(0.75)],
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-        ),
-        borderRadius: BorderRadius.circular(14),
-        boxShadow: [
-          BoxShadow(
-            color: color.withOpacity(0.25),
-            blurRadius: 12,
-            offset: const Offset(0, 4),
-          ),
-        ],
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: const Color(0xFFE5E7EB)),
+        boxShadow: const [BoxShadow(color: Color(0x0D000000), blurRadius: 2, offset: Offset(0, 1))],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -691,24 +682,24 @@ class DiklyGradientStat extends StatelessWidget {
                 width: 34,
                 height: 34,
                 decoration: BoxDecoration(
-                  color: Colors.white.withOpacity(0.2),
-                  borderRadius: BorderRadius.circular(10),
+                  color: color.withOpacity(0.10),
+                  borderRadius: BorderRadius.circular(9),
                 ),
-                child: Icon(icon, size: 18, color: Colors.white),
+                child: Icon(icon, size: 18, color: color),
               ),
               if (trend != null)
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                   decoration: BoxDecoration(
-                    color: Colors.white.withOpacity(0.2),
+                    color: const Color(0xFF16A34A).withOpacity(0.10),
                     borderRadius: BorderRadius.circular(20),
                   ),
                   child: Text(
                     trend!,
                     style: GoogleFonts.dmSans(
-                      fontSize: 10,
+                      fontSize: 9,
                       fontWeight: FontWeight.w700,
-                      color: Colors.white,
+                      color: const Color(0xFF16A34A),
                     ),
                   ),
                 ),
@@ -720,17 +711,19 @@ class DiklyGradientStat extends StatelessWidget {
             style: GoogleFonts.dmSans(
               fontSize: 24,
               fontWeight: FontWeight.w800,
-              color: Colors.white,
+              color: color,
+              letterSpacing: -0.5,
               height: 1.0,
             ),
           ),
-          const SizedBox(height: 2),
+          const SizedBox(height: 3),
           Text(
-            label,
+            label.toUpperCase(),
             style: GoogleFonts.dmSans(
-              fontSize: 11,
-              color: Colors.white.withOpacity(0.8),
-              fontWeight: FontWeight.w500,
+              fontSize: 9,
+              fontWeight: FontWeight.w600,
+              color: const Color(0xFF9CA3AF),
+              letterSpacing: 0.6,
             ),
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
@@ -757,7 +750,7 @@ class DiklyEmptyCard extends StatelessWidget {
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: const Color(0xFFE4E4E7)),
+        border: Border.all(color: const Color(0xFFE5E7EB)),
       ),
       child: Column(
         children: [

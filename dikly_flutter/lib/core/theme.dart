@@ -2,42 +2,42 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 
 class DiklyColors {
-  // Primary — Dikly brand blue-purple (#4F6EF7)
-  static const Color primary       = Color(0xFF4F6EF7);
-  static const Color primaryDark   = Color(0xFF3B55D6);
-  static const Color primaryLight  = Color(0xFF7C93FB);
-  static const Color primaryULight = Color(0xFFEEF2FF);
+  // Primary — Dikly brand blue (#2563EB)
+  static const Color primary       = Color(0xFF2563EB);
+  static const Color primaryDark   = Color(0xFF1D4ED8);
+  static const Color primaryLight  = Color(0xFF3B82F6);
+  static const Color primaryULight = Color(0xFFEFF6FF);
 
-  // Semantic (NextUI tokens)
-  static const Color success       = Color(0xFF17C964);
-  static const Color successLight  = Color(0xFFD1FAE5);
-  static const Color warning       = Color(0xFFF5A524);
-  static const Color warningLight  = Color(0xFFFEF3C7);
-  static const Color error         = Color(0xFFF31260);
-  static const Color errorLight    = Color(0xFFFFE4EF);
+  // Semantic (web design tokens)
+  static const Color success       = Color(0xFF16A34A);
+  static const Color successLight  = Color(0xFFDCFCE7);
+  static const Color warning       = Color(0xFFD97706);
+  static const Color warningLight  = Color(0xFFFEF9C3);
+  static const Color error         = Color(0xFFDC2626);
+  static const Color errorLight    = Color(0xFFFEE2E2);
   static const Color info          = Color(0xFF006FEE);
   static const Color infoLight     = Color(0xFFE6F1FE);
 
-  // Surface / BG (zinc-based)
-  static const Color background    = Color(0xFFFAFAFA);  // zinc-50
+  // Surface / BG
+  static const Color background    = Color(0xFFF4F6F9);
   static const Color surface       = Color(0xFFFFFFFF);
-  static const Color surfaceHover  = Color(0xFFF4F4F5);  // zinc-100
+  static const Color surfaceHover  = Color(0xFFF3F4F6);
 
-  // Text (zinc scale)
-  static const Color text          = Color(0xFF18181B);  // zinc-900
-  static const Color textSecondary = Color(0xFF52525B);  // zinc-600
-  static const Color textLight     = Color(0xFF71717A);  // zinc-500
-  static const Color textMuted     = Color(0xFFA1A1AA);  // zinc-400
+  // Text
+  static const Color text          = Color(0xFF0D1117);
+  static const Color textSecondary = Color(0xFF374151);
+  static const Color textLight     = Color(0xFF6B7280);
+  static const Color textMuted     = Color(0xFF9CA3AF);
 
-  // Border (zinc scale)
-  static const Color border        = Color(0xFFE4E4E7);  // zinc-200
-  static const Color borderFocus   = Color(0xFFA1A1AA);  // zinc-400
-  static const Color borderLight   = Color(0xFFF4F4F5);  // zinc-100
+  // Border
+  static const Color border        = Color(0xFFE5E7EB);
+  static const Color borderFocus   = Color(0xFF9CA3AF);
+  static const Color borderLight   = Color(0xFFF3F4F6);
 
   // Grays (zinc scale kept for compat)
   static const Color grey50  = Color(0xFFFAFAFA);
   static const Color grey100 = Color(0xFFF4F4F5);
-  static const Color grey200 = Color(0xFFE4E4E7);
+  static const Color grey200 = Color(0xFFE5E7EB);
   static const Color grey300 = Color(0xFFD4D4D8);
   static const Color grey400 = Color(0xFFA1A1AA);
   static const Color grey500 = Color(0xFF71717A);
@@ -121,7 +121,7 @@ class AppTheme {
   static BoxDecoration card({double radius = 14}) => BoxDecoration(
     color: Colors.white,
     borderRadius: BorderRadius.circular(radius),
-    border: Border.all(color: const Color(0xFFE4E4E7)),
+    border: Border.all(color: const Color(0xFFE5E7EB)),
     boxShadow: shadowSm,
   );
 
@@ -130,7 +130,7 @@ class AppTheme {
       BoxDecoration(
         color: DiklyColors.surface,
         borderRadius: BorderRadius.circular(radius),
-        border: Border.all(color: const Color(0xFFE4E4E7), width: 1),
+        border: Border.all(color: const Color(0xFFE5E7EB), width: 1),
         boxShadow: shadow ?? shadowSm,
       );
 
@@ -152,7 +152,7 @@ class AppTheme {
       useMaterial3: true,
       colorScheme: colorScheme,
       textTheme: _textTheme,
-      scaffoldBackgroundColor: const Color(0xFFFAFAFA),
+      scaffoldBackgroundColor: const Color(0xFFF4F6F9),
 
       appBarTheme: AppBarTheme(
         backgroundColor: Colors.white,
@@ -162,7 +162,7 @@ class AppTheme {
         surfaceTintColor: Colors.transparent,
         titleTextStyle: _dm(17, FontWeight.w700, color: DiklyColors.text),
         iconTheme: const IconThemeData(color: DiklyColors.text, size: 22),
-        shape: const Border(bottom: BorderSide(color: Color(0xFFE4E4E7), width: 1)),
+        shape: const Border(bottom: BorderSide(color: Color(0xFFE5E7EB), width: 1)),
       ),
 
       cardTheme: CardThemeData(
@@ -172,7 +172,7 @@ class AppTheme {
         surfaceTintColor: Colors.transparent,
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(14),
-          side: const BorderSide(color: Color(0xFFE4E4E7), width: 1),
+          side: const BorderSide(color: Color(0xFFE5E7EB), width: 1),
         ),
         margin: const EdgeInsets.only(bottom: 12),
       ),
@@ -224,11 +224,11 @@ class AppTheme {
         contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
         border: OutlineInputBorder(
           borderRadius: BorderRadius.circular(10),
-          borderSide: const BorderSide(color: Color(0xFFE4E4E7), width: 1),
+          borderSide: const BorderSide(color: Color(0xFFE5E7EB), width: 1),
         ),
         enabledBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(10),
-          borderSide: const BorderSide(color: Color(0xFFE4E4E7), width: 1),
+          borderSide: const BorderSide(color: Color(0xFFE5E7EB), width: 1),
         ),
         focusedBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(10),
@@ -275,11 +275,11 @@ class AppTheme {
         labelStyle: _dm(12, FontWeight.w500, color: DiklyColors.textSecondary),
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(999)),
-        side: const BorderSide(color: Color(0xFFE4E4E7), width: 1),
+        side: const BorderSide(color: Color(0xFFE5E7EB), width: 1),
       ),
 
       dividerTheme: const DividerThemeData(
-        color: Color(0xFFE4E4E7),
+        color: Color(0xFFE5E7EB),
         space: 1,
         thickness: 1,
       ),

@@ -27,9 +27,9 @@ class DiklyStatCard extends StatelessWidget {
         borderRadius: BorderRadius.circular(14),
         border: Border(
           left: BorderSide(color: color, width: 4),
-          top: const BorderSide(color: Color(0xFFE4E4E7)),
-          right: const BorderSide(color: Color(0xFFE4E4E7)),
-          bottom: const BorderSide(color: Color(0xFFE4E4E7)),
+          top: const BorderSide(color: Color(0xFFE5E7EB)),
+          right: const BorderSide(color: Color(0xFFE5E7EB)),
+          bottom: const BorderSide(color: Color(0xFFE5E7EB)),
         ),
         boxShadow: AppTheme.shadowSm,
       ),
