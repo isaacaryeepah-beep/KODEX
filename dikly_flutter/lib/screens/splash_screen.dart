@@ -2,6 +2,7 @@ import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
+import '../core/update_checker.dart';
 
 class SplashScreen extends StatefulWidget {
   const SplashScreen({super.key});
@@ -17,6 +18,12 @@ class _SplashScreenState extends State<SplashScreen>
   late Animation<double> _logoScale;
   late Animation<double> _subtitleFade;
   late Animation<double> _glowPulse;
+
+  // Start update check immediately — runs in parallel with the animation.
+  late final Future<UpdateInfo?> _updateFuture = UpdateChecker.check();
+
+  // null = not updating, 0.0–1.0 = download progress
+  double? _downloadProgress;
 
   @override
   void initState() {
@@ -45,9 +52,36 @@ class _SplashScreenState extends State<SplashScreen>
 
     _ctrl.forward();
 
-    Future.delayed(const Duration(milliseconds: 3200), () {
-      if (mounted) context.go('/portal');
+    Future.delayed(const Duration(milliseconds: 3200), () async {
+      if (!mounted) return;
+      final update = await _updateFuture;
+      if (!mounted) return;
+      if (update != null) {
+        await _downloadAndInstall(update);
+      } else {
+        context.go('/portal');
+      }
     });
+  }
+
+  Future<void> _downloadAndInstall(UpdateInfo update) async {
+    if (!mounted) return;
+    setState(() => _downloadProgress = 0.0);
+
+    try {
+      await UpdateChecker.downloadAndInstall(
+        update,
+        onProgress: (p) {
+          if (mounted) setState(() => _downloadProgress = p);
+        },
+      );
+      // System installer has launched — navigate to portal so the app is
+      // ready when the user returns after installation.
+      if (mounted) context.go('/portal');
+    } catch (_) {
+      // Download failed — navigate silently and retry next launch.
+      if (mounted) context.go('/portal');
+    }
   }
 
   @override
@@ -70,7 +104,53 @@ class _SplashScreenState extends State<SplashScreen>
             painter: _TechBgPainter(),
           ),
 
+          // ── Update download overlay ───────────────────────────────
+          if (_downloadProgress != null)
+            Container(
+              color: const Color(0xDD07192E),
+              child: Center(
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 40),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Icon(Icons.system_update_rounded,
+                          color: Color(0xFF00E5FF), size: 36),
+                      const SizedBox(height: 16),
+                      Text(
+                        'Updating DIKLY…',
+                        style: GoogleFonts.dmSans(
+                          color: Colors.white,
+                          fontSize: 16,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+                      ClipRRect(
+                        borderRadius: BorderRadius.circular(4),
+                        child: LinearProgressIndicator(
+                          value: _downloadProgress,
+                          backgroundColor: Colors.white12,
+                          valueColor: const AlwaysStoppedAnimation(Color(0xFF00E5FF)),
+                          minHeight: 6,
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      Text(
+                        '${((_downloadProgress ?? 0) * 100).toInt()}%',
+                        style: GoogleFonts.dmSans(
+                          color: Colors.white54,
+                          fontSize: 12,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+
           // ── Animated content ─────────────────────────────────────
+          if (_downloadProgress == null)
           AnimatedBuilder(
             animation: _ctrl,
             builder: (context, _) {
@@ -154,6 +234,7 @@ class _SplashScreenState extends State<SplashScreen>
     );
   }
 }
+
 
 /// Paints the dark navy tech background:
 /// diagonal streaks · QR pattern · constellation dots · waveform.

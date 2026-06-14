@@ -5,6 +5,10 @@ on:
     branches: [main, claude/update-resume-aVv3d]
   workflow_dispatch:
 
+concurrency:
+  group: flutter-release
+  cancel-in-progress: true
+
 jobs:
   build-android:
     name: Build Android
@@ -49,7 +53,7 @@ jobs:
 
       - name: Build Release APK
         working-directory: dikly_flutter
-        run: flutter build apk --release
+        run: flutter build apk --release --build-number=${{ github.run_number }} --build-name=1.0.${{ github.run_number }}
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
@@ -60,7 +64,7 @@ jobs:
 
       - name: Build Release AAB (Play Store)
         working-directory: dikly_flutter
-        run: flutter build appbundle --release
+        run: flutter build appbundle --release --build-number=${{ github.run_number }} --build-name=1.0.${{ github.run_number }}
 
       - name: Upload AAB
         uses: actions/upload-artifact@v4
