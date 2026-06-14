@@ -759,15 +759,35 @@ class ApiService {
 
   // Performance
   Future<Map<String, dynamic>> getPerformance() async {
-    final response = await _dio.get('/api/performance/me');
-    final data = response.data;
-    return (data['data'] ?? data) as Map<String, dynamic>;
+    final d = await getStudentDashboardData();
+    return {
+      'attendanceRate': d['attendanceRate'] ?? 0,
+      'assignmentsCompleted': d['quizzesTaken'] ?? 0,
+      'averageGrade': d['attendanceRate'] ?? 0,
+      'sessionsAttended': d['totalCheckIns'] ?? 0,
+    };
   }
 
   Future<Map<String, dynamic>> getLecturerPerformance() async {
-    final response = await _dio.get('/api/performance/lecturer');
-    final data = response.data;
-    return (data['data'] ?? data) as Map<String, dynamic>;
+    final d = await getLecturerDashboardData();
+    return {
+      'totalSessions': d['totalSessions'] ?? 0,
+      'avgAttendance': 0.0,
+      'coursesActive': d['activeCourses'] ?? 0,
+      'studentsFeedbackScore': 0.0,
+    };
+  }
+
+  Future<Map<String, dynamic>> getCorporatePerformance() async {
+    final response = await _dio.get('/api/performance/my-scorecard');
+    final data = response.data ?? {};
+    final reviewScore = double.tryParse(data['avgReviewScore']?.toString() ?? '') ?? 0.0;
+    return {
+      'attendanceRate': data['avgProgress'] ?? 0,
+      'assignmentsCompleted': data['completedGoals'] ?? 0,
+      'averageGrade': (reviewScore * 20).round(),
+      'sessionsAttended': data['totalGoals'] ?? 0,
+    };
   }
 
   Future<List<Map<String, dynamic>>> getLecturerQuizzesWithStats() async {

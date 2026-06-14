@@ -15,17 +15,39 @@ final _lecturerPerformanceProvider =
   (ref) => apiService.getLecturerPerformance(),
 );
 
+final _corporatePerformanceProvider =
+    FutureProvider.autoDispose<Map<String, dynamic>>(
+  (ref) => apiService.getCorporatePerformance(),
+);
+
 class PerformanceScreen extends ConsumerWidget {
   const PerformanceScreen({super.key});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final user = ref.watch(currentUserProvider);
-    final isLecturer = user?.role == 'lecturer';
+    final role = user?.role ?? 'student';
+    final isLecturer = role == 'lecturer';
+    final isCorporate = role == 'admin' || role == 'manager' || role == 'employee';
 
-    final title = (user?.role == 'admin' || user?.role == 'manager')
-        ? 'Performance'
-        : 'My Performance';
+    final title = isCorporate ? 'My Performance' : 'My Performance';
+
+    if (isCorporate) {
+      final async = ref.watch(_corporatePerformanceProvider);
+      return _buildScaffold(
+        context: context,
+        title: title,
+        body: async.when(
+          loading: () => const Center(child: CircularProgressIndicator()),
+          error: (e, _) => _ErrorView(
+              onRetry: () => ref.refresh(_corporatePerformanceProvider)),
+          data: (data) => RefreshIndicator(
+            onRefresh: () async => ref.refresh(_corporatePerformanceProvider),
+            child: _PerformanceBody(data: data, isLecturer: false),
+          ),
+        ),
+      );
+    }
 
     if (isLecturer) {
       final async = ref.watch(_lecturerPerformanceProvider);

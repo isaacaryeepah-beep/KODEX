@@ -369,14 +369,27 @@ class _CorporateCards extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
+        const Padding(
+          padding: EdgeInsets.only(bottom: 10),
+          child: Text(
+            'CORPORATE PORTALS',
+            style: TextStyle(
+              fontSize: 9,
+              fontWeight: FontWeight.w700,
+              color: Color(0xFF9CA3AF),
+              letterSpacing: 2.0,
+            ),
+          ),
+        ),
         _PortalCard(
           icon: Icons.admin_panel_settings_outlined,
           iconColor: const Color(0xFF2563EB),
           iconBg: const Color(0xFFEFF6FF),
           title: 'Admin',
-          subtitle: 'Manage company settings & users',
-          onTap: () => context.go('/login/admin'),
+          subtitle: 'Company admin',
+          onTap: () => context.go('/login/admin', extra: 'corp'),
         ),
         const SizedBox(height: 8),
         _PortalCard(
@@ -385,7 +398,7 @@ class _CorporateCards extends StatelessWidget {
           iconBg: const Color(0xFFEEF2FF),
           title: 'Manager',
           subtitle: 'Team leads & department managers',
-          onTap: () => context.go('/login/manager'),
+          onTap: () => context.go('/login/manager', extra: 'corp'),
         ),
         const SizedBox(height: 8),
         _PortalCard(
@@ -394,7 +407,7 @@ class _CorporateCards extends StatelessWidget {
           iconBg: const Color(0xFFF0FDF4),
           title: 'Employee',
           subtitle: 'Staff & workers',
-          onTap: () => context.go('/login/employee'),
+          onTap: () => context.go('/login/employee', extra: 'corp'),
         ),
       ],
     );
@@ -432,7 +445,7 @@ class _AcademicCards extends StatelessWidget {
                 iconColor: const Color(0xFF2563EB),
                 iconBg: const Color(0xFFEFF6FF),
                 title: 'Admin',
-                onTap: () => context.go('/login/admin'),
+                onTap: () => context.go('/login/admin', extra: 'acad'),
               ),
             ),
             const SizedBox(width: 8),
@@ -442,7 +455,7 @@ class _AcademicCards extends StatelessWidget {
                 iconColor: const Color(0xFF7C3AED),
                 iconBg: const Color(0xFFF5F3FF),
                 title: 'Lecturer',
-                onTap: () => context.go('/login/lecturer'),
+                onTap: () => context.go('/login/lecturer', extra: 'acad'),
               ),
             ),
           ],
@@ -457,7 +470,7 @@ class _AcademicCards extends StatelessWidget {
                 iconColor: const Color(0xFF4F46E5),
                 iconBg: const Color(0xFFEEF2FF),
                 title: 'HOD',
-                onTap: () => context.go('/login/hod'),
+                onTap: () => context.go('/login/hod', extra: 'acad'),
               ),
             ),
             const SizedBox(width: 8),
@@ -467,7 +480,7 @@ class _AcademicCards extends StatelessWidget {
                 iconColor: const Color(0xFF0EA5E9),
                 iconBg: const Color(0xFFE0F2FE),
                 title: 'Student',
-                onTap: () => context.go('/login/student'),
+                onTap: () => context.go('/login/student', extra: 'acad'),
               ),
             ),
           ],
