@@ -81,14 +81,11 @@ class DiklyHeroSection extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       width: double.infinity,
-      decoration: BoxDecoration(
-        gradient: LinearGradient(
-          colors: gradient,
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-        ),
+      decoration: const BoxDecoration(
+        color: Colors.white,
+        border: Border(bottom: BorderSide(color: Color(0xFFE5E7EB), width: 1)),
       ),
-      padding: const EdgeInsets.fromLTRB(20, 12, 20, 24),
+      padding: const EdgeInsets.fromLTRB(20, 14, 20, 18),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -98,7 +95,7 @@ class DiklyHeroSection extends StatelessWidget {
             style: GoogleFonts.dmSans(
               fontSize: 22,
               fontWeight: FontWeight.w800,
-              color: Colors.white,
+              color: const Color(0xFF0D1117),
               height: 1.2,
             ),
           ),
@@ -107,23 +104,12 @@ class DiklyHeroSection extends StatelessWidget {
             subtitle,
             style: GoogleFonts.dmSans(
               fontSize: 13,
-              color: Colors.white70,
+              color: const Color(0xFF6B7280),
               fontWeight: FontWeight.w500,
             ),
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
           ),
-          if (stats.isNotEmpty) ...[
-            const SizedBox(height: 20),
-            Row(
-              children: [
-                for (int i = 0; i < stats.length; i++) ...[
-                  if (i > 0) const SizedBox(width: 10),
-                  Expanded(child: stats[i]),
-                ],
-              ],
-            ),
-          ],
         ],
       ),
     );
@@ -196,11 +182,7 @@ class DiklyPageBody extends StatelessWidget {
   Widget build(BuildContext context) {
     return Expanded(
       child: Container(
-        decoration: const BoxDecoration(
-          color: Color(0xFFF4F6F9),
-          borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-        ),
-        clipBehavior: Clip.hardEdge,
+        color: const Color(0xFFF4F6F9),
         child: child,
       ),
     );
@@ -664,12 +646,17 @@ class DiklyGradientStat extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.all(14),
+      padding: const EdgeInsets.fromLTRB(14, 12, 14, 14),
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: const Color(0xFFE5E7EB)),
-        boxShadow: const [BoxShadow(color: Color(0x0D000000), blurRadius: 2, offset: Offset(0, 1))],
+        border: Border(
+          top: BorderSide(color: color, width: 3),
+          left: const BorderSide(color: Color(0xFFE5E7EB)),
+          right: const BorderSide(color: Color(0xFFE5E7EB)),
+          bottom: const BorderSide(color: Color(0xFFE5E7EB)),
+        ),
+        boxShadow: const [BoxShadow(color: Color(0x0D000000), blurRadius: 4, offset: Offset(0, 2))],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -678,15 +665,7 @@ class DiklyGradientStat extends StatelessWidget {
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Container(
-                width: 34,
-                height: 34,
-                decoration: BoxDecoration(
-                  color: color.withOpacity(0.10),
-                  borderRadius: BorderRadius.circular(9),
-                ),
-                child: Icon(icon, size: 18, color: color),
-              ),
+              Icon(icon, size: 18, color: color),
               if (trend != null)
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
@@ -705,7 +684,7 @@ class DiklyGradientStat extends StatelessWidget {
                 ),
             ],
           ),
-          const SizedBox(height: 10),
+          const SizedBox(height: 8),
           Text(
             value,
             style: GoogleFonts.dmSans(
