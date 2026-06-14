@@ -44,13 +44,14 @@ flutter:
   assets:
     - assets/icon.png
     - assets/login-bg.jpg
+    - assets/bg_office.jpg
 
 flutter_launcher_icons:
   android: true
-  ios: false
+  ios: true
   image_path: "assets/icon.png"
   min_sdk_android: 21
-  adaptive_icon_background: "#2563EB"
+  adaptive_icon_background: "#FFFFFF"
   adaptive_icon_foreground: "assets/icon.png"
 
 

@@ -408,16 +408,38 @@ class ApiService {
   Future<Map<String, dynamic>> getManagerDashboardData() async {
     final results = await Future.wait([
       _dio.get('/api/corporate-attendance/today').catchError((_) => Response(requestOptions: RequestOptions(), data: {'records': [], 'summary': {}})),
-      _dio.get('/api/performance/team-overview').catchError((_) => Response(requestOptions: RequestOptions(), data: {'overview': []})),
       _dio.get('/api/approvals/pending').catchError((_) => Response(requestOptions: RequestOptions(), data: {'pending': []})),
-      _dio.get('/api/announcements?limit=5').catchError((_) => Response(requestOptions: RequestOptions(), data: {'announcements': []})),
+      _dio.get('/api/employee-profiles').catchError((_) => Response(requestOptions: RequestOptions(), data: {'employees': [], 'total': 0})),
+      _dio.get('/api/teams').catchError((_) => Response(requestOptions: RequestOptions(), data: {'teams': []})),
+      _dio.get('/api/corporate-attendance/summary').catchError((_) => Response(requestOptions: RequestOptions(), data: {})),
     ]);
+
+    final todayData = (results[0].data ?? {}) as Map<String, dynamic>;
+    final approvalsData = (results[1].data ?? {}) as Map<String, dynamic>;
+    final employeesData = (results[2].data ?? {}) as Map<String, dynamic>;
+    final teamsData = (results[3].data ?? {}) as Map<String, dynamic>;
+    final summaryData = (results[4].data ?? {}) as Map<String, dynamic>;
+
+    final todayRecords = (todayData['records'] as List?) ?? [];
+    final pendingList = (approvalsData['pending'] as List?) ?? [];
+    final employees = (employeesData['employees'] as List?) ?? [];
+    final teams = (teamsData['teams'] as List?) ?? [];
+    final todaySummary = (todayData['summary'] as Map<String, dynamic>?) ?? {};
+
+    final activeSessions = todaySummary['total_clocked'] ??
+        todayRecords.where((r) => r['clockOut'] == null && r['clockIn'] != null).length;
+
     return {
-      'todayRecords': results[0].data['records'] ?? [],
-      'todaySummary': results[0].data['summary'] ?? {},
-      'teamOverview': results[1].data['overview'] ?? [],
-      'pendingApprovals': results[2].data['pending'] ?? [],
-      'announcements': results[3].data['announcements'] ?? [],
+      'totalEmployees': employeesData['total'] ?? employees.length,
+      'activeSessions': activeSessions,
+      'hoursThisMonth': summaryData['totalHours'] ?? summaryData['hours'] ?? 0,
+      'leaveRequests': pendingList.length,
+      'departments': teams.length,
+      'pendingApprovals': pendingList,
+      'recentSessions': todayRecords.take(5).toList(),
+      'teamOverview': employees.take(10).toList(),
+      'teams': teams,
+      'todaySummary': todaySummary,
     };
   }
 

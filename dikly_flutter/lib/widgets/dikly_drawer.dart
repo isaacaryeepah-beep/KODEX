@@ -66,23 +66,13 @@ class DiklyDrawer extends StatelessWidget {
                   // Logo row
                   Row(
                     children: [
-                      Container(
-                        width: 34,
-                        height: 34,
-                        decoration: BoxDecoration(
-                          color: _textDark,
-                          borderRadius: BorderRadius.circular(10),
-                        ),
-                        child: Center(
-                          child: Text(
-                            'D',
-                            style: GoogleFonts.dmSans(
-                              fontSize: 16,
-                              fontWeight: FontWeight.w800,
-                              color: Colors.white,
-                              height: 1.0,
-                            ),
-                          ),
+                      ClipRRect(
+                        borderRadius: BorderRadius.circular(8),
+                        child: Image.asset(
+                          'assets/icon.png',
+                          width: 34,
+                          height: 34,
+                          fit: BoxFit.contain,
                         ),
                       ),
                       const SizedBox(width: 10),
