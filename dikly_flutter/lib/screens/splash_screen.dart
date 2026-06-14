@@ -305,7 +305,6 @@ class _TechBgPainter extends CustomPainter {
   void _drawBinaryHints(Canvas canvas, Size size) {
     final rng = Random(99);
     final samples = ['1010', '0011', '1001', '0110', '101', '010', '1100', '0101'];
-    final textPaint = Paint();
 
     for (int i = 0; i < 12; i++) {
       final x = 10.0 + rng.nextDouble() * (size.width - 60);
@@ -326,8 +325,6 @@ class _TechBgPainter extends CustomPainter {
       )..layout();
       tp.paint(canvas, Offset(x, y));
     }
-    // suppress unused warning
-    textPaint.toString();
   }
 
   @override

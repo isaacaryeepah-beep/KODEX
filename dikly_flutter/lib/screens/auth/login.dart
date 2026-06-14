@@ -5,7 +5,6 @@ import 'package:google_fonts/google_fonts.dart';
 import '../../core/auth.dart';
 import '../../core/theme.dart';
 
-// Role metadata: badge label, icon, accent color
 const _portalInfo = {
   'student': {
     'title': 'Student Portal',
@@ -101,22 +100,16 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     if (!_formKey.currentState!.validate()) return;
     FocusScope.of(context).unfocus();
 
-    final success = await ref.read(authProvider.notifier).login(
+    await ref.read(authProvider.notifier).login(
           password: _passwordController.text,
           loginRole: _info['loginRole'] as String,
           portalMode: _info['portalMode'] as String,
           email: _isStudent ? null : _emailController.text.trim(),
-          indexNumber: _isStudent
-              ? _emailController.text.trim().toUpperCase()
-              : null,
+          indexNumber: _isStudent ? _emailController.text.trim().toUpperCase() : null,
           institutionCode: _needsInstitutionCode
               ? _institutionCodeCtrl.text.trim().toUpperCase()
               : null,
         );
-
-    if (!success && mounted) {
-      // Error is shown inline via authState.error — nothing extra needed here.
-    }
   }
 
   @override
@@ -131,11 +124,11 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
       body: Stack(
         fit: StackFit.expand,
         children: [
-          // Office background
+          // ── Office workspace background ──────────────────────────
           Image.asset('assets/bg_office.jpg', fit: BoxFit.cover),
-          // Dark overlay
           Container(color: const Color(0xB5141628)),
-          // Content
+
+          // ── Scrollable content ───────────────────────────────────
           SafeArea(
             child: SingleChildScrollView(
               padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
@@ -144,7 +137,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                 children: [
                   const SizedBox(height: 8),
 
-                  // ── Back arrow ───────────────────────────────────────────
+                  // Back button (frosted glass)
                   GestureDetector(
                     onTap: () => context.pop(),
                     child: Container(
@@ -159,378 +152,327 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                         children: [
                           const Icon(Icons.arrow_back_ios_rounded, size: 14, color: Colors.white70),
                           const SizedBox(width: 4),
-                          Text('Back', style: GoogleFonts.dmSans(fontSize: 13, fontWeight: FontWeight.w500, color: Colors.white70)),
+                          Text(
+                            'Back',
+                            style: GoogleFonts.dmSans(
+                              fontSize: 13,
+                              fontWeight: FontWeight.w500,
+                              color: Colors.white70,
+                            ),
+                          ),
                         ],
                       ),
                     ),
                   ),
-              const SizedBox(height: 24),
+                  const SizedBox(height: 24),
 
-              // ── Logo (small) ────────────────────────────────────────────
-              Row(
-                children: [
-                  ClipRRect(
-                    borderRadius: BorderRadius.circular(9),
-                    child: Image.asset('assets/icon.png', width: 36, height: 36, fit: BoxFit.contain),
-                  ),
-                  const SizedBox(width: 10),
-                  Text(
-                    'DIKLY',
-                    style: GoogleFonts.dmSans(
-                      fontSize: 22,
-                      fontWeight: FontWeight.w800,
-                      color: Colors.white,
-                      letterSpacing: 1,
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 24),
-
-              // ── Login card ─────────────────────────────────────────────────
-              Center(
-                child: ConstrainedBox(
-                  constraints: const BoxConstraints(maxWidth: 480),
-                  child: Container(
-                    padding: const EdgeInsets.all(32),
-                    decoration: BoxDecoration(
-                      color: DiklyColors.surface,
-                      borderRadius: BorderRadius.circular(14),
-                      border: Border.all(
-                        color: DiklyColors.border,
-                        width: 1.5,
+                  // Logo
+                  Row(
+                    children: [
+                      ClipRRect(
+                        borderRadius: BorderRadius.circular(9),
+                        child: Image.asset(
+                          'assets/icon.png',
+                          width: 36,
+                          height: 36,
+                          fit: BoxFit.contain,
+                        ),
                       ),
-                      boxShadow: AppTheme.shadowMd,
-                    ),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        // Role badge chip
-                        Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 12,
-                            vertical: 6,
-                          ),
-                          decoration: BoxDecoration(
-                            color: color.withOpacity(0.10),
-                            borderRadius: BorderRadius.circular(999),
-                          ),
-                          child: Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              Icon(icon, size: 14, color: color),
-                              const SizedBox(width: 6),
-                              Text(
-                                badge,
-                                style: GoogleFonts.dmSans(
-                                  fontSize: 12,
-                                  fontWeight: FontWeight.w600,
-                                  color: color,
-                                ),
-                              ),
-                            ],
-                          ),
+                      const SizedBox(width: 10),
+                      Text(
+                        'DIKLY',
+                        style: GoogleFonts.dmSans(
+                          fontSize: 22,
+                          fontWeight: FontWeight.w800,
+                          color: Colors.white,
+                          letterSpacing: 1,
                         ),
-                        const SizedBox(height: 20),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 24),
 
-                        // "Welcome back"
-                        Text(
-                          'Welcome back',
-                          style: GoogleFonts.dmSans(
-                            fontSize: 24,
-                            fontWeight: FontWeight.w700,
-                            color: DiklyColors.text,
-                          ),
-                        ),
-                        const SizedBox(height: 4),
-                        Text(
-                          'Sign in to your account',
-                          style: GoogleFonts.dmSans(
-                            fontSize: 14,
-                            color: DiklyColors.textLight,
-                          ),
-                        ),
-                        const SizedBox(height: 28),
-
-                        // Error alert
-                        if (authState.error != null) ...[
-                          Container(
-                            width: double.infinity,
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 14,
-                              vertical: 12,
+                  // Login card
+                  Center(
+                    child: ConstrainedBox(
+                      constraints: const BoxConstraints(maxWidth: 480),
+                      child: Container(
+                        padding: const EdgeInsets.all(28),
+                        decoration: BoxDecoration(
+                          color: Colors.white,
+                          borderRadius: BorderRadius.circular(16),
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.black.withOpacity(0.25),
+                              blurRadius: 40,
+                              offset: const Offset(0, 12),
                             ),
-                            decoration: BoxDecoration(
-                              color: DiklyColors.errorLight,
-                              borderRadius: BorderRadius.circular(8),
-                              border: Border.all(
-                                color: DiklyColors.error.withOpacity(0.3),
+                          ],
+                        ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            // Role badge chip
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                              decoration: BoxDecoration(
+                                color: color.withOpacity(0.10),
+                                borderRadius: BorderRadius.circular(999),
                               ),
-                            ),
-                            child: Row(
-                              children: [
-                                const Icon(
-                                  Icons.error_outline_rounded,
-                                  size: 16,
-                                  color: DiklyColors.error,
-                                ),
-                                const SizedBox(width: 8),
-                                Expanded(
-                                  child: Text(
-                                    authState.error!,
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Icon(icon, size: 14, color: color),
+                                  const SizedBox(width: 6),
+                                  Text(
+                                    badge,
                                     style: GoogleFonts.dmSans(
-                                      fontSize: 13,
-                                      color: DiklyColors.error,
-                                    ),
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                          const SizedBox(height: 20),
-                        ],
-
-                        // Form
-                        Form(
-                          key: _formKey,
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              // Identifier label + field (email or student index number)
-                              Text(
-                                _isStudent
-                                    ? 'Student ID / Index Number'
-                                    : 'Email address',
-                                style: GoogleFonts.dmSans(
-                                  fontSize: 13,
-                                  fontWeight: FontWeight.w500,
-                                  color: DiklyColors.textSecondary,
-                                ),
-                              ),
-                              const SizedBox(height: 6),
-                              TextFormField(
-                                controller: _emailController,
-                                keyboardType: _isStudent
-                                    ? TextInputType.text
-                                    : TextInputType.emailAddress,
-                                autocorrect: false,
-                                textCapitalization: _isStudent
-                                    ? TextCapitalization.characters
-                                    : TextCapitalization.none,
-                                style: GoogleFonts.dmSans(
-                                  fontSize: 14,
-                                  color: DiklyColors.text,
-                                ),
-                                decoration: InputDecoration(
-                                  hintText: _isStudent
-                                      ? 'e.g. STU/2021/001'
-                                      : 'you@example.com',
-                                  prefixIcon: Icon(
-                                    _isStudent
-                                        ? Icons.badge_outlined
-                                        : Icons.email_outlined,
-                                    size: 18,
-                                  ),
-                                  contentPadding: const EdgeInsets.symmetric(
-                                    horizontal: 14,
-                                    vertical: 12,
-                                  ),
-                                ),
-                                validator: (value) {
-                                  if (value == null || value.trim().isEmpty) {
-                                    return _isStudent
-                                        ? 'Please enter your student ID'
-                                        : 'Please enter your email';
-                                  }
-                                  if (!_isStudent && !value.contains('@')) {
-                                    return 'Please enter a valid email';
-                                  }
-                                  return null;
-                                },
-                              ),
-                              const SizedBox(height: 18),
-
-                              // Institution Code field (student / manager / employee)
-                              if (_needsInstitutionCode) ...[
-                                Text(
-                                  'Institution Code',
-                                  style: GoogleFonts.dmSans(
-                                    fontSize: 13,
-                                    fontWeight: FontWeight.w500,
-                                    color: DiklyColors.textSecondary,
-                                  ),
-                                ),
-                                const SizedBox(height: 6),
-                                TextFormField(
-                                  controller: _institutionCodeCtrl,
-                                  keyboardType: TextInputType.text,
-                                  autocorrect: false,
-                                  textCapitalization:
-                                      TextCapitalization.characters,
-                                  style: GoogleFonts.dmSans(
-                                    fontSize: 14,
-                                    color: DiklyColors.text,
-                                  ),
-                                  decoration: InputDecoration(
-                                    hintText: 'e.g. KNUST2024',
-                                    prefixIcon: const Icon(
-                                      Icons.account_balance_outlined,
-                                      size: 18,
-                                    ),
-                                    contentPadding:
-                                        const EdgeInsets.symmetric(
-                                      horizontal: 14,
-                                      vertical: 12,
-                                    ),
-                                  ),
-                                  validator: (value) {
-                                    if (value == null ||
-                                        value.trim().isEmpty) {
-                                      return 'Please enter your institution code';
-                                    }
-                                    return null;
-                                  },
-                                ),
-                                const SizedBox(height: 18),
-                              ],
-
-                              // Password label + field
-                              Text(
-                                'Password',
-                                style: GoogleFonts.dmSans(
-                                  fontSize: 13,
-                                  fontWeight: FontWeight.w500,
-                                  color: DiklyColors.textSecondary,
-                                ),
-                              ),
-                              const SizedBox(height: 6),
-                              TextFormField(
-                                controller: _passwordController,
-                                obscureText: _obscurePassword,
-                                style: GoogleFonts.dmSans(
-                                  fontSize: 14,
-                                  color: DiklyColors.text,
-                                ),
-                                decoration: InputDecoration(
-                                  hintText: '••••••••',
-                                  prefixIcon: const Icon(
-                                    Icons.lock_outline_rounded,
-                                    size: 18,
-                                  ),
-                                  contentPadding: const EdgeInsets.symmetric(
-                                    horizontal: 14,
-                                    vertical: 12,
-                                  ),
-                                  suffixIcon: GestureDetector(
-                                    onTap: () => setState(
-                                      () => _obscurePassword = !_obscurePassword,
-                                    ),
-                                    child: Icon(
-                                      _obscurePassword
-                                          ? Icons.visibility_outlined
-                                          : Icons.visibility_off_outlined,
-                                      size: 18,
-                                      color: DiklyColors.textLight,
-                                    ),
-                                  ),
-                                ),
-                                validator: (value) {
-                                  if (value == null || value.isEmpty) {
-                                    return 'Please enter your password';
-                                  }
-                                  if (value.length < 4) {
-                                    return 'Password too short';
-                                  }
-                                  return null;
-                                },
-                              ),
-                              const SizedBox(height: 12),
-
-                              // Forgot password
-                              Align(
-                                alignment: Alignment.centerRight,
-                                child: GestureDetector(
-                                  onTap: () {},
-                                  child: Text(
-                                    'Forgot password?',
-                                    style: GoogleFonts.dmSans(
-                                      fontSize: 13,
-                                      fontWeight: FontWeight.w500,
+                                      fontSize: 12,
+                                      fontWeight: FontWeight.w600,
                                       color: color,
                                     ),
                                   ),
+                                ],
+                              ),
+                            ),
+                            const SizedBox(height: 18),
+
+                            Text(
+                              'Welcome back',
+                              style: GoogleFonts.dmSans(
+                                fontSize: 24,
+                                fontWeight: FontWeight.w700,
+                                color: DiklyColors.text,
+                              ),
+                            ),
+                            const SizedBox(height: 4),
+                            Text(
+                              'Sign in to your account',
+                              style: GoogleFonts.dmSans(fontSize: 14, color: DiklyColors.textLight),
+                            ),
+                            const SizedBox(height: 24),
+
+                            // Error banner
+                            if (authState.error != null) ...[
+                              Container(
+                                width: double.infinity,
+                                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                                decoration: BoxDecoration(
+                                  color: DiklyColors.errorLight,
+                                  borderRadius: BorderRadius.circular(8),
+                                  border: Border.all(color: DiklyColors.error.withOpacity(0.3)),
+                                ),
+                                child: Row(
+                                  children: [
+                                    const Icon(Icons.error_outline_rounded, size: 16, color: DiklyColors.error),
+                                    const SizedBox(width: 8),
+                                    Expanded(
+                                      child: Text(
+                                        authState.error!,
+                                        style: GoogleFonts.dmSans(fontSize: 13, color: DiklyColors.error),
+                                      ),
+                                    ),
+                                  ],
                                 ),
                               ),
-                              const SizedBox(height: 20),
+                              const SizedBox(height: 18),
+                            ],
 
-                              // Sign In button
-                              SizedBox(
-                                width: double.infinity,
-                                height: 48,
-                                child: ElevatedButton(
-                                  onPressed:
-                                      authState.isLoading ? null : _login,
-                                  style: ElevatedButton.styleFrom(
-                                    backgroundColor: color,
-                                    foregroundColor: Colors.white,
-                                    elevation: 0,
-                                    shape: RoundedRectangleBorder(
-                                      borderRadius: BorderRadius.circular(8),
+                            // Form
+                            Form(
+                              key: _formKey,
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  // Email / student ID
+                                  Text(
+                                    _isStudent ? 'Student ID / Index Number' : 'Email address',
+                                    style: GoogleFonts.dmSans(
+                                      fontSize: 13,
+                                      fontWeight: FontWeight.w500,
+                                      color: DiklyColors.textSecondary,
                                     ),
                                   ),
-                                  child: authState.isLoading
-                                      ? const SizedBox(
-                                          width: 20,
-                                          height: 20,
-                                          child: CircularProgressIndicator(
-                                            color: Colors.white,
-                                            strokeWidth: 2.5,
-                                          ),
-                                        )
-                                      : Text(
-                                          'Sign In',
-                                          style: GoogleFonts.dmSans(
-                                            fontSize: 15,
-                                            fontWeight: FontWeight.w700,
-                                            color: Colors.white,
-                                          ),
+                                  const SizedBox(height: 6),
+                                  TextFormField(
+                                    controller: _emailController,
+                                    keyboardType: _isStudent
+                                        ? TextInputType.text
+                                        : TextInputType.emailAddress,
+                                    autocorrect: false,
+                                    textCapitalization: _isStudent
+                                        ? TextCapitalization.characters
+                                        : TextCapitalization.none,
+                                    style: GoogleFonts.dmSans(fontSize: 14, color: DiklyColors.text),
+                                    decoration: InputDecoration(
+                                      hintText: _isStudent ? 'e.g. STU/2021/001' : 'you@example.com',
+                                      prefixIcon: Icon(
+                                        _isStudent ? Icons.badge_outlined : Icons.email_outlined,
+                                        size: 18,
+                                      ),
+                                      contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                                    ),
+                                    validator: (v) {
+                                      if (v == null || v.trim().isEmpty) {
+                                        return _isStudent ? 'Please enter your student ID' : 'Please enter your email';
+                                      }
+                                      if (!_isStudent && !v.contains('@')) return 'Please enter a valid email';
+                                      return null;
+                                    },
+                                  ),
+                                  const SizedBox(height: 16),
+
+                                  // Institution code (student / manager / employee)
+                                  if (_needsInstitutionCode) ...[
+                                    Text(
+                                      'Institution Code',
+                                      style: GoogleFonts.dmSans(
+                                        fontSize: 13,
+                                        fontWeight: FontWeight.w500,
+                                        color: DiklyColors.textSecondary,
+                                      ),
+                                    ),
+                                    const SizedBox(height: 6),
+                                    TextFormField(
+                                      controller: _institutionCodeCtrl,
+                                      autocorrect: false,
+                                      textCapitalization: TextCapitalization.characters,
+                                      style: GoogleFonts.dmSans(fontSize: 14, color: DiklyColors.text),
+                                      decoration: const InputDecoration(
+                                        hintText: 'e.g. KNUST2024',
+                                        prefixIcon: Icon(Icons.account_balance_outlined, size: 18),
+                                        contentPadding: EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                                      ),
+                                      validator: (v) {
+                                        if (v == null || v.trim().isEmpty) return 'Please enter your institution code';
+                                        return null;
+                                      },
+                                    ),
+                                    const SizedBox(height: 16),
+                                  ],
+
+                                  // Password
+                                  Text(
+                                    'Password',
+                                    style: GoogleFonts.dmSans(
+                                      fontSize: 13,
+                                      fontWeight: FontWeight.w500,
+                                      color: DiklyColors.textSecondary,
+                                    ),
+                                  ),
+                                  const SizedBox(height: 6),
+                                  TextFormField(
+                                    controller: _passwordController,
+                                    obscureText: _obscurePassword,
+                                    style: GoogleFonts.dmSans(fontSize: 14, color: DiklyColors.text),
+                                    decoration: InputDecoration(
+                                      hintText: '••••••••',
+                                      prefixIcon: const Icon(Icons.lock_outline_rounded, size: 18),
+                                      contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                                      suffixIcon: GestureDetector(
+                                        onTap: () => setState(() => _obscurePassword = !_obscurePassword),
+                                        child: Icon(
+                                          _obscurePassword ? Icons.visibility_outlined : Icons.visibility_off_outlined,
+                                          size: 18,
+                                          color: DiklyColors.textLight,
                                         ),
-                                ),
+                                      ),
+                                    ),
+                                    validator: (v) {
+                                      if (v == null || v.isEmpty) return 'Please enter your password';
+                                      if (v.length < 4) return 'Password too short';
+                                      return null;
+                                    },
+                                  ),
+                                  const SizedBox(height: 10),
+
+                                  // Forgot password
+                                  Align(
+                                    alignment: Alignment.centerRight,
+                                    child: GestureDetector(
+                                      onTap: () {},
+                                      child: Text(
+                                        'Forgot password?',
+                                        style: GoogleFonts.dmSans(
+                                          fontSize: 13,
+                                          fontWeight: FontWeight.w500,
+                                          color: color,
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                                  const SizedBox(height: 20),
+
+                                  // Sign In button
+                                  SizedBox(
+                                    width: double.infinity,
+                                    height: 50,
+                                    child: ElevatedButton(
+                                      onPressed: authState.isLoading ? null : _login,
+                                      style: ElevatedButton.styleFrom(
+                                        backgroundColor: color,
+                                        foregroundColor: Colors.white,
+                                        elevation: 0,
+                                        shape: RoundedRectangleBorder(
+                                          borderRadius: BorderRadius.circular(10),
+                                        ),
+                                      ),
+                                      child: authState.isLoading
+                                          ? const SizedBox(
+                                              width: 20,
+                                              height: 20,
+                                              child: CircularProgressIndicator(
+                                                color: Colors.white,
+                                                strokeWidth: 2.5,
+                                              ),
+                                            )
+                                          : Text(
+                                              'Sign In',
+                                              style: GoogleFonts.dmSans(
+                                                fontSize: 15,
+                                                fontWeight: FontWeight.w700,
+                                              ),
+                                            ),
+                                    ),
+                                  ),
+                                ],
                               ),
-                            ],
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 24),
+
+                  // Footer
+                  Center(
+                    child: Column(
+                      children: [
+                        Text(
+                          'DIKLY · Secure Portal',
+                          style: GoogleFonts.dmSans(fontSize: 12, color: Colors.white54),
+                        ),
+                        const SizedBox(height: 6),
+                        GestureDetector(
+                          onTap: () => context.go('/portal'),
+                          child: Text(
+                            'Switch portal',
+                            style: GoogleFonts.dmSans(
+                              fontSize: 12,
+                              color: Colors.white70,
+                              fontWeight: FontWeight.w600,
+                            ),
                           ),
                         ),
                       ],
                     ),
                   ),
-                ),
+                  const SizedBox(height: 16),
+                ],
               ),
-              const SizedBox(height: 24),
-
-              // Footer
-              Center(
-                child: Column(
-                  children: [
-                    Text(
-                      'DIKLY · Secure Portal',
-                      style: GoogleFonts.dmSans(fontSize: 12, color: Colors.white54),
-                    ),
-                    const SizedBox(height: 4),
-                    GestureDetector(
-                      onTap: () => context.go('/portal'),
-                      child: Text(
-                        'Switch portal',
-                        style: GoogleFonts.dmSans(fontSize: 12, color: Colors.white70, fontWeight: FontWeight.w500),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              const SizedBox(height: 16),
-            ],
+            ),
           ),
-        ),
-      ),
         ],
       ),
     );
