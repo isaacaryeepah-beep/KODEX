@@ -6,7 +6,6 @@ import 'package:intl/intl.dart';
 import '../../core/api.dart';
 import '../../core/auth.dart';
 import '../../core/theme.dart';
-import '../../widgets/app_shell.dart';
 import '../../widgets/ds/dikly_ds.dart';
 
 final _studentDashProvider = FutureProvider.autoDispose<Map<String, dynamic>>(
@@ -29,12 +28,8 @@ class StudentHomeScreen extends ConsumerWidget {
         user!.deviceLockedUntil!.isAfter(DateTime.now());
     final lockUntil = user?.deviceLockedUntil;
 
-    return AppShell(
-      title: '',
-      appBarColor: _theme.dark,
-      appBarForeground: Colors.white,
-      child: Column(
-        children: [
+    return Column(
+      children: [
           // ── Hero ─────────────────────────────────────────────────
           dashAsync.when(
             data: (d) => DiklyHeroSection(
@@ -106,8 +101,7 @@ class StudentHomeScreen extends ConsumerWidget {
               ),
             ),
           ),
-        ],
-      ),
+      ],
     );
   }
 
@@ -281,8 +275,7 @@ class _DeviceLockBanner extends StatelessWidget {
               style: GoogleFonts.dmSans(fontSize: 12, color: const Color(0xFF92400E), height: 1.4),
             ),
           ),
-        ],
-      ),
+      ],
     );
   }
 }

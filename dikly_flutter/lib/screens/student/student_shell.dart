@@ -83,13 +83,14 @@ class _StudentShellState extends ConsumerState<StudentShell> {
     return Scaffold(
       backgroundColor: DiklyColors.background,
       appBar: AppBar(
-        backgroundColor: Colors.white,
+        backgroundColor: const Color(0xFF6D28D9),
+        foregroundColor: Colors.white,
         elevation: 0,
         shadowColor: Colors.transparent,
         surfaceTintColor: Colors.transparent,
         leading: Builder(
           builder: (ctx) => IconButton(
-            icon: const Icon(Icons.menu_outlined, color: DiklyColors.text),
+            icon: const Icon(Icons.menu_outlined, color: Colors.white),
             onPressed: () => Scaffold.of(ctx).openDrawer(),
           ),
         ),
@@ -98,12 +99,8 @@ class _StudentShellState extends ConsumerState<StudentShell> {
           style: TextStyle(
             fontSize: 17,
             fontWeight: FontWeight.w700,
-            color: DiklyColors.text,
+            color: Colors.white,
           ),
-        ),
-        bottom: PreferredSize(
-          preferredSize: const Size.fromHeight(1),
-          child: Container(height: 1, color: const Color(0xFFE4E4E7)),
         ),
         actions: [
           Padding(

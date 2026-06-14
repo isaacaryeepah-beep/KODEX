@@ -6,7 +6,6 @@ import 'package:intl/intl.dart';
 import '../../core/api.dart';
 import '../../core/auth.dart';
 import '../../core/theme.dart';
-import '../../widgets/app_shell.dart';
 import '../../widgets/ds/dikly_ds.dart';
 
 final _lecturerDashProvider = FutureProvider.autoDispose<Map<String, dynamic>>(
@@ -24,12 +23,8 @@ class LecturerHomeScreen extends ConsumerWidget {
     final dashAsync = ref.watch(_lecturerDashProvider);
     final firstName = (user?.name ?? 'Lecturer').split(' ').first;
 
-    return AppShell(
-      title: '',
-      appBarColor: _theme.dark,
-      appBarForeground: Colors.white,
-      child: Column(
-        children: [
+    return Column(
+      children: [
           dashAsync.when(
             data: (d) => DiklyHeroSection(
               gradient: _theme.gradient,
@@ -81,8 +76,7 @@ class LecturerHomeScreen extends ConsumerWidget {
               ),
             ),
           ),
-        ],
-      ),
+      ],
     );
   }
 

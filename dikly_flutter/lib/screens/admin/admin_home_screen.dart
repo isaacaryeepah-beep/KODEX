@@ -7,7 +7,6 @@ import 'package:intl/intl.dart';
 import '../../core/api.dart';
 import '../../core/auth.dart';
 import '../../core/theme.dart';
-import '../../widgets/app_shell.dart';
 import '../../widgets/ds/dikly_ds.dart';
 
 final _adminDashProvider = FutureProvider.autoDispose<Map<String, dynamic>>(
@@ -29,12 +28,8 @@ class AdminHomeScreen extends ConsumerWidget {
     final firstName = (user?.name ?? 'Admin').split(' ').first;
     final instCode = user?.institutionCode ?? '';
 
-    return AppShell(
-      title: '',
-      appBarColor: _theme.dark,
-      appBarForeground: Colors.white,
-      child: Column(
-        children: [
+    return Column(
+      children: [
           dashAsync.when(
             data: (d) => DiklyHeroSection(
               gradient: _theme.gradient,
@@ -87,8 +82,7 @@ class AdminHomeScreen extends ConsumerWidget {
               ),
             ),
           ),
-        ],
-      ),
+      ],
     );
   }
 

@@ -86,13 +86,14 @@ class _AdminShellState extends ConsumerState<AdminShell> {
     return Scaffold(
       backgroundColor: DiklyColors.background,
       appBar: AppBar(
-        backgroundColor: DiklyColors.surface,
+        backgroundColor: const Color(0xFF3730A3),
+        foregroundColor: Colors.white,
         elevation: 0,
         shadowColor: Colors.transparent,
         surfaceTintColor: Colors.transparent,
         leading: Builder(
           builder: (ctx) => IconButton(
-            icon: const Icon(Icons.menu_outlined, color: DiklyColors.text),
+            icon: const Icon(Icons.menu_outlined, color: Colors.white),
             onPressed: () => Scaffold.of(ctx).openDrawer(),
           ),
         ),
@@ -101,12 +102,8 @@ class _AdminShellState extends ConsumerState<AdminShell> {
           style: GoogleFonts.dmSans(
             fontSize: 17,
             fontWeight: FontWeight.w700,
-            color: DiklyColors.text,
+            color: Colors.white,
           ),
-        ),
-        bottom: PreferredSize(
-          preferredSize: const Size.fromHeight(1),
-          child: Container(height: 1, color: DiklyColors.border),
         ),
         actions: [
           PopupMenuButton<String>(

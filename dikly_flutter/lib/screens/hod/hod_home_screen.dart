@@ -6,7 +6,6 @@ import 'package:intl/intl.dart';
 import '../../core/api.dart';
 import '../../core/auth.dart';
 import '../../core/theme.dart';
-import '../../widgets/app_shell.dart';
 import '../../widgets/ds/dikly_ds.dart';
 
 final _hodDashProvider = FutureProvider.autoDispose<Map<String, dynamic>>(
@@ -32,12 +31,8 @@ class HodHomeScreen extends ConsumerWidget {
     final firstName = (user?.name ?? 'HOD').split(' ').first;
     final pendingCount = approvalsAsync.value ?? 0;
 
-    return AppShell(
-      title: '',
-      appBarColor: _theme.dark,
-      appBarForeground: Colors.white,
-      child: Column(
-        children: [
+    return Column(
+      children: [
           dashAsync.when(
             data: (d) => DiklyHeroSection(
               gradient: _theme.gradient,
@@ -92,8 +87,7 @@ class HodHomeScreen extends ConsumerWidget {
               ),
             ),
           ),
-        ],
-      ),
+      ],
     );
   }
 
@@ -243,8 +237,7 @@ class _DepartmentWarning extends StatelessWidget {
               style: GoogleFonts.dmSans(fontSize: 12, color: const Color(0xFF92400E), height: 1.4),
             ),
           ),
-        ],
-      ),
+      ],
     );
   }
 }
