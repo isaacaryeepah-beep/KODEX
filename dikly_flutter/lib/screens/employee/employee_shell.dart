@@ -37,6 +37,7 @@ class _EmployeeShellState extends ConsumerState<EmployeeShell> {
       DrawerItem(Icons.event_available_outlined, 'My Attendance', '/corporate-attendance'),
       DrawerItem(Icons.access_time_outlined, 'My Shift', '/employee/shift'),
       DrawerItem(Icons.event_note_outlined, 'Leave', '/employee/leaves'),
+      DrawerItem(Icons.school_outlined, 'My Assessments', '/reports'),
     ]),
     DrawerSection(header: 'COMMUNICATE', items: [
       DrawerItem(Icons.notifications_outlined, 'Notifications', '/announcements'),
@@ -48,6 +49,7 @@ class _EmployeeShellState extends ConsumerState<EmployeeShell> {
       DrawerItem(Icons.trending_up_outlined, 'My Performance', '/performance'),
       DrawerItem(Icons.receipt_long_outlined, 'Timesheet', '/manager/timesheets'),
       DrawerItem(Icons.attach_money_outlined, 'Expenses', '/expenses'),
+      DrawerItem(Icons.inventory_2_outlined, 'My Assets', '/reports'),
     ]),
     DrawerSection(header: 'SUPPORT', items: [
       DrawerItem(Icons.smart_toy_outlined, 'Assistant', '/support'),
