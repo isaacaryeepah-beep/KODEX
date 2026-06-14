@@ -1,3 +1,4 @@
+import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -18,9 +19,22 @@ class _PortalSelectorScreenState extends State<PortalSelectorScreen> {
       body: Stack(
         fit: StackFit.expand,
         children: [
-          // ── Background photo ──────────────────────────────────────
+          // ── Background photo + deep gradient overlay ──────────────
           Image.asset('assets/bg_office.jpg', fit: BoxFit.cover),
-          Container(color: const Color(0xCC0D1117)),
+          Container(
+            decoration: const BoxDecoration(
+              gradient: LinearGradient(
+                begin: Alignment.topCenter,
+                end: Alignment.bottomCenter,
+                colors: [
+                  Color(0xBB050D1F),
+                  Color(0xCC071428),
+                  Color(0xDD08172E),
+                ],
+                stops: [0.0, 0.5, 1.0],
+              ),
+            ),
+          ),
 
           // ── Main scrollable content ───────────────────────────────
           SafeArea(
@@ -93,13 +107,20 @@ class _PortalSelectorScreenState extends State<PortalSelectorScreen> {
                   ),
                   const SizedBox(height: 28),
 
-                  // ── Main card ─────────────────────────────────────
-                  Container(
+                  // ── Main card (glassmorphic) ──────────────────────
+                  ClipRRect(
+                    borderRadius: BorderRadius.circular(24),
+                    child: BackdropFilter(
+                      filter: ImageFilter.blur(sigmaX: 24, sigmaY: 24),
+                      child: Container(
                     decoration: BoxDecoration(
-                      color: const Color(0xFFF2EFE9),
+                      color: Colors.white.withOpacity(0.10),
                       borderRadius: BorderRadius.circular(24),
+                      border: Border.all(
+                        color: Colors.white.withOpacity(0.18),
+                        width: 1.5,
+                      ),
                     ),
-                    clipBehavior: Clip.hardEdge,
                     child: Column(
                       children: [
                         // Gradient top bar
@@ -124,13 +145,13 @@ class _PortalSelectorScreenState extends State<PortalSelectorScreen> {
                                   style: GoogleFonts.dmSans(
                                     fontSize: 11,
                                     fontWeight: FontWeight.w600,
-                                    color: const Color(0xFF9CA3AF),
+                                    color: Colors.white60,
                                     letterSpacing: 2.5,
                                   ),
                                 ),
                               ),
                               const SizedBox(height: 10),
-                              Container(height: 1, color: const Color(0xFFE5E2DC)),
+                              Container(height: 1, color: Colors.white12),
                               const SizedBox(height: 16),
 
                               // ── Workspace cards ──────────────────
@@ -187,7 +208,9 @@ class _PortalSelectorScreenState extends State<PortalSelectorScreen> {
                         ),
                       ],
                     ),
-                  ),
+                      ),  // inner Container
+                    ),    // BackdropFilter
+                  ),      // ClipRRect
 
                   const SizedBox(height: 24),
 
@@ -273,14 +296,16 @@ class _WorkspaceCard extends StatelessWidget {
         duration: const Duration(milliseconds: 180),
         padding: const EdgeInsets.fromLTRB(16, 20, 16, 16),
         decoration: BoxDecoration(
-          color: const Color(0xFFF9F8F5),
+          color: isSelected
+              ? Colors.white.withOpacity(0.18)
+              : Colors.white.withOpacity(0.08),
           borderRadius: BorderRadius.circular(16),
           border: Border.all(
-            color: isSelected ? accentColor : Colors.transparent,
-            width: 2,
+            color: isSelected ? accentColor.withOpacity(0.8) : Colors.white.withOpacity(0.12),
+            width: 1.5,
           ),
           boxShadow: [
-            BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 6, offset: const Offset(0, 2)),
+            BoxShadow(color: Colors.black.withOpacity(0.15), blurRadius: 12, offset: const Offset(0, 4)),
           ],
         ),
         child: Column(
@@ -289,24 +314,24 @@ class _WorkspaceCard extends StatelessWidget {
             Container(
               width: 54,
               height: 54,
-              decoration: BoxDecoration(color: iconBg, shape: BoxShape.circle),
+              decoration: BoxDecoration(color: iconBg.withOpacity(0.85), shape: BoxShape.circle),
               child: Icon(icon, color: iconColor, size: 26),
             ),
             const SizedBox(height: 14),
             Text(label,
                 style: GoogleFonts.dmSans(
-                    fontSize: 17, fontWeight: FontWeight.w800, color: const Color(0xFF1E293B))),
+                    fontSize: 17, fontWeight: FontWeight.w800, color: Colors.white)),
             const SizedBox(height: 4),
             Text(subtitle,
                 style: GoogleFonts.dmSans(
-                    fontSize: 12, color: const Color(0xFF64748B), height: 1.4)),
+                    fontSize: 12, color: Colors.white60, height: 1.4)),
             const SizedBox(height: 14),
             AnimatedContainer(
               duration: const Duration(milliseconds: 180),
               height: 4,
               width: 32,
               decoration: BoxDecoration(
-                color: isSelected ? accentColor : const Color(0xFFD1D5DB),
+                color: isSelected ? accentColor : Colors.white24,
                 borderRadius: BorderRadius.circular(2),
               ),
             ),
@@ -330,14 +355,14 @@ class _CorporatePortals extends StatelessWidget {
         // Section label
         Row(
           children: [
-            const Icon(Icons.work_outline_rounded, size: 14, color: Color(0xFFD97706)),
+            const Icon(Icons.work_outline_rounded, size: 14, color: Color(0xFFFBBF24)),
             const SizedBox(width: 6),
             Text(
               'CORPORATE PORTALS',
               style: GoogleFonts.dmSans(
                   fontSize: 10,
                   fontWeight: FontWeight.w700,
-                  color: const Color(0xFFD97706),
+                  color: const Color(0xFFFBBF24),
                   letterSpacing: 2),
             ),
           ],
@@ -391,14 +416,14 @@ class _AcademicPortals extends StatelessWidget {
         // Section label
         Row(
           children: [
-            const Icon(Icons.school_outlined, size: 14, color: Color(0xFF4338CA)),
+            const Icon(Icons.school_outlined, size: 14, color: Color(0xFF818CF8)),
             const SizedBox(width: 6),
             Text(
               'ACADEMIC PORTALS',
               style: GoogleFonts.dmSans(
                   fontSize: 10,
                   fontWeight: FontWeight.w700,
-                  color: const Color(0xFF4338CA),
+                  color: const Color(0xFF818CF8),
                   letterSpacing: 2),
             ),
           ],
@@ -473,35 +498,36 @@ class _RoleCard extends StatelessWidget {
       child: Container(
         padding: const EdgeInsets.fromLTRB(10, 18, 10, 14),
         decoration: BoxDecoration(
-          color: const Color(0xFFF1F0F8),
+          color: Colors.white.withOpacity(0.10),
           borderRadius: BorderRadius.circular(14),
+          border: Border.all(color: Colors.white.withOpacity(0.15), width: 1),
         ),
         child: Column(
           children: [
             Container(
               width: 48,
               height: 48,
-              decoration: const BoxDecoration(
-                color: Color(0xFFE0E0F0),
+              decoration: BoxDecoration(
+                color: Colors.white.withOpacity(0.18),
                 shape: BoxShape.circle,
               ),
-              child: Icon(icon, color: const Color(0xFF4338CA), size: 22),
+              child: Icon(icon, color: Colors.white, size: 22),
             ),
             const SizedBox(height: 10),
             Text(
               title,
               style: GoogleFonts.dmSans(
-                  fontSize: 13, fontWeight: FontWeight.w800, color: const Color(0xFF1E293B)),
+                  fontSize: 13, fontWeight: FontWeight.w800, color: Colors.white),
               textAlign: TextAlign.center,
             ),
             const SizedBox(height: 3),
             Text(
               subtitle,
-              style: GoogleFonts.dmSans(fontSize: 10, color: const Color(0xFF64748B), height: 1.4),
+              style: GoogleFonts.dmSans(fontSize: 10, color: Colors.white60, height: 1.4),
               textAlign: TextAlign.center,
             ),
             const SizedBox(height: 8),
-            const Text('→', style: TextStyle(fontSize: 14, color: Color(0xFF94A3B8))),
+            const Text('→', style: TextStyle(fontSize: 14, color: Colors.white38)),
           ],
         ),
       ),
