@@ -36,8 +36,7 @@ async function renderAttendanceDevice() {
   let device = null;
   try {
     const res = await fetch('/api/devices/my', {
-      headers: { 'Authorization': 'Bearer ' + (localStorage.getItem('token') || '') },
-      signal: AbortSignal.timeout(10000),
+      headers: { 'Authorization': 'Bearer ' + (localStorage.getItem('token') || '') }
     });
     const json = await res.json();
     device = json.data || null;
@@ -77,18 +76,94 @@ function _devPageHTML(device) {
 <style>${_devCSS()}</style>`;
 }
 
-// ── no device — info panel (pairing is done by Admin/HOD) ────────────────────
+// ── no device — one-tap connect flow ─────────────────────────────────────────
 function _devNoPairedHTML() {
   return `
 <div class="dev-connect-wrapper">
-  <div class="dev-connect-card" style="text-align:center;padding:40px 24px">
-    <div class="dev-connect-icon">📡</div>
-    <h2 class="dev-connect-title">No Device Assigned</h2>
-    <p class="dev-connect-desc" style="max-width:340px;margin:0 auto">
-      Your classroom device hasn't been set up yet. Ask your <strong>Admin or HOD</strong> to pair a device to your room — they can generate a pairing code from the <strong>Devices</strong> section in their portal.
-    </p>
+
+  <!-- main connect card -->
+  <div class="dev-connect-card" id="dev-connect-card">
+    <div class="dev-connect-top">
+      <div class="dev-connect-icon">📡</div>
+      <h2 class="dev-connect-title">Connect Your Classroom Device</h2>
+      <p class="dev-connect-desc">Tap <strong>Connect Device</strong> and we'll walk you through the setup automatically.</p>
+    </div>
+
+    <div id="dev-setup-error" class="dev-setup-err-box" style="display:none"></div>
+
+    <!-- inline progress stepper (hidden until button tap) -->
+    <div id="dev-inline-stepper" class="dev-inline-stepper" style="display:none">
+
+      <!-- Step 1: Generate code (automatic) -->
+      <div class="dev-istep" id="dev-istep-1">
+        <div class="dev-istep-icon-wrap" id="dev-istep-1-icon">
+          <span class="dev-istep-spinner"></span>
+        </div>
+        <div class="dev-istep-body">
+          <div class="dev-istep-label">Generating your setup code</div>
+          <div class="dev-istep-sub" id="dev-istep-1-sub">Connecting to server…</div>
+        </div>
+      </div>
+
+      <!-- code display (shown after step 1 succeeds) -->
+      <div id="dev-inline-code-area" class="dev-inline-code-area" style="display:none">
+        <div class="dev-inline-code-label">Your setup code</div>
+        <div id="dev-inline-code" class="dev-inline-code">——————</div>
+        <div id="dev-inline-expires" class="dev-inline-expires"></div>
+        <div class="dev-inline-code-hint">Auto-filled in the setup portal — no need to type it</div>
+      </div>
+
+      <!-- Step 2: Connect to device WiFi (manual) -->
+      <div class="dev-istep dev-istep-inactive" id="dev-istep-2">
+        <div class="dev-istep-icon-wrap dev-istep-num" id="dev-istep-2-icon">2</div>
+        <div class="dev-istep-body">
+          <div class="dev-istep-label">Connect to the device WiFi</div>
+          <div class="dev-istep-sub">Power on the ESP32, then join its hotspot</div>
+          <div id="dev-istep-2-actions" style="display:none">
+            <div class="dev-hotspot-chip">
+              <span class="dev-hotspot-chip-icon">📶</span>
+              <div>
+                <div class="dev-hotspot-chip-ssid">DIKLY-XXXXXX</div>
+                <div class="dev-hotspot-chip-note">No password needed · look in WiFi settings</div>
+              </div>
+            </div>
+            <button class="dev-btn dev-btn-primary dev-btn-portal" onclick="_devOpenSetupPage()">
+              Open Setup Portal →
+            </button>
+            <p class="dev-istep-portal-note">Once connected to the DIKLY WiFi, tap above. The portal auto-fills your code — just enter your classroom WiFi password and tap <strong>Pair Device</strong>.</p>
+          </div>
+        </div>
+      </div>
+
+      <!-- Step 3: Waiting for pairing (automatic polling) -->
+      <div class="dev-istep dev-istep-inactive" id="dev-istep-3">
+        <div class="dev-istep-icon-wrap dev-istep-num" id="dev-istep-3-icon">3</div>
+        <div class="dev-istep-body">
+          <div class="dev-istep-label">Completing setup</div>
+          <div class="dev-istep-sub" id="dev-istep-3-sub">Waiting for device to pair…</div>
+        </div>
+      </div>
+
+    </div><!-- /stepper -->
+
+    <!-- main action button -->
+    <button id="dev-connect-btn" class="dev-btn dev-btn-primary dev-btn-connect-main" onclick="_devStartSetup()">
+      + Connect Device
+    </button>
+
+    <div id="dev-cancel-row" style="display:none;text-align:center;margin-top:12px">
+      <button class="dev-btn dev-btn-ghost dev-btn-sm" onclick="_devCancelSetup()">Cancel</button>
+    </div>
   </div>
-</div>`;
+
+  <!-- success card (swaps in after pairing) -->
+  <div id="dev-setup-success" class="dev-setup-success" style="display:none">
+    <div class="dev-success-icon">✓</div>
+    <div class="dev-success-title">Device Connected!</div>
+    <div class="dev-success-sub">Your ESP32 is now linked to your account. Loading device details…</div>
+  </div>
+
+</div>`; // /dev-connect-wrapper
 }
 
 // ── paired device view ────────────────────────────────────────────────────────
@@ -203,17 +278,6 @@ function _devPairedHTML(d) {
 
 </div>
 
-<!-- Class Rep PIN card -->
-<div style="margin-top:20px;padding:16px;background:#f8fafc;border-radius:12px;border:1.5px solid #e2e8f0">
-  <h4 style="font-size:13px;font-weight:700;margin-bottom:8px">Class Rep PIN</h4>
-  <p style="font-size:12px;color:#64748b;margin-bottom:10px">Set a 4-digit PIN that your class rep must enter to connect a shared device to your session.</p>
-  <div style="display:flex;gap:8px;align-items:center">
-    <input id="lecturer-pin-input" type="password" inputmode="numeric" maxlength="4" placeholder="4 digits" style="width:100px;padding:8px 12px;border:1.5px solid #e2e8f0;border-radius:8px;font-size:16px;letter-spacing:4px">
-    <button onclick="saveLecturerPin()" style="padding:8px 16px;background:#1e293b;color:#fff;border:none;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer">Save PIN</button>
-    <button onclick="clearLecturerPin()" style="padding:8px 14px;background:transparent;color:#ef4444;border:1.5px solid #ef4444;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer">Clear</button>
-  </div>
-</div>
-
 <!-- Help panel -->
 ${_devHelpHTML()}`;
 }
@@ -296,22 +360,28 @@ function _devModalsHTML() {
 function _devHelpHTML() {
   return `
 <div class="dev-help-panel">
-  <div class="dev-help-header">Troubleshooting</div>
+  <div class="dev-help-header">Setup & Troubleshooting</div>
   <div class="dev-help-grid">
     <div class="dev-help-section">
-      <p class="dev-help-title">Device is Offline</p>
-      <ul class="dev-help-list">
-        <li>Check the device is powered on and the classroom WiFi is working</li>
-        <li>Wait 30 s then click <strong>↻ Refresh</strong> — the first heartbeat can take a moment</li>
-        <li>If still offline, the device may need its WiFi password updated — ask your Admin or HOD</li>
-      </ul>
+      <p class="dev-help-title">How to Pair &amp; Set Up WiFi</p>
+      <ol class="dev-help-list">
+        <li>Click <strong>Generate Pairing Code</strong> and note the 6-character code</li>
+        <li>Power on the ESP32 — it broadcasts hotspot <code>DIKLY-XXXXXX</code></li>
+        <li>Connect your phone/laptop to the <code>DIKLY-XXXXXX</code> hotspot</li>
+        <li>Tap <strong>Open Device Portal</strong> in the Setup Wizard — the device setup page opens automatically</li>
+        <li>Enter your <strong>Institution Code</strong>, the <strong>Pairing Code</strong>, and your <strong>WiFi credentials</strong></li>
+        <li>Tap <strong>Pair Device</strong> — the ESP32 reboots and connects to WiFi</li>
+        <li>Return here — device shows <strong>Online</strong> within ~30 seconds</li>
+      </ol>
     </div>
     <div class="dev-help-section">
-      <p class="dev-help-title">Session not showing on device</p>
+      <p class="dev-help-title">Troubleshooting</p>
       <ul class="dev-help-list">
-        <li>Device must show <strong>Online</strong> before a session code appears</li>
-        <li>Start the session from the portal — the device polls every 5 s and will pick it up automatically</li>
-        <li>If the device shows the wrong session, end and restart the session</li>
+        <li><strong>Device portal won't open?</strong> Make sure you're connected to <code>DIKLY-XXXXXX</code>, not your home WiFi — then tap <strong>Open Device Portal</strong> again</li>
+        <li><strong>Portal blocked?</strong> Use the <strong>QR code</strong> option to open it on your phone instead</li>
+        <li><strong>Wrong WiFi password?</strong> Hold the reset button 5 s to re-enter setup mode</li>
+        <li><strong>Offline after connecting?</strong> Wait 30 s for first heartbeat; refresh if needed</li>
+        <li><strong>Can't start session?</strong> Device must show <strong>Online</strong> first</li>
       </ul>
     </div>
   </div>
@@ -355,6 +425,197 @@ async function _devLoadActivity() {
 function _devRefresh() {
   renderAttendanceDevice();
 }
+
+// ── one-tap setup flow ────────────────────────────────────────────────────────
+
+function _devStartSetup() {
+  const btn     = document.getElementById('dev-connect-btn');
+  const stepper = document.getElementById('dev-inline-stepper');
+  const cancelRow = document.getElementById('dev-cancel-row');
+  if (btn) btn.style.display = 'none';
+  if (stepper) stepper.style.display = 'flex';
+  if (cancelRow) cancelRow.style.display = 'block';
+  _devGenerateCode();
+}
+
+function _devCancelSetup() {
+  clearInterval(_devPollTimer);
+  clearInterval(_devExpiryTimer);
+  _devCurrentCode = '';
+  const btn     = document.getElementById('dev-connect-btn');
+  const stepper = document.getElementById('dev-inline-stepper');
+  const cancelRow = document.getElementById('dev-cancel-row');
+  const errBox  = document.getElementById('dev-setup-error');
+  const codeArea = document.getElementById('dev-inline-code-area');
+  if (btn)      { btn.textContent = '+ Connect Device'; btn.style.display = ''; }
+  if (stepper)  stepper.style.display = 'none';
+  if (cancelRow) cancelRow.style.display = 'none';
+  if (errBox)   errBox.style.display = 'none';
+  if (codeArea) codeArea.style.display = 'none';
+  _devIStepReset(1); _devIStepReset(2); _devIStepReset(3);
+}
+
+function _devIStepDone(n, sub) {
+  const step = document.getElementById('dev-istep-' + n);
+  const icon = document.getElementById('dev-istep-' + n + '-icon');
+  const subEl = document.getElementById('dev-istep-' + n + '-sub');
+  if (step) step.classList.remove('dev-istep-inactive');
+  if (icon) { icon.innerHTML = '✓'; icon.className = 'dev-istep-icon-wrap dev-istep-done'; }
+  if (sub && subEl) subEl.textContent = sub;
+}
+
+function _devIStepActivate(n, showSpinner) {
+  const step = document.getElementById('dev-istep-' + n);
+  const icon = document.getElementById('dev-istep-' + n + '-icon');
+  if (step) step.classList.remove('dev-istep-inactive');
+  if (showSpinner && icon) {
+    icon.innerHTML = '<span class="dev-istep-spinner"></span>';
+    icon.className = 'dev-istep-icon-wrap';
+  }
+}
+
+function _devIStepError(n) {
+  const step = document.getElementById('dev-istep-' + n);
+  const icon = document.getElementById('dev-istep-' + n + '-icon');
+  if (step) step.classList.remove('dev-istep-inactive');
+  if (icon) { icon.innerHTML = '!'; icon.className = 'dev-istep-icon-wrap dev-istep-err'; }
+}
+
+function _devIStepReset(n) {
+  const step = document.getElementById('dev-istep-' + n);
+  const icon = document.getElementById('dev-istep-' + n + '-icon');
+  if (n === 1) {
+    if (step) step.classList.remove('dev-istep-inactive');
+    if (icon) { icon.innerHTML = '<span class="dev-istep-spinner"></span>'; icon.className = 'dev-istep-icon-wrap'; }
+  } else {
+    if (step) step.classList.add('dev-istep-inactive');
+    if (icon) { icon.innerHTML = String(n); icon.className = 'dev-istep-icon-wrap dev-istep-num'; }
+  }
+}
+
+let _devCurrentCode = '';
+
+async function _devGenerateCode() {
+  const errBox   = document.getElementById('dev-setup-error');
+  const step1Sub = document.getElementById('dev-istep-1-sub');
+  if (errBox) errBox.style.display = 'none';
+  if (step1Sub) step1Sub.textContent = 'Connecting to server…';
+
+  try {
+    const res = await fetch('/api/devices/pairing-code', {
+      method: 'POST',
+      headers: { 'Authorization': 'Bearer ' + (localStorage.getItem('token') || ''), 'Content-Type': 'application/json' }
+    });
+    const json = await res.json();
+    if (!res.ok) throw new Error(json.message || 'Failed to generate code');
+
+    _devCurrentCode = json.code;
+
+    // Step 1 done
+    _devIStepDone(1, 'Setup code ready');
+
+    // Show code
+    const codeArea = document.getElementById('dev-inline-code-area');
+    const codeEl   = document.getElementById('dev-inline-code');
+    const expiresEl = document.getElementById('dev-inline-expires');
+    if (codeArea) codeArea.style.display = 'block';
+    if (codeEl)   codeEl.textContent = json.code;
+    if (expiresEl) _devStartExpiryCountdown(new Date(json.expiresAt), expiresEl);
+
+    // Activate step 2 (manual — user connects WiFi)
+    _devIStepActivate(2, false);
+    const step2Actions = document.getElementById('dev-istep-2-actions');
+    if (step2Actions) step2Actions.style.display = 'block';
+
+    // Activate step 3 with spinner (polling starts)
+    _devIStepActivate(3, true);
+
+    // Start background polling
+    _devPollForLink(json.code);
+
+  } catch (e) {
+    const msg = e.message === 'Failed to fetch'
+      ? 'Could not reach the server. Check your connection and try again.'
+      : (e.message || 'Failed to generate setup code');
+    if (errBox) { errBox.textContent = msg; errBox.style.display = 'block'; }
+    _devIStepError(1);
+    const btn = document.getElementById('dev-connect-btn');
+    if (btn) { btn.textContent = '↻ Retry'; btn.style.display = ''; }
+  }
+}
+
+let _devExpiryTimer = null;
+function _devStartExpiryCountdown(exp, el) {
+  clearInterval(_devExpiryTimer);
+  _devExpiryTimer = setInterval(() => {
+    const secs = Math.max(0, Math.ceil((exp - Date.now()) / 1000));
+    const m = Math.floor(secs / 60), s = secs % 60;
+    if (el) el.textContent = secs > 0
+      ? `Expires in ${m}:${String(s).padStart(2,'0')}`
+      : 'Code expired — please regenerate';
+    if (secs === 0) clearInterval(_devExpiryTimer);
+  }, 1000);
+}
+
+let _devPollTimer = null;
+function _devPollForLink(code) {
+  clearInterval(_devPollTimer);
+  let attempts = 0;
+  _devPollTimer = setInterval(async () => {
+    attempts++;
+    if (attempts > 60) {
+      clearInterval(_devPollTimer);
+      _devIStepError(3);
+      const sub = document.getElementById('dev-istep-3-sub');
+      if (sub) sub.textContent = 'Setup timed out. The code expired — tap Start Over to try again.';
+      const btn = document.getElementById('dev-connect-btn');
+      if (btn) { btn.textContent = '↻ Start Over'; btn.style.display = ''; }
+      return;
+    }
+    try {
+      const res = await fetch('/api/devices/my', {
+        headers: { 'Authorization': 'Bearer ' + (localStorage.getItem('token') || '') }
+      });
+      const json = await res.json();
+      if (json.data) {
+        clearInterval(_devPollTimer);
+        clearInterval(_devExpiryTimer);
+        _devIStepDone(2, 'Connected to WiFi');
+        _devIStepDone(3, 'Device linked!');
+        setTimeout(() => {
+          const card    = document.getElementById('dev-connect-card');
+          const success = document.getElementById('dev-setup-success');
+          if (card)    card.style.display = 'none';
+          if (success) success.style.display = 'flex';
+          setTimeout(() => renderAttendanceDevice(), 2000);
+        }, 600);
+      }
+    } catch (_) {}
+  }, 3000);
+}
+
+// ── setup portal helpers ──────────────────────────────────────────────────────
+
+function _devSetupURL() {
+  const params = new URLSearchParams({ code: _devCurrentCode });
+  const instCode = window.currentUser?.company?.institutionCode;
+  if (instCode) params.set('inst', instCode);
+  return `http://192.168.4.1/?${params.toString()}`;
+}
+
+function _devOpenSetupPage() {
+  if (!_devCurrentCode) return;
+  const url = _devSetupURL();
+  const w = window.open(url, '_blank');
+  if (!w) {
+    const errBox = document.getElementById('dev-setup-error');
+    if (errBox) {
+      errBox.innerHTML = 'Popup blocked. <a href="' + _esc(url) + '" target="_blank" style="color:#4f46e5;font-weight:600">Tap here to open the setup portal</a>, or allow popups for this site.';
+      errBox.style.display = 'block';
+    }
+  }
+}
+
 
 async function _devUnlink() {
   const btn = document.getElementById('dev-unlink-confirm-btn');
@@ -758,18 +1019,14 @@ function _devCSS() {
 .dev-inline-expires { font-size:12px; color:#94a3b8; margin-top:4px; }
 .dev-inline-code-hint { font-size:11px; color:#94a3b8; margin-top:6px; }
 
-/* Step 2 actions — numbered WiFi checklist */
-.dev-wifi-steps { list-style:none; margin:12px 0 16px; padding:0; display:flex; flex-direction:column; gap:14px; }
-.dev-wifi-steps li { display:flex; gap:12px; align-items:flex-start; }
-.dev-wifi-step-num { width:22px; height:22px; border-radius:50%; background:#6366f1; color:#fff; font-size:11px; font-weight:800; display:flex; align-items:center; justify-content:center; flex-shrink:0; margin-top:2px; }
-.dev-wifi-step-body { font-size:13px; color:#475569; line-height:1.6; flex:1; }
-.dev-wifi-step-body strong { color:#1e293b; }
-.dev-hotspot-chip { display:flex; align-items:center; gap:12px; background:#0f172a; border-radius:12px; padding:12px 16px; margin-top:10px; }
+/* Step 2 actions */
+.dev-istep-wifi-actions { margin-top:12px; }
+.dev-hotspot-chip { display:flex; align-items:center; gap:12px; background:#0f172a; border-radius:12px; padding:12px 16px; margin-bottom:14px; }
 .dev-hotspot-chip-icon { font-size:20px; flex-shrink:0; }
 .dev-hotspot-chip-ssid { font-size:15px; font-weight:800; color:#fff; font-family:monospace; letter-spacing:.5px; }
 .dev-hotspot-chip-note { font-size:11px; color:#94a3b8; margin-top:2px; }
 .dev-btn-portal { width:100%; justify-content:center; padding:13px; font-size:15px; border-radius:12px; }
-.dev-istep-portal-note { font-size:12px; color:#92400e; background:#fffbeb; border:1px solid #fde68a; border-radius:8px; padding:8px 12px; margin-top:10px; line-height:1.5; }
+.dev-istep-portal-note { font-size:12px; color:#64748b; line-height:1.6; margin-top:10px; }
 
 /* Main connect button */
 .dev-btn-connect-main { width:100%; justify-content:center; padding:14px; font-size:16px; border-radius:12px; }
@@ -861,802 +1118,4 @@ function _devCSS() {
 }
 .dev-pairing-code { animation: dev-code-in .2s ease; }
 `;
-}
-
-// ─── ADMIN / HOD — Devices Page ──────────────────────────────────────────────
-async function renderAdminDevices() {
-  const content = document.getElementById('main-content');
-  if (!content) return;
-  const instCode = (typeof currentUser !== 'undefined' && currentUser?.company?.institutionCode) || '——';
-
-  content.innerHTML = `
-    <style>${_devCSS()}
-    .ad-hero{background:linear-gradient(135deg,#4f46e5 0%,#7c3aed 100%);border-radius:20px;padding:28px 32px;margin-bottom:24px;display:flex;align-items:center;justify-content:space-between;gap:20px;flex-wrap:wrap;box-shadow:0 8px 32px rgba(79,70,229,.25)}
-    .ad-hero-left{display:flex;align-items:center;gap:18px}
-    .ad-hero-icon{width:52px;height:52px;background:rgba(255,255,255,.15);border-radius:14px;display:flex;align-items:center;justify-content:center;flex-shrink:0}
-    .ad-hero-title{font-size:22px;font-weight:800;color:#fff;margin:0 0 4px}
-    .ad-hero-sub{font-size:13px;color:rgba(255,255,255,.75);margin:0}
-    .ad-gen-btn{display:inline-flex;align-items:center;gap:8px;background:#fff;color:#4f46e5;border:none;border-radius:12px;padding:10px 20px;font-size:13px;font-weight:700;cursor:pointer;box-shadow:0 2px 8px rgba(0,0,0,.12);transition:transform .15s,box-shadow .15s;white-space:nowrap}
-    .ad-gen-btn:hover{transform:translateY(-1px);box-shadow:0 4px 16px rgba(0,0,0,.18)}
-    .ad-gen-btn:active{transform:translateY(0)}
-    .ad-info-row{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:24px}
-    @media(max-width:560px){.ad-info-row{grid-template-columns:1fr}}
-    .ad-info-card{background:#fff;border-radius:16px;padding:20px 24px;box-shadow:0 1px 4px rgba(0,0,0,.06),0 0 0 1px rgba(0,0,0,.04)}
-    .ad-info-label{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:#94a3b8;margin-bottom:8px}
-    .ad-inst-code-display{font-size:26px;font-weight:900;font-family:monospace;letter-spacing:5px;color:#1e293b;margin-bottom:4px}
-    .ad-info-hint{font-size:11px;color:#94a3b8;line-height:1.5}
-    .ad-pair-banner{display:none;background:linear-gradient(135deg,#eef2ff,#f5f3ff);border:1.5px solid #c7d2fe;border-radius:16px;padding:24px;margin-bottom:24px}
-    .ad-pair-banner-title{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:#6366f1;margin-bottom:12px;display:flex;align-items:center;gap:6px}
-    .ad-pair-codes{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:16px}
-    @media(max-width:480px){.ad-pair-codes{grid-template-columns:1fr}}
-    .ad-pair-code-box{background:#fff;border-radius:12px;padding:16px 20px;text-align:center;box-shadow:0 1px 4px rgba(0,0,0,.06)}
-    .ad-pair-code-label{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.6px;color:#94a3b8;margin-bottom:6px}
-    .ad-pair-code-val{font-size:28px;font-weight:900;letter-spacing:6px;font-family:monospace;color:#4f46e5}
-    .ad-pair-code-val.inst{color:#1e293b}
-    .ad-pair-expires-note{font-size:11px;color:#6366f1;text-align:center;margin-bottom:12px}
-    .ad-pair-steps{font-size:12px;color:#475569;background:rgba(255,255,255,.6);border-radius:10px;padding:10px 14px;line-height:1.8}
-    .ad-list-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:16px}
-    .ad-list-title{font-size:13px;font-weight:700;color:#475569;display:flex;align-items:center;gap:8px}
-    .ad-list-badge{background:#f1f5f9;color:#64748b;border-radius:999px;padding:2px 10px;font-size:11px;font-weight:700}
-    .ad-refresh-btn{display:inline-flex;align-items:center;gap:6px;background:none;border:1px solid #e2e8f0;border-radius:8px;padding:5px 12px;font-size:12px;color:#64748b;cursor:pointer;transition:border-color .15s}
-    .ad-refresh-btn:hover{border-color:#6366f1;color:#6366f1}
-    .ad-last-updated{font-size:11px;color:#94a3b8}
-    .ad-device-grid{display:flex;flex-direction:column;gap:12px}
-    .ad-device-card{background:#fff;border-radius:16px;padding:0;box-shadow:0 1px 4px rgba(0,0,0,.06),0 0 0 1px rgba(0,0,0,.04);overflow:hidden;transition:box-shadow .18s}
-    .ad-device-card:hover{box-shadow:0 4px 20px rgba(0,0,0,.1),0 0 0 1px rgba(0,0,0,.06)}
-    .ad-device-card-top{display:flex;align-items:center;gap:14px;padding:16px 20px 12px;border-bottom:none}
-    .ad-device-avatar{width:42px;height:42px;border-radius:12px;background:linear-gradient(135deg,#e0e7ff,#ede9fe);display:flex;align-items:center;justify-content:center;flex-shrink:0}
-    .ad-device-name{font-size:15px;font-weight:700;color:#1e293b;margin:0 0 3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-    .ad-device-meta{font-size:11px;color:#94a3b8;display:flex;align-items:center;gap:10px;flex-wrap:wrap}
-    .ad-status-dot{width:7px;height:7px;border-radius:50%;display:inline-block;flex-shrink:0}
-    .ad-status-online{background:#22c55e;box-shadow:0 0 0 3px rgba(34,197,94,.2)}
-    .ad-status-offline{background:#cbd5e1}
-    .ad-status-label-online{color:#16a34a;font-weight:600}
-    .ad-status-label-offline{color:#94a3b8}
-    .ad-device-actions{display:flex;gap:6px;flex-wrap:wrap;padding:0 20px 14px;border-bottom:1px solid #f1f5f9}
-    .ad-act-btn{display:inline-flex;align-items:center;gap:4px;border-radius:8px;padding:6px 12px;font-size:11px;font-weight:600;cursor:pointer;border:none;transition:background .15s;white-space:nowrap}
-    .ad-act-rename{background:#f0fdf4;color:#166534}
-    .ad-act-rename:hover{background:#dcfce7}
-    .ad-act-setup{background:#f1f5f9;color:#475569}
-    .ad-act-setup:hover{background:#e2e8f0}
-    .ad-act-remove{background:#fff0f0;color:#dc2626}
-    .ad-act-remove:hover{background:#fee2e2}
-    .ad-act-factory{background:#fff7ed;color:#9a3412}
-    .ad-act-factory:hover{background:#ffedd5}
-    .ad-device-card-body{padding:14px 20px;display:flex;flex-direction:column;gap:10px}
-    .ad-device-dept{font-size:12px;font-weight:600;color:#475569;display:flex;align-items:center;gap:6px}
-    .ad-device-dept-icon{color:#94a3b8}
-    .ad-lec-row{display:flex;flex-wrap:wrap;gap:6px;align-items:center}
-    .ad-lec-pill{display:inline-flex;align-items:center;gap:5px;background:#ede9fe;color:#5b21b6;border-radius:999px;padding:3px 10px 3px 12px;font-size:11px;font-weight:600;white-space:nowrap}
-    .ad-lec-remove{background:none;border:none;cursor:pointer;color:#7c3aed;font-size:14px;padding:0;line-height:1;opacity:.6}
-    .ad-lec-remove:hover{opacity:1}
-    .ad-assign-btn{display:inline-flex;align-items:center;gap:4px;background:#f8fafc;border:1.5px dashed #cbd5e1;color:#64748b;border-radius:999px;padding:3px 12px;font-size:11px;font-weight:600;cursor:pointer;transition:border-color .15s,color .15s}
-    .ad-assign-btn:hover{border-color:#6366f1;color:#6366f1}
-    .ad-device-footer{display:flex;align-items:center;gap:16px;flex-wrap:wrap;padding:10px 20px;background:#f8fafc;border-top:1px solid #f1f5f9}
-    .ad-footer-chip{display:flex;align-items:center;gap:5px;font-size:11px;color:#94a3b8}
-    .ad-footer-chip svg{opacity:.5}
-    .ad-empty{text-align:center;padding:56px 24px;background:#fff;border-radius:20px;box-shadow:0 1px 4px rgba(0,0,0,.06)}
-    .ad-empty-icon{width:64px;height:64px;background:#f1f5f9;border-radius:20px;display:flex;align-items:center;justify-content:center;margin:0 auto 16px}
-    .ad-empty-title{font-size:17px;font-weight:700;color:#1e293b;margin:0 0 6px}
-    .ad-empty-desc{font-size:13px;color:#64748b;max-width:320px;margin:0 auto;line-height:1.6}
-    </style>
-    <div class="dev-page">
-
-      <!-- Hero header -->
-      <div class="ad-hero">
-        <div class="ad-hero-left">
-          <div class="ad-hero-icon">
-            <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2"><rect x="5" y="2" width="14" height="20" rx="2"/><line x1="12" y1="18" x2="12.01" y2="18" stroke-width="2.5"/><line x1="9" y1="6" x2="15" y2="6"/><line x1="9" y1="10" x2="15" y2="10"/></svg>
-          </div>
-          <div>
-            <h1 class="ad-hero-title">Classroom Devices</h1>
-            <p class="ad-hero-sub">Manage and provision ESP32 attendance devices</p>
-          </div>
-        </div>
-        <button class="ad-gen-btn" id="ad-gen-btn" onclick="adGenerateCode()">
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
-          Generate Pairing Code
-        </button>
-      </div>
-
-      <!-- Info cards row -->
-      <div class="ad-info-row">
-        <div class="ad-info-card">
-          <div class="ad-info-label">Institution Code</div>
-          <div class="ad-inst-code-display" id="ad-inst-code">${instCode}</div>
-          <div class="ad-info-hint">Class Rep needs this + a pairing code to set up a device. Keep it confidential.</div>
-        </div>
-        <div class="ad-info-card" style="background:linear-gradient(135deg,#f8fafc,#f1f5f9);display:flex;flex-direction:column;justify-content:center;align-items:center;text-align:center;gap:8px">
-          <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#94a3b8" stroke-width="1.5"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
-          <div style="font-size:12px;font-weight:600;color:#475569">Device pairing is secure</div>
-          <div style="font-size:11px;color:#94a3b8">JWT-authenticated · Company-isolated</div>
-        </div>
-      </div>
-
-      <!-- Pairing code panel -->
-      <div id="ad-pair-panel" class="ad-pair-banner">
-        <div class="ad-pair-banner-title">
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#6366f1" stroke-width="2"><path d="M21 2l-2 2m-7.61 7.61a5.5 5.5 0 1 1-7.778 7.778 5.5 5.5 0 0 1 7.777-7.777zm0 0L15.5 7.5m0 0l3 3L22 7l-3-3m-3.5 3.5L19 4"/></svg>
-          New Pairing Code Generated
-        </div>
-        <div class="ad-pair-codes">
-          <div class="ad-pair-code-box">
-            <div class="ad-pair-code-label">Institution Code</div>
-            <div class="ad-pair-code-val inst" id="ad-inst-code-2">${instCode}</div>
-          </div>
-          <div class="ad-pair-code-box">
-            <div class="ad-pair-code-label">Pairing Code</div>
-            <div class="ad-pair-code-val dev-pairing-code" id="ad-pair-code">——————</div>
-          </div>
-        </div>
-        <div class="ad-pair-expires-note" id="ad-pair-expires"></div>
-        <div class="ad-pair-steps">
-          📱 Rep connects to <strong>Dikly-XXXXXX</strong> WiFi → opens <strong>192.168.4.1</strong> → enters both codes above + school WiFi → done.
-        </div>
-      </div>
-
-      <!-- Device list -->
-      <div class="ad-list-header">
-        <div class="ad-list-title">
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#64748b" stroke-width="2"><rect x="5" y="2" width="14" height="20" rx="2"/><line x1="12" y1="18" x2="12.01" y2="18"/></svg>
-          Paired Devices
-          <span class="ad-list-badge" id="ad-device-count">—</span>
-        </div>
-        <div style="display:flex;align-items:center;gap:10px">
-          <span class="ad-last-updated" id="ad-last-updated"></span>
-          <button class="ad-refresh-btn" onclick="adRefreshDevices()">
-            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>
-            Refresh
-          </button>
-        </div>
-      </div>
-      <div id="ad-device-list"><div class="loading">Loading devices…</div></div>
-    </div>`;
-
-  await adLoadDevices();
-
-  // Auto-refresh every 10 s so the HOD sees the device come online without reloading
-  if (window._adRefreshTimer) clearInterval(window._adRefreshTimer);
-  window._adRefreshTimer = setInterval(() => {
-    // Stop polling if the user has navigated away
-    if (!document.getElementById('ad-device-list')) {
-      clearInterval(window._adRefreshTimer); window._adRefreshTimer = null; return;
-    }
-    adLoadDevices();
-  }, 10000);
-}
-
-async function adRefreshDevices() {
-  await adLoadDevices();
-}
-
-async function adGenerateCode() {
-  const btn = document.getElementById('ad-gen-btn');
-  if (btn) { btn.disabled = true; btn.textContent = 'Generating…'; }
-  try {
-    const data = await api('/api/devices/pairing-code', {
-      method: 'POST',
-      headers: { 'Authorization': 'Bearer ' + (localStorage.getItem('token') || ''), 'Content-Type': 'application/json' }
-    });
-    const panel   = document.getElementById('ad-pair-panel');
-    const codeEl  = document.getElementById('ad-pair-code');
-    const expEl   = document.getElementById('ad-pair-expires');
-    const codeEl2 = document.getElementById('ad-pair-code-2');
-    if (panel)   panel.style.display = 'block';
-    if (codeEl)  { codeEl.textContent = data.code; codeEl.style.animation = 'none'; void codeEl.offsetWidth; codeEl.style.animation = ''; }
-    if (codeEl2) codeEl2.textContent = data.code;
-    if (expEl && data.expiresAt) {
-      const d = new Date(data.expiresAt);
-      expEl.textContent = 'Expires ' + d.toLocaleDateString(undefined, { day:'numeric', month:'short', year:'numeric' });
-    }
-  } catch (e) {
-    alert('Failed to generate pairing code: ' + (e.message || 'Server error'));
-  } finally {
-    if (btn) { btn.disabled = false; btn.textContent = 'Generate Pairing Code'; }
-  }
-}
-
-async function adLoadDevices() {
-  const list = document.getElementById('ad-device-list');
-  if (!list) return;
-  try {
-    const data = await api('/api/devices/all');
-    const stamp = document.getElementById('ad-last-updated');
-    if (stamp) {
-      const t = new Date();
-      stamp.textContent = 'Updated ' + t.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit', second: '2-digit' });
-    }
-    const devices = data.devices || [];
-    const countEl = document.getElementById('ad-device-count');
-    if (countEl) countEl.textContent = devices.length;
-
-    if (!devices.length) {
-      const instCode = (typeof currentUser !== 'undefined' && currentUser?.company?.institutionCode) || null;
-      list.innerHTML = `
-        <div class="ad-empty">
-          <div class="ad-empty-icon">
-            <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#94a3b8" stroke-width="1.5"><rect x="5" y="2" width="14" height="20" rx="2"/><line x1="12" y1="18" x2="12.01" y2="18"/><line x1="9" y1="6" x2="15" y2="6"/><line x1="9" y1="10" x2="15" y2="10"/></svg>
-          </div>
-          <div class="ad-empty-title">No devices paired yet</div>
-          <div class="ad-empty-desc">
-            To pair a device: <strong>1)</strong> Click <em>Generate Pairing Code</em> above.
-            <strong>2)</strong> Give the Class Rep your Institution Code
-            ${instCode ? `(<strong style="color:var(--primary);font-family:monospace;letter-spacing:2px">${instCode}</strong>)` : ''}
-            and the pairing code. <strong>3)</strong> The Class Rep connects to the device hotspot and enters both codes.
-          </div>
-        </div>`;
-      return;
-    }
-
-    list.innerHTML = `<div class="ad-device-grid">
-      ${devices.map(d => {
-        const isOnline = !!d.online;
-        const last = d.lastHeartbeat
-          ? new Date(d.lastHeartbeat).toLocaleString(undefined, { day:'numeric', month:'short', hour:'2-digit', minute:'2-digit' })
-          : 'Never';
-        const deptLabel = [
-          d.assignedDepartment,
-          d.assignedLevel && 'Level ' + d.assignedLevel,
-          d.assignedGroup && 'Group ' + d.assignedGroup,
-        ].filter(Boolean).join(' · ') || 'No class assigned';
-        const fw = d.firmwareVersion || '—';
-        const ip = d.localIp || '—';
-
-        const lecturerPills = (d.assignedLecturers || []).map(a => {
-          const lecName = a.lecturerId?.name || 'Unknown';
-          const crsName = a.courseId?.title || a.courseId?.name || 'Unknown Course';
-          const lecId   = a.lecturerId?._id || a.lecturerId || '';
-          const crsId   = a.courseId?._id   || a.courseId   || '';
-          return `<span class="ad-lec-pill">
-            <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="8" r="4"/><path d="M4 20c0-4 3.6-7 8-7s8 3 8 7"/></svg>
-            ${lecName} · ${crsName}
-            <button class="ad-lec-remove" onclick="adRemoveLecturer('${d.deviceId}','${lecId}','${crsId}')" title="Remove">&times;</button>
-          </span>`;
-        }).join('');
-
-        const classRepName = d.classRepId?.name || null;
-        const classRepPill = classRepName
-          ? `<span class="ad-lec-pill" style="background:#faf5ff;border-color:#d8b4fe;color:#7c3aed">
-              <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><polyline points="17 11 19 13 23 9"/></svg>
-              Rep: ${_esc(classRepName)}
-              <button class="ad-lec-remove" onclick="adRemoveClassRep('${d.deviceId}')" title="Remove class rep">&times;</button>
-            </span>`
-          : '';
-
-        const setupData = JSON.stringify({
-          name: d.deviceName || '',
-          dept: d.assignedDepartment || '',
-          level: d.assignedLevel || '',
-          group: d.assignedGroup || '',
-        }).replace(/'/g, '&#39;');
-
-        return `
-          <div class="ad-device-card">
-            <div class="ad-device-card-top">
-              <div class="ad-device-avatar">
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#6366f1" stroke-width="1.8"><rect x="5" y="2" width="14" height="20" rx="2"/><line x1="12" y1="18" x2="12.01" y2="18" stroke-width="2.5"/><line x1="9" y1="7" x2="15" y2="7"/><line x1="9" y1="11" x2="15" y2="11"/></svg>
-              </div>
-              <div style="min-width:0;flex:1">
-                <div class="ad-device-name">${d.deviceName}</div>
-                <div class="ad-device-meta">
-                  <span class="ad-status-dot ${isOnline ? 'ad-status-online' : 'ad-status-offline'}"></span>
-                  <span class="${isOnline ? 'ad-status-label-online' : 'ad-status-label-offline'}">${isOnline ? 'Online' : 'Offline'}</span>
-                  <span>·</span>
-                  <span>${d.deviceId}</span>
-                </div>
-              </div>
-            </div>
-            <div class="ad-device-actions">
-              <button class="ad-act-btn ad-act-rename" onclick="adRenameDevice('${d.deviceId}','${(d.deviceName||'').replace(/'/g,"&#39;")}')" title="Rename device">
-                <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
-                Rename
-              </button>
-              <button class="ad-act-btn ad-act-setup" onclick="adOpenSetupModal('${d.deviceId}', ${setupData})">
-                <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
-                Setup
-              </button>
-              <button class="ad-act-btn ad-act-factory" onclick="adFactoryReset('${d.deviceId}','${(d.deviceName||'').replace(/'/g,"&#39;")}')" title="Wipe device to factory defaults">
-                <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
-                Factory Reset
-              </button>
-              <button class="ad-act-btn ad-act-remove" onclick="adRemoveDevice('${d.deviceId}','${d.deviceName}')">
-                <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6M14 11v6"/><path d="M9 6V4h6v2"/></svg>
-                Remove
-              </button>
-            </div>
-            <div class="ad-device-card-body">
-              <div class="ad-device-dept">
-                <svg class="ad-device-dept-icon" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
-                ${deptLabel}
-              </div>
-              <div class="ad-lec-row">
-                ${lecturerPills || '<span style="font-size:11px;color:#94a3b8;font-style:italic">No lecturers assigned</span>'}
-                <button class="ad-assign-btn" onclick="adOpenAssignModal('${d.deviceId}')">
-                  <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
-                  Assign Lecturer
-                </button>
-              </div>
-              <div class="ad-lec-row" style="margin-top:6px;border-top:1px dashed var(--border);padding-top:6px">
-                ${classRepPill || '<span style="font-size:11px;color:#94a3b8;font-style:italic">No class rep assigned · use Class Reps page to assign</span>'}
-              </div>
-            </div>
-            <div class="ad-device-footer">
-              <span class="ad-footer-chip">
-                <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>
-                IP: ${ip}
-              </span>
-              <span class="ad-footer-chip">
-                <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg>
-                fw: ${fw}
-              </span>
-              <span class="ad-footer-chip">
-                <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
-                Last seen: ${last}
-              </span>
-            </div>
-          </div>`;
-      }).join('')}
-    </div>`;
-  } catch (e) {
-    list.innerHTML = `<div class="dev-card" style="border-left:4px solid var(--danger);font-size:13px;color:var(--danger)">Failed to load devices: ${e.message}</div>`;
-  }
-}
-
-// ─── ASSIGN LECTURER MODAL ────────────────────────────────────────────────────
-async function adOpenAssignModal(deviceId) {
-  // Remove any existing modal
-  const existing = document.getElementById('ad-assign-modal-overlay');
-  if (existing) existing.remove();
-
-  // Inject overlay
-  const overlay = document.createElement('div');
-  overlay.id = 'ad-assign-modal-overlay';
-  overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:9000;display:flex;align-items:center;justify-content:center;padding:16px';
-  overlay.innerHTML = `
-    <div style="background:var(--surface,#fff);border-radius:12px;padding:28px;width:100%;max-width:440px;box-shadow:0 20px 60px rgba(0,0,0,.25);position:relative">
-      <button onclick="document.getElementById('ad-assign-modal-overlay').remove()" style="position:absolute;top:14px;right:14px;background:none;border:none;cursor:pointer;font-size:20px;color:var(--text-secondary)">&times;</button>
-      <div style="font-size:16px;font-weight:700;margin-bottom:4px;color:var(--text-primary)">Assign Lecturer to Device</div>
-      <div style="font-size:12px;color:var(--text-secondary);margin-bottom:20px">Device: <strong>${deviceId}</strong></div>
-
-      <label style="display:block;font-size:12px;font-weight:600;color:var(--text-secondary);margin-bottom:4px">Department</label>
-      <select id="ad-dept-select" style="width:100%;padding:8px 10px;border:1px solid #e2e8f0;border-radius:8px;font-size:13px;margin-bottom:14px;background:var(--surface,#fff);color:var(--text-primary)">
-        <option value="">— All departments —</option>
-      </select>
-
-      <label style="display:block;font-size:12px;font-weight:600;color:var(--text-secondary);margin-bottom:4px">Lecturer</label>
-      <select id="ad-lec-select" style="width:100%;padding:8px 10px;border:1px solid #e2e8f0;border-radius:8px;font-size:13px;margin-bottom:14px;background:var(--surface,#fff);color:var(--text-primary)">
-        <option value="">Loading lecturers…</option>
-      </select>
-
-      <label style="display:block;font-size:12px;font-weight:600;color:var(--text-secondary);margin-bottom:4px">Course</label>
-      <select id="ad-crs-select" style="width:100%;padding:8px 10px;border:1px solid #e2e8f0;border-radius:8px;font-size:13px;margin-bottom:20px;background:var(--surface,#fff);color:var(--text-primary)">
-        <option value="">Select a lecturer first</option>
-      </select>
-
-      <div id="ad-assign-err" style="display:none;color:#dc2626;font-size:12px;margin-bottom:10px"></div>
-      <div style="display:flex;gap:10px;justify-content:flex-end">
-        <button onclick="document.getElementById('ad-assign-modal-overlay').remove()" style="padding:8px 18px;border:1px solid #e2e8f0;border-radius:8px;background:none;cursor:pointer;font-size:13px">Cancel</button>
-        <button id="ad-assign-submit" onclick="adSubmitAssign('${deviceId}')" style="padding:8px 18px;border:none;border-radius:8px;background:#6366f1;color:#fff;cursor:pointer;font-size:13px;font-weight:600">Assign</button>
-      </div>
-    </div>`;
-  document.body.appendChild(overlay);
-
-  // Close on backdrop click
-  overlay.addEventListener('click', e => { if (e.target === overlay) overlay.remove(); });
-
-  // Load lecturers
-  try {
-    const data = await api('/api/devices/lecturers-for-assignment');
-    const lecturers = data.lecturers || [];
-    window._adLecturerData = lecturers;
-
-    const deptSel = document.getElementById('ad-dept-select');
-    const lecSel  = document.getElementById('ad-lec-select');
-
-    // Populate department filter from unique departments in lecturer list
-    const depts = [...new Set(lecturers.map(l => l.department).filter(Boolean))].sort();
-    deptSel.innerHTML = `<option value="">— All departments —</option>` +
-      depts.map(d => `<option value="${esc(d)}">${esc(d)}</option>`).join('');
-
-    function populateLecturers(filterDept) {
-      const filtered = filterDept ? lecturers.filter(l => l.department === filterDept) : lecturers;
-      lecSel.innerHTML = `<option value="">— Select lecturer —</option>` +
-        filtered.map(l => `<option value="${l._id}">${esc(l.name)}${l.department ? ' · ' + esc(l.department) : ''}</option>`).join('');
-      document.getElementById('ad-crs-select').innerHTML = `<option value="">Select a lecturer first</option>`;
-    }
-
-    populateLecturers('');
-
-    deptSel.addEventListener('change', () => {
-      populateLecturers(deptSel.value);
-    });
-
-    lecSel.addEventListener('change', () => {
-      const lec = lecturers.find(l => l._id === lecSel.value);
-      const crsSel = document.getElementById('ad-crs-select');
-      if (!lec || !lec.courses || !lec.courses.length) {
-        crsSel.innerHTML = `<option value="">No courses found for this lecturer</option>`;
-        return;
-      }
-      crsSel.innerHTML = `<option value="">— Select course —</option>` +
-        lec.courses.map(c => `<option value="${c._id}">${c.courseCode} – ${c.name}</option>`).join('');
-    });
-  } catch (e) {
-    const lecSel = document.getElementById('ad-lec-select');
-    if (lecSel) lecSel.innerHTML = `<option value="">Failed to load lecturers</option>`;
-  }
-}
-
-async function adSubmitAssign(deviceId) {
-  const lecSel = document.getElementById('ad-lec-select');
-  const crsSel = document.getElementById('ad-crs-select');
-  const errEl  = document.getElementById('ad-assign-err');
-  const btn    = document.getElementById('ad-assign-submit');
-
-  const lecturerId = lecSel?.value;
-  const courseId   = crsSel?.value;
-
-  if (!lecturerId || !courseId) {
-    if (errEl) { errEl.textContent = 'Please select both a lecturer and a course.'; errEl.style.display = 'block'; }
-    return;
-  }
-
-  if (btn) { btn.disabled = true; btn.textContent = 'Assigning…'; }
-  if (errEl) errEl.style.display = 'none';
-
-  try {
-    await api(`/api/devices/${deviceId}/assign-lecturer`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ lecturerId, courseId }),
-    });
-    document.getElementById('ad-assign-modal-overlay')?.remove();
-    await adLoadDevices();
-  } catch (e) {
-    if (errEl) { errEl.textContent = e.message || 'Failed to assign lecturer.'; errEl.style.display = 'block'; }
-    if (btn) { btn.disabled = false; btn.textContent = 'Assign'; }
-  }
-}
-
-async function adRemoveLecturer(deviceId, lecturerId, courseId) {
-  if (!confirm('Remove this lecturer from the device?')) return;
-  try {
-    await api(`/api/devices/${deviceId}/remove-lecturer`, {
-      method: 'DELETE',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ lecturerId, courseId }),
-    });
-    await adLoadDevices();
-  } catch (e) {
-    alert('Failed to remove lecturer: ' + (e.message || 'Server error'));
-  }
-}
-
-// ─── ASSIGN CLASS REP TO DEVICE ──────────────────────────────────────────────
-async function adOpenClassRepModal(deviceId) {
-  const existing = document.getElementById('ad-classrep-modal-overlay');
-  if (existing) existing.remove();
-
-  const overlay = document.createElement('div');
-  overlay.id = 'ad-classrep-modal-overlay';
-  overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:9000;display:flex;align-items:center;justify-content:center;padding:16px';
-  overlay.innerHTML = `
-    <div style="background:var(--surface,#fff);border-radius:14px;padding:28px;width:100%;max-width:480px;box-shadow:0 20px 60px rgba(0,0,0,.25);position:relative">
-      <button onclick="document.getElementById('ad-classrep-modal-overlay').remove()"
-        style="position:absolute;top:16px;right:16px;background:none;border:none;cursor:pointer;color:var(--text-muted);font-size:18px">✕</button>
-      <div style="font-size:16px;font-weight:800;color:#0f172a;margin-bottom:4px">Assign Class Rep to Device</div>
-      <div style="font-size:12px;color:#64748b;margin-bottom:20px">Search by index number to find the class representative for this device.</div>
-
-      <div style="display:flex;gap:8px;margin-bottom:12px">
-        <input id="cr-dev-index" type="text" placeholder="Student index number (e.g. UCC/CS/23/0001)"
-          style="flex:1;padding:9px 12px;border:1.5px solid var(--border);border-radius:8px;font-size:13px;font-family:inherit;outline:none;text-transform:uppercase"
-          oninput="this.value=this.value.toUpperCase()">
-        <button onclick="adSearchClassRep('${deviceId}')"
-          style="padding:9px 16px;background:#7c3aed;color:#fff;border:none;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer;white-space:nowrap">Search</button>
-      </div>
-      <div id="cr-dev-result" style="min-height:40px"></div>
-    </div>`;
-  document.body.appendChild(overlay);
-  document.getElementById('cr-dev-index')?.focus();
-}
-
-async function adSearchClassRep(deviceId) {
-  const indexInput = document.getElementById('cr-dev-index');
-  const result     = document.getElementById('cr-dev-result');
-  if (!indexInput || !result) return;
-  const idx = indexInput.value.trim().toUpperCase();
-  if (!idx) { indexInput.style.borderColor = '#ef4444'; indexInput.focus(); return; }
-  indexInput.style.borderColor = 'var(--border)';
-  result.innerHTML = '<div style="font-size:13px;color:var(--text-muted)">Searching…</div>';
-  try {
-    const data = await api('/api/class-rep-admin/students?indexNumber=' + encodeURIComponent(idx));
-    const students = data.students || [];
-    if (!students.length) {
-      result.innerHTML = '<div style="font-size:13px;color:#ef4444">No student found with that index number.</div>';
-      return;
-    }
-    const s = students[0];
-    const tags = [
-      s.programme ? `<span style="background:#ede9fe;color:#7c3aed;padding:1px 7px;border-radius:20px;font-size:11px;font-weight:700">${_esc(s.programme)}</span>` : '',
-      s.studentLevel ? `<span style="background:#dbeafe;color:#1d4ed8;padding:1px 7px;border-radius:20px;font-size:11px;font-weight:700">L${_esc(s.studentLevel)}</span>` : '',
-      s.studentGroup ? `<span style="background:#ecfdf5;color:#059669;padding:1px 7px;border-radius:20px;font-size:11px;font-weight:700">Grp ${_esc(s.studentGroup)}</span>` : '',
-      s.sessionType  ? `<span style="background:#fff7ed;color:#c2410c;padding:1px 7px;border-radius:20px;font-size:11px;font-weight:600">${_esc(s.sessionType)}</span>` : '',
-    ].filter(Boolean).join(' ');
-    result.innerHTML = `
-      <div style="border:1.5px solid var(--border);border-radius:10px;padding:14px 16px;display:flex;gap:12px;align-items:center;margin-bottom:14px">
-        <div style="width:40px;height:40px;border-radius:50%;background:linear-gradient(135deg,#7c3aed,#6366f1);display:flex;align-items:center;justify-content:center;font-size:16px;font-weight:800;color:#fff;flex-shrink:0">
-          ${_esc((s.name||'?')[0].toUpperCase())}
-        </div>
-        <div style="min-width:0;flex:1">
-          <div style="font-weight:700;font-size:14px">${_esc(s.name)}</div>
-          <div style="font-size:11px;color:#64748b;margin-bottom:5px">${_esc(s.IndexNumber||s.indexNumber||'')} · ${_esc(s.department||'')}</div>
-          <div style="display:flex;gap:5px;flex-wrap:wrap">${tags}</div>
-          ${s.isClassRep ? '<div style="margin-top:5px;font-size:11px;color:#7c3aed;font-weight:700">⭐ Already a Class Rep</div>' : ''}
-        </div>
-      </div>
-      <div style="display:flex;gap:8px;justify-content:flex-end">
-        <button onclick="document.getElementById('ad-classrep-modal-overlay').remove()"
-          style="padding:9px 16px;background:var(--bg,#f8fafc);border:1.5px solid var(--border);border-radius:8px;font-size:13px;font-weight:600;cursor:pointer">Cancel</button>
-        <button onclick="adConfirmClassRep('${deviceId}','${s._id}','${_esc(s.name).replace(/'/g,"\\'")}','${!s.isClassRep}')"
-          style="padding:9px 16px;background:#7c3aed;color:#fff;border:none;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer">
-          ${s.isClassRep ? 'Assign to This Device' : 'Make Rep & Assign to Device'}
-        </button>
-      </div>`;
-  } catch (e) {
-    result.innerHTML = `<div style="font-size:13px;color:#ef4444">${e.message || 'Search failed'}</div>`;
-  }
-}
-
-async function adConfirmClassRep(deviceId, studentId, name, needsRepRole) {
-  try {
-    if (needsRepRole === 'true') {
-      await api('/api/class-rep-admin/assign', { method: 'POST', body: JSON.stringify({ studentId }) });
-    }
-    await api(`/api/devices/${deviceId}/assign-class-rep`, {
-      method: 'PATCH',
-      body: JSON.stringify({ classRepId: studentId }),
-    });
-    document.getElementById('ad-classrep-modal-overlay')?.remove();
-    typeof toastSuccess === 'function' ? toastSuccess(`${name} assigned as class rep for this device`) : alert(`${name} assigned as class rep`);
-    await adLoadDevices();
-  } catch (e) {
-    typeof toastError === 'function' ? toastError(e.message || 'Failed to assign class rep') : alert('Failed: ' + e.message);
-  }
-}
-
-async function adRemoveClassRep(deviceId) {
-  if (!confirm('Remove the class rep assignment from this device?')) return;
-  try {
-    await api(`/api/devices/${deviceId}/assign-class-rep`, {
-      method: 'PATCH',
-      body: JSON.stringify({ classRepId: null }),
-    });
-    await adLoadDevices();
-  } catch (e) {
-    alert('Failed to remove class rep: ' + (e.message || 'Server error'));
-  }
-}
-
-// ─── DEVICE SETUP MODAL (rename + dept/level/group) ──────────────────────────
-function adOpenSetupModal(deviceId, current) {
-  const existing = document.getElementById('ad-setup-modal-overlay');
-  if (existing) existing.remove();
-
-  const overlay = document.createElement('div');
-  overlay.id = 'ad-setup-modal-overlay';
-  overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:9000;display:flex;align-items:center;justify-content:center;padding:16px';
-  overlay.innerHTML = `
-    <div style="background:var(--surface,#fff);border-radius:12px;padding:28px;width:100%;max-width:440px;box-shadow:0 20px 60px rgba(0,0,0,.25);position:relative">
-      <button onclick="document.getElementById('ad-setup-modal-overlay').remove()" style="position:absolute;top:14px;right:14px;background:none;border:none;cursor:pointer;font-size:20px;color:var(--text-secondary)">&times;</button>
-      <div style="font-size:16px;font-weight:700;margin-bottom:4px;color:var(--text-primary)">Device Setup</div>
-      <div style="font-size:12px;color:var(--text-secondary);margin-bottom:20px">ID: <strong>${deviceId}</strong></div>
-
-      <label style="display:block;font-size:12px;font-weight:600;color:var(--text-secondary);margin-bottom:4px">Device Name</label>
-      <input id="ad-setup-name" value="${(current?.name || '').replace(/"/g,'&quot;')}" placeholder="e.g. DIKLY-CS-L100-A"
-        style="width:100%;padding:8px 10px;border:1px solid #e2e8f0;border-radius:8px;font-size:13px;margin-bottom:14px;box-sizing:border-box;background:var(--surface,#fff);color:var(--text-primary)">
-
-      <label style="display:block;font-size:12px;font-weight:600;color:var(--text-secondary);margin-bottom:4px">Department</label>
-      <input id="ad-setup-dept" value="${(current?.dept || '').replace(/"/g,'&quot;')}" placeholder="e.g. Computer Science"
-        style="width:100%;padding:8px 10px;border:1px solid #e2e8f0;border-radius:8px;font-size:13px;margin-bottom:14px;box-sizing:border-box;background:var(--surface,#fff);color:var(--text-primary)">
-
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:20px">
-        <div>
-          <label style="display:block;font-size:12px;font-weight:600;color:var(--text-secondary);margin-bottom:4px">Level</label>
-          <input id="ad-setup-level" value="${(current?.level || '').replace(/"/g,'&quot;')}" placeholder="e.g. 100"
-            style="width:100%;padding:8px 10px;border:1px solid #e2e8f0;border-radius:8px;font-size:13px;box-sizing:border-box;background:var(--surface,#fff);color:var(--text-primary)">
-        </div>
-        <div>
-          <label style="display:block;font-size:12px;font-weight:600;color:var(--text-secondary);margin-bottom:4px">Group</label>
-          <input id="ad-setup-group" value="${(current?.group || '').replace(/"/g,'&quot;')}" placeholder="e.g. A"
-            style="width:100%;padding:8px 10px;border:1px solid #e2e8f0;border-radius:8px;font-size:13px;box-sizing:border-box;background:var(--surface,#fff);color:var(--text-primary)">
-        </div>
-      </div>
-
-      <div id="ad-setup-err" style="display:none;color:#dc2626;font-size:12px;margin-bottom:10px"></div>
-      <div style="display:flex;gap:10px;justify-content:flex-end">
-        <button onclick="document.getElementById('ad-setup-modal-overlay').remove()" style="padding:8px 18px;border:1px solid #e2e8f0;border-radius:8px;background:none;cursor:pointer;font-size:13px">Cancel</button>
-        <button id="ad-setup-submit" onclick="adSubmitSetup('${deviceId}')" style="padding:8px 18px;border:none;border-radius:8px;background:#6366f1;color:#fff;cursor:pointer;font-size:13px;font-weight:600">Save</button>
-      </div>
-    </div>`;
-  document.body.appendChild(overlay);
-  overlay.addEventListener('click', e => { if (e.target === overlay) overlay.remove(); });
-}
-
-async function adSubmitSetup(deviceId) {
-  const nameEl  = document.getElementById('ad-setup-name');
-  const deptEl  = document.getElementById('ad-setup-dept');
-  const levelEl = document.getElementById('ad-setup-level');
-  const groupEl = document.getElementById('ad-setup-group');
-  const errEl   = document.getElementById('ad-setup-err');
-  const btn     = document.getElementById('ad-setup-submit');
-
-  const deviceName = nameEl?.value?.trim();
-  const department = deptEl?.value?.trim();
-  const level      = levelEl?.value?.trim();
-  const group      = groupEl?.value?.trim();
-
-  if (!level || !group) {
-    if (errEl) { errEl.textContent = 'Level and Group are required.'; errEl.style.display = 'block'; }
-    return;
-  }
-
-  if (btn) { btn.disabled = true; btn.textContent = 'Saving…'; }
-  if (errEl) errEl.style.display = 'none';
-
-  const errors = [];
-  try {
-    await api('/api/devices/assign-group', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ deviceId, department, level, group }),
-    });
-  } catch (e) {
-    errors.push('Group: ' + (e.message || 'Failed'));
-  }
-
-  if (deviceName) {
-    try {
-      await api('/api/devices/my/rename', {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ deviceName, deviceId }),
-      });
-    } catch (e) {
-      errors.push('Name: ' + (e.message || 'Failed'));
-    }
-  }
-
-  if (errors.length) {
-    if (errEl) { errEl.textContent = errors.join(' | '); errEl.style.display = 'block'; }
-    if (btn) { btn.disabled = false; btn.textContent = 'Save'; }
-    return;
-  }
-
-  document.getElementById('ad-setup-modal-overlay')?.remove();
-  await adLoadDevices();
-}
-
-// ─── RENAME DEVICE ───────────────────────────────────────────────────────────
-async function adRenameDevice(deviceId, currentName) {
-  const existing = document.getElementById('ad-rename-modal-overlay');
-  if (existing) existing.remove();
-
-  const overlay = document.createElement('div');
-  overlay.id = 'ad-rename-modal-overlay';
-  overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:9000;display:flex;align-items:center;justify-content:center;padding:16px';
-  overlay.innerHTML = `
-    <div style="background:#fff;border-radius:16px;padding:28px;width:100%;max-width:400px;box-shadow:0 20px 60px rgba(0,0,0,.25);position:relative">
-      <button onclick="document.getElementById('ad-rename-modal-overlay').remove()" style="position:absolute;top:14px;right:14px;background:none;border:none;cursor:pointer;font-size:20px;color:#94a3b8">&times;</button>
-      <div style="font-size:16px;font-weight:700;margin-bottom:4px;color:#0f172a">Rename Device</div>
-      <div style="font-size:12px;color:#94a3b8;margin-bottom:20px">ID: ${deviceId}</div>
-      <label style="display:block;font-size:12px;font-weight:600;color:#475569;margin-bottom:6px">New device name</label>
-      <input id="ad-rename-input" type="text" value="${(currentName || '').replace(/"/g,'&quot;')}"
-        placeholder="e.g. CS-Lab-A, Room-201-Device"
-        style="width:100%;padding:10px 12px;border:1.5px solid #e2e8f0;border-radius:8px;font-size:14px;outline:none;margin-bottom:6px"
-        oninput="this.style.borderColor='#6366f1'"
-        onkeydown="if(event.key==='Enter')adSubmitRename('${deviceId}')"/>
-      <div id="ad-rename-err" style="display:none;color:#dc2626;font-size:12px;margin-bottom:10px"></div>
-      <div style="display:flex;gap:10px;justify-content:flex-end;margin-top:16px">
-        <button onclick="document.getElementById('ad-rename-modal-overlay').remove()" style="padding:9px 18px;border:1px solid #e2e8f0;border-radius:8px;background:none;cursor:pointer;font-size:13px;color:#475569">Cancel</button>
-        <button id="ad-rename-submit" onclick="adSubmitRename('${deviceId}')" style="padding:9px 18px;border:none;border-radius:8px;background:#6366f1;color:#fff;cursor:pointer;font-size:13px;font-weight:600">Save Name</button>
-      </div>
-    </div>`;
-  document.body.appendChild(overlay);
-  overlay.addEventListener('click', e => { if (e.target === overlay) overlay.remove(); });
-  setTimeout(() => document.getElementById('ad-rename-input')?.focus(), 50);
-}
-
-async function adSubmitRename(deviceId) {
-  const input  = document.getElementById('ad-rename-input');
-  const errEl  = document.getElementById('ad-rename-err');
-  const btn    = document.getElementById('ad-rename-submit');
-  const newName = input?.value?.trim();
-  if (!newName) {
-    if (errEl) { errEl.textContent = 'Device name cannot be empty.'; errEl.style.display = 'block'; }
-    return;
-  }
-  if (btn) { btn.disabled = true; btn.textContent = 'Saving…'; }
-  if (errEl) errEl.style.display = 'none';
-  try {
-    await api('/api/devices/my/rename', {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ deviceName: newName, deviceId }),
-    });
-    document.getElementById('ad-rename-modal-overlay')?.remove();
-    await adLoadDevices();
-  } catch (e) {
-    if (errEl) { errEl.textContent = e.message || 'Failed to rename device.'; errEl.style.display = 'block'; }
-    if (btn) { btn.disabled = false; btn.textContent = 'Save Name'; }
-  }
-}
-
-// ─── FACTORY RESET DEVICE ────────────────────────────────────────────────────
-function adFactoryReset(deviceId, deviceName) {
-  const existing = document.getElementById('ad-freset-modal-overlay');
-  if (existing) existing.remove();
-
-  const overlay = document.createElement('div');
-  overlay.id = 'ad-freset-modal-overlay';
-  overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:9000;display:flex;align-items:center;justify-content:center;padding:16px';
-  overlay.innerHTML = `
-    <div style="background:#fff;border-radius:16px;padding:32px;width:100%;max-width:420px;box-shadow:0 20px 60px rgba(0,0,0,.3);position:relative">
-      <div style="display:flex;align-items:center;gap:14px;margin-bottom:16px">
-        <div style="width:48px;height:48px;border-radius:12px;background:#fff7ed;border:1.5px solid #fed7aa;display:flex;align-items:center;justify-content:center;flex-shrink:0">
-          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#ea580c" stroke-width="2"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
-        </div>
-        <div>
-          <div style="font-size:17px;font-weight:700;color:#0f172a">Factory Reset Device</div>
-          <div style="font-size:12px;color:#94a3b8;margin-top:2px">${deviceId}</div>
-        </div>
-      </div>
-      <p style="font-size:13px;color:#475569;line-height:1.65;margin-bottom:12px">
-        This will <strong>permanently wipe all data</strong> on <strong>${deviceName || deviceId}</strong>:
-      </p>
-      <ul style="font-size:13px;color:#475569;line-height:2;padding-left:18px;margin-bottom:16px">
-        <li>WiFi credentials stored on the device</li>
-        <li>Institution code &amp; pairing token</li>
-        <li>All locally cached attendance records</li>
-        <li>Device configuration and settings</li>
-      </ul>
-      <div style="background:#fef2f2;border:1px solid #fecaca;border-radius:10px;padding:12px 14px;font-size:12px;color:#b91c1c;margin-bottom:20px;line-height:1.5">
-        ⚠️ The device will return to <strong>factory setup mode</strong> on its next heartbeat (within 5 seconds if online). This action cannot be undone.
-      </div>
-      <div id="ad-freset-err" style="display:none;color:#dc2626;font-size:12px;margin-bottom:10px"></div>
-      <div style="display:flex;gap:10px;justify-content:flex-end">
-        <button onclick="document.getElementById('ad-freset-modal-overlay').remove()" style="padding:10px 20px;border:1px solid #e2e8f0;border-radius:8px;background:none;cursor:pointer;font-size:13px;color:#475569;font-weight:500">Cancel</button>
-        <button id="ad-freset-submit" onclick="adSubmitFactoryReset('${deviceId}')"
-          style="padding:10px 20px;border:none;border-radius:8px;background:#dc2626;color:#fff;cursor:pointer;font-size:13px;font-weight:700">
-          Yes, Factory Reset
-        </button>
-      </div>
-    </div>`;
-  document.body.appendChild(overlay);
-  overlay.addEventListener('click', e => { if (e.target === overlay) overlay.remove(); });
-}
-
-async function adSubmitFactoryReset(deviceId) {
-  const errEl = document.getElementById('ad-freset-err');
-  const btn   = document.getElementById('ad-freset-submit');
-  if (btn) { btn.disabled = true; btn.textContent = 'Resetting…'; }
-  if (errEl) errEl.style.display = 'none';
-  try {
-    await api(`/api/devices/${deviceId}/factory-reset`, { method: 'POST' });
-    document.getElementById('ad-freset-modal-overlay')?.remove();
-    await adLoadDevices();
-  } catch (e) {
-    if (errEl) { errEl.textContent = e.message || 'Factory reset failed.'; errEl.style.display = 'block'; }
-    if (btn) { btn.disabled = false; btn.textContent = 'Yes, Factory Reset'; }
-  }
-}
-
-// ─── REMOVE DEVICE ────────────────────────────────────────────────────────────
-async function adRemoveDevice(deviceId, deviceName) {
-  if (!confirm(`Remove "${deviceName}" from your institution?\n\nThis will unpair the device and delete its JWT. The physical device will reset to setup mode on next boot.`)) return;
-  try {
-    await api(`/api/devices/${deviceId}/remove`, { method: 'DELETE' });
-    await adLoadDevices();
-  } catch (e) {
-    alert('Failed to remove device: ' + e.message);
-  }
 }

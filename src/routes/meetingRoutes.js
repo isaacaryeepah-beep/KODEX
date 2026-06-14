@@ -6,6 +6,7 @@ const meetCtrl       = require('../controllers/meetingController');
 const attendCtrl     = require('../controllers/meetingAttendanceController');
 const monitorCtrl    = require('../controllers/meetingMonitorController');
 const proctoringCtrl = require('../controllers/proctoringController');
+const preflight      = require('../services/sessionPreflight');
 
 const authenticate        = require('../middleware/auth');
 const { companyIsolation } = require('../middleware/companyIsolation');
@@ -29,8 +30,6 @@ router.get('/upcoming',    meetCtrl.upcomingMeetings);
 router.get('/live',        meetCtrl.liveMeetings);
 router.get('/my-meetings', meetCtrl.myMeetings);
 router.get('/validate-token', meetCtrl.validateMeetingToken);
-// Jitsi infrastructure health: verifies JWT generation + BOSH reachability
-router.get('/jitsi/health',  meetCtrl.jitsiHealth);
 router.get('/',              meetCtrl.listMeetings);
 
 // ─── CREATE ───────────────────────────────────────────────────────────────────
@@ -46,10 +45,8 @@ router.post('/:id/cancel', loadMeeting, isOwner, meetCtrl.cancelMeeting);
 router.delete('/:id/delete', loadMeeting, isOwner, meetCtrl.deleteMeeting);
 
 // ─── ROOM CONTROL (moderator) ─────────────────────────────────────────────────
-router.post('/:id/lock',                      loadMeeting, isModerator, meetCtrl.lockRoom);
-router.post('/:id/unlock',                    loadMeeting, isModerator, meetCtrl.unlockRoom);
-router.post('/:id/mute-all',                  loadMeeting, isModerator, meetCtrl.muteAll);
-router.post('/:id/participants/:uid/mute',    loadMeeting, isModerator, meetCtrl.muteParticipant);
+router.post('/:id/lock',   loadMeeting, isModerator, meetCtrl.lockRoom);
+router.post('/:id/unlock', loadMeeting, isModerator, meetCtrl.unlockRoom);
 
 // ─── INVIGILATOR MANAGEMENT (owner only) ─────────────────────────────────────
 router.post('/:id/invigilators/add',    loadMeeting, isOwner, meetCtrl.addInvigilator);
@@ -58,17 +55,17 @@ router.post('/:id/invigilators/remove', loadMeeting, isOwner, meetCtrl.removeInv
 // ─── JOIN ─────────────────────────────────────────────────────────────────────
 router.get('/:id/join', loadMeeting, requireNoDeviceLock, canJoin, meetCtrl.joinMeeting);
 
-// ─── PREFLIGHT (monitoring init before Jitsi join) ────────────────────────────
-router.post('/:id/preflight', loadMeeting, requireNoDeviceLock, canJoin, meetCtrl.preflightMeeting);
-
-// ─── RECONNECT (monitoring restore after Jitsi reconnect) ─────────────────────
-router.post('/:id/reconnect', meetCtrl.reconnectMeeting);
+// ─── PRE-FLIGHT & RECONNECT ───────────────────────────────────────────────────
+router.post('/:id/preflight', preflight.runPreflight);
+router.post('/:id/reconnect', preflight.handleReconnect);
 
 // ─── LIVE MONITORING (SSE + polling) ─────────────────────────────────────────
 // Monitor dashboard data (moderators/invigilators only — enforced inside controller)
 router.get('/:id/monitor',        monitorCtrl.getMonitorData);
 // SSE stream for monitor dashboard
 router.get('/:id/monitor/stream', monitorCtrl.monitorStream);
+// Invigilation mode switch (ai | human | hybrid)
+router.post('/:id/monitor/invigilation-mode', loadMeeting, isModerator, monitorCtrl.setInvigilationMode);
 // SSE stream for individual participant (receives warnings/kicks)
 router.get('/:id/participant-stream', monitorCtrl.participantStream);
 

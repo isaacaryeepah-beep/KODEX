@@ -1,5 +1,5 @@
 require("dotenv").config();
-
+const http = require("http");
 const express = require("express");
 const cors = require("cors");
 const helmet = require("helmet");
@@ -26,8 +26,7 @@ const approvalRoutes = require("./routes/approvals");
 const rosterRoutes = require("./routes/roster");
 const adminReportRoutes = require("./routes/adminReports");
 const adminDashboardRoutes = require("./routes/adminDashboard");
-let jitsiRoutes = null;
-try { jitsiRoutes = require("./routes/jitsi"); } catch(e) { console.warn('[Jitsi] routes not loaded:', e.message); }
+const jitsiRoutes = require("./routes/jitsi");
 const searchRoutes = require("./routes/Search");
 // Legacy proctored quiz system — superseded by SnapQuiz (proctoringEnabled=true).
 // Kept for historical data access. Set LEGACY_PROCTOR_DISABLED=true to retire.
@@ -57,7 +56,7 @@ const { sanitizeInputs } = require("./middleware/sanitize");
 const app = express();
 const PORT = process.env.PORT || 5000;
 
-app.set("trust proxy", 1);
+app.set("trust proxy", true);
 
 app.use(compression({ level: 4, threshold: 1024 }));
 
@@ -70,40 +69,7 @@ app.use((req, res, next) => {
 });
 
 app.use(helmet({
-  contentSecurityPolicy: {
-    useDefaults: true,
-    directives: {
-      // Self + CDN scripts (Jitsi, Stream, fonts)
-      "script-src": [
-        "'self'",
-        "https://meet.jit.si",
-        "https://8x8.vc",
-        "https://cdn.jsdelivr.net",
-        "https://unpkg.com",
-        "'unsafe-inline'",   // Required for inline event handlers in legacy HTML pages
-      ],
-      // Helmet 8 useDefaults injects script-src-attr 'none' which blocks ALL onclick
-      // attributes even when script-src has 'unsafe-inline'. The entire app uses inline
-      // event handlers, so this must be explicitly removed.
-      "script-src-attr": ["'unsafe-inline'"],
-      "style-src":  ["'self'", "https://fonts.googleapis.com", "'unsafe-inline'"],
-      "font-src":   ["'self'", "https://fonts.gstatic.com", "data:"],
-      "img-src":    ["'self'", "data:", "blob:", "https:"],
-      "media-src":  ["'self'", "blob:", "https:"],
-      "connect-src": [
-        "'self'",
-        "https://dikly.sbs", "https://api.dikly.sbs",
-        "https://dikly.live", "https://api.dikly.live",
-        "https://getstream.io", "wss://getstream.io",
-        "wss://dikly.sbs", "wss://dikly.live",
-        "https://livekit.cloud", "wss://livekit.cloud",
-      ],
-      "frame-src":  ["'self'", "https://meet.jit.si", "https://8x8.vc"],
-      "object-src": ["'none'"],
-      "base-uri":   ["'self'"],
-      "form-action": ["'self'"],
-    },
-  },
+  contentSecurityPolicy: false,
   crossOriginEmbedderPolicy: false,
   referrerPolicy: { policy: "strict-origin-when-cross-origin" },
   hsts: { maxAge: 31536000, includeSubDomains: true },
@@ -113,7 +79,7 @@ app.use(helmet({
 }));
 
 const allowedOrigins = [
-  // dikly.live (legacy + Jitsi meet subdomain)
+  // Production domains
   "https://dikly.live",
   "https://www.dikly.live",
   "https://app.dikly.live",
@@ -121,18 +87,10 @@ const allowedOrigins = [
   "https://api.dikly.live",
   "https://admin.dikly.live",
   "https://meet.dikly.live",
-  // dikly.sbs (primary platform domains)
+  // Legacy domain
   "https://dikly.sbs",
   "https://www.dikly.sbs",
-  "https://app.dikly.sbs",
-  "https://monitor.dikly.sbs",
-  "https://api.dikly.sbs",
-  "https://admin.dikly.sbs",
-  // exam subdomain
-  "https://exam.dikly.sbs",
-  // Flutter web app (GitHub Pages)
-  "https://isaacaryeepah-beep.github.io",
-  // local development
+  // Local dev
   "http://localhost:3000",
   "http://localhost:5000",
 ];
@@ -156,10 +114,7 @@ app.use(cors({
     "x-request-time",
   ],
   credentials: true,
-  preflightContinue: false,
-  optionsSuccessStatus: 204,
 }));
-
 
 app.use((req, res, next) => {
   if (req.path === "/api/webhooks/paystack") {
@@ -192,78 +147,13 @@ app.use("/api/", (req, res, next) => {
   return apiLimiter(req, res, next);
 });
 
-// Docker / load-balancer health check
-app.get('/health', (req, res) => res.json({ status: 'ok', ts: Date.now() }));
-
 app.get("/superadmin", (req, res) => {
   res.sendFile(path.join(__dirname, "public", "superadmin.html"));
 });
 
-// Standalone proctoring monitor dashboard
-app.get('/monitor', (req, res) => {
-  res.sendFile(path.join(__dirname, 'public', 'monitor.html'));
-});
-
-// Student session preflight / validation screen (runs before Jitsi)
-app.get('/session-preflight', (req, res) => {
-  // Permissions-Policy allows this page to delegate camera/mic to cross-origin iframes.
-  // Without it, iOS Safari may reload or block the Jitsi iframe when permissions are granted.
-  res.setHeader('Permissions-Policy', 'camera=*, microphone=*, display-capture=*');
-  res.sendFile(path.join(__dirname, 'public', 'session-preflight.html'));
-});
-
-// Meeting lobby pages
-app.get('/lecturer-meeting', (req, res) => {
-  res.setHeader('Permissions-Policy', 'camera=*, microphone=*, display-capture=*');
-  res.sendFile(path.join(__dirname, 'public', 'lecturer-meeting.html'));
-});
-app.get('/student-meeting', (req, res) => {
-  res.setHeader('Permissions-Policy', 'camera=*, microphone=*, display-capture=*');
-  res.sendFile(path.join(__dirname, 'public', 'student-meeting.html'));
-});
-
-// GetStream live call room
-app.get('/stream-room', (req, res) => {
-  res.setHeader('Permissions-Policy', 'camera=*, microphone=*, display-capture=*');
-  res.sendFile(path.join(__dirname, 'public', 'stream-room.html'));
-});
-
-// AI-proctored exam pages
-app.get('/exam-preflight', (req, res) => {
-  res.setHeader('Permissions-Policy', 'camera=*, microphone=*, fullscreen=*');
-  res.sendFile(path.join(__dirname, 'public', 'exam-preflight.html'));
-});
-app.get('/exam-room', (req, res) => {
-  res.setHeader('Permissions-Policy', 'camera=*, microphone=*, fullscreen=*');
-  res.sendFile(path.join(__dirname, 'public', 'exam-room.html'));
-});
-
-// ── App download proxy ───────────────────────────────────────────────────────
-// Streams the app installer directly so the browser downloads it without
-// opening a new tab or redirecting to GitHub.
-const DOWNLOAD_URLS = {
-  android: process.env.ANDROID_DOWNLOAD_URL || 'https://github.com/isaacaryeepah-beep/Dikly_releases/releases/download/apk-latest/dikly.apk',
-  windows: process.env.WINDOWS_DOWNLOAD_URL || 'https://github.com/isaacaryeepah-beep/Dikly_releases/releases/download/windows-latest/dikly-windows-setup.exe',
-  mac:     process.env.MAC_DOWNLOAD_URL     || 'https://github.com/isaacaryeepah-beep/Dikly_releases/releases/download/mac-latest/dikly-mac.dmg',
-};
-const DOWNLOAD_META = {
-  android: { filename: 'dikly.apk',               type: 'application/vnd.android.package-archive' },
-  windows: { filename: 'dikly-windows-setup.exe',  type: 'application/octet-stream' },
-  mac:     { filename: 'dikly-mac.dmg',             type: 'application/octet-stream' },
-};
-
-app.get('/downloads/:platform', (req, res) => {
-  const platform = req.params.platform;
-  const url  = DOWNLOAD_URLS[platform];
-  const meta = DOWNLOAD_META[platform];
-  if (!url || !meta) return res.status(404).json({ error: 'Unknown platform' });
-  // Redirect to GitHub releases — browser follows the redirect chain and
-  // downloads the file directly from the CDN without opening a new tab.
-  res.setHeader('Content-Disposition', `attachment; filename="${meta.filename}"`);
-  res.redirect(302, url);
-});
-
 app.get("/anticheat",      (req, res) => res.sendFile(path.join(__dirname, "public", "anticheat-dashboard.html")));
+app.get("/monitor",        (req, res) => res.sendFile(path.join(__dirname, "public", "monitor-standalone.html")));
+app.get("/meeting-join",   (req, res) => res.sendFile(path.join(__dirname, "public", "meeting-monitor.html")));
 app.get("/about",          (req, res) => res.sendFile(path.join(__dirname, "public", "about.html")));
 app.get("/founder",        (req, res) => res.sendFile(path.join(__dirname, "public", "founder.html")));
 app.get("/contact",        (req, res) => res.sendFile(path.join(__dirname, "public", "contact.html")));
@@ -271,29 +161,11 @@ app.get("/privacy",        (req, res) => res.sendFile(path.join(__dirname, "publ
 app.get("/terms",          (req, res) => res.sendFile(path.join(__dirname, "public", "terms.html")));
 app.get("/delete-account", (req, res) => res.sendFile(path.join(__dirname, "public", "delete-account.html")));
 
-// Flutter web app — served at /app/ (same origin as API, no CORS needed)
-const flutterWebPath = path.join(__dirname, '..', 'flutter-web');
-// Explicit index handler first so express.static never sees a bare directory (avoids 403)
-app.get(['/app', '/app/'], (req, res) => {
-  res.sendFile(path.join(flutterWebPath, 'index.html'), (err) => {
-    if (err) res.status(503).send('Flutter app deploying — try again in a moment.');
-  });
-});
-app.use('/app', express.static(flutterWebPath, { index: false }));
-app.get('/app/{*path}', (req, res) => {
-  res.sendFile(path.join(flutterWebPath, 'index.html'), (err) => {
-    if (err) res.status(503).send('Flutter app deploying — try again in a moment.');
-  });
-});
-
 app.use(express.static(path.join(__dirname, "public"), {
   setHeaders: (res, filePath) => {
     const ext = path.extname(filePath).toLowerCase();
-    if (['.png', '.jpg', '.jpeg', '.webp', '.woff', '.woff2', '.svg'].includes(ext)) {
+    if (['.js', '.css', '.svg', '.png', '.jpg', '.jpeg', '.webp', '.woff', '.woff2'].includes(ext)) {
       res.setHeader("Cache-Control", "public, max-age=604800, stale-while-revalidate=86400");
-    } else if (['.js', '.css'].includes(ext)) {
-      // Must revalidate on every load — prevents stale JS/CSS in mobile WebViews
-      res.setHeader("Cache-Control", "no-cache, must-revalidate");
     } else {
       res.setHeader("Cache-Control", "no-cache, no-store, must-revalidate");
       res.setHeader("Pragma", "no-cache");
@@ -324,6 +196,9 @@ app.get("/api", (req, res) => {
   });
 });
 
+app.get("/health", (req, res) => {
+  res.json({ status: "ok", timestamp: new Date().toISOString() });
+});
 
 app.use("/api/auth", authRoutes);
 app.use("/api/users", userRoutes);
@@ -354,11 +229,7 @@ app.use("/api/approvals", approvalRoutes);
 app.use("/api/hod", hodRoutes);
 app.use("/api/roster", rosterRoutes);
 app.use("/api/admin/reports", adminReportRoutes);
-if (jitsiRoutes) {
-  app.use("/api/jitsi", jitsiRoutes);
-} else {
-  app.use("/api/jitsi", (req, res) => res.status(503).json({ error: "Jitsi is not configured on this server. Use GetStream meetings instead." }));
-}
+app.use("/api/jitsi", jitsiRoutes);
 app.use("/api/admin", adminDashboardRoutes);
 app.use("/api/search", searchRoutes);
 if (proctoredQuizRoutes) {
@@ -371,7 +242,6 @@ if (proctoredQuizRoutes) {
 app.use("/api/assignments", assignmentRoutes);
 app.use("/api/ai", aiProxyRoutes);
 app.use("/api/meetings", meetingRoutes);
-app.use("/api/exam",     require("./routes/examRoutes"));
 app.use("/api/attendance-sessions", sessionDashboardRoutes);
 
 const { markAttendance } = require('./controllers/sessionDashboardController');
@@ -445,15 +315,6 @@ app.use("/api/faq",                 faqRoutes);
 const deviceSessionRoutes = require("./routes/deviceSessionRoutes");
 app.use("/api", deviceSessionRoutes);
 
-const classRepRoutes      = require('./routes/classRepRoutes');
-app.use('/api/class-rep', classRepRoutes);
-
-const classRepAdminRoutes = require('./routes/classRepAdmin');
-app.use('/api/class-rep-admin', classRepAdminRoutes);
-
-const courseVideoRoutes = require('./routes/courseVideoRoutes');
-app.use('/api/course-videos', courseVideoRoutes);
-
 if (superadminRoutes) app.use("/api/superadmin", superadminRoutes);
 
 app.get('/.well-known/assetlinks.json', (req, res) => {
@@ -498,8 +359,11 @@ app.use((err, req, res, next) => {
   res.status(500).json({ error: "Internal server error" });
 });
 
-let validateJitsiConfig = () => {};
-try { ({ validateJitsiConfig } = require('./services/jitsiConfigValidator')); } catch(_) {}
+const { validateJitsiConfig } = require('./services/jitsiConfigValidator');
+const { attachMonitorWs }    = require('./services/monitorWs');
+
+const server = http.createServer(app);
+attachMonitorWs(server);
 
 const start = async () => {
   validateJitsiConfig();
@@ -544,17 +408,8 @@ const start = async () => {
     }
   }
 
-  const httpServer = app.listen(PORT, "0.0.0.0", () => {
+  server.listen(PORT, "0.0.0.0", () => {
     console.log(`Server running on port ${PORT}`);
-
-    // Attach WebSocket monitoring server
-    try {
-      const monitorWs = require('./services/monitorWs');
-      monitorWs.attachToServer(httpServer);
-      console.log('[MonitorWS] WebSocket monitoring server attached');
-    } catch (e) {
-      console.error('[MonitorWS] Failed to attach:', e.message);
-    }
 
     try {
       const { startScheduler } = require("./services/emailScheduler");
@@ -564,41 +419,7 @@ const start = async () => {
     } catch (e) {
       console.error("Scheduler failed to start:", e.message);
     }
-
-    try {
-      const snapQuizWatchdog = require("./services/snapQuizWatchdog");
-      snapQuizWatchdog.start();
-    } catch (e) {
-      console.error("[SnapQuizWatchdog] Failed to start:", e.message);
-    }
-
-    try {
-      const { startAssignmentReminder } = require("./services/assignmentReminder");
-      startAssignmentReminder();
-    } catch (e) {
-      console.error("[AssignmentReminder] Failed to start:", e.message);
-    }
-
-    try {
-      const { startTimetableReminder } = require("./services/timetableReminder");
-      startTimetableReminder();
-    } catch (e) {
-      console.error("[TimetableReminder] Failed to start:", e.message);
-    }
   });
 };
 
 start();
-
-// ── Process-level crash guards ────────────────────────────────────────────────
-// Log the error so it appears in Render/PM2 logs, then exit so the process
-// manager can restart cleanly. Swallowing these silently causes zombie servers.
-process.on("uncaughtException", (err) => {
-  console.error("[FATAL] uncaughtException:", err);
-  process.exit(1);
-});
-
-process.on("unhandledRejection", (reason) => {
-  console.error("[FATAL] unhandledRejection:", reason);
-  process.exit(1);
-});

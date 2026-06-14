@@ -1,18 +1,15 @@
 'use strict';
-const crypto             = require('crypto');
 const Meeting            = require('../models/Meeting');
 const MeetingAttendance  = require('../models/MeetingAttendance');
 const MeetingParticipant = require('../models/MeetingParticipant');
 const User               = require('../models/User');
 const { generateRoomName }                             = require('../utils/generateRoomName');
 const { generateMeetingToken, verifyMeetingToken }     = require('../utils/jwt');
-const { generateJitsiToken, JITSI_DOMAIN, JITSI_APP_ID, jitsiConfigured } = require('../services/jitsiTokenService');
-const { configured: streamConfigured, generateLiveKitToken, buildLiveKitRoomUrl, muteAllInRoom, muteParticipantInRoom } = require('../services/livekitService');
+const { generateJitsiToken, isSelfHosted, JITSI_DOMAIN } = require('../services/jitsiTokenService');
 const { broadcastMonitor }                             = require('./meetingMonitorController');
-const { runPreflight, handleReconnect }                 = require('../services/sessionPreflight');
 
-const APP_BASE_URL     = process.env.APP_BASE_URL     || 'https://app.dikly.sbs';
-const MONITOR_BASE_URL = process.env.MONITOR_BASE_URL || 'https://monitor.dikly.sbs';
+const APP_BASE_URL     = process.env.APP_BASE_URL     || 'https://dikly.live';
+const MONITOR_BASE_URL = process.env.APP_SUBDOMAIN_MONITOR || `${APP_BASE_URL}`;
 const MODERATOR_ROLES  = ['lecturer', 'manager', 'admin', 'superadmin', 'hod'];
 
 function isModeratorRole(role) {
@@ -43,22 +40,34 @@ function buildJitsiConfig(meeting, user, isMod) {
     participantButtons.splice(3, 0, 'desktop');
   }
 
-  // Lecture-mode bandwidth constraints — students mostly watch/listen
-  const lectureConstraints = isLecture && !isMod ? {
+  // In lecture mode most students have cameras/mics OFF — optimise accordingly.
+  // Lecturer (moderator) gets higher video quality; students get low-res receive.
+  const lectureConfigOverwrite = isLecture ? {
+    // Adaptive bitrate: send high quality from lecturer, receive low from students
     constraints: {
-      video: { height: { ideal: 180, max: 360 } },
+      video: {
+        aspectRatio: 16 / 9,
+        height: { ideal: 720, max: 1080, min: isMod ? 360 : 180 },
+      },
     },
-    startBitrate: 200,
-    disableSimulcast: false,
+    // Reduce bandwidth for student receivers (lecture = mostly listen/watch)
+    maxBitratesVideo: {
+      low:    isMod ? 200000  : 100000,
+      standard: isMod ? 500000 : 200000,
+      high:   isMod ? 1500000 : 500000,
+    },
+    // Keep lecturer's video pinned by default for all participants
+    defaultRemoteDisplayMode: 'tile',
+    // Disable AV auto-mute prompts for students watching only
+    enableNoisyMicDetection: true,
+    // Simulcast: send 3 spatial layers from lecturer for adaptive quality
     enableLayerSuspension: true,
-  } : {};
-
-  const lecturerConstraints = isLecture && isMod ? {
-    constraints: {
-      video: { height: { ideal: 720, max: 1080 } },
-    },
-    startBitrate: 800,
-    disableSimulcast: false,
+    enableUnifiedOnChrome: true,
+    // Reduce CPU on student devices (mostly passive)
+    p2p: { enabled: false },
+    // Use VP8 with simulcast for better low-bandwidth compatibility
+    preferH264: false,
+    disableH264: false,
   } : {};
 
   return {
@@ -68,95 +77,31 @@ function buildJitsiConfig(meeting, user, isMod) {
     email:       user.email,
     subject:     meeting.title,
     isModerator: isMod,
+    meetingType: meeting.meetingType,
     configOverwrite: {
-      // Moderators join with audio+video on; students muted by default
-      startWithAudioMuted: isMod ? false : (meeting.settings?.muteOnJoin ?? true),
-      startWithVideoMuted: isLecture ? !isMod : false,
+      startWithAudioMuted:       meeting.settings?.muteOnJoin ?? true,
+      // In lecture mode students start with video OFF to save bandwidth
+      startWithVideoMuted:       isLecture && !isMod ? true : false,
       enableLobbyChat:           meeting.settings?.enableLobby ?? false,
       enableNoisyMicDetection:   true,
       disableDeepLinking:        true,
       enableWelcomePage:         false,
-      // Prejoin is always disabled — moderators use lecturer-meeting.html,
-      // students use session-preflight.html which calls our own checks first.
       prejoinPageEnabled:        false,
-      prejoinConfig:             { enabled: false },
-      // Kills popup-based XMPP auth fallback; JWT passed directly is the only auth method.
-      tokenAuthUrl:              false,
-      // Force all media through JVB so proctoring sees every stream.
-      p2p:                       { enabled: false },
       disableThirdPartyRequests: true,
-      applicationName:           'DIKLY',
-      // Adaptive bitrate for low-bandwidth educational environments
-      channelLastN:    isLecture ? 4 : -1,
-      adaptiveLastN:   true,
-      ...lectureConstraints,
-      ...lecturerConstraints,
-      // Jitsi 9584+: toolbar config moved from interfaceConfigOverwrite to configOverwrite
-      toolbarButtons: isMod ? moderatorButtons : participantButtons,
-      // Hide Jitsi watermark via configOverwrite (interfaceConfigOverwrite ignored in 9584)
-      disableWatermark: true,
+      // Reconnect handling
+      enableReconnectingScreen:  true,
+      connectionIndicators: { disabled: false, inactiveHidden: true },
+      ...lectureConfigOverwrite,
     },
     interfaceConfigOverwrite: {
-      // ── White-label: remove all Jitsi branding ──────────────────────────
       SHOW_JITSI_WATERMARK:      false,
       SHOW_WATERMARK_FOR_GUESTS: false,
-      SHOW_BRAND_WATERMARK:      false,
-      SHOW_POWERED_BY:           false,
-      DISPLAY_WELCOME_PAGE_CONTENT: false,
-      DISPLAY_WELCOME_PAGE_TOOLBAR_ADDITIONAL_CONTENT: false,
-      JITSI_WATERMARK_LINK:      '',
-      BRAND_WATERMARK_LINK:      '',
-      DEFAULT_LOGO_URL:          '',
       MOBILE_APP_PROMO:          false,
-      // ── DIKLY branding ──────────────────────────────────────────────────
-      NATIVE_APP_NAME:           'DIKLY',
-      PROVIDER_NAME:             'DIKLY',
-      APP_NAME:                  'DIKLY Classes',
-      DEFAULT_BACKGROUND:        '#0a0c10',
-      HIDE_INVITE_MORE_HEADER:   true,
-      AUTHENTICATION_ENABLE:     false,
-      SETTINGS_SECTIONS:         ['devices', 'language'],
-      TOOLBAR_TIMEOUT:           isMod ? 4000 : 3000,
-      INITIAL_TOOLBAR_TIMEOUT:   20000,
-      TOOLBAR_BUTTONS:           isMod ? moderatorButtons : participantButtons,
+      // In lecture mode hide irrelevant controls for students
+      TOOLBAR_BUTTONS: isMod ? moderatorButtons : participantButtons,
+      FILM_STRIP_MAX_HEIGHT: isLecture ? 60 : 120,
     },
   };
-}
-
-// ─── BUILD JITSI MEETING URL ──────────────────────────────────────────────────
-// Returns https://meet.../room?jwt=...#config.* URL.
-// TURN/ICE config is intentionally NOT included in the hash — embedding large
-// JSON in the fragment produces URLs that iOS Safari and carrier NAT proxies
-// silently truncate, stripping TURN credentials. custom-config.js on the Jitsi
-// server handles TURN and relay-only policy for mobile via UA detection.
-function buildJitsiMeetingUrl(meeting, user, isMod) {
-  const token = generateJitsiToken(user, meeting.roomName, isMod);
-
-  const moderatorToolbar = [
-    'microphone','camera','desktop','chat','raisehand',
-    'tileview','select-background','mute-everyone',
-    'kick-participant','participants-pane','hangup',
-  ];
-  const participantToolbar = ['microphone','camera','chat','raisehand','tileview','hangup'];
-  if (meeting.settings?.screenShareEnabled && !isMod) {
-    participantToolbar.splice(2, 0, 'desktop');
-  }
-
-  const startAudioMuted = isMod ? false : (meeting.settings?.muteOnJoin ?? true);
-  const startVideoMuted = (meeting.meetingType === 'lecture') ? !isMod : false;
-
-  const hashParts = [
-    'config.prejoinPageEnabled=false',
-    'config.disableDeepLinking=true',
-    'config.p2p.enabled=false',
-    'config.enableIceRestart=true',
-    'config.disableThirdPartyRequests=true',
-    `config.startWithAudioMuted=${startAudioMuted}`,
-    `config.startWithVideoMuted=${startVideoMuted}`,
-    `config.toolbarButtons=${encodeURIComponent(JSON.stringify(isMod ? moderatorToolbar : participantToolbar))}`,
-  ];
-
-  return `https://${JITSI_DOMAIN}/${meeting.roomName}?jwt=${token}#${hashParts.join('&')}`;
 }
 
 // ─── CREATE ───────────────────────────────────────────────────────────────────
@@ -185,7 +130,7 @@ exports.createMeeting = async (req, res) => {
     }
 
     const roomPassword = settings?.enablePassword
-      ? crypto.randomBytes(8).toString('hex').toUpperCase()
+      ? Math.random().toString(36).slice(2, 10).toUpperCase()
       : null;
 
     const meeting = await Meeting.create({
@@ -316,30 +261,21 @@ exports.startMeeting = async (req, res) => {
     meeting.actualStart = new Date();
     await meeting.save();
 
-    console.log(`[Meeting:start] id=${meeting._id} room=${meeting.roomName} host=${req.user.email || req.user._id} role=${req.user.role}`);
-
+    const jitsiToken  = generateJitsiToken(req.user, meeting.roomName, true);
     const meetingToken = generateMeetingToken(req.user._id.toString(), meeting._id.toString(), req.user.deviceId || null);
-
-    let meetingUrl, jitsiToken;
-    if (streamConfigured) {
-      const lkToken = await generateLiveKitToken(req.user._id, req.user.name || req.user.email, meeting.roomName, true);
-      meetingUrl = buildLiveKitRoomUrl(meeting, req.user, lkToken, true);
-    } else {
-      jitsiToken = generateJitsiToken(req.user, meeting.roomName, true);
-      meetingUrl = buildJitsiMeetingUrl(meeting, req.user, true);
-    }
 
     res.json({
       success: true, message: 'Meeting started',
       data: {
         roomName:    meeting.roomName,
-        meetingUrl,
+        joinUrl:     `https://${JITSI_DOMAIN}/${meeting.roomName}`,
         password:    meeting.roomPassword,
         settings:    meeting.settings,
-        jitsiToken:  jitsiToken || null,
+        jitsiToken,
         meetingToken,
-        jitsiConfig: streamConfigured ? null : buildJitsiConfig(meeting, req.user, true),
-        monitorUrl:  `${APP_BASE_URL}/meeting-monitor.html?meeting=${meeting._id}`,
+        selfHosted:  isSelfHosted(),
+        jitsiConfig: buildJitsiConfig(meeting, req.user, true),
+        monitorUrl:  `${MONITOR_BASE_URL}/monitor?meeting=${meeting._id}`,
       },
     });
   } catch (err) { res.status(500).json({ error: err.message }); }
@@ -452,109 +388,42 @@ exports.joinMeeting = async (req, res) => {
     const meeting = req.meeting;
     const user    = req.user;
 
-    const isMod = isMeetingModerator(meeting, user);
-
     if (meeting.status === 'scheduled') {
-      if (isMod) {
-        // Moderators implicitly start the meeting on first join — no separate /start call needed.
-        meeting.status      = 'live';
-        meeting.actualStart = new Date();
-        await meeting.save();
-        console.log(`[Meeting:join] auto-started id=${meeting._id} by moderator=${user.email || user._id}`);
-      } else {
-        return res.status(403).json({
-          error: 'Meeting has not started yet.',
-          status: 'scheduled',
-          scheduledStart: meeting.scheduledStart,
-        });
-      }
+      return res.status(403).json({
+        error: 'Meeting has not started yet.',
+        status: 'scheduled',
+        scheduledStart: meeting.scheduledStart,
+      });
     }
     if (meeting.status !== 'live') {
       return res.status(403).json({ error: `Meeting is ${meeting.status}.`, status: meeting.status });
     }
 
-    console.log(`[Meeting:join] id=${meeting._id} room=${meeting.roomName} user=${user.email || user._id} role=${user.role} moderator=${isMod} locked=${meeting.isLocked}`);
+    const isMod = isMeetingModerator(meeting, user);
 
     // Locked rooms: only moderators can still enter
     if (meeting.isLocked && !isMod) {
-      console.log(`[Meeting:join] BLOCKED — room locked, user=${user.email || user._id}`);
       return res.status(403).json({ error: 'The room is locked. No new participants can join at this time.' });
     }
 
-    // Participation check: verify user is actually allowed to join this meeting
-    if (!isMod && !meeting.openToCompany) {
-      const uid = user._id.toString();
-      const allowed =
-        (meeting.allowedUsers || []).some(u => String(u) === uid) ||
-        (meeting.allowedCourses || []).some(c =>
-          (user.enrolledCourses || []).map(String).includes(String(c))) ||
-        (meeting.allowedDepartments || []).includes(String(user.department)) ||
-        (meeting.allowedTeams || []).includes(String(user.team));
-      if (!allowed) {
-        console.log(`[Meeting:join] BLOCKED — not a participant, user=${user.email || user._id}`);
-        return res.status(403).json({ error: 'You are not authorised to join this meeting.' });
-      }
-    }
-
+    const jitsiToken  = generateJitsiToken(user, meeting.roomName, isMod);
     const meetingToken = generateMeetingToken(user._id.toString(), meeting._id.toString(), user.deviceId || null);
-
-    let meetingUrl, jitsiToken, jitsiConfig;
-
-    if (streamConfigured) {
-      // ── LiveKit path ────────────────────────────────────────────────────
-      const lkToken = await generateLiveKitToken(user._id, user.name || user.email, meeting.roomName, isMod);
-      meetingUrl = buildLiveKitRoomUrl(meeting, user, lkToken, isMod);
-    } else {
-      // ── Jitsi fallback ──────────────────────────────────────────────────
-      jitsiToken  = generateJitsiToken(user, meeting.roomName, isMod);
-      jitsiConfig = buildJitsiConfig(meeting, user, isMod);
-      meetingUrl  = buildJitsiMeetingUrl(meeting, user, isMod);
-    }
-
-    const meetingData = meeting.toObject ? meeting.toObject() : { ...meeting };
-    if (!isMod) delete meetingData.roomPassword;
 
     res.json({
       success: true,
       data: {
-        meeting: meetingData,
-        meetingUrl,
-        isModerator: isMod,
+        meeting,
+        jitsiConfig:  buildJitsiConfig(meeting, user, isMod),
+        jitsiToken,
         meetingToken,
-        // Jitsi fields (null when using GetStream)
-        jitsiConfig: jitsiConfig || null,
-        jitsiToken:  jitsiToken  || null,
-        monitorUrl:  isMod ? `${MONITOR_BASE_URL}/monitor?meeting=${meeting._id}` : null,
-        embedUrl: isMod
-          ? `${APP_BASE_URL}/lecturer-meeting?meeting=${meeting._id}`
-          : `${APP_BASE_URL}/session-preflight?meeting=${meeting._id}`,
+        selfHosted:   isSelfHosted(),
+        isModerator:  isMod,
+        monitorUrl:   isMod
+          ? `${MONITOR_BASE_URL}/monitor?meeting=${meeting._id}`
+          : null,
       },
     });
   } catch (err) { res.status(500).json({ error: err.message }); }
-};
-
-// ─── PREFLIGHT ────────────────────────────────────────────────────────────────
-// POST /api/meetings/:id/preflight
-// Initialises monitoring and device validation before the student enters Jitsi.
-exports.preflightMeeting = async (req, res) => {
-  try {
-    const result = await runPreflight(req.params.id, req.user);
-    res.json(result);
-  } catch (err) {
-    res.status(err.status || 500).json({ error: err.message });
-  }
-};
-
-// ─── RECONNECT ────────────────────────────────────────────────────────────────
-// POST /api/meetings/:id/reconnect
-// Called by the client when Jitsi reconnects so monitoring can be restored.
-exports.reconnectMeeting = async (req, res) => {
-  try {
-    const result = await handleReconnect(req.params.id, req.user);
-    res.json(result);
-  } catch (err) {
-    res.status(err.status || 500).json({ error: err.message });
-  }
 };
 
 // ─── VALIDATE TOKEN ───────────────────────────────────────────────────────────
@@ -576,83 +445,9 @@ exports.validateMeetingToken = async (req, res) => {
         id: meeting._id, title: meeting.title, roomName: meeting.roomName,
         status: meeting.status, settings: meeting.settings, meetingType: meeting.meetingType,
         isLocked: meeting.isLocked,
-        roomPassword: meeting.settings?.enablePassword ? meeting.roomPassword : undefined,
+        roomPassword: meeting.settings.enablePassword ? meeting.roomPassword : undefined,
       },
     });
-  } catch (err) { res.status(500).json({ error: err.message }); }
-};
-
-// ─── JITSI HEALTH ────────────────────────────────────────────────────────────
-// GET /api/meetings/jitsi/health — verifies JWT generation and Jitsi reachability.
-// Requires authentication so only logged-in users can probe this.
-exports.jitsiHealth = async (req, res) => {
-  const https = require('https');
-  const result = {
-    domain:    JITSI_DOMAIN,
-    app_id:    JITSI_APP_ID,
-    token_ok:  false,
-    jitsi_reachable: false,
-    xmpp_bosh_ok:    false,
-    token_payload: null,
-    error: null,
-  };
-
-  // 1. Verify token generation works
-  try {
-    const tok = generateJitsiToken(req.user, 'dikly_health_probe', false, 1);
-    const decoded = require('jsonwebtoken').decode(tok);
-    result.token_ok = true;
-    result.token_payload = {
-      iss:  decoded.iss,
-      sub:  decoded.sub,
-      aud:  decoded.aud,
-      room: decoded.room,
-      moderator: decoded.context?.user?.moderator,
-      exp: new Date(decoded.exp * 1000).toISOString(),
-    };
-  } catch (e) {
-    result.error = 'JWT generation failed: ' + e.message;
-    console.error('[Jitsi:health] JWT error:', e.message);
-    return res.status(500).json(result);
-  }
-
-  // 2. Check Jitsi web is reachable (BOSH endpoint returns 200 or 400 — both mean it's up)
-  await new Promise(resolve => {
-    const req2 = https.get(`https://${JITSI_DOMAIN}/http-bind`, r => {
-      result.jitsi_reachable = true;
-      result.xmpp_bosh_ok    = r.statusCode < 500;
-      console.log(`[Jitsi:health] BOSH status=${r.statusCode}`);
-      r.resume();
-      resolve();
-    });
-    req2.on('error', e => {
-      result.error = `Jitsi unreachable: ${e.message}`;
-      console.error('[Jitsi:health] BOSH error:', e.message);
-      resolve();
-    });
-    req2.setTimeout(5000, () => { req2.destroy(); resolve(); });
-  });
-
-  const ok = result.token_ok && result.jitsi_reachable;
-  console.log(`[Jitsi:health] ${ok ? '✓ OK' : '✗ FAILED'} — domain=${JITSI_DOMAIN} bosh=${result.xmpp_bosh_ok}`);
-  res.status(ok ? 200 : 502).json(result);
-};
-
-// ─── MUTE ALL (LiveKit) ───────────────────────────────────────────────────────
-exports.muteAll = async (req, res) => {
-  try {
-    if (!streamConfigured) return res.status(503).json({ error: 'LiveKit not configured' });
-    await muteAllInRoom(req.meeting.roomName);
-    res.json({ success: true, message: 'All participants muted' });
-  } catch (err) { res.status(500).json({ error: err.message }); }
-};
-
-// ─── MUTE PARTICIPANT (LiveKit) ───────────────────────────────────────────────
-exports.muteParticipant = async (req, res) => {
-  try {
-    if (!streamConfigured) return res.status(503).json({ error: 'LiveKit not configured' });
-    await muteParticipantInRoom(req.meeting.roomName, req.params.uid);
-    res.json({ success: true, message: 'Participant muted' });
   } catch (err) { res.status(500).json({ error: err.message }); }
 };
 

@@ -6,41 +6,6 @@ const API = window.location.hostname === 'localhost' || window.location.hostname
   ? ''
   : window.location.origin;
 
-// Lazy script loader — returns a Promise that resolves when the script is ready.
-// Calling it twice for the same URL is a no-op (resolved immediately on 2nd call).
-const _loadedScripts = new Set();
-function _loadScript(src) {
-  if (_loadedScripts.has(src)) return Promise.resolve();
-  return new Promise((resolve, reject) => {
-    const el = document.createElement('script');
-    el.src = src;
-    el.onload  = () => { _loadedScripts.add(src); resolve(); };
-    el.onerror = () => reject(new Error('Script load failed: ' + src));
-    document.head.appendChild(el);
-  });
-}
-// Role → scripts that should be preloaded right after login so first navigation is instant.
-const _ROLE_SCRIPTS = {
-  student:    ['/js/pages-academic.js'],
-  lecturer:   ['/js/pages-academic.js', '/js/pages-device.js'],
-  admin:      ['/js/pages-academic.js', '/js/pages-device.js', '/js/pages-corporate.js'],
-  manager:    ['/js/manager-portal.js', '/js/pages-corporate.js'],
-  hod:        ['/js/manager-portal.js', '/js/pages-academic.js'],
-  employee:   ['/js/pages-corporate.js'],
-  superadmin: ['/js/manager-portal.js', '/js/pages-corporate.js'],
-};
-function _preloadForRole(role) {
-  const scripts = _ROLE_SCRIPTS[role] || [];
-  scripts.forEach(src => _loadScript(src).catch(() => {}));
-}
-// Lazy-aware _safeRender: ensures `scriptSrc` is loaded before calling fn.
-// If the script is already loaded (preloaded for the role), resolves instantly.
-function _lazyRender(content, scriptSrc, fn, label) {
-  _loadScript(scriptSrc)
-    .catch(() => {}) // if CDN/network blip, try calling fn anyway
-    .then(() => _safeRender(content, fn, label));
-}
-
 // Opens external URLs in system browser. Uses Capacitor Browser plugin when
 // running inside the native app so the in-app WebView is not navigated away.
 async function openUrl(url, forceExternal = false) {
@@ -62,20 +27,7 @@ async function openUrl(url, forceExternal = false) {
 // running inside the native app (iOS/Android), falls back to standard browser
 // anchor-click download for web.
 async function downloadBlob(blob, filename) {
-  // Detect Capacitor native app (Android/iOS)
-  const isNative = !!(window.Capacitor?.isNativePlatform?.() ||
-                      navigator.userAgent.includes('DiklyApp/'));
-
-  if (isNative) {
-    const FS    = window.Capacitor?.Plugins?.Filesystem;
-    const Share = window.Capacitor?.Plugins?.Share;
-
-    if (!FS || !Share) {
-      // Old APK — native plugins not registered yet
-      toastError('Please reinstall the DIKLY app to enable file downloads.');
-      return;
-    }
-
+  if (window.Capacitor?.isNativePlatform?.()) {
     try {
       const reader = new FileReader();
       const base64 = await new Promise((res, rej) => {
@@ -83,25 +35,22 @@ async function downloadBlob(blob, filename) {
         reader.onerror = rej;
         reader.readAsDataURL(blob);
       });
-      const result = await FS.writeFile({
+      const result = await window.Capacitor.Plugins.Filesystem.writeFile({
         path:      filename,
         data:      base64,
-        directory: 'CACHE',
+        directory: 'DOCUMENTS',
         recursive: true,
       });
-      await Share.share({
-        title:       filename,
-        url:         result.uri,
+      await window.Capacitor.Plugins.Share.share({
+        title:      filename,
+        url:        result.uri,
         dialogTitle: 'Save or share ' + filename,
       });
       return;
     } catch (e) {
-      console.error('[downloadBlob] Native download failed:', e);
-      toastError('Download failed: ' + (e.message || 'unknown error'));
-      return;
+      console.warn('[downloadBlob] Native failed, using browser fallback:', e.message);
     }
   }
-
   // Standard browser download
   const url = URL.createObjectURL(blob);
   const a   = document.createElement('a');
@@ -239,131 +188,6 @@ function startNotifPolling() {
 
 function stopNotifPolling() {
   if (_notifPollTimer) { clearInterval(_notifPollTimer); _notifPollTimer = null; }
-}
-
-// ── Real-time notification SSE ────────────────────────────────────────────────
-let _sseSource       = null;
-let _notifUnread     = 0;
-let _notifPanelOpen  = false;
-
-function _updateNotifBadge(count) {
-  _notifUnread = count;
-  const badge = document.getElementById('notif-bell-badge');
-  if (!badge) return;
-  if (count > 0) {
-    badge.textContent    = count > 99 ? '99+' : count;
-    badge.style.display  = 'inline-block';
-  } else {
-    badge.style.display  = 'none';
-  }
-}
-
-let _sseFailures = 0;
-let _sseRetryTimer = null;
-
-function startSSE(isRetry = false) {
-  if (_sseRetryTimer) { clearTimeout(_sseRetryTimer); _sseRetryTimer = null; }
-  if (!isRetry) _sseFailures = 0; // fresh start (login/reload) resets the backoff counter
-  if (_sseSource) { _sseSource.close(); _sseSource = null; }
-  const token = localStorage.getItem('token');
-  if (!token) return;
-
-  _sseSource = new EventSource(`/api/notifications/stream?token=${encodeURIComponent(token)}`);
-
-  _sseSource.onmessage = (e) => {
-    _sseFailures = 0; // reset backoff on successful message
-    try {
-      const msg = JSON.parse(e.data);
-      if (msg.event === 'unread_count') {
-        _updateNotifBadge(msg.count);
-      } else if (msg.event === 'notification') {
-        const n = msg.notification;
-        _updateNotifBadge(_notifUnread + 1);
-        _notifSound.playChime('announcement');
-        if (window.toast) {
-          window.toast(n.body || '', 'info', {
-            title: n.title,
-            duration: 6000,
-          });
-        }
-        if (_notifPanelOpen) _loadNotifPanel();
-      }
-    } catch (_) {}
-  };
-
-  _sseSource.onerror = () => {
-    if (_sseSource) { _sseSource.close(); _sseSource = null; }
-    _sseFailures++;
-    // Stop retrying after 5 consecutive failures (likely auth issue or server offline)
-    if (_sseFailures > 5) return;
-    // Exponential backoff: 5s, 10s, 20s, 40s, 60s
-    const delay = Math.min(5000 * Math.pow(2, _sseFailures - 1), 60000);
-    _sseRetryTimer = setTimeout(() => { if (currentUser) startSSE(true); }, delay);
-  };
-}
-
-function stopSSE() {
-  if (_sseSource) { _sseSource.close(); _sseSource = null; }
-}
-
-async function _loadNotifPanel() {
-  const list = document.getElementById('notif-panel-list');
-  if (!list) return;
-  try {
-    const d = await api('/api/notifications?limit=15');
-    const notifs = d.notifications || [];
-    if (!notifs.length) {
-      list.innerHTML = '<p style="text-align:center;color:var(--text-muted);font-size:13px;padding:20px">All caught up!</p>';
-      return;
-    }
-    list.innerHTML = notifs.map(n => `
-      <div onclick="_notifPanelClick('${n._id}','${n.link || ''}')"
-           style="display:flex;gap:10px;padding:10px 16px;cursor:pointer;border-bottom:1px solid var(--border);align-items:flex-start;background:${n.isRead ? 'transparent' : 'var(--primary-ultra-light,#f0f4ff)'}">
-        <div style="width:8px;height:8px;border-radius:50%;background:${n.isRead ? 'transparent' : 'var(--primary)'};margin-top:5px;flex-shrink:0"></div>
-        <div style="flex:1;min-width:0">
-          <div style="font-weight:${n.isRead ? '400' : '600'};font-size:13px;line-height:1.3">${n.title}</div>
-          ${n.body ? `<div style="font-size:12px;color:var(--text-light);margin-top:2px">${n.body}</div>` : ''}
-          <div style="font-size:11px;color:var(--text-muted);margin-top:3px">${_timeAgo(new Date(n.createdAt))}</div>
-        </div>
-      </div>`).join('');
-  } catch (_) {
-    list.innerHTML = '<p style="text-align:center;color:var(--text-muted);font-size:13px;padding:20px">Could not load</p>';
-  }
-}
-
-async function _notifPanelClick(id, link) {
-  await api('/api/notifications/' + id + '/read', { method: 'PATCH' }).catch(() => {});
-  _updateNotifBadge(Math.max(0, _notifUnread - 1));
-  closeNotifPanel();
-  if (link) location.href = link;
-}
-
-function toggleNotifPanel() {
-  const panel = document.getElementById('notif-panel');
-  if (!panel) return;
-  _notifPanelOpen = !_notifPanelOpen;
-  panel.style.display = _notifPanelOpen ? 'flex' : 'none';
-  if (_notifPanelOpen) _loadNotifPanel();
-}
-
-function closeNotifPanel() {
-  const panel = document.getElementById('notif-panel');
-  if (panel) panel.style.display = 'none';
-  _notifPanelOpen = false;
-}
-
-async function markAllNotifsRead() {
-  await api('/api/notifications/read-all', { method: 'PATCH' }).catch(() => {});
-  _updateNotifBadge(0);
-  _loadNotifPanel();
-}
-
-function _timeAgo(date) {
-  const s = Math.floor((Date.now() - date) / 1000);
-  if (s < 60)   return 'just now';
-  if (s < 3600)  return Math.floor(s / 60) + 'm ago';
-  if (s < 86400) return Math.floor(s / 3600) + 'h ago';
-  return Math.floor(s / 86400) + 'd ago';
 }
 
 // ═══════════════════════════════════════════════════════
@@ -531,12 +355,10 @@ function _timeAgo(date) {
 
     const el = document.createElement('div');
     el.className = `toast toast-${t}`;
-    const title = options.title;
     el.innerHTML = `
       <span class="toast-icon">${ICONS[t]}</span>
       <div class="toast-body">
-        ${title ? `<div class="toast-title">${title}</div>` : ''}
-        ${message ? `<div class="toast-msg">${message}</div>` : ''}
+        <div class="toast-msg">${message}</div>
       </div>
       <span class="toast-close">×</span>
       <div class="toast-progress" style="width:100%"></div>
@@ -676,8 +498,7 @@ async function saveOfflineProfile(credentials, userData) {
     profiles[profileKey] = {
       passwordHash,
       user: {
-        _id: userData.user._id || userData.user.id,
-        id:  userData.user._id || userData.user.id,
+        id: userData.user.id || userData.user._id,
         name: userData.user.name,
         email: userData.user.email,
         role: userData.user.role,
@@ -689,8 +510,7 @@ async function saveOfflineProfile(credentials, userData) {
         profilePhoto: userData.user.profilePhoto || null,
         lastLoginAt: userData.user.lastLoginAt || null,
       },
-      token: userData.token,                   // access JWT (15 min — may expire)
-      refreshToken: userData.refreshToken || null, // refresh token (30 days) for re-auth on reconnect
+      token: userData.token,           // cached JWT (may expire but used for UI)
       trial: userData.trial || null,
       savedAt: Date.now(),
     };
@@ -715,18 +535,15 @@ function buildProfileKey(credentials) {
 }
 
 // ── Attempt offline login ─────────────────────────────────────────────────────
-async function attemptOfflineLogin(credentials, formId) {
+async function attemptOfflineLogin(credentials) {
   try {
     const profiles = JSON.parse(localStorage.getItem(OFFLINE_LOGIN_KEY) || '{}');
     const profileKey = buildProfileKey(credentials);
     const profile = profiles[profileKey];
 
     if (!profile) {
-      throw new Error('No offline profile found. Connect to the internet and sign in once to enable offline access.');
+      throw new Error('No offline profile found. Please login online at least once first.');
     }
-
-    // Profile confirmed — show the notice now (not before)
-    if (formId) showOfflineLoginNotice(formId);
 
     // Check if profile has expired
     const ageMs = Date.now() - profile.savedAt;
@@ -741,14 +558,10 @@ async function attemptOfflineLogin(credentials, formId) {
       throw new Error('Wrong email or password.');
     }
 
-    // Return a fake login response matching the real API shape.
-    // We intentionally do NOT block on an expired access token here —
-    // in offline mode, no API calls can be made anyway, and the refresh token
-    // will be used to get a fresh access token once connectivity is restored.
+    // Return a fake login response matching the real API shape
     console.log('[OfflineLogin] Offline login successful for', profileKey);
     return {
       token: profile.token,
-      refreshToken: profile.refreshToken || null,
       user: profile.user,
       trial: profile.trial,
       offlineMode: true,   // flag so app knows we're offline
@@ -767,24 +580,6 @@ function clearOfflineProfile(userRole, email, indexNumber, institutionCode) {
     localStorage.setItem(OFFLINE_LOGIN_KEY, JSON.stringify(profiles));
   } catch (e) {
     console.warn('[OfflineLogin] Could not clear profile:', e);
-  }
-}
-
-// ── Clear offline profile by user ID (used on logout — no need to reconstruct key) ──
-function clearOfflineProfileById(userId) {
-  try {
-    const profiles = JSON.parse(localStorage.getItem(OFFLINE_LOGIN_KEY) || '{}');
-    let changed = false;
-    for (const key of Object.keys(profiles)) {
-      const uid = profiles[key]?.user?.id || profiles[key]?.user?._id;
-      if (uid && uid.toString() === userId.toString()) {
-        delete profiles[key];
-        changed = true;
-      }
-    }
-    if (changed) localStorage.setItem(OFFLINE_LOGIN_KEY, JSON.stringify(profiles));
-  } catch (e) {
-    console.warn('[OfflineLogin] Could not clear profile by ID:', e);
   }
 }
 
@@ -987,20 +782,22 @@ async function syncOfflineQueue() {
 }
 
 function showToastNotif(msg, type) {
-  if (!msg) return;
-  // Route through the modern stacking toast system so messages never overlap
-  const t = type === 'success' ? 'success'
-          : type === 'error'   ? 'error'
-          : type === 'warn'    ? 'warning'
-          : 'info';
-  if (window.toast) { window.toast(msg, t); return; }
-  // Fallback if called before the modern system is ready
-  console.info('[toast]', type, msg);
+  const t = document.createElement('div');
+  t.style.cssText = [
+    'position:fixed','bottom:24px','left:50%','transform:translateX(-50%)',
+    'padding:10px 20px','border-radius:8px','font-size:13px','font-weight:600',
+    'z-index:10000','box-shadow:0 4px 16px rgba(0,0,0,0.15)',
+    type === 'success' ? 'background:#dcfce7;color:#166534;border:1px solid #86efac' :
+                         'background:#fef3c7;color:#92400e;border:1px solid #fbbf24'
+  ].join(';');
+  t.textContent = msg;
+  document.body.appendChild(t);
+  setTimeout(() => t.remove(), 3500);
 }
 
 // Alias used by Corporate Phase 1 functions (shifts, leave)
 function toast(msg, type) {
-  showToastNotif(msg, type === 'ok' ? 'success' : type || 'info');
+  showToastNotif(msg, type === 'ok' ? 'success' : 'warn');
 }
 
 // Listen for online/offline events
@@ -1018,7 +815,6 @@ window.addEventListener('DOMContentLoaded', () => {
 let currentUser = null;
 let currentUserTrial = null; // mirrors data.userTrial from the last /me response
 let currentView = 'dashboard';
-let _appOfflineMode = false; // true when logged in via cached credentials (no server reachable)
 
 function svgIcon(path, size = 18) {
   return `<svg width="${size}" height="${size}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${path}</svg>`;
@@ -1058,103 +854,19 @@ function assignmentsIcon() {
   return svgIcon('<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/>');
 }
 
-async function _doFetch(path, options, tok) {
-  const headers = { 'Content-Type': 'application/json' };
-  if (tok) headers['Authorization'] = `Bearer ${tok}`;
-  return fetch(`${API}${path}`, { ...options, headers: { ...headers, ...options.headers } });
-}
-
-// ── Session expiry warning ────────────────────────────────────────────────────
-let _expiryTimer = null;
-let _expiryBannerVisible = false;
-
-function _scheduleExpiryWarning() {
-  if (_expiryTimer) { clearTimeout(_expiryTimer); _expiryTimer = null; }
-  if (!token) return;
-  try {
-    const payload = JSON.parse(atob(token.split('.')[1]));
-    const msLeft  = payload.exp * 1000 - Date.now();
-    const warnAt  = msLeft - 2 * 60 * 1000; // 2 min before expiry
-    if (warnAt <= 0) return;
-    _expiryTimer = setTimeout(_showExpiryBanner, warnAt);
-  } catch (_) {}
-}
-
-function _showExpiryBanner() {
-  if (_expiryBannerVisible || !currentUser) return;
-  _expiryBannerVisible = true;
-  const banner = document.createElement('div');
-  banner.id = 'session-expiry-banner';
-  banner.style.cssText = 'position:fixed;bottom:80px;left:50%;transform:translateX(-50%);z-index:9999;background:#1e293b;color:#fff;padding:12px 20px;border-radius:12px;display:flex;align-items:center;gap:12px;box-shadow:0 4px 20px rgba(0,0,0,.35);font-size:13px;max-width:360px;width:90%';
-  banner.innerHTML = `
-    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#fbbf24" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
-    <span style="flex:1">Your session expires in 2 minutes</span>
-    <button onclick="stayLoggedIn()" style="background:#3b82f6;color:#fff;border:none;padding:6px 12px;border-radius:7px;font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap">Stay logged in</button>
-  `;
-  document.body.appendChild(banner);
-  setTimeout(_dismissExpiryBanner, 90 * 1000);
-}
-
-function _dismissExpiryBanner() {
-  const el = document.getElementById('session-expiry-banner');
-  if (el) el.remove();
-  _expiryBannerVisible = false;
-}
-
-async function stayLoggedIn() {
-  _dismissExpiryBanner();
-  const ok = await _tryRefreshToken();
-  if (ok) {
-    _scheduleExpiryWarning();
-    showToastNotif('Session extended', 'success');
-  } else {
-    showToastNotif('Could not extend session — please log in again', 'error');
-  }
-}
-
-let _refreshing = null;
-async function _tryRefreshToken() {
-  const rt = localStorage.getItem('refreshToken');
-  if (!rt) return false;
-  try {
-    const r = await fetch(`${API}/api/auth/refresh`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ refreshToken: rt }),
-    });
-    if (!r.ok) return false;
-    const d = await r.json();
-    token = d.token;
-    localStorage.setItem('token', token);
-    if (d.refreshToken) localStorage.setItem('refreshToken', d.refreshToken);
-    _scheduleExpiryWarning();
-    return true;
-  } catch { return false; }
-}
-
 async function api(path, options = {}) {
-  let res = await _doFetch(path, options, token);
-  if (res.status === 401 && path !== '/api/auth/refresh') {
-    if (!_refreshing) _refreshing = _tryRefreshToken().finally(() => { _refreshing = null; });
-    const refreshed = await _refreshing;
-    if (refreshed) {
-      res = await _doFetch(path, options, token);
-    }
-  }
+  const headers = { 'Content-Type': 'application/json' };
+  if (token) headers['Authorization'] = `Bearer ${token}`;
+  const res = await fetch(`${API}${path}`, { ...options, headers: { ...headers, ...options.headers } });
   if (res.headers.get('content-type')?.includes('application/json')) {
     const data = await res.json();
     if (!res.ok) {
-      // 402 = institution or personal subscription expired — hard full-screen block
-      if (res.status === 402 && data.subscriptionExpired) {
-        showSubscriptionBlock(data.message, data.isAdmin);
-        throw new Error(data.message || 'Subscription expired');
+      // Subscription gate — redirect lecturer to subscription page automatically
+      if (res.status === 403 && data.subscriptionRequired) {
+        showSubscriptionGate(data.message);
+        throw new Error(data.error || 'Subscription required');
       }
-      // Legacy 403 subscription gate (old middleware responses)
-      if (res.status === 403 && (data.subscriptionExpired || data.subscriptionRequired)) {
-        showSubscriptionBlock(data.message, data.isAdmin);
-        throw new Error(data.message || data.error || 'Subscription required');
-      }
-      const err = new Error(data.message || data.error || 'Request failed');
+      const err = new Error(data.error || 'Request failed');
       err.status = res.status;
       err.data   = data;
       throw err;
@@ -1172,9 +884,9 @@ async function apiUpload(urlPath, formData, method = 'POST') {
   if (res.headers.get('content-type')?.includes('application/json')) {
     const data = await res.json();
     if (!res.ok) {
-      if ((res.status === 402 || res.status === 403) && (data.subscriptionExpired || data.subscriptionRequired)) {
-        showSubscriptionBlock(data.message, data.isAdmin);
-        throw new Error(data.error || 'Subscription expired');
+      if (res.status === 403 && data.subscriptionRequired) {
+        showSubscriptionGate(data.message);
+        throw new Error(data.error || 'Subscription required');
       }
       throw new Error(data.error || data.message || 'Request failed');
     }
@@ -1184,61 +896,45 @@ async function apiUpload(urlPath, formData, method = 'POST') {
   return res;
 }
 
-let _subBlockActive = false;
-function showSubscriptionBlock(message, isAdmin) {
-  if (_subBlockActive) return;
-  _subBlockActive = true;
-
-  const msg = message || 'Your subscription has expired. Access is suspended.';
-  const isAdminUser = isAdmin || (currentUser && currentUser.role === 'admin');
-  const institutionName = currentUser?.company?.name || currentUser?.institutionName || '';
-
-  // Remove any existing block overlay
-  const existing = document.getElementById('_sub-block-overlay');
-  if (existing) existing.remove();
-
-  const overlay = document.createElement('div');
-  overlay.id = '_sub-block-overlay';
-  overlay.style.cssText = [
-    'position:fixed', 'inset:0', 'z-index:99999',
-    'background:rgba(15,23,42,0.97)',
-    'display:flex', 'align-items:center', 'justify-content:center',
-    'padding:24px', 'box-sizing:border-box',
-  ].join(';');
-
-  overlay.innerHTML = `
-    <div style="background:#fff;border-radius:16px;max-width:460px;width:100%;padding:40px 32px;text-align:center;box-shadow:0 25px 60px rgba(0,0,0,.5)">
-      <div style="width:72px;height:72px;border-radius:50%;background:#fef2f2;display:flex;align-items:center;justify-content:center;margin:0 auto 20px;font-size:32px">🔒</div>
-      <h2 style="margin:0 0 8px;font-size:22px;font-weight:700;color:#0f172a">Subscription Expired</h2>
-      ${institutionName ? `<p style="margin:0 0 16px;font-size:13px;font-weight:600;color:#6366f1;letter-spacing:.4px;text-transform:uppercase">${esc(institutionName)}</p>` : ''}
-      <p style="margin:0 0 28px;font-size:14px;color:#475569;line-height:1.6">${esc(msg)}</p>
-      ${isAdminUser
-        ? `<div style="display:flex;flex-direction:column;gap:10px">
-            <button onclick="(function(){var o=document.getElementById('_sub-block-overlay');if(o)o.remove();_subBlockActive=false;document.body.style.overflow='';navigateTo('subscription');})();"
-              style="background:#6366f1;color:#fff;border:none;border-radius:8px;padding:12px 24px;font-size:14px;font-weight:600;cursor:pointer;width:100%">
-              Renew Subscription
-            </button>
-            <p style="margin:0;font-size:12px;color:#94a3b8">Renewing will immediately restore access for all users.</p>
-          </div>`
-        : `<div style="background:#f8fafc;border-radius:8px;padding:14px 16px;text-align:left">
-            <p style="margin:0 0 4px;font-size:13px;font-weight:600;color:#0f172a">What to do</p>
-            <p style="margin:0;font-size:13px;color:#64748b;line-height:1.5">Contact your <strong>institution administrator</strong> and ask them to renew the DIKLY subscription. All features will be restored immediately after renewal.</p>
-          </div>`
-      }
-      <p style="margin:20px 0 0;font-size:12px;color:#94a3b8">Need help? Contact support at <strong>support@dikly.sbs</strong></p>
-    </div>
-  `;
-
-  document.body.appendChild(overlay);
-
-  // Prevent any interaction with the app behind the overlay
-  document.body.style.overflow = 'hidden';
-}
-
-// Legacy alias — kept for any old callers
+let _subGateFired = false;
 function showSubscriptionGate(message) {
-  const isAdmin = currentUser && currentUser.role === 'admin';
-  showSubscriptionBlock(message, isAdmin);
+  // Roles that never pay — ignore subscription gates
+  const freeRoles = ['employee', 'student', 'hod'];
+  if (currentUser && freeRoles.includes(currentUser.role)) return;
+
+  // If the user already has an active personal subscription, suppress the gate.
+  // This fires when multiple parallel API calls return 403 before the middleware
+  // catches up, or during login before the server fix propagates.
+  if (currentUserTrial?.isSubscribed) return;
+  if (currentUser?.subscriptionExpiry && new Date(currentUser.subscriptionExpiry) > new Date()) return;
+
+  // Deduplicate — multiple concurrent 403s should show only one toast
+  if (_subGateFired) return;
+  _subGateFired = true;
+  setTimeout(() => { _subGateFired = false; }, 3000);
+
+  // Navigate to subscription page and show a toast if possible
+  try {
+    if (typeof navigateTo === 'function') navigateTo('subscription');
+    const msg = message || 'Your 30-day free trial has expired. Subscribe to continue using DIKLY.';
+    if (typeof toastError === 'function') {
+      toastError(msg);
+    } else {
+      // Fallback if toast not yet available
+      const content = document.getElementById('main-content');
+      if (content) {
+        content.innerHTML = `
+          <div class="card" style="max-width:480px;margin:40px auto;text-align:center;padding:32px">
+            <div style="font-size:40px;margin-bottom:16px">🔒</div>
+            <h3 style="margin-bottom:8px">Subscription Required</h3>
+            <p style="color:var(--text-muted);margin-bottom:20px">${msg}</p>
+            <button class="btn btn-primary" onclick="navigateTo('subscription')">View Subscription</button>
+          </div>`;
+      }
+    }
+  } catch(e) {
+    console.warn('showSubscriptionGate:', e.message);
+  }
 }
 
 function timeAgo(dateStr) {
@@ -1289,10 +985,6 @@ function selectMode(mode) {
   tglCorp.classList.remove('active-corp');
   tglAcad.classList.remove('active-acad');
 
-  // Hide download section once user starts navigating portals
-  const dlSec = document.getElementById('app-download-section');
-  if (dlSec) dlSec.classList.add('hidden');
-
   // Toggle off if same mode tapped again
   if (_selectedMode === mode) { _selectedMode = null; return; }
 
@@ -1313,13 +1005,12 @@ function selectMode(mode) {
 function selectPortal(type) {
   selectedPortalType = type;
   document.getElementById('portal-selector').classList.add('hidden');
-  ['workspace-brand','app-download-section','workspace-foot'].forEach(id => {
-    const el = document.getElementById(id); if (el) el.classList.add('hidden');
-  });
   if (type === 'admin-corporate' || type === 'admin-academic' || type === 'manager') {
     const isAcademic = type === 'admin-academic';
     const isManager  = type === 'manager';
-    // selectedPortalType stays as 'manager' — used in handleAdminLogin to send loginRole:'manager'
+    // Manager uses the same admin login form — override selectedPortalType
+    if (isManager) selectedPortalType = 'admin-corporate';
+    // Make sure portal-selector is hidden and admin-auth is visible
     const portalSel = document.getElementById('portal-selector');
     if (portalSel) portalSel.classList.add('hidden');
     const adminAuth = document.getElementById('admin-auth');
@@ -1354,10 +1045,6 @@ function showPortalSelector() {
   document.getElementById('employee-auth').classList.add('hidden');
   document.getElementById('student-auth').classList.add('hidden');
   document.getElementById('portal-selector').classList.remove('hidden');
-  ['workspace-brand','workspace-foot'].forEach(id => {
-    const el = document.getElementById(id); if (el) el.classList.remove('hidden');
-  });
-  const mrf = document.getElementById('manager-register-form'); if (mrf) mrf.classList.add('hidden');
   document.querySelectorAll('.auth-container input').forEach(i => i.value = '');
   document.querySelectorAll('.error-msg').forEach(e => e.style.display = 'none');
   selectedPortalType = null;
@@ -1369,51 +1056,15 @@ function backToPortalSelector() {
 
 function showAdminRegister() {
   document.getElementById('admin-login-form').classList.add('hidden');
+  document.getElementById('admin-register-form').classList.remove('hidden');
   document.getElementById('admin-auth-error').style.display = 'none';
-  if (selectedPortalType === 'manager') {
-    document.getElementById('admin-register-form').classList.add('hidden');
-    document.getElementById('manager-register-form').classList.remove('hidden');
-  } else {
-    document.getElementById('manager-register-form').classList.add('hidden');
-    document.getElementById('admin-register-form').classList.remove('hidden');
-  }
 }
 
 function showAdminLogin() {
   document.getElementById('admin-register-form').classList.add('hidden');
-  document.getElementById('manager-register-form').classList.add('hidden');
   document.getElementById('admin-login-form').classList.remove('hidden');
   document.getElementById('admin-auth-error').style.display = 'none';
   const f = document.getElementById('admin-forgot-form'); if(f) f.classList.add('hidden');
-}
-
-async function handleManagerRegister() {
-  try {
-    const name            = document.getElementById('manager-reg-name').value.trim();
-    const email           = document.getElementById('manager-reg-email').value.trim();
-    const phone           = document.getElementById('manager-reg-phone').value.trim();
-    const password        = document.getElementById('manager-reg-password').value;
-    const institutionCode = document.getElementById('manager-reg-code').value.trim().toUpperCase();
-    if (!name || !email || !password || !institutionCode) {
-      return showAdminError('Please fill in all required fields');
-    }
-    if (password.length < 8) {
-      return showAdminError('Password must be at least 8 characters');
-    }
-    const data = await api('/api/auth/register-manager', {
-      method: 'POST',
-      body: JSON.stringify({ name, email, phone: phone || undefined, password, institutionCode }),
-    });
-    const el = document.getElementById('admin-auth-error');
-    el.textContent = data.message || 'Registration submitted! Your account is pending admin approval.';
-    el.style.background = '#f0fdf4';
-    el.style.color = '#15803d';
-    el.style.border = '1px solid #86efac';
-    el.style.display = 'block';
-    showAdminLogin();
-  } catch (e) {
-    showAdminError(e.message || 'Registration failed');
-  }
 }
 
 function showAdminForgot() {
@@ -1592,7 +1243,15 @@ function showEmployeeError(msg) {
   el._hideTimer = setTimeout(() => { el.style.display = 'none'; el.classList.remove('shake'); }, 8000);
 }
 
+function showStudentRegister() {
+  document.getElementById('student-login-form').classList.add('hidden');
+  document.getElementById('student-forgot-form').classList.add('hidden');
+  document.getElementById('student-register-form').classList.remove('hidden');
+  document.getElementById('student-auth-error').style.display = 'none';
+}
+
 function showStudentLogin() {
+  document.getElementById('student-register-form').classList.add('hidden');
   document.getElementById('student-forgot-form').classList.add('hidden');
   document.getElementById('student-login-form').classList.remove('hidden');
   document.getElementById('student-auth-error').style.display = 'none';
@@ -1601,6 +1260,7 @@ function showStudentLogin() {
 
 function showStudentForgot() {
   document.getElementById('student-login-form').classList.add('hidden');
+  document.getElementById('student-register-form').classList.add('hidden');
   document.getElementById('student-forgot-form').classList.remove('hidden');
   document.getElementById('student-auth-error').style.display = 'none';
   document.getElementById('student-reset-code-group').classList.add('hidden');
@@ -1670,7 +1330,6 @@ function friendlyError(msg) {
   if (m.includes('too many requests'))            return 'Too many requests. Please slow down and try again.';
   if (m.includes('no offline profile'))           return 'You\'re offline. Please connect to the internet to login for the first time.';
   if (m.includes('offline session expired'))      return 'Offline session expired. Please connect to login again.';
-  if (m.includes('offline session token has expired')) return 'Your offline session has expired. Please connect to the internet to sign in again.';
   if (m.includes('incorrect password'))           return 'Wrong email or password.';
   if (m.includes('network') || m.includes('fetch')) return 'Network error. Please check your connection.';
   return msg; // fallback: show as-is
@@ -1685,13 +1344,14 @@ async function handleAdminLogin() {
     if (!password) return showAdminError('Please enter your password.');
     if (btn) { btn.textContent = 'Signing in…'; btn.disabled = true; }
 
-    const portalMode  = selectedPortalType === 'admin-academic' ? 'academic' : 'corporate';
-    const loginRole   = selectedPortalType === 'manager' ? 'manager' : 'admin';
-    const credentials = { email, password, loginRole, portalMode, deviceId: getDeviceFingerprint() };
+    const portalMode = selectedPortalType === 'admin-academic' ? 'academic' : 'corporate';
+    // loginRole 'admin' allows both admin and manager roles (PORTAL_ALLOWED_ROLES.admin = ['admin','manager'])
+    const credentials = { email, password, loginRole: 'admin', portalMode, deviceId: getDeviceFingerprint() };
 
     let data;
     if (!(await isOnlineAsync())) {
-      data = await attemptOfflineLogin(credentials, 'admin-login-form');
+      showOfflineLoginNotice('admin-login-form');
+      data = await attemptOfflineLogin(credentials);
     } else {
       removeOfflineLoginNotice();
       data = await initiate2FA(credentials);
@@ -1700,10 +1360,7 @@ async function handleAdminLogin() {
 
     token = data.token;
     localStorage.setItem('token', token);
-    // Restore refresh token from offline profile if present (so auto-refresh works when reconnected)
-    if (data.refreshToken) localStorage.setItem('refreshToken', data.refreshToken);
     currentUser = data.user;
-    if (window.DiklyIDB) window.DiklyIDB.saveUserSession(data.user, data.token).catch(() => {});
     showDashboard(data);
     requestPushPermission().catch(() => {});
   } catch (e) {
@@ -1744,7 +1401,6 @@ async function handleAdminRegister() {
     const data = await api('/api/auth/register', { method: 'POST', body: JSON.stringify(body) });
     token = data.token;
     localStorage.setItem('token', token);
-    if (data.refreshToken) localStorage.setItem('refreshToken', data.refreshToken);
     currentUser = data.user;
     showDashboard(data);
   } catch (e) {
@@ -1765,7 +1421,8 @@ async function handleLecturerLogin() {
     let data;
     if (!(await isOnlineAsync())) {
       // ── OFFLINE PATH ──
-      data = await attemptOfflineLogin(credentials, 'lecturer-login-form');
+      showOfflineLoginNotice('lecturer-login-form');
+      data = await attemptOfflineLogin(credentials);
     } else {
       // ── ONLINE PATH ──
       removeOfflineLoginNotice();
@@ -1779,7 +1436,6 @@ async function handleLecturerLogin() {
 
     token = data.token;
     localStorage.setItem('token', token);
-    if (data.refreshToken) localStorage.setItem('refreshToken', data.refreshToken);
     currentUser = data.user;
     showDashboard(data);
   } catch (e) {
@@ -2011,7 +1667,8 @@ async function handleHodLogin() {
     const credentials = { email, password, loginRole: 'hod', portalMode: 'academic', deviceId: getDeviceFingerprint() };
     let data;
     if (!(await isOnlineAsync())) {
-      data = await attemptOfflineLogin(credentials, 'hod-login-form');
+      showOfflineLoginNotice('hod-login-form');
+      data = await attemptOfflineLogin(credentials);
     } else {
       removeOfflineLoginNotice();
       data = await initiate2FA(credentials);
@@ -2019,7 +1676,6 @@ async function handleHodLogin() {
     }
     token = data.token;
     localStorage.setItem('token', token);
-    if (data.refreshToken) localStorage.setItem('refreshToken', data.refreshToken);
     currentUser = data.user;
     showDashboard(data);
   } catch (e) {
@@ -2087,7 +1743,8 @@ async function handleEmployeeLogin() {
     let data;
     if (!(await isOnlineAsync())) {
       // ── OFFLINE PATH ──
-      data = await attemptOfflineLogin(credentials, 'employee-login-form');
+      showOfflineLoginNotice('employee-login-form');
+      data = await attemptOfflineLogin(credentials);
     } else {
       // ── ONLINE PATH ──
       removeOfflineLoginNotice();
@@ -2098,7 +1755,6 @@ async function handleEmployeeLogin() {
 
     token = data.token;
     localStorage.setItem('token', token);
-    if (data.refreshToken) localStorage.setItem('refreshToken', data.refreshToken);
     currentUser = data.user;
     showDashboard(data);
   } catch (e) {
@@ -2159,7 +1815,8 @@ async function handleStudentLogin() {
     let data;
     if (!(await isOnlineAsync())) {
       // ── OFFLINE PATH ──
-      data = await attemptOfflineLogin(credentials, 'student-login-form');
+      showOfflineLoginNotice('student-login-form');
+      data = await attemptOfflineLogin(credentials);
     } else {
       // ── ONLINE PATH ──
       removeOfflineLoginNotice();
@@ -2170,7 +1827,6 @@ async function handleStudentLogin() {
 
     token = data.token;
     localStorage.setItem('token', token);
-    if (data.refreshToken) localStorage.setItem('refreshToken', data.refreshToken);
     currentUser = data.user;
     showDashboard(data);
   } catch (e) {
@@ -2192,6 +1848,62 @@ async function handleStudentLogin() {
   }
 }
 
+async function handleStudentRegister() {
+  try {
+    const name = document.getElementById('student-reg-name').value.trim();
+    const indexNumber = document.getElementById('student-reg-index').value.trim().toUpperCase();
+    const institutionCode = document.getElementById('student-reg-code').value.trim();
+    const password = document.getElementById('student-reg-password').value;
+    const confirm = document.getElementById('student-reg-confirm').value;
+    const department = document.getElementById('student-reg-dept')?.value?.trim();
+    const programme = document.getElementById('student-reg-programme')?.value?.trim();
+    const studentLevel = document.getElementById('student-reg-level')?.value?.trim();
+    const studentGroup = document.getElementById('student-reg-group')?.value?.trim().toUpperCase();
+    const sessionType = document.getElementById('student-reg-session-type')?.value?.trim();
+    const semester = document.getElementById('student-reg-semester')?.value?.trim();
+    const email = document.getElementById('student-reg-email')?.value?.trim().toLowerCase();
+    const phone = document.getElementById('student-reg-phone')?.value?.trim();
+    if (!name) return showStudentError('Please enter your full name.');
+    if (!institutionCode) return showStudentError('Please enter your Institution Code.');
+    if (!indexNumber) return showStudentError('Student ID / Index Number is required.');
+    if (indexNumber.length < 3) return showStudentError('Student ID looks too short. Please check and enter your full index number.');
+    if (!password) return showStudentError('Please enter a password.');
+    if (password.length < 8) return showStudentError('Password must be at least 8 characters.');
+    if (password !== confirm) return showStudentError('Passwords do not match.');
+    if (!department) return showStudentError('Please enter your department.');
+    if (!programme) return showStudentError('Please select your programme.');
+    if (!studentLevel) return showStudentError('Please select your level.');
+    if (!studentGroup) return showStudentError('Please enter your group (e.g. A, B, C).');
+    if (!sessionType) return showStudentError('Please select your session type.');
+    if (!semester) return showStudentError('Please select your semester.');
+    if (!email || !/^\S+@\S+\.\S+$/.test(email)) return showStudentError('Please enter a valid email address.');
+    if (!phone) return showStudentError('Phone number is required so lecturers can reach you by SMS.');
+    const data = await api('/api/auth/register-student', { method: 'POST', body: JSON.stringify({ name, indexNumber, email, phone, password, institutionCode, department, programme, studentLevel, studentGroup, sessionType, semester }) });
+    if (data.token) {
+      token = data.token;
+      localStorage.setItem('token', token);
+      currentUser = data.user;
+      showDashboard(data);
+      if (data.departmentNote) toastWarning(data.departmentNote);
+    } else {
+      const el = document.getElementById('student-auth-error');
+      el.textContent = data.message || 'Registration successful!';
+      el.style.display = 'block';
+      el.style.background = '#f0fdf4';
+      el.style.color = '#15803d';
+      showStudentLogin();
+      document.getElementById('student-auth-error').style.display = 'block';
+      if (data.departmentNote) {
+        const warn = document.createElement('div');
+        warn.style.cssText = 'margin-top:8px;padding:10px 14px;background:#fffbeb;border:1px solid #fde68a;border-radius:8px;font-size:12px;color:#92400e;';
+        warn.textContent = data.departmentNote;
+        el.after(warn);
+      }
+    }
+  } catch (e) {
+    showStudentError(e.message || 'Registration failed');
+  }
+}
 
 let studentForgotStep = 'request';
 let studentForgotIndex = '';
@@ -2242,24 +1954,15 @@ async function handleStudentForgotPassword() {
 
 async function handleLogout() {
   stopNotifPolling();
-  stopSSE();
   try {
     if (isOnline()) await api('/api/auth/logout', { method: 'POST' });
   } catch (e) {}
-  if (window.DiklyIDB) window.DiklyIDB.clearAll().catch(() => {});
   resetBranding();
-  // Clear this user's offline profile so their credentials don't persist on shared devices
-  const _logoutUserId = currentUser?._id || currentUser?.id;
-  if (_logoutUserId) clearOfflineProfileById(_logoutUserId);
-  _appOfflineMode = false;
   token = null;
   currentUser = null;
   currentUserTrial = null;
   window.currentUser = null;
   localStorage.removeItem('token');
-  localStorage.removeItem('refreshToken');
-  if (_expiryTimer) { clearTimeout(_expiryTimer); _expiryTimer = null; }
-  _dismissExpiryBanner();
   document.getElementById('main-content').innerHTML = '';
   document.getElementById('sidebar-nav').innerHTML = '';
   document.getElementById('user-name').textContent = '';
@@ -2331,25 +2034,6 @@ async function loadUserData() {
     if (!currentUser) throw new Error('No user data');
     showDashboard(data);
   } catch (e) {
-    // Fall back to cached profile when the server is unreachable (network error).
-    // This covers: truly offline, connected to ESP32 hotspot (no internet),
-    // or any scenario where navigator.onLine is true but the server can't be reached.
-    // Only skip the cache when the server replied with a real error (e.status exists).
-    const isNetworkError = !e.status;
-    if (token && isNetworkError) {
-      try {
-        const profiles = JSON.parse(localStorage.getItem(OFFLINE_LOGIN_KEY) || '{}');
-        const cached = Object.values(profiles).find(p =>
-          p.token === token && p.user &&
-          (Date.now() - (p.savedAt || 0)) < OFFLINE_LOGIN_MAX_AGE_DAYS * 86400000
-        );
-        if (cached) {
-          currentUser = { ...cached.user, _id: cached.user._id || cached.user.id };
-          showDashboard({ user: currentUser, userTrial: cached.trial, offlineMode: true });
-          return;
-        }
-      } catch (_) {}
-    }
     localStorage.removeItem('token');
     token = null;
     currentUser = null;
@@ -2515,10 +2199,17 @@ function showDashboard(data) {
     showForceChangePassword();
     return;
   }
-  if (data?.userTrial) {
+  // Hard-hide subscription banners for students — they never need a subscription
+  if (currentUser?.role === 'student') {
+    const tb  = document.getElementById('trial-banner');
+    const teb = document.getElementById('trial-expired-banner');
+    if (tb)  { tb.style.display  = 'none'; tb.innerHTML  = ''; }
+    if (teb) { teb.style.display = 'none'; teb.innerHTML = ''; }
+    currentUserTrial = null;     // never cache subscription state for students
+  } else if (data?.userTrial) {
+    // Cache userTrial so showSubscriptionGate can check active subscription status
     currentUserTrial = data.userTrial;
   }
-  _scheduleExpiryWarning();
   try {
     window.currentUser = currentUser; // expose for faq-assistant.js (let ≠ window prop)
     document.getElementById('auth-page').style.display = 'none';
@@ -2533,29 +2224,8 @@ function showDashboard(data) {
     const roleEl = document.getElementById('user-role');
     roleEl.textContent = currentUser.role || '';
     roleEl.className = `role-badge role-${currentUser.role || 'user'}`;
-    // Mark role on body for CSS scoping
+    // Mark role on body so CSS can scope role-specific overrides (e.g. hide banners for student)
     document.body.setAttribute('data-role', currentUser.role || '');
-
-    // ── Persistent class-rep banner (shown for the whole session, not per-page) ──
-    const _repBannerEl = document.getElementById('class-rep-banner');
-    if (_repBannerEl) {
-      if (currentUser.isClassRep) {
-        _repBannerEl.innerHTML = `
-          <div style="width:32px;height:32px;border-radius:8px;background:linear-gradient(135deg,#7c3aed,#6366f1);display:flex;align-items:center;justify-content:center;flex-shrink:0">
-            ${svgIcon('<path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/><polyline points="9 11 12 14 22 4"/>', 16, '#fff')}
-          </div>
-          <div style="flex:1">
-            <span style="background:#7c3aed;color:#fff;font-size:10px;font-weight:800;padding:2px 7px;border-radius:20px;letter-spacing:.5px;margin-right:8px">CLASS REP</span>
-            <span style="font-weight:700;color:#5b21b6">You are a Class Representative</span>
-            <span style="color:#6d28d9;font-size:12px;margin-left:8px">· Tap to manage the class device</span>
-          </div>
-          <span style="color:#7c3aed;opacity:.7">${svgIcon('<polyline points="9 18 15 12 9 6"/>', 16)}</span>`;
-        _repBannerEl.classList.add('visible');
-        _repBannerEl.onclick = () => navigateTo('class-device');
-      } else {
-        _repBannerEl.classList.remove('visible');
-      }
-    }
 
     const companyName = currentUser.company?.name || '';
     const mode = currentUser.company?.mode || 'corporate';
@@ -2581,8 +2251,8 @@ function showDashboard(data) {
     // ── Per-user subscription banner (lecturer / manager / admin) ──────────
     // userTrial comes from authController and is always based on the individual
     // user's trialEndDate + subscriptionExpiry — NOT the company trial.
-    const PAID_FE = ['lecturer', 'manager', 'admin', 'student', 'employee'];
-    const isSubRole = (role === 'hod'); // only HODs are fully free now
+    const PAID_FE = ['lecturer', 'manager', 'admin'];
+    const isSubRole = (role === 'employee' || role === 'student' || role === 'hod');
     const userTrial = data.userTrial || null;
 
     const _bannerEl   = document.getElementById('trial-banner');
@@ -2590,24 +2260,16 @@ function showDashboard(data) {
     const _hideBoth   = () => { _bannerEl.style.display = 'none'; _expiredEl.style.display = 'none'; };
     const _dayLabel   = n => `${n} day${n !== 1 ? 's' : ''}`;
 
-    // HODs are fully free — no banners needed
-    if (role === 'hod') {
+    if (isSubRole) {
       _hideBoth();
-    } else if ((PAID_FE.includes(role) || role === 'student' || role === 'employee') && userTrial) {
+    } else if (PAID_FE.includes(role) && userTrial) {
       const daysLeft = userTrial.daysLeft || 0;
       const status   = userTrial.status;
 
-      const _isStudent  = role === 'student';
-      const _isEmployee = role === 'employee';
-      const _trialLabel = _isStudent ? `${daysLeft <= 3 ? 'Trial Ending' : 'Free Trial'} (45-day)`
-                        : _isEmployee ? 'Company Trial'
-                        : daysLeft <= 3 ? 'Trial Ending Soon' : '30-Day Free Trial';
-      const _planTitle  = _isStudent ? 'Semester Plan Active'
-                        : _isEmployee ? 'Monthly Plan Active'
-                        : (currentUser?.company?.mode === 'corporate' ? 'Monthly Plan Active' : 'Semester Plan Active');
-
       if (status === 'active') {
-        const _planDays    = (_isStudent || (!_isEmployee && currentUser?.company?.mode !== 'corporate')) ? 112 : 30;
+        const _subMode   = currentUser?.company?.mode || 'academic';
+        const _planTitle = _subMode === 'corporate' ? 'Monthly Plan Active' : 'Semester Plan Active';
+        const _planDays  = _subMode === 'corporate' ? 30 : 112;
         const _displayDays = Math.min(daysLeft, _planDays);
         _expiredEl.style.display = 'none';
         _bannerEl.className = 'trial-banner sub--active';
@@ -2633,14 +2295,14 @@ function showDashboard(data) {
           <div class="sub-banner-left">
             <div class="sub-banner-icon sub-banner-icon--${urgent ? 'urgent' : 'trial'}">${urgent ? '⚠' : '⏳'}</div>
             <div class="sub-banner-text">
-              <span class="sub-banner-title">${_trialLabel}</span>
+              <span class="sub-banner-title">${urgent ? 'Trial Ending Soon' : '30-Day Free Trial'}</span>
               <span class="sub-banner-sep">·</span>
               <span class="sub-banner-detail">${_dayLabel(daysLeft)} remaining</span>
             </div>
           </div>
           <div class="sub-banner-right">
             <div class="sub-banner-pill">${urgent ? 'Expiring' : 'Trial'}</div>
-            ${!_isEmployee ? `<button class="sub-banner-cta" onclick="navigateTo('subscription')">${urgent ? 'Subscribe Now' : 'Subscribe'}</button>` : ''}
+            <button class="sub-banner-cta" onclick="navigateTo('subscription')">${urgent ? 'Upgrade Now' : 'Upgrade'}</button>
           </div>`;
         _bannerEl.style.display = 'flex';
 
@@ -2651,23 +2313,23 @@ function showDashboard(data) {
           <div class="sub-banner-left">
             <div class="sub-banner-icon sub-banner-icon--expired">✕</div>
             <div class="sub-banner-text">
-              <span class="sub-banner-title">${_isStudent ? 'Trial Expired' : _isEmployee ? 'Company Trial Ended' : 'Trial Expired'}</span>
+              <span class="sub-banner-title">Trial Expired</span>
               <span class="sub-banner-sep">·</span>
               <span class="sub-banner-detail" id="sub-expired-label">Subscribe to continue via Paystack</span>
             </div>
           </div>
           <div class="sub-banner-right">
-            <button class="sub-banner-cta" onclick="navigateTo('subscription')">Subscribe Now</button>
+            <button class="sub-banner-cta" onclick="paySubscription()">Subscribe Now</button>
           </div>`;
         _expiredEl.style.display = 'flex';
         // Populate live price asynchronously
         api('/api/payments/plans').then(pd => {
           const el = document.getElementById('sub-expired-label');
           if (!el) return;
-          const lp  = pd?.plans?.[0];
+          const lp = pd?.plans?.[0];
           const cur = lp?.currency === 'GHS' ? '₵' : (lp?.currency || '₵');
-          const amt = lp?.price ?? (_isStudent ? 20 : _isEmployee ? 15 : 300);
-          const per = lp?.id?.includes('month') ? '/month' : '/semester';
+          const amt = lp?.price ?? ((currentUser?.company?.mode === 'corporate') ? 150 : 300);
+          const per = currentUser?.company?.mode === 'corporate' ? '/month' : '/semester';
           el.textContent = `Subscribe to continue — ${cur}${amt}${per} via Paystack`;
         }).catch(() => {});
       }
@@ -2695,14 +2357,12 @@ function showDashboard(data) {
     buildSidebar();
     loadAnnBadge();
     startNotifPolling();
-    startSSE();
     _notifSound.updateBtn();
     applyBranding(); // async — applies colors/logo in background
     // Show offline banner immediately when logged in via cached credentials
-    if (data?.offlineMode) { _appOfflineMode = true; showOfflineBanner(false); }
-    // Navigate directly to mark-attendance for QR scan or ESP32 return flow
-    const _postLoginP = new URLSearchParams(window.location.search);
-    if (_postLoginP.get('qr_token') || _postLoginP.get('esp32session')) {
+    if (data?.offlineMode) showOfflineBanner(false);
+    // If student arrived via QR scan link, go straight to mark-attendance to auto-submit
+    if (new URLSearchParams(window.location.search).get('qr_token')) {
       navigateTo('mark-attendance');
     } else {
       navigateTo('dashboard');
@@ -2733,30 +2393,24 @@ function buildSidebar() {
       links.push({ id: 'approvals', label: 'Approvals', icon: approvalsIcon() });
       links.push({ id: 'search', label: 'Search', icon: svgIcon('<circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>') });
       links.push({ id: 'users', label: 'Users', icon: usersIcon() });
+      links.push({ id: 'sessions', label: 'Sessions', icon: sessionsIcon() });
       if (currentUser.company?.mode === 'academic') {
-        links.push({ id: 'sessions', label: 'Sessions', icon: sessionsIcon() });
         links.push({ sep: true, label: 'ACADEMIC' });
         links.push({ id: 'courses', label: 'Courses', icon: coursesIcon() });
         links.push({ id: 'hod-course-approvals', label: 'Course Approvals', icon: svgIcon('<path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/>') });
-        links.push({ id: 'quizzes', label: 'Proctored/Snap Quiz', icon: quizzesIcon() });
+        links.push({ id: 'quizzes', label: 'Quizzes', icon: quizzesIcon() });
         links.push({ id: 'gradebook', label: 'Grade Book', icon: svgIcon('<path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/>') });
         links.push({ id: 'announcements', label: 'Announcements', icon: svgIcon('<path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/>') });
         links.push({ id: 'programmes', label: 'Programmes', icon: svgIcon('<path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/>') });
-        links.push({ id: 'hod-unlock-students', label: 'Unlock Students', icon: svgIcon('<rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/>') });
-        links.push({ id: 'class-rep-mgmt',     label: 'Class Reps',      icon: svgIcon('<path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/><polyline points="9 11 12 14 22 4"/>') });
-        links.push({ id: 'admin-devices',      label: 'Devices',         icon: svgIcon('<rect x="5" y="2" width="14" height="20" rx="2" ry="2"/><line x1="12" y1="18" x2="12.01" y2="18"/>') });
       }
       if (currentUser.company?.mode === 'corporate') {
         links.push({ sep: true, label: 'WORKFORCE' });
         links.push({ id: 'sign-in-out',    label: 'Sign In / Out',   icon: attendanceIcon() });
         links.push({ id: 'corp-attendance',label: 'Team Attendance', icon: svgIcon('<path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/><polyline points="9 11 12 14 22 4"/>') });
-        links.push({ id: 'corp-clock-settings', label: 'Clock Settings', icon: svgIcon('<circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/><circle cx="12" cy="12" r="2"/>') });
         links.push({ id: 'shifts',         label: 'Shifts',          icon: svgIcon('<rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/>') });
         links.push({ id: 'leave-requests', label: 'Leave Requests',  icon: svgIcon('<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/>') });
         links.push({ id: 'timesheets',     label: 'Timesheets',      icon: svgIcon('<rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/><line x1="8" y1="14" x2="16" y2="14"/>') });
         links.push({ id: 'expenses-mgr',   label: 'Expenses',        icon: svgIcon('<line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/>') });
-        links.push({ id: 'performance',    label: 'Performance',     icon: svgIcon('<line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/>') });
-        links.push({ id: 'branches',       label: 'Branches',        icon: svgIcon('<line x1="6" y1="3" x2="6" y2="15"/><circle cx="18" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><path d="M18 9a9 9 0 0 1-9 9"/>') });
         links.push({ id: 'announcements',  label: 'Announcements',   icon: svgIcon('<path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/>') });
         links.push({ id: 'audit-logs',     label: 'Audit Logs',      icon: svgIcon('<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><line x1="10" y1="9" x2="10" y2="9"/>') });
       }
@@ -2772,31 +2426,20 @@ function buildSidebar() {
     case 'manager':
       links.push({ sep: true, label: 'MANAGE' });
       links.push({ id: 'approvals', label: 'Approvals', icon: approvalsIcon() });
-      links.push({ id: 'users', label: 'Team', icon: usersIcon() });
+      links.push({ id: 'users', label: 'Users', icon: usersIcon() });
       if (currentUser.company?.mode === 'corporate') {
         links.push({ sep: true, label: 'WORKFORCE' });
-        links.push({ id: 'sign-in-out',    label: 'Sign In / Out',   icon: attendanceIcon() });
-        links.push({ id: 'corp-attendance',label: 'Team Attendance', icon: svgIcon('<path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/><polyline points="9 11 12 14 22 4"/>') });
-        links.push({ id: 'shifts',         label: 'Shifts',          icon: svgIcon('<rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/>') });
-        links.push({ id: 'leave-requests', label: 'Leave',           icon: svgIcon('<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/>') });
-        links.push({ id: 'timesheets',     label: 'Timesheets',      icon: svgIcon('<rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/><line x1="8" y1="14" x2="16" y2="14"/>') });
-        links.push({ id: 'expenses-mgr',   label: 'Expenses',        icon: svgIcon('<line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/>') });
-        links.push({ id: 'performance',    label: 'Performance',     icon: svgIcon('<line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/>') });
-        links.push({ id: 'branches',       label: 'Branches',        icon: svgIcon('<line x1="6" y1="3" x2="6" y2="15"/><circle cx="18" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><path d="M18 9a9 9 0 0 1-9 9"/>') });
-        links.push({ sep: true, label: 'COMMUNICATE' });
-        links.push({ id: 'announcements',  label: 'Announcements',   icon: svgIcon('<path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/>') });
-        links.push({ id: 'messages',       label: 'Messages',        icon: svgIcon('<path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>') });
-        links.push({ id: 'meetings',       label: 'Meetings',        icon: meetingsIcon() });
-        links.push({ sep: true, label: 'INSIGHTS' });
-        links.push({ id: 'reports',        label: 'Reports',         icon: reportsIcon() });
-        links.push({ id: 'audit-logs',     label: 'Audit Logs',      icon: svgIcon('<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><line x1="10" y1="9" x2="10" y2="9"/>') });
-      } else {
-        links.push({ sep: true, label: 'COMMUNICATE' });
-        links.push({ id: 'messages', label: 'Messages', icon: svgIcon('<path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>') });
-        links.push({ id: 'meetings', label: 'Meetings', icon: meetingsIcon() });
-        links.push({ sep: true, label: 'INSIGHTS' });
-        links.push({ id: 'reports', label: 'Reports', icon: reportsIcon() });
+        links.push({ id: 'sign-in-out', label: 'Sign In / Out', icon: attendanceIcon() });
+        links.push({ id: 'corp-attendance', label: 'Team Attendance', icon: svgIcon('<path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/><polyline points="9 11 12 14 22 4"/>') });
+        links.push({ id: 'shifts', label: 'Shifts', icon: svgIcon('<rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/>') });
+        links.push({ id: 'leave-requests', label: 'Leave Requests', icon: svgIcon('<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/>') });
+        links.push({ id: 'announcements', label: 'Announcements', icon: svgIcon('<path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/>') });
       }
+      links.push({ sep: true, label: 'COMMUNICATE' });
+      links.push({ id: 'messages', label: 'Messages', icon: svgIcon('<path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>') });
+      links.push({ id: 'meetings', label: 'Meetings', icon: meetingsIcon() });
+      links.push({ sep: true, label: 'INSIGHTS' });
+      links.push({ id: 'reports', label: 'Reports', icon: reportsIcon() });
       links.push({ sep: true, label: 'SUPPORT' });
       links.push({ id: 'faq-center', label: 'FAQ Center', icon: svgIcon('<circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/>') });
       links.push({ id: 'subscription', label: 'Subscription', icon: subscriptionIcon() });
@@ -2806,12 +2449,10 @@ function buildSidebar() {
       links.push({ id: 'hod-overview',     label: 'Overview',       icon: dashboardIcon() });
       links.push({ id: 'hod-sessions',     label: 'Sessions',       icon: sessionsIcon() });
       links.push({ id: 'hod-courses',      label: 'Courses',        icon: coursesIcon() });
-      links.push({ id: 'timetable',        label: 'Timetable',      icon: svgIcon('<rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/>') });
       links.push({ id: 'hod-lecturers',    label: 'Lecturers',      icon: svgIcon('<path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/>') });
       links.push({ id: 'hod-students',     label: 'Students',       icon: usersIcon() });
       links.push({ sep: true, label: 'INSIGHTS' });
       links.push({ id: 'hod-performance',  label: 'Performance',    icon: svgIcon('<line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/>') });
-      links.push({ id: 'quiz-monitor',     label: 'Quiz Monitor 🔴', icon: svgIcon('<path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7z"/><circle cx="12" cy="12" r="3"/>') });
       links.push({ id: 'hod-alerts',       label: 'Smart Alerts',   icon: svgIcon('<path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/>') });
       links.push({ id: 'hod-reports',      label: 'Reports',        icon: reportsIcon() });
       links.push({ sep: true, label: 'COMMUNICATE' });
@@ -2823,11 +2464,8 @@ function buildSidebar() {
       links.push({ id: 'approvals',           label: 'Approvals',        icon: approvalsIcon() });
       links.push({ id: 'hod-course-approvals',label: 'Course Approvals', icon: svgIcon('<path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/>') });
       links.push({ id: 'hod-unlock-students', label: 'Locked Students',  icon: svgIcon('<rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/>') });
-      links.push({ id: 'admin-devices',       label: 'Devices',          icon: svgIcon('<rect x="5" y="2" width="14" height="20" rx="2" ry="2"/><line x1="12" y1="18" x2="12.01" y2="18"/>') });
-      links.push({ id: 'class-rep-mgmt',     label: 'Class Reps',       icon: svgIcon('<path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/><polyline points="9 11 12 14 22 4"/>') });
       links.push({ sep: true, label: 'SUPPORT' });
       links.push({ id: 'faq-center',       label: 'FAQ Center',     icon: svgIcon('<circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/>') });
-      links.push({ id: 'subscription',     label: 'Subscription',   icon: subscriptionIcon() });
       break;
     case 'lecturer':
       links.push({ id: 'sessions', label: 'Sessions', icon: sessionsIcon() });
@@ -2835,12 +2473,10 @@ function buildSidebar() {
       links.push({ sep: true, label: 'CONTENT' });
       links.push({ id: 'search', label: 'Search', icon: svgIcon('<circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>') });
       links.push({ id: 'courses', label: 'Courses', icon: coursesIcon() });
-      links.push({ id: 'course-videos', label: 'Course Videos', icon: svgIcon('<polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2" ry="2"/>') });
-      links.push({ id: 'quizzes', label: 'Proctored/Snap Quiz', icon: quizzesIcon() });
-      links.push({ id: 'quiz-monitor', label: 'Quiz Monitor 🔴', icon: svgIcon('<path d="M1 6s4-2 11-2 11 2 11 2v3s-4 2-11 2S1 9 1 9V6z"/><path d="M1 6v12s4 2 11 2 11-2 11-2V6"/><line x1="12" y1="12" x2="12" y2="20"/>') });
-      links.push({ id: 'timetable', label: 'Timetable', icon: svgIcon('<rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/>') });
+      links.push({ id: 'quizzes', label: 'Quizzes', icon: quizzesIcon() });
+      links.push({ id: 'timetable', label: 'Schedule', icon: svgIcon('<rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/>') });
       links.push({ id: 'question-bank', label: 'Question Bank', icon: svgIcon('<ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"/><path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"/>') });
-      links.push({ id: 'assignments', label: 'Assignment', icon: assignmentsIcon() });
+      links.push({ id: 'assignments', label: 'Assignments / Quiz', icon: assignmentsIcon() });
       links.push({ id: 'gradebook', label: 'Grade Book', icon: svgIcon('<path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/>') });
       links.push({ sep: true, label: 'COMMUNICATE' });
       links.push({ id: 'messages', label: 'Messages', icon: svgIcon('<path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>') });
@@ -2872,7 +2508,6 @@ function buildSidebar() {
       links.push({ id: 'emp-assistant', label: 'Assistant', icon: svgIcon('<path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/><circle cx="12" cy="10" r="1"/><circle cx="8" cy="10" r="1"/><circle cx="16" cy="10" r="1"/>') });
       links.push({ id: 'support',       label: 'Support',         icon: svgIcon('<circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/>') });
       links.push({ id: 'faq-center',    label: 'FAQ Center',      icon: svgIcon('<path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/><line x1="9" y1="10" x2="15" y2="10"/><line x1="12" y1="7" x2="12" y2="13"/>') });
-      links.push({ id: 'subscription',  label: 'Subscription',    icon: subscriptionIcon() });
       break;
     case 'student':
       links.push({ sep: true, label: 'ATTENDANCE' });
@@ -2880,32 +2515,23 @@ function buildSidebar() {
       links.push({ id: 'my-attendance', label: 'My Attendance', icon: sessionsIcon() });
       links.push({ sep: true, label: 'ACADEMIC' });
       links.push({ id: 'courses', label: 'My Courses', icon: coursesIcon() });
-      links.push({ id: 'timetable', label: 'Timetable', icon: svgIcon('<rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/>') });
-      links.push({ id: 'quizzes', label: 'Proctored/Snap Quiz', icon: quizzesIcon() });
-      links.push({ id: 'assignments', label: 'Assignment', icon: assignmentsIcon() });
+      links.push({ id: 'timetable', label: 'Schedule', icon: svgIcon('<rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/>') });
+      links.push({ id: 'quizzes', label: 'Quizzes', icon: quizzesIcon() });
+      links.push({ id: 'assignments', label: 'Assignments / Quiz', icon: assignmentsIcon() });
       links.push({ id: 'gradebook', label: 'My Grades', icon: svgIcon('<path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/>') });
       links.push({ id: 'quiz-history', label: 'My Results', icon: svgIcon('<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/>') });
-      links.push({ id: 'course-videos', label: 'Course Videos', icon: svgIcon('<polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2" ry="2"/>') });
       links.push({ sep: true, label: 'COMMUNICATE' });
       links.push({ id: 'messages', label: 'Messages', icon: svgIcon('<path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>') });
       links.push({ id: 'meetings', label: 'Meetings', icon: meetingsIcon() });
       links.push({ id: 'announcements', label: 'Announcements', icon: svgIcon('<path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/>') });
-      if (currentUser.isClassRep) {
-        links.push({ sep: true, label: 'CLASS REP' });
-        links.push({ id: 'class-device', label: 'Class Device', icon: svgIcon('<rect x="5" y="2" width="14" height="20" rx="2" ry="2"/><line x1="12" y1="18" x2="12.01" y2="18"/><polyline points="9 11 12 14 22 4"/>') });
-        links.push({ id: 'class-announcements', label: 'Class Announcements', icon: svgIcon('<path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/><line x1="12" y1="2" x2="12" y2="4"/>') });
-        links.push({ id: 'class-timetable', label: 'Class Timetable', icon: svgIcon('<rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/><line x1="12" y1="14" x2="12" y2="18"/><line x1="10" y1="16" x2="14" y2="16"/>') });
-      }
       links.push({ sep: true, label: 'SUPPORT' });
       links.push({ id: 'support', label: 'Support', icon: svgIcon('<circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/>') });
       links.push({ id: 'faq-center', label: 'FAQ Center', icon: svgIcon('<path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/><line x1="9" y1="10" x2="15" y2="10"/><line x1="12" y1="7" x2="12" y2="13"/>') });
-      links.push({ id: 'subscription', label: 'Subscription', icon: subscriptionIcon() });
       break;
     case 'superadmin':
-      links.push({ id: 'superadmin-platform', label: 'Platform',     icon: svgIcon('<rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/>') });
-      links.push({ id: 'approvals',            label: 'Approvals',    icon: approvalsIcon() });
-      links.push({ id: 'search',               label: 'Search',       icon: svgIcon('<circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>') });
-      links.push({ sep: true, label: 'SUPPORT' });
+      links.push({ id: 'superadmin-platform', label: 'Platform',   icon: svgIcon('<rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/>') });
+      links.push({ id: 'approvals',            label: 'Approvals',  icon: approvalsIcon() });
+      links.push({ id: 'search',               label: 'Search',     icon: svgIcon('<circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>') });
       break;
   }
 
@@ -2930,27 +2556,6 @@ function buildSidebar() {
       if (l.sep) return l.label ? `<div class="nav-section-label">${l.label}</div>` : `<div class="nav-sep"></div>`;
       return `<a onclick="navigateTo('${l.id}')" id="nav-${l.id}" data-tooltip="${l.label}">${l.id==='announcements'?'<div class="ann-line"></div>':''} ${l.icon}<span>${l.label}</span>${l.id==='announcements'?'<span id="ann-badge" style="display:none;position:absolute;top:4px;right:4px;background:#ef4444;color:#fff;font-size:9px;font-weight:700;padding:1px 5px;border-radius:20px;min-width:14px;text-align:center;line-height:14px;"></span>':''}</a>`;
     }).join('');
-
-  // Institution code chip — visible to all roles that belong to an institution
-  const instCode = currentUser.company?.institutionCode || currentUser.company?.code;
-  if (instCode && role !== 'superadmin') {
-    let chip = sidebar && sidebar.querySelector('.sidebar-inst-chip');
-    if (!chip) {
-      chip = document.createElement('div');
-      chip.className = 'sidebar-inst-chip';
-      if (sidebar) sidebar.appendChild(chip);
-    }
-    chip.innerHTML = `
-      <div style="padding:10px 14px 12px;border-top:1px solid rgba(255,255,255,.08);">
-        <div style="font-size:9.5px;font-weight:700;letter-spacing:.8px;text-transform:uppercase;opacity:.5;margin-bottom:4px">Institution Code</div>
-        <div style="display:flex;align-items:center;gap:6px;">
-          <span id="sidebar-inst-code-val" style="font-family:monospace;font-size:13px;font-weight:700;letter-spacing:.5px;background:rgba(255,255,255,.08);padding:4px 9px;border-radius:7px;flex:1;text-align:center;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${instCode}</span>
-          <button onclick="(function(){navigator.clipboard.writeText('${instCode}');const b=document.getElementById('sidebar-copy-btn');if(b){b.textContent='✓';setTimeout(()=>{b.textContent='Copy'},1500);}})();" id="sidebar-copy-btn"
-                  style="font-size:10px;font-weight:700;padding:4px 8px;border-radius:6px;border:1px solid rgba(255,255,255,.18);background:rgba(255,255,255,.1);cursor:pointer;color:inherit;flex-shrink:0;transition:background .15s"
-                  onmouseover="this.style.background='rgba(255,255,255,.2)'" onmouseout="this.style.background='rgba(255,255,255,.1)'">Copy</button>
-        </div>
-      </div>`;
-  }
 }
 
 function navigateTo(view) {
@@ -2958,8 +2563,6 @@ function navigateTo(view) {
   if (window._empClockTimer) { clearInterval(window._empClockTimer); window._empClockTimer = null; }
   // Stop thread poll when leaving messages
   if (view !== 'messages') _stopThreadPoll();
-  // Stop QR camera stream if navigating away from mark-attendance
-  if (view !== 'mark-attendance' && typeof _stopQrScanner === 'function') _stopQrScanner();
   currentView = view;
   document.querySelectorAll('.sidebar-nav a').forEach(a => a.classList.remove('active'));
   const navEl = document.getElementById(`nav-${view}`);
@@ -2975,25 +2578,22 @@ function navigateTo(view) {
   switch (view) {
     case 'dashboard': renderDashboard(); break;
     case 'sessions': renderSessions(); break;
-    case 'attendance-device': _lazyRender(content, '/js/pages-device.js', renderAttendanceDevice, 'Attendance Device'); break;
+    case 'attendance-device': _safeRender(content, renderAttendanceDevice, 'Attendance Device'); break;
     case 'users': renderUsers(); break;
     case 'meetings': renderMeetings(); break;
     case 'courses': renderCourses(); break;
     case 'quizzes': renderQuizzes(); break;
     case 'quiz-history': renderStudentQuizHistory(); break;
-    case 'quiz-monitor': renderQuizMonitorPage(); break;
     case 'lecturer-performance': renderLecturerPerformance(); break;
-    case 'timetable': (currentUser.role === 'student' || currentUser.role === 'hod') ? renderStudentTimetable() : renderLecturerTimetable(); break;
+    case 'timetable': currentUser.role === 'student' ? renderStudentTimetable() : renderLecturerTimetable(); break;
     case 'question-bank': renderQuestionBank(); break;
     case 'my-attendance': renderMyAttendance(); break;
     case 'mark-attendance': renderMarkAttendance(); break;
     case 'emp-home': renderEmployeeDashboard(document.getElementById('main-content')); break;
     case 'emp-notifications': renderEmpNotifications(); break;
-    case 'all-notifications': renderAllNotifications(); break;
     case 'emp-assistant': renderEmpAssistant(); break;
     case 'sign-in-out': renderSignInOut(); break;
     case 'corp-attendance': renderCorporateAttendance(); break;
-    case 'corp-clock-settings': renderCorpClockSettings(); break;
     case 'subscription': renderSubscription(); break;
     case 'reports': renderReports(); break;
     case 'shifts': renderShifts(); break;
@@ -3006,21 +2606,19 @@ function navigateTo(view) {
     case 'profile':     renderProfile(); break;
     case 'contact':     renderContact(); break;
     case 'about':       renderAbout(); break;
-    case 'superadmin-platform': _loadScript('/js/manager-portal.js').then(() => renderSuperadminDashboard(document.getElementById('main-content'))).catch(() => {}); break;
-    case 'hod-overview':         _loadScript('/js/manager-portal.js').then(() => renderHodDashboard()).catch(() => {}); break;
-    case 'hod-courses':          _loadScript('/js/manager-portal.js').then(() => renderHodCourses()).catch(() => {}); break;
-    case 'hod-sessions':         _loadScript('/js/manager-portal.js').then(() => renderHodSessions()).catch(() => {}); break;
-    case 'hod-lecturers':        _loadScript('/js/manager-portal.js').then(() => renderHodLecturers()).catch(() => {}); break;
-    case 'hod-students':         _loadScript('/js/manager-portal.js').then(() => renderHodStudents()).catch(() => {}); break;
-    case 'hod-reports':          _loadScript('/js/manager-portal.js').then(() => renderHodReports()).catch(() => {}); break;
+    case 'superadmin-platform': renderSuperadminDashboard(document.getElementById('main-content')); break;
+    case 'hod-overview':         renderHodDashboard(); break;
+    case 'hod-courses':          renderHodCourses(); break;
+    case 'hod-sessions':         renderHodSessions(); break;
+    case 'hod-lecturers':        renderHodLecturers(); break;
+    case 'hod-students':         renderHodStudents(); break;
+    case 'hod-reports':          renderHodReports(); break;
 
-    case 'admin-devices':        _loadScript('/js/pages-device.js').then(() => renderAdminDevices()).catch(() => {}); break;
-    case 'hod-course-approvals': _loadScript('/js/manager-portal.js').then(() => renderHodCourseApprovals()).catch(() => {}); break;
-    case 'hod-unlock-students':  _loadScript('/js/manager-portal.js').then(() => renderHodUnlockStudents()).catch(() => {}); break;
-    case 'class-rep-mgmt':       renderClassRepMgmt(); break;
-    case 'hod-performance':      _loadScript('/js/manager-portal.js').then(() => renderHodPerformance()).catch(() => {}); break;
-    case 'hod-alerts':           _loadScript('/js/manager-portal.js').then(() => renderHodAlerts()).catch(() => {}); break;
-    case 'hod-messaging':        _loadScript('/js/manager-portal.js').then(() => renderHodMessaging()).catch(() => {}); break;
+    case 'hod-course-approvals': renderHodCourseApprovals(); break;
+    case 'hod-unlock-students':  renderHodUnlockStudents(); break;
+    case 'hod-performance':      renderHodPerformance(); break;
+    case 'hod-alerts':           renderHodAlerts(); break;
+    case 'hod-messaging':        renderHodMessaging(); break;
     case 'announcements': renderAnnouncements(); break;
     case 'gradebook': renderGradeBook(); break;
     case 'training':       renderTraining(); break;
@@ -3043,23 +2641,19 @@ function navigateTo(view) {
     case 'assets':         renderAssets(); break;
     case 'my-assets':      renderMyAssets(); break;
     case 'messages':      renderMessages(); break;
-    case 'faq-center':      _lazyRender(content, '/js/pages-faq.js',       () => renderFAQCenter(), 'FAQ Center');      break;
-    case 'support':         _lazyRender(content, '/js/pages-faq.js',       () => renderSupport(),   'Support');         break;
-    case 'payroll':         _lazyRender(content, '/js/pages-corporate.js', renderPayroll,        'Payroll');         break;
-    case 'audit-logs':      _lazyRender(content, '/js/pages-corporate.js', renderAuditLogs,      'Audit Logs');      break;
-    case 'programmes':      _lazyRender(content, '/js/pages-corporate.js', renderProgrammes,     'Programmes');      break;
-    case 'calendar-events': _lazyRender(content, '/js/pages-academic.js',  renderCalendarEvents, 'Calendar');        break;
-    case 'forums':          _lazyRender(content, '/js/pages-academic.js',  renderForums,         'Forums');          break;
-    case 'badges':          _lazyRender(content, '/js/pages-academic.js',  renderBadges,         'Badges');          break;
-    case 'transcripts':     _lazyRender(content, '/js/pages-academic.js',  renderTranscripts,    'Transcripts');     break;
-    case 'evaluations':     _lazyRender(content, '/js/pages-academic.js',  renderEvaluations,    'Evaluations');     break;
-    case 'live-attendance': _lazyRender(content, '/js/manager-portal.js',  renderLiveAttendance, 'Live Attendance'); break;
-    case 'branches':        _lazyRender(content, '/js/manager-portal.js',  renderBranches,       'Branches');        break;
+    case 'faq-center':    _safeRender(content, renderFAQCenter,    'FAQ Center');    break;
+    case 'support':       _safeRender(content, renderSupport,      'Support');       break;
+    case 'payroll':       _safeRender(content, renderPayroll,      'Payroll');       break;
+    case 'audit-logs':    _safeRender(content, renderAuditLogs,    'Audit Logs');    break;
+    case 'programmes':    _safeRender(content, renderProgrammes,   'Programmes');    break;
+    case 'calendar-events': _safeRender(content, renderCalendarEvents, 'Calendar'); break;
+    case 'forums':        _safeRender(content, renderForums,       'Forums');        break;
+    case 'badges':        _safeRender(content, renderBadges,       'Badges');        break;
+    case 'transcripts':   _safeRender(content, renderTranscripts,  'Transcripts');   break;
+    case 'evaluations':   _safeRender(content, renderEvaluations,  'Evaluations');   break;
+    case 'live-attendance': _safeRender(content, renderLiveAttendance, 'Live Attendance'); break;
+    case 'branches':        _safeRender(content, renderBranches,       'Branches');        break;
     case 'my-profile':      renderProfile(); break;
-    case 'class-device':         renderClassDevice(); break;
-    case 'class-announcements':  renderClassAnnouncements(); break;
-    case 'class-timetable':      renderClassTimetable(); break;
-    case 'course-videos':        renderCourseVideos(); break;
     default: renderDashboard();
   }
 }
@@ -3086,7 +2680,6 @@ async function renderDashboard() {
   const content = document.getElementById('main-content');
   if (!content) return;
   const role = currentUser.role;
-  _preloadForRole(role);
 
   // Clear immediately so stale content from a previous role never flashes
   content.innerHTML = `<div class="dashboard-skeleton">
@@ -3101,8 +2694,6 @@ async function renderDashboard() {
   </div>`;
 
   try {
-    const roleScripts = _ROLE_SCRIPTS[role] || [];
-    await Promise.all(roleScripts.map(s => _loadScript(s).catch(() => {})));
     switch (role) {
       case 'admin':
         await renderAdminDashboard(content);
@@ -3155,7 +2746,7 @@ async function renderApprovals() {
       ? `Lecturer &amp; student requests for <strong>${currentUser.department || 'your department'}</strong>`
       : isManager
         ? 'Employee registration requests pending your approval'
-        : 'Review and approve employee and manager registration requests';
+        : 'Review and approve registration requests';
 
     // HODs don't need a department column (all in same dept); managers don't need one either
     const showDeptCol = !isHod && !isManager;
@@ -3325,43 +2916,22 @@ async function renderHodDashboard(content) {
   }
 
   try {
-    const deptQs = currentUser.department ? '&department=' + encodeURIComponent(currentUser.department) : '';
-    let sessions, lecturers, students, activeSess, _offlineBanner = '';
-    const _hc = !isOnline() ? offlineRead('hod_dashboard') : null;
-    if (_hc) {
-      sessions  = _hc.sessions  || [];
-      lecturers = _hc.lecturers || 0;
-      students  = _hc.students  || 0;
-      _offlineBanner = `<div style="display:inline-flex;align-items:center;gap:6px;background:#fef3c7;border:1px solid #fde68a;border-radius:20px;padding:3px 12px;font-size:11.5px;font-weight:600;color:#92400e;margin-bottom:10px">📡 Offline · Cached data</div>`;
-    } else {
-      const [sessData, lecturerData, studentData] = await Promise.all([
-        api('/api/attendance-sessions?limit=5'),
-        api('/api/users?role=lecturer' + deptQs),
-        api('/api/users?role=student' + deptQs),
-      ]);
-      sessions  = sessData.sessions   || [];
-      lecturers = (lecturerData.users || []).length;
-      students  = (studentData.users  || []).length;
-      offlineCache('hod_dashboard', { sessions, lecturers, students });
-    }
-    activeSess = sessions.filter(s => ['active','live','paused','locked'].includes(s.status)).length;
+    const [sessData, userStats] = await Promise.all([
+      api('/api/attendance-sessions?limit=5'),
+      api('/api/users/stats')
+    ]);
+    const sessions   = sessData.sessions   || [];
+    const stats      = userStats           || {};
+    const lecturers  = stats.lecturers     || 0;
+    const students   = stats.students      || 0;
+    const hods       = stats.hods          || 0;
+    const activeSess = sessions.filter(s => s.active).length;
 
-    content.innerHTML = _offlineBanner + `
-
-      <div class="page-header" style="display:flex;align-items:flex-start;justify-content:space-between;flex-wrap:wrap;gap:12px;">
+    content.innerHTML = `
+      <div class="page-header">
         <div>
           <h2>Department Overview</h2>
           <p>Welcome back, ${currentUser.name} · <strong style="color:#0891b2;">${currentUser.department || 'No Department Assigned'}</strong> — ${currentUser.company?.name || ''}</p>
-        </div>
-        <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center;">
-          <button onclick="navigateTo('announcements')" style="display:inline-flex;align-items:center;gap:8px;padding:10px 20px;background:linear-gradient(135deg,#0891b2,#0e7490);color:#fff;border:none;border-radius:10px;font-size:14px;font-weight:700;cursor:pointer;box-shadow:0 4px 14px rgba(8,145,178,.35);">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
-            Announcements
-          </button>
-          <button onclick="navigateTo('subscription')" style="display:inline-flex;align-items:center;gap:8px;padding:10px 20px;background:linear-gradient(135deg,#6366f1,#8b5cf6);color:#fff;border:none;border-radius:10px;font-size:14px;font-weight:700;cursor:pointer;box-shadow:0 4px 14px rgba(99,102,241,.35);">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>
-            Subscription
-          </button>
         </div>
       </div>
       <div class="stats-grid" style="margin-bottom:20px;">
@@ -3393,7 +2963,7 @@ async function renderHodDashboard(content) {
                   <div style="font-size:13px;font-weight:600;">${s.title || s.courseName || 'Untitled'}</div>
                   <div style="font-size:11px;color:var(--text-muted);">${s.createdBy?.name || '—'} · ${timeAgo(s.createdAt)}</div>
                 </div>
-                <span class="tag ${['active','live','paused','locked'].includes(s.status) ? 'tag-green' : 'tag-gray'}">${['active','live','paused','locked'].includes(s.status) ? 'Live' : 'Ended'}</span>
+                <span class="tag ${s.active ? 'tag-green' : 'tag-gray'}">${s.active ? 'Live' : 'Ended'}</span>
               </div>`).join('')
           }
           <button class="btn btn-secondary btn-sm" style="margin-top:12px;width:100%;" onclick="navigateTo('hod-sessions')">View All Sessions →</button>
@@ -3478,24 +3048,10 @@ async function renderHodDashboard(content) {
 async function renderHodSessions() {
   const content = document.getElementById('main-content');
   content.innerHTML = '<div class="loading">Loading sessions…</div>';
-  let sessions = [], _isOff = false;
-  if (!isOnline()) {
-    const _c = offlineRead('hod_sessions');
-    if (_c) { sessions = _c.sessions || []; _isOff = true; }
-    else { content.innerHTML = `<div style="text-align:center;padding:60px 20px"><div style="font-size:48px;margin-bottom:12px">📡</div><div style="font-size:18px;font-weight:700">You're Offline</div><p style="color:var(--text-muted);margin-top:8px">Connect once while online to cache this page.</p></div>`; return; }
-  } else {
-    try {
-      const dept = currentUser.department ? '&department=' + encodeURIComponent(currentUser.department) : '';
-      const data = await api('/api/attendance-sessions?limit=100' + dept);
-      sessions = data.sessions || [];
-      offlineCache('hod_sessions', data);
-    } catch(e) {
-      const _c = offlineRead('hod_sessions');
-      if (_c) { sessions = _c.sessions || []; _isOff = true; }
-      else { content.innerHTML = `<div class="card"><p style="color:#ef4444;">${e.message}</p></div>`; return; }
-    }
-  }
-  { const data = { sessions }; /* compat */
+  try {
+    const dept = currentUser.department ? '&department=' + encodeURIComponent(currentUser.department) : '';
+    const data = await api('/api/attendance-sessions?limit=100' + dept);
+    const sessions = data.sessions || [];
     content.innerHTML = `
       <div class="page-header" style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:10px;">
         <div><h2>All Sessions</h2><p>Department-wide attendance sessions — ${sessions.length} total</p></div>
@@ -3519,229 +3075,104 @@ async function renderHodSessions() {
                   <td style="padding:10px 12px;color:var(--text-muted);">${s.createdBy?.name || '—'}</td>
                   <td style="padding:10px 12px;">${s.attendanceCount ?? s.records?.length ?? '—'}</td>
                   <td style="padding:10px 12px;color:var(--text-muted);font-size:12px;">${fmtDate(s.createdAt)}</td>
-                  <td style="padding:10px 12px;"><span class="tag ${['active','live','paused','locked'].includes(s.status) ? 'tag-green' : 'tag-gray'}">${['active','live','paused','locked'].includes(s.status) ? 'Live' : 'Ended'}</span></td>
+                  <td style="padding:10px 12px;"><span class="tag ${s.active ? 'tag-green' : 'tag-gray'}">${s.active ? 'Live' : 'Ended'}</span></td>
                 </tr>`).join('')}
           </tbody>
         </table>
-      </div>`+ (_isOff ? `<div style="display:inline-flex;align-items:center;gap:6px;background:#fef3c7;border:1px solid #fde68a;border-radius:20px;padding:3px 12px;font-size:11.5px;font-weight:600;color:#92400e;margin-bottom:10px">📡 Offline · Cached data</div>` : '');
+      </div>`;
+  } catch(e) {
+    content.innerHTML = `<div class="card"><p style="color:#ef4444;">${e.message}</p></div>`;
   }
 }
 
 async function renderHodLecturers() {
   const content = document.getElementById('main-content');
   content.innerHTML = '<div class="loading">Loading lecturers…</div>';
-  let lecturers = [], courses = [], _isOff = false;
-  if (!isOnline()) {
-    const _c = offlineRead('hod_lecturers');
-    if (_c) { lecturers = _c.lecturers || []; courses = _c.courses || []; _isOff = true; }
-    else { content.innerHTML = `<div style="text-align:center;padding:60px 20px"><div style="font-size:48px;margin-bottom:12px">📡</div><div style="font-size:18px;font-weight:700">You're Offline</div><p style="color:var(--text-muted);margin-top:8px">Connect once while online to cache this page.</p></div>`; return; }
-  } else {
-    try {
-      const dept = currentUser.department ? '&department=' + encodeURIComponent(currentUser.department) : '';
-      const [lecturerData, courseData] = await Promise.all([
-        api('/api/users?role=lecturer&limit=200' + dept),
-        api('/api/courses?limit=500'),
-      ]);
-      lecturers = lecturerData.users || [];
-      courses   = courseData.courses || courseData || [];
-      offlineCache('hod_lecturers', { lecturers, courses });
-    } catch(e) {
-      const _c = offlineRead('hod_lecturers');
-      if (_c) { lecturers = _c.lecturers || []; courses = _c.courses || []; _isOff = true; }
-      else { content.innerHTML = `<div class="card"><p style="color:#ef4444;">${e.message}</p></div>`; return; }
-    }
-  }
-  {
-
-    // Build map: lecturerId → [course titles]
-    const coursesByLecturer = {};
-    for (const c of courses) {
-      const lid = c.lecturerId?._id || c.lecturerId;
-      if (!lid) continue;
-      const key = lid.toString();
-      if (!coursesByLecturer[key]) coursesByLecturer[key] = [];
-      coursesByLecturer[key].push(c.title || c.code || 'Untitled');
-    }
-
-    const deptLabel = currentUser.department ? `in ${currentUser.department}` : 'in your institution';
+  try {
+    const dept = currentUser.department ? '&department=' + encodeURIComponent(currentUser.department) : '';
+    const data = await api('/api/users?role=lecturer&limit=200' + dept);
+    const lecturers = data.users || [];
     content.innerHTML = `
       <div class="page-header">
-        <div><h2>Lecturers</h2><p>${lecturers.length} lecturer${lecturers.length !== 1 ? 's' : ''} ${deptLabel}</p></div>
+        <div><h2>Lecturers</h2><p>${lecturers.length} lecturer${lecturers.length !== 1 ? 's' : ''} in your institution</p></div>
         <button class="btn btn-secondary btn-sm" onclick="hodExportCSV('lecturers')">Export CSV</button>
       </div>
       <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:12px;">
         ${lecturers.length === 0 ? '<div class="empty-state"><p>No lecturers found.</p></div>' :
-          lecturers.map(u => {
-            const lecCourses = coursesByLecturer[u._id] || [];
-            const courseChips = lecCourses.slice(0, 3).map(t =>
-              `<span style="font-size:10px;padding:2px 7px;border-radius:20px;background:#f0fdf4;color:#166534;border:1px solid #bbf7d0;font-weight:600;white-space:nowrap;">${esc(t)}</span>`
-            ).join('');
-            const moreTag = lecCourses.length > 3
-              ? `<span style="font-size:10px;color:var(--text-muted)">+${lecCourses.length - 3} more</span>`
-              : '';
-            return `
-            <div class="card" style="display:flex;align-items:flex-start;gap:12px;padding:14px 16px;">
-              <div style="width:38px;height:38px;border-radius:50%;background:#ecfeff;color:#0891b2;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:15px;flex-shrink:0;margin-top:2px;">
+          lecturers.map(u => `
+            <div class="card" style="display:flex;align-items:center;gap:12px;padding:14px 16px;">
+              <div style="width:38px;height:38px;border-radius:50%;background:#ecfeff;color:#0891b2;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:15px;flex-shrink:0;">
                 ${(u.name||'?')[0].toUpperCase()}
               </div>
               <div style="min-width:0;flex:1;">
-                <div style="font-weight:700;font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${esc(u.name)}</div>
-                <div style="font-size:11px;color:var(--text-muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${esc(u.email)}</div>
+                <div style="font-weight:700;font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${u.name}</div>
+                <div style="font-size:11px;color:var(--text-muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${u.email}</div>
                 <div style="display:flex;gap:6px;align-items:center;margin-top:4px;flex-wrap:wrap;">
                   <span class="tag ${u.isApproved ? 'tag-green' : 'tag-amber'}">${u.isApproved ? 'Active' : 'Pending'}</span>
-                  ${u.department ? `<span style="font-size:10px;padding:2px 6px;border-radius:20px;background:#ecfeff;color:#0891b2;font-weight:600;">${esc(u.department)}</span>` : ''}
+                  ${u.department ? `<span style="font-size:10px;padding:2px 6px;border-radius:20px;background:#ecfeff;color:#0891b2;font-weight:600;">${u.department}</span>` : ''}
+                  
                 </div>
-                ${lecCourses.length ? `<div style="display:flex;gap:4px;flex-wrap:wrap;margin-top:6px;">${courseChips}${moreTag}</div>` : '<div style="font-size:11px;color:var(--text-muted);margin-top:5px;">No courses assigned</div>'}
               </div>
-            </div>`;
-          }).join('')}
+            </div>`).join('')}
       </div>`;
-  }
-}
-
-let _hodCachedStudents = null;
-
-async function renderHodStudents() {
-  const content = document.getElementById('main-content');
-  content.innerHTML = '<div class="loading">Loading students…</div>';
-  if (!isOnline()) {
-    const _c = offlineRead('hod_students');
-    if (_c) { _hodCachedStudents = _c; _renderHodLevelCards(content, _c); return; }
-    content.innerHTML = `<div style="text-align:center;padding:60px 20px"><div style="font-size:48px;margin-bottom:12px">📡</div><div style="font-size:18px;font-weight:700">You're Offline</div><p style="color:var(--text-muted);margin-top:8px">Connect once while online to cache this page.</p></div>`; return;
-  }
-  try {
-    const dept = currentUser.department ? '&department=' + encodeURIComponent(currentUser.department) : '';
-    const data = await api('/api/users?role=student&limit=500' + dept);
-    _hodCachedStudents = data.users || [];
-    offlineCache('hod_students', _hodCachedStudents);
-    _renderHodLevelCards(content, _hodCachedStudents);
   } catch(e) {
-    const _c = offlineRead('hod_students');
-    if (_c) { _hodCachedStudents = _c; _renderHodLevelCards(content, _c); return; }
     content.innerHTML = `<div class="card"><p style="color:#ef4444;">${e.message}</p></div>`;
   }
 }
 
-function _renderHodLevelCards(content, allStudents) {
-  const levelMap = {};
-  allStudents.forEach(u => {
-    const lv = u.studentLevel ? String(u.studentLevel) : 'Unassigned';
-    if (!levelMap[lv]) levelMap[lv] = [];
-    levelMap[lv].push(u);
-  });
-  const levels = Object.keys(levelMap).sort((a, b) => {
-    if (a === 'Unassigned') return 1;
-    if (b === 'Unassigned') return -1;
-    return Number(a) - Number(b);
-  });
-
-  const cards = levels.map(lv => {
-    const studs = levelMap[lv];
-    const active = studs.filter(u => u.isApproved).length;
-    const accent = _deptColor('Level ' + lv);
-    const lvEnc = encodeURIComponent(lv);
-    return `
-      <div onclick="_renderHodLevelStudents(decodeURIComponent('${lvEnc}'), _hodCachedStudents)"
-           style="background:#fff;border:1.5px solid #e8eaed;border-radius:16px;padding:0;cursor:pointer;overflow:hidden;box-shadow:0 1px 4px rgba(0,0,0,.06);transition:box-shadow .18s;position:relative"
-           onmouseover="this.style.boxShadow='0 6px 24px rgba(0,0,0,.11)'" onmouseout="this.style.boxShadow='0 1px 4px rgba(0,0,0,.06)'">
-        <div style="height:5px;background:${accent};border-radius:16px 16px 0 0"></div>
-        <div style="padding:20px 22px 18px">
-          <div style="display:flex;align-items:center;gap:12px;margin-bottom:14px">
-            <div style="width:42px;height:42px;border-radius:12px;background:${accent}1a;display:flex;align-items:center;justify-content:center;flex-shrink:0">
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="${accent}" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
-            </div>
-            <div>
-              <div style="font-size:16px;font-weight:800;color:#0f172a">Level ${lv === 'Unassigned' ? '<span style="color:#94a3b8">Unassigned</span>' : lv}</div>
-              <div style="font-size:12px;color:#64748b;margin-top:1px">${studs.length} student${studs.length !== 1 ? 's' : ''}</div>
-            </div>
-          </div>
-          <div style="display:flex;gap:10px;flex-wrap:wrap">
-            <span style="font-size:11px;font-weight:600;background:${accent}15;color:${accent};padding:3px 10px;border-radius:20px">${active} Active</span>
-            ${studs.length - active > 0 ? `<span style="font-size:11px;font-weight:600;background:#fef3c715;color:#b45309;padding:3px 10px;border-radius:20px">${studs.length - active} Pending</span>` : ''}
-          </div>
-        </div>
-      </div>`;
-  }).join('');
-
-  content.innerHTML = `
-    <div class="page-header" style="margin-bottom:24px">
-      <div>
-        <h2 style="font-size:22px;font-weight:800;letter-spacing:-.5px;color:#0f172a;margin-bottom:2px">Students</h2>
-        <p style="color:#64748b;font-size:13px">${allStudents.length} student${allStudents.length !== 1 ? 's' : ''} enrolled${currentUser.department ? ' · ' + esc(currentUser.department) : ''}</p>
-      </div>
-      <button class="btn btn-secondary btn-sm" onclick="hodExportCSV('students')">Export CSV</button>
-    </div>
-    ${levels.length === 0
-      ? `<div style="background:#fff;border:1px solid #e8eaed;border-radius:16px;padding:60px 20px;text-align:center"><p style="color:#64748b">No students found.</p></div>`
-      : `<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:16px">${cards}</div>`}`;
-}
-
-function _renderHodLevelStudents(level, allStudents) {
+async function renderHodStudents() {
   const content = document.getElementById('main-content');
-  const studs = allStudents.filter(u => {
-    const lv = u.studentLevel ? String(u.studentLevel) : 'Unassigned';
-    return lv === level;
-  });
-  const accent = _deptColor('Level ' + level);
-
-  content.innerHTML = `
-    <div class="page-header" style="margin-bottom:20px">
-      <div style="display:flex;align-items:center;gap:10px">
-        <button onclick="_renderHodLevelCards(document.getElementById('main-content'),_hodCachedStudents)"
-                style="background:none;border:none;cursor:pointer;padding:6px 8px;border-radius:8px;color:#64748b;font-size:13px;display:flex;align-items:center;gap:5px;transition:background .15s"
-                onmouseover="this.style.background='#f1f5f9'" onmouseout="this.style.background='none'">
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="15 18 9 12 15 6"/></svg>
-          All Levels
-        </button>
-        <span style="color:#cbd5e1">›</span>
-        <span style="font-size:14px;font-weight:700;color:#0f172a">Level ${esc(level)}</span>
+  content.innerHTML = '<div class="loading">Loading students…</div>';
+  try {
+    const dept = currentUser.department ? '&department=' + encodeURIComponent(currentUser.department) : '';
+    const data = await api('/api/users?role=student&limit=500' + dept);
+    const students = data.users || [];
+    content.innerHTML = `
+      <div class="page-header">
+        <div><h2>Students</h2><p>${students.length} student${students.length !== 1 ? 's' : ''} enrolled</p></div>
+        <div style="display:flex;gap:8px;align-items:center;">
+          <button class="btn btn-secondary btn-sm" onclick="hodExportCSV('students')">Export CSV</button>
+          <input id="hod-stu-search" placeholder="Search students…" oninput="hodFilterStudents()" style="padding:8px 12px;border:1.5px solid var(--border);border-radius:8px;font-size:13px;font-family:inherit;outline:none;min-width:200px;">
+        </div>
       </div>
-      <div style="display:flex;gap:8px;align-items:center">
-        <button class="btn btn-secondary btn-sm" onclick="hodExportCSV('students')">Export CSV</button>
-        <input id="hod-stu-search" placeholder="Search students…" oninput="hodFilterStudents()"
-               style="padding:8px 12px;border:1.5px solid var(--border);border-radius:8px;font-size:13px;font-family:inherit;outline:none;min-width:200px;">
-      </div>
-    </div>
-    <div id="hod-stu-list" style="overflow-x:auto;">
-      <table style="width:100%;border-collapse:collapse;font-size:13px;background:#fff;border:1px solid #e8eaed;border-radius:14px;overflow:hidden;box-shadow:0 1px 4px rgba(0,0,0,.05)">
-        <thead>
-          <tr style="border-bottom:2px solid var(--border);background:#f8fafc">
-            <th style="text-align:left;padding:12px 14px;font-weight:700;color:var(--text-muted);font-size:11px;text-transform:uppercase;letter-spacing:.5px">Name</th>
-            <th style="text-align:left;padding:12px 14px;font-weight:700;color:var(--text-muted);font-size:11px;text-transform:uppercase;letter-spacing:.5px">Index No.</th>
-            <th style="text-align:left;padding:12px 14px;font-weight:700;color:var(--text-muted);font-size:11px;text-transform:uppercase;letter-spacing:.5px">Programme</th>
-            <th style="text-align:left;padding:12px 14px;font-weight:700;color:var(--text-muted);font-size:11px;text-transform:uppercase;letter-spacing:.5px">Group</th>
-            <th style="text-align:left;padding:12px 14px;font-weight:700;color:var(--text-muted);font-size:11px;text-transform:uppercase;letter-spacing:.5px">Session</th>
-            <th style="text-align:left;padding:12px 14px;font-weight:700;color:var(--text-muted);font-size:11px;text-transform:uppercase;letter-spacing:.5px">Status</th>
-            <th style="text-align:left;padding:12px 14px;font-weight:700;color:var(--text-muted);font-size:11px;text-transform:uppercase;letter-spacing:.5px"></th>
-          </tr>
-        </thead>
-        <tbody id="hod-stu-tbody">
-          ${studs.length === 0 ? `<tr><td colspan="7" style="padding:32px;text-align:center;color:var(--text-muted)">No students in Level ${esc(level)}.</td></tr>` :
-            studs.map(u => `
-              <tr class="hod-stu-row" data-name="${esc((u.name||'').toLowerCase())}" data-index="${esc((u.IndexNumber||u.indexNumber||'').toLowerCase())}" style="border-bottom:1px solid var(--border);">
-                <td style="padding:11px 14px;font-weight:600">${esc(u.name)}</td>
-                <td style="padding:11px 14px;color:var(--text-muted);font-family:monospace">${u.IndexNumber || u.indexNumber || '—'}</td>
-                <td style="padding:11px 14px">${u.programme ? `<span style="background:#ede9fe;color:#7c3aed;padding:2px 9px;border-radius:20px;font-size:11px;font-weight:700">${esc(u.programme)}</span>` : '—'}</td>
-                <td style="padding:11px 14px">${u.studentGroup ? `<span style="background:#ecfdf5;color:#059669;padding:2px 9px;border-radius:20px;font-size:11px;font-weight:700">Grp ${esc(u.studentGroup)}</span>` : '—'}</td>
-                <td style="padding:11px 14px">
-                  ${u.sessionType ? `<span style="background:#fff7ed;color:#c2410c;padding:2px 9px;border-radius:20px;font-size:11px;font-weight:600">${esc(u.sessionType)}</span>` : '—'}
-                  ${u.semester ? `<span style="font-size:11px;color:var(--text-muted);margin-left:4px">Sem ${esc(u.semester)}</span>` : ''}
-                  ${u.academicYear ? `<span style="font-size:10px;color:var(--text-muted);margin-left:4px">${esc(u.academicYear)}</span>` : ''}
-                </td>
-                <td style="padding:11px 14px">
-                  <span class="tag ${u.isApproved ? 'tag-green' : 'tag-amber'}">${u.isApproved ? 'Active' : 'Pending'}</span>
-                  ${u.isClassRep ? '<span class="tag" style="background:#7c3aed;color:#fff;margin-left:4px">Rep</span>' : ''}
-                </td>
-                <td style="padding:11px 14px;display:flex;gap:6px;flex-wrap:wrap">
-                  <button class="btn btn-xs btn-secondary" onclick="hodViewStudentAttendance('${u._id}','${(u.name||'').replace(/'/g,"\\'")}')">Attendance</button>
-                  ${u.isClassRep
-                    ? `<button class="btn btn-xs" style="background:#fee2e2;color:#b91c1c;border:1px solid #fca5a5;" onclick="hodToggleClassRep('${u._id}','${esc(u.name).replace(/'/g,"\\'")}',false)">Remove Rep</button>`
-                    : `<button class="btn btn-xs" style="background:#faf5ff;color:#7c3aed;border:1px solid #d8b4fe;" onclick="hodToggleClassRep('${u._id}','${esc(u.name).replace(/'/g,"\\'")}',true)">Make Rep</button>`}
-                </td>
-              </tr>`).join('')}
-        </tbody>
-      </table>
-    </div>`;
+      <div id="hod-stu-list" style="overflow-x:auto;">
+        <table style="width:100%;border-collapse:collapse;font-size:13px;">
+          <thead>
+            <tr style="border-bottom:2px solid var(--border);">
+              <th style="text-align:left;padding:10px 12px;font-weight:700;color:var(--text-muted);font-size:11px;text-transform:uppercase;">Name</th>
+              <th style="text-align:left;padding:10px 12px;font-weight:700;color:var(--text-muted);font-size:11px;text-transform:uppercase;">Index No.</th>
+              <th style="text-align:left;padding:10px 12px;font-weight:700;color:var(--text-muted);font-size:11px;text-transform:uppercase;">Programme</th>
+              <th style="text-align:left;padding:10px 12px;font-weight:700;color:var(--text-muted);font-size:11px;text-transform:uppercase;">Level / Group</th>
+              <th style="text-align:left;padding:10px 12px;font-weight:700;color:var(--text-muted);font-size:11px;text-transform:uppercase;">Session</th>
+              <th style="text-align:left;padding:10px 12px;font-weight:700;color:var(--text-muted);font-size:11px;text-transform:uppercase;">Status</th>
+              <th style="text-align:left;padding:10px 12px;font-weight:700;color:var(--text-muted);font-size:11px;text-transform:uppercase;"></th>
+            </tr>
+          </thead>
+          <tbody id="hod-stu-tbody">
+            ${students.length === 0 ? '<tr><td colspan="4" style="padding:24px;text-align:center;color:var(--text-muted);">No students found.</td></tr>' :
+              students.map(u => `
+                <tr class="hod-stu-row" data-name="${(u.name||'').toLowerCase()}" data-index="${(u.indexNumber||'').toLowerCase()}" style="border-bottom:1px solid var(--border);">
+                  <td style="padding:10px 12px;font-weight:600;">${u.name}</td>
+                  <td style="padding:10px 12px;color:var(--text-muted);font-family:monospace;">${u.IndexNumber || u.indexNumber || '—'}</td>
+                  <td style="padding:10px 12px;">${u.programme ? `<span style="background:#ede9fe;color:#7c3aed;padding:2px 8px;border-radius:20px;font-size:11px;font-weight:700">${esc(u.programme)}</span>` : '—'}</td>
+                  <td style="padding:10px 12px;">
+                    ${u.studentLevel ? `<span style="background:#dbeafe;color:#1d4ed8;padding:2px 7px;border-radius:20px;font-size:11px;font-weight:700;margin-right:3px">L${esc(u.studentLevel)}</span>` : ''}
+                    ${u.studentGroup ? `<span style="background:#ecfdf5;color:#059669;padding:2px 7px;border-radius:20px;font-size:11px;font-weight:700">Grp ${esc(u.studentGroup)}</span>` : ''}
+                    ${!u.studentLevel && !u.studentGroup ? '—' : ''}
+                  </td>
+                  <td style="padding:10px 12px;">
+                    ${u.sessionType ? `<span style="background:#fff7ed;color:#c2410c;padding:2px 8px;border-radius:20px;font-size:11px;font-weight:600">${esc(u.sessionType)}</span>` : '—'}
+                    ${u.semester ? `<span style="font-size:11px;color:var(--text-muted);margin-left:4px">Sem ${esc(u.semester)}</span>` : ''}
+                  </td>
+                  <td style="padding:10px 12px;"><span class="tag ${u.isApproved ? 'tag-green' : 'tag-amber'}">${u.isApproved ? 'Active' : 'Pending'}</span></td>
+                  <td style="padding:10px 12px;"><button class="btn btn-xs btn-secondary" onclick="hodViewStudentAttendance('${u._id}','${u.name.replace(/'/g,"\\'")}')">Attendance</button></td>
+                </tr>`).join('')}
+          </tbody>
+        </table>
+      </div>`;
+  } catch(e) {
+    content.innerHTML = `<div class="card"><p style="color:#ef4444;">${e.message}</p></div>`;
+  }
 }
 
 function hodFilterStudents() {
@@ -3750,23 +3181,6 @@ function hodFilterStudents() {
     const match = row.dataset.name.includes(q) || row.dataset.index.includes(q);
     row.style.display = match ? '' : 'none';
   });
-}
-
-async function hodToggleClassRep(studentId, name, assign) {
-  const action = assign ? `Make ${name} a class representative?` : `Remove ${name} as class representative?`;
-  if (!confirm(action)) return;
-  try {
-    if (assign) {
-      await api('/api/class-rep-admin/assign', { method: 'POST', body: JSON.stringify({ studentId }) });
-      toastSuccess(`${name} is now a class representative`);
-    } else {
-      await api(`/api/class-rep-admin/remove/${studentId}`, { method: 'DELETE' });
-      toastSuccess(`${name} removed as class representative`);
-    }
-    renderHodStudents();
-  } catch(e) {
-    toastError(e.message || 'Failed to update class representative');
-  }
 }
 
 async function renderHodReports() {
@@ -3780,7 +3194,7 @@ async function renderHodReports() {
     ]);
     const sessions  = sessData.sessions || [];
     const stats     = userStats || {};
-    const ended     = sessions.filter(s => !['active','live','paused','locked'].includes(s.status));
+    const ended     = sessions.filter(s => !s.active);
     const totalAtt  = ended.reduce((sum, s) => sum + (s.attendanceCount ?? s.records?.length ?? 0), 0);
     const avgAtt    = ended.length ? Math.round(totalAtt / ended.length) : 0;
 
@@ -3886,7 +3300,7 @@ async function renderHodReports() {
     const trendMap = {};
     const now = Date.now();
     const days30 = 30 * 24 * 60 * 60 * 1000;
-    sessions.filter(s => !['active','live','paused','locked'].includes(s.status) && new Date(s.createdAt) > now - days30).forEach(s => {
+    sessions.filter(s => !s.active && new Date(s.createdAt) > now - days30).forEach(s => {
       const d = new Date(s.createdAt).toLocaleDateString('en-GB', { day: '2-digit', month: 'short' });
       trendMap[d] = (trendMap[d] || 0) + (s.attendanceCount ?? s.records?.length ?? 0);
     });
@@ -3998,7 +3412,7 @@ async function renderHodQuizzes() {
 
     content.innerHTML = `
       <div class="page-header">
-        <div><h2>Quizzes</h2><p>All quizzes in the ${currentUser.department || 'department'}</p></div>
+        <div><h2>Department Quizzes</h2><p>All quizzes in the ${currentUser.department || 'department'}</p></div>
       </div>
 
       <div class="stats-grid" style="margin-bottom:20px;">
@@ -4074,7 +3488,7 @@ async function hodExportCSV(type) {
       const hodDept = currentUser.department ? '&department=' + encodeURIComponent(currentUser.department) : '';
       const d = await api('/api/attendance-sessions?limit=200' + hodDept);
       headers = ['Session', 'Lecturer', 'Date', 'Attendance', 'Status'];
-      rows = (d.sessions || []).map(s => [s.title || s.courseName || 'Session', s.createdBy?.name || '', fmtDate(s.createdAt), s.attendanceCount ?? s.records?.length ?? 0, ['active','live','paused','locked'].includes(s.status) ? 'Live' : 'Ended']);
+      rows = (d.sessions || []).map(s => [s.title || s.courseName || 'Session', s.createdBy?.name || '', fmtDate(s.createdAt), s.attendanceCount ?? s.records?.length ?? 0, s.active ? 'Live' : 'Ended']);
       filename = 'DIKLY_Attendance_' + (currentUser.department || 'All') + '.csv';
     } else if (type === 'courses') {
       const d = await api('/api/hod/course-overview');
@@ -4392,344 +3806,6 @@ Current: ${currentDept || 'None'}`, currentDept || '');
   }).catch(e => toastError(e.message || 'Failed to update department'));
 }
 
-
-// ── Class Rep Management (HOD + Admin) ────────────────────────────────────
-async function renderClassRepMgmt() {
-  const content = document.getElementById('main-content');
-  content.innerHTML = '<div class="loading">Loading class representatives…</div>';
-  try {
-    const [repsData, devicesData] = await Promise.all([
-      api('/api/class-rep-admin/list'),
-      api('/api/devices/all').catch(() => ({ devices: [] })),
-    ]);
-    const reps    = repsData.reps || [];
-    const devices = devicesData.devices || [];
-
-    // Group reps by class key for the 2-rep cap display
-    const repsByClass = {};
-    reps.forEach(r => {
-      const key = `${r.studentLevel}||${r.studentGroup}||${r.sessionType}||${r.semester}||${r.programme}`;
-      if (!repsByClass[key]) repsByClass[key] = [];
-      repsByClass[key].push(r._id);
-    });
-
-    content.innerHTML = `
-      <div class="page-header" style="flex-wrap:wrap;gap:10px;">
-        <div>
-          <h2>Class Representatives</h2>
-          <p>${reps.length} active rep${reps.length !== 1 ? 's' : ''} · Max 2 per class group</p>
-        </div>
-        <button class="btn btn-primary btn-sm" onclick="crOpenBrowse()">
-          ${svgIcon('<path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="8.5" cy="7" r="4"/><line x1="20" y1="8" x2="20" y2="14"/><line x1="23" y1="11" x2="17" y2="11"/>', 14)}
-          Assign New Rep
-        </button>
-      </div>
-
-      ${reps.length === 0
-        ? `<div class="card" style="text-align:center;padding:48px 20px;">
-            <div style="width:56px;height:56px;border-radius:16px;background:#ede9fe;display:flex;align-items:center;justify-content:center;margin:0 auto 14px">
-              ${svgIcon('<path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/>', 24, '#7c3aed')}
-            </div>
-            <h3 style="font-size:15px;font-weight:700;color:#0f172a;margin-bottom:6px">No class reps assigned yet</h3>
-            <p style="color:#64748b;font-size:13px;margin-bottom:16px">Use "Assign New Rep" to browse students and appoint up to 2 reps per class group.</p>
-            <button class="btn btn-primary btn-sm" onclick="crOpenBrowse()">Assign New Rep</button>
-          </div>`
-        : `<div style="overflow-x:auto;">
-            <table style="width:100%;border-collapse:collapse;font-size:13px;">
-              <thead>
-                <tr style="border-bottom:2px solid var(--border);">
-                  <th style="text-align:left;padding:10px 12px;font-weight:700;color:var(--text-muted);font-size:11px;text-transform:uppercase;">Name</th>
-                  <th style="text-align:left;padding:10px 12px;font-weight:700;color:var(--text-muted);font-size:11px;text-transform:uppercase;">Index No.</th>
-                  <th style="text-align:left;padding:10px 12px;font-weight:700;color:var(--text-muted);font-size:11px;text-transform:uppercase;">Programme</th>
-                  <th style="text-align:left;padding:10px 12px;font-weight:700;color:var(--text-muted);font-size:11px;text-transform:uppercase;">Level / Group</th>
-                  <th style="text-align:left;padding:10px 12px;font-weight:700;color:var(--text-muted);font-size:11px;text-transform:uppercase;">Session</th>
-                  <th style="text-align:left;padding:10px 12px;font-weight:700;color:var(--text-muted);font-size:11px;text-transform:uppercase;">Department</th>
-                  <th style="text-align:left;padding:10px 12px;font-weight:700;color:var(--text-muted);font-size:11px;text-transform:uppercase;">Device</th>
-                  <th style="text-align:left;padding:10px 12px;font-weight:700;color:var(--text-muted);font-size:11px;text-transform:uppercase;"></th>
-                </tr>
-              </thead>
-              <tbody>
-                ${reps.map(r => `
-                  <tr style="border-bottom:1px solid var(--border);">
-                    <td style="padding:10px 12px;">
-                      <div style="display:flex;align-items:center;gap:8px;">
-                        ${r.profilePhoto
-                          ? `<img src="${esc(r.profilePhoto)}" style="width:32px;height:32px;border-radius:50%;object-fit:cover;" onerror="this.style.display='none'">`
-                          : `<div style="width:32px;height:32px;border-radius:50%;background:linear-gradient(135deg,#7c3aed,#6366f1);display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;color:#fff">${esc((r.name||'?')[0].toUpperCase())}</div>`}
-                        <div>
-                          <div style="font-weight:600">${esc(r.name)}</div>
-                          <div style="font-size:11px;color:var(--text-muted)">${esc(r.email||'')}</div>
-                        </div>
-                      </div>
-                    </td>
-                    <td style="padding:10px 12px;color:var(--text-muted);font-family:monospace;">${esc(r.IndexNumber||r.indexNumber||'—')}</td>
-                    <td style="padding:10px 12px;">${r.programme ? `<span style="background:#ede9fe;color:#7c3aed;padding:2px 8px;border-radius:20px;font-size:11px;font-weight:700">${esc(r.programme)}</span>` : '—'}</td>
-                    <td style="padding:10px 12px;">
-                      ${r.studentLevel ? `<span style="background:#dbeafe;color:#1d4ed8;padding:2px 7px;border-radius:20px;font-size:11px;font-weight:700;margin-right:3px">L${esc(r.studentLevel)}</span>` : ''}
-                      ${r.studentGroup ? `<span style="background:#ecfdf5;color:#059669;padding:2px 7px;border-radius:20px;font-size:11px;font-weight:700">Grp ${esc(r.studentGroup)}</span>` : ''}
-                    </td>
-                    <td style="padding:10px 12px;">
-                      ${r.sessionType ? `<span style="background:#fff7ed;color:#c2410c;padding:2px 8px;border-radius:20px;font-size:11px;font-weight:600">${esc(r.sessionType)}</span>` : '—'}
-                      ${r.semester ? `<span style="font-size:11px;color:var(--text-muted);margin-left:4px">Sem ${esc(r.semester)}</span>` : ''}
-                    </td>
-                    <td style="padding:10px 12px;color:var(--text-muted);font-size:12px">${esc(r.department||'—')}</td>
-                    <td style="padding:10px 12px;">
-                      ${(() => {
-                        const assignedDevice = devices.find(d => d.classRepId && (d.classRepId._id || d.classRepId) === r._id);
-                        const assignedDeviceId = assignedDevice ? (assignedDevice.deviceId || '') : '';
-                        const opts = `<option value="">— None —</option>` +
-                          devices.map(d => {
-                            const did = d.deviceId || '';
-                            const label = esc(d.deviceName || d.deviceId);
-                            const sel = did === assignedDeviceId ? 'selected' : '';
-                            return `<option value="${esc(did)}" ${sel}>${label}</option>`;
-                          }).join('');
-                        return `<select onchange="crAssignDeviceInline(this,'${r._id}','${esc(r.name).replace(/'/g,"\\'")}')"
-                          style="font-size:12px;border:1.5px solid var(--border);border-radius:8px;padding:4px 8px;background:var(--bg,#fff);color:var(--text);max-width:160px">${opts}</select>`;
-                      })()}
-                    </td>
-                    <td style="padding:10px 12px;white-space:nowrap;">
-                      <button class="btn btn-xs" style="background:#fee2e2;color:#b91c1c;border:1px solid #fca5a5;" onclick="crRemoveRep('${r._id}','${esc(r.name).replace(/'/g,"\\'")}')">Remove</button>
-                    </td>
-                  </tr>`).join('')}
-              </tbody>
-            </table>
-          </div>`}
-
-      <!-- Browse & Assign modal -->
-      <div id="cr-browse-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:9999;display:none;align-items:center;justify-content:center;padding:16px;">
-        <div style="background:#fff;border-radius:16px;width:100%;max-width:680px;max-height:90vh;overflow-y:auto;box-shadow:0 20px 60px rgba(0,0,0,.25);">
-          <div style="padding:20px 24px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;">
-            <div>
-              <div style="font-size:16px;font-weight:800;color:#0f172a">Browse Students</div>
-              <div style="font-size:12px;color:var(--text-muted);margin-top:2px">Filter by class group, then assign a student as class rep</div>
-            </div>
-            <button onclick="crCloseBrowse()" style="background:none;border:none;cursor:pointer;padding:4px;border-radius:8px;color:var(--text-muted)">${svgIcon('<line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>', 20)}</button>
-          </div>
-          <div style="padding:20px 24px;">
-            <div style="margin-bottom:14px;">
-              <label style="font-size:11px;font-weight:700;color:var(--text-muted);display:block;margin-bottom:4px">INDEX NUMBER <span style="color:#ef4444">*</span></label>
-              <input id="cr-f-index" type="text" placeholder="e.g. UG/IT/23/0001" style="width:100%;padding:9px 12px;border:1.5px solid var(--border);border-radius:8px;font-size:13px;font-family:inherit;outline:none;box-sizing:border-box;text-transform:uppercase;" oninput="this.value=this.value.toUpperCase()" />
-              <div style="font-size:11px;color:var(--text-muted);margin-top:4px">Enter the student's index number to look them up. You may also apply filters below to narrow results.</div>
-            </div>
-            <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(130px,1fr));gap:10px;margin-bottom:16px;">
-              <div>
-                <label style="font-size:11px;font-weight:700;color:var(--text-muted);display:block;margin-bottom:4px">DEPARTMENT</label>
-                <input id="cr-f-dept" type="text" placeholder="e.g. Computer Science" style="width:100%;padding:7px 10px;border:1.5px solid var(--border);border-radius:8px;font-size:13px;font-family:inherit;outline:none;box-sizing:border-box;" />
-              </div>
-              <div>
-                <label style="font-size:11px;font-weight:700;color:var(--text-muted);display:block;margin-bottom:4px">LEVEL</label>
-                <select id="cr-f-level" style="width:100%;padding:7px 10px;border:1.5px solid var(--border);border-radius:8px;font-size:13px;font-family:inherit;outline:none;">
-                  <option value="">All</option>
-                  <option value="100">100</option><option value="200">200</option><option value="300">300</option><option value="400">400</option><option value="500">500</option>
-                </select>
-              </div>
-              <div>
-                <label style="font-size:11px;font-weight:700;color:var(--text-muted);display:block;margin-bottom:4px">GROUP</label>
-                <select id="cr-f-group" style="width:100%;padding:7px 10px;border:1.5px solid var(--border);border-radius:8px;font-size:13px;font-family:inherit;outline:none;">
-                  <option value="">All</option>
-                  <option value="A">A</option><option value="B">B</option><option value="C">C</option><option value="D">D</option>
-                </select>
-              </div>
-              <div>
-                <label style="font-size:11px;font-weight:700;color:var(--text-muted);display:block;margin-bottom:4px">SESSION</label>
-                <select id="cr-f-session" style="width:100%;padding:7px 10px;border:1.5px solid var(--border);border-radius:8px;font-size:13px;font-family:inherit;outline:none;">
-                  <option value="">All</option>
-                  <option value="Regular">Regular</option><option value="Evening">Evening</option><option value="Weekend">Weekend</option><option value="Distance">Distance</option>
-                </select>
-              </div>
-              <div>
-                <label style="font-size:11px;font-weight:700;color:var(--text-muted);display:block;margin-bottom:4px">SEMESTER</label>
-                <select id="cr-f-semester" style="width:100%;padding:7px 10px;border:1.5px solid var(--border);border-radius:8px;font-size:13px;font-family:inherit;outline:none;">
-                  <option value="">All</option>
-                  <option value="1">Sem 1</option><option value="2">Sem 2</option>
-                </select>
-              </div>
-            </div>
-            <button class="btn btn-primary btn-sm" onclick="crFetchStudents()" style="margin-bottom:16px;">Search Students</button>
-            <div id="cr-student-list"><p style="color:var(--text-muted);font-size:13px;">Use filters above then click Search.</p></div>
-          </div>
-        </div>
-      </div>`;
-  } catch(e) {
-    content.innerHTML = `<div class="card"><p style="color:#ef4444;">${e.message}</p></div>`;
-  }
-}
-
-window.crOpenBrowse = function() {
-  const modal = document.getElementById('cr-browse-modal');
-  if (modal) { modal.style.display = 'flex'; }
-};
-
-window.crCloseBrowse = function() {
-  const modal = document.getElementById('cr-browse-modal');
-  if (modal) { modal.style.display = 'none'; }
-};
-
-window.crFetchStudents = async function() {
-  const listEl  = document.getElementById('cr-student-list');
-  const indexEl = document.getElementById('cr-f-index');
-  if (!listEl) return;
-
-  const indexNumber = (indexEl?.value || '').trim().toUpperCase();
-  if (!indexNumber) {
-    indexEl && (indexEl.style.border = '1.5px solid #ef4444');
-    listEl.innerHTML = '<p style="color:#ef4444;font-size:13px;font-weight:600;">Index number is required. Please enter the student\'s index number.</p>';
-    indexEl?.focus();
-    return;
-  }
-  if (indexEl) indexEl.style.border = '1.5px solid var(--border)';
-
-  listEl.innerHTML = '<div class="loading" style="padding:16px 0;">Loading…</div>';
-  try {
-    const level      = document.getElementById('cr-f-level')?.value    || '';
-    const group    = document.getElementById('cr-f-group')?.value    || '';
-    const session  = document.getElementById('cr-f-session')?.value  || '';
-    const semester = document.getElementById('cr-f-semester')?.value || '';
-    const dept     = document.getElementById('cr-f-dept')?.value.trim() || '';
-    const params = new URLSearchParams();
-    params.set('indexNumber', indexNumber);
-    if (level)    params.set('level', level);
-    if (group)    params.set('group', group);
-    if (session)  params.set('sessionType', session);
-    if (semester) params.set('semester', semester);
-    if (dept)     params.set('department', dept);
-
-    const data = await api('/api/class-rep-admin/students?' + params.toString());
-    const students = data.students || [];
-
-    // Count reps per class key from the loaded students themselves
-    const repCountByKey = {};
-    students.forEach(s => {
-      const key = `${s.studentLevel}||${s.studentGroup}||${s.sessionType}||${s.semester}||${s.programme}`;
-      if (!repCountByKey[key]) repCountByKey[key] = 0;
-      if (s.isClassRep) repCountByKey[key]++;
-    });
-
-    if (students.length === 0) {
-      listEl.innerHTML = '<p style="color:var(--text-muted);font-size:13px;">No students found for those filters.</p>';
-      return;
-    }
-
-    listEl.innerHTML = `
-      <div style="font-size:12px;color:var(--text-muted);margin-bottom:10px;">${students.length} student${students.length!==1?'s':''} found · reps shown at top</div>
-      <div style="overflow-x:auto;">
-        <table style="width:100%;border-collapse:collapse;font-size:13px;">
-          <thead>
-            <tr style="border-bottom:2px solid var(--border);">
-              <th style="text-align:left;padding:8px 10px;font-weight:700;color:var(--text-muted);font-size:11px;text-transform:uppercase;">Name</th>
-              <th style="text-align:left;padding:8px 10px;font-weight:700;color:var(--text-muted);font-size:11px;text-transform:uppercase;">Index</th>
-              <th style="text-align:left;padding:8px 10px;font-weight:700;color:var(--text-muted);font-size:11px;text-transform:uppercase;">Level/Group</th>
-              <th style="text-align:left;padding:8px 10px;font-weight:700;color:var(--text-muted);font-size:11px;text-transform:uppercase;">Status</th>
-              <th style="text-align:left;padding:8px 10px;"></th>
-            </tr>
-          </thead>
-          <tbody>
-            ${students.map(s => {
-              const key = `${s.studentLevel}||${s.studentGroup}||${s.sessionType}||${s.semester}||${s.programme}`;
-              const repCount = repCountByKey[key] || 0;
-              const atCap = repCount >= 2;
-              const isRep = s.isClassRep;
-              return `<tr style="border-bottom:1px solid var(--border);${isRep?'background:#faf5ff;':''}">
-                <td style="padding:8px 10px;font-weight:600;">${esc(s.name)}</td>
-                <td style="padding:8px 10px;color:var(--text-muted);font-family:monospace;font-size:12px;">${esc(s.IndexNumber||s.indexNumber||'—')}</td>
-                <td style="padding:8px 10px;">
-                  ${s.studentLevel ? `<span style="background:#dbeafe;color:#1d4ed8;padding:1px 6px;border-radius:20px;font-size:11px;font-weight:700">L${esc(s.studentLevel)}</span>` : ''}
-                  ${s.studentGroup ? `<span style="background:#ecfdf5;color:#059669;padding:1px 6px;border-radius:20px;font-size:11px;font-weight:700;margin-left:2px">Grp ${esc(s.studentGroup)}</span>` : ''}
-                </td>
-                <td style="padding:8px 10px;">
-                  ${isRep
-                    ? `<span style="background:#7c3aed;color:#fff;padding:2px 8px;border-radius:20px;font-size:10px;font-weight:800;">CLASS REP</span>`
-                    : `<span style="background:#f1f5f9;color:#64748b;padding:2px 8px;border-radius:20px;font-size:10px;font-weight:600;">Student</span>`}
-                  ${atCap && !isRep ? `<span style="font-size:10px;color:#dc2626;margin-left:4px">2/2 cap</span>` : ''}
-                </td>
-                <td style="padding:8px 10px;text-align:right;">
-                  ${isRep
-                    ? `<button class="btn btn-xs" style="background:#fee2e2;color:#b91c1c;border:1px solid #fca5a5;" onclick="crRemoveRepBrowse('${s._id}','${esc(s.name).replace(/'/g,"\\'")}')">Remove</button>`
-                    : atCap
-                      ? `<button class="btn btn-xs" disabled style="opacity:.4;cursor:not-allowed;">Cap reached</button>`
-                      : `<button class="btn btn-xs btn-primary" onclick="crAssignRep('${s._id}','${esc(s.name).replace(/'/g,"\\'")}')">Make Rep</button>`}
-                </td>
-              </tr>`;
-            }).join('')}
-          </tbody>
-        </table>
-      </div>`;
-  } catch(e) {
-    listEl.innerHTML = `<p style="color:#ef4444;font-size:13px;">${e.message}</p>`;
-  }
-};
-
-window.crAssignRep = async function(studentId, name) {
-  if (!confirm(`Assign ${name} as a class representative?`)) return;
-  try {
-    await api('/api/class-rep-admin/assign', { method: 'POST', body: JSON.stringify({ studentId }) });
-    toastSuccess(`${name} is now a class representative`);
-    crCloseBrowse();
-    renderClassRepMgmt();
-  } catch(e) {
-    toastError(e.message || 'Failed to assign class representative');
-  }
-};
-
-window.crRemoveRep = async function(userId, name) {
-  if (!confirm(`Remove ${name} as class representative?`)) return;
-  try {
-    await api(`/api/class-rep-admin/remove/${userId}`, { method: 'DELETE' });
-    toastSuccess(`${name} is no longer a class representative`);
-    renderClassRepMgmt();
-  } catch(e) {
-    toastError(e.message || 'Failed to remove class representative');
-  }
-};
-
-window.crRemoveRepBrowse = async function(userId, name) {
-  if (!confirm(`Remove ${name} as class representative?`)) return;
-  try {
-    await api(`/api/class-rep-admin/remove/${userId}`, { method: 'DELETE' });
-    toastSuccess(`${name} is no longer a class representative`);
-    crFetchStudents();
-    // refresh main list in background
-    api('/api/class-rep-admin/list').then(d => {
-      const countEl = document.querySelector('.page-header p');
-      if (countEl) { const n = (d.reps||[]).length; countEl.textContent = `${n} active rep${n!==1?'s':''} · Max 2 per class group`; }
-    }).catch(() => {});
-  } catch(e) {
-    toastError(e.message || 'Failed to remove class representative');
-  }
-};
-
-window.crAssignDeviceInline = async function(selectEl, repId, repName) {
-  const deviceId = selectEl.value;
-  const prev = selectEl.dataset.prev ?? selectEl.value;
-  selectEl.dataset.prev = deviceId;
-  selectEl.disabled = true;
-  try {
-    if (deviceId) {
-      await api(`/api/devices/${deviceId}/assign-class-rep`, {
-        method: 'PATCH',
-        body: JSON.stringify({ classRepId: repId }),
-      });
-      toastSuccess(`Device assigned to ${repName}`);
-    } else {
-      // "— None —" selected: find the previously assigned device and unassign it
-      const data = await api('/api/devices/all').catch(() => ({ devices: [] }));
-      const assigned = (data.devices || []).find(d => d.classRepId && (d.classRepId._id || d.classRepId) === repId);
-      if (assigned) {
-        await api(`/api/devices/${assigned.deviceId}/assign-class-rep`, {
-          method: 'PATCH',
-          body: JSON.stringify({ classRepId: null }),
-        });
-        toastSuccess('Device unassigned');
-      }
-    }
-  } catch(e) {
-    toastError(e.message || 'Failed to update device assignment');
-    selectEl.value = prev;
-  } finally {
-    selectEl.disabled = false;
-  }
-};
 
 // ── HOD — Department Performance Dashboard ────────────────────────────────
 async function renderHodPerformance() {
@@ -5125,17 +4201,12 @@ async function renderSuperadminDashboard(content) {
 
 
 async function renderLecturerDashboard(content) {
-  let _ld = !isOnline() ? offlineRead('lecturer_dashboard') : null;
-  if (!isOnline() && !_ld) { content.innerHTML = `<div style="text-align:center;padding:60px 20px"><div style="font-size:48px;margin-bottom:12px">📡</div><div style="font-size:18px;font-weight:700">You're Offline</div><p style="color:var(--text-muted);margin-top:8px">Connect once while online to cache this page.</p></div>`; return; }
-  const [sessionsData, coursesData, quizzesData, meetingsData] = _ld
-    ? [_ld.sessionsData, _ld.coursesData, _ld.quizzesData, _ld.meetingsData]
-    : await Promise.all([
+  const [sessionsData, coursesData, quizzesData, meetingsData] = await Promise.all([
     api('/api/attendance-sessions?limit=5').catch(() => ({ sessions: [], pagination: { total: 0 } })),
     api('/api/courses').catch(() => ({ courses: [] })),
     api('/api/lecturer/quizzes').catch(() => ({ quizzes: [] })),
     api('/api/meetings?limit=10').catch(() => ({ data: [] })),
   ]);
-  if (!_ld) offlineCache('lecturer_dashboard', { sessionsData, coursesData, quizzesData, meetingsData });
 
   const totalStudents  = coursesData.courses.reduce((sum, c) => sum + (c.enrolledStudents?.length || 0), 0);
   const activeCourses  = coursesData.courses.length;
@@ -5152,7 +4223,7 @@ async function renderLecturerDashboard(content) {
     return d.toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' });
   };
   const _fmtTime = iso => new Date(iso).toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' });
-  const _joinUrl  = m => `/lecturer-meeting?meeting=${m._id}`;
+  const _joinUrl  = m => `https://meet.jit.si/${m.roomName}`;
 
   const _meetingStatusMeta = m => {
     if (m.status === 'live') return { label: 'Live', cls: 'sched-status--live' };
@@ -5181,7 +4252,7 @@ async function renderLecturerDashboard(content) {
     <div class="quick-actions">
       <button class="btn btn-primary btn-sm" onclick="navigateTo('sessions'); showStartSessionModal()">${sessionsIcon()} Start Session</button>
       <button class="btn btn-secondary btn-sm" onclick="navigateTo('courses'); setTimeout(showCreateCourseModal, 300)">${coursesIcon()} Create Course</button>
-      <button class="btn btn-secondary btn-sm" onclick="renderProctoredQuizzes(); setTimeout(showCreateQuizModal, 300)">${quizzesIcon()} Create Quiz</button>
+      <button class="btn btn-secondary btn-sm" onclick="navigateTo('quizzes'); setTimeout(showCreateQuizModal, 300)">${quizzesIcon()} Create Quiz</button>
     </div>
     <div class="card">
       <div class="card-title">Recent Sessions</div>
@@ -5338,23 +4409,12 @@ async function renderEmployeeDashboard(content) {
   const today      = new Date().toISOString().slice(0, 10);
   const monthStart = new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString().slice(0, 10);
 
-  let todayData, monthData, shiftData, leavesData, _empOffline = false;
-  const _empCached = offlineRead('employee_dashboard');
-  if (!isOnline() && _empCached) {
-    ({ todayData, monthData, shiftData, leavesData } = _empCached);
-    _empOffline = true;
-  } else if (!isOnline()) {
-    content.innerHTML = '<div class="card"><div class="empty-state"><p>📶 You\'re offline and no cached data is available yet. Please connect and reload.</p></div></div>';
-    return;
-  } else {
-    [todayData, monthData, shiftData, leavesData] = await Promise.all([
-      api(`/api/corporate-attendance/my?from=${today}&to=${today}`).catch(() => ({ records: [] })),
-      api(`/api/corporate-attendance/my?from=${monthStart}&to=${today}`).catch(() => ({ records: [] })),
-      api('/api/shifts/my-shift').catch(() => ({})),
-      api('/api/leaves/my').catch(() => ({ leaves: [] })),
-    ]);
-    offlineCache('employee_dashboard', { todayData, monthData, shiftData, leavesData });
-  }
+  const [todayData, monthData, shiftData, leavesData] = await Promise.all([
+    api(`/api/corporate-attendance/my?from=${today}&to=${today}`).catch(() => ({ records: [] })),
+    api(`/api/corporate-attendance/my?from=${monthStart}&to=${today}`).catch(() => ({ records: [] })),
+    api('/api/shifts/my-shift').catch(() => ({})),
+    api('/api/leaves/my').catch(() => ({ leaves: [] })),
+  ]);
 
   // ── Today ─────────────────────────────────────────────────────────────────
   const todayRecord  = todayData.records?.[0] || null;
@@ -5435,7 +4495,6 @@ async function renderEmployeeDashboard(content) {
   const statusColors = { present:'#16a34a', late:'#d97706', absent:'#dc2626', half_day:'#7c3aed', on_leave:'#0284c7', remote:'#0891b2' };
 
   content.innerHTML = `
-    ${_empOffline ? '<div style="background:#fef3c7;border:1px solid #fcd34d;border-radius:8px;padding:8px 14px;font-size:12px;font-weight:600;color:#92400e;margin-bottom:12px">📶 Offline — showing cached data</div>' : ''}
     <div class="page-header">
       <div>
         <h2>Welcome back, ${esc(currentUser.name.split(' ')[0])}</h2>
@@ -5682,7 +4741,7 @@ async function employeeSignIn() {
     _showGPSBlockedModal(gpsErr.message);
     return;
   }
-  if (gpsData.accuracy != null && gpsData.accuracy > 500) {
+  if (gpsData.accuracy != null && gpsData.accuracy > 100) {
     _showStrictBlockedModal(`GPS accuracy too poor (${gpsData.accuracy}m). Move to an open area and try again.`);
     return;
   }
@@ -5715,7 +4774,7 @@ async function employeeSignOut() {
     _showGPSBlockedModal(gpsErr.message);
     return;
   }
-  if (gpsData.accuracy != null && gpsData.accuracy > 500) {
+  if (gpsData.accuracy != null && gpsData.accuracy > 100) {
     _showStrictBlockedModal(`GPS accuracy too poor (${gpsData.accuracy}m). Move to an open area and try again.`);
     return;
   }
@@ -6008,29 +5067,19 @@ async function viewStudentQuizResult(quizId) {
 }
 
 async function renderStudentDashboard(content) {
-  let _sd = !isOnline() ? offlineRead('student_dashboard') : null;
-  if (!isOnline() && !_sd) { content.innerHTML = `<div style="text-align:center;padding:60px 20px"><div style="font-size:48px;margin-bottom:12px">📡</div><div style="font-size:18px;font-weight:700">You're Offline</div><p style="color:var(--text-muted);margin-top:8px">Connect once while online to cache this page.</p></div>`; return; }
-  const [attendance, coursesData, quizzesData, meetingsData, activeSessionData, upcomingAsgData] = _sd
-    ? [_sd.attendance, _sd.coursesData, _sd.quizzesData, _sd.meetingsData, _sd.activeSessionData, _sd.upcomingAsgData]
-    : await Promise.all([
+  const [attendance, coursesData, quizzesData, meetingsData, activeSessionData] = await Promise.all([
     api('/api/attendance-sessions/my-attendance?limit=5').catch(() => ({ records: [], pagination: { total: 0 } })),
     api('/api/courses').catch(() => ({ courses: [] })),
     api('/api/student/quizzes').catch(() => ({ quizzes: [] })),
-    api('/api/meetings').catch(() => ({ data: [] })),
+    api('/api/zoom').catch(() => ({ meetings: [] })),
     api('/api/attendance-sessions/active').catch(() => ({ session: null })),
-    api('/api/student/assignments/upcoming').catch(() => ({ assignments: [] })),
   ]);
-  if (!_sd) {
-    offlineCache('student_dashboard', { attendance, coursesData, quizzesData, meetingsData, activeSessionData, upcomingAsgData });
-    if (activeSessionData.session) offlineCache('activeSession', activeSessionData.session);
-  }
 
   const totalCheckins = attendance.pagination.total;
   const enrolledCourses = coursesData.courses.length;
   const quizzesTaken = quizzesData.quizzes.length;
-  const upcomingMeetings = (meetingsData.data || meetingsData.meetings || []).filter(m => m.status === 'scheduled');
+  const upcomingMeetings = meetingsData.meetings.filter(m => m.status === 'scheduled');
   const activeSession = activeSessionData.session;
-  const upcomingAssignments = upcomingAsgData.assignments || [];
   const attendanceRate = totalCheckins > 0 ? Math.round((attendance.records.filter(r => r.status === 'present').length / attendance.records.length) * 100) : 0;
 
   const methodLabel = (m) => {
@@ -6055,14 +5104,11 @@ async function renderStudentDashboard(content) {
     </div>`;
   })() : '';
 
-  const classRepBanner = ''; // now rendered as persistent #class-rep-banner, not per-page
-
   content.innerHTML = `
     <div class="page-header">
       <h2>Welcome back, ${currentUser.name.split(' ')[0]}</h2>
       <p>${currentUser.company?.name || 'Your institution'}${currentUser.indexNumber ? ' \u2022 ' + currentUser.indexNumber : ''}</p>
     </div>
-    ${classRepBanner}
     ${devLockBanner}
 
     ${activeSession ? `
@@ -6105,41 +5151,12 @@ async function renderStudentDashboard(content) {
               <div style="font-weight:600;font-size:14px">${m.title}</div>
               <div style="font-size:12px;color:var(--text-light)">${new Date(m.scheduledStart).toLocaleString()} — ${m.duration} min</div>
             </div>
-            ${m._id ? `<button class="btn btn-success btn-sm" onclick="joinMeeting('${m._id}')">Join</button>` : ''}
+            ${m.joinUrl ? `<a href="${m.joinUrl}" target="_blank" class="btn btn-success btn-sm">Join</a>` : ''}
           </div>
         `).join('')}
       </div>
     ` : ''}
-
-    ${upcomingAssignments.length > 0 ? `
-      <div class="card">
-        <div class="card-title" style="display:flex;align-items:center;justify-content:space-between">
-          <span>Upcoming Assignments</span>
-          <button class="btn btn-secondary btn-sm" onclick="location.href='/assignments.html'">View All</button>
-        </div>
-        ${upcomingAssignments.slice(0, 5).map(a => {
-          const hoursLeft = Math.round((new Date(a.dueDate) - Date.now()) / 3600000);
-          const daysLeft  = Math.floor(hoursLeft / 24);
-          const urgency   = hoursLeft <= 24 ? 'color:#dc2626' : hoursLeft <= 48 ? 'color:#d97706' : 'color:var(--text-light)';
-          const timeLabel = daysLeft >= 2 ? `${daysLeft}d left` : hoursLeft >= 1 ? `${hoursLeft}h left` : 'Due soon';
-          const subStatus = a.submission ? a.submission.status : null;
-          const badge     = subStatus === 'graded' ? '<span style="font-size:11px;background:#dcfce7;color:#166534;border-radius:8px;padding:2px 8px;font-weight:600">Graded</span>'
-                          : subStatus ? '<span style="font-size:11px;background:#dbeafe;color:#1e40af;border-radius:8px;padding:2px 8px;font-weight:600">Submitted</span>'
-                          : '<span style="font-size:11px;background:#fef3c7;color:#92400e;border-radius:8px;padding:2px 8px;font-weight:600">Pending</span>';
-          return `<div style="display:flex;align-items:center;justify-content:space-between;padding:10px 0;border-bottom:1px solid var(--border);cursor:pointer" onclick="location.href='/assignments.html?id=${a._id}'">
-            <div style="flex:1;min-width:0">
-              <div style="font-weight:600;font-size:14px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${a.title}</div>
-              <div style="font-size:12px;color:var(--text-light)">${a.course?.code || ''} ${a.course?.title || ''}</div>
-            </div>
-            <div style="display:flex;align-items:center;gap:8px;flex-shrink:0;margin-left:12px">
-              ${badge}
-              <span style="font-size:12px;font-weight:600;${urgency}">${timeLabel}</span>
-            </div>
-          </div>`;
-        }).join('')}
-      </div>
-    ` : ''}
-
+    
     <div class="card">
       <div class="card-title">Recent Attendance</div>
       ${attendance.records.length ? `
@@ -6160,17 +5177,12 @@ async function renderStudentDashboard(content) {
 }
 
 async function renderAdminDashboard(content) {
-  let _ad = !isOnline() ? offlineRead('admin_dashboard') : null;
-  if (!isOnline() && !_ad) { content.innerHTML = `<div style="text-align:center;padding:60px 20px"><div style="font-size:48px;margin-bottom:12px">📡</div><div style="font-size:18px;font-weight:700">You're Offline</div><p style="color:var(--text-muted);margin-top:8px">Connect once while online to cache this page.</p></div>`; return; }
-  const [sessionsData, usersData, pendingData, announcementsData] = _ad
-    ? [_ad.sessionsData, _ad.usersData, _ad.pendingData, _ad.announcementsData]
-    : await Promise.all([
+  const [sessionsData, usersData, pendingData, announcementsData] = await Promise.all([
     api('/api/attendance-sessions?limit=5').catch(() => ({ sessions: [], pagination: { total: 0 } })),
     api('/api/users').catch(() => ({ users: [] })),
     api('/api/approvals/pending').catch(() => ({ pending: [] })),
     api('/api/announcements').catch(() => ({ announcements: [] })),
   ]);
-  if (!_ad) offlineCache('admin_dashboard', { sessionsData, usersData, pendingData, announcementsData });
 
   const activeSessions = sessionsData.sessions.filter(s => ['active', 'live', 'paused', 'locked'].includes(s.status)).length;
   // Auto-refresh every 30s if there are active sessions
@@ -6289,6 +5301,10 @@ async function renderAdminDashboard(content) {
       <div class="quick-actions-bar">
         <div class="section-label">Quick actions</div>
         <div class="actions-row">
+          <button class="action-chip blue" onclick="navigateTo('sessions')">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="16"/><line x1="8" y1="12" x2="16" y2="12"/></svg>
+            Start session
+          </button>
           <button class="action-chip green" onclick="navigateTo('users')">
             <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="8.5" cy="7" r="4"/><line x1="20" y1="8" x2="20" y2="14"/><line x1="23" y1="11" x2="17" y2="11"/></svg>
             Add user
@@ -6662,20 +5678,11 @@ async function renderManagerDashboard(content) {
 let _sessionsFilterCourseId = '';
 let _sessionsFilterCourseTitle = '';
 
-let _sessionsAutoRefreshTimer = null;
-
 async function renderSessions(courseId, courseTitle) {
   // Allow passing a courseId to pre-filter (e.g. from course page)
   if (courseId) { _sessionsFilterCourseId = courseId; _sessionsFilterCourseTitle = courseTitle || ''; }
   const content = document.getElementById('main-content');
   if (!content) return;
-
-  // Auto-refresh every 30 s so the UI reflects watchdog-killed sessions
-  if (_sessionsAutoRefreshTimer) clearInterval(_sessionsAutoRefreshTimer);
-  _sessionsAutoRefreshTimer = setInterval(() => {
-    if (document.getElementById('main-content')) renderSessions();
-    else { clearInterval(_sessionsAutoRefreshTimer); _sessionsAutoRefreshTimer = null; }
-  }, 30_000);
 
   // Offline: render from cache immediately
   if (!isOnline()) {
@@ -6686,27 +5693,9 @@ async function renderSessions(courseId, courseTitle) {
 
   try {
     const qs = _sessionsFilterCourseId ? `?courseId=${_sessionsFilterCourseId}` : '';
-    const [data, flaggedData, deviceData] = await Promise.allSettled([
-      api('/api/attendance-sessions' + qs),
-      ['lecturer', 'hod', 'admin', 'superadmin'].includes(currentUser.role)
-        ? api('/api/attendance-sessions/flagged/new-devices?limit=200')
-        : Promise.resolve(null),
-      api('/api/devices/my').catch(() => null),
-    ]).then(r => r.map(p => p.status === 'fulfilled' ? p.value : null));
-
+    const data = await api('/api/attendance-sessions' + qs);
     offlineCache('sessions', data);
-
-    // Build sessionId → flag count map for row badges
-    const flaggedBySession = {};
-    if (flaggedData?.records) {
-      for (const r of flaggedData.records) {
-        const sid = r.session?._id || r.session;
-        if (sid) flaggedBySession[sid] = (flaggedBySession[sid] || 0) + 1;
-      }
-    }
-    const pendingDeviceRecords = deviceData?.data?.pendingRecordsCount || 0;
-
-    _renderSessionsHTML(content, data?.sessions || [], false, { flaggedBySession, pendingDeviceRecords });
+    _renderSessionsHTML(content, data.sessions || [], false);
   } catch (e) {
     const cached = offlineRead('sessions');
     if (cached) {
@@ -6717,13 +5706,10 @@ async function renderSessions(courseId, courseTitle) {
   }
 }
 
-function _renderSessionsHTML(content, sessions, isOffline, extras) {
+function _renderSessionsHTML(content, sessions, isOffline) {
   const pendingCount = offlineQueueCount();
   const canStart = ['lecturer', 'manager'].includes(currentUser.role);
   const isLecturer = currentUser.role === 'lecturer';
-  const flaggedBySession = extras?.flaggedBySession || {};
-  const pendingDeviceRecords = extras?.pendingDeviceRecords || 0;
-  const totalFlags = Object.values(flaggedBySession).reduce((a, b) => a + b, 0);
 
   const filterPill = _sessionsFilterCourseId
     ? `<div style="display:flex;align-items:center;gap:6px;background:#eff6ff;border:1px solid #bfdbfe;border-radius:20px;padding:3px 10px 3px 8px;font-size:12px;color:#1e40af;font-weight:600;">
@@ -6732,27 +5718,11 @@ function _renderSessionsHTML(content, sessions, isOffline, extras) {
       </div>`
     : '';
 
-  const newDeviceBanner = totalFlags > 0
-    ? `<div onclick="showFlaggedDevicesModal()" style="background:#fff7ed;border:1px solid #fed7aa;border-radius:8px;padding:10px 14px;margin-bottom:12px;display:flex;align-items:center;gap:10px;font-size:13px;color:#92400e;cursor:pointer;">
-        <span style="font-size:18px">⚠️</span>
-        <span><strong>${totalFlags} new-device flag${totalFlags !== 1 ? 's' : ''}</strong> detected — a student marked attendance from an unrecognised device. <u>Review now</u></span>
-      </div>`
-    : '';
-
-  const pendingDeviceBanner = pendingDeviceRecords > 0
-    ? `<div style="background:#f0f9ff;border:1px solid #bae6fd;border-radius:8px;padding:10px 14px;margin-bottom:12px;display:flex;align-items:center;gap:10px;font-size:13px;color:#0369a1;">
-        <span style="font-size:18px">📴</span>
-        <span><strong>${pendingDeviceRecords} record${pendingDeviceRecords !== 1 ? 's' : ''} pending sync</strong> — the classroom device recorded attendance offline and will sync to the server when it reconnects to the internet.</span>
-      </div>`
-    : '';
-
   content.innerHTML = `
     <div class="page-header">
       <h2>Attendance Sessions</h2>
       <p>Manage attendance sessions${isOffline ? ' <span style="color:#f59e0b;font-weight:600">(Offline — showing cached data)</span>' : ''}</p>
     </div>
-    ${newDeviceBanner}
-    ${pendingDeviceBanner}
     <div class="actions-bar" style="margin-bottom:14px;">
       ${canStart ? `<button class="btn btn-primary btn-sm" onclick="showStartSessionModal()">Start New Session</button>` : ''}
       ${filterPill}
@@ -6766,14 +5736,9 @@ function _renderSessionsHTML(content, sessions, isOffline, extras) {
             ${isLecturer ? '<th>Course</th>' : ''}
             <th>Status</th><th>Started</th><th>Stopped</th><th>Actions</th>
           </tr></thead>
-          <tbody>${sessions.map((s, i) => {
-            const flags = flaggedBySession[s._id] || 0;
-            const flagBadge = flags > 0
-              ? `<span onclick="showFlaggedDevicesModal('${s._id}')" title="${flags} new-device flag${flags !== 1 ? 's' : ''} — click to review" style="background:#fef3c7;color:#92400e;border:1px solid #fbbf24;border-radius:4px;padding:1px 6px;font-size:11px;font-weight:700;margin-left:6px;cursor:pointer;">⚠️ ${flags}</span>`
-              : '';
-            return `
-            <tr style="${flags > 0 ? 'background:#fffbeb;' : ''}">
-              <td>${s.title || 'Untitled'}${flagBadge}</td>
+          <tbody>${sessions.map((s, i) => `
+            <tr>
+              <td>${s.title || 'Untitled'}</td>
               ${isLecturer ? `<td><span style="font-size:11px;font-weight:600;color:#6366f1;">${s.course ? esc(s.course.code || s.course.title || '') : '—'}</span></td>` : ''}
               <td><span class="status-badge status-${s.status}">${s.status}</span></td>
               <td>${new Date(s.startedAt).toLocaleString()}</td>
@@ -6786,8 +5751,8 @@ function _renderSessionsHTML(content, sessions, isOffline, extras) {
               ` : ['active','live','paused','locked'].includes(s.status) ? `
                 <button class="btn btn-sm" style="font-size:11px;background:var(--bg);border:1px solid var(--border)" onclick="viewAttendees('${s._id}', '${(s.title||'Session').replace(/['\''\'']/g,'')}')">Attendees</button>
               ` : ''}</td>
-            </tr>`;
-          }).join('')}</tbody>
+            </tr>
+          `).join('')}</tbody>
         </table>
       ` : `<div class="empty-state"><p>${_sessionsFilterCourseId ? 'No sessions for this course yet.' : 'No sessions found'}</p></div>`}
     </div>
@@ -6795,121 +5760,7 @@ function _renderSessionsHTML(content, sessions, isOffline, extras) {
 }
 
 
-// ── Flagged new-device review modal ──────────────────────────────────────────
-async function showFlaggedDevicesModal(sessionId) {
-  const container = document.getElementById('modal-container');
-  if (!container) return;
-  container.classList.remove('hidden');
-  container.innerHTML = `<div class="modal-overlay"><div class="modal"><p style="color:var(--text-muted);text-align:center;padding:16px 0">⏳ Loading flagged records…</p></div></div>`;
-
-  try {
-    const qs = sessionId ? `?sessionId=${encodeURIComponent(sessionId)}&limit=100` : '?limit=100';
-    const data = await api('/api/attendance-sessions/flagged/new-devices' + qs);
-    const records = data.records || [];
-
-    if (!records.length) {
-      container.innerHTML = `
-        <div class="modal-overlay" onclick="closeModal(event)">
-          <div class="modal" onclick="event.stopPropagation()" style="text-align:center;max-width:400px">
-            <div style="font-size:40px;margin-bottom:12px">✅</div>
-            <h3 style="margin-bottom:8px">All Clear</h3>
-            <p style="font-size:13px;color:var(--text-muted);margin-bottom:20px">No unresolved new-device flags.</p>
-            <button class="btn btn-secondary btn-sm" onclick="closeModal()">Close</button>
-          </div>
-        </div>`;
-      return;
-    }
-
-    const rows = records.map(r => {
-      const studentName  = esc(r.user?.name || 'Unknown');
-      const indexNum     = esc(r.user?.indexNumber || '—');
-      const sessionTitle = esc(r.session?.title || 'Session');
-      const deviceId     = esc(r.deviceId || '—');
-      const time         = r.checkInTime ? new Date(r.checkInTime).toLocaleString() : '—';
-      const shortDev     = r.deviceId ? r.deviceId.slice(0, 16) + (r.deviceId.length > 16 ? '…' : '') : '—';
-      return `
-        <tr id="flagrow-${r._id}">
-          <td style="font-size:13px"><strong>${studentName}</strong><br><span style="color:var(--text-muted);font-size:11px">${indexNum}</span></td>
-          <td style="font-size:12px;color:var(--text-muted)">${sessionTitle}</td>
-          <td style="font-size:11px;font-family:monospace;color:#7c3aed" title="${deviceId}">${shortDev}</td>
-          <td style="font-size:11px;color:var(--text-muted)">${time}</td>
-          <td style="white-space:nowrap">
-            <button class="btn btn-sm" style="font-size:11px;background:#dcfce7;color:#166534;border:1px solid #86efac;margin-right:4px"
-              onclick="resolveFlaggedRecord('${r._id}','trust')">Trust Device</button>
-            <button class="btn btn-sm" style="font-size:11px;background:var(--bg);color:var(--text-muted);border:1px solid var(--border)"
-              onclick="resolveFlaggedRecord('${r._id}','dismiss')">Dismiss</button>
-          </td>
-        </tr>`;
-    }).join('');
-
-    container.innerHTML = `
-      <div class="modal-overlay" onclick="closeModal(event)">
-        <div class="modal" onclick="event.stopPropagation()" style="max-width:780px;width:95vw">
-          <h3 style="margin-bottom:4px">⚠️ New-Device Flags</h3>
-          <p style="font-size:12px;color:var(--text-muted);margin-bottom:16px">
-            These students marked attendance from a device not previously seen on their account.
-            <strong>Trust Device</strong> adds it to their trusted list and clears all matching flags.
-            <strong>Dismiss</strong> clears only this flag.
-          </p>
-          <div style="overflow-x:auto">
-            <table style="width:100%;font-size:13px">
-              <thead><tr style="font-size:11px;color:var(--text-muted)">
-                <th style="text-align:left;padding:6px 8px">Student</th>
-                <th style="text-align:left;padding:6px 8px">Session</th>
-                <th style="text-align:left;padding:6px 8px">Device ID</th>
-                <th style="text-align:left;padding:6px 8px">Time</th>
-                <th style="text-align:left;padding:6px 8px">Action</th>
-              </tr></thead>
-              <tbody>${rows}</tbody>
-            </table>
-          </div>
-          <div style="margin-top:16px;text-align:right">
-            <button class="btn btn-secondary btn-sm" onclick="closeModal()">Close</button>
-          </div>
-        </div>
-      </div>`;
-  } catch (e) {
-    container.innerHTML = `
-      <div class="modal-overlay" onclick="closeModal(event)">
-        <div class="modal" onclick="event.stopPropagation()" style="text-align:center;max-width:380px">
-          <p style="color:#dc2626">Failed to load flagged records: ${esc(e.message)}</p>
-          <button class="btn btn-secondary btn-sm" style="margin-top:12px" onclick="closeModal()">Close</button>
-        </div>
-      </div>`;
-  }
-}
-
-async function resolveFlaggedRecord(recordId, action) {
-  const row = document.getElementById('flagrow-' + recordId);
-  if (row) row.style.opacity = '0.4';
-
-  try {
-    const endpoint = action === 'trust'
-      ? `/api/attendance-sessions/flagged/${recordId}/trust`
-      : `/api/attendance-sessions/flagged/${recordId}/resolve`;
-
-    const result = await api(endpoint, { method: 'POST' });
-
-    if (row) row.remove();
-
-    const tbody = document.querySelector('#modal-container tbody');
-    if (tbody && !tbody.children.length) {
-      closeModal();
-      toastSuccess('All flags resolved.');
-    } else if (action === 'trust') {
-      toastSuccess(`Device trusted for ${result.studentName || 'student'} — all matching flags cleared.`);
-    } else {
-      toastSuccess('Flag dismissed.');
-    }
-
-    renderSessions();
-  } catch (e) {
-    if (row) row.style.opacity = '1';
-    toastError('Failed: ' + e.message);
-  }
-}
-
-async function showStartSessionModal(offlineOverride) {
+async function showStartSessionModal() {
   // Force a fresh connectivity check each time this is opened (covers Retry path)
   _serverCheckTs = 0;
 
@@ -6953,11 +5804,39 @@ async function showStartSessionModal(offlineOverride) {
       <div class="modal-overlay" onclick="closeModal(event)">
         <div class="modal" onclick="event.stopPropagation()" style="text-align:center;max-width:400px">
           <div style="font-size:40px;margin-bottom:12px">📟</div>
-          <h3 style="margin-bottom:8px">No Device Connected</h3>
+          <h3 style="margin-bottom:8px">Device Not Paired</h3>
           <p style="font-size:13px;color:var(--text-muted);margin-bottom:20px;line-height:1.6">
-            No attendance device is connected to your session yet.<br><br>
-            Ask your <strong>class rep</strong> to open the app, go to <strong>Class Device</strong>, and connect the device to you before you start.
+            You haven't paired a classroom device yet.<br>
+            Open <strong>Attendance Device</strong>, generate a pairing code, and enter it on your ESP32.
           </p>
+          <div style="display:flex;gap:8px;justify-content:center">
+            <button class="btn btn-secondary btn-sm" onclick="closeModal()">Cancel</button>
+            <button class="btn btn-primary btn-sm" onclick="closeModal();navigateTo('attendance-device')">Open Pairing</button>
+            <button class="btn btn-primary btn-sm" onclick="showStartSessionModal()">↻ Retry</button>
+          </div>
+        </div>
+      </div>`;
+    return;
+  }
+
+  // Device registered but offline
+  if (!checkError && deviceStatus && deviceStatus.hasDevice && !deviceStatus.deviceOnline) {
+    const lastSeen = deviceStatus.lastSeenAt
+      ? `Last seen: ${new Date(deviceStatus.lastSeenAt).toLocaleString()}`
+      : 'Last seen: Never';
+    container.innerHTML = `
+      <div class="modal-overlay" onclick="closeModal(event)">
+        <div class="modal" onclick="event.stopPropagation()" style="text-align:center;max-width:400px">
+          <div style="font-size:40px;margin-bottom:12px">📟</div>
+          <h3 style="margin-bottom:8px">Device is Offline</h3>
+          <p style="font-size:13px;color:var(--text-muted);margin-bottom:16px;line-height:1.6">
+            The <strong>DIKLY classroom device</strong> is not responding.<br>
+            Power it on, wait a few seconds, then try again.
+          </p>
+          <div style="background:#fef3c7;border:1px solid #fde68a;border-radius:8px;padding:10px 14px;font-size:12px;color:#92400e;margin-bottom:20px;text-align:left">
+            <strong>${lastSeen}</strong><br>
+            Status: Offline — no heartbeat in last 20s
+          </div>
           <div style="display:flex;gap:8px;justify-content:center">
             <button class="btn btn-secondary btn-sm" onclick="closeModal()">Cancel</button>
             <button class="btn btn-primary btn-sm" onclick="showStartSessionModal()">↻ Retry</button>
@@ -6967,15 +5846,9 @@ async function showStartSessionModal(offlineOverride) {
     return;
   }
 
-  // Device registered but offline — automatically proceed in offline mode (no explicit button needed).
-  // The device will sync the rotating code as soon as it reconnects to WiFi.
-  if (!offlineOverride && !checkError && deviceStatus && deviceStatus.hasDevice && !deviceStatus.deviceOnline) {
-    offlineOverride = 'offline';
-  }
-
   // Device check failed — network error or server unreachable.
   // BLOCK — never silently proceed. Show retry screen.
-  if (!offlineOverride && checkError) {
+  if (checkError) {
     container.innerHTML = `
       <div class="modal-overlay" onclick="closeModal(event)">
         <div class="modal" onclick="event.stopPropagation()" style="text-align:center;max-width:400px">
@@ -6993,7 +5866,7 @@ async function showStartSessionModal(offlineOverride) {
       </div>`;
     return;
   }
-  // ── Device confirmed online (or offline override) — show session form ────────────
+  // ── Device confirmed online — show session form ────────────
 
   // Fetch courses — always from dikly.sbs (hardcoded in API constant)
   // If this fails, it means the server is unreachable — show clear error.
@@ -7027,46 +5900,13 @@ async function showStartSessionModal(offlineOverride) {
     return;
   }
 
-  // Build class group badge from the paired device info
-  const devData = deviceStatus?.hasDevice
-    ? (() => {
-        try { return null; } catch(_) { return null; } // populated below
-      })()
-    : null;
-  let groupBadge = '';
-  try {
-    const devResp = await api('/api/devices/my');
-    const dev = devResp?.data || null;
-    if (dev) {
-      const parts = [
-        dev.assignedDepartment,
-        dev.assignedLevel && 'Level ' + dev.assignedLevel,
-        dev.assignedGroup && 'Group ' + dev.assignedGroup,
-      ].filter(Boolean);
-      if (parts.length) {
-        groupBadge = `<div style="display:flex;align-items:center;gap:8px;background:#f0fdf4;border:1px solid #bbf7d0;border-radius:8px;padding:8px 12px;font-size:12px;color:#166534;margin-bottom:14px">
-          <span style="font-size:16px">📍</span>
-          <div><span style="font-weight:600">Device:</span> ${esc(dev.deviceName || dev.deviceId)}<br><span style="font-weight:600">Class Group:</span> ${esc(parts.join(' · '))}</div>
-        </div>`;
-      }
-    }
-  } catch(_) { /* non-critical */ }
-
-  const offlineBanner = offlineOverride ? `
-    <div style="background:#fef3c7;border:1px solid #fde68a;border-radius:8px;padding:10px 14px;font-size:12px;color:#92400e;margin-bottom:14px;display:flex;align-items:flex-start;gap:8px">
-      <span style="font-size:16px;flex-shrink:0">📶</span>
-      <div><strong>Offline Mode</strong> — The classroom device has no internet. The session will start and the device will sync the rotating code when WiFi reconnects. Students mark attendance using the code on the device screen.</div>
-    </div>` : '';
-
   container.innerHTML = `
     <div class="modal-overlay" onclick="closeModal(event)">
-      <div class="modal" onclick="event.stopPropagation()" data-offline="${offlineOverride ? '1' : ''}">
+      <div class="modal" onclick="event.stopPropagation()">
         <h3>Start New Session</h3>
-        ${offlineBanner}
-        ${groupBadge}
         <div class="form-group">
           <label>Course <span style="color:red">*</span></label>
-          <select id="session-course" onchange="loadSessionDevices(this.value)" style="width:100%;padding:9px 12px;border:1.5px solid var(--border);border-radius:8px;font-size:13px">
+          <select id="session-course" style="width:100%;padding:9px 12px;border:1.5px solid var(--border);border-radius:8px;font-size:13px">
             <option value="">— Select Course —</option>
             ${courses
                 .filter(c => !c.needsApproval || c.approvalStatus === 'approved')
@@ -7074,21 +5914,9 @@ async function showStartSessionModal(offlineOverride) {
           </select>
           ${courses.some(c => c.needsApproval && c.approvalStatus !== 'approved') ? `<p style="font-size:11px;color:#b45309;margin-top:4px">Some courses are hidden because they are pending approval or rejected.</p>` : ''}
         </div>
-        <div class="form-group" id="session-device-group" style="display:none">
-          <label>Classroom Device <span style="color:red">*</span></label>
-          <select id="session-device" style="width:100%;padding:9px 12px;border:1.5px solid var(--border);border-radius:8px;font-size:13px">
-            <option value="">— Loading devices… —</option>
-          </select>
-          <p id="session-device-hint" style="font-size:11px;color:var(--text-muted);margin-top:4px"></p>
-        </div>
         <div class="form-group">
           <label>Session Title <span style="font-weight:400;color:var(--text-muted);font-size:12px">(optional)</span></label>
           <input type="text" id="session-title" placeholder="e.g., Week 5 Lecture">
-        </div>
-        <div class="form-group">
-          <label>Restrict to Group <span style="font-weight:400;color:var(--text-muted);font-size:12px">(optional)</span></label>
-          <input type="text" id="session-target-group" placeholder="e.g. A, B, C — leave blank for all groups">
-          <p style="font-size:11px;color:var(--text-muted);margin-top:4px">Only students in this group will be able to mark attendance.</p>
         </div>
         <div class="modal-actions">
           <button class="btn btn-secondary btn-sm" onclick="closeModal()">Cancel</button>
@@ -7099,54 +5927,11 @@ async function showStartSessionModal(offlineOverride) {
   `;
 }
 
-async function loadSessionDevices(courseId) {
-  const group  = document.getElementById('session-device-group');
-  const select = document.getElementById('session-device');
-  const hint   = document.getElementById('session-device-hint');
-  if (!group || !select) return;
-
-  if (!courseId) {
-    group.style.display = 'none';
-    return;
-  }
-
-  group.style.display = 'block';
-  select.innerHTML = '<option value="">— Loading devices… —</option>';
-  if (hint) hint.textContent = '';
-
-  try {
-    const data = await api(`/api/devices/available?courseId=${encodeURIComponent(courseId)}`);
-    const devices = data.devices || [];
-    if (!devices.length) {
-      select.innerHTML = '<option value="">— No devices found for this course —</option>';
-      if (hint) hint.textContent = 'Ask an admin or class rep to assign a device to this group.';
-      return;
-    }
-    select.innerHTML = '<option value="">— Select Device —</option>' +
-      devices.map(d => {
-        const label = [d.deviceName || d.deviceId, d.assignedGroup ? 'Grp ' + d.assignedGroup : '', d.online ? '● Online' : '○ Offline'].filter(Boolean).join(' · ');
-        return `<option value="${esc(d.deviceId)}"${d.online ? '' : ' style="color:var(--text-muted)"'}>${esc(label)}</option>`;
-      }).join('');
-    if (hint) hint.textContent = devices.length === 1 ? 'One device found — selected automatically.' : `${devices.length} devices available for this course's group.`;
-    if (devices.length === 1) select.value = devices[0].deviceId;
-  } catch (e) {
-    select.innerHTML = '<option value="">— Failed to load devices —</option>';
-    if (hint) hint.textContent = e.message || 'Could not fetch devices.';
-  }
-}
-
 async function startSession() {
   const title    = document.getElementById('session-title')?.value?.trim();
   const courseId = document.getElementById('session-course')?.value;
-  const deviceEl = document.getElementById('session-device');
-  const deviceId = deviceEl?.closest('#session-device-group')?.style.display !== 'none'
-    ? deviceEl?.value || null
-    : null;
 
   if (!courseId) { toastWarning('Please select a course.'); return; }
-  if (deviceEl?.closest('#session-device-group')?.style.display !== 'none' && !deviceId) {
-    toastWarning('Please select a classroom device.'); return;
-  }
 
   // Don't close modal yet — keep it open so we can show errors in it
   const container = document.getElementById('modal-container');
@@ -7175,74 +5960,26 @@ async function startSession() {
 
   try {
     const hotspotKey = sessionStorage.getItem('dikly_esp32_hotspot_key') || '';
-    const sessionTargetGroup = (document.getElementById('session-target-group')?.value || '').trim() || null;
-    const result = await api('/api/attendance-sessions/start', {
+    await api('/api/attendance-sessions/start', {
       method: 'POST',
       headers: hotspotKey ? { 'x-esp32-hotspot-key': hotspotKey } : {},
-      body: JSON.stringify({ title, courseId, ...(deviceId ? { deviceId } : {}), ...(sessionTargetGroup ? { targetGroup: sessionTargetGroup } : {}) }),
+      body: JSON.stringify({ title, courseId }),
     });
     closeModal();
-    if (result.offlineMode) {
-      toastInfo('Session started in offline mode — device will sync when it reconnects.');
-    } else if (result.warning) {
-      if (container) container.innerHTML = `
-        <div class="modal-overlay" onclick="closeModal(event)">
-          <div class="modal" onclick="event.stopPropagation()" style="max-width:440px">
-            <div style="font-size:36px;text-align:center;margin-bottom:10px">⚠️</div>
-            <h3 style="text-align:center;margin-bottom:10px">Course Mismatch Warning</h3>
-            <p style="font-size:13px;color:var(--text-muted);line-height:1.6;margin-bottom:18px">${esc(result.warning)}</p>
-            <div style="display:flex;gap:8px;justify-content:center">
-              <button class="btn btn-primary btn-sm" onclick="closeModal()">OK, Continue</button>
-            </div>
-          </div>
-        </div>`;
-    }
     renderSessions();
   } catch (e) {
     // Device offline or not registered — show in-modal block screen
     if (e.status === 503) {
-      const msg = e.data?.message || 'The classroom device is not responding. Power it on, connect to DIKLY-CLASSROOM WiFi, then try again.';
+      const msg = e.data?.message || 'The classroom device is not responding. Power it on and try again.';
       if (container) container.innerHTML = `
         <div class="modal-overlay" onclick="closeModal(event)">
-          <div class="modal" onclick="event.stopPropagation()" style="text-align:center;max-width:420px">
+          <div class="modal" onclick="event.stopPropagation()" style="text-align:center;max-width:400px">
             <div style="font-size:40px;margin-bottom:12px">📟</div>
-            <h3 style="margin-bottom:8px">Device Not Detected</h3>
+            <h3 style="margin-bottom:8px">Device is Offline</h3>
             <p style="font-size:13px;color:var(--text-muted);margin-bottom:16px;line-height:1.6">${esc(msg)}</p>
-            <div style="background:#fef3c7;border:1px solid #fde68a;border-radius:8px;padding:10px 14px;font-size:12px;color:#92400e;margin-bottom:20px;text-align:left">
-              <strong>If the device has no internet:</strong> Connect your phone to <strong>DIKLY-CLASSROOM</strong> WiFi first, then tap Retry.
-            </div>
             <div style="display:flex;gap:8px;justify-content:center">
               <button class="btn btn-secondary btn-sm" onclick="closeModal()">Cancel</button>
               <button class="btn btn-primary btn-sm" onclick="showStartSessionModal()">↻ Retry</button>
-            </div>
-          </div>
-        </div>`;
-    } else if (e.status === 403 && e.data?.timetableBlocked) {
-      const msg  = e.data?.message || 'This session is outside your scheduled time window.';
-      const sched = e.data?.scheduledTime;
-      const schedLine = sched ? `<div style="background:#fef3c7;border:1px solid #fde68a;border-radius:8px;padding:10px 14px;font-size:12px;color:#92400e;margin-bottom:20px;text-align:left">Scheduled: <strong>${sched.start} – ${sched.end}</strong></div>` : '';
-      if (container) container.innerHTML = `
-        <div class="modal-overlay" onclick="closeModal(event)">
-          <div class="modal" onclick="event.stopPropagation()" style="text-align:center;max-width:400px">
-            <div style="font-size:40px;margin-bottom:12px">🕐</div>
-            <h3 style="margin-bottom:8px">Not Your Scheduled Time</h3>
-            <p style="font-size:13px;color:var(--text-muted);margin-bottom:14px;line-height:1.6">${esc(msg)}</p>
-            ${schedLine}
-            <div style="display:flex;gap:8px;justify-content:center">
-              <button class="btn btn-secondary btn-sm" onclick="closeModal()">OK</button>
-            </div>
-          </div>
-        </div>`;
-    } else if (e.status === 403 && e.data?.deviceAssigned === false) {
-      const msg = e.data?.message || 'You are not assigned to this attendance device.';
-      if (container) container.innerHTML = `
-        <div class="modal-overlay" onclick="closeModal(event)">
-          <div class="modal" onclick="event.stopPropagation()" style="text-align:center;max-width:400px">
-            <div style="font-size:40px;margin-bottom:12px">🚫</div>
-            <h3 style="margin-bottom:8px">Device Not Assigned to You</h3>
-            <p style="font-size:13px;color:var(--text-muted);margin-bottom:20px;line-height:1.6">${esc(msg)}</p>
-            <div style="display:flex;gap:8px;justify-content:center">
-              <button class="btn btn-secondary btn-sm" onclick="closeModal()">OK</button>
             </div>
           </div>
         </div>`;
@@ -7283,7 +6020,7 @@ async function stopSession(id) {
 // QR auto-rotation state
 let _qrRotateTimer = null;
 let _qrCountdownTimer = null;
-const QR_EXPIRY_SECONDS = 60;
+const QR_EXPIRY_SECONDS = 15;
 
 function _stopQrTimers() {
   if (_qrRotateTimer)   { clearTimeout(_qrRotateTimer);  _qrRotateTimer = null; }
@@ -7349,12 +6086,12 @@ async function generateQR(sessionId) {
                     style="transition:stroke-dashoffset 1s linear,stroke 0.3s"/>
                 </svg>
                 <div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center">
-                  <span id="qr-countdown" style="font-size:16px;font-weight:800;color:var(--primary)">${Math.floor(QR_EXPIRY_SECONDS/60)}:${String(QR_EXPIRY_SECONDS%60).padStart(2,'0')}</span>
+                  <span id="qr-countdown" style="font-size:16px;font-weight:800;color:var(--primary)">${QR_EXPIRY_SECONDS}</span>
                 </div>
               </div>
               <div id="qr-status" style="display:inline-flex;align-items:center;gap:6px;background:rgba(34,197,94,0.1);border:1px solid rgba(34,197,94,0.3);border-radius:999px;padding:5px 14px;font-size:12px;font-weight:600;color:#16a34a">
                 <span style="width:7px;height:7px;border-radius:50%;background:#16a34a;display:inline-block;animation:pulse-green 1.5s infinite"></span>
-                Live · Auto-refreshes every 1 min
+                Live · Auto-refreshes every ${QR_EXPIRY_SECONDS}s
               </div>
             </div>
 
@@ -7370,18 +6107,17 @@ async function generateQR(sessionId) {
       const ring = document.getElementById('qr-ring');
       const countEl = document.getElementById('qr-countdown');
       const circumference = 170;
-      const _fmtTime = s => `${Math.floor(s/60)}:${String(s%60).padStart(2,'0')}`;
 
       _qrCountdownTimer = setInterval(() => {
         remaining--;
-        if (countEl) countEl.textContent = _fmtTime(remaining);
+        if (countEl) countEl.textContent = remaining;
         if (ring) {
           const offset = circumference * (1 - remaining / QR_EXPIRY_SECONDS);
           ring.style.strokeDashoffset = offset;
-          // Turn orange at 15s, red at 5s
-          if (remaining <= 5)        ring.style.stroke = '#ef4444';
-          else if (remaining <= 15)  ring.style.stroke = '#f97316';
-          else                       ring.style.stroke = 'var(--primary)';
+          // Turn orange at 5s, red at 3s
+          if (remaining <= 3)       ring.style.stroke = '#ef4444';
+          else if (remaining <= 5)  ring.style.stroke = '#f97316';
+          else                      ring.style.stroke = 'var(--primary)';
         }
         if (remaining <= 0) {
           clearInterval(_qrCountdownTimer);
@@ -7401,21 +6137,11 @@ async function generateQR(sessionId) {
       }, QR_EXPIRY_SECONDS * 1000);
 
     } catch (e) {
-      _stopQrTimers();
-      const sessionEnded = e.message?.toLowerCase().includes('not active') || e.message?.toLowerCase().includes('not found');
       container.innerHTML = `
-        <div class="modal-overlay" onclick="closeModal(event)">
-          <div class="modal" style="text-align:center;max-width:360px">
-            <div style="font-size:40px;margin-bottom:12px">${sessionEnded ? '📴' : '⚠️'}</div>
-            <h3 style="margin:0 0 8px">${sessionEnded ? 'Session Ended' : 'QR Error'}</h3>
-            <p style="color:var(--text-light);font-size:14px;margin-bottom:20px">
-              ${sessionEnded
-                ? 'The classroom device went offline and the session was automatically stopped.'
-                : e.message}
-            </p>
-            <div class="modal-actions" style="justify-content:center">
-              <button class="btn btn-primary btn-sm" onclick="closeModal();renderSessions()">Back to Sessions</button>
-            </div>
+        <div class="modal-overlay" onclick="_stopQrTimers();closeModal(event)">
+          <div class="modal" style="text-align:center">
+            <p style="color:var(--danger)">${e.message}</p>
+            <button class="btn btn-primary btn-sm" onclick="_stopQrTimers();closeModal()">Close</button>
           </div>
         </div>`;
     }
@@ -7428,68 +6154,34 @@ async function generateVerbalCode(sessionId) {
   const container = document.getElementById('modal-container');
   container.classList.remove('hidden');
 
-  let _verbalTimer = null;
-  let _verbalRefreshTimer = null;
-
-  function _stopVerbalTimers() {
-    if (_verbalTimer)        { clearInterval(_verbalTimer);   _verbalTimer = null; }
-    if (_verbalRefreshTimer) { clearTimeout(_verbalRefreshTimer); _verbalRefreshTimer = null; }
-  }
-
   async function _fetchAndShow() {
-    _stopVerbalTimers();
     try {
-      // Try to get the device code first (same HMAC code the ESP32 screen shows).
-      // Falls back to QR-token verbal code for sessions without a device.
-      let code, totalSecs, isDeviceCode = false, windowSecs = 300;
-
-      try {
-        const dc = await api(`/api/attendance-sessions/${sessionId}/current-code`);
-        code = dc.code;
-        totalSecs = dc.expiresInSeconds;
-        windowSecs = dc.windowSeconds || 300;
-        isDeviceCode = true;
-      } catch (_) {
-        // No device seed on this session — fall back to QR token verbal code
-        const data = await api('/api/qr-tokens/generate', {
-          method: 'POST',
-          body: JSON.stringify({ sessionId, codeType: 'verbal', expiryMinutes: 5 })
-        });
-        const qr = data.qrToken;
-        code = qr.code;
-        totalSecs = Math.round((new Date(qr.expiresAt) - Date.now()) / 1000);
-      }
-
-      const modeWord = currentUser.company?.mode === 'corporate' ? 'employees' : 'students';
-      const subtitle = isDeviceCode
-        ? 'This is the code currently shown on the classroom device screen.'
-        : `Read this code out loud. All ${modeWord} can use it within the time window.`;
-      const badgeText = isDeviceCode
-        ? '📟 Live device code — matches classroom screen'
-        : `Multi-use · All ${modeWord} can enter this code`;
-
-      const fmtTime = s => s >= 60 ? `${Math.floor(s/60)}m ${s%60}s` : `${s}s`;
+      const data = await api('/api/qr-tokens/generate', {
+        method: 'POST',
+        body: JSON.stringify({ sessionId, codeType: 'verbal', expiryMinutes: 5 })
+      });
+      const { code, expiresAt } = data.qrToken;
+      const expiry = new Date(expiresAt);
+      const totalSecs = Math.round((expiry - Date.now()) / 1000);
 
       container.innerHTML = `
-        <div class="modal-overlay" onclick="_stopVerbalTimers();closeModal(event)">
+        <div class="modal-overlay" onclick="closeModal(event)">
           <div class="modal" onclick="event.stopPropagation()" style="text-align:center;max-width:380px">
             <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px">
-              <h3 style="margin:0">${isDeviceCode ? 'Device Attendance Code' : 'Verbal Attendance Code'}</h3>
-              <button onclick="_stopVerbalTimers();closeModal()" style="background:none;border:none;font-size:20px;cursor:pointer;color:var(--text-light)">×</button>
+              <h3 style="margin:0">Verbal Attendance Code</h3>
+              <button onclick="closeModal()" style="background:none;border:none;font-size:20px;cursor:pointer;color:var(--text-light)">×</button>
             </div>
-            <p style="color:var(--text-light);font-size:12px;margin-bottom:16px">${subtitle}</p>
+            <p style="color:var(--text-light);font-size:12px;margin-bottom:16px">Read this code out loud. All ${currentUser.company?.mode === 'corporate' ? 'employees' : 'students'} can use it within the time window.</p>
             <div style="font-size:64px;font-weight:900;color:#7c3aed;letter-spacing:12px;margin-bottom:8px;font-family:monospace">${code}</div>
-            <div style="display:inline-flex;align-items:center;gap:6px;background:rgba(124,58,237,0.1);border:1px solid rgba(124,58,237,0.3);border-radius:999px;padding:5px 14px;font-size:12px;font-weight:600;color:#7c3aed;margin-bottom:10px">
+            <div style="display:inline-flex;align-items:center;gap:6px;background:rgba(124,58,237,0.1);border:1px solid rgba(124,58,237,0.3);border-radius:999px;padding:5px 14px;font-size:12px;font-weight:600;color:#7c3aed;margin-bottom:6px">
               <span style="width:7px;height:7px;border-radius:50%;background:#7c3aed;display:inline-block;animation:pulse-green 1.5s infinite"></span>
-              ${badgeText}
+              Multi-use · All ${currentUser.company?.mode === 'corporate' ? 'employees' : 'students'} can enter this code
             </div>
-            <p style="color:var(--text-light);font-size:12px;margin-bottom:20px">
-              ${isDeviceCode ? 'Rotates in:' : 'Expires in:'}
-              <span id="verbal-countdown" style="font-weight:700;color:#7c3aed">${fmtTime(totalSecs)}</span>
-            </p>
+            <p style="color:var(--text-light);font-size:12px;margin-bottom:4px">Expires in: <span id="verbal-countdown" style="font-weight:700;color:#7c3aed">${Math.floor(totalSecs/60)}m ${totalSecs%60}s</span></p>
+            <p style="color:var(--text-muted);font-size:11px;margin-bottom:20px">Expires at ${expiry.toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'})}</p>
             <div class="modal-actions" style="justify-content:center;gap:8px">
-              <button class="btn btn-sm" style="background:#7c3aed;color:#fff" onclick="generateVerbalCode('${sessionId}')">Refresh</button>
-              <button class="btn btn-primary btn-sm" onclick="_stopVerbalTimers();closeModal()">Close</button>
+              <button class="btn btn-sm" style="background:#7c3aed;color:#fff" onclick="generateVerbalCode('${sessionId}')">New Code</button>
+              <button class="btn btn-primary btn-sm" onclick="closeModal()">Close</button>
             </div>
           </div>
         </div>
@@ -7498,24 +6190,14 @@ async function generateVerbalCode(sessionId) {
       // Countdown timer
       let secs = totalSecs;
       const countEl = () => document.getElementById('verbal-countdown');
-      _verbalTimer = setInterval(() => {
+      const timer = setInterval(() => {
         secs--;
-        if (secs <= 0) {
-          clearInterval(_verbalTimer); _verbalTimer = null;
-          if (countEl()) countEl().textContent = 'Rotating…';
-          return;
-        }
-        if (countEl()) countEl().textContent = fmtTime(secs);
+        if (secs <= 0) { clearInterval(timer); if (countEl()) countEl().textContent = 'Expired'; return; }
+        if (countEl()) countEl().textContent = Math.floor(secs/60) + 'm ' + (secs%60) + 's';
       }, 1000);
 
-      // Auto-refresh when the window rolls over
-      if (isDeviceCode) {
-        _verbalRefreshTimer = setTimeout(() => generateVerbalCode(sessionId), totalSecs * 1000);
-      }
-
     } catch(e) {
-      _stopVerbalTimers();
-      const msg = e.message || 'Failed to get code';
+      const msg = e.message || 'Failed to generate code';
       const isSubError = msg.toLowerCase().includes('subscription') || msg.toLowerCase().includes('trial');
       container.innerHTML = `<div class="modal-overlay" onclick="closeModal(event)"><div class="modal" onclick="event.stopPropagation()" style="text-align:center;padding:24px">
         <div style="font-size:36px;margin-bottom:12px">${isSubError ? '🔒' : '⚠️'}</div>
@@ -7530,473 +6212,127 @@ async function generateVerbalCode(sessionId) {
 }
 
 
-// ── Colour palette for department accent bars ─────────────────────────────────
-let _cachedUsers = null;
-const _DEPT_COLORS = ['#6366f1','#8b5cf6','#ec4899','#f97316','#14b8a6','#22c55e','#3b82f6','#f59e0b','#ef4444','#06b6d4'];
-function _deptColor(name) {
-  let h = 0;
-  for (let i = 0; i < (name||'').length; i++) h = ((h * 31) + name.charCodeAt(i)) | 0;
-  return _DEPT_COLORS[Math.abs(h) % _DEPT_COLORS.length];
-}
-
 async function renderUsers(filterRole='', filterDept='', filterSearch='') {
   const content = document.getElementById('main-content');
   if (!content) return;
-  content.innerHTML = '<div style="padding:40px;text-align:center;color:var(--text-muted)">Loading users…</div>';
-  if (!isOnline()) {
-    const _c = offlineRead('users_list');
-    if (_c) {
-      _cachedUsers = _c;
-      window._hodDepts = [...new Set(_c.filter(u => u.role==='hod' && u.department).map(u => u.department))].sort();
-      const mode = currentUser.company?.mode || 'corporate';
-      if (mode === 'academic') _renderUserDeptCards(content, _c, filterSearch);
-      else _renderUsersCorporateTable(content, _c, filterRole, filterDept, filterSearch);
-      return;
-    }
-    content.innerHTML = `<div style="text-align:center;padding:60px 20px"><div style="font-size:48px;margin-bottom:12px">📡</div><div style="font-size:18px;font-weight:700">You're Offline</div><p style="color:var(--text-muted);margin-top:8px">Connect once while online to cache this page.</p></div>`; return;
-  }
   try {
-    const data = await api('/api/users');
-    _cachedUsers = data.users || [];
-    offlineCache('users_list', _cachedUsers);
-    window._hodDepts = [...new Set(_cachedUsers.filter(u => u.role==='hod' && u.department).map(u => u.department))].sort();
+    let url = '/api/users';
+    const params = [];
+    if (filterRole) params.push('role=' + encodeURIComponent(filterRole));
+    if (filterDept) params.push('department=' + encodeURIComponent(filterDept));
+    if (params.length) url += '?' + params.join('&');
+
+    const data = await api(url);
     const mode = currentUser.company?.mode || 'corporate';
-    if (mode === 'academic') {
-      _renderUserDeptCards(content, _cachedUsers, filterSearch);
-    } else {
-      _renderUsersCorporateTable(content, _cachedUsers, filterRole, filterDept, filterSearch);
+    const isManager = currentUser.role === 'manager';
+    const canManage = ['manager', 'admin', 'superadmin'].includes(currentUser.role);
+    const pageTitle = isManager ? 'Employees' : 'Users';
+    const pageDesc = isManager ? 'Manage your employees' : 'Manage team members';
+    const addLabel = isManager ? 'Add Employee' : 'Add User';
+
+    let otherUsers = data.users.filter(u => u._id !== currentUser.id);
+    if (filterSearch) {
+      const q = filterSearch.toLowerCase();
+      otherUsers = otherUsers.filter(u =>
+        u.name?.toLowerCase().includes(q) ||
+        u.email?.toLowerCase().includes(q) ||
+        u.indexNumber?.toLowerCase().includes(q) ||
+        u.department?.toLowerCase().includes(q)
+      );
     }
-  } catch(e) {
-    const _c = offlineRead('users_list');
-    if (_c) {
-      _cachedUsers = _c;
-      window._hodDepts = [...new Set(_c.filter(u => u.role==='hod' && u.department).map(u => u.department))].sort();
-      const mode = currentUser.company?.mode || 'corporate';
-      if (mode === 'academic') _renderUserDeptCards(content, _c, filterSearch);
-      else _renderUsersCorporateTable(content, _c, filterRole, filterDept, filterSearch);
-      return;
-    }
-    content.innerHTML = `<div class="card"><p style="color:#ef4444">Error loading users: ${e.message}</p></div>`;
-  }
-}
 
-// ── View 1: Department overview cards ─────────────────────────────────────────
-function _renderUserDeptCards(content, allUsers, filterSearch='') {
-  const canManage = ['admin','superadmin'].includes(currentUser.role);
-  const _roleRank = {superadmin:6,admin:5,manager:4,hod:3,lecturer:3,employee:2,student:1};
-  const _myRank = _roleRank[currentUser.role] || 0;
-  const selfId = (currentUser._id || currentUser.id || '').toString();
+    // Collect unique departments for filter dropdown
+    const allDepts = [...new Set((data.users || []).map(u => u.department).filter(Boolean))].sort();
 
-  const deptMap = {};
-  const staffNoDept = [];
-  allUsers.forEach(u => {
-    if (u._id?.toString() === selfId) return;
-    if (u.role === 'student') {
-      const d = u.department || '—';
-      if (!deptMap[d]) deptMap[d] = { students:[], lecturers:[], hod:null, levels:new Set() };
-      deptMap[d].students.push(u);
-      if (u.studentLevel) deptMap[d].levels.add(u.studentLevel);
-    } else if (u.role === 'lecturer' || u.role === 'hod') {
-      if (u.department) {
-        if (!deptMap[u.department]) deptMap[u.department] = { students:[], lecturers:[], hod:null, levels:new Set() };
-        if (u.role === 'hod') deptMap[u.department].hod = u;
-        else deptMap[u.department].lecturers.push(u);
-      } else { staffNoDept.push(u); }
-    } else { staffNoDept.push(u); }
-  });
-
-  let entries = Object.entries(deptMap);
-  if (filterSearch) {
-    const q = filterSearch.toLowerCase();
-    entries = entries.filter(([dn, d]) =>
-      dn.toLowerCase().includes(q) ||
-      d.hod?.name?.toLowerCase().includes(q) ||
-      d.lecturers.some(l => l.name?.toLowerCase().includes(q)) ||
-      d.students.some(s => s.name?.toLowerCase().includes(q) || (s.indexNumber||s.IndexNumber||'').toLowerCase().includes(q))
-    );
-  }
-  entries.sort(([a],[b]) => a.localeCompare(b));
-  const totalStudents = allUsers.filter(u => u.role==='student' && u._id?.toString()!==selfId).length;
-
-  content.innerHTML = `
-    <div class="page-header">
-      <div>
-        <h2>Users</h2>
-        <p>${totalStudents} students · ${entries.length} department${entries.length!==1?'s':''}</p>
-      </div>
-      <div style="display:flex;gap:8px;flex-wrap:wrap">
-        ${canManage?`<button class="btn btn-primary btn-sm" onclick="showCreateUserModal()">＋ Add User</button>`:''}
-        ${canManage?`<button class="btn btn-sm btn-secondary" onclick="showBulkImportModal()">📥 Bulk Import</button>`:''}
-        ${canManage?`<button class="btn btn-sm" style="background:#f59e0b;color:#fff" onclick="renderResetLogs()">🔐 Reset Log</button>`:''}
-      </div>
-    </div>
-    <div style="margin-bottom:18px">
-      <input id="user-search-input" placeholder="Search departments, names, index numbers…" value="${esc(filterSearch)}"
-        oninput="renderUsers('','',this.value)"
-        style="width:100%;max-width:420px;padding:9px 14px;border:1.5px solid var(--border);border-radius:10px;font-size:13px;font-family:inherit;outline:none;box-sizing:border-box">
-    </div>
-    <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(265px,1fr));gap:16px;margin-bottom:28px">
-      ${entries.map(([deptName, d]) => {
-        const col = _deptColor(deptName);
-        const levArr = Array.from(d.levels).sort();
-        const enc = encodeURIComponent(deptName);
-        return `
-          <div class="card" tabindex="0" role="button"
-            style="padding:0;overflow:hidden;cursor:pointer;border:1.5px solid var(--border);transition:box-shadow .2s,transform .15s;outline:none"
-            onmouseenter="this.style.boxShadow='0 6px 24px rgba(0,0,0,.12)';this.style.transform='translateY(-2px)'"
-            onmouseleave="this.style.boxShadow='';this.style.transform=''"
-            onclick="_renderUserDeptDetail(decodeURIComponent('${enc}'),_cachedUsers)"
-            onkeydown="if(event.key==='Enter')_renderUserDeptDetail(decodeURIComponent('${enc}'),_cachedUsers)">
-            <div style="height:4px;background:${col}"></div>
-            <div style="padding:18px 20px 16px">
-              <div style="display:flex;align-items:flex-start;gap:12px;margin-bottom:14px">
-                <div style="width:46px;height:46px;border-radius:12px;background:${col}1a;display:flex;align-items:center;justify-content:center;font-size:22px;font-weight:800;color:${col};flex-shrink:0">
-                  ${esc(deptName.charAt(0).toUpperCase())}
-                </div>
-                <div style="flex:1;min-width:0">
-                  <div style="font-weight:700;font-size:14px;line-height:1.25;word-break:break-word">${esc(deptName)}</div>
-                  <div style="font-size:11px;color:var(--text-muted);margin-top:3px">
-                    ${d.hod?`HOD: <strong>${esc(d.hod.name)}</strong>`:`<span style="color:#f59e0b">No HOD assigned</span>`}
-                  </div>
-                </div>
-              </div>
-              <div style="display:grid;grid-template-columns:repeat(3,1fr);text-align:center;gap:4px;margin-bottom:12px">
-                <div>
-                  <div style="font-size:22px;font-weight:700;color:${col}">${d.students.length}</div>
-                  <div style="font-size:10px;color:var(--text-muted);text-transform:uppercase;letter-spacing:.4px">Students</div>
-                </div>
-                <div>
-                  <div style="font-size:22px;font-weight:700">${d.lecturers.length}</div>
-                  <div style="font-size:10px;color:var(--text-muted);text-transform:uppercase;letter-spacing:.4px">Lecturers</div>
-                </div>
-                <div>
-                  <div style="font-size:22px;font-weight:700">${levArr.length}</div>
-                  <div style="font-size:10px;color:var(--text-muted);text-transform:uppercase;letter-spacing:.4px">Levels</div>
-                </div>
-              </div>
-              ${levArr.length?`<div style="display:flex;flex-wrap:wrap;gap:4px;margin-bottom:12px">
-                ${levArr.map(lv=>`<span style="padding:2px 9px;border-radius:20px;font-size:11px;font-weight:700;background:${col}1a;color:${col}">${esc(lv)}</span>`).join('')}
-              </div>`:''}
-              <div style="border-top:1px solid var(--border);padding-top:10px;display:flex;justify-content:space-between;align-items:center">
-                <span style="font-size:11px;color:var(--text-muted)">${levArr.length} level${levArr.length!==1?'s':''}</span>
-                <span style="font-size:12px;font-weight:700;color:${col}">Open →</span>
-              </div>
-            </div>
-          </div>`;
-      }).join('')}
-    </div>
-    ${staffNoDept.length?`
-      <div style="font-size:11px;font-weight:700;color:var(--text-muted);letter-spacing:.8px;text-transform:uppercase;margin-bottom:10px">Other Staff</div>
-      <div class="card" style="padding:0;overflow:hidden">
-        <table>
-          <thead><tr><th>Name</th><th>Email</th><th>Role</th><th>Status</th>${canManage?'<th>Actions</th>':''}</tr></thead>
-          <tbody>
-            ${staffNoDept.filter(u => {
-              if (!filterSearch) return true;
-              const q = filterSearch.toLowerCase();
-              return u.name?.toLowerCase().includes(q) || u.email?.toLowerCase().includes(q);
-            }).map(u => {
-              const canAct = (_roleRank[u.role]||0) < _myRank;
-              return `<tr id="user-row-${u._id}">
-                <td style="font-weight:500">${esc(u.name)}</td>
-                <td style="font-size:12px;color:var(--text-muted)">${esc(u.email||'—')}</td>
-                <td><span class="role-badge role-${u.role}">${u.role}</span></td>
-                <td><span class="status-badge ${u.isActive?'status-active':'status-stopped'}">${u.isActive?'Active':'Inactive'}</span></td>
-                ${canManage?`<td style="white-space:nowrap">${canAct?`
-                  ${u.isActive?`<button class="btn btn-sm" style="background:#f59e0b;color:#fff;font-size:11px" onclick="deactivateUser('${u._id}')">Deactivate</button>`:`<button class="btn btn-sm" style="background:#22c55e;color:#fff;font-size:11px" onclick="activateUser('${u._id}')">Activate</button>`}
-                  <button class="btn btn-sm" style="background:#6366f1;color:#fff;font-size:11px" onclick="adminResetStudentPassword('${u._id}',this)">🔑 Reset</button>
-                  <button class="btn btn-danger btn-sm" style="font-size:11px" onclick="deleteUserPermanently('${u._id}',this)">Delete</button>
-                `:'—'}</td>`:''}
-              </tr>`;
-            }).join('')}
-          </tbody>
-        </table>
-      </div>`:''}
-  `;
-}
-
-// ── View 2: Level cards inside a department ────────────────────────────────────
-function _renderUserDeptDetail(deptName, allUsers) {
-  const content = document.getElementById('main-content');
-  if (!content) return;
-  const canManage = ['admin','superadmin'].includes(currentUser.role);
-  const _roleRank = {superadmin:6,admin:5,manager:4,hod:3,lecturer:3,employee:2,student:1};
-  const _myRank = _roleRank[currentUser.role] || 0;
-  const col = _deptColor(deptName);
-  const encDept = encodeURIComponent(deptName);
-
-  const deptStudents = allUsers.filter(u => u.role==='student' && u.department===deptName);
-  const deptLecturers = allUsers.filter(u => u.role==='lecturer' && u.department===deptName);
-  const deptHod = allUsers.find(u => u.role==='hod' && u.department===deptName);
-
-  const levelMap = {};
-  deptStudents.forEach(s => {
-    const lv = s.studentLevel || 'Unclassified';
-    if (!levelMap[lv]) levelMap[lv] = [];
-    levelMap[lv].push(s);
-  });
-
-  const staffList = [...(deptHod?[deptHod]:[]), ...deptLecturers];
-
-  content.innerHTML = `
-    <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;font-size:13px">
-      <span style="color:var(--primary);cursor:pointer;font-weight:500" onclick="renderUsers()">Users</span>
-      <span style="color:var(--text-muted)">›</span>
-      <span style="font-weight:600">${esc(deptName)}</span>
-    </div>
-    <div class="page-header" style="margin-bottom:20px">
-      <div style="display:flex;align-items:center;gap:14px">
-        <div style="width:52px;height:52px;border-radius:14px;background:${col}1a;display:flex;align-items:center;justify-content:center;font-size:24px;font-weight:800;color:${col};flex-shrink:0">
-          ${esc(deptName.charAt(0).toUpperCase())}
+    content.innerHTML = `
+      <div class="page-header"><h2>${pageTitle}</h2><p>${pageDesc} · ${otherUsers.length} shown</p></div>
+      <div class="actions-bar" style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:10px;">
+        ${canManage ? `<button class="btn btn-primary btn-sm" onclick="showCreateUserModal()">${addLabel}</button>` : ''}
+        ${['admin','superadmin'].includes(currentUser.role) && mode === 'academic' ? `<button class="btn btn-sm btn-secondary" onclick="showBulkImportModal()">📥 Bulk Import Students</button>` : ''}
+        ${['admin','superadmin'].includes(currentUser.role) ? `<button class="btn btn-sm" style="background:#f59e0b;color:#fff" onclick="renderResetLogs()">🔐 Password Reset Log</button>` : ''}
+        <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin-left:auto;">
+          <input id="user-search-input" placeholder="Search name / email / ID…" value="${filterSearch}"
+            oninput="renderUsers(document.getElementById('user-role-filter').value, document.getElementById('user-dept-filter').value, this.value)"
+            style="padding:7px 11px;border:1.5px solid var(--border);border-radius:8px;font-size:13px;font-family:inherit;outline:none;min-width:180px;">
+          <select id="user-role-filter" onchange="renderUsers(this.value, document.getElementById('user-dept-filter').value, document.getElementById('user-search-input').value)"
+            style="padding:7px 10px;border:1.5px solid var(--border);border-radius:8px;font-size:13px;font-family:inherit;outline:none;">
+            <option value="" ${!filterRole?'selected':''}>All Roles</option>
+            ${currentUser.role === 'superadmin'
+              ? `<option value="admin"     ${filterRole==='admin'?'selected':''}>Admin</option>
+                 <option value="manager"   ${filterRole==='manager'?'selected':''}>Manager</option>
+                 <option value="hod"       ${filterRole==='hod'?'selected':''}>HOD</option>
+                 <option value="lecturer"  ${filterRole==='lecturer'?'selected':''}>Lecturer</option>
+                 <option value="employee"  ${filterRole==='employee'?'selected':''}>Employee</option>
+                 <option value="student"   ${filterRole==='student'?'selected':''}>Student</option>`
+              : mode === 'academic'
+                ? `<option value="admin"    ${filterRole==='admin'?'selected':''}>Admin</option>
+                   <option value="hod"      ${filterRole==='hod'?'selected':''}>HOD</option>
+                   <option value="lecturer" ${filterRole==='lecturer'?'selected':''}>Lecturer</option>
+                   <option value="student"  ${filterRole==='student'?'selected':''}>Student</option>`
+                : `<option value="admin"    ${filterRole==='admin'?'selected':''}>Admin</option>
+                   <option value="manager"  ${filterRole==='manager'?'selected':''}>Manager</option>
+                   <option value="employee" ${filterRole==='employee'?'selected':''}>Employee</option>`}
+          </select>
+          ${mode === 'academic' && allDepts.length > 0 ? `
+          <select id="user-dept-filter" onchange="renderUsers(document.getElementById('user-role-filter').value, this.value, document.getElementById('user-search-input').value)"
+            style="padding:7px 10px;border:1.5px solid var(--border);border-radius:8px;font-size:13px;font-family:inherit;outline:none;">
+            <option value="" ${!filterDept?'selected':''}>All Departments</option>
+            ${allDepts.map(d => `<option value="${d}" ${filterDept===d?'selected':''}>${d}</option>`).join('')}
+          </select>` : `<select id="user-dept-filter" style="display:none;"></select>`}
+          ${filterRole || filterDept || filterSearch ? `<button class="btn btn-xs btn-secondary" onclick="renderUsers()">✕ Clear</button>` : ''}
         </div>
-        <div>
-          <h2 style="margin:0">${esc(deptName)}</h2>
-          <p style="margin:0;font-size:13px;color:var(--text-muted)">
-            ${deptStudents.length} students · ${deptLecturers.length} lecturer${deptLecturers.length!==1?'s':''}${deptHod?' · HOD: '+esc(deptHod.name):''}
-          </p>
-        </div>
+        ${canManage ? `
+          <div id="bulk-actions" style="display:none;gap:8px;align-items:center;margin-left:auto">
+            <span id="selected-count" style="font-size:13px;color:var(--text-light)">0 selected</span>
+            <button class="btn btn-sm" style="background:#22c55e;color:#fff" onclick="bulkUserAction('activate')">Activate</button>
+            <button class="btn btn-sm" style="background:#f59e0b;color:#fff" onclick="bulkUserAction('deactivate')">Deactivate</button>
+            <button class="btn btn-danger btn-sm" onclick="bulkUserAction('delete')">Delete</button>
+          </div>
+        ` : ''}
       </div>
-      ${canManage?`<button class="btn btn-primary btn-sm" onclick="showCreateUserModal()">＋ Add User</button>`:''}
-    </div>
-    <div style="font-size:11px;font-weight:700;color:var(--text-muted);letter-spacing:.8px;text-transform:uppercase;margin-bottom:12px">Levels</div>
-    <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:14px;margin-bottom:28px">
-      ${Object.entries(levelMap).sort(([a],[b])=>a.localeCompare(b)).map(([lv, students]) => {
-        const groups = {};
-        const sessions = {};
-        students.forEach(s => {
-          groups[s.studentGroup||'Unassigned'] = (groups[s.studentGroup||'Unassigned']||0)+1;
-          sessions[s.sessionType||'Regular'] = (sessions[s.sessionType||'Regular']||0)+1;
-        });
-        const active = students.filter(s=>s.isActive).length;
-        const encLv = encodeURIComponent(lv);
-        return `
-          <div class="card" tabindex="0" role="button"
-            style="padding:18px;cursor:pointer;border:1.5px solid var(--border);transition:box-shadow .2s,transform .15s;outline:none"
-            onmouseenter="this.style.boxShadow='0 6px 24px rgba(0,0,0,.12)';this.style.transform='translateY(-2px)'"
-            onmouseleave="this.style.boxShadow='';this.style.transform=''"
-            onclick="_renderUserLevelDetail(decodeURIComponent('${encDept}'),decodeURIComponent('${encLv}'),_cachedUsers,'')"
-            onkeydown="if(event.key==='Enter')_renderUserLevelDetail(decodeURIComponent('${encDept}'),decodeURIComponent('${encLv}'),_cachedUsers,'')">
-            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
-              <span style="font-size:26px;font-weight:800;color:${col}">${esc(lv)}</span>
-              <span style="padding:3px 10px;border-radius:20px;background:${col}1a;color:${col};font-size:11px;font-weight:700">${students.length}</span>
-            </div>
-            <div style="display:flex;flex-wrap:wrap;gap:4px;margin-bottom:8px">
-              ${Object.entries(groups).sort().map(([g,c])=>`<span style="padding:2px 8px;border-radius:20px;font-size:11px;background:#f3f4f6;color:#374151;font-weight:600">Grp ${esc(g)}: ${c}</span>`).join('')}
-            </div>
-            <div style="display:flex;flex-wrap:wrap;gap:4px;margin-bottom:10px">
-              ${Object.entries(sessions).map(([st,c])=>`<span style="padding:2px 8px;border-radius:20px;font-size:11px;font-weight:600;background:${st==='Regular'?'#f0fdf4':'#fff7ed'};color:${st==='Regular'?'#166534':'#9a3412'}">${esc(st)}: ${c}</span>`).join('')}
-            </div>
-            <div style="border-top:1px solid var(--border);padding-top:8px;display:flex;justify-content:space-between;align-items:center">
-              <span style="font-size:11px;color:${active===students.length?'#22c55e':'#f59e0b'}">${active}/${students.length} active</span>
-              <span style="font-size:12px;font-weight:700;color:${col}">View →</span>
-            </div>
-          </div>`;
-      }).join('')}
-    </div>
-    <div style="font-size:11px;font-weight:700;color:var(--text-muted);letter-spacing:.8px;text-transform:uppercase;margin-bottom:10px">Department Staff</div>
-    <div class="card" style="padding:0;overflow:hidden">
-      <table>
-        <thead><tr><th>Name</th><th>Email</th><th>Role</th><th>Status</th>${canManage?'<th>Actions</th>':''}</tr></thead>
-        <tbody>
-          ${staffList.length ? staffList.map(u => {
-            const canAct = (_roleRank[u.role]||0) < _myRank;
-            return `<tr id="user-row-${u._id}">
-              <td style="font-weight:500">${esc(u.name)}</td>
-              <td style="font-size:12px;color:var(--text-muted)">${esc(u.email||'—')}</td>
-              <td><span class="role-badge role-${u.role}">${u.role}</span></td>
-              <td><span class="status-badge ${u.isActive?'status-active':'status-stopped'}">${u.isActive?'Active':'Inactive'}</span></td>
-              ${canManage?`<td style="white-space:nowrap">${canAct?`
-                ${u.isActive?`<button class="btn btn-sm" style="background:#f59e0b;color:#fff;font-size:11px" onclick="deactivateUser('${u._id}')">Deactivate</button>`:`<button class="btn btn-sm" style="background:#22c55e;color:#fff;font-size:11px" onclick="activateUser('${u._id}')">Activate</button>`}
-                <button class="btn btn-sm" style="background:#6366f1;color:#fff;font-size:11px" onclick="adminResetStudentPassword('${u._id}',this)">🔑 Reset</button>
-                <button class="btn btn-danger btn-sm" style="font-size:11px" onclick="deleteUserPermanently('${u._id}',this)">Delete</button>
-              `:'—'}</td>`:''}
-            </tr>`;
-          }).join('') : `<tr><td colspan="${canManage?5:4}" style="text-align:center;padding:16px;color:var(--text-muted)">No staff in this department yet</td></tr>`}
-        </tbody>
-      </table>
-    </div>
-  `;
-}
-
-// ── View 3: Student list within a level ────────────────────────────────────────
-function _renderUserLevelDetail(deptName, level, allUsers, groupFilter='') {
-  const content = document.getElementById('main-content');
-  if (!content) return;
-  const canManage = ['admin','superadmin'].includes(currentUser.role);
-  const _roleRank = {superadmin:6,admin:5,manager:4,hod:3,lecturer:3,employee:2,student:1};
-  const _myRank = _roleRank[currentUser.role] || 0;
-  const col = _deptColor(deptName);
-  const encDept = encodeURIComponent(deptName);
-  const encLv = encodeURIComponent(level);
-
-  let students = allUsers.filter(u => u.role==='student' && u.department===deptName && u.studentLevel===level);
-  const allGroups = [...new Set(students.map(s=>s.studentGroup).filter(Boolean))].sort();
-  if (groupFilter) students = students.filter(s=>s.studentGroup===groupFilter);
-  const colCount = canManage ? 7 : 5;
-
-  const studentRow = u => {
-    const canAct = (_roleRank[u.role]||0) < _myRank;
-    return `<tr id="user-row-${u._id}"
-      data-name="${(u.name||'').toLowerCase()}"
-      data-idx="${(u.IndexNumber||u.indexNumber||'').toLowerCase()}"
-      data-email="${(u.email||'').toLowerCase()}">
-      ${canManage?`<td><input type="checkbox" class="user-checkbox" value="${u._id}" onchange="updateBulkActions()"></td>`:''}
-      <td style="font-weight:500">${esc(u.name)}</td>
-      <td style="font-family:monospace;font-size:12px;color:var(--text-muted)">${esc(u.IndexNumber||u.indexNumber||'—')}</td>
-      <td style="font-size:12px;color:var(--text-muted)">${esc(u.email||'—')}</td>
-      <td style="font-size:11px;white-space:nowrap">
-        ${u.programme?`<span style="background:#ede9fe;color:#7c3aed;padding:1px 6px;border-radius:20px;font-weight:700;margin-right:2px">${esc(u.programme)}</span>`:''}
-        ${u.studentGroup?`<span style="background:#ecfdf5;color:#059669;padding:1px 6px;border-radius:20px;font-weight:700;margin-right:2px">Grp ${esc(u.studentGroup)}</span>`:''}
-        ${u.sessionType?`<span style="padding:1px 6px;border-radius:20px;font-weight:600;margin-right:2px;background:${u.sessionType==='Regular'?'#f0fdf4':'#fff7ed'};color:${u.sessionType==='Regular'?'#166534':'#9a3412'}">${esc(u.sessionType)}</span>`:''}
-        ${u.semester?`<span style="color:var(--text-muted)">Sem ${esc(u.semester)}</span>`:''}
-      </td>
-      <td><span class="status-badge ${u.isActive?'status-active':'status-stopped'}">${u.isActive?'Active':'Inactive'}</span></td>
-      ${canManage?`<td style="white-space:nowrap">${canAct?`
-        ${u.isActive?`<button class="btn btn-sm" style="background:#f59e0b;color:#fff;font-size:11px" onclick="deactivateUser('${u._id}')">Deactivate</button>`:`<button class="btn btn-sm" style="background:#22c55e;color:#fff;font-size:11px" onclick="activateUser('${u._id}')">Activate</button>`}
-        <button class="btn btn-sm" style="background:#6366f1;color:#fff;font-size:11px" onclick="adminResetStudentPassword('${u._id}',this)">🔑 Reset</button>
-        ${u.deviceId?`<button class="btn btn-sm" style="background:#f97316;color:#fff;font-size:11px" onclick="clearStudentDeviceLock('${u._id}',this)">🔓 Unlock</button>`:''}
-        <button class="btn btn-danger btn-sm" style="font-size:11px" onclick="deleteUserPermanently('${u._id}',this)">Delete</button>
-      `:'—'}</td>`:''}
-    </tr>`;
-  };
-
-  content.innerHTML = `
-    <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;font-size:13px">
-      <span style="color:var(--primary);cursor:pointer;font-weight:500" onclick="renderUsers()">Users</span>
-      <span style="color:var(--text-muted)">›</span>
-      <span style="color:var(--primary);cursor:pointer;font-weight:500" onclick="_renderUserDeptDetail(decodeURIComponent('${encDept}'),_cachedUsers)">${esc(deptName)}</span>
-      <span style="color:var(--text-muted)">›</span>
-      <span style="font-weight:600">${esc(level)}</span>
-    </div>
-    <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;margin-bottom:16px">
-      <div>
-        <h2 style="margin:0;display:flex;align-items:center;gap:10px">
-          ${esc(deptName)}
-          <span style="padding:3px 12px;border-radius:20px;font-size:14px;background:${col}1a;color:${col};font-weight:800">${esc(level)}</span>
-        </h2>
-        <p style="margin:4px 0 0;font-size:13px;color:var(--text-muted)">${students.length} student${students.length!==1?'s':''}${groupFilter?' · Group '+esc(groupFilter):''}</p>
+      <div class="card">
+        ${otherUsers.length ? `
+          <table>
+            <thead><tr>
+              ${canManage ? '<th style="width:40px"><input type="checkbox" id="select-all-users" onchange="toggleSelectAllUsers()"></th>' : ''}
+              <th>Name</th>${mode === 'corporate' ? '<th>Employee ID</th>' : ''}<th>Email / Index</th><th>Role</th>${mode !== 'corporate' ? '<th>Classification</th>' : ''}<th>Status</th>${canManage ? '<th>Actions</th>' : ''}
+            </tr></thead>
+            <tbody>${otherUsers.map(u => `
+              <tr id="user-row-${u._id}">
+                ${canManage ? `<td><input type="checkbox" class="user-checkbox" value="${u._id}" onchange="updateBulkActions()"></td>` : ''}
+                <td>${u.name}</td>
+                ${mode === 'corporate' ? `<td>${u.employeeId || '-'}</td>` : ''}
+                <td>${u.email || u.IndexNumber || u.indexNumber || 'N/A'}</td>
+                <td><span class="role-badge role-${u.role}">${u.role}</span>${u.department ? `<span style="font-size:10px;margin-left:5px;padding:2px 6px;border-radius:20px;background:#ecfeff;color:#0891b2;font-weight:600;">${u.department}</span>` : ''}</td>
+                ${mode !== 'corporate' ? `<td style="font-size:11px;white-space:nowrap">
+                  ${u.role === 'student' ? `
+                    ${u.programme ? `<span style="background:#ede9fe;color:#7c3aed;padding:1px 6px;border-radius:20px;font-weight:700;margin-right:2px">${esc(u.programme)}</span>` : ''}
+                    ${u.studentLevel ? `<span style="background:#dbeafe;color:#1d4ed8;padding:1px 6px;border-radius:20px;font-weight:700;margin-right:2px">L${esc(u.studentLevel)}</span>` : ''}
+                    ${u.studentGroup ? `<span style="background:#ecfdf5;color:#059669;padding:1px 6px;border-radius:20px;font-weight:700;margin-right:2px">Grp ${esc(u.studentGroup)}</span>` : ''}
+                    ${u.sessionType ? `<span style="background:#fff7ed;color:#c2410c;padding:1px 6px;border-radius:20px;font-weight:600;margin-right:2px">${esc(u.sessionType)}</span>` : ''}
+                    ${u.semester ? `<span style="color:var(--text-muted)">Sem ${esc(u.semester)}</span>` : ''}
+                    ${!u.programme && !u.studentLevel ? '<span style="color:var(--text-muted)">—</span>' : ''}
+                  ` : '<span style="color:var(--text-muted)">—</span>'}
+                </td>` : ''}
+                <td><span class="status-badge ${u.isActive ? 'status-active' : 'status-stopped'}">${u.isActive ? 'Active' : 'Inactive'}</span></td>
+                ${canManage ? `<td style="white-space:nowrap">
+                  ${u.isActive
+                    ? `<button class="btn btn-sm" style="background:#f59e0b;color:#fff;font-size:11px" onclick="deactivateUser('${u._id}')">Deactivate</button>`
+                    : `<button class="btn btn-sm" style="background:#22c55e;color:#fff;font-size:11px" onclick="activateUser('${u._id}')">Activate</button>`}
+                  <button class="btn btn-sm" style="background:#6366f1;color:#fff;font-size:11px" onclick="adminResetStudentPassword('${u._id}', this)">🔑 Reset</button>
+                  ${u.role === 'student' && u.deviceId ? `<button class="btn btn-sm" style="background:#f97316;color:#fff;font-size:11px" onclick="clearStudentDeviceLock('${u._id}', this)">🔓 Unlock</button>` : ''}
+                  <button class="btn btn-danger btn-sm" style="font-size:11px" onclick="deleteUserPermanently('${u._id}', this)">Delete</button>
+                </td>` : ''}
+              </tr>
+            `).join('')}</tbody>
+          </table>
+        ` : '<div class="empty-state"><p>No users found</p></div>'}
       </div>
-      <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
-        ${canManage?`<button class="btn btn-primary btn-sm" onclick="showCreateUserModal()">＋ Add</button>`:''}
-        <input id="level-search" placeholder="Search students…"
-          oninput="_filterLevelRows(this.value)"
-          style="padding:7px 11px;border:1.5px solid var(--border);border-radius:8px;font-size:13px;font-family:inherit;outline:none;min-width:160px">
-        ${allGroups.length>1?`
-          <select onchange="_renderUserLevelDetail(decodeURIComponent('${encDept}'),decodeURIComponent('${encLv}'),_cachedUsers,this.value)"
-            style="padding:7px 10px;border:1.5px solid var(--border);border-radius:8px;font-size:13px;font-family:inherit;outline:none">
-            <option value="">All Groups</option>
-            ${allGroups.map(g=>`<option value="${esc(g)}" ${groupFilter===g?'selected':''}>${esc(g)}</option>`).join('')}
-          </select>`:''}
-      </div>
-    </div>
-    ${canManage?`
-      <div id="bulk-actions" style="display:none;gap:8px;align-items:center;margin-bottom:10px;padding:10px 14px;background:#f8fafc;border-radius:8px;border:1px solid var(--border)">
-        <span id="selected-count" style="font-size:13px;color:var(--text-muted)">0 selected</span>
-        <button class="btn btn-sm" style="background:#22c55e;color:#fff" onclick="bulkUserAction('activate')">Activate</button>
-        <button class="btn btn-sm" style="background:#f59e0b;color:#fff" onclick="bulkUserAction('deactivate')">Deactivate</button>
-        <button class="btn btn-danger btn-sm" onclick="bulkUserAction('delete')">Delete</button>
-      </div>`:''}
-    <div class="card" style="padding:0;overflow:hidden">
-      <table>
-        <thead><tr>
-          ${canManage?`<th style="width:36px"><input type="checkbox" id="select-all-users" onchange="toggleSelectAllUsers()"></th>`:''}
-          <th>Name</th><th>Index No.</th><th>Email</th><th>Classification</th><th>Status</th>
-          ${canManage?'<th>Actions</th>':''}
-        </tr></thead>
-        <tbody id="students-level-tbody">
-          ${students.map(studentRow).join('')}
-          ${students.length===0?`<tr><td colspan="${colCount}" style="text-align:center;padding:24px;color:var(--text-muted)">No students found</td></tr>`:''}
-        </tbody>
-      </table>
-    </div>
-  `;
-}
-
-function _filterLevelRows(searchVal) {
-  const q = (searchVal||'').toLowerCase();
-  document.querySelectorAll('#students-level-tbody tr[data-name]').forEach(row => {
-    const matches = !q || row.dataset.name.includes(q) || row.dataset.idx.includes(q) || row.dataset.email.includes(q);
-    row.style.display = matches ? '' : 'none';
-  });
-}
-
-// ── Corporate table (non-academic fallback) ────────────────────────────────────
-function _renderUsersCorporateTable(content, allUsers, filterRole='', filterDept='', filterSearch='') {
-  const canManage = ['manager','admin','superadmin'].includes(currentUser.role);
-  const isManager = currentUser.role === 'manager';
-  const _roleRank = {superadmin:6,admin:5,manager:4,hod:3,lecturer:3,employee:2,student:1};
-  const _myRank = _roleRank[currentUser.role] || 0;
-  const canActOn = u => (_roleRank[u.role]||0) < _myRank;
-  const selfId = (currentUser._id||currentUser.id||'').toString();
-
-  let users = allUsers.filter(u => u._id?.toString()!==selfId);
-  if (filterRole) users = users.filter(u => u.role===filterRole);
-  if (filterDept) users = users.filter(u => u.department===filterDept);
-  if (filterSearch) {
-    const q = filterSearch.toLowerCase();
-    users = users.filter(u => u.name?.toLowerCase().includes(q) || u.email?.toLowerCase().includes(q) || u.department?.toLowerCase().includes(q));
+    `;
+  } catch (e) {
+    content.innerHTML = `<div class="card"><p>Error: ${e.message}</p></div>`;
   }
-  const allDepts = [...new Set(allUsers.map(u=>u.department).filter(Boolean))].sort();
-
-  content.innerHTML = `
-    <div class="page-header"><h2>${isManager?'Employees':'Users'}</h2><p>Manage team members · ${users.length} shown</p></div>
-    <div class="actions-bar" style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:10px">
-      ${canManage?`<button class="btn btn-primary btn-sm" onclick="showCreateUserModal()">${isManager?'Add Employee':'Add User'}</button>`:''}
-      ${['admin','superadmin'].includes(currentUser.role)?`<button class="btn btn-sm" style="background:#f59e0b;color:#fff" onclick="renderResetLogs()">🔐 Reset Log</button>`:''}
-      <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin-left:auto">
-        <input id="user-search-input" placeholder="Search name / email…" value="${esc(filterSearch)}"
-          oninput="_renderUsersCorporateTable(document.getElementById('main-content'),_cachedUsers,document.getElementById('user-role-filter').value,document.getElementById('user-dept-filter').value,this.value)"
-          style="padding:7px 11px;border:1.5px solid var(--border);border-radius:8px;font-size:13px;font-family:inherit;outline:none;min-width:180px">
-        <select id="user-role-filter" onchange="_renderUsersCorporateTable(document.getElementById('main-content'),_cachedUsers,this.value,document.getElementById('user-dept-filter').value,document.getElementById('user-search-input').value)"
-          style="padding:7px 10px;border:1.5px solid var(--border);border-radius:8px;font-size:13px;font-family:inherit;outline:none">
-          <option value="">All Roles</option>
-          <option value="admin" ${filterRole==='admin'?'selected':''}>Admin</option>
-          <option value="manager" ${filterRole==='manager'?'selected':''}>Manager</option>
-          <option value="employee" ${filterRole==='employee'?'selected':''}>Employee</option>
-        </select>
-        <select id="user-dept-filter" onchange="_renderUsersCorporateTable(document.getElementById('main-content'),_cachedUsers,document.getElementById('user-role-filter').value,this.value,document.getElementById('user-search-input').value)"
-          style="padding:7px 10px;border:1.5px solid var(--border);border-radius:8px;font-size:13px;font-family:inherit;outline:none">
-          <option value="">All Departments</option>
-          ${allDepts.map(d=>`<option value="${esc(d)}" ${filterDept===d?'selected':''}>${esc(d)}</option>`).join('')}
-        </select>
-      </div>
-      ${canManage?`
-        <div id="bulk-actions" style="display:none;gap:8px;align-items:center;margin-left:auto">
-          <span id="selected-count" style="font-size:13px;color:var(--text-muted)">0 selected</span>
-          <button class="btn btn-sm" style="background:#22c55e;color:#fff" onclick="bulkUserAction('activate')">Activate</button>
-          <button class="btn btn-sm" style="background:#f59e0b;color:#fff" onclick="bulkUserAction('deactivate')">Deactivate</button>
-          <button class="btn btn-danger btn-sm" onclick="bulkUserAction('delete')">Delete</button>
-        </div>`:''}
-    </div>
-    <div class="card" style="padding:0;overflow:hidden">
-      ${users.length?`
-        <table>
-          <thead><tr>
-            ${canManage?'<th style="width:40px"><input type="checkbox" id="select-all-users" onchange="toggleSelectAllUsers()"></th>':''}
-            <th>Name</th><th>Employee ID</th><th>Email</th><th>Role</th><th>Status</th>
-            ${canManage?'<th>Actions</th>':''}
-          </tr></thead>
-          <tbody>${users.map(u=>`
-            <tr id="user-row-${u._id}">
-              ${canManage?`<td>${canActOn(u)?`<input type="checkbox" class="user-checkbox" value="${u._id}" onchange="updateBulkActions()">`:''}</td>`:''}
-              <td style="font-weight:500">${esc(u.name)}</td>
-              <td style="font-size:12px;color:var(--text-muted)">${esc(u.employeeId||'—')}</td>
-              <td style="font-size:12px;color:var(--text-muted)">${esc(u.email||'—')}</td>
-              <td><span class="role-badge role-${u.role}">${u.role}</span>${u.department?`<span style="font-size:10px;margin-left:5px;padding:2px 6px;border-radius:20px;background:#ecfeff;color:#0891b2;font-weight:600">${esc(u.department)}</span>`:''}</td>
-              <td><span class="status-badge ${u.isActive?'status-active':'status-stopped'}">${u.isActive?'Active':'Inactive'}</span></td>
-              ${canManage?`<td style="white-space:nowrap">${canActOn(u)?`
-                ${u.isActive?`<button class="btn btn-sm" style="background:#f59e0b;color:#fff;font-size:11px" onclick="deactivateUser('${u._id}')">Deactivate</button>`:`<button class="btn btn-sm" style="background:#22c55e;color:#fff;font-size:11px" onclick="activateUser('${u._id}')">Activate</button>`}
-                <button class="btn btn-sm" style="background:#6366f1;color:#fff;font-size:11px" onclick="adminResetStudentPassword('${u._id}',this)">🔑 Reset</button>
-                <button class="btn btn-danger btn-sm" style="font-size:11px" onclick="deleteUserPermanently('${u._id}',this)">Delete</button>
-              `:'—'}</td>`:''}
-            </tr>`).join('')}
-          </tbody>
-        </table>
-      `:`<div class="empty-state"><p>No users found</p></div>`}
-    </div>
-  `;
 }
-
 
 async function renderResetLogs() {
   const content = document.getElementById('main-content');
@@ -8159,9 +6495,9 @@ async function showCreateUserModal() {
           <label>Role</label>
           <select id="new-user-role" onchange="toggleUserFields(); onCreateUserRoleChange();">${roles}</select>
         </div>` : `<input type="hidden" id="new-user-role" value="${defaultRole}">`}
-        <div class="form-group" id="new-user-email-group">
-          <label>Email <span style="color:red">*</span></label>
-          <input type="email" id="new-user-email" placeholder="user@example.com">
+        <div class="form-group" id="new-user-email-group" ${defaultRole === 'student' ? 'class="hidden"' : ''}>
+          <label>Email</label>
+          <input type="email" id="new-user-email" placeholder="user@company.com">
         </div>
         <div class="form-group ${defaultRole !== 'student' ? 'hidden' : ''}" id="new-user-index-group">
           <label>Student ID / Index Number <span style="color:red">*</span></label>
@@ -8234,17 +6570,6 @@ async function showCreateUserModal() {
               </select>
             </div>
           </div>
-          <div class="form-group">
-            <label>Academic Year <span style="color:red">*</span></label>
-            <select id="new-user-academic-year" style="width:100%;padding:9px 12px;border:1.5px solid var(--border);border-radius:8px;font-size:13px">
-              <option value="">— Select Academic Year —</option>
-              ${(() => {
-                const yr = new Date().getFullYear();
-                return [yr-1, yr, yr+1].map(y => `<option value="${y}/${y+1}" ${y === yr ? 'selected' : ''}>${y}/${y+1}</option>`).join('');
-              })()}
-            </select>
-            <p style="font-size:11px;color:var(--text-light);margin-top:4px">The academic year this student is enrolled in.</p>
-          </div>
         </div>
         <div class="form-group">
           <label>Phone Number <span style="color:red">*</span></label>
@@ -8263,7 +6588,7 @@ async function showCreateUserModal() {
 
 function toggleUserFields() {
   const role = document.getElementById('new-user-role').value;
-  // Email is required for ALL roles — never hide it
+  document.getElementById('new-user-email-group').classList.toggle('hidden', role === 'student');
   document.getElementById('new-user-index-group').classList.toggle('hidden', role !== 'student');
   const deptGroup  = document.getElementById('new-user-dept-group');
   const deptReq    = document.getElementById('new-user-dept-req');
@@ -8291,12 +6616,6 @@ async function createUser() {
       password: document.getElementById('new-user-password').value,
       role,
     };
-    // Email is required for all roles
-    const email = document.getElementById('new-user-email').value.trim();
-    if (!email) { toastWarning('Email address is required.'); return; }
-    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) { toastWarning('Please enter a valid email address.'); return; }
-    body.email = email;
-
     if (role === 'student') {
       const idx = document.getElementById('new-user-index').value.trim().toUpperCase();
       if (!idx) { toastWarning('Student ID / Index Number is required.'); return; }
@@ -8308,19 +6627,18 @@ async function createUser() {
       const studentGroup= document.getElementById('new-user-group')?.value?.trim().toUpperCase();
       const sessionType = document.getElementById('new-user-session-type')?.value;
       const semester    = document.getElementById('new-user-semester')?.value;
-      const academicYear = document.getElementById('new-user-academic-year')?.value;
       if (!programme)    { toastWarning('Please select the student\'s programme (e.g. BSc, HND).'); return; }
       if (!studentLevel) { toastWarning('Please select the student\'s level.'); return; }
       if (!studentGroup) { toastWarning('Please enter the student\'s group (e.g. A, B, C).'); return; }
       if (!sessionType)  { toastWarning('Please select the session type (Morning, Evening etc.).'); return; }
       if (!semester)     { toastWarning('Please select the semester.'); return; }
-      if (!academicYear) { toastWarning('Please select the academic year.'); return; }
       body.programme    = programme;
       body.studentLevel = studentLevel;
       body.studentGroup = studentGroup;
       body.sessionType  = sessionType;
       body.semester     = semester;
-      body.academicYear = academicYear;
+    } else {
+      body.email = document.getElementById('new-user-email').value;
     }
     const phone = document.getElementById('new-user-phone').value.trim();
     if (!phone) { toastWarning('Phone number is required.'); return; }
@@ -8461,49 +6779,11 @@ async function deleteUserPermanently(id, btnOrName) {
   }
 }
 
-async function createInstantMeeting() {
-  try {
-    const now = new Date();
-    const end = new Date(now.getTime() + 60 * 60000);
-    const data = await api('/api/meetings/create', {
-      method: 'POST',
-      body: JSON.stringify({
-        title: 'Instant Meeting',
-        meetingType: 'meeting',
-        scheduledStart: now.toISOString(),
-        scheduledEnd: end.toISOString(),
-        openToCompany: true,
-      }),
-    });
-    const id = (data.data || data)._id;
-    if (!id) throw new Error('No meeting ID returned');
-    window.location.href = `/lecturer-meeting?meeting=${encodeURIComponent(id)}`;
-  } catch (e) {
-    toastError(e.message || 'Could not create meeting');
-  }
-}
-
 async function renderMeetings() {
   const content = document.getElementById('main-content');
   if (!content) return;
-  content.innerHTML = '<div style="padding:32px;text-align:center;color:var(--text-muted);">Loading meetings…</div>';
-  if (!isOnline()) {
-    const _c = offlineRead('meetings');
-    if (_c) { /* render below */ Object.assign(arguments, [_c]); }
-    else { content.innerHTML = `<div style="text-align:center;padding:60px 20px"><div style="font-size:48px;margin-bottom:12px">📡</div><div style="font-size:18px;font-weight:700">You're Offline</div><p style="color:var(--text-muted);margin-top:8px">Connect once while online to cache this page.</p></div>`; return; }
-  }
-  const _meetingsCached = !isOnline() ? offlineRead('meetings') : null;
-  let data;
-  if (_meetingsCached) { data = _meetingsCached; }
-  else {
-    try { data = await api('/api/meetings'); offlineCache('meetings', data); }
-    catch(e) {
-      const _c = offlineRead('meetings');
-      if (_c) { data = _c; }
-      else { content.innerHTML = `<div class="card"><p style="color:#ef4444;">${e.message}</p></div>`; return; }
-    }
-  }
   try {
+    const data = await api('/api/zoom');
     const canCreate = ['manager', 'lecturer'].includes(currentUser.role);
     const canManageExisting = ['manager', 'lecturer', 'admin', 'superadmin', 'hod'].includes(currentUser.role);
 
@@ -8511,79 +6791,42 @@ async function renderMeetings() {
     const isDeviceLocked = devLock?.isLocked && devLock?.lockedUntil && new Date(devLock.lockedUntil) > new Date();
 
     function fmtDate(dt) {
-      if (!dt) return '—';
       const d = new Date(dt);
       return d.toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' })
            + ' · ' + d.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' });
     }
 
-    function fmtDuration(start, end) {
-      if (!start || !end) return '—';
-      const min = Math.round((new Date(end) - new Date(start)) / 60000);
-      if (min < 60) return `${min}m`;
-      const h = Math.floor(min / 60), m = min % 60;
-      return m ? `${h}h ${m}m` : `${h}h`;
-    }
-
-    const MEETING_TYPE_LABELS = {
-      meeting: 'Meeting', lecture: 'Lecture', proctored_quiz: 'Proctored Quiz',
-      snap_quiz: 'Snap Quiz', oral_exam: 'Oral Exam',
-      staff_conference: 'Staff Conference', live_assessment: 'Live Assessment',
-    };
-    const MEETING_TYPE_ICONS = {
-      lecture: '🎓', meeting: '🎥', proctored_quiz: '📝',
-      snap_quiz: '⚡', oral_exam: '🗣️', staff_conference: '👔', live_assessment: '📋',
-    };
-
     function meetingCard(m) {
-      const isLive      = m.status === 'live';
+      const isLive      = m.status === 'live' || m.status === 'active';
       const isScheduled = m.status === 'scheduled';
       const isEnded     = ['ended', 'completed', 'cancelled'].includes(m.status);
-      // Support both old (createdBy) and new (creatorId) field shapes
-      const hostId   = m.creatorId?._id || m.creatorId || m.createdBy?._id;
-      const hostName = m.creatorId?.name || m.createdBy?.name || 'Unknown';
-      const isCreator   = String(hostId) === String(currentUser._id);
-      const isAdmin     = ['admin', 'superadmin', 'hod'].includes(currentUser.role);
-      const isInvigil   = (m.invigilators || []).some(i => String(i._id || i) === String(currentUser._id));
-      const canControl  = canManageExisting && (isCreator || isAdmin || isInvigil);
-      const durationMin = m.scheduledStart && m.scheduledEnd
-        ? Math.round((new Date(m.scheduledEnd) - new Date(m.scheduledStart)) / 60000)
-        : (m.duration || '—');
+      const isCreator   = m.createdBy?._id === currentUser._id;
+      const isAdmin     = ['admin', 'superadmin'].includes(currentUser.role);
+      const canControl  = canManageExisting && (isCreator || isAdmin);
 
       const borderColor = isLive ? '#22c55e' : isScheduled ? '#3b82f6' : '#e5e7eb';
-      const statusBadgeStyle = isLive ? 'background:#dcfce7;color:#15803d;' : isScheduled ? 'background:#dbeafe;color:#1d4ed8;' : m.status==='cancelled' ? 'background:#fee2e2;color:#b91c1c;' : 'background:#f3f4f6;color:#6b7280;';
+      const statusBadgeStyle = isLive ? 'background:#dcfce7;color:#15803d;' : isScheduled ? 'background:#dbeafe;color:#1d4ed8;' : isEnded && m.status==='cancelled' ? 'background:#fee2e2;color:#b91c1c;' : 'background:#f3f4f6;color:#6b7280;';
       const statusText = isLive ? '● LIVE' : isScheduled ? 'Scheduled' : m.status === 'cancelled' ? 'Cancelled' : 'Ended';
-      const typeLabel  = MEETING_TYPE_LABELS[m.meetingType] || '';
-      const safeName   = (m.title || '').replace(/'/g, "\\'");
+      const safeName = (m.title || '').replace(/'/g, "\\'");
 
       return `<div style="background:#fff;border-radius:14px;box-shadow:0 1px 6px rgba(0,0,0,0.07);padding:16px;border:1px solid #f1f5f9;border-left:4px solid ${borderColor};margin-bottom:0;">
         <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px;margin-bottom:10px;">
           <div style="flex:1;min-width:0;">
             <div style="font-weight:700;font-size:15px;color:#0f172a;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${esc(m.title)}</div>
-            ${typeLabel ? `<div style="font-size:10px;font-weight:700;color:#7c3aed;margin-top:2px;text-transform:uppercase;letter-spacing:.5px;">${typeLabel}</div>` : ''}
+            ${m.course ? `<div style="font-size:11px;font-weight:600;color:#7c3aed;margin-top:2px;">${esc(m.course.title||'')}</div>` : ''}
           </div>
           <span style="${statusBadgeStyle}padding:3px 10px;border-radius:20px;font-size:11px;font-weight:700;flex-shrink:0;">${statusText}</span>
         </div>
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:12px;font-size:12px;color:#64748b;">
-          <div><div style="font-weight:600;color:#0f172a;">Host</div>${esc(hostName)}</div>
-          <div><div style="font-weight:600;color:#0f172a;">Duration</div>${durationMin} min</div>
+          <div><div style="font-weight:600;color:#0f172a;">Host</div>${esc(m.createdBy?.name||'Unknown')}</div>
+          <div><div style="font-weight:600;color:#0f172a;">Duration</div>${m.duration} min</div>
           <div style="grid-column:1/-1;"><div style="font-weight:600;color:#0f172a;">Start</div>${fmtDate(m.scheduledStart)}</div>
         </div>
         <div style="display:flex;gap:6px;flex-wrap:wrap;">
-          ${isLive && !canControl && !isDeviceLocked ? `<button style="flex:1;background:#22c55e;color:#fff;border:none;padding:10px 14px;border-radius:9px;font-weight:700;cursor:pointer;font-size:14px;min-width:90px;" onclick="joinMeeting('${m._id}')">▶ Join</button>` : ''}
-          ${isLive && canControl ? `<button style="flex:1;background:#22c55e;color:#fff;border:none;padding:10px 14px;border-radius:9px;font-weight:700;cursor:pointer;font-size:14px;min-width:90px;" onclick="startMeeting('${m._id}')">▶ Rejoin</button>` : ''}
+          ${isLive && !isDeviceLocked ? `<button style="flex:1;background:#22c55e;color:#fff;border:none;padding:10px 14px;border-radius:9px;font-weight:700;cursor:pointer;font-size:14px;min-width:90px;" onclick="joinMeeting('${m._id}')">▶ Join</button>` : ''}
           ${isLive && isDeviceLocked ? `<span style="background:#fef3c7;color:#92400e;padding:8px 12px;border-radius:9px;font-size:12px;font-weight:600;">🔒 Locked</span>` : ''}
           ${isScheduled && !canControl ? `<span style="background:#eff6ff;color:#1d4ed8;padding:8px 12px;border-radius:9px;font-size:12px;font-weight:600;">Not Live Yet</span>` : ''}
-          ${canControl && isScheduled ? (() => {
-            const now = Date.now();
-            const start = m.scheduledStart ? new Date(m.scheduledStart).getTime() : 0;
-            const minsUntil = Math.ceil((start - now) / 60000);
-            const canStart = now >= start - 60000; // allow 1 min early
-            return canStart
-              ? `<button style="flex:1;background:#3b82f6;color:#fff;border:none;padding:10px 14px;border-radius:9px;font-weight:700;cursor:pointer;font-size:14px;min-width:90px;" onclick="startMeeting('${m._id}')">▶ Start</button>`
-              : `<button disabled style="flex:1;background:#93c5fd;color:#fff;border:none;padding:10px 14px;border-radius:9px;font-weight:600;font-size:13px;min-width:90px;cursor:not-allowed;" title="Meeting hasn't reached its scheduled time">⏳ In ${minsUntil}m</button>`;
-          })() : ''}
-          ${canControl && isLive ? `<button style="background:#0ea5e9;color:#fff;border:none;padding:10px 14px;border-radius:9px;font-weight:700;cursor:pointer;" onclick="openMeetingMonitor('${m._id}')">👁 Monitor</button>` : ''}
+          ${canControl && isScheduled ? `<button style="flex:1;background:#3b82f6;color:#fff;border:none;padding:10px 14px;border-radius:9px;font-weight:700;cursor:pointer;font-size:14px;min-width:90px;" onclick="startMeeting('${m._id}')">▶ Start</button>` : ''}
           ${canControl && isLive ? `<button style="background:#ef4444;color:#fff;border:none;padding:10px 14px;border-radius:9px;font-weight:700;cursor:pointer;" onclick="endMeeting('${m._id}')">■ End</button>` : ''}
           ${canControl && (isScheduled || isLive) ? `<button style="background:#f1f5f9;color:#374151;border:none;padding:10px 14px;border-radius:9px;font-weight:600;cursor:pointer;" onclick="cancelMeeting('${m._id}')">Cancel</button>` : ''}
           <button style="background:#f1f5f9;color:#374151;border:none;padding:10px 14px;border-radius:9px;font-weight:600;cursor:pointer;" onclick="viewMeetingDetail('${m._id}')">Details</button>
@@ -8592,7 +6835,7 @@ async function renderMeetings() {
       </div>`;
     }
 
-    const meetings = data.data || data.meetings || [];
+    const meetings = data.meetings || [];
     const live      = meetings.filter(m => m.status === 'live' || m.status === 'active');
     const scheduled = meetings.filter(m => m.status === 'scheduled');
     const past      = meetings.filter(m => ['ended', 'completed', 'cancelled'].includes(m.status));
@@ -8634,7 +6877,7 @@ async function showCreateMeetingModal() {
     courses = d.courses || d || [];
   } catch(e) { courses = []; }
 
-  const courseOptions = `<option value="">— Select a course —</option>` +
+  const courseOptions = `<option value="">— No specific course —</option>` +
     courses.map(c => `<option value="${c._id}">${esc(c.title)}${c.level?' · L'+c.level:''}${c.group?' · Grp '+c.group:''}</option>`).join('');
   // default scheduled start = now+5min, end = now+65min
   const now = new Date();
@@ -8670,26 +6913,11 @@ async function showCreateMeetingModal() {
           <textarea id="meeting-desc" rows="2" placeholder="What is this meeting about?" style="resize:vertical;"></textarea>
         </div>
 
-        <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
-          <div class="form-group">
-            <label>Meeting Type</label>
-            <select id="meeting-type" style="width:100%;padding:9px 12px;border:1.5px solid var(--border);border-radius:8px;font-size:13px">
-              <option value="meeting">General Meeting</option>
-              ${currentUser?.company?.mode !== 'corporate' ? `
-              <option value="lecture">Lecture</option>
-              <option value="oral_exam">Oral Exam</option>
-              <option value="live_assessment">Live Assessment</option>
-              ` : ''}
-              <option value="staff_conference">Staff Conference</option>
-            </select>
-          </div>
-          ${currentUser?.company?.mode !== 'corporate' ? `
-          <div class="form-group">
-            <label>Course</label>
-            <select id="meeting-course" style="width:100%;padding:9px 12px;border:1.5px solid var(--border);border-radius:8px;font-size:13px">
-              ${courseOptions}
-            </select>
-          </div>` : ''}
+        <div class="form-group">
+          <label>Course <span style="color:var(--text-muted);font-weight:400;font-size:12px">(optional)</span></label>
+          <select id="meeting-course" style="width:100%;padding:9px 12px;border:1.5px solid var(--border);border-radius:8px;font-size:13px">
+            ${courseOptions}
+          </select>
         </div>
 
         <div id="meeting-error" style="color:#ef4444;margin:8px 0;display:none;font-size:13px;"></div>
@@ -8711,13 +6939,12 @@ async function showCreateMeetingModal() {
 }
 
 async function createMeeting() {
-  const title      = document.getElementById('meeting-title')?.value.trim();
-  const start      = document.getElementById('meeting-start')?.value;
-  const end        = document.getElementById('meeting-end')?.value;
-  const desc       = document.getElementById('meeting-desc')?.value.trim();
-  const courseId   = document.getElementById('meeting-course')?.value || undefined;
-  const meetingType = document.getElementById('meeting-type')?.value || 'meeting';
-  const errEl      = document.getElementById('meeting-error');
+  const title = document.getElementById('meeting-title')?.value.trim();
+  const start = document.getElementById('meeting-start')?.value;
+  const end   = document.getElementById('meeting-end')?.value;
+  const desc  = document.getElementById('meeting-desc')?.value.trim();
+  const courseId = document.getElementById('meeting-course')?.value || undefined;
+  const errEl = document.getElementById('meeting-error');
 
   if (!title) { errEl.textContent = 'Please enter a meeting title.'; errEl.style.display = 'block'; return; }
   if (!start || !end) { errEl.textContent = 'Please set a start and end time.'; errEl.style.display = 'block'; return; }
@@ -8727,13 +6954,12 @@ async function createMeeting() {
   if (schedBtn) { schedBtn.textContent = 'Scheduling…'; schedBtn.disabled = true; }
 
   try {
-    await api('/api/meetings/create', { method: 'POST', body: JSON.stringify({
-      title, meetingType,
+    await api('/api/zoom', { method: 'POST', body: JSON.stringify({
+      title,
       scheduledStart: start,
-      scheduledEnd:   end,
-      description:    desc || undefined,
-      linkedCourseId: courseId || undefined,
-      openToCompany:  !courseId,
+      scheduledEnd: end,
+      description: desc || undefined,
+      courseId: courseId || undefined,
     }) });
     closeModal();
     renderMeetings();
@@ -8746,11 +6972,9 @@ async function createMeeting() {
 }
 
 async function createAndStartMeeting() {
-  const title       = document.getElementById('meeting-title').value.trim();
-  const courseId    = document.getElementById('meeting-course')?.value || '';
-  const meetingType = document.getElementById('meeting-type')?.value || 'meeting';
-  const errEl       = document.getElementById('meeting-error');
-  const btn         = document.getElementById('start-meeting-btn');
+  const title = document.getElementById('meeting-title').value.trim();
+  const errEl = document.getElementById('meeting-error');
+  const btn   = document.getElementById('start-meeting-btn');
   if (!title) {
     errEl.textContent = 'Please enter a meeting title.';
     errEl.style.display = 'block';
@@ -8760,263 +6984,88 @@ async function createAndStartMeeting() {
   const now = new Date();
   const end = new Date(now.getTime() + 60 * 60 * 1000);
   try {
-    const data = await api('/api/meetings/create', { method: 'POST', body: JSON.stringify({
-      title, meetingType,
+    const data = await api('/api/zoom', { method: 'POST', body: JSON.stringify({
+      title,
       scheduledStart: now.toISOString().slice(0,16),
-      scheduledEnd:   end.toISOString().slice(0,16),
-      linkedCourseId: courseId || undefined,
-      openToCompany:  !courseId,
+      scheduledEnd: end.toISOString().slice(0,16),
     }) });
     closeModal();
-    const newId = (data.data || data.meeting || data)?._id;
-    if (!newId) throw new Error('No meeting ID returned');
-    window.location.href = `/lecturer-meeting?meeting=${encodeURIComponent(newId)}`;
+    await startMeeting(data.meeting._id);
   } catch(e) {
-    if (btn) { btn.textContent = 'Start Now'; btn.disabled = false; }
+    if (btn) { btn.textContent = '🎥 Start Meeting'; btn.disabled = false; }
     errEl.textContent = e.message;
     errEl.style.display = 'block';
   }
 }
 
-function startMeeting(id) {
-  window.location.href = `/lecturer-meeting?meeting=${encodeURIComponent(id)}`;
-}
-
-const PROCTORED_TYPES = ['proctored_quiz', 'snap_quiz', 'oral_exam', 'live_assessment'];
-
-// True on iPhone, iPad (incl. desktop-mode iPad), and Android browsers.
-// On mobile we navigate directly to the Jitsi URL instead of embedding an iframe,
-// because iOS Safari reloads cross-origin iframes after granting camera/mic permission
-// which silently breaks the External API and leaves the meeting stuck on a black screen.
-const _isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent)
-  || (navigator.maxTouchPoints > 1 && /Macintosh/i.test(navigator.userAgent));
-
-// Mobile join: pre-request camera/mic so the user understands why (and iOS remembers the
-// choice for the DIKLY domain), then navigate to the real Jitsi room in the same tab.
-async function _joinMeetingMobile(roomUrl) {
-  if (navigator.mediaDevices?.getUserMedia) {
-    try {
-      const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
-      stream.getTracks().forEach(t => t.stop()); // release camera/mic immediately; Jitsi re-acquires
-    } catch (err) {
-      if (err.name === 'NotAllowedError' || err.name === 'PermissionDeniedError') {
-        toastError('Camera and microphone access are required to join the meeting.');
-        return;
-      }
-      // NotFoundError, OverconstrainedError, etc. — navigate anyway; Jitsi will show its own error
-    }
-  }
-  window.location.href = roomUrl + '#config.deeplinking.disabled=true';
-}
-
-function joinMeeting(id) {
-  window.location.href = `/student-meeting?meeting=${encodeURIComponent(id)}`;
-}
-
-// ── PROCTORING HELPERS ────────────────────────────────────────────────────────
-
-let _antiCheatMeetingId  = null;
-let _antiCheatListeners  = {};
-let _antiCheatFullscreen = false;
-
-function _postProctoringEvent(meetingId, type, metadata) {
-  const tok = localStorage.getItem('dikly_token');
-  if (!tok || !meetingId) return;
-  fetch(`/api/meetings/${meetingId}/proctoring/event`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${tok}` },
-    body: JSON.stringify({ type, metadata: metadata || null }),
-  }).catch(() => {});
-}
-
-function startMeetingAntiCheat(meetingId) {
-  stopMeetingAntiCheat();
-  _antiCheatMeetingId = meetingId;
-
-  _antiCheatListeners.visibility = () => {
-    if (document.hidden) _postProctoringEvent(meetingId, 'tab_switch', null);
-  };
-  _antiCheatListeners.fullscreen = () => {
-    const inFS = !!(document.fullscreenElement || document.webkitFullscreenElement);
-    if (_antiCheatFullscreen && !inFS) _postProctoringEvent(meetingId, 'fullscreen_exit', null);
-    if (!_antiCheatFullscreen && inFS) _postProctoringEvent(meetingId, 'fullscreen_enter', null);
-    _antiCheatFullscreen = inFS;
-  };
-
-  document.addEventListener('visibilitychange', _antiCheatListeners.visibility);
-  document.addEventListener('fullscreenchange', _antiCheatListeners.fullscreen);
-  document.addEventListener('webkitfullscreenchange', _antiCheatListeners.fullscreen);
-
-  _postProctoringEvent(meetingId, 'session_start', null);
-}
-
-function stopMeetingAntiCheat() {
-  if (_antiCheatListeners.visibility) {
-    document.removeEventListener('visibilitychange', _antiCheatListeners.visibility);
-  }
-  if (_antiCheatListeners.fullscreen) {
-    document.removeEventListener('fullscreenchange', _antiCheatListeners.fullscreen);
-    document.removeEventListener('webkitfullscreenchange', _antiCheatListeners.fullscreen);
-  }
-  _antiCheatListeners  = {};
-  _antiCheatMeetingId  = null;
-  _antiCheatFullscreen = false;
-}
-
-function showProctoredJoinStaging(meetingId, jitsiConfig, jitsiToken) {
-  document.getElementById('proctored-staging-overlay')?.remove();
-
-  const overlay = document.createElement('div');
-  overlay.id = 'proctored-staging-overlay';
-  overlay.style.cssText = 'position:fixed;inset:0;z-index:10000;background:#0f172a;display:flex;align-items:center;justify-content:center;';
-  overlay.innerHTML = `
-    <div style="background:#1e293b;border-radius:16px;padding:32px;max-width:440px;width:90%;box-shadow:0 25px 60px rgba(0,0,0,0.5);">
-      <div style="text-align:center;margin-bottom:24px;">
-        <div style="font-size:36px;margin-bottom:8px;">🔒</div>
-        <h2 style="color:#f1f5f9;margin:0 0 6px;font-size:18px;font-weight:700;">Proctored Session Check</h2>
-        <p style="color:#94a3b8;margin:0;font-size:13px;">Complete all checks before joining</p>
-      </div>
-
-      <div id="staging-checklist" style="display:flex;flex-direction:column;gap:10px;margin-bottom:24px;">
-        <div id="check-camera" class="staging-check" style="display:flex;align-items:center;gap:10px;padding:10px 14px;border-radius:10px;background:#0f172a;">
-          <span id="check-camera-icon" style="font-size:18px;">⏳</span>
-          <span style="color:#cbd5e1;font-size:13px;flex:1;">Camera access</span>
-          <span id="check-camera-status" style="font-size:11px;color:#64748b;">Checking…</span>
-        </div>
-        <div id="check-mic" class="staging-check" style="display:flex;align-items:center;gap:10px;padding:10px 14px;border-radius:10px;background:#0f172a;">
-          <span id="check-mic-icon" style="font-size:18px;">⏳</span>
-          <span style="color:#cbd5e1;font-size:13px;flex:1;">Microphone access</span>
-          <span id="check-mic-status" style="font-size:11px;color:#64748b;">Checking…</span>
-        </div>
-        <div id="check-anticheat" class="staging-check" style="display:flex;align-items:center;gap:10px;padding:10px 14px;border-radius:10px;background:#0f172a;">
-          <span id="check-anticheat-icon" style="font-size:18px;">⏳</span>
-          <span style="color:#cbd5e1;font-size:13px;flex:1;">Anti-cheat monitoring</span>
-          <span id="check-anticheat-status" style="font-size:11px;color:#64748b;">Pending…</span>
-        </div>
-      </div>
-
-      <div id="staging-preview" style="display:none;margin-bottom:16px;border-radius:10px;overflow:hidden;background:#000;aspect-ratio:16/9;max-height:180px;">
-        <video id="staging-video" autoplay muted playsinline style="width:100%;height:100%;object-fit:cover;"></video>
-      </div>
-
-      <div id="staging-error" style="display:none;background:#7f1d1d;border-radius:8px;padding:10px 14px;color:#fca5a5;font-size:12px;margin-bottom:16px;"></div>
-
-      <div style="display:flex;gap:10px;">
-        <button id="staging-cancel-btn" onclick="document.getElementById('proctored-staging-overlay').remove();renderMeetings();"
-          style="flex:1;background:#334155;color:#cbd5e1;border:none;padding:11px;border-radius:9px;font-weight:600;cursor:pointer;font-size:14px;">
-          Cancel
-        </button>
-        <button id="staging-join-btn" disabled
-          style="flex:2;background:#3b82f6;color:#fff;border:none;padding:11px;border-radius:9px;font-weight:700;cursor:pointer;font-size:14px;opacity:0.5;"
-          onclick="_proctoredConfirmJoin('${meetingId}')">
-          Join Session
-        </button>
-      </div>
-    </div>
-  `;
-  document.body.appendChild(overlay);
-
-  // Store config so the confirm handler can reach it
-  overlay._jitsiConfig = jitsiConfig;
-  overlay._jitsiToken  = jitsiToken;
-
-  _runStagingChecks(meetingId);
-}
-
-async function _runStagingChecks(meetingId) {
-  let cameraOk = false;
-  let micOk    = false;
-  let stream   = null;
-
-  const setCheck = (id, ok, label) => {
-    const icon   = document.getElementById(`check-${id}-icon`);
-    const status = document.getElementById(`check-${id}-status`);
-    const row    = document.getElementById(`check-${id}`);
-    if (!icon) return;
-    icon.textContent   = ok ? '✅' : '❌';
-    status.textContent = label;
-    row.style.background = ok ? 'rgba(34,197,94,0.08)' : 'rgba(239,68,68,0.08)';
-  };
-
-  // Camera check
+async function startMeeting(id) {
   try {
-    stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
-    cameraOk = true;
-    micOk    = true;
-    setCheck('camera', true, 'Allowed');
-    setCheck('mic',    true, 'Allowed');
-
-    const preview = document.getElementById('staging-preview');
-    const video   = document.getElementById('staging-video');
-    if (preview && video) {
-      video.srcObject = stream;
-      preview.style.display = 'block';
+    await api(`/api/zoom/${id}/start`, { method: 'POST' });
+    // Join as host — records attendance and returns roomName / jitsiConfig
+    const joinData    = await api(`/api/zoom/${id}/join`, { method: 'POST' });
+    const jitsiConfig = joinData?.data?.jitsiConfig;
+    const legacyUrl   = joinData?.data?.secureJoinUrl || joinData?.joinUrl;
+    const roomName    = jitsiConfig?.roomName || joinData?.roomName;
+    renderMeetings();
+    if (roomName) {
+      const embedConfig = jitsiConfig || {
+        roomName,
+        domain:      legacyUrl ? (() => { try { return new URL(legacyUrl).hostname; } catch(e) { return 'meet.jit.si'; } })() : 'meet.jit.si',
+        displayName: currentUser?.name  || '',
+        email:       currentUser?.email || '',
+        subject:     '',
+      };
+      showJitsiEmbed(embedConfig);
+    } else if (legacyUrl) {
+      window.open(legacyUrl, '_blank');
     }
-  } catch (err) {
-    const errEl = document.getElementById('staging-error');
-    if (err.name === 'NotAllowedError' || err.name === 'PermissionDeniedError') {
-      setCheck('camera', false, 'Denied');
-      setCheck('mic',    false, 'Denied');
-      if (errEl) {
-        errEl.style.display = 'block';
-        errEl.textContent = 'Camera and microphone access was denied. Please allow access in your browser settings and try again.';
-      }
-    } else if (err.name === 'NotFoundError') {
-      setCheck('camera', false, 'Not found');
-      setCheck('mic',    false, 'Not found');
-      if (errEl) {
-        errEl.style.display = 'block';
-        errEl.textContent = 'No camera or microphone detected. Connect a device and try again.';
-      }
+  } catch (e) {
+    toastError(e.message);
+  }
+}
+
+async function joinMeeting(id) {
+  try {
+    const data = await api(`/api/zoom/${id}/join`, { method: 'POST' });
+    // meetingController returns jitsiConfig nested under data.data
+    // zoomController returns roomName + joinUrl at root level
+    const jitsiConfig = data.data?.jitsiConfig;
+    const secureUrl   = data.data?.secureJoinUrl;
+    const legacyUrl   = data.joinUrl;
+    const roomName    = jitsiConfig?.roomName || data.roomName;
+
+    if (roomName) {
+      const embedConfig = jitsiConfig || {
+        roomName,
+        domain:      legacyUrl ? (() => { try { return new URL(legacyUrl).hostname; } catch(e) { return 'meet.jit.si'; } })() : 'meet.jit.si',
+        displayName: currentUser?.name  || '',
+        email:       currentUser?.email || '',
+        subject:     '',
+      };
+      showJitsiEmbed(embedConfig);
+    } else if (secureUrl) {
+      window.open(secureUrl, '_blank');
+    } else if (legacyUrl) {
+      window.open(legacyUrl, '_blank');
     } else {
-      setCheck('camera', false, err.message);
-      setCheck('mic',    false, err.message);
-      if (errEl) { errEl.style.display = 'block'; errEl.textContent = err.message; }
+      toastError('No join URL available');
     }
-  }
-
-  // Anti-cheat check (always succeeds — just activating monitoring)
-  setCheck('anticheat', true, 'Active');
-
-  // Enable join button only if both camera and mic are OK
-  if (cameraOk && micOk) {
-    const btn = document.getElementById('staging-join-btn');
-    if (btn) { btn.disabled = false; btn.style.opacity = '1'; }
-  }
-
-  // Stop preview stream when overlay is removed so camera light turns off
-  const overlay = document.getElementById('proctored-staging-overlay');
-  if (overlay && stream) {
-    overlay._previewStream = stream;
+  } catch (e) {
+    const msg = e.message || 'Failed to join meeting';
+    if (msg.includes('locked') || msg.includes('device')) {
+      toastError('🔒 ' + msg);
+    } else if (msg.includes('not started') || msg.includes('not currently live')) {
+      toastError('Meeting is not live yet. Wait for the host to start.');
+    } else if (msg.includes('ended')) {
+      toastError('This meeting has ended.');
+    } else {
+      toastError(msg);
+    }
+    renderMeetings();
   }
 }
 
-function _proctoredConfirmJoin(meetingId) {
-  const overlay = document.getElementById('proctored-staging-overlay');
-  if (!overlay) return;
-
-  // Stop preview stream
-  if (overlay._previewStream) {
-    overlay._previewStream.getTracks().forEach(t => t.stop());
-    overlay._previewStream = null;
-  }
-
-  const jitsiConfig = overlay._jitsiConfig;
-  const jitsiToken  = overlay._jitsiToken;
-  overlay.remove();
-
-  if (_isMobile) {
-    // Permission was already granted during staging checks — navigate directly
-    const roomUrl = `https://${jitsiConfig.domain}/${jitsiConfig.roomName}${jitsiToken ? '?jwt=' + jitsiToken : ''}`;
-    window.location.href = roomUrl + '#config.deeplinking.disabled=true';
-    return;
-  }
-
-  startMeetingAntiCheat(meetingId);
-  showJitsiEmbed(jitsiConfig, jitsiToken);
-}
-
-function showJitsiEmbed(config, jitsiToken) {
+function showJitsiEmbed(config) {
   document.getElementById('jitsi-room-overlay')?.remove();
   if (window._jitsiApi) { try { window._jitsiApi.dispose(); } catch(e) {} window._jitsiApi = null; }
 
@@ -9035,17 +7084,13 @@ function showJitsiEmbed(config, jitsiToken) {
   `;
   document.body.appendChild(overlay);
 
-  const domain = config.domain;
-  if (!domain) {
-    console.error('[Jitsi] No domain in jitsiConfig — check JITSI_DOMAIN server env var');
-    return;
-  }
+  const domain = config.domain || 'meet.jit.si';
   if (window.JitsiMeetExternalAPI) {
-    _initJitsiEmbed(config, domain, jitsiToken);
+    _initJitsiEmbed(config, domain);
   } else {
     const script = document.createElement('script');
     script.src = `https://${domain}/external_api.js`;
-    script.onload = () => _initJitsiEmbed(config, domain, jitsiToken);
+    script.onload = () => _initJitsiEmbed(config, domain);
     script.onerror = () => {
       toastError('Could not load embedded meeting. Opening in new tab instead.');
       overlay.remove();
@@ -9055,91 +7100,43 @@ function showJitsiEmbed(config, jitsiToken) {
   }
 }
 
-let _jitsiJoined      = false;
-let _jitsiWatchdog    = null;
-let _jitsiWatchdogHits = 0;
-const _JITSI_MAX_INITS = 3;
-
-function _initJitsiEmbed(config, domain, jitsiToken) {
+function _initJitsiEmbed(config, domain) {
   const container = document.getElementById('jitsi-embed-container');
   if (!container) return;
-
-  if (window._jitsiApi) { try { window._jitsiApi.dispose(); } catch(e) {} window._jitsiApi = null; }
-
-  // Toolbar buttons: prefer server-provided configOverwrite.toolbarButtons (Jitsi 9584+),
-  // fall back to interfaceConfigOverwrite.TOOLBAR_BUTTONS (older builds), then hard-coded defaults.
-  const toolbarButtons = config.configOverwrite?.toolbarButtons
-    || config.interfaceConfigOverwrite?.TOOLBAR_BUTTONS
-    || (config.isModerator
-      ? ['microphone','camera','closedcaptions','desktop','chat','raisehand',
-         'tileview','select-background','mute-everyone','kick-participant',
-         'participants-pane','security','settings','hangup']
-      : ['microphone','camera','chat','raisehand','tileview','select-background','desktop','hangup']);
-
-  const options = {
-    roomName:   config.roomName,
-    width:      '100%',
-    height:     '100%',
+  window._jitsiApi = new JitsiMeetExternalAPI(domain, {
+    roomName: config.roomName,
+    width: '100%',
+    height: '100%',
     parentNode: container,
     userInfo: {
       displayName: config.displayName || currentUser?.name || '',
       email:       config.email       || currentUser?.email || '',
     },
     configOverwrite: {
-      startWithAudioMuted:       config.configOverwrite?.startWithAudioMuted ?? true,
-      startWithVideoMuted:       false,
-      enableNoisyMicDetection:   true,
-      disableDeepLinking:        true,
-      enableWelcomePage:         false,
-      prejoinPageEnabled:        false,
+      startWithAudioMuted:     config.configOverwrite?.startWithAudioMuted ?? true,
+      startWithVideoMuted:     false,
+      enableNoisyMicDetection: true,
+      disableDeepLinking:      true,
       ...(config.configOverwrite || {}),
-      // Always enforce these regardless of what server sends
-      toolbarButtons,
-      disableWatermark: true,
     },
     interfaceConfigOverwrite: {
       MOBILE_APP_PROMO:          false,
       SHOW_JITSI_WATERMARK:      false,
       SHOW_WATERMARK_FOR_GUESTS: false,
+      TOOLBAR_BUTTONS: [
+        'microphone','camera','closedcaptions','desktop',
+        'chat','raisehand','tileview','select-background','hangup',
+      ],
       ...(config.interfaceConfigOverwrite || {}),
-      TOOLBAR_BUTTONS: toolbarButtons,
     },
-  };
-
-  // Attach Jitsi JWT when self-hosted auth is enabled
-  if (jitsiToken) options.jwt = jitsiToken;
-
-  _jitsiJoined = false;
-  window._jitsiApi = new JitsiMeetExternalAPI(domain, options);
+  });
   window._jitsiApi.addEventListeners({
     readyToClose:          () => leaveJitsiMeeting(),
     videoConferenceLeft:   () => leaveJitsiMeeting(),
-    videoConferenceJoined: () => {
-      _jitsiJoined = true;
-      clearTimeout(_jitsiWatchdog);
-      _jitsiWatchdogHits = 0;
-    },
   });
-
-  // iOS Safari reloads the cross-origin iframe after granting camera/mic permission,
-  // which silently breaks the External API. Reinit if videoConferenceJoined hasn't
-  // fired within 20 seconds (max 3 attempts).
-  clearTimeout(_jitsiWatchdog);
-  if (_jitsiWatchdogHits < _JITSI_MAX_INITS) {
-    _jitsiWatchdog = setTimeout(() => {
-      if (!_jitsiJoined && document.getElementById('jitsi-embed-container')) {
-        _jitsiWatchdogHits++;
-        _initJitsiEmbed(config, domain, jitsiToken);
-      }
-    }, 20000);
-  }
 }
 
 function leaveJitsiMeeting() {
-  stopMeetingAntiCheat();
-  clearTimeout(_jitsiWatchdog);
-  _jitsiJoined = false;
-  _jitsiWatchdogHits = 0;
   if (window._jitsiApi) { try { window._jitsiApi.dispose(); } catch(e) {} window._jitsiApi = null; }
   document.getElementById('jitsi-room-overlay')?.remove();
   renderMeetings();
@@ -9148,10 +7145,8 @@ function leaveJitsiMeeting() {
 async function endMeeting(id) {
   if (!confirm('End this meeting? All participants will be marked as left.')) return;
   try {
-    await api(`/api/meetings/${id}/end`, { method: 'POST' });
-    leaveJitsiMeeting();
+    await api(`/api/zoom/${id}/end`, { method: 'POST' });
     renderMeetings();
-    toastSuccess('Meeting ended.');
   } catch (e) {
     toastError(e.message);
   }
@@ -9160,20 +7155,11 @@ async function endMeeting(id) {
 async function cancelMeeting(id) {
   if (!confirm('Cancel this meeting?')) return;
   try {
-    await api(`/api/meetings/${id}/cancel`, { method: 'POST' });
+    await api(`/api/zoom/${id}/cancel`, { method: 'POST' });
     renderMeetings();
   } catch (e) {
     toastError(e.message);
   }
-}
-
-async function openMeetingMonitor(id) {
-  // Pass the DIKLY access token (not the short-lived meeting token) so the
-  // monitor page can authenticate all of its API calls.
-  const accessToken = localStorage.getItem('dikly_token') || localStorage.getItem('token') || '';
-  if (!accessToken) { toastError('Not authenticated — please log in again.'); return; }
-  const monitorUrl = `/meeting-monitor.html?meeting=${encodeURIComponent(id)}&token=${encodeURIComponent(accessToken)}`;
-  window.open(monitorUrl, '_blank', 'noopener');
 }
 
 async function viewMeetingDetail(id) {
@@ -9181,9 +7167,9 @@ async function viewMeetingDetail(id) {
   if (!content) return;
   content.innerHTML = '<div class="card"><p>Loading meeting details...</p></div>';
   try {
-    const data = await api(`/api/meetings/${id}`);
-    const m = data.data || data.meeting || data;
-    const isCreator = m.creatorId?._id?.toString() === currentUser._id || m.creatorId?.toString() === currentUser._id || m.createdBy?._id === currentUser._id;
+    const data = await api(`/api/zoom/${id}`);
+    const m = data.meeting;
+    const isCreator = m.createdBy?._id === currentUser._id;
     const isAdmin = ['admin', 'superadmin'].includes(currentUser.role);
     const canManage = ['manager', 'lecturer', 'admin', 'superadmin'].includes(currentUser.role) && (isCreator || isAdmin);
 
@@ -9196,7 +7182,7 @@ async function viewMeetingDetail(id) {
       <div class="page-header" style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;">
         <div>
           <h2>${m.title}</h2>
-          <p>Hosted by ${m.creatorId?.name || m.createdBy?.name || 'Unknown'} <span class="status-badge" style="${statusStyle(m.status)}">${m.status.charAt(0).toUpperCase() + m.status.slice(1)}</span></p>
+          <p>Hosted by ${m.createdBy?.name || 'Unknown'} <span class="status-badge" style="${statusStyle(m.status)}">${m.status.charAt(0).toUpperCase() + m.status.slice(1)}</span></p>
         </div>
         <button class="btn btn-secondary btn-sm" onclick="renderMeetings()">Back to Meetings</button>
       </div>
@@ -9207,12 +7193,12 @@ async function viewMeetingDetail(id) {
           <p><strong>End:</strong> ${new Date(m.scheduledEnd).toLocaleString()}</p>
           <p><strong>Duration:</strong> ${m.duration} minutes</p>
           ${m.course ? `<p><strong>Course:</strong> ${m.course.code} - ${m.course.title}</p>` : ''}
-          <p><strong>Join Link:</strong> <a href="${canManage ? '/lecturer-meeting?meeting=' + m._id : '/session-preflight?meeting=' + m._id}" target="_blank" style="color:#3b82f6;word-break:break-all;">${window.location.origin}${canManage ? '/lecturer-meeting?meeting=' + m._id : '/session-preflight?meeting=' + m._id}</a></p>
+          <p><strong>Join Link:</strong> <a href="${m.joinUrl}" target="_blank" style="color:#3b82f6;word-break:break-all;">${m.joinUrl}</a></p>
           ${m.inviteLink ? `<p><strong>Invite Link:</strong> <a href="${m.inviteLink}" target="_blank" style="color:#16a34a;word-break:break-all;font-weight:600">▶ ${m.inviteLink}</a></p>` : ''}
           ${canManage ? `<button class="btn btn-sm" style="background:#0ea5e9;color:#fff;margin-top:4px" onclick="showInviteLinkForm('${m._id}', \`${m.inviteLink || ''}\`)">🔗 ${m.inviteLink ? 'Update' : 'Add'} Invite Link</button>` : ''}
           <div style="margin-top:12px;">
-            ${m.status === 'live' || m.status === 'active' ? `<button class="btn btn-success btn-sm" onclick="joinMeeting('${m._id}')">Join Meeting</button>` : ''}
-            ${canManage && (m.status === 'live' || m.status === 'active') ? `<button class="btn btn-danger btn-sm" style="margin-left:4px;" onclick="endMeeting('${m._id}')">End Meeting</button>` : ''}
+            ${m.status === 'active' || m.status === 'live' ? `<button class="btn btn-success btn-sm" onclick="joinMeeting('${m._id}')">Join Meeting</button>` : ''}
+            ${canManage && m.status === 'active' ? `<button class="btn btn-danger btn-sm" style="margin-left:4px;" onclick="endMeeting('${m._id}')">End Meeting</button>` : ''}
           </div>
         </div>
         <div class="card">
@@ -9341,58 +7327,55 @@ function _renderCoursesHTML(content, courses, isOffline) {
     const approved   = !course.needsApproval || course.approvalStatus === 'approved';
     const titleEsc   = esc(course.title).replace(/'/g, "\\'");
     const codeEsc    = esc(course.code).replace(/'/g, "\\'");
-    const accent     = _deptColor(course.code || course.title || '');
-    const enrolled   = course.rosterCount ?? course.enrolledStudents?.length ?? 0;
+
+    const metaItems = [
+      course.lecturerId?.name ? `<span>👨‍🏫 ${esc(course.lecturerId.name)}</span>` : '',
+      course.level  ? `<span style="background:#ede9fe;color:#7c3aed;padding:2px 7px;border-radius:20px;font-weight:700;">Level ${esc(String(course.level))}</span>` : '',
+      course.group  ? `<span style="background:#ecfdf5;color:#059669;padding:2px 7px;border-radius:20px;font-weight:600;">Group ${esc(course.group)}</span>` : '',
+      `<span>👥 ${course.enrolledStudents?.length || 0} enrolled</span>`,
+    ].filter(Boolean).join('');
 
     let actions = '';
     if (!isOffline && canManageRoster) {
       const uploadBtn = approved
-        ? `<button class="btn btn-primary btn-sm" style="display:inline-flex;align-items:center;gap:5px;font-size:11.5px" onclick="showUploadRosterModal('${course._id}','${codeEsc}')"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>Upload</button>`
-        : `<span style="font-size:11px;color:var(--text-muted);font-style:italic">${course.approvalStatus === 'pending' ? 'Awaiting HOD approval' : 'Rejected'}</span>`;
+        ? `<button class="btn btn-primary btn-sm" style="display:inline-flex;align-items:center;gap:5px" onclick="showUploadRosterModal('${course._id}','${codeEsc}')"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>Upload Students</button>`
+        : `<span style="font-size:11px;color:var(--text-muted);font-style:italic">${course.approvalStatus === 'pending' ? 'Awaiting HOD approval' : 'Rejected — contact HOD'}</span>`;
       actions = `
         ${uploadBtn}
-        <button class="btn btn-sm" style="background:#f8fafc;border:1px solid #e2e8f0;color:#475569;display:inline-flex;align-items:center;gap:4px;font-size:11.5px" onclick="viewRoster('${course._id}','${codeEsc}')"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/></svg>Roster</button>
-        <button class="btn btn-sm" style="background:#ede9fe;color:#6d28d9;border:1px solid #ddd6fe;display:inline-flex;align-items:center;gap:4px;font-size:11.5px" onclick="openBulkEmailModal('${course._id}','${titleEsc}')"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg>Email</button>
-        <button class="btn btn-sm" style="background:#dcfce7;color:#166534;border:1px solid #bbf7d0;display:inline-flex;align-items:center;gap:4px;font-size:11.5px" onclick="openBulkSmsModal('${course._id}','${titleEsc}')"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>SMS</button>`;
+        <button class="btn btn-sm" style="background:#f8fafc;border:1px solid #e2e8f0;color:#475569;display:inline-flex;align-items:center;gap:5px" onclick="viewRoster('${course._id}','${codeEsc}')"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/></svg>View Roster</button>
+        <button class="btn btn-sm" style="background:#ede9fe;color:#6d28d9;border:1px solid #ddd6fe;display:inline-flex;align-items:center;gap:5px" onclick="openBulkEmailModal('${course._id}','${titleEsc}')"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg>Email</button>
+        <button class="btn btn-sm" style="background:#dcfce7;color:#166534;border:1px solid #bbf7d0;display:inline-flex;align-items:center;gap:5px" onclick="openBulkSmsModal('${course._id}','${titleEsc}')"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>SMS</button>`;
     } else if (!isOffline && isStudent) {
-      actions = `<button class="btn btn-sm" style="background:#f0fdf4;color:#16a34a;border:1px solid #bbf7d0;font-size:11.5px" onclick="generateCertificate('${course._id}','${titleEsc}')">🎓 Certificate</button>`;
+      actions = `<button class="btn btn-sm" style="background:#f0fdf4;color:#16a34a;border:1px solid #bbf7d0;" onclick="generateCertificate('${course._id}','${titleEsc}')">🎓 Certificate</button>`;
     } else if (!isOffline) {
-      actions = `<button class="btn btn-sm" style="background:var(--bg);border:1px solid var(--border);font-size:11.5px" onclick="viewRoster('${course._id}','${codeEsc}')">View Roster</button>`;
+      actions = `<button class="btn btn-sm" style="background:var(--bg);border:1px solid var(--border);" onclick="viewRoster('${course._id}','${codeEsc}')">View Roster</button>`;
     }
 
     return `
-      <div style="background:#fff;border:1.5px solid #e8eaed;border-radius:16px;overflow:hidden;box-shadow:0 1px 4px rgba(0,0,0,.06);display:flex;flex-direction:column;transition:box-shadow .18s"
-           onmouseover="this.style.boxShadow='0 6px 24px rgba(0,0,0,.11)'" onmouseout="this.style.boxShadow='0 1px 4px rgba(0,0,0,.06)'">
-        <div style="height:5px;background:${accent}"></div>
-        <div style="padding:18px 20px 14px;flex:1;display:flex;flex-direction:column;gap:12px">
-          <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px">
-            <div style="min-width:0">
-              <div style="display:flex;align-items:center;gap:7px;flex-wrap:wrap;margin-bottom:5px">
-                <span style="font-family:monospace;font-size:11px;font-weight:700;background:${accent}18;color:${accent};padding:2px 8px;border-radius:5px;letter-spacing:.3px">${esc(course.code)}</span>
-                ${course.level ? `<span style="background:#dbeafe;color:#1d4ed8;padding:2px 7px;border-radius:20px;font-size:10.5px;font-weight:700">Level ${esc(String(course.level))}</span>` : ''}
-                ${course.group ? `<span style="background:#ecfdf5;color:#059669;padding:2px 7px;border-radius:20px;font-size:10.5px;font-weight:600">Group ${esc(course.group)}</span>` : ''}
+      <div style="background:#fff;border:1px solid #e8eaed;border-radius:14px;padding:18px 20px;margin-bottom:12px;box-shadow:0 1px 4px rgba(0,0,0,.05);transition:box-shadow .18s" onmouseover="this.style.boxShadow='0 4px 18px rgba(0,0,0,.09)'" onmouseout="this.style.boxShadow='0 1px 4px rgba(0,0,0,.05)'">
+        <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:10px;flex-wrap:wrap;margin-bottom:10px">
+          <div style="display:flex;align-items:center;gap:10px;min-width:0">
+            <div style="width:38px;height:38px;border-radius:10px;background:#eff6ff;display:flex;align-items:center;justify-content:center;flex-shrink:0">
+              <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#2563eb" stroke-width="2"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg>
+            </div>
+            <div>
+              <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+                <span style="font-family:monospace;font-size:11.5px;font-weight:700;background:#eff6ff;color:#1d4ed8;padding:2px 8px;border-radius:5px">${esc(course.code)}</span>
+                <span style="font-size:15px;font-weight:700;color:#0f172a">${esc(course.title)}</span>
               </div>
-              <div style="font-size:14px;font-weight:700;color:#0f172a;line-height:1.3">${esc(course.title)}</div>
-              ${course.lecturerId?.name ? `<div style="font-size:11.5px;color:#64748b;margin-top:3px">👨‍🏫 ${esc(course.lecturerId.name)}</div>` : ''}
+              <div style="display:flex;flex-wrap:wrap;gap:6px;align-items:center;font-size:12px;color:#64748b;margin-top:5px">${metaItems}</div>
             </div>
-            <div style="flex-shrink:0">${statusBadge(course)}</div>
           </div>
-          <div style="display:flex;align-items:center;gap:6px;padding:10px 12px;background:#f8fafc;border-radius:10px;border:1px solid #f1f5f9">
-            <div style="width:28px;height:28px;border-radius:8px;background:${accent}18;display:flex;align-items:center;justify-content:center">
-              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="${accent}" stroke-width="2.5"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
-            </div>
-            <span style="font-size:13px;font-weight:700;color:#0f172a">${enrolled}</span>
-            <span style="font-size:12px;color:#64748b">student${enrolled !== 1 ? 's' : ''} enrolled</span>
-          </div>
-          <div style="display:flex;flex-wrap:wrap;gap:6px;align-items:center;padding-top:2px">
-            ${actions}
-          </div>
+          <div>${statusBadge(course)}</div>
+        </div>
+        <div style="display:flex;flex-wrap:wrap;gap:8px;align-items:center;padding-top:10px;border-top:1px solid #f1f5f9">
+          ${actions}
         </div>
       </div>`;
   }
 
   content.innerHTML = `
-    <div style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:10px;margin-bottom:24px">
+    <div style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:10px;margin-bottom:20px">
       <div>
         <h2 style="font-size:22px;font-weight:800;letter-spacing:-.5px;color:#0f172a;margin-bottom:2px">${isStudent ? 'My Courses' : 'Courses'}</h2>
         <p style="color:#64748b;font-size:13px">${isStudent ? 'Your enrolled academic courses' : 'Manage academic courses'}${isOffline ? ' · <span style="color:#f59e0b;font-weight:600">Offline — cached</span>' : ''}</p>
@@ -9400,7 +7383,7 @@ function _renderCoursesHTML(content, courses, isOffline) {
       ${canCreate && !isOffline ? `<button class="btn btn-primary" onclick="showCreateCourseModal()" style="display:flex;align-items:center;gap:6px"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>Create Course</button>` : ''}
     </div>
     ${courses.length
-      ? `<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:16px">${courses.map(courseCard).join('')}</div>`
+      ? courses.map(courseCard).join('')
       : `<div style="background:#fff;border:1px solid #e8eaed;border-radius:16px;padding:60px 20px;text-align:center;box-shadow:0 1px 4px rgba(0,0,0,.05)">
           <div style="width:56px;height:56px;border-radius:16px;background:#eff6ff;display:flex;align-items:center;justify-content:center;margin:0 auto 16px">
             <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#2563eb" stroke-width="1.8"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg>
@@ -9634,19 +7617,6 @@ async function renderQuizzes() {
   const content = document.getElementById('main-content');
   if (!content) return;
   const role = currentUser.role;
-  // Lecturer and student: open the quizzes panel in assignments.html
-  if (role === 'student' || role === 'lecturer') {
-    window.location.href = '/assignments.html?tab=quizzes';
-    return;
-  }
-  // Admin / superadmin keep the proctored quiz overview
-  await renderAdminQuizzes(content);
-}
-
-async function renderProctoredQuizzes() {
-  const content = document.getElementById('main-content');
-  if (!content) return;
-  const role = currentUser.role;
   if (role === 'lecturer') {
     await renderLecturerQuizzes(content);
   } else if (role === 'student') {
@@ -9759,18 +7729,6 @@ async function showCreateQuizModal() {
             <option value="">Select a course</option>
             ${courses.map(c => `<option value="${c._id}">${esc(c.title)}${c.level?' · L'+c.level:''}${c.group?' · Grp '+c.group:''}</option>`).join('')}
           </select></div>
-          <div class="form-group">
-            <label>Target Audience</label>
-            <select id="cq-audience" onchange="document.getElementById('cq-group-row').style.display=this.value==='group'?'':'none'" style="width:100%;padding:8px;border:1px solid #d1d5db;border-radius:6px;">
-              <option value="all">All enrolled students</option>
-              <option value="group">Specific group only</option>
-            </select>
-          </div>
-          <div class="form-group" id="cq-group-row" style="display:none">
-            <label>Group <span style="color:#ef4444">*</span></label>
-            <input type="text" id="cq-group" placeholder="e.g. A, B, C" style="width:100%;padding:8px;border:1px solid #d1d5db;border-radius:6px;">
-            <p style="font-size:11px;color:#6b7280;margin-top:4px">Only students whose group matches this value will see the quiz.</p>
-          </div>
           <div class="form-group"><label>Time Limit (minutes)</label><input type="number" id="cq-timelimit" value="30" min="1" style="width:100%;padding:8px;border:1px solid #d1d5db;border-radius:6px;"></div>
           <div class="form-group"><label>Start Time *</label><input type="datetime-local" id="cq-start" style="width:100%;padding:8px;border:1px solid #d1d5db;border-radius:6px;"></div>
           <div class="form-group"><label>End Time *</label><input type="datetime-local" id="cq-end" style="width:100%;padding:8px;border:1px solid #d1d5db;border-radius:6px;"></div>
@@ -9807,17 +7765,10 @@ async function submitCreateQuiz() {
   const endTime = document.getElementById('cq-end').value;
   const maxAttempts = parseInt(document.getElementById('cq-max-attempts')?.value ?? '1');
   const scorePolicy = document.getElementById('cq-score-policy')?.value || 'best';
-  const targetAudience = document.getElementById('cq-audience')?.value || 'all';
-  const targetGroup = (document.getElementById('cq-group')?.value || '').trim();
   const errEl = document.getElementById('cq-error');
 
   if (!title || !courseId || !startTime || !endTime) {
     errEl.textContent = 'Please fill in all required fields.';
-    errEl.style.display = 'block';
-    return;
-  }
-  if (targetAudience === 'group' && !targetGroup) {
-    errEl.textContent = 'Please enter the group name/letter.';
     errEl.style.display = 'block';
     return;
   }
@@ -9827,7 +7778,7 @@ async function submitCreateQuiz() {
   try {
     const data = await api('/api/lecturer/quizzes', {
       method: 'POST',
-      body: JSON.stringify({ title, description, courseId, timeLimit, startTime: new Date(startTime).toISOString(), endTime: new Date(endTime).toISOString(), maxAttempts: isNaN(maxAttempts) ? 1 : maxAttempts, scorePolicy, targetAudience, targetGroup: targetAudience === 'group' ? targetGroup : null })
+      body: JSON.stringify({ title, description, courseId, timeLimit, startTime: new Date(startTime).toISOString(), endTime: new Date(endTime).toISOString(), maxAttempts: isNaN(maxAttempts) ? 1 : maxAttempts, scorePolicy })
     });
     closeQuizModal();
     showAddQuestionsView(data.quiz._id);
@@ -9868,20 +7819,17 @@ async function showAddQuestionsView(quizId) {
         <div class="form-group" style="margin-bottom:16px;">
           <label style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:#6b7280;display:block;margin-bottom:8px;">Question Type</label>
           <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;">
-            <label id="aq-lbl-single" style="display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;cursor:pointer;padding:16px 10px;border:2px solid #0f172a;border-radius:12px;background:#0f172a;color:#fff;font-size:12px;font-weight:700;text-align:center;line-height:1.3;">
+            <label id="aq-lbl-single" style="display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;cursor:pointer;padding:12px 6px;border:2px solid var(--primary);border-radius:10px;background:var(--primary);color:#fff;font-size:12px;font-weight:700;text-align:center;line-height:1.3;">
               <input type="radio" name="aq-type" value="single" checked onchange="aqToggleType('single')" style="display:none;">
-              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="4" fill="currentColor" stroke="none"/></svg>
-              SINGLE ANSWER
+              <span style="font-size:18px;">🔘</span>Single Answer
             </label>
-            <label id="aq-lbl-multi" style="display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;cursor:pointer;padding:16px 10px;border:2px solid #e5e7eb;border-radius:12px;background:#fff;color:#374151;font-size:12px;font-weight:700;text-align:center;line-height:1.3;">
+            <label id="aq-lbl-multi" style="display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;cursor:pointer;padding:12px 6px;border:2px solid #e5e7eb;border-radius:10px;background:var(--card);color:#374151;font-size:12px;font-weight:700;text-align:center;line-height:1.3;">
               <input type="radio" name="aq-type" value="multiple" onchange="aqToggleType('multiple')" style="display:none;">
-              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="3"/><polyline points="9 12 11 14 15 10"/></svg>
-              MULTI ANSWER
+              <span style="font-size:18px;">☑️</span>Multi Answer
             </label>
-            <label id="aq-lbl-fill" style="display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;cursor:pointer;padding:16px 10px;border:2px solid #e5e7eb;border-radius:12px;background:#fff;color:#374151;font-size:12px;font-weight:700;text-align:center;line-height:1.3;">
+            <label id="aq-lbl-fill" style="display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;cursor:pointer;padding:12px 6px;border:2px solid #e5e7eb;border-radius:10px;background:var(--card);color:#374151;font-size:12px;font-weight:700;text-align:center;line-height:1.3;">
               <input type="radio" name="aq-type" value="fill" onchange="aqToggleType('fill')" style="display:none;">
-              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="2" x2="22" y2="6"/><path d="M7.5 20.5L19 9l-4-4L3.5 16.5 2 22z"/></svg>
-              FILL IN
+              <span style="font-size:18px;">✏️</span>Fill In
             </label>
           </div>
           <p id="aq-type-hint" style="font-size:12px;color:#9ca3af;margin-top:8px;">One correct answer — student picks one option.</p>
@@ -10002,8 +7950,8 @@ function aqToggleType(type) {
     : isFill
       ? 'Fill in the blank — student types their answer.'
       : 'One correct answer — student picks one option.';
-  const primStyle = 'display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;cursor:pointer;padding:16px 10px;border:2px solid #0f172a;border-radius:12px;background:#0f172a;color:#fff;font-size:12px;font-weight:700;text-align:center;line-height:1.3;';
-  const secStyle  = 'display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;cursor:pointer;padding:16px 10px;border:2px solid #e5e7eb;border-radius:12px;background:#fff;color:#374151;font-size:12px;font-weight:700;text-align:center;line-height:1.3;';
+  const primStyle = 'display:flex;align-items:center;gap:6px;cursor:pointer;padding:8px 16px;border:2px solid var(--primary);border-radius:8px;background:var(--primary);color:#fff;font-size:13px;font-weight:600;';
+  const secStyle  = 'display:flex;align-items:center;gap:6px;cursor:pointer;padding:8px 16px;border:2px solid #e5e7eb;border-radius:8px;background:#fff;color:#374151;font-size:13px;font-weight:600;';
   document.getElementById('aq-lbl-single').style.cssText = (!isMulti && !isFill) ? primStyle : secStyle;
   document.getElementById('aq-lbl-multi').style.cssText  = isMulti ? primStyle : secStyle;
   document.getElementById('aq-lbl-fill').style.cssText   = isFill  ? primStyle : secStyle;
@@ -10481,14 +8429,14 @@ async function renderStudentQuizzes(content, showAll) {
           ${q.canAttempt && !q.canContinue ? `<button class="btn btn-primary" style="flex:1;" onclick="startStudentQuiz('${q._id}')">${q.attemptCount > 0 ? '↩ Retake' : '▶ Take Quiz'}</button>` : ''}
           ${q.isSubmitted ? `<button class="btn btn-secondary" style="flex:1;" onclick="viewStudentResult('${q._id}')">📊 View Result</button>` : ''}
           ${q.status === 'closed' && !q.isSubmitted ? `<div style="font-size:12px;color:var(--text-muted);padding:8px 0;">This quiz has closed.</div>` : ''}
-          ${q.status === 'upcoming' && !q.canAttempt ? `<div style="font-size:12px;color:#7c3aed;padding:8px 0;" id="quiz-countdown-${q._id}">Opens at ${new Date(q.startTime).toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'})}</div>` : ''}
+          ${q.status === 'upcoming' && !q.canAttempt ? `<div style="font-size:12px;color:#7c3aed;padding:8px 0;">Not open yet — check back at the start time.</div>` : ''}
         </div>
       </div>`;
     }
 
     content.innerHTML = `
       <div class="page-header" style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:10px;margin-bottom:16px;">
-        <div><h2>Quizzes</h2><p>Your scheduled proctored and snap quizzes</p></div>
+        <div><h2>Quizzes</h2><p>Your available quizzes and assessments</p></div>
       </div>
       <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:13px;font-weight:500;margin-bottom:16px;padding:10px 14px;background:var(--card);border-radius:8px;border:1px solid var(--border);">
         <input type="checkbox" ${showAll ? 'checked' : ''} onchange="renderStudentQuizzes(document.getElementById('main-content'), this.checked)" style="accent-color:var(--primary);width:15px;height:15px;">
@@ -10498,20 +8446,6 @@ async function renderStudentQuizzes(content, showAll) {
         ? quizzes.map(q => quizCard(q)).join('')
         : '<div class="card"><div class="empty-state"><p>No quizzes available right now.</p><p style="font-size:13px;color:var(--text-muted);margin-top:4px;">Check back when your lecturer opens a quiz.</p></div></div>'}
     `;
-
-    // Auto-refresh when the next upcoming quiz opens (within 30 min)
-    if (window._quizOpenTimer) { clearTimeout(window._quizOpenTimer); window._quizOpenTimer = null; }
-    const upcoming = quizzes.filter(q => q.status === 'upcoming');
-    if (upcoming.length > 0) {
-      const next = upcoming.reduce((a, b) => new Date(a.startTime) < new Date(b.startTime) ? a : b);
-      const msUntilOpen = new Date(next.startTime) - Date.now();
-      if (msUntilOpen > 0 && msUntilOpen <= 30 * 60 * 1000) {
-        window._quizOpenTimer = setTimeout(() => {
-          const c = document.getElementById('main-content');
-          if (c && currentView === 'quizzes') renderStudentQuizzes(c, showAll);
-        }, msUntilOpen + 500);
-      }
-    }
   } catch (e) {
     content.innerHTML = `<div class="card"><p style="color:#ef4444;">Error: ${e.message}</p></div>`;
   }
@@ -10529,11 +8463,7 @@ async function startStudentQuiz(quizId) {
     const timeLimit = data.timeLimit || 30;
     const attempt = data.attempt;
     const startedAt = new Date(attempt.startedAt);
-    // Correct for clock drift: use server time offset so timer is accurate
-    const clockOffset = data.serverTime ? (new Date(data.serverTime) - Date.now()) : 0;
-    const attemptEnd = new Date(startedAt.getTime() + timeLimit * 60 * 1000);
-    const quizEnd = data.quizEndTime ? new Date(data.quizEndTime) : null;
-    const endTime = quizEnd && quizEnd < attemptEnd ? quizEnd : attemptEnd;
+    const endTime = new Date(startedAt.getTime() + timeLimit * 60 * 1000);
 
     content.innerHTML = `
       <div class="page-header" style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;">
@@ -10551,23 +8481,6 @@ async function startStudentQuiz(quizId) {
                     style="width:100%;padding:11px 14px;border:1.5px solid #d1d5db;border-radius:8px;font-size:14px;font-family:inherit;outline:none;transition:border-color .15s;"
                     onfocus="this.style.borderColor='#6366f1'" onblur="this.style.borderColor='#d1d5db'">
                   <p style="font-size:11px;color:#9ca3af;margin-top:5px;">Spelling counts — answer is not case-sensitive.</p>
-                </div>`
-              : q.questionType === 'explain'
-              ? `<div style="margin-top:6px;">
-                  <textarea id="sq-explain-${q._id}" rows="5" placeholder="Type your answer here…"
-                    style="width:100%;padding:11px 14px;border:1.5px solid #d1d5db;border-radius:8px;font-size:14px;font-family:inherit;outline:none;transition:border-color .15s;resize:vertical;box-sizing:border-box;"
-                    onfocus="this.style.borderColor='#6366f1'" onblur="this.style.borderColor='#d1d5db'"></textarea>
-                  <p style="font-size:11px;color:#9ca3af;margin-top:5px;">This question will be manually graded by your instructor.</p>
-                </div>`
-              : q.questionType === 'multiple'
-              ? `<div style="display:flex;flex-direction:column;gap:8px;">
-                  <p style="font-size:11px;color:#6b7280;margin:0 0 4px;">Select all that apply.</p>
-                  ${q.options.map((opt, oi) => `
-                    <label style="display:flex;align-items:center;gap:8px;padding:10px;border:1px solid #e5e7eb;border-radius:8px;cursor:pointer;transition:background 0.15s;" onmouseover="this.style.background='#f3f4f6'" onmouseout="this.style.background=''">
-                      <input type="checkbox" name="sq-${q._id}" value="${oi}" style="accent-color:#3b82f6;width:16px;height:16px;">
-                      <span><strong>${String.fromCharCode(65 + oi)}.</strong> ${opt}</span>
-                    </label>
-                  `).join('')}
                 </div>`
               : `<div style="display:flex;flex-direction:column;gap:8px;">
               ${q.options.map((opt, oi) => `
@@ -10589,7 +8502,7 @@ async function startStudentQuiz(quizId) {
     window._quizQuestions = questions;
 
     function updateTimer() {
-      const now = new Date(Date.now() + clockOffset);
+      const now = new Date();
       const remaining = Math.max(0, endTime - now);
       const mins = Math.floor(remaining / 60000);
       const secs = Math.floor((remaining % 60000) / 1000);
@@ -10626,24 +8539,12 @@ async function submitStudentQuiz(quizId) {
     window._quizTabHandler = null;
   }
   window._quizSubmitting = false;
-  if (_appOfflineMode) {
-    toastError('You are offline. Connect to the internet to submit your quiz.');
-    return;
-  }
   if (quizTimerInterval) { clearInterval(quizTimerInterval); quizTimerInterval = null; }
   const questions = window._quizQuestions || [];
   const answers = questions.map(q => {
     if (q.questionType === 'fill') {
       const input = document.getElementById(`sq-fill-${q._id}`);
       return { questionId: q._id, selectedAnswer: null, selectedAnswerText: input ? input.value.trim() : '' };
-    }
-    if (q.questionType === 'explain') {
-      const textarea = document.getElementById(`sq-explain-${q._id}`);
-      return { questionId: q._id, selectedAnswer: null, selectedAnswerText: textarea ? textarea.value.trim() : '' };
-    }
-    if (q.questionType === 'multiple') {
-      const checked = Array.from(document.querySelectorAll(`input[name="sq-${q._id}"]:checked`)).map(el => parseInt(el.value));
-      return { questionId: q._id, selectedAnswer: checked, selectedAnswerText: null };
     }
     const selected = document.querySelector(`input[name="sq-${q._id}"]:checked`);
     return { questionId: q._id, selectedAnswer: selected ? parseInt(selected.value) : -1, selectedAnswerText: null };
@@ -10712,33 +8613,8 @@ async function viewStudentResult(quizId) {
                     </div>
                     ${!a.isCorrect ? `<div style="padding:8px 12px;border-radius:6px;border:1px solid #22c55e;background:#f0fdf4;color:#15803d;">← Correct answer: <strong>${q.correctAnswerText || ''}</strong></div>` : ''}
                   </div>`
-                : q.questionType === 'explain'
-                ? `<div style="display:flex;flex-direction:column;gap:6px;font-size:13px;">
-                    <div style="padding:8px 12px;border-radius:6px;border:1px solid #e5e7eb;background:#f9fafb;">
-                      Your answer: <em>${a.selectedAnswerText || '(no answer)'}</em>
-                    </div>
-                    ${a.pendingManualGrade ? `<div style="padding:6px 12px;border-radius:6px;background:#fffbeb;border:1px solid #fde68a;color:#92400e;font-size:12px;">⏳ Awaiting manual grading by instructor</div>` : ''}
-                  </div>`
-                : q.questionType === 'multiple'
-                ? `<div style="display:flex;flex-direction:column;gap:6px;">
-                  ${(q.options || []).map((opt, oi) => {
-                    const correctArr = Array.isArray(q.correctAnswer) ? q.correctAnswer : [];
-                    const selectedArr = Array.isArray(a.selectedAnswer) ? a.selectedAnswer : [];
-                    const isCorrectOpt = correctArr.includes(oi);
-                    const isSelectedOpt = selectedArr.includes(oi);
-                    let style = 'padding:8px 12px;border-radius:6px;border:1px solid #e5e7eb;';
-                    if (isCorrectOpt) style += 'background:#f0fdf4;border-color:#22c55e;color:#15803d;';
-                    if (isSelectedOpt && !isCorrectOpt) style += 'background:#fef2f2;border-color:#ef4444;color:#dc2626;';
-                    return `<div style="${style}">
-                      <strong>${String.fromCharCode(65 + oi)}.</strong> ${opt}
-                      ${isCorrectOpt ? ' ✓ Correct' : ''}
-                      ${isSelectedOpt && !isCorrectOpt ? ' ✗ Your selection' : ''}
-                      ${isSelectedOpt && isCorrectOpt ? ' ✓ Your selection' : ''}
-                    </div>`;
-                  }).join('')}
-                </div>`
                 : `<div style="display:flex;flex-direction:column;gap:6px;">
-                ${(q.options || []).map((opt, oi) => {
+                ${q.options.map((opt, oi) => {
                   let style = 'padding:8px 12px;border-radius:6px;border:1px solid #e5e7eb;';
                   if (oi === q.correctAnswer) style += 'background:#f0fdf4;border-color:#22c55e;color:#15803d;';
                   if (oi === a.selectedAnswer && !a.isCorrect) style += 'background:#fef2f2;border-color:#ef4444;color:#dc2626;';
@@ -10760,262 +8636,12 @@ async function viewStudentResult(quizId) {
   }
 }
 
-// ── Snap Quiz Live Monitoring Dashboard ───────────────────────────────────────
-
-async function renderQuizMonitorPage() {
-  const content = document.getElementById('main-content');
-  content.innerHTML = '<div class="loading">Loading quiz list…</div>';
-  try {
-    const isHodOrAdmin = ['hod', 'admin', 'superadmin'].includes(currentUser?.role);
-    const endpoint = isHodOrAdmin
-      ? '/api/lecturer/snap-quizzes/department-overview?status=open&limit=100'
-      : '/api/lecturer/snap-quizzes?status=open&limit=50';
-    const data = await api(endpoint).catch(() => api('/api/lecturer/snap-quizzes?status=open&limit=50'));
-    const quizzes = data.quizzes || [];
-    if (!quizzes.length) {
-      content.innerHTML = `<div class="page-header"><div><h2>Quiz Monitor</h2><p>No open quizzes right now</p></div></div>
-        <div class="card" style="text-align:center;padding:48px">
-          <div style="font-size:36px;margin-bottom:12px">📋</div>
-          <p style="color:var(--text-muted)">Open a quiz from the <a href="#" onclick="navigateTo('quizzes');return false">Quizzes</a> page to see live student status here.</p>
-        </div>`;
-      return;
-    }
-    content.innerHTML = `
-      <div class="page-header"><div><h2>Quiz Monitor</h2><p>Select a quiz to watch live</p></div></div>
-      <div style="display:grid;gap:10px;max-width:800px">
-        ${quizzes.map(q => `
-          <div style="background:var(--card);border:1.5px solid #22c55e;border-radius:12px;padding:14px 18px;display:flex;align-items:center;justify-content:space-between;gap:12px;cursor:pointer" onclick="renderQuizLiveDashboard('${q._id}','${esc(q.title).replace(/'/g,"\\'")}')" onmouseover="this.style.boxShadow='0 4px 16px rgba(0,0,0,.1)'" onmouseout="this.style.boxShadow=''">
-            <div>
-              <div style="font-weight:700;font-size:14px">${esc(q.title)}</div>
-              <div style="font-size:11px;color:var(--text-muted);margin-top:3px">
-                <span style="background:#dcfce7;color:#166534;padding:2px 7px;border-radius:20px;font-size:10px;font-weight:700">LIVE</span>
-                · ${q.timeLimitMinutes} min
-                · Security: <strong>${q.securityLevel || 'medium'}</strong>
-              </div>
-            </div>
-            <button class="btn btn-primary btn-sm">Monitor →</button>
-          </div>`).join('')}
-      </div>`;
-  } catch (e) {
-    content.innerHTML = `<div class="card"><p>Error: ${e.message}</p></div>`;
-  }
-}
-
-let _quizMonitorWs = null;
-let _quizMonitorRefreshTimer = null;
-
-async function renderQuizLiveDashboard(quizId, quizTitle) {
-  const content = document.getElementById('main-content');
-  content.innerHTML = '<div class="loading">Connecting to live monitor…</div>';
-
-  // Cleanup previous ws
-  if (_quizMonitorWs) { try { _quizMonitorWs.close(); } catch(_) {} _quizMonitorWs = null; }
-  if (_quizMonitorRefreshTimer) { clearInterval(_quizMonitorRefreshTimer); _quizMonitorRefreshTimer = null; }
-
-  const render = async () => {
-    try {
-      const d = await api(`/api/lecturer/snap-quizzes/${quizId}/live-monitor`);
-      _renderQuizMonitorUI(d, quizId, quizTitle);
-    } catch (e) {
-      content.innerHTML = `<div class="card"><p>Error: ${e.message}</p><button class="btn btn-secondary btn-sm" onclick="renderQuizMonitorPage()">← Back</button></div>`;
-    }
-  };
-
-  await render();
-
-  // Connect WebSocket for live updates
-  try {
-    const token = localStorage.getItem('diklyToken') || sessionStorage.getItem('diklyToken') || '';
-    const wsUrl = (location.protocol === 'https:' ? 'wss' : 'ws') + '://' + location.host + '/ws/monitor?token=' + encodeURIComponent(token);
-    const ws = new WebSocket(wsUrl);
-    _quizMonitorWs = ws;
-    ws.onopen = () => ws.send(JSON.stringify({ type: 'subscribe', quizId }));
-    ws.onmessage = (ev) => {
-      try {
-        const msg = JSON.parse(ev.data);
-        if (msg.type && msg.type.startsWith('quiz:')) {
-          _handleQuizMonitorEvent(msg.type.replace('quiz:', ''), msg.payload);
-        }
-      } catch (_) {}
-    };
-    ws.onerror = ws.onclose = () => { _quizMonitorWs = null; };
-  } catch (_) {}
-
-  // Fallback: refresh stats every 20s in case WS is unavailable
-  _quizMonitorRefreshTimer = setInterval(render, 20000);
-}
-
-function _handleQuizMonitorEvent(eventType, payload) {
-  const feed = document.getElementById('qm-feed');
-  if (!feed) return;
-  const colors = { violation_logged: '#ef4444', attempt_started: '#22c55e', attempt_submitted: '#3b82f6', attempt_auto_submitted: '#f59e0b', heartbeat_missed: '#f97316', snapshot_analyzed: '#8b5cf6' };
-  const icons  = { violation_logged: '⚠️', attempt_started: '▶️', attempt_submitted: '✅', attempt_auto_submitted: '⏰', heartbeat_missed: '💔', snapshot_analyzed: '🤖' };
-  const labels = { violation_logged: 'Violation', attempt_started: 'Started', attempt_submitted: 'Submitted', attempt_auto_submitted: 'Auto-submitted', heartbeat_missed: 'Missed heartbeat', snapshot_analyzed: 'AI analysis' };
-  const color = colors[eventType] || '#64748b';
-  const icon  = icons[eventType]  || '📌';
-  const label = labels[eventType] || eventType;
-
-  const item = document.createElement('div');
-  item.style.cssText = `display:flex;align-items:flex-start;gap:10px;padding:8px 12px;border-left:3px solid ${color};background:${color}11;border-radius:0 8px 8px 0;margin-bottom:6px`;
-  item.innerHTML = `
-    <span style="font-size:14px;margin-top:1px">${icon}</span>
-    <div style="flex:1;min-width:0">
-      <div style="font-size:12px;font-weight:700;color:${color}">${label}</div>
-      <div style="font-size:11px;color:var(--text-muted);margin-top:1px">${payload.studentId ? 'Student: ...'+String(payload.studentId).slice(-6) : ''}${payload.violationType ? ' · '+payload.violationType : ''}${payload.causedTermination ? ' · <strong style="color:#ef4444">TERMINATED</strong>' : ''}</div>
-    </div>
-    <span style="font-size:10px;color:#94a3b8;white-space:nowrap">${new Date().toLocaleTimeString()}</span>`;
-  feed.prepend(item);
-  while (feed.children.length > 50) feed.removeChild(feed.lastChild);
-
-  // Update student row if present
-  if (payload.attemptId) {
-    const row = document.getElementById('qm-student-' + payload.attemptId);
-    if (row && eventType === 'violation_logged') {
-      const vc = row.querySelector('.qm-vcount');
-      if (vc) vc.textContent = (parseInt(vc.textContent) || 0) + 1;
-    }
-    if (row && (eventType === 'attempt_submitted' || eventType === 'attempt_auto_submitted')) {
-      row.style.opacity = '0.6';
-      const st = row.querySelector('.qm-status');
-      if (st) { st.textContent = eventType === 'attempt_auto_submitted' ? 'Auto-submitted' : 'Submitted'; st.style.color = '#22c55e'; }
-    }
-  }
-}
-
-function _renderQuizMonitorUI(d, quizId, quizTitle) {
-  const content = document.getElementById('main-content');
-  const { quiz, students, recentViolations, summary } = d;
-  const secColors = { low: '#22c55e', medium: '#6366f1', high: '#dc2626' };
-  const secColor = secColors[quiz.securityLevel] || '#6366f1';
-  const fmt = n => n ?? '—';
-
-  const studentRows = students.map(s => {
-    const statusColor = s.status === 'active' ? '#22c55e' : s.isTerminated ? '#ef4444' : '#64748b';
-    const statusLabel = s.isTerminated ? 'Terminated' : s.status === 'active' ? 'Active' : s.status === 'submitted' ? 'Submitted' : s.status === 'auto_submitted' ? 'Auto-submitted' : s.status;
-    const onlineDot = s.online ? '🟢' : s.status === 'active' ? '🔴' : '⚫';
-    const minutes = s.timeRemaining != null ? Math.floor(s.timeRemaining / 60) + ':' + String(s.timeRemaining % 60).padStart(2, '0') : '—';
-    return `<tr id="qm-student-${s.attemptId}" style="border-bottom:1px solid var(--border)">
-      <td style="padding:10px 12px">
-        <div style="font-weight:600;font-size:13px">${esc(s.student.name)}</div>
-        <div style="font-size:10px;color:var(--text-muted)">${esc(s.student.indexNumber || s.student.email)}</div>
-        <div style="font-size:10px;color:#94a3b8">${esc(s.platform)}</div>
-      </td>
-      <td style="padding:10px 12px">
-        ${onlineDot} <span class="qm-status" style="font-size:12px;font-weight:600;color:${statusColor}">${statusLabel}</span>
-      </td>
-      <td style="padding:10px 12px;text-align:center">
-        <span class="qm-vcount" style="font-size:13px;font-weight:700;color:${(s.violationCount||0) > 0 ? '#ef4444' : '#64748b'}">${s.violationCount||0}</span>
-      </td>
-      <td style="padding:10px 12px;text-align:center;font-size:12px;color:var(--text-muted)">${minutes}</td>
-      <td style="padding:10px 12px;text-align:center">
-        ${s.percentageScore != null ? `<span style="font-size:12px;font-weight:700">${s.percentageScore}%</span>` : '<span style="color:#94a3b8;font-size:11px">—</span>'}
-      </td>
-      <td style="padding:10px 12px;text-align:center">
-        <button class="btn btn-xs" style="font-size:10px" onclick="sqForceSubmit('${quizId}','${s.attemptId}','${esc(s.student.name).replace(/'/g,"\\'")}')">Force Submit</button>
-      </td>
-    </tr>`;
-  }).join('');
-
-  content.innerHTML = `
-    <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:18px;flex-wrap:wrap">
-      <div>
-        <div style="display:flex;align-items:center;gap:10px">
-          <button class="btn btn-secondary btn-sm" onclick="renderQuizMonitorPage()">← Back</button>
-          <h2 style="font-size:18px;font-weight:800;margin:0">${esc(quizTitle)}</h2>
-          <span style="background:#dcfce7;color:#166534;padding:3px 10px;border-radius:20px;font-size:11px;font-weight:700">● LIVE</span>
-        </div>
-        <div style="margin-top:4px;font-size:12px;color:var(--text-muted)">
-          Security: <span style="background:${secColor}22;color:${secColor};padding:1px 8px;border-radius:20px;font-size:11px;font-weight:700">${(quiz.securityLevel||'medium').toUpperCase()}</span>
-          · ${quiz.monitoringMode === 'ai' ? '🤖 AI Monitoring ON' : '📋 Standard monitoring'}
-          ${quiz.mobileMonitoring ? ' · 📱 Mobile' : ''}
-        </div>
-      </div>
-      <button class="btn btn-sm" style="background:#f1f5f9;border:1px solid var(--border)" onclick="renderQuizLiveDashboard('${quizId}','${esc(quizTitle).replace(/'/g,"\\'")}')">🔄 Refresh</button>
-    </div>
-
-    <!-- KPI row -->
-    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:10px;margin-bottom:18px">
-      ${[
-        { label:'Total', value:fmt(summary.total),     color:'#6366f1' },
-        { label:'Active', value:fmt(summary.active),   color:'#22c55e' },
-        { label:'Submitted', value:fmt(summary.submitted), color:'#3b82f6' },
-        { label:'Online now', value:fmt(summary.online),  color:'#10b981' },
-        { label:'Terminated', value:fmt(summary.terminated), color:'#ef4444' },
-      ].map(k => `<div style="background:var(--card);border:1.5px solid ${k.color}33;border-radius:12px;padding:14px;text-align:center">
-        <div style="font-size:22px;font-weight:800;color:${k.color}">${k.value}</div>
-        <div style="font-size:11px;color:var(--text-muted);margin-top:2px">${k.label}</div>
-      </div>`).join('')}
-    </div>
-
-    <div style="display:grid;grid-template-columns:1fr 300px;gap:16px;align-items:start">
-      <!-- Student table -->
-      <div style="background:var(--card);border:1px solid var(--border);border-radius:14px;overflow:hidden">
-        <div style="padding:12px 16px;border-bottom:1px solid var(--border);font-weight:700;font-size:13px">Students (${students.length})</div>
-        <div style="overflow-x:auto">
-          <table style="width:100%;border-collapse:collapse;font-size:12px">
-            <thead><tr style="background:var(--bg);border-bottom:1.5px solid var(--border)">
-              <th style="padding:8px 12px;text-align:left;font-size:11px;color:var(--text-muted);text-transform:uppercase">Student</th>
-              <th style="padding:8px 12px;text-align:left;font-size:11px;color:var(--text-muted);text-transform:uppercase">Status</th>
-              <th style="padding:8px 12px;text-align:center;font-size:11px;color:var(--text-muted);text-transform:uppercase">Violations</th>
-              <th style="padding:8px 12px;text-align:center;font-size:11px;color:var(--text-muted);text-transform:uppercase">Time left</th>
-              <th style="padding:8px 12px;text-align:center;font-size:11px;color:var(--text-muted);text-transform:uppercase">Score</th>
-              <th style="padding:8px 12px;text-align:center;font-size:11px;color:var(--text-muted);text-transform:uppercase">Action</th>
-            </tr></thead>
-            <tbody>${studentRows || '<tr><td colspan="6" style="text-align:center;padding:24px;color:var(--text-muted)">No students yet</td></tr>'}</tbody>
-          </table>
-        </div>
-      </div>
-
-      <!-- Live event feed -->
-      <div style="background:var(--card);border:1px solid var(--border);border-radius:14px;overflow:hidden">
-        <div style="padding:12px 16px;border-bottom:1px solid var(--border);font-weight:700;font-size:13px;display:flex;align-items:center;justify-content:space-between">
-          Live Events
-          <span style="width:8px;height:8px;border-radius:50%;background:#22c55e;display:inline-block" title="WebSocket connected"></span>
-        </div>
-        <div id="qm-feed" style="padding:10px;max-height:480px;overflow-y:auto">
-          ${recentViolations.length === 0
-            ? '<p style="font-size:12px;color:#94a3b8;text-align:center;padding:24px 0">No events yet</p>'
-            : recentViolations.map(v => `
-              <div style="display:flex;align-items:flex-start;gap:8px;padding:7px 10px;border-left:3px solid ${v.severity==='critical'?'#ef4444':v.severity==='warning'?'#f59e0b':'#94a3b8'};background:${v.severity==='critical'?'#fef2f2':v.severity==='warning'?'#fffbeb':'#f8fafc'};border-radius:0 8px 8px 0;margin-bottom:5px">
-                <div style="flex:1;min-width:0">
-                  <div style="font-size:11px;font-weight:700;color:${v.severity==='critical'?'#ef4444':'#f59e0b'}">${v.violationType?.replace(/_/g,' ') || 'Event'}</div>
-                  ${v.causedTermination ? '<div style="font-size:10px;color:#ef4444;font-weight:700">SESSION TERMINATED</div>' : ''}
-                </div>
-                <span style="font-size:10px;color:#94a3b8;white-space:nowrap">${v.occurredAt ? new Date(v.occurredAt).toLocaleTimeString() : ''}</span>
-              </div>`).join('')}
-        </div>
-      </div>
-    </div>`;
-}
-
-window.sqForceSubmit = async function(quizId, attemptId, studentName) {
-  if (!confirm(`Force-submit quiz for ${studentName}? This cannot be undone.`)) return;
-  try {
-    await api(`/api/lecturer/snap-quizzes/${quizId}/attempts/${attemptId}/force-submit`, { method: 'POST' });
-    toastSuccess(`Submitted for ${studentName}`);
-    const row = document.getElementById('qm-student-' + attemptId);
-    if (row) {
-      row.style.opacity = '0.6';
-      const st = row.querySelector('.qm-status');
-      if (st) { st.textContent = 'Force-submitted'; st.style.color = '#22c55e'; }
-    }
-  } catch (e) {
-    toastError(e.message);
-  }
-};
-
-// Cleanup ws when navigating away
-document.addEventListener('navigated', () => {
-  if (_quizMonitorWs) { try { _quizMonitorWs.close(); } catch(_) {} _quizMonitorWs = null; }
-  if (_quizMonitorRefreshTimer) { clearInterval(_quizMonitorRefreshTimer); _quizMonitorRefreshTimer = null; }
-});
-
 async function renderAdminQuizzes(content) {
   try {
     const data = await api('/api/admin/quizzes');
     const quizzes = data.quizzes || [];
     content.innerHTML = `
-      <div class="page-header"><h2>Quizzes</h2><p>Overview of all quizzes across all lecturers</p></div>
+      <div class="page-header"><h2>All Quizzes</h2><p>Overview of quizzes across all lecturers</p></div>
 
       <!-- Duplicate finder tool -->
       <div class="card" style="margin-bottom:16px;border:2px solid #fde68a;background:#fffbeb">
@@ -11216,6 +8842,9 @@ async function renderMyAttendance() {
     offlineCache('my_attendance', data);
     content.innerHTML = `
       <div class="page-header"><h2>My Attendance</h2><p>Your attendance history</p></div>
+      <div class="actions-bar">
+        <button class="btn btn-primary btn-sm" onclick="showMarkAttendanceModal()">Mark Attendance</button>
+      </div>
       <div class="card">
         ${data.records.length ? `
           <table>
@@ -12032,7 +9661,7 @@ async function exportBankToPDF() {
     }
   });
 
-  await downloadBlob(doc.output('blob'), `DIKLY_QuestionBank_${new Date().toISOString().slice(0,10)}.pdf`);
+  doc.save(`DIKLY_QuestionBank_${new Date().toISOString().slice(0,10)}.pdf`);
   toastSuccess(`PDF saved with ${selected.length} question${selected.length !== 1 ? 's' : ''} ✓`);
 }
 
@@ -12160,8 +9789,6 @@ const ESP32_LOCAL_PORT   = 80;
 let   esp32IP            = localStorage.getItem('dikly_esp32_ip') || null;
 let   bleDetected        = false;
 let   bleScanInterval    = null;
-let   _esp32UrlToken     = null; // connectionToken received via ESP32 /mark redirect
-let   _esp32AutoProof   = null; // one-time proof fetched in background (Capacitor app)
 
 // Save ESP32 IP when found
 function setEsp32IP(ip) {
@@ -12184,55 +9811,19 @@ async function esp32Api(path, options = {}) {
   return data;
 }
 
-// Detect local IPs via WebRTC (works from HTTPS — no HTTP request needed).
-// Returns an array of local IP strings the device has on all interfaces.
-async function _getLocalIPs() {
-  return new Promise(resolve => {
-    const ips = new Set();
-    const pc = new RTCPeerConnection({ iceServers: [] });
-    pc.createDataChannel('');
-    pc.onicecandidate = e => {
-      if (!e.candidate) { pc.close(); return resolve([...ips]); }
-      const m = e.candidate.candidate.match(/(\d{1,3}(?:\.\d{1,3}){3})/);
-      if (m) ips.add(m[1]);
-    };
-    pc.createOffer().then(o => pc.setLocalDescription(o));
-    setTimeout(() => { pc.close(); resolve([...ips]); }, 2500);
-  });
-}
-
-// Try to find ESP32 on local network.
-// Primary (HTTPS-safe): WebRTC reveals the student's local IPs. If any are in
-// the ESP32 AP subnet (192.168.4.x), the student is connected to the hotspot.
-// Fallback: direct HTTP fetch — works in Capacitor WebView, blocked in browsers.
+// Try to find ESP32 on local network
 async function discoverESP32() {
-  // WebRTC local-IP check — works from HTTPS without any HTTP request.
-  // The ESP32 AP mode always uses 192.168.4.x. A student connected to it
-  // will have a 192.168.4.2–254 address.
-  try {
-    const localIPs = await _getLocalIPs();
-    const onHotspot = localIPs.some(ip => /^192\.168\.4\.[2-9]\d*$|^192\.168\.4\.[1-9]\d+$/.test(ip));
-    if (onHotspot) {
-      setEsp32IP('192.168.4.1');
-      bleDetected = true;
-      // Try to fetch hotspot token while we're on the network (Capacitor / HTTP only)
-      try {
-        const tokenRes = await fetch('http://192.168.4.1/token', { cache: 'no-store', signal: AbortSignal.timeout(2000) });
-        if (tokenRes.ok) {
-          const td = await tokenRes.json();
-          if (td.token) sessionStorage.setItem('dikly_esp32_hotspot_key', td.token);
-        }
-      } catch (_) {}
-      return true;
-    }
-  } catch (_) {}
-
-  // HTTP fallback for Capacitor WebView (no mixed-content restriction)
+  // Always try 192.168.4.1 — the fixed AP gateway IP of the ESP32.
+  // The Capacitor WebView allows HTTP requests to local network IPs.
+  // Two-step: first /token (gets key in JSON body), then /status (confirms device).
   const candidates = ['192.168.4.1'];
   if (esp32IP && esp32IP !== '192.168.4.1') candidates.push(esp32IP);
+
   for (const ip of candidates) {
     try {
-      const tokenRes = await fetch(`http://${ip}/token`, { cache: 'no-store', signal: AbortSignal.timeout(3000) });
+      // Step 1: fetch /token — returns { token: "..." } in JSON body.
+      // This is more reliable than reading response headers in a WebView.
+      const tokenRes = await fetch(`http://${ip}/token`, { cache: 'no-store' });
       if (tokenRes.ok) {
         const tokenData = await tokenRes.json();
         if (tokenData.token) {
@@ -12242,8 +9833,10 @@ async function discoverESP32() {
           return true;
         }
       }
-    } catch(e) {}
+    } catch(e) { /* try /status fallback */ }
+
     try {
+      // Step 2 fallback: /status — reads token from response header
       esp32IP = ip;
       const status = await esp32Api('/status');
       if (status.device === 'DIKLY-ESP32') {
@@ -12251,7 +9844,7 @@ async function discoverESP32() {
         bleDetected = true;
         return true;
       }
-    } catch(e) {}
+    } catch(e) { /* not reachable on this IP */ }
   }
   return false;
 }
@@ -12365,7 +9958,6 @@ async function handleQrScan() {
   try {
     await api('/api/attendance-sessions/mark', {
       method: 'POST',
-      signal: AbortSignal.timeout(30000),
       body: JSON.stringify({ qrToken, method: 'qr_mark' }),
     });
     if (content) {
@@ -12380,13 +9972,11 @@ async function handleQrScan() {
   } catch(e) {
     if (content) {
       const expired = e.message?.toLowerCase().includes('expired');
-      const timedOut = e.name === 'TimeoutError' || e.name === 'AbortError';
-      const msg = timedOut ? 'Request timed out. Please check your connection and try again.' : esc(e.message || 'Failed');
       content.innerHTML = `
         <div class="card" style="text-align:center;padding:48px 24px;max-width:400px;margin:40px auto;border-left:4px solid var(--danger)">
           <div style="font-size:56px;margin-bottom:16px">${expired ? '⏰' : '❌'}</div>
           <div style="font-size:20px;font-weight:800;color:var(--danger)">${expired ? 'QR Code Expired' : 'Failed'}</div>
-          <p style="color:var(--text-light);font-size:13px;margin-top:8px">${expired ? 'This QR code has expired. Ask your lecturer/manager for a fresh one.' : msg}</p>
+          <p style="color:var(--text-light);font-size:13px;margin-top:8px">${expired ? 'This QR code has expired. Ask your lecturer/manager for a fresh one.' : e.message}</p>
           <button class="btn btn-secondary" style="margin-top:20px" onclick="navigateTo('mark-attendance')">Go Back</button>
         </div>`;
     }
@@ -12394,758 +9984,172 @@ async function handleQrScan() {
   return true;
 }
 
-// ── CLASS REP DEVICE PAGE ─────────────────────────────────────────────────────
-async function renderClassDevice() {
-  const root = document.getElementById('main-content');
-  if (!root) return;
-  root.innerHTML = '<div class="loading">Loading device…</div>';
-  try {
-    const [devRes, lecRes] = await Promise.all([
-      api('/api/class-rep/device'),
-      api('/api/class-rep/lecturers'),
-    ]);
-    const device = devRes.device;
-    const lecturers = lecRes.lecturers || [];
-
-    const localIp = device && device.localIp ? device.localIp : null;
-    const currentSsid = device && device.currentNetwork ? device.currentNetwork : null;
-    var deviceOnline = device ? (Date.now() - new Date(device.lastHeartbeat || 0).getTime() < 20000) : false;
-
-    const deviceStatus = device
-      ? (deviceOnline
-        ? '<span style="color:#16a34a;font-weight:700">● Online</span>'
-        : '<span style="color:#dc2626;font-weight:700">● Offline</span>')
-      : null;
-
-    const activeInfo = device && device.activeLecturerId
-      ? `<div style="margin-top:12px;padding:12px 16px;background:#f0fdf4;border:1.5px solid #86efac;border-radius:10px;font-size:13px">
-          <strong>Currently connected to:</strong> ${esc(device.activeLecturerId.name || 'Lecturer')}<br>
-          <span style="color:#64748b;font-size:12px">Connected at ${new Date(device.connectedAt).toLocaleTimeString()}</span>
-          <br><button onclick="classRepDisconnect()" style="margin-top:10px;padding:7px 16px;background:#dc2626;color:#fff;border:none;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer">End Session &amp; Release Device</button>
-         </div>`
-      : '';
-
-    root.innerHTML = `
-      <div style="max-width:560px;margin:0 auto">
-        <h2 style="font-size:20px;font-weight:800;margin-bottom:4px">Class Device</h2>
-        <p style="color:#64748b;font-size:13px;margin-bottom:24px">Manage the attendance device for your class</p>
-
-        ${!device ? `
-          <div style="text-align:center;padding:48px 20px;background:#f8fafc;border-radius:16px;border:1.5px dashed #e2e8f0">
-            <div style="font-size:40px;margin-bottom:12px">&#128225;</div>
-            <h3 style="font-size:16px;font-weight:700;margin-bottom:6px">No device assigned</h3>
-            <p style="color:#64748b;font-size:13px">Ask your admin to assign an attendance device to your class.</p>
-          </div>` : `
-          <div style="background:#fff;border:1.5px solid #e2e8f0;border-radius:14px;padding:18px;margin-bottom:20px">
-            <div style="display:flex;align-items:center;gap:12px;margin-bottom:4px">
-              <span style="font-size:28px">&#128225;</span>
-              <div>
-                <div style="font-weight:700;font-size:15px">${esc(device.deviceName || device.deviceId)}</div>
-                <div style="font-size:12px;color:#64748b">${deviceStatus}</div>
-              </div>
-            </div>
-            ${activeInfo}
-          </div>
-
-          ${!device.activeLecturerId ? `
-          <div style="background:#fff;border:1.5px solid #e2e8f0;border-radius:14px;padding:18px;margin-bottom:20px">
-            <h3 style="font-size:15px;font-weight:700;margin-bottom:14px">Connect Device to a Lecturer</h3>
-            ${!deviceOnline ? `
-            <div style="background:#fef3c7;border:1px solid #fde68a;border-radius:8px;padding:12px 14px;font-size:13px;color:#92400e;display:flex;align-items:flex-start;gap:8px">
-              <span style="flex-shrink:0;font-size:16px">📶</span>
-              <div><strong>Device is offline.</strong> Power it on and wait for it to connect before linking to a lecturer.</div>
-            </div>` : `
-            ${lecturers.length ? `
-            <div style="margin-bottom:12px">
-              <label style="font-size:12px;font-weight:600;text-transform:uppercase;letter-spacing:.5px;color:#64748b;display:block;margin-bottom:6px">From Your Courses</label>
-              <select id="cr-lecturer-select" style="width:100%;padding:10px 12px;border:1.5px solid #e2e8f0;border-radius:8px;font-size:13px">
-                <option value="">&mdash; Choose lecturer / course &mdash;</option>
-                ${lecturers.map(l => `<option value="${l.lecturerId}|${l.courseId}">${esc(l.lecturerName)} — ${esc(l.courseCode)}: ${esc(l.courseTitle)}</option>`).join('')}
-              </select>
-            </div>
-            <div id="cr-pin-wrap" style="margin-bottom:12px;display:none">
-              <label style="font-size:12px;font-weight:600;text-transform:uppercase;letter-spacing:.5px;color:#64748b;display:block;margin-bottom:6px">Lecturer PIN (if required)</label>
-              <input id="cr-pin" type="password" inputmode="numeric" maxlength="4" placeholder="4-digit PIN" style="width:100%;padding:10px 12px;border:1.5px solid #e2e8f0;border-radius:8px;font-size:16px;letter-spacing:4px;box-sizing:border-box">
-            </div>
-            <div id="cr-error" style="color:#dc2626;font-size:13px;margin-bottom:8px;display:none"></div>
-            <button id="cr-connect-btn" onclick="classRepConnect()" style="width:100%;padding:11px;background:#1e293b;color:#fff;border:none;border-radius:9px;font-size:14px;font-weight:700;cursor:pointer">
-              Connect &amp; Start Session
-            </button>
-            <div style="display:flex;align-items:center;gap:8px;margin:14px 0 10px">
-              <div style="flex:1;height:1px;background:#e2e8f0"></div>
-              <span style="font-size:12px;color:#94a3b8;font-weight:500">or assign manually</span>
-              <div style="flex:1;height:1px;background:#e2e8f0"></div>
-            </div>` : `
-            <div style="background:#f1f5f9;border-radius:8px;padding:10px 14px;font-size:13px;color:#64748b;margin-bottom:14px">
-              No lecturers auto-detected from your enrolled courses — search below to assign one.
-            </div>`}
-            <!-- Manual lecturer search -->
-            <div>
-              <label style="font-size:12px;font-weight:600;text-transform:uppercase;letter-spacing:.5px;color:#64748b;display:block;margin-bottom:6px">Assign Any Lecturer</label>
-              <div style="position:relative;margin-bottom:8px">
-                <input id="cr-lec-search" type="text" placeholder="Search by name or email…"
-                  style="width:100%;padding:10px 12px;border:1.5px solid #e2e8f0;border-radius:8px;font-size:13px;box-sizing:border-box"
-                  oninput="crSearchLecturers(this.value)">
-              </div>
-              <div id="cr-lec-results" style="display:none;border:1.5px solid #e2e8f0;border-radius:8px;overflow:hidden;margin-bottom:10px;max-height:200px;overflow-y:auto"></div>
-              <input id="cr-manual-lecturer-id" type="hidden">
-              <div id="cr-manual-selected" style="display:none;background:#f0fdf4;border:1.5px solid #86efac;border-radius:8px;padding:9px 13px;font-size:13px;font-weight:600;color:#15803d;margin-bottom:10px"></div>
-              <div id="cr-manual-pin-wrap" style="margin-bottom:10px;display:none">
-                <label style="font-size:12px;font-weight:600;text-transform:uppercase;letter-spacing:.5px;color:#64748b;display:block;margin-bottom:5px">Lecturer PIN (if required)</label>
-                <input id="cr-manual-pin" type="password" inputmode="numeric" maxlength="4" placeholder="4-digit PIN" style="width:100%;padding:10px 12px;border:1.5px solid #e2e8f0;border-radius:8px;font-size:16px;letter-spacing:4px;box-sizing:border-box">
-              </div>
-              <div id="cr-manual-error" style="color:#dc2626;font-size:13px;margin-bottom:8px;display:none"></div>
-              <button id="cr-manual-connect-btn" onclick="classRepConnectManual()" disabled
-                style="width:100%;padding:11px;background:#cbd5e1;color:#94a3b8;border:none;border-radius:9px;font-size:14px;font-weight:700;cursor:not-allowed">
-                Assign &amp; Connect
-              </button>
-            </div>`}
-          </div>` : ''}
-
-          <!-- WiFi Info -->
-          ${(localIp || currentSsid) ? `
-          <div style="background:#fff;border:1.5px solid #e2e8f0;border-radius:14px;padding:18px">
-            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
-              <h3 style="font-size:15px;font-weight:700;margin:0">Device Network</h3>
-              ${currentSsid ? `<span style="font-size:12px;color:#16a34a;font-weight:600;background:#f0fdf4;padding:3px 10px;border-radius:20px;border:1px solid #86efac">&#9679; ${esc(currentSsid)}</span>` : ''}
-            </div>
-            <div style="display:flex;align-items:flex-start;gap:10px;background:#f8fafc;border-radius:8px;padding:12px 14px;font-size:13px;color:#475569">
-              <span style="flex-shrink:0;font-size:16px">ℹ️</span>
-              <div>To change the device WiFi, ask your <strong>admin</strong> to update it from the Admin portal.
-              ${localIp ? `<br><span style="font-size:12px;color:#94a3b8;margin-top:4px;display:block">Device IP: <span style="font-family:monospace">${esc(localIp)}</span></span>` : ''}
-              </div>
-            </div>
-          </div>` : ''}
-        `}
-      </div>
-    `;
-
-    // Show PIN field when a lecturer is selected
-    const sel = document.getElementById('cr-lecturer-select');
-    if (sel) sel.addEventListener('change', () => {
-      const pinWrap = document.getElementById('cr-pin-wrap');
-      if (pinWrap) pinWrap.style.display = sel.value ? 'block' : 'none';
-    });
-
-  } catch (e) {
-    root.innerHTML = `<div style="color:#dc2626;padding:20px">Error: ${esc(e.message)}</div>`;
-  }
-}
-
-window.classRepConnect = async function() {
-  const sel = document.getElementById('cr-lecturer-select');
-  const pin = document.getElementById('cr-pin') ? document.getElementById('cr-pin').value : '';
-  const errEl = document.getElementById('cr-error');
-  const btn = document.getElementById('cr-connect-btn');
-  if (!sel || !sel.value) { if (errEl) { errEl.textContent = 'Please select a lecturer'; errEl.style.display = 'block'; } return; }
-  const parts = sel.value.split('|');
-  const lecturerId = parts[0];
-  const courseId = parts[1];
-  if (btn) { btn.disabled = true; btn.textContent = 'Connecting…'; }
-  if (errEl) errEl.style.display = 'none';
-  try {
-    await api('/api/class-rep/connect', { method: 'POST', body: JSON.stringify({ lecturerId, courseId, lecturerPin: pin }) });
-    showToastNotif('Device connected successfully', 'success');
-    renderClassDevice();
-  } catch (e) {
-    const requiresPin = e.data && e.data.requiresPin;
-    const msg = requiresPin ? 'Incorrect PIN — ask the lecturer for their 4-digit PIN' : (e.message || 'Failed to connect');
-    if (errEl) { errEl.textContent = msg; errEl.style.display = 'block'; }
-    if (requiresPin) { const pw = document.getElementById('cr-pin-wrap'); if (pw) pw.style.display = 'block'; }
-    if (btn) { btn.disabled = false; btn.textContent = 'Connect & Start Session'; }
-  }
-};
-
-let _crSearchTimer = null;
-window.crSearchLecturers = function(query) {
-  clearTimeout(_crSearchTimer);
-  const resultsEl = document.getElementById('cr-lec-results');
-  if (!query || query.trim().length < 2) {
-    if (resultsEl) resultsEl.style.display = 'none';
-    return;
-  }
-  _crSearchTimer = setTimeout(async () => {
-    if (resultsEl) { resultsEl.style.display = 'block'; resultsEl.innerHTML = '<div style="padding:10px 14px;color:#64748b;font-size:13px">Searching…</div>'; }
-    try {
-      const data = await api(`/api/class-rep/search-lecturers?q=${encodeURIComponent(query.trim())}`);
-      const list = data.users || data.data || data || [];
-      if (!list.length) {
-        if (resultsEl) resultsEl.innerHTML = '<div style="padding:10px 14px;color:#64748b;font-size:13px">No lecturers found</div>';
-        return;
-      }
-      if (resultsEl) resultsEl.innerHTML = list.map(l =>
-        `<div data-id="${l._id||l.id}" data-name="${(l.name||l.fullName||'').replace(/"/g,'&quot;')}"
-          style="padding:10px 14px;font-size:13px;cursor:pointer;border-bottom:1px solid #f1f5f9"
-          onmouseover="this.style.background='#f8fafc'" onmouseout="this.style.background=''"
-          onclick="crSelectLecturer('${l._id||l.id}','${(l.name||l.fullName||'').replace(/'/g,"\\'")}')">
-          <span style="font-weight:600">${l.name||l.fullName||'Unknown'}</span>
-          <span style="color:#64748b;margin-left:8px;font-size:12px">${l.email||''}</span>
-        </div>`
-      ).join('');
-    } catch (e) {
-      if (resultsEl) resultsEl.innerHTML = '<div style="padding:10px 14px;color:#dc2626;font-size:13px">Search failed</div>';
-    }
-  }, 350);
-};
-
-window.crSelectLecturer = function(id, name) {
-  const idEl = document.getElementById('cr-manual-lecturer-id');
-  const selEl = document.getElementById('cr-manual-selected');
-  const pinWrap = document.getElementById('cr-manual-pin-wrap');
-  const btn = document.getElementById('cr-manual-connect-btn');
-  const resultsEl = document.getElementById('cr-lec-results');
-  const searchEl = document.getElementById('cr-lec-search');
-  if (idEl) idEl.value = id;
-  if (selEl) { selEl.textContent = '✓ ' + name; selEl.style.display = 'block'; }
-  if (pinWrap) pinWrap.style.display = 'block';
-  if (btn) { btn.disabled = false; btn.style.background = '#4f6ef7'; btn.style.color = '#fff'; btn.style.cursor = 'pointer'; }
-  if (resultsEl) resultsEl.style.display = 'none';
-  if (searchEl) searchEl.value = name;
-};
-
-window.classRepConnectManual = async function() {
-  const idEl = document.getElementById('cr-manual-lecturer-id');
-  const pin = document.getElementById('cr-manual-pin') ? document.getElementById('cr-manual-pin').value : '';
-  const errEl = document.getElementById('cr-manual-error');
-  const btn = document.getElementById('cr-manual-connect-btn');
-  if (!idEl || !idEl.value) { if (errEl) { errEl.textContent = 'Please select a lecturer first'; errEl.style.display = 'block'; } return; }
-  if (btn) { btn.disabled = true; btn.textContent = 'Connecting…'; btn.style.opacity = '.7'; }
-  if (errEl) errEl.style.display = 'none';
-  try {
-    await api('/api/class-rep/connect', { method: 'POST', body: JSON.stringify({ lecturerId: idEl.value, lecturerPin: pin }) });
-    showToastNotif('Lecturer assigned and device connected', 'success');
-    renderClassDevice();
-  } catch (e) {
-    const requiresPin = e.data && e.data.requiresPin;
-    const msg = requiresPin ? 'Incorrect PIN — ask the lecturer for their 4-digit PIN' : (e.message || 'Failed to connect');
-    if (errEl) { errEl.textContent = msg; errEl.style.display = 'block'; }
-    if (btn) { btn.disabled = false; btn.textContent = 'Assign & Connect'; btn.style.background = '#4f6ef7'; btn.style.color = '#fff'; btn.style.cursor = 'pointer'; }
-  }
-};
-
-window.classRepDisconnect = async function() {
-  if (!confirm('End the session and release the device?')) return;
-  const btn = event && event.target;
-  if (btn) { btn.disabled = true; btn.textContent = 'Releasing…'; }
-  try {
-    await api('/api/class-rep/disconnect', { method: 'POST', body: '{}' });
-    showToastNotif('Device released', 'success');
-    renderClassDevice();
-  } catch (e) {
-    showToastNotif(e.message || 'Failed to disconnect', 'error');
-    if (btn) { btn.disabled = false; btn.textContent = 'End Session & Release Device'; }
-  }
-};
-
-window.saveLecturerPin = async function() {
-  const pin = document.getElementById('lecturer-pin-input') ? document.getElementById('lecturer-pin-input').value : '';
-  if (!pin || !/^\d{4}$/.test(pin)) { showToastNotif('PIN must be 4 digits', 'error'); return; }
-  try {
-    await api('/api/class-rep/set-pin', { method: 'POST', body: JSON.stringify({ pin }) });
-    showToastNotif('PIN saved', 'success');
-    const input = document.getElementById('lecturer-pin-input');
-    if (input) input.value = '';
-  } catch (e) { showToastNotif(e.message || 'Failed to save PIN', 'error'); }
-};
-
-window.clearLecturerPin = async function() {
-  if (!confirm('Remove your Class Rep PIN? Class reps will be able to connect the device without entering a PIN.')) return;
-  try {
-    await api('/api/class-rep/set-pin', { method: 'DELETE' });
-    showToastNotif('PIN cleared — class reps can now connect freely', 'success');
-    const input = document.getElementById('lecturer-pin-input');
-    if (input) input.value = '';
-  } catch (e) { showToastNotif(e.message || 'Failed to clear PIN', 'error'); }
-};
-
-// ─── Class Rep WiFi Management ────────────────────────────────────────────────
-window.crScanWifi = async function(localIp) {
-  const btn     = document.getElementById('cr-wifi-scan-btn');
-  const listEl  = document.getElementById('cr-wifi-list');
-  const msgEl   = document.getElementById('cr-wifi-msg');
-  if (!listEl || !msgEl) return;
-
-  btn.disabled = true;
-  btn.textContent = 'Scanning…';
-  listEl.style.display = 'none';
-  msgEl.textContent = '';
-
-  try {
-    const data = await api('/api/class-rep/scan-wifi');
-    const list = data.networks || [];
-    list.sort((a, b) => (b.rssi || 0) - (a.rssi || 0));
-
-    if (!list.length) {
-      msgEl.innerHTML = '<span style="color:#64748b">No networks found. Try scanning again.</span>';
-      return;
-    }
-
-    listEl.style.display = 'block';
-    listEl.innerHTML = list.map((n, i) => {
-      const rssi  = n.rssi || -90;
-      const bars  = rssi > -60 ? 4 : rssi > -75 ? 3 : rssi > -85 ? 2 : 1;
-      const barHtml = [1,2,3,4].map(b =>
-        `<span style="display:inline-block;width:4px;height:${4+b*4}px;border-radius:1px;background:${b<=bars?'#16a34a':'#e2e8f0'};margin-right:2px;vertical-align:bottom"></span>`
-      ).join('');
-      const badge = n.open
-        ? `<span style="font-size:10px;font-weight:700;color:#16a34a;background:#f0fdf4;border:1px solid #86efac;padding:2px 7px;border-radius:20px">OPEN</span>`
-        : `<span style="font-size:10px;font-weight:700;color:#64748b;background:#f8fafc;border:1px solid #e2e8f0;padding:2px 7px;border-radius:20px">PWD</span>`;
-      const ssidEsc = esc(n.ssid || '(Hidden)');
-      const ssidRaw = (n.ssid || '').replace(/'/g, "\\'");
-      return `
-        <div id="cr-net-${i}" style="display:flex;align-items:center;justify-content:space-between;padding:11px 14px;
-             border-bottom:1px solid #f1f5f9;cursor:pointer;transition:background .1s"
-             onmouseenter="this.style.background='#f8fafc'" onmouseleave="this.style.background=''"
-             onclick="crSelectNetwork('${localIp}','${ssidRaw}',${n.open?'true':'false'},${i})">
-          <div style="display:flex;align-items:center;gap:10px">
-            <div style="display:flex;align-items:flex-end;height:20px">${barHtml}</div>
-            <span style="font-size:13px;font-weight:600;color:#1e293b">${ssidEsc}</span>
-          </div>
-          ${badge}
-        </div>
-        <div id="cr-pwd-${i}" style="display:none;padding:10px 14px;background:#f8fafc;border-bottom:1px solid #f1f5f9">
-          <input id="cr-pwd-input-${i}" type="password" placeholder="Enter WiFi password"
-            style="width:100%;padding:9px 12px;border:1.5px solid #e2e8f0;border-radius:8px;font-size:13px;box-sizing:border-box;margin-bottom:8px">
-          <div style="display:flex;gap:8px">
-            <button onclick="crConnectWifi('${localIp}','${ssidRaw}',${i})"
-              style="flex:1;padding:9px;background:#1e293b;color:#fff;border:none;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer">
-              Connect
-            </button>
-            <button onclick="document.getElementById('cr-pwd-${i}').style.display='none'"
-              style="padding:9px 14px;background:#f1f5f9;color:#64748b;border:none;border-radius:8px;font-size:13px;cursor:pointer">
-              Cancel
-            </button>
-          </div>
-        </div>`;
-    }).join('');
-
-    // Wrap in a bordered container
-    listEl.style.cssText = 'display:block;border:1.5px solid #e2e8f0;border-radius:10px;overflow:hidden';
-
-  } catch (e) {
-    msgEl.innerHTML = `<span style="color:#dc2626">${esc(e.message || 'Scan failed')}</span>`;
-  } finally {
-    btn.disabled = false;
-    btn.textContent = 'Scan for Networks';
-  }
-};
-
-window.crSelectNetwork = function(localIp, ssid, isOpen, idx) {
-  if (isOpen) {
-    crConnectWifi(localIp, ssid, idx, true);
-  } else {
-    // Toggle password field
-    const pwd = document.getElementById(`cr-pwd-${idx}`);
-    if (pwd) {
-      const visible = pwd.style.display !== 'none';
-      pwd.style.display = visible ? 'none' : 'block';
-      if (!visible) document.getElementById(`cr-pwd-input-${idx}`)?.focus();
-    }
-  }
-};
-
-window.crConnectWifi = async function(localIp, ssid, idx, isOpen = false) {
-  const msgEl   = document.getElementById('cr-wifi-msg');
-  const pwdInput = document.getElementById(`cr-pwd-input-${idx}`);
-  const password = isOpen ? '' : (pwdInput ? pwdInput.value : '');
-
-  if (msgEl) { msgEl.innerHTML = `<span style="color:#64748b">Connecting to <strong>${esc(ssid)}</strong>…</span>`; }
-
-  try {
-    const data = await api('/api/class-rep/configure-wifi', {
-      method: 'POST',
-      body: JSON.stringify({ ssid, password }),
-    });
-    if (msgEl) msgEl.innerHTML = `<span style="color:#16a34a;font-weight:600">✓ Connected to <strong>${esc(ssid)}</strong>. Device is restarting…</span>`;
-    showToastNotif(`Device switching to ${ssid}`, 'success');
-    setTimeout(() => renderClassDevice(), 4000);
-  } catch (e) {
-    const msg = e.message || 'Failed to connect';
-    if (msgEl) msgEl.innerHTML = `<span style="color:#dc2626">${esc(msg)}</span>`;
-    showToastNotif(msg, 'error');
-  }
-};
-// ─────────────────────────────────────────────────────────────────────────────
 async function renderMarkAttendance() {
   const content = document.getElementById('main-content');
   if (!content) return;
 
+  // Capture esp32key from URL if redirected from ESP32 captive portal
   handleEsp32KeyParam();
+
+  // Check if arriving via QR scan deep link
   if (await handleQrScan()) return;
 
-  // Detect return from ESP32 /mark redirect (browser navigation bypass for mixed-content)
-  {
-    const p = new URLSearchParams(window.location.search);
-    const s = p.get('esp32session'), u = p.get('esp32student'),
-          t = p.get('esp32issued'),  g = p.get('esp32sig'),
-          n = p.get('esp32nonce'),   mk = p.get('esp32marked'), dp = p.get('esp32dup');
-    if (s && u && t && g) {
-      window.history.replaceState({}, '', window.location.pathname + '#mark-attendance');
-      return _handleEsp32ConnToken(content, s, u, t, g, n, mk, dp);
-    }
-  }
+  // Offline: show queued state and cached session info
+  if (!isOnline()) {
+    const cachedSession = offlineRead('activeSession');
+    const pendingCount  = offlineQueueCount();
 
-  const deviceIp = esp32IP || '192.168.4.1';
-  const userId   = currentUser?._id || currentUser?.id || '';
+    // SVG icons
+    const wifiOffIcon  = svgIcon('<line x1="1" y1="1" x2="23" y2="23"/><path d="M16.72 11.06A10.94 10.94 0 0 1 19 12.55"/><path d="M5 12.55a10.94 10.94 0 0 1 5.17-2.39"/><path d="M10.71 5.05A16 16 0 0 1 22.56 9"/><path d="M1.42 9a15.91 15.91 0 0 1 4.7-2.88"/><path d="M8.53 16.11a6 6 0 0 1 6.95 0"/><line x1="12" y1="20" x2="12.01" y2="20"/>', 22);
+    const radarIcon    = svgIcon('<circle cx="12" cy="12" r="2"/><path d="M16.24 7.76a6 6 0 0 1 0 8.49m-8.48-.01a6 6 0 0 1 0-8.49m11.31-2.82a10 10 0 0 1 0 14.14m-14.14 0a10 10 0 0 1 0-14.14"/>', 48);
 
-  // Set up postMessage listener for ESP32 popup response (captures content in closure)
-  if (window._esp32MsgHandler) window.removeEventListener('message', window._esp32MsgHandler);
-  window._esp32MsgHandler = function(e) {
-    if (!e.data || e.data.type !== 'ESP32_MARK') return;
-    window.removeEventListener('message', window._esp32MsgHandler);
-    window._esp32MsgHandler = null;
-    const { session, student, issued, nonce, sig, marked, dup } = e.data;
-    _handleEsp32ConnToken(content,
-      String(session), String(student), String(issued), String(sig),
-      nonce ? String(nonce) : null,
-      marked ? '1' : null,
-      dup    ? '1' : null
-    );
-  };
-  window.addEventListener('message', window._esp32MsgHandler);
+    content.innerHTML = `
+      <div class="page-header"><h2>Mark Attendance</h2><p>Check in to active sessions</p></div>
 
-  content.innerHTML = `
-    <div class="page-header"><h2>Mark Attendance</h2><p>Check in to active sessions</p></div>
-    <div style="display:flex;align-items:flex-start;gap:10px;padding:12px 14px;background:rgba(79,110,247,.1);border:1px solid rgba(79,110,247,.3);border-radius:10px;margin-bottom:14px;font-size:13px;color:var(--text-light)">
-      <span style="font-size:18px;flex-shrink:0">📶</span>
-      <div>
-        <div style="font-weight:700;margin-bottom:3px">Connect to classroom WiFi first</div>
-        <div>Go to phone <strong>WiFi settings</strong> → connect to <strong>Dikly-XXXXXX</strong>.<br>
-        If your phone says <em>"Internet may not be available"</em> — tap <strong>Stay connected</strong>.</div>
+      <!-- Offline status bar -->
+      <div class="card" style="border-left:4px solid #f59e0b;background:#fffbeb;padding:14px 16px;margin-bottom:16px">
+        <div style="display:flex;align-items:center;gap:12px">
+          <div style="flex-shrink:0;width:36px;height:36px;border-radius:50%;background:#fef3c7;display:flex;align-items:center;justify-content:center;color:#92400e">
+            ${wifiOffIcon}
+          </div>
+          <div style="flex:1;min-width:0">
+            <div style="font-weight:700;font-size:15px;color:#92400e">No Internet Connection</div>
+            <div style="font-size:12px;color:#b45309;margin-top:2px">
+              ${pendingCount > 0
+                ? `${pendingCount} pending action${pendingCount !== 1 ? 's' : ''} will sync automatically when you reconnect`
+                : 'Reconnect to submit attendance and access live sessions'}
+            </div>
+          </div>
+          ${pendingCount > 0 ? `
+            <div style="flex-shrink:0;background:#f59e0b;color:#fff;font-size:12px;font-weight:700;padding:4px 10px;border-radius:999px">
+              ${pendingCount} pending
+            </div>
+          ` : ''}
+        </div>
       </div>
-    </div>
-    <div id="proof-status-card" class="card" style="text-align:center;padding:32px 20px">
-      <div id="proof-status-icon" style="font-size:52px;margin-bottom:12px">📶</div>
-      <div id="proof-status-title" style="font-weight:700;font-size:17px;margin-bottom:6px">Ready to mark attendance</div>
-      <div id="proof-status-sub" style="font-size:13px;color:var(--text-muted);margin-bottom:16px">Connect to <strong>Dikly-XXXXXX</strong> WiFi, then tap the button below</div>
-      <button id="proof-mark-btn" class="btn btn-primary" onclick="_tryAutoMark('${deviceIp}','${userId}')" style="width:100%;margin-bottom:10px;font-size:16px;padding:14px">Mark Attendance</button>
-      <div id="mark-auto-msg" style="display:none;padding:10px 14px;border-radius:8px;font-size:13px;margin-top:8px"></div>
-    </div>`;
-}
 
-function _tryAutoMark(ip, userId) {
-  const btn  = document.getElementById('proof-mark-btn');
-  const iEl  = document.getElementById('proof-status-icon');
-  const tEl  = document.getElementById('proof-status-title');
-  const sEl  = document.getElementById('proof-status-sub');
-  if (btn)  { btn.disabled = true; btn.textContent = 'Connecting…'; }
-  if (iEl)  iEl.textContent = '📡';
-  if (tEl)  tEl.textContent = 'Connecting to classroom device…';
-  if (sEl)  sEl.innerHTML = 'Stay on this page — do not close the app';
+      ${cachedSession ? `
+        <!-- Cached session -->
+        <div class="card" style="border-left:4px solid var(--success);background:#f0fdf4;padding:16px;margin-bottom:16px">
+          <div style="font-size:11px;text-transform:uppercase;letter-spacing:.6px;font-weight:700;color:var(--success);margin-bottom:6px">Last Known Active Session</div>
+          <div style="font-size:17px;font-weight:700;color:var(--text-primary)">${cachedSession.title || 'Untitled Session'}</div>
+          ${cachedSession.course ? `<div style="font-size:13px;color:var(--text-light);margin-top:3px">${cachedSession.course.code ? cachedSession.course.code + ' — ' : ''}${cachedSession.course.title || ''}</div>` : ''}
+          <div style="font-size:12px;color:var(--text-muted);margin-top:4px">Started ${new Date(cachedSession.startedAt).toLocaleString()}</div>
+        </div>
 
-  const markUrl = `http://${ip}/mark?studentId=${encodeURIComponent(userId)}`;
-
-  // Open a small popup so the student stays in the Dikly app.
-  // The ESP32 /mark page will postMessage back to this window then close itself.
-  const popup = window.open(markUrl, 'esp32mark', 'width=320,height=240,left=0,top=0');
-
-  if (!popup || popup.closed) {
-    // Popup blocked (auto-open without gesture) — fall back to full-page navigation
-    window.location.href = markUrl;
+        <!-- Explain that attendance requires internet (offline queuing disabled to prevent fraud) -->
+        <div class="card" style="text-align:center;padding:28px 20px">
+          <div style="display:inline-flex;align-items:center;justify-content:center;width:56px;height:56px;border-radius:50%;background:#f0f9ff;color:#0369a1;margin-bottom:14px">
+            ${radarIcon}
+          </div>
+          <div style="font-size:16px;font-weight:700;margin-bottom:8px">Internet Required to Mark Attendance</div>
+          <p style="font-size:13px;color:var(--text-light);max-width:300px;margin:0 auto;line-height:1.6">
+            Connect to <strong>classroom WiFi with internet access</strong> to submit your attendance code.
+            Offline marking is disabled to prevent remote fraud.
+          </p>
+        </div>
+      ` : `
+        <!-- No cached data at all -->
+        <div class="card" style="text-align:center;padding:48px 24px">
+          <div style="display:inline-flex;align-items:center;justify-content:center;width:72px;height:72px;border-radius:50%;background:#f0f9ff;color:#0369a1;margin-bottom:16px">
+            ${radarIcon}
+          </div>
+          <div style="font-size:18px;font-weight:700;margin-bottom:8px">No Offline Data Available</div>
+          <p style="font-size:14px;color:var(--text-light);max-width:300px;margin:0 auto;line-height:1.6">
+            Open this page while online at least once so session data can be saved for offline use.
+          </p>
+        </div>
+      `}
+    `;
     return;
   }
 
-  // Timeout: if ESP32 doesn't respond in 12s, re-enable the button
-  const tid = setTimeout(() => {
-    try { if (popup && !popup.closed) popup.close(); } catch (_) {}
-    if (btn)  { btn.disabled = false; btn.textContent = 'Try Again'; }
-    if (iEl)  iEl.textContent = '⚠️';
-    if (tEl)  tEl.textContent = 'No response from classroom device';
-    if (sEl)  sEl.innerHTML = 'Make sure you are connected to <strong>Dikly-XXXXXX</strong> WiFi, then tap Try Again.';
-  }, 12000);
+  let activeSession = null;
+  try {
+    const data = await api('/api/attendance-sessions/active');
+    activeSession = data.session;
+    if (activeSession) offlineCache('activeSession', activeSession); // cache for offline
+  } catch (e) {}
 
-  // Extend the message listener to cancel the timeout on success
-  const prevHandler = window._esp32MsgHandler;
-  if (prevHandler) window.removeEventListener('message', prevHandler);
-  window._esp32MsgHandler = function(e) {
-    if (!e.data || e.data.type !== 'ESP32_MARK') return;
-    clearTimeout(tid);
-    try { if (popup && !popup.closed) popup.close(); } catch (_) {}
-    window.removeEventListener('message', window._esp32MsgHandler);
-    window._esp32MsgHandler = null;
-    const { session, student, issued, nonce, sig, marked, dup } = e.data;
-    // Re-find content in case the DOM was re-rendered
-    const contentEl = document.getElementById('main-content');
-    if (contentEl) _handleEsp32ConnToken(contentEl,
-      String(session), String(student), String(issued), String(sig),
-      nonce ? String(nonce) : null,
-      marked ? '1' : null,
-      dup    ? '1' : null
-    );
-  };
-  window.addEventListener('message', window._esp32MsgHandler);
-}
+  const alreadyMarked = activeSession ? await api('/api/attendance-sessions/my-attendance?limit=100')
+    .then(d => d.records.some(r => r.session?._id === activeSession._id))
+    .catch(() => false) : false;
 
-/// Handles return from ESP32 /mark redirect:
-//   https://dikly.sbs/?esp32session=X&esp32student=Y&esp32issued=Z&esp32sig=W&esp32nonce=N&esp32marked=1
-// esp32marked=1 → ESP32 already saved locally; show ✅ immediately, sync to cloud in background.
-// esp32dup=1    → student already marked this session on the device.
-async function _handleEsp32ConnToken(content, esp32session, esp32student, esp32issued, esp32sig, esp32nonce, esp32marked, esp32dup) {
-  // ── Already checked in (device dedup) ────────────────────────────────────
-  if (esp32dup === '1') {
-    content.innerHTML = `
-      <div class="card" style="text-align:center;padding:48px 24px;border-left:4px solid var(--success,#22c55e)">
-        <div style="font-size:56px;margin-bottom:16px">✅</div>
-        <div style="font-size:20px;font-weight:800;color:var(--success,#22c55e)">Already Checked In</div>
-        <p style="color:var(--text-light);font-size:13px;margin-top:8px">You have already been marked present for this session.</p>
-        <button class="btn btn-primary" style="margin-top:20px" onclick="navigateTo('my-attendance')">View My Attendance</button>
-      </div>`;
-    // Still attempt cloud sync in background (idempotent — server handles duplicate gracefully)
-    _syncEsp32TokenToCloud(esp32session, esp32student, esp32issued, esp32sig, esp32nonce).catch(() => {});
-    return;
-  }
-
-  // ── ESP32 already recorded locally — show success immediately ─────────────
-  if (esp32marked === '1') {
-    const syncId = 'esp32-sync-status';
-    content.innerHTML = `
-      <div class="card" style="text-align:center;padding:48px 24px;border-left:4px solid var(--success,#22c55e)">
-        <div style="font-size:56px;margin-bottom:16px">✅</div>
-        <div style="font-size:20px;font-weight:800;color:var(--success,#22c55e)">Attendance Marked!</div>
-        <p style="color:var(--text-light);font-size:13px;margin-top:8px">You have been checked in successfully.</p>
-        <div id="${syncId}" style="font-size:12px;color:var(--text-muted);margin-top:8px">Syncing to cloud…</div>
-        <button class="btn btn-primary" style="margin-top:20px" onclick="navigateTo('my-attendance')">View My Attendance</button>
-      </div>`;
-    _syncEsp32TokenToCloud(esp32session, esp32student, esp32issued, esp32sig, esp32nonce)
-      .then(() => {
-        const el = document.getElementById(syncId);
-        if (el) el.textContent = 'Synced ✓';
-      })
-      .catch(e => {
-        const el = document.getElementById(syncId);
-        if (!el) return;
-        const msg = e?.message || '';
-        if (msg.toLowerCase().includes('already')) {
-          el.textContent = 'Synced ✓';
-        } else {
-          el.textContent = 'Saved on device — will sync when online';
-        }
-      });
-    return;
-  }
-
-  // ── Legacy path (no esp32marked param — wait for server response) ─────────
   content.innerHTML = `
-    <div class="card" style="text-align:center;padding:48px 24px">
-      <div style="font-size:48px;margin-bottom:16px">⏳</div>
-      <div style="font-size:18px;font-weight:700">Marking your attendance…</div>
-      <p style="color:var(--text-light);font-size:13px;margin-top:8px">Please wait</p>
-    </div>`;
-  try {
-    await _syncEsp32TokenToCloud(esp32session, esp32student, esp32issued, esp32sig, esp32nonce);
-    content.innerHTML = `
-      <div class="card" style="text-align:center;padding:48px 24px;border-left:4px solid var(--success,#22c55e)">
-        <div style="font-size:56px;margin-bottom:16px">✅</div>
-        <div style="font-size:20px;font-weight:800;color:var(--success,#22c55e)">Attendance Marked!</div>
-        <p style="color:var(--text-light);font-size:13px;margin-top:8px">You have been checked in successfully.</p>
-        <button class="btn btn-primary" style="margin-top:20px" onclick="navigateTo('my-attendance')">View My Attendance</button>
-      </div>`;
-  } catch (e) {
-    const msg = e.message || 'Could not mark attendance. Please try again.';
-    const alreadyMarked = msg.toLowerCase().includes('already');
-    content.innerHTML = `
-      <div class="card" style="text-align:center;padding:48px 24px;border-left:4px solid ${alreadyMarked ? 'var(--success,#22c55e)' : 'var(--danger,#ef4444)'}">
-        <div style="font-size:56px;margin-bottom:16px">${alreadyMarked ? '✅' : '❌'}</div>
-        <div style="font-size:20px;font-weight:800">${alreadyMarked ? 'Already Checked In' : 'Failed'}</div>
-        <p style="color:var(--text-light);font-size:13px;margin-top:8px">${esc(msg)}</p>
-        <button class="btn btn-secondary" style="margin-top:20px" onclick="navigateTo('mark-attendance')">Try Again</button>
-      </div>`;
-  }
+    <div class="page-header">
+      <h2>Mark Attendance</h2>
+      <p>Check in to active sessions</p>
+    </div>
+    
+    ${activeSession ? `
+      <div class="card" style="border-left: 4px solid var(--success); background: #f0fdf4">
+        <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px">
+          <div>
+            <div style="font-size:12px;text-transform:uppercase;color:var(--success);font-weight:700;letter-spacing:0.5px">Active Session</div>
+            <div style="font-size:18px;font-weight:700;margin-top:4px">${activeSession.title || 'Untitled Session'}</div>
+            <div style="font-size:13px;color:var(--text-light);margin-top:2px">Started ${new Date(activeSession.startedAt).toLocaleString()} by ${activeSession.createdBy?.name || 'Unknown'}</div>
+            ${activeSession.course ? `<div style="font-size:13px;color:var(--text-light)">Course: ${activeSession.course.title || activeSession.course.code || ''}</div>` : ''}
+          </div>
+          <span class="status-badge status-active" style="font-size:13px;padding:6px 14px">LIVE</span>
+        </div>
+      </div>
+      
+      ${alreadyMarked ? `
+        <div class="card" style="text-align:center;border-left:4px solid var(--primary)">
+          <div style="font-size:48px;margin-bottom:8px">${svgIcon('<polyline points="9 11 12 14 22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/>', 48)}</div>
+          <div style="font-size:18px;font-weight:700;color:var(--success)">Attendance Already Marked</div>
+          <p style="font-size:13px;color:var(--text-light);margin-top:4px">You have already checked in for this session.</p>
+        </div>
+      ` : `
+        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:16px;margin-bottom:16px">
+          
+          <div class="card mark-method-card" onclick="showCodeEntry()" style="cursor:pointer;text-align:center;transition:all 0.2s">
+            <div style="font-size:36px;margin-bottom:12px">${svgIcon('<rect x="3" y="3" width="18" height="18" rx="2"/><path d="M7 7h.01M7 12h.01M12 7h.01M12 12h.01M17 7h.01M7 17h.01M12 17h.01M17 12h.01M17 17h.01"/>', 42)}</div>
+            <div style="font-size:16px;font-weight:700">Enter Code</div>
+            <p style="font-size:12px;color:var(--text-light);margin-top:4px">Type the verbal code read out by your lecturer</p>
+          </div>
+
+          <div class="card mark-method-card" onclick="showQrEntry()" style="cursor:pointer;text-align:center;transition:all 0.2s">
+            <div style="font-size:36px;margin-bottom:12px">${svgIcon('<rect x="2" y="2" width="8" height="8" rx="1"/><rect x="14" y="2" width="8" height="8" rx="1"/><rect x="2" y="14" width="8" height="8" rx="1"/><rect x="14" y="14" width="4" height="4"/><path d="M18 14h4v4M14 18h4v4"/>', 42)}</div>
+            <div style="font-size:16px;font-weight:700">QR Code</div>
+            <p style="font-size:12px;color:var(--text-light);margin-top:4px">Enter QR token from your lecturer's screen</p>
+          </div>
+          
+          <div class="card mark-method-card" onclick="showJitsiJoin()" style="cursor:pointer;text-align:center;transition:all 0.2s">
+            <div style="font-size:36px;margin-bottom:12px">${svgIcon('<path d="M23 7l-7 5 7 5V7z"/><rect x="1" y="5" width="15" height="14" rx="2" ry="2"/>', 42)}</div>
+            <div style="font-size:16px;font-weight:700">Join Meeting</div>
+            <p style="font-size:12px;color:var(--text-light);margin-top:4px">Mark attendance by joining the session meeting</p>
+          </div>
+        </div>
+        
+        <div id="mark-input-area"></div>
+      `}
+    ` : `
+      <div class="card" style="text-align:center;padding:40px 20px">
+        <div style="margin-bottom:16px">${svgIcon('<circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>', 48)}</div>
+        <div style="font-size:18px;font-weight:700;margin-bottom:8px">No Active Session</div>
+        <p style="font-size:14px;color:var(--text-light)">There are no active attendance sessions right now.</p>
+        <p style="font-size:13px;color:var(--text-light);margin-top:8px">Your lecturer will start a session when it's time to mark attendance.</p>
+        <button class="btn btn-secondary btn-sm" style="margin-top:16px" onclick="navigateTo('mark-attendance')">Refresh</button>
+      </div>
+    `}
+  `;
 }
 
-// Submits the ESP32 connection token to the cloud server.
-// Called immediately for esp32marked=1 (background sync) and for the legacy path.
-// On network failure, queues the token in localStorage for retry when online.
-async function _syncEsp32TokenToCloud(session, student, issuedAt, sig, nonce) {
-  const deviceId = getDeviceFingerprint();
-  const payload = {
-    sessionId: session,
-    method: 'code_mark',
-    connectionToken: { sessionId: session, studentId: student, issuedAt: Number(issuedAt), sig, nonce: nonce || undefined },
-    deviceId,
-  };
-  try {
-    await api('/api/attendance-sessions/mark', { method: 'POST', body: JSON.stringify(payload) });
-  } catch(e) {
-    if (e.status && e.status >= 400 && e.status < 500) throw e; // 4xx (already marked, bad token) — don't queue
-    _queueEsp32Sync(payload);  // network / 5xx — queue for retry
-    throw e;
-  }
-}
-
-function _queueEsp32Sync(payload) {
-  try {
-    const q = JSON.parse(localStorage.getItem('_dikly_esp32_q') || '[]');
-    q.push({ p: payload, t: Date.now() });
-    localStorage.setItem('_dikly_esp32_q', JSON.stringify(q.slice(-20)));
-  } catch (_) {}
-  window.addEventListener('online', _flushEsp32Queue, { once: true });
-}
-
-async function _flushEsp32Queue() {
-  try {
-    const q = JSON.parse(localStorage.getItem('_dikly_esp32_q') || '[]');
-    if (!q.length) return;
-    localStorage.removeItem('_dikly_esp32_q');
-    const now = Date.now();
-    for (const { p, t } of q) {
-      // Discard tokens older than 10 min — server nonce TTL is 10 min, replaying after that creates duplicates
-      if (now - (t || 0) > 600_000) continue;
-      try { await api('/api/attendance-sessions/mark', { method: 'POST', body: JSON.stringify(p) }); }
-      catch (e) {
-        // 404 = session gone, 409 = already marked, 403 replay = nonce reused — all unretriable, discard silently
-        if (e.status === 404 || e.status === 409 || e.status === 403) continue;
-        // Any other error (5xx, network) — silently discard too since token may expire
-      }
-    }
-  } catch (_) {}
-}
-// Flush any queued tokens on startup and whenever the browser comes back online
-window.addEventListener('online', _flushEsp32Queue);
-
-let _qrScanStream = null;
-let _qrScanRaf = null;
-
-function _stopQrScanner() {
-  if (_qrScanRaf) { cancelAnimationFrame(_qrScanRaf); _qrScanRaf = null; }
-  if (_qrScanStream) { _qrScanStream.getTracks().forEach(t => t.stop()); _qrScanStream = null; }
-}
-
-async function openQrScanner() {
-  const area = document.getElementById('qr-scanner-area');
+function showCodeEntry() {
+  const area = document.getElementById('mark-input-area');
   if (!area) return;
-
-  // Toggle off if already open
-  if (area.style.display !== 'none') {
-    _stopQrScanner();
-    area.style.display = 'none';
-    area.innerHTML = '';
-    return;
-  }
-
-  area.style.display = 'block';
-  area.innerHTML = '<div style="text-align:center;padding:20px;font-size:13px;color:var(--text-muted)">Starting camera…</div>';
-
-  // Load jsQR lazily from CDN
-  if (!window.jsQR) {
-    await new Promise((resolve, reject) => {
-      const s = document.createElement('script');
-      s.src = 'https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.min.js';
-      s.onload = resolve; s.onerror = reject;
-      document.head.appendChild(s);
-    }).catch(() => {
-      area.innerHTML = '<div style="color:var(--danger);font-size:13px;padding:12px">Could not load QR scanner. Please enter the code manually.</div>';
-    });
-    if (!window.jsQR) return;
-  }
-
-  let stream;
-  try {
-    stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' }, audio: false });
-  } catch (err) {
-    area.innerHTML = '<div style="color:var(--danger);font-size:13px;padding:12px">Camera access denied. Please enter the code manually or allow camera permission.</div>';
-    return;
-  }
-  _qrScanStream = stream;
-
   area.innerHTML = `
-    <div style="position:relative;border-radius:10px;overflow:hidden;background:#000;max-width:100%">
-      <video id="qr-video" autoplay playsinline muted style="width:100%;display:block;max-height:260px;object-fit:cover"></video>
-      <canvas id="qr-canvas" style="display:none"></canvas>
-      <div style="position:absolute;inset:0;pointer-events:none;display:flex;align-items:center;justify-content:center">
-        <div style="width:180px;height:180px;border:3px solid rgba(255,255,255,.8);border-radius:12px;box-shadow:0 0 0 4000px rgba(0,0,0,.3)"></div>
+    <div class="card">
+      <div class="card-title">Enter Attendance Code</div>
+      <div class="form-group">
+        <label>6-Digit Code</label>
+        <input type="text" id="mark-code-input" placeholder="Enter code" maxlength="4" style="font-size:24px;text-align:center;letter-spacing:8px;font-weight:700;text-transform:uppercase" autofocus>
       </div>
+      <button class="btn btn-primary" onclick="submitCodeMark()" style="width:100%">Submit Code</button>
     </div>
-    <p style="font-size:12px;color:var(--text-muted);text-align:center;margin-top:8px">Point at the QR code on the classroom screen</p>
-    <button class="btn btn-secondary btn-sm" onclick="openQrScanner()" style="width:100%;margin-top:6px">Cancel</button>`;
-
-  const video = document.getElementById('qr-video');
-  const canvas = document.getElementById('qr-canvas');
-  video.srcObject = stream;
-  await video.play().catch(() => {});
-
-  const scan = () => {
-    if (!video.videoWidth) { _qrScanRaf = requestAnimationFrame(scan); return; }
-    canvas.width = video.videoWidth;
-    canvas.height = video.videoHeight;
-    const ctx = canvas.getContext('2d');
-    ctx.drawImage(video, 0, 0);
-    const img = ctx.getImageData(0, 0, canvas.width, canvas.height);
-    const result = window.jsQR(img.data, img.width, img.height, { inversionAttempts: 'dontInvert' });
-    if (result?.data) {
-      _stopQrScanner();
-      area.style.display = 'none';
-      area.innerHTML = '';
-      // Extract qr_token from the encoded URL
-      try {
-        const url = new URL(result.data);
-        const qrToken = url.searchParams.get('qr_token');
-        const qrCode  = url.searchParams.get('qr_code');
-        if (qrToken) {
-          _submitQrToken(qrToken, qrCode);
-        } else {
-          // Maybe raw 6-digit code was encoded
-          const raw = result.data.replace(/\D/g, '');
-          if (raw.length === 6) {
-            const inp = document.getElementById('mark-code-input');
-            if (inp) { inp.value = raw; inp.dispatchEvent(new Event('input')); }
-          } else {
-            toastError('Unrecognised QR code. Enter the code manually.');
-          }
-        }
-      } catch(_) {
-        const raw = result.data.replace(/\D/g, '');
-        if (raw.length === 6) {
-          const inp = document.getElementById('mark-code-input');
-          if (inp) { inp.value = raw; }
-        } else {
-          toastError('Unrecognised QR code. Enter the code manually.');
-        }
-      }
-      return;
-    }
-    _qrScanRaf = requestAnimationFrame(scan);
-  };
-  _qrScanRaf = requestAnimationFrame(scan);
-}
-
-async function _submitQrToken(qrToken, qrCode) {
-  const content = document.getElementById('main-content');
-  if (content) {
-    content.innerHTML = `
-      <div class="card" style="text-align:center;padding:48px 24px;max-width:400px;margin:40px auto">
-        <div style="font-size:48px;margin-bottom:16px">⏳</div>
-        <div style="font-size:18px;font-weight:700">Marking your attendance…</div>
-        <p style="color:var(--text-light);font-size:13px;margin-top:8px">Please wait</p>
-      </div>`;
-  }
-  try {
-    await api('/api/attendance-sessions/mark', {
-      method: 'POST',
-      signal: AbortSignal.timeout(30000),
-      body: JSON.stringify({ qrToken, method: 'qr_mark' }),
-    });
-    if (content) {
-      content.innerHTML = `
-        <div class="card" style="text-align:center;padding:48px 24px;max-width:400px;margin:40px auto;border-left:4px solid var(--success)">
-          <div style="font-size:56px;margin-bottom:16px">✅</div>
-          <div style="font-size:20px;font-weight:800;color:var(--success)">Attendance Marked!</div>
-          <p style="color:var(--text-light);font-size:13px;margin-top:8px">You have been checked in successfully.</p>
-          <button class="btn btn-primary" style="margin-top:20px" onclick="navigateTo('my-attendance')">View My Attendance</button>
-        </div>`;
-    }
-  } catch(e) {
-    if (content) {
-      const expired = e.message?.toLowerCase().includes('expired');
-      content.innerHTML = `
-        <div class="card" style="text-align:center;padding:48px 24px;max-width:400px;margin:40px auto;border-left:4px solid var(--danger)">
-          <div style="font-size:56px;margin-bottom:16px">${expired ? '⏰' : '❌'}</div>
-          <div style="font-size:20px;font-weight:800;color:var(--danger)">${expired ? 'QR Code Expired' : 'Failed'}</div>
-          <p style="color:var(--text-light);font-size:13px;margin-top:8px">${expired ? 'This QR code has expired. Ask your lecturer for a fresh one.' : esc(e.message || 'Failed')}</p>
-          <button class="btn btn-secondary" style="margin-top:20px" onclick="navigateTo('mark-attendance')">Go Back</button>
-        </div>`;
-    }
-  }
+  `;
+  document.getElementById('mark-code-input')?.focus();
 }
 
 function showQrEntry() {
@@ -13166,57 +10170,50 @@ function showQrEntry() {
   `;
 }
 
-async function submitCodeMark(deviceIp) {
-  const code = document.getElementById('mark-code-input')?.value?.trim();
-  const msgEl = document.getElementById('mark-code-msg');
-  const showMsg = (txt, ok) => {
-    if (!msgEl) return;
-    msgEl.innerHTML = txt;
-    msgEl.style.background = ok ? '#f0fdf4' : '#fef2f2';
-    msgEl.style.color = ok ? '#15803d' : '#dc2626';
-    msgEl.style.border = ok ? '1px solid #86efac' : '1px solid #fca5a5';
-    msgEl.style.display = 'block';
-  };
+async function submitCodeMark() {
+  const code = document.getElementById('mark-code-input')?.value?.toUpperCase().trim();
+  if (!code || code.length !== 4) { toastWarning('Please enter the 4-character code.'); return; }
 
-  if (!code || code.length !== 6 || !/^\d{6}$/.test(code)) {
-    showMsg('Please enter the 6-digit code shown on the classroom device.', false); return;
+  // If ESP32 is detected, submit locally (works offline)
+  if (bleDetected && esp32IP) {
+    try {
+      await submitToESP32(code);
+      offlineCache('pendingMark', null);
+      toastSuccess('Attendance marked successfully!');
+      navigateTo('mark-attendance');
+      return;
+    } catch(e) {
+      // Fall through to server if ESP32 submission fails
+      console.warn('[BLE] ESP32 submission failed, trying server:', e.message);
+    }
   }
 
-  const btn = document.querySelector('.btn-primary[onclick*="submitCodeMark"]');
-  if (btn) { btn.textContent = 'Submitting…'; btn.disabled = true; }
-  const restoreBtn = () => { if (btn) { btn.textContent = 'Mark Attendance'; btn.disabled = false; } };
+  // Offline queuing is disabled — attendance must be marked in real-time
+  // while connected to the classroom WiFi (DIKLY-CLASSROOM).
+  if (!(await isOnlineAsync())) {
+    toastError('You must be connected to the classroom WiFi (DIKLY-CLASSROOM) and have internet access to mark attendance.');
+    return;
+  }
 
-  const ip          = deviceIp || esp32IP || '192.168.4.1';
-  const userId      = currentUser?._id || currentUser?.id || '';
-  const indexNumber = currentUser?.indexNumber || currentUser?.IndexNumber || '';
-
-  // Attendance MUST go through the classroom ESP32 device — no cloud fallback.
-  // This prevents remote marking: the student must be physically connected to
-  // the Dikly-XXXXXX hotspot to reach 192.168.4.1.
-  // The ESP32 validates the code locally, increments the Present counter
-  // instantly, and syncs records to the server when internet returns.
   try {
-    const r = await fetch(`http://${ip}/attend`, {
+    await api('/api/attendance-sessions/mark', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ code, userId, indexNumber }),
-      signal: AbortSignal.timeout(8000),
+      body: JSON.stringify({ code, method: 'code_mark' }),
     });
-    const result = await r.json().catch(() => ({}));
-    if (r.ok && !result.error) {
-      showMsg('✓ Attendance recorded! Count updated on device.', true);
-      setTimeout(() => navigateTo('mark-attendance'), 2200);
-      return;
+    offlineCache('pendingMark', null);
+    toastSuccess('Attendance marked successfully!');
+    navigateTo('mark-attendance');
+  } catch (e) {
+    if (e.data && e.data.esp32Required) {
+      toastError('You must be connected to the classroom WiFi (DIKLY-CLASSROOM) to mark attendance.');
+    } else {
+      toastError(e.message);
     }
-    restoreBtn();
-    showMsg(result.error || 'Wrong code. Check the screen and try again.', false);
-  } catch (_) {
-    restoreBtn();
-    showMsg('Not connected to classroom WiFi. Connect to <strong>Dikly-XXXXXX</strong> and try again.', false);
   }
 }
 
-// Legacy offline code entry UI — kept for fallback rendering only.
+// Offline code entry — BLOCKED. Attendance cannot be queued offline.
+// Students must be physically present on DIKLY-CLASSROOM WiFi with internet.
 function showCodeEntryOffline() {
   const area = document.getElementById('mark-input-area');
   if (!area) return;
@@ -13249,16 +10246,13 @@ async function submitQrMark() {
   try {
     await api('/api/attendance-sessions/mark', {
       method: 'POST',
-      signal: AbortSignal.timeout(30000),
       body: JSON.stringify({ qrToken, method: 'qr_mark' }),
     });
     offlineCache('pendingMark', null);
     toastSuccess('Attendance marked successfully!');
     navigateTo('mark-attendance');
   } catch (e) {
-    if (e.name === 'TimeoutError' || e.name === 'AbortError') {
-      toastError('Request timed out. Please check your connection and try again.');
-    } else if (e.data && e.data.esp32Required) {
+    if (e.data && e.data.esp32Required) {
       toastError('You must be connected to the classroom WiFi (DIKLY-CLASSROOM) to mark attendance.');
     } else {
       toastError(e.message);
@@ -13357,28 +10351,17 @@ async function markBLE() {
       });
     } catch (e) {
       // Map server error codes to clear messages
-      const errCode = e.data?.code;
-      // ble-verify endpoint has been removed — fall back to code entry
-      if (e.status === 410 || e.message?.includes('BLE verification has been removed')) {
-        if (area) area.innerHTML = `
-          <div class="card" style="text-align:center;padding:28px 20px;border-left:4px solid var(--warning);background:#fffbeb">
-            <div style="font-size:40px;margin-bottom:12px">📟</div>
-            <div style="font-size:15px;font-weight:700;margin-bottom:8px">BLE Check-in Unavailable</div>
-            <p style="font-size:13px;color:var(--text-muted);margin-bottom:16px">Please use the attendance code shown on the classroom device instead.</p>
-            <button class="btn btn-primary btn-sm" onclick="showCodeEntry()">Enter Code</button>
-          </div>`;
-        return;
-      }
-      if (errCode === 'NOT_ON_HOTSPOT')      throw new Error(
+      const code = e.data?.code;
+      if (code === 'NOT_ON_HOTSPOT')      throw new Error(
         'Connected to DIKLY-CLASSROOM but still failing?\n\n' +
         'Android is routing traffic through mobile data instead of WiFi.\n\n' +
         'Fix: Go to Settings → Wi-Fi → tap & hold DIKLY-CLASSROOM → ' +
         'Network usage → set to \'Always use this network\', then retry.'
       );
-      if (errCode === 'TOKEN_EXPIRED')       throw new Error('Token expired — move closer to the device and try again.');
-      if (errCode === 'INVALID_TOKEN')       throw new Error('Invalid token. You must be physically next to the classroom device.');
-      if (errCode === 'TOKEN_ALREADY_USED')  throw new Error('This token was already used. Each BLE scan is single-use.');
-      if (errCode === 'DEVICE_OFFLINE')      throw new Error('Classroom device is offline. Ask your lecturer to power it on.');
+      if (code === 'TOKEN_EXPIRED')       throw new Error('Token expired — move closer to the device and try again.');
+      if (code === 'INVALID_TOKEN')       throw new Error('Invalid token. You must be physically next to the classroom device.');
+      if (code === 'TOKEN_ALREADY_USED')  throw new Error('This token was already used. Each BLE scan is single-use.');
+      if (code === 'DEVICE_OFFLINE')      throw new Error('Classroom device is offline. Ask your lecturer to power it on.');
       throw e;
     }
 
@@ -13430,8 +10413,8 @@ async function showJitsiJoin() {
   if (!area) return;
   let meetingsHtml = '<p style="color:var(--text-light);font-size:13px">Loading meetings...</p>';
   try {
-    const data = await api('/api/meetings');
-    const available = (data.data || data.meetings || []).filter(m => m.status === 'scheduled' || m.status === 'live');
+    const data = await api('/api/zoom');
+    const available = data.meetings.filter(m => m.status === 'scheduled' || m.status === 'active');
     if (available.length > 0) {
       meetingsHtml = available.map(m => `
         <div style="display:flex;align-items:center;justify-content:space-between;padding:12px;border:1px solid var(--border);border-radius:8px;margin-bottom:8px">
@@ -13440,7 +10423,7 @@ async function showJitsiJoin() {
             <div style="font-size:12px;color:var(--text-light)">${new Date(m.scheduledStart).toLocaleString()} — ${m.duration} min</div>
             <span class="status-badge" style="${m.status === 'active' ? 'background:#22c55e;color:#fff;' : 'background:#3b82f6;color:#fff;'}font-size:11px;margin-top:4px;">${m.status === 'active' ? 'Live' : 'Scheduled'}</span>
           </div>
-          <button class="btn btn-success btn-sm" onclick="submitJitsiJoin('${m._id}')">Join & Mark</button>
+          <button class="btn btn-success btn-sm" onclick="submitJitsiJoin('${m._id}', '${m.joinUrl || ''}')">Join & Mark</button>
         </div>
       `).join('');
     } else {
@@ -13457,35 +10440,12 @@ async function showJitsiJoin() {
   `;
 }
 
-async function submitJitsiJoin(meetingId) {
+async function submitJitsiJoin(meetingId, joinUrl) {
   try {
-    const data        = await api(`/api/meetings/${meetingId}/join`);
-    const d           = data.data || data;
-    const jitsiToken  = d.jitsiToken;
-    const jitsiConfig = d.jitsiConfig;
-    const meetingUrl  = d.meetingUrl;
-
-    if (!meetingUrl && !jitsiConfig?.roomName) {
-      toastError('No meeting room returned — contact your admin.');
-      return;
-    }
-
+    await api(`/api/zoom/${meetingId}/join`, { method: 'POST' });
+    if (joinUrl) window.open(joinUrl, '_blank');
     toastSuccess('Attendance marked via meeting join!');
-
-    if (_isMobile) {
-      // Always prefer the canonical meetingUrl (has all config hash params)
-      const roomUrl = meetingUrl || `https://${jitsiConfig.domain}/${jitsiConfig.roomName}${jitsiToken ? '?jwt=' + jitsiToken : ''}`;
-      await _joinMeetingMobile(roomUrl);
-      return;
-    }
-
-    if (jitsiConfig?.roomName) {
-      showJitsiEmbed(jitsiConfig, jitsiToken);
-      navigateTo('mark-attendance');
-    } else {
-      // LiveKit or external URL — open directly
-      window.location.href = meetingUrl;
-    }
+    navigateTo('mark-attendance');
   } catch (e) {
     toastError(e.message);
   }
@@ -13498,10 +10458,10 @@ function showMarkAttendanceModal() {
     <div class="modal-overlay" onclick="closeModal(event)">
       <div class="modal" onclick="event.stopPropagation()">
         <h3>Mark Attendance</h3>
-        <p style="font-size:13px;color:var(--text-light);margin-bottom:16px">Enter the 6-digit code shown on the classroom device screen.</p>
+        <p style="font-size:13px;color:var(--text-light);margin-bottom:16px">Enter the 4-character code shown by your lecturer or manager.</p>
         <div class="form-group">
           <label>Attendance Code</label>
-          <input type="text" id="attend-code" placeholder="000000" maxlength="6" inputmode="numeric" style="font-size:22px;text-align:center;letter-spacing:8px;font-weight:700" autofocus>
+          <input type="text" id="attend-code" placeholder="Enter code" maxlength="4" style="font-size:22px;text-align:center;letter-spacing:8px;font-weight:700;text-transform:uppercase" autofocus>
         </div>
         <div class="modal-actions">
           <button class="btn btn-secondary btn-sm" onclick="closeModal()">Cancel</button>
@@ -13516,7 +10476,7 @@ function showMarkAttendanceModal() {
 async function markAttendance() {
   try {
     const code = document.getElementById('attend-code').value;
-    if (!code || !/^\d{6}$/.test(code)) { toastWarning('Please enter the 6-digit attendance code.'); return; }
+    if (!code || code.length !== 4) { toastWarning('Please enter the 4-character code.'); return; }
     await api('/api/attendance-sessions/mark', {
       method: 'POST',
       body: JSON.stringify({ code, method: 'code_mark' }),
@@ -13531,14 +10491,9 @@ async function markAttendance() {
 
 async function paySubscription() {
   try {
-    const role = currentUser?.role;
-    let planId;
-    if (role === 'student')       planId = 'student_semester';
-    else if (role === 'employee') planId = 'employee_monthly';
-    else {
-      const mode = currentUser?.company?.mode || (role === 'manager' ? 'corporate' : 'academic');
-      planId = mode === 'corporate' ? 'monthly' : 'semester';
-    }
+    // Determine plan from company mode; fallback by role so managers never pay for semester plan
+    const mode   = currentUser?.company?.mode || (currentUser?.role === 'manager' ? 'corporate' : 'academic');
+    const planId = mode === 'corporate' ? 'monthly' : 'semester';
 
     // Show loading state on button
     const btn = document.querySelector('[onclick="paySubscription()"]');
@@ -13567,109 +10522,16 @@ async function renderSubscription() {
   const content = document.getElementById('main-content');
   if (!content) return;
 
-  // HODs see the institution subscription status
-  if (currentUser && currentUser.role === 'hod') {
-    content.innerHTML = '<div class="loading">Loading subscription info…</div>';
-    try {
-      const meData = await api('/api/auth/me');
-      const ut        = meData.userTrial || {};
-      const status    = ut.status   || 'expired';
-      const rawDays   = ut.daysLeft || 0;
-      const daysLeft  = Math.min(rawDays, 365);
-      const expiry    = ut.subscriptionExpiry
-        ? new Date(ut.subscriptionExpiry).toLocaleDateString('en-GB', { day:'numeric', month:'long', year:'numeric' })
-        : '—';
-      const isActive  = status === 'active';
-      const isTrial   = status === 'trial';
-      const isExpired = !isActive && !isTrial;
-
-      const statusColor = isActive ? '#16a34a' : isTrial ? '#d97706' : '#dc2626';
-      const statusBg    = isActive ? '#f0fdf4' : isTrial ? '#fffbeb' : '#fef2f2';
-      const statusBorder= isActive ? '#86efac' : isTrial ? '#fde68a' : '#fca5a5';
-      const statusLabel = isActive ? 'Active' : isTrial ? 'Free Trial' : 'Expired';
-      const statusIcon  = isActive ? '✅' : isTrial ? '⏳' : '❌';
-
-      const urgentBanner = (isExpired || (daysLeft <= 14 && daysLeft > 0)) ? `
-        <div style="background:${isExpired?'#fef2f2':'#fffbeb'};border:1.5px solid ${isExpired?'#fca5a5':'#fde68a'};border-radius:12px;padding:16px 20px;margin-bottom:20px;display:flex;gap:14px;align-items:flex-start;">
-          <div style="font-size:24px;flex-shrink:0">${isExpired?'🔴':'⚠️'}</div>
-          <div>
-            <div style="font-weight:700;color:${isExpired?'#b91c1c':'#92400e'};font-size:14px;margin-bottom:4px">
-              ${isExpired ? 'Subscription Expired — Access Restricted' : `Subscription Expiring in ${daysLeft} Day${daysLeft!==1?'s':''}`}
-            </div>
-            <div style="font-size:13px;color:${isExpired?'#dc2626':'#b45309'};">
-              ${isExpired ? 'Your institution\'s subscription has expired. Contact your admin to renew immediately to restore full access.' : 'Remind your institution admin to renew before access is restricted.'}
-            </div>
-          </div>
-        </div>` : '';
-
-      content.innerHTML = `
-        <div class="page-header">
-          <h2>Subscription</h2>
-          <p>Institution access plan · ${currentUser.company?.name || 'Your Institution'}</p>
-        </div>
-
-        ${urgentBanner}
-
-        <div class="stats-grid" style="margin-bottom:24px;">
-          <div class="stat-card">
-            <div class="stat-value" style="color:${statusColor}">${statusIcon} ${statusLabel}</div>
-            <div class="stat-label">Plan Status</div>
-          </div>
-          <div class="stat-card">
-            <div class="stat-value" style="color:${daysLeft > 30 ? 'var(--success)' : daysLeft > 7 ? '#d97706' : '#dc2626'}">${daysLeft}</div>
-            <div class="stat-label">Days Remaining</div>
-          </div>
-          <div class="stat-card">
-            <div class="stat-value" style="font-size:15px">${expiry}</div>
-            <div class="stat-label">${isActive ? 'Expires On' : isTrial ? 'Trial Ends' : 'Expired On'}</div>
-          </div>
-          <div class="stat-card">
-            <div class="stat-value" style="font-size:14px">${currentUser.company?.name || '—'}</div>
-            <div class="stat-label">Institution</div>
-          </div>
-        </div>
-
-        <div class="card" style="max-width:520px;">
-          <div style="display:flex;align-items:center;gap:14px;margin-bottom:20px;">
-            <div style="width:48px;height:48px;border-radius:14px;background:${statusBg};border:1.5px solid ${statusBorder};display:flex;align-items:center;justify-content:center;font-size:22px;flex-shrink:0">${statusIcon}</div>
-            <div>
-              <div style="font-weight:700;font-size:16px;color:#0f172a;">Institution Plan</div>
-              <div style="font-size:13px;color:#64748b;">Your HOD access is included in your institution's subscription</div>
-            </div>
-          </div>
-
-          <div style="background:${statusBg};border:1.5px solid ${statusBorder};border-radius:10px;padding:14px 16px;margin-bottom:20px;">
-            <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;">
-              <div>
-                <div style="font-size:13px;font-weight:700;color:${statusColor};">Status: ${statusLabel}</div>
-                <div style="font-size:12px;color:#64748b;margin-top:2px;">Expires: ${expiry}</div>
-              </div>
-              <div style="text-align:right;">
-                <div style="font-size:22px;font-weight:800;color:${statusColor};">${daysLeft}</div>
-                <div style="font-size:11px;color:#64748b;">days left</div>
-              </div>
-            </div>
-          </div>
-
-          <div style="border-top:1px solid var(--border);padding-top:16px;">
-            <div style="font-size:13px;font-weight:700;color:#374151;margin-bottom:10px;">What's Included</div>
-            <ul style="font-size:13px;color:#64748b;margin:0;padding-left:18px;line-height:2;">
-              <li>Full department management access</li>
-              <li>Student &amp; lecturer oversight</li>
-              <li>Attendance monitoring &amp; reports</li>
-              <li>Course approvals &amp; performance analytics</li>
-              <li>Class representative management</li>
-              <li>Smart alerts &amp; department messaging</li>
-            </ul>
-          </div>
-
-          <div style="margin-top:20px;padding:12px 14px;background:#f8fafc;border-radius:8px;font-size:12px;color:#64748b;">
-            💡 To renew or upgrade the institution plan, contact your <strong>institution admin</strong>. Subscription management is handled at the admin level.
-          </div>
-        </div>`;
-    } catch(e) {
-      content.innerHTML = `<div class="card"><p style="color:var(--danger)">${esc(e.message)}</p></div>`;
-    }
+  // Employees and students do not pay — show informational message and stop
+  const freeRoles = ['employee', 'student'];
+  if (currentUser && freeRoles.includes(currentUser.role)) {
+    content.innerHTML = `
+      <div class="page-header"><h2>Subscription</h2><p>Your access plan</p></div>
+      <div class="card" style="max-width:480px;padding:32px;text-align:center">
+        <div style="font-size:40px;margin-bottom:12px">✅</div>
+        <h3 style="margin-bottom:8px">No Payment Required</h3>
+        <p style="color:var(--text-muted)">Your access is managed by your company admin. You do not need a personal subscription.</p>
+      </div>`;
     return;
   }
 
@@ -13679,44 +10541,31 @@ async function renderSubscription() {
       api('/api/payments/plans').catch(() => null),
     ]);
     const ut      = meData.userTrial || {};
-    const status  = ut.status   || 'expired';
-    const rawDays = ut.daysLeft || 0;
-    const role    = currentUser?.role;
-    const isStudent  = role === 'student';
-    const isEmployee = role === 'employee';
-    const mode       = currentUser?.company?.mode || (role === 'manager' ? 'corporate' : 'academic');
-    const isCorp     = isEmployee || mode === 'corporate';
-    const _planMax   = (isStudent || (!isCorp)) ? 112 : 30;
-    const daysLeft   = Math.min(rawDays, _planMax);
-    const expiry     = ut.subscriptionExpiry
+    const status    = ut.status   || 'expired';
+    const rawDays   = ut.daysLeft || 0;
+    // Determine plan based on company mode; fallback by role so managers never see semester plan
+    const mode       = currentUser?.company?.mode || (currentUser?.role === 'manager' ? 'corporate' : 'academic');
+    const isCorp     = mode === 'corporate';
+    // Cap displayed days at plan maximum — corporate is strictly 30 days per period
+    const _planMax  = isCorp ? 30 : 112;
+    const daysLeft  = Math.min(rawDays, _planMax);
+    const expiry   = ut.subscriptionExpiry
       ? new Date(ut.subscriptionExpiry).toLocaleDateString('en-GB', { day:'numeric', month:'long', year:'numeric' })
       : '—';
 
-    const livePlan   = plansData?.plans?.[0];
-    const liveCur    = livePlan?.currency || 'GHS';
-    const liveAmt    = livePlan?.price ?? (isStudent ? 20 : isEmployee ? 15 : isCorp ? 150 : 300);
-    const liveSym    = liveCur === 'GHS' ? '₵' : liveCur + ' ';
+    // Use live price from API; fall back to defaults if unavailable
+    const livePlan    = plansData?.plans?.[0];
+    const liveCur     = plansData?.plans?.[0]?.currency || 'GHS';
+    const liveAmt     = livePlan?.price ?? (isCorp ? 150 : 300);
+    const liveSym     = liveCur === 'GHS' ? '₵' : liveCur + ' ';
 
-    const planName   = isStudent  ? 'Student Semester Plan'
-                     : isEmployee ? 'Employee Monthly Plan'
-                     : isCorp     ? 'Monthly Plan' : 'Semester Plan';
+    const planName   = isCorp ? 'Monthly Plan'    : 'Semester Plan';
     const planPrice  = `${liveSym}${liveAmt}`;
-    const planPeriod = (isStudent || (!isCorp)) ? '1 semester (16 weeks)' : '30 days / month';
-    const planId     = isStudent  ? 'student_semester'
-                     : isEmployee ? 'employee_monthly'
-                     : isCorp     ? 'monthly' : 'semester';
-    const planLabel  = (isStudent || (!isCorp)) ? `${liveSym}${liveAmt} / semester` : `${liveSym}${liveAmt} / month`;
-    const trialNote  = isStudent
-      ? `You received a 45-day free trial on account creation. After it ends, subscribe for ${liveSym}${liveAmt}/semester to keep access.`
-      : isEmployee
-      ? `Employees are covered by the company trial while it is active. After it ends, subscribe for ${liveSym}${liveAmt}/month individually.`
-      : null;
-    const planFeatures = isStudent
-      ? ['Full student portal access', 'Attend classes &amp; mark attendance', 'Take quizzes &amp; assignments', 'View grades &amp; results', 'Access the secure exam portal']
-      : isEmployee
-      ? ['Full employee portal access', 'Clock in/out &amp; attendance tracking', 'Leave &amp; expense management', 'Performance tracking', 'Internal messaging &amp; announcements']
-      : isCorp
-      ? ['Full platform access', 'Attendance &amp; clock in/out management', 'Leave &amp; expense management', 'Performance tracking &amp; reporting', 'Renew any time — days stack up']
+    const planPeriod = isCorp ? '30 days / month' : '1 semester (16 weeks)';
+    const planId     = isCorp ? 'monthly'         : 'semester';
+    const planLabel  = isCorp ? `${liveSym}${liveAmt} / month` : `${liveSym}${liveAmt} / semester`;
+    const planFeatures = isCorp
+      ? ['Full platform access', 'Attendance & clock in/out management', 'Leave &amp; expense management', 'Performance tracking &amp; reporting', 'Renew any time — days stack up']
       : ['Full platform access', 'Attendance marking &amp; session management', 'Assessment creation &amp; grading', 'Grade book &amp; reports', 'Renew any time — days stack up'];
 
     const statusColor = status === 'active' ? 'var(--success)' : status === 'trial' ? '#f59e0b' : 'var(--danger)';
@@ -13772,17 +10621,9 @@ async function renderSubscription() {
             ⚠️ Your subscription has expired. Renew to continue using DIKLY.
           </div>` : ''}
 
-        ${trialNote ? `
-          <div style="background:#f0f9ff;border:1px solid #bae6fd;border-radius:8px;padding:12px 14px;margin-bottom:16px;font-size:13px;color:#0369a1">
-            ℹ️ ${trialNote}
-          </div>` : ''}
-
-        ${status === 'trial' && !trialNote ? `
+        ${status === 'trial' ? `
           <div style="background:#fffbeb;border:1px solid #fde68a;border-radius:8px;padding:12px 14px;margin-bottom:16px;font-size:13px;color:#92400e">
             ⏳ 30-day free trial active — <strong>${daysLeft} days</strong> left. Subscribe before it ends to avoid interruption.
-          </div>` : status === 'trial' && isStudent ? `
-          <div style="background:#fffbeb;border:1px solid #fde68a;border-radius:8px;padding:12px 14px;margin-bottom:16px;font-size:13px;color:#92400e">
-            ⏳ 45-day free trial active — <strong>${daysLeft} days</strong> left. Subscribe before it ends to keep access.
           </div>` : ''}
 
         <button class="btn btn-primary" style="width:100%;padding:14px;font-size:15px;font-weight:600;letter-spacing:0.3px;border-radius:10px"
@@ -14063,50 +10904,11 @@ async function downloadReport(type, apiBase = 'reports', e) {
   }
   if (card) card.style.pointerEvents = 'none';
   try {
-    const isNative = !!(window.Capacitor?.isNativePlatform?.() ||
-                        navigator.userAgent.includes('DiklyApp/'));
-
-    if (isNative) {
-      const FS = window.Capacitor?.Plugins?.Filesystem;
-      if (!FS) {
-        toastError('Please reinstall the DIKLY app to enable downloads.');
-        return;
-      }
-      // Fetch PDF bytes directly using JWT bearer token
-      const pdfRes = await fetch(`${API}/api/${apiBase}/${type}`, {
-        headers: { 'Authorization': `Bearer ${token}` },
-      });
-      if (!pdfRes.ok) {
-        let errMsg = 'Failed to generate report';
-        try { const e = await pdfRes.json(); errMsg = e.error || errMsg; } catch(_) {}
-        throw new Error(errMsg);
-      }
-      const blob = await pdfRes.blob();
-      // Convert blob to base64
-      const base64 = await new Promise((resolve, reject) => {
-        const reader = new FileReader();
-        reader.onload  = () => resolve(reader.result.split(',')[1]);
-        reader.onerror = reject;
-        reader.readAsDataURL(blob);
-      });
-      const filename = `${type}-report.pdf`;
-      // Save to app-specific external storage — no permission needed on any Android version
-      await FS.writeFile({
-        path: `Reports/${filename}`,
-        data: base64,
-        directory: 'EXTERNAL',
-        recursive: true,
-      });
-      toast('Report saved to device storage', 'ok');
-      return;
-    }
-
-    // Web browser: fetch blob and trigger anchor download
     const headers = { 'Authorization': `Bearer ${token}` };
     const res = await fetch(`${API}/api/${apiBase}/${type}`, { headers });
     if (!res.ok) {
       let errMsg = 'Failed to generate report';
-      try { const err = await res.json(); errMsg = err.error; } catch(_) {}
+      try { const err = await res.json(); errMsg = err.error; } catch(e) {}
       throw new Error(errMsg);
     }
     const blob = await res.blob();
@@ -14280,32 +11082,12 @@ async function renderProfile() {
         </div>
       </div>` : ''}
       <button class="btn btn-primary" onclick="saveProfile()" style="width:100%">Save Changes</button>
+    </div>
 
-      ${u.role === 'lecturer' ? `
-      <div style="margin-top:28px;padding-top:24px;border-top:1px solid var(--border)">
-        <h3 style="font-size:14px;font-weight:700;margin-bottom:4px;color:var(--text-primary)">Class Rep PIN</h3>
-        <p style="font-size:12px;color:var(--text-muted);margin-bottom:14px">Set a 4-digit PIN that your class rep must enter to connect the attendance device to your session. Leave blank to allow connection without a PIN.</p>
-        <div style="display:flex;gap:10px;align-items:flex-end">
-          <div style="flex:1">
-            <input type="password" id="lecturer-pin-input" inputmode="numeric" maxlength="4" placeholder="4-digit PIN" style="width:100%;padding:10px 12px;border:1.5px solid var(--border);border-radius:8px;font-size:18px;letter-spacing:6px;box-sizing:border-box">
-          </div>
-          <button onclick="saveLecturerPin()" style="padding:10px 18px;background:var(--primary);color:#fff;border:none;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer;white-space:nowrap">Save PIN</button>
-          <button onclick="clearLecturerPin()" style="padding:10px 14px;background:transparent;color:#ef4444;border:1.5px solid #ef4444;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;white-space:nowrap">Clear PIN</button>
-        </div>
-      </div>` : ''}
-
-      <div style="margin-top:28px;padding-top:24px;border-top:1px solid var(--border)">
-        <h3 style="font-size:14px;font-weight:700;margin-bottom:4px;color:var(--text-primary)">Signed-in Devices</h3>
-        <p style="font-size:12px;color:var(--text-muted);margin-bottom:16px">All devices that have logged into your account</p>
-        <div id="devices-list"><div style="color:var(--text-muted);font-size:13px">Loading devices…</div></div>
-      </div>
-
-      ${currentUser.role !== 'student' ? `
-      <div style="margin-top:28px;padding-top:24px;border-top:1px solid var(--border)">
-        <h3 style="font-size:14px;font-weight:700;margin-bottom:4px;color:#ef4444">Danger Zone</h3>
-        <p style="font-size:12px;color:var(--text-muted);margin-bottom:14px">Permanently delete your account and all associated data.</p>
-        <a href="/delete-account" target="_blank" style="display:inline-block;padding:10px 20px;border-radius:8px;border:1.5px solid #ef4444;color:#ef4444;font-size:13px;font-weight:600;text-decoration:none;background:transparent">Delete Account</a>
-      </div>` : ''}
+    <div class="card" style="max-width:520px;margin-top:20px">
+      <h3 style="font-size:14px;font-weight:700;margin-bottom:4px;color:var(--text-primary)">Signed-in Devices</h3>
+      <p style="font-size:12px;color:var(--text-muted);margin-bottom:16px">All devices that have logged into your account</p>
+      <div id="devices-list"><div style="color:var(--text-muted);font-size:13px">Loading devices…</div></div>
     </div>
   `;
   loadMyDevices();
@@ -14346,9 +11128,13 @@ async function loadMyDevices() {
           <div style="font-size:11px;color:var(--text-muted);margin-top:2px">${esc(d.ipAddress) || 'IP unknown'} · Last seen ${timeAgo(d.lastSeenAt)}</div>
           ${d.userAgent ? `<div style="font-size:10px;color:var(--text-muted);margin-top:1px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(d.userAgent)}</div>` : ''}
         </div>
-        ${!d.isCurrent ? `<button onclick="removeDevice('${esc(d.deviceId)}')" style="flex-shrink:0;padding:6px 12px;border-radius:8px;border:1.5px solid #ef4444;background:transparent;color:#ef4444;font-size:12px;font-weight:600;cursor:pointer">Remove</button>` : ''}
+        ${!d.isCurrent ? `<button data-device-id="${esc(d.deviceId)}" class="remove-device-btn" style="flex-shrink:0;padding:6px 12px;border-radius:8px;border:1.5px solid #ef4444;background:transparent;color:#ef4444;font-size:12px;font-weight:600;cursor:pointer">Remove</button>` : ''}
       </div>
     `).join('');
+
+    container.querySelectorAll('.remove-device-btn').forEach(btn => {
+      btn.addEventListener('click', () => removeDevice(btn.dataset.deviceId));
+    });
 
     // Show device lock warning if active
     if (data.deviceLock?.isLocked && data.deviceLock?.lockedUntil) {
@@ -14528,7 +11314,7 @@ async function renderStudentGradeBook(content) {
                 <div style="font-weight:700;font-size:15px;margin-bottom:4px;">${c.title}</div>
                 <div style="font-size:12px;color:var(--text-muted);margin-bottom:10px;">${c.code} · ${c.lecturerId?.name || 'N/A'}</div>
                 <div style="display:flex;justify-content:space-between;align-items:center;">
-                  <span style="font-size:12px;color:var(--text-light);">${c.rosterCount ?? c.enrolledStudents?.length ?? 0} students</span>
+                  <span style="font-size:12px;color:var(--text-light);">${c.enrolledStudents?.length || 0} students</span>
                   <span class="btn btn-sm btn-primary" style="pointer-events:none;">View Grades →</span>
                 </div>
               </div>`).join('')}
@@ -14640,7 +11426,7 @@ async function renderLecturerGradeBook(content) {
                 <div style="font-weight:700;font-size:15px;margin-bottom:4px;">${c.title}</div>
                 <div style="font-size:12px;color:var(--text-muted);margin-bottom:10px;">${c.code} · ${c.lecturerId?.name || 'N/A'}</div>
                 <div style="display:flex;justify-content:space-between;align-items:center;">
-                  <span style="font-size:12px;color:var(--text-light);">${c.rosterCount ?? c.enrolledStudents?.length ?? 0} students</span>
+                  <span style="font-size:12px;color:var(--text-light);">${c.enrolledStudents?.length || 0} students</span>
                   <span class="btn btn-sm btn-primary" style="pointer-events:none;">Open →</span>
                 </div>
               </div>`).join('')}
@@ -14970,7 +11756,6 @@ async function loadAnnBadge() {
 const ANN_COLORS = { info:'#6366f1', warning:'#f59e0b', success:'#22c55e', urgent:'#ef4444' };
 const ANN_ICONS  = { info:'ℹ️', warning:'⚠️', success:'✅', urgent:'🚨' };
 const ANN_CAN_POST = ['admin','superadmin','lecturer','manager','hod'];
-// Class reps can post via class-announcements page, not the general announcements page
 
 async function renderAnnouncements() {
   const content = document.getElementById('main-content');
@@ -15020,7 +11805,7 @@ function annCard(a, canPost, isAdmin) {
   const color = ANN_COLORS[a.type] || '#6366f1';
   const icon  = ANN_ICONS[a.type]  || 'ℹ️';
   const canDelete = isAdmin || (canPost && String(a.author?._id) === String(currentUser._id || currentUser.id));
-  const audienceLabel = { all:'Everyone', students:'Students', employees:'Employees', lecturers:'Lecturers', hod:'HODs', class_group:'Class Group', department:'Department', programme:'Programme', course:'Course' }[a.audience] || 'Everyone';
+  const audienceLabel = { all:'Everyone', students:'Students', employees:'Employees' }[a.audience] || 'Everyone';
   return `
     <div class="card" style="margin-bottom:12px;border-left:4px solid ${color};position:relative;${a.pinned?'background:linear-gradient(135deg,var(--card),#fefce8);':''}" id="ann-${a._id}">
       ${a.pinned ? '<div style="position:absolute;top:10px;right:12px;font-size:11px;color:#92400e;font-weight:700;background:#fef3c7;padding:2px 7px;border-radius:20px;">📌 Pinned</div>' : ''}
@@ -15573,8 +12358,7 @@ async function exportAttendanceToExcel(sessionId, sessionTitle) {
     ws['!cols'] = [{ wch: 25 }, { wch: 15 }, { wch: 12 }, { wch: 15 }, { wch: 22 }, { wch: 20 }];
 
     const filename = `Attendance_${(sessionTitle || 'session').replace(/[^a-z0-9]/gi, '_')}_${new Date().toISOString().slice(0,10)}.xlsx`;
-    const wbout = window.XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
-    await downloadBlob(new Blob([wbout], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }), filename);
+    window.XLSX.writeFile(wb, filename);
     showToastNotif('Excel file downloaded!', 'success');
   } catch(e) {
     showToastNotif('Export failed: ' + e.message, 'error');
@@ -15610,8 +12394,7 @@ async function exportAllAttendanceToExcel() {
     const wb = window.XLSX.utils.book_new();
     window.XLSX.utils.book_append_sheet(wb, ws, 'My Attendance');
     ws['!cols'] = [{ wch: 30 }, { wch: 15 }, { wch: 12 }, { wch: 15 }];
-    const wboutAll = window.XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
-    await downloadBlob(new Blob([wboutAll], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }), `My_Attendance_${new Date().toISOString().slice(0,10)}.xlsx`);
+    window.XLSX.writeFile(wb, `My_Attendance_${new Date().toISOString().slice(0,10)}.xlsx`);
     showToastNotif('Excel file downloaded!', 'success');
   } catch(e) {
     showToastNotif('Export failed: ' + e.message, 'error');
@@ -15652,7 +12435,7 @@ function _timetableGrid(slots, canEdit) {
               </div>
               ${s.course?.code ? `<div style="font-size:10px;color:var(--text-muted);">${esc(s.course.code)}</div>` : ''}
               ${s.room ? `<div style="font-size:10px;color:var(--text-muted);">📍 ${esc(s.room)}</div>` : ''}
-              ${s.lecturer?.name ? `<div style="font-size:10px;color:var(--text-muted);">👤 ${esc(s.lecturer.name)}</div>` : ''}
+              ${!canEdit && s.lecturer?.name ? `<div style="font-size:10px;color:var(--text-muted);">👤 ${esc(s.lecturer.name)}</div>` : ''}
               ${canEdit ? `<button onclick="event.stopPropagation();deleteSlot('${s._id}')"
                 style="position:absolute;top:4px;right:4px;background:none;border:none;cursor:pointer;
                 color:var(--text-muted);font-size:14px;line-height:1;padding:2px;">×</button>` : ''}
@@ -15669,62 +12452,6 @@ function _timetableGrid(slots, canEdit) {
     </div>`;
 }
 
-// ── Timetable ICS calendar export ────────────────────────────────────────────
-function exportTimetableICS(slots) {
-  if (!slots || slots.length === 0) { showToastNotif('No slots to export', 'error'); return; }
-  const DAYS = ['SU','MO','TU','WE','TH','FR','SA'];
-  const pad  = n => String(n).padStart(2, '0');
-
-  // Find the Monday of the current week as anchor
-  const now    = new Date();
-  const monday = new Date(now);
-  monday.setDate(now.getDate() - ((now.getDay() + 6) % 7));
-  monday.setHours(0, 0, 0, 0);
-
-  const uid = () => `${Date.now()}-${Math.random().toString(36).slice(2)}@kodex`;
-
-  const events = slots.map(slot => {
-    const [h, m]   = (slot.startTime || '00:00').split(':').map(Number);
-    const [eh, em] = (slot.endTime   || `${h+1}:00`).split(':').map(Number);
-    const dayOfWeek = slot.dayOfWeek ?? 1; // 0=Sun … 6=Sat
-    const diff = (dayOfWeek - 1 + 7) % 7;  // days from Monday
-    const date = new Date(monday);
-    date.setDate(monday.getDate() + diff);
-
-    const dtFmt = (d, hr, mn) =>
-      `${d.getFullYear()}${pad(d.getMonth()+1)}${pad(d.getDate())}T${pad(hr)}${pad(mn)}00`;
-
-    return [
-      'BEGIN:VEVENT',
-      `UID:${uid()}`,
-      `SUMMARY:${(slot.title || slot.courseName || 'Class').replace(/[,;\\]/g, '\\$&')}`,
-      `DTSTART:${dtFmt(date, h, m)}`,
-      `DTEND:${dtFmt(date, eh, em)}`,
-      `RRULE:FREQ=WEEKLY;BYDAY=${DAYS[dayOfWeek]}`,
-      slot.room ? `LOCATION:Room ${slot.room}` : '',
-      'END:VEVENT',
-    ].filter(Boolean).join('\r\n');
-  });
-
-  const ics = [
-    'BEGIN:VCALENDAR',
-    'VERSION:2.0',
-    'PRODID:-//KODEX//Timetable//EN',
-    'CALSCALE:GREGORIAN',
-    'METHOD:PUBLISH',
-    ...events,
-    'END:VCALENDAR',
-  ].join('\r\n');
-
-  const blob = new Blob([ics], { type: 'text/calendar;charset=utf-8' });
-  const a    = document.createElement('a');
-  a.href     = URL.createObjectURL(blob);
-  a.download = 'timetable.ics';
-  a.click();
-  URL.revokeObjectURL(a.href);
-  showToastNotif('Calendar downloaded — open it to import into Google/Apple Calendar', 'success');
-}
-
 let _timetableSlots = [];
 let _timetableCourses = [];
 
@@ -15732,49 +12459,24 @@ async function renderLecturerTimetable() {
   const content = document.getElementById('main-content');
   if (!content) return;
   content.innerHTML = '<div class="loading">Loading timetable…</div>';
-  if (!isOnline()) {
-    const _c = offlineRead('lecturer_timetable');
-    if (_c) { _timetableSlots = _c.slots || []; _timetableCourses = _c.courses || []; }
-    else { content.innerHTML = `<div style="text-align:center;padding:60px 20px"><div style="font-size:48px;margin-bottom:12px">📡</div><div style="font-size:18px;font-weight:700">You're Offline</div><p style="color:var(--text-muted);margin-top:8px">Connect once while online to cache this page.</p></div>`; return; }
-  } else {
-    try {
-      const [slotData, courseData] = await Promise.all([
-        api('/api/timetable'),
-        api('/api/courses').catch(() => api('/api/lecturer/quizzes').then(d => ({ courses: [] })).catch(() => ({ courses: [] }))),
-      ]);
-      _timetableSlots   = slotData.slots   || [];
-      _timetableCourses = (courseData.courses || courseData || []);
-      offlineCache('lecturer_timetable', { slots: _timetableSlots, courses: _timetableCourses });
-    } catch(e) {
-      const _c = offlineRead('lecturer_timetable');
-      if (_c) { _timetableSlots = _c.slots || []; _timetableCourses = _c.courses || []; }
-      else { content.innerHTML = `<div class="card"><p style="color:var(--danger)">Error: ${e.message}</p></div>`; return; }
-    }
-  }
-  {
-
-    const isAdminView = ['admin','superadmin','manager'].includes(currentUser?.role);
-    const ttTitle    = isAdminView ? 'All Timetables' : 'My Timetable';
-    const ttSubtitle = isAdminView
-      ? 'All lecturers\' class slots — click any slot to edit or delete'
-      : 'Your weekly class timetable — click any slot to edit';
+  try {
+    const [slotData, courseData] = await Promise.all([
+      api('/api/timetable'),
+      api('/api/courses').catch(() => api('/api/lecturer/quizzes').then(d => ({ courses: [] })).catch(() => ({ courses: [] }))),
+    ]);
+    _timetableSlots   = slotData.slots   || [];
+    _timetableCourses = (courseData.courses || courseData || []);
 
     content.innerHTML = `
       <div class="page-header" style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:10px;margin-bottom:20px">
         <div>
-          <h2 style="font-size:22px;font-weight:800;letter-spacing:-.5px;color:#0f172a;margin-bottom:2px">${ttTitle}</h2>
-          <p style="color:#64748b;font-size:13px">${ttSubtitle}</p>
+          <h2 style="font-size:22px;font-weight:800;letter-spacing:-.5px;color:#0f172a;margin-bottom:2px">My Schedule</h2>
+          <p style="color:#64748b;font-size:13px">Your weekly class timetable — click any slot to edit</p>
         </div>
-        <div style="display:flex;gap:8px;flex-wrap:wrap">
-          <button class="btn btn-secondary" onclick="exportTimetableICS(_timetableSlots)" style="display:flex;align-items:center;gap:6px;font-size:13px">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
-            Export .ics
-          </button>
-          <button class="btn btn-primary" onclick="openAddSlotModal()" style="display:flex;align-items:center;gap:6px">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
-            Add Class
-          </button>
-        </div>
+        <button class="btn btn-primary" onclick="openAddSlotModal()" style="display:flex;align-items:center;gap:6px">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+          Add Class
+        </button>
       </div>
       ${_timetableSlots.length === 0
         ? `<div style="background:#fff;border:1px solid #e8eaed;border-radius:16px;padding:60px 20px;text-align:center;box-shadow:0 1px 4px rgba(0,0,0,.05)">
@@ -15783,97 +12485,15 @@ async function renderLecturerTimetable() {
             </div>
             <h3 style="font-size:16px;font-weight:700;color:#0f172a;margin-bottom:6px">No classes scheduled yet</h3>
             <p style="color:#64748b;font-size:13px;margin-bottom:22px">Add your first class to build out your weekly timetable</p>
-            <div style="display:flex;gap:10px;justify-content:center;flex-wrap:wrap">
-              <button class="btn btn-primary" onclick="openAddSlotModal()" style="display:inline-flex;align-items:center;gap:6px">
-                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
-                Add Your First Class
-              </button>
-              ${_timetableCourses.length > 0 ? `
-              <button onclick="openImportCoursesModal()" style="display:inline-flex;align-items:center;gap:6px;padding:9px 16px;background:#f0fdf4;border:1.5px solid #86efac;color:#16a34a;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer">
-                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="8 17 12 21 16 17"/><line x1="12" y1="12" x2="12" y2="21"/><path d="M20.88 18.09A5 5 0 0 0 18 9h-1.26A8 8 0 1 0 3 16.29"/></svg>
-                Import from My Courses
-              </button>` : ''}
-            </div>
+            <button class="btn btn-primary" onclick="openAddSlotModal()" style="display:inline-flex;align-items:center;gap:6px">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+              Add Your First Class
+            </button>
           </div>`
         : `<div style="background:#fff;border:1px solid #e8eaed;border-radius:14px;overflow-x:auto;box-shadow:0 1px 4px rgba(0,0,0,.05)">${_timetableGrid(_timetableSlots, true)}</div>`
       }`;
-  }
-}
-
-function openImportCoursesModal() {
-  const DAYS = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
-  const courses = _timetableCourses.filter(c => c && (c._id || c.id));
-  if (!courses.length) { showToastNotif('No courses found to import.'); return; }
-
-  const rows = courses.map((c, i) => {
-    const id   = c._id || c.id;
-    const name = c.title || c.name || 'Untitled';
-    const code = c.code  || '';
-    return `
-      <div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:10px;padding:14px;margin-bottom:10px" id="import-row-${i}">
-        <div style="font-weight:700;font-size:13px;color:#0f172a;margin-bottom:10px">${code ? code + ' — ' : ''}${name}</div>
-        <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px">
-          <div>
-            <label style="font-size:11px;color:#64748b;font-weight:600;display:block;margin-bottom:4px">DAY</label>
-            <select id="import-day-${i}" style="width:100%;padding:7px 10px;border:1.5px solid #e2e8f0;border-radius:8px;font-size:13px;background:#fff">
-              ${DAYS.map((d,di) => `<option value="${di}"${di===1?' selected':''}>${d}</option>`).join('')}
-            </select>
-          </div>
-          <div>
-            <label style="font-size:11px;color:#64748b;font-weight:600;display:block;margin-bottom:4px">START</label>
-            <input type="time" id="import-start-${i}" value="08:00" style="width:100%;padding:7px 10px;border:1.5px solid #e2e8f0;border-radius:8px;font-size:13px">
-          </div>
-          <div>
-            <label style="font-size:11px;color:#64748b;font-weight:600;display:block;margin-bottom:4px">END</label>
-            <input type="time" id="import-end-${i}" value="10:00" style="width:100%;padding:7px 10px;border:1.5px solid #e2e8f0;border-radius:8px;font-size:13px">
-          </div>
-        </div>
-        <input type="hidden" id="import-cid-${i}" value="${id}">
-      </div>`;
-  }).join('');
-
-  showModal(`
-    <h3 style="margin:0 0 6px;font-size:17px;font-weight:700">Import Courses into Timetable</h3>
-    <p style="color:#64748b;font-size:13px;margin:0 0 16px">Set a day and time for each of your courses. You can edit them after.</p>
-    <div id="import-courses-list" style="max-height:55vh;overflow-y:auto;padding-right:4px">${rows}</div>
-    <div id="import-error" style="color:#ef4444;font-size:13px;margin-top:8px;display:none"></div>
-    <div style="display:flex;gap:10px;margin-top:18px">
-      <button onclick="closeModal()" style="flex:1;padding:10px;background:#f1f5f9;border:none;border-radius:8px;font-size:14px;font-weight:600;cursor:pointer;color:#475569">Cancel</button>
-      <button onclick="_doImportCourses(${courses.length})" style="flex:2;padding:10px;background:#2563eb;border:none;border-radius:8px;font-size:14px;font-weight:700;cursor:pointer;color:#fff">
-        Import ${courses.length} Course${courses.length > 1 ? 's' : ''}
-      </button>
-    </div>
-  `);
-}
-
-async function _doImportCourses(count) {
-  const errEl = document.getElementById('import-error');
-  errEl.style.display = 'none';
-  const btn = document.querySelector('[onclick^="_doImportCourses"]');
-  if (btn) { btn.disabled = true; btn.textContent = 'Importing…'; }
-
-  let created = 0, skipped = 0;
-  for (let i = 0; i < count; i++) {
-    const courseId  = document.getElementById(`import-cid-${i}`)?.value;
-    const dayOfWeek = Number(document.getElementById(`import-day-${i}`)?.value);
-    const startTime = document.getElementById(`import-start-${i}`)?.value;
-    const endTime   = document.getElementById(`import-end-${i}`)?.value;
-    if (!courseId || !startTime || !endTime) continue;
-    if (startTime >= endTime) { skipped++; continue; }
-    try {
-      await api('/api/timetable', { method: 'POST', body: JSON.stringify({ courseId, dayOfWeek, startTime, endTime }) });
-      created++;
-    } catch(e) {
-      skipped++;
-    }
-  }
-
-  closeModal();
-  if (created > 0) {
-    showToastNotif(`✅ ${created} class${created > 1 ? 'es' : ''} added to your timetable${skipped > 0 ? ` (${skipped} skipped due to time clashes)` : ''}`);
-    renderLecturerTimetable();
-  } else {
-    showToastNotif('No classes were imported. Check for time clashes and try again.', 'error');
+  } catch(e) {
+    content.innerHTML = `<div class="card"><p style="color:var(--danger)">Error: ${e.message}</p></div>`;
   }
 }
 
@@ -15881,41 +12501,13 @@ async function renderStudentTimetable() {
   const content = document.getElementById('main-content');
   if (!content) return;
   content.innerHTML = '<div class="loading">Loading timetable…</div>';
-  let slots = [];
-  if (!isOnline()) {
-    const _c = offlineRead('student_timetable');
-    if (_c) { slots = _c.slots || []; }
-    else { content.innerHTML = `<div style="text-align:center;padding:60px 20px"><div style="font-size:48px;margin-bottom:12px">📡</div><div style="font-size:18px;font-weight:700">You're Offline</div><p style="color:var(--text-muted);margin-top:8px">Connect once while online to cache this page.</p></div>`; return; }
-  } else {
-    try {
-      const slotData = await api('/api/timetable');
-      slots = slotData.slots || [];
-      offlineCache('student_timetable', slotData);
-    } catch(e) {
-      const _c = offlineRead('student_timetable');
-      if (_c) { slots = _c.slots || []; }
-      else { content.innerHTML = `<div class="card"><p style="color:var(--danger)">Error: ${e.message}</p></div>`; return; }
-    }
-  }
-  {
-    const isClassRep = currentUser.isClassRep;
-    const isHod = currentUser.role === 'hod';
+  try {
+    const slotData = await api('/api/timetable');
+    const slots = slotData.slots || [];
     content.innerHTML = `
-      <div class="page-header" style="margin-bottom:20px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px">
-        <div>
-          <h2 style="font-size:22px;font-weight:800;letter-spacing:-.5px;color:#0f172a;margin-bottom:2px">${isHod ? 'Department Timetable' : 'My Timetable'}</h2>
-          <p style="color:#64748b;font-size:13px">${isHod ? 'Read-only view of all department class slots' : 'Your weekly class timetable based on enrolled courses'}</p>
-        </div>
-        <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
-          <button onclick="exportTimetableICS(slots)" style="display:inline-flex;align-items:center;gap:6px;padding:8px 14px;background:#f8fafc;border:1.5px solid #e2e8f0;color:#475569;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
-            Export .ics
-          </button>
-          ${isClassRep ? `<button onclick="navigateTo('class-timetable')" style="display:inline-flex;align-items:center;gap:6px;padding:8px 14px;background:#f0fdf4;border:1.5px solid #86efac;color:#16a34a;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
-            Edit Timetable
-          </button>` : ''}
-        </div>
+      <div class="page-header" style="margin-bottom:20px">
+        <h2 style="font-size:22px;font-weight:800;letter-spacing:-.5px;color:#0f172a;margin-bottom:2px">My Schedule</h2>
+        <p style="color:#64748b;font-size:13px">Your weekly class timetable based on enrolled courses</p>
       </div>
       ${slots.length === 0
         ? `<div style="background:#fff;border:1px solid #e8eaed;border-radius:16px;padding:60px 20px;text-align:center;box-shadow:0 1px 4px rgba(0,0,0,.05)">
@@ -15927,6 +12519,8 @@ async function renderStudentTimetable() {
           </div>`
         : `<div style="background:#fff;border:1px solid #e8eaed;border-radius:14px;overflow-x:auto;box-shadow:0 1px 4px rgba(0,0,0,.05)">${_timetableGrid(slots, false)}</div>`
       }`;
+  } catch(e) {
+    content.innerHTML = `<div class="card"><p style="color:var(--danger)">Error: ${e.message}</p></div>`;
   }
 }
 
@@ -15937,44 +12531,20 @@ async function openEditSlotModal(slotId) {
   _openSlotModal(slot);
 }
 
-async function _openSlotModal(slot, presetDay) {
+function _openSlotModal(slot, presetDay) {
   const container = document.getElementById('modal-container');
   container.classList.remove('hidden');
   const isEdit = !!slot;
-  const isAdminOrHod = ['admin','superadmin','hod','manager'].includes(currentUser?.role)
-                    && currentUser?.company?.mode === 'academic';
-
   const colorOptions = TIMETABLE_COLORS.map(c =>
     `<span onclick="document.getElementById('slot-color').value='${c}';document.querySelectorAll('.color-dot').forEach(d=>d.style.outline='none');this.style.outline='3px solid ${c}';this.style.outlineOffset='2px'"
       class="color-dot" style="display:inline-block;width:22px;height:22px;border-radius:50%;background:${c};cursor:pointer;margin:2px;
       ${slot?.color===c||(!slot&&c==='#6366f1')?'outline:3px solid '+c+';outline-offset:2px':''}"></span>`
   ).join('');
 
-  // Fetch lecturers list for admin/HOD so they can assign slots to specific lecturers
-  let lecturerOptions = '';
-  if (isAdminOrHod) {
-    try {
-      const data = await api('/api/devices/lecturers-for-assignment');
-      const lecs = data.lecturers || [];
-      const currentLecId = slot?.lecturer?._id || slot?.lecturer || '';
-      lecturerOptions = `<div class="form-group">
-        <label>Lecturer <span style="color:red">*</span></label>
-        <select id="slot-lecturer" style="width:100%;padding:9px 12px;border:1.5px solid var(--border);border-radius:8px;font-size:13px">
-          <option value="">— Select lecturer —</option>
-          ${lecs.map(l => `<option value="${l._id}" ${l._id === currentLecId ? 'selected' : ''}>${esc(l.name)}</option>`).join('')}
-        </select>
-      </div>`;
-    } catch(_) {
-      lecturerOptions = `<div class="form-group"><p style="font-size:12px;color:#b45309">Could not load lecturers list.</p></div>`;
-    }
-  }
-
   container.innerHTML = `
     <div class="modal-overlay" onclick="closeModal(event)">
       <div class="modal" onclick="event.stopPropagation()" style="max-width:420px">
         <h3 style="margin:0 0 16px">${isEdit ? 'Edit Class Slot' : 'Add Class to Timetable'}</h3>
-
-        ${lecturerOptions}
 
         <div class="form-group">
           <label>Course <span style="color:red">*</span></label>
@@ -16026,24 +12596,19 @@ async function _openSlotModal(slot, presetDay) {
 }
 
 async function saveSlot(slotId) {
-  const courseId   = document.getElementById('slot-course').value;
-  const dayOfWeek  = document.getElementById('slot-day').value;
-  const startTime  = document.getElementById('slot-start').value;
-  const endTime    = document.getElementById('slot-end').value;
-  const room       = document.getElementById('slot-room').value.trim();
-  const color      = document.getElementById('slot-color').value;
-  const lecturerId = document.getElementById('slot-lecturer')?.value || null;
+  const courseId  = document.getElementById('slot-course').value;
+  const dayOfWeek = document.getElementById('slot-day').value;
+  const startTime = document.getElementById('slot-start').value;
+  const endTime   = document.getElementById('slot-end').value;
+  const room      = document.getElementById('slot-room').value.trim();
+  const color     = document.getElementById('slot-color').value;
 
   if (!courseId) { toastWarning('Please select a course'); return; }
   if (!startTime || !endTime) { toastWarning('Please set start and end time'); return; }
   if (startTime >= endTime) { toastWarning('End time must be after start time'); return; }
-  if (document.getElementById('slot-lecturer') && !lecturerId) {
-    toastWarning('Please select a lecturer'); return;
-  }
 
   try {
-    const body = { courseId, dayOfWeek: Number(dayOfWeek), startTime, endTime, room, color,
-                   ...(lecturerId ? { lecturerId } : {}) };
+    const body = { courseId, dayOfWeek: Number(dayOfWeek), startTime, endTime, room, color };
     if (slotId) {
       await api(`/api/timetable/${slotId}`, { method: 'PUT', body: JSON.stringify(body) });
       showToastNotif('Class updated', 'success');
@@ -16513,7 +13078,7 @@ async function generateAttendanceReportCard() {
 
     doc.setFontSize(8); doc.setTextColor(150,150,150); doc.setFont('helvetica','normal');
     doc.text('Generated automatically by DIKLY — dikly.sbs', M, 285);
-    await downloadBlob(doc.output('blob'), 'DIKLY_Report_Card_' + (currentUser.indexNumber||'student') + '_' + new Date().toISOString().slice(0,10) + '.pdf');
+    doc.save('DIKLY_Report_Card_' + (currentUser.indexNumber||'student') + '_' + new Date().toISOString().slice(0,10) + '.pdf');
     showToastNotif('Report card downloaded!', 'success');
   } catch(e) { showToastNotif('Failed: ' + e.message, 'error'); }
 }
@@ -16586,7 +13151,7 @@ async function generateCertificate(courseId, courseTitle) {
     doc.setFontSize(8); doc.setTextColor(199,210,254);
     doc.text('dikly.sbs', W/2, H-16, { align: 'center' });
 
-    await downloadBlob(doc.output('blob'), 'DIKLY_Certificate_' + (courseTitle||'course').replace(/[^a-z0-9]/gi,'_') + '.pdf');
+    doc.save('DIKLY_Certificate_' + (courseTitle||'course').replace(/[^a-z0-9]/gi,'_') + '.pdf');
     showToastNotif('Certificate downloaded!', 'success');
   } catch(e) { showToastNotif('Failed: ' + e.message, 'error'); }
 }
@@ -16629,13 +13194,12 @@ function toggleMobileSidebar() {
   if (isOpen) {
     closeMobileSidebar();
   } else {
+    // 'sidebar-force-open' class beats display:none !important via specificity
     sidebar.classList.add('sidebar-force-open');
     requestAnimationFrame(() => {
       sidebar.classList.add('open');
       overlay.classList.add('active');
-      // Lock .content (the SPA scroll container) — body is never the scroller here
-      const content = document.querySelector('.content');
-      if (content) content.style.overflowY = 'hidden';
+      document.body.style.overflow = 'hidden';
     });
   }
 }
@@ -16645,6 +13209,7 @@ function closeMobileSidebar() {
   const overlay = document.getElementById('sidebar-overlay');
   if (sidebar) {
     sidebar.classList.remove('open');
+    // Remove force-show class after transition completes
     setTimeout(() => {
       if (!sidebar.classList.contains('open')) {
         sidebar.classList.remove('sidebar-force-open');
@@ -16652,57 +13217,14 @@ function closeMobileSidebar() {
     }, 300);
   }
   if (overlay) overlay.classList.remove('active');
-  const content = document.querySelector('.content');
-  if (content) content.style.overflowY = '';
+  document.body.style.overflow = '';
 }
-
-// ── iOS Safari scroll fix for mobile sidebar ──────────────────────────────────
-// On iOS, touch-scroll events on fixed elements propagate to the underlying page.
-// We intercept touchmove on the sidebar-nav and on the overlay separately:
-//   • sidebar-nav: allow scroll, but stop propagation so page doesn't move
-//   • overlay: block scroll entirely (tapping overlay closes sidebar)
-(function initSidebarScrollFix() {
-  let _touchStartY = 0;
-
-  document.addEventListener('touchstart', (e) => {
-    if (e.target.closest('.sidebar-nav')) {
-      _touchStartY = e.touches[0].clientY;
-    }
-  }, { passive: true });
-
-  document.addEventListener('touchmove', (e) => {
-    const nav = e.target.closest('.sidebar-nav');
-    if (nav) {
-      // Allow scroll within the nav, but stop it reaching the page
-      const atTop    = nav.scrollTop === 0;
-      const atBottom = nav.scrollTop + nav.clientHeight >= nav.scrollHeight;
-      const movingUp = e.touches[0].clientY < _touchStartY;   // finger going up = scroll down
-      const movingDn = e.touches[0].clientY > _touchStartY;   // finger going down = scroll up
-      if ((atTop && movingDn) || (atBottom && movingUp)) {
-        // At boundary — prevent rubber-banding into the page
-        e.preventDefault();
-      }
-      // Otherwise let the nav scroll naturally but stop propagation
-      e.stopPropagation();
-      return;
-    }
-    // Anywhere on the overlay (outside the sidebar) — block scroll entirely
-    if (e.target.closest('.sidebar-overlay') || e.target.closest('.sidebar-force-open')) {
-      const inSidebar = e.target.closest('.sidebar');
-      if (!inSidebar) e.preventDefault();
-    }
-  }, { passive: false });
-})();
 
 // Close sidebar when a nav item is tapped on mobile
 document.addEventListener('click', (e) => {
   const navLink = e.target.closest('.sidebar-nav a');
   if (navLink && window.innerWidth <= 768) {
     closeMobileSidebar();
-  }
-  // Close notification panel when clicking outside of it
-  if (_notifPanelOpen && !e.target.closest('#notif-panel') && !e.target.closest('#notif-bell-btn')) {
-    closeNotifPanel();
   }
 });
 
@@ -16735,7 +13257,6 @@ function buildBottomNav(role) {
     dashboard:       '<rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/>',
     sessions:        '<circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>',
     quizzes:         '<path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><rect x="8" y="2" width="8" height="4" rx="1"/><path d="M9 14l2 2 4-4"/>',
-    'quiz-monitor':  '<path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7z"/><circle cx="12" cy="12" r="3"/><circle cx="12" cy="12" r="1" fill="red"/>',
     reports:         '<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/>',
     subscription:    '<rect x="1" y="4" width="22" height="16" rx="2"/><line x1="1" y1="10" x2="23" y2="10"/>',
     users:           '<path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/>',
@@ -16768,9 +13289,7 @@ function buildBottomNav(role) {
     'hod-students': 'Students', 'hod-reports': 'Reports',
     'sign-in-out': 'Sign In/Out', 'my-attendance': 'Attendance',
     'mark-attendance': 'Attendance', subscription: 'Subscribe',
-    announcements: 'Notices', assignments: 'Assignment',
-    quizzes: 'Proctored/Snap Quiz',
-    'quiz-monitor': 'Quiz Monitor',
+    announcements: 'Notices', assignments: 'Assignments',
   };
 
   const priority = PRIORITY[role] || ['dashboard', 'sessions', 'reports'];
@@ -16891,7 +13410,7 @@ function openAIQuizPanel(quizId) {
           </div>
           <div>
             <h3 style="font-size:16px;font-weight:700;margin:0">AI Question Generator</h3>
-            <p style="font-size:12px;color:var(--text-muted);margin:0">Powered by Dikly AI</p>
+            <p style="font-size:12px;color:var(--text-muted);margin:0">Powered by Claude AI</p>
           </div>
         </div>
         <button onclick="document.getElementById('ai-quiz-overlay').remove()" style="width:28px;height:28px;border-radius:7px;border:1px solid var(--border);background:var(--bg);cursor:pointer;font-size:14px;display:flex;align-items:center;justify-content:center">✕</button>
@@ -17852,7 +14371,7 @@ async function _caLoadSettings() {
         </div>
 
         <button class="btn btn-primary" style="margin-top:20px" onclick="_caSaveSettings()">Save Settings</button>
-        <button class="btn btn-secondary btn-sm" style="margin-top:20px;margin-left:8px" onclick="_caDetectMyIP(true)">📡 Detect My IP</button>
+        <button class="btn btn-secondary btn-sm" style="margin-top:20px;margin-left:8px" onclick="_caDetectMyIP()">📡 Detect My IP</button>
       </div>
 
       <div class="card" style="max-width:560px">
@@ -17922,23 +14441,13 @@ async function _caClearClockWindow() {
   await _caSaveClockWindow();
 }
 
-async function _caDetectMyIP(addToInput = false) {
-  const el  = document.getElementById('cas-myip');
-  const inp = document.getElementById('cas-ips');
+async function _caDetectMyIP() {
+  const el = document.getElementById('cas-myip');
   if (!el) return;
   try {
-    const d = await api('/api/corporate-attendance/my-ip');
-    const ip = d.ip || 'unknown';
-    el.textContent = ip;
-    if (addToInput && inp && ip !== 'unknown') {
-      const existing = inp.value.split(',').map(s => s.trim()).filter(Boolean);
-      if (!existing.includes(ip)) {
-        inp.value = [...existing, ip].join(', ');
-        toastSuccess(`IP ${ip} added to the allowed list — click Save Settings to apply`);
-      } else {
-        toastInfo(`IP ${ip} is already in the list`);
-      }
-    }
+    const r = await fetch('https://api.ipify.org?format=json');
+    const d = await r.json();
+    el.textContent = d.ip || 'unknown';
   } catch { el.textContent = 'unavailable'; }
 }
 
@@ -17964,109 +14473,6 @@ async function _caSaveSettings() {
 }
 
 // ── SHIFTS (Admin/Manager) ─────────────────────────────────────────────────
-// ── Corporate Clock In/Out Settings (direct admin page) ───────────────────
-async function renderCorpClockSettings() {
-  const content = document.getElementById('main-content');
-  if (!content) return;
-  content.innerHTML = '<div class="loading">Loading settings…</div>';
-  try {
-    const [s, win] = await Promise.all([
-      api('/api/corporate-attendance/settings').catch(() => ({})),
-      api('/api/corporate-attendance/clock-window').catch(() => ({})),
-    ]);
-
-    content.innerHTML = `
-      <div class="page-header" style="display:flex;align-items:flex-start;justify-content:space-between;flex-wrap:wrap;gap:12px;">
-        <div>
-          <h2>Clock In / Out Settings</h2>
-          <p>Configure attendance restrictions and allowed clock-in/out time windows.</p>
-        </div>
-        <button class="btn btn-secondary btn-sm" onclick="navigateTo('corp-attendance')">← Team Attendance</button>
-      </div>
-
-      <div class="card" style="max-width:600px;margin-bottom:20px">
-        <h3 style="font-size:15px;font-weight:700;margin-bottom:4px">Strict Attendance Settings</h3>
-        <p style="font-size:12px;color:var(--text-light);margin-bottom:18px">Employees can only clock in when on company WiFi AND inside the office geofence.</p>
-        <div style="display:flex;align-items:center;justify-content:space-between;padding:12px 0;border-bottom:1px solid var(--border)">
-          <div>
-            <div style="font-weight:600;font-size:13px">Require Company WiFi</div>
-            <div style="font-size:11px;color:var(--text-light)">Employees must be on the company IP range to clock in</div>
-          </div>
-          <label style="display:flex;align-items:center;gap:8px;cursor:pointer">
-            <input type="checkbox" id="cas-require-wifi" ${s.requireWifi ? 'checked' : ''} style="width:16px;height:16px;cursor:pointer">
-          </label>
-        </div>
-        <div style="display:flex;align-items:center;justify-content:space-between;padding:12px 0;border-bottom:1px solid var(--border)">
-          <div>
-            <div style="font-weight:600;font-size:13px">Require Geofence</div>
-            <div style="font-size:11px;color:var(--text-light)">Employees must be within the office location radius</div>
-          </div>
-          <label style="display:flex;align-items:center;gap:8px;cursor:pointer">
-            <input type="checkbox" id="cas-require-geo" ${s.requireGeofence ? 'checked' : ''} style="width:16px;height:16px;cursor:pointer">
-          </label>
-        </div>
-        <div style="padding:12px 0;border-bottom:1px solid var(--border)">
-          <div style="font-weight:600;font-size:13px;margin-bottom:6px">Allowed IP Addresses</div>
-          <div style="font-size:11px;color:var(--text-light);margin-bottom:8px">Comma-separated list of allowed IPs (leave blank to allow all)</div>
-          <input id="cas-ips" value="${esc((s.allowedIPs||[]).join(', '))}" placeholder="e.g. 192.168.1.1, 10.0.0.1" style="width:100%;padding:8px 10px;border:1px solid var(--border);border-radius:6px;font-size:13px;font-family:monospace">
-          <div style="margin-top:6px;display:flex;align-items:center;gap:8px;font-size:12px;color:var(--text-muted)">
-            My current IP: <strong id="cas-myip">—</strong>
-            <button onclick="_caDetectMyIP(true)" style="background:#f1f5f9;border:none;border-radius:6px;padding:2px 8px;font-size:11px;cursor:pointer">Detect &amp; Add</button>
-          </div>
-        </div>
-        <div style="padding:12px 0">
-          <div style="font-weight:600;font-size:13px;margin-bottom:6px">Geofence</div>
-          <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:8px">
-            <div>
-              <label style="font-size:11px;font-weight:700;text-transform:uppercase;color:var(--text-muted)">Latitude</label>
-              <input id="cas-lat" type="number" step="any" value="${s.geofence?.lat||''}" placeholder="e.g. 5.6037" style="width:100%;padding:8px;border:1px solid var(--border);border-radius:6px;font-size:13px">
-            </div>
-            <div>
-              <label style="font-size:11px;font-weight:700;text-transform:uppercase;color:var(--text-muted)">Longitude</label>
-              <input id="cas-lng" type="number" step="any" value="${s.geofence?.lng||''}" placeholder="e.g. -0.1870" style="width:100%;padding:8px;border:1px solid var(--border);border-radius:6px;font-size:13px">
-            </div>
-          </div>
-          <div>
-            <label style="font-size:11px;font-weight:700;text-transform:uppercase;color:var(--text-muted)">Radius (metres)</label>
-            <input id="cas-radius" type="number" value="${s.geofence?.radius||100}" placeholder="100" style="width:120px;padding:8px;border:1px solid var(--border);border-radius:6px;font-size:13px">
-          </div>
-        </div>
-        <button class="btn btn-primary" onclick="_caSaveSettings()" style="margin-top:8px">Save Attendance Settings</button>
-      </div>
-
-      <div class="card" style="max-width:600px">
-        <h3 style="font-size:15px;font-weight:700;margin-bottom:4px">Clock-In / Clock-Out Time Windows</h3>
-        <p style="font-size:12px;color:var(--text-light);margin-bottom:18px">Restrict the times of day when employees can clock in or out. Leave blank for no restriction.</p>
-        <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:16px">
-          <div>
-            <div style="font-weight:700;font-size:13px;margin-bottom:8px;color:#0891b2">Clock-In Window</div>
-            <div style="display:flex;gap:8px;align-items:center;margin-bottom:6px">
-              <input type="time" id="cw-ci-start" value="${win.clockIn?.start||''}" style="flex:1;padding:7px;border:1px solid var(--border);border-radius:6px;font-size:13px">
-              <span style="color:var(--text-muted)">to</span>
-              <input type="time" id="cw-ci-end"   value="${win.clockIn?.end  ||''}" style="flex:1;padding:7px;border:1px solid var(--border);border-radius:6px;font-size:13px">
-            </div>
-          </div>
-          <div>
-            <div style="font-weight:700;font-size:13px;margin-bottom:8px;color:#7c3aed">Clock-Out Window</div>
-            <div style="display:flex;gap:8px;align-items:center;margin-bottom:6px">
-              <input type="time" id="cw-co-start" value="${win.clockOut?.start||''}" style="flex:1;padding:7px;border:1px solid var(--border);border-radius:6px;font-size:13px">
-              <span style="color:var(--text-muted)">to</span>
-              <input type="time" id="cw-co-end"   value="${win.clockOut?.end  ||''}" style="flex:1;padding:7px;border:1px solid var(--border);border-radius:6px;font-size:13px">
-            </div>
-          </div>
-        </div>
-        <div style="display:flex;gap:8px;flex-wrap:wrap">
-          <button class="btn btn-primary" onclick="_caSaveClockWindow()">Save Time Windows</button>
-          <button class="btn btn-secondary" onclick="_caClearClockWindow()">Clear All Windows</button>
-        </div>
-      </div>`;
-
-    _caDetectMyIP(false);
-  } catch(e) {
-    content.innerHTML = `<div class="card"><p style="color:var(--danger)">${esc(e.message)}</p></div>`;
-  }
-}
-
 async function renderShifts() {
   const content = document.getElementById('main-content');
   if (!content) return;
@@ -18614,58 +15020,6 @@ async function renderEmpNotifications() {
                 <div style="font-size:12px;color:var(--text-muted);line-height:1.5">${esc(n.body)}</div>
               </div>
               ${n.action ? `<button class="btn btn-sm" style="background:var(--card);border:1px solid var(--border);flex-shrink:0;font-size:12px" onclick="${n.action.fn}">${n.action.label}</button>` : ''}
-            </div>`;
-          }).join('')}
-    `;
-  } catch(e) {
-    content.innerHTML = `<div class="card"><p style="color:#ef4444">Error: ${e.message}</p></div>`;
-  }
-}
-
-// ── Universal Notifications page (all roles) ─────────────────────────────────
-async function renderAllNotifications() {
-  const content = document.getElementById('main-content');
-  if (!content) return;
-  content.innerHTML = '<div class="loading">Loading notifications…</div>';
-  try {
-    const d = await api('/api/notifications?limit=50');
-    const notifs = d.notifications || [];
-    const typeStyles = {
-      ok:      { bg: '#f0fdf4', border: '#86efac' },
-      success: { bg: '#f0fdf4', border: '#86efac' },
-      warn:    { bg: '#fffbeb', border: '#fde68a' },
-      warning: { bg: '#fffbeb', border: '#fde68a' },
-      error:   { bg: '#fef2f2', border: '#fca5a5' },
-      info:    { bg: '#eff6ff', border: '#bfdbfe' },
-    };
-    const iconFor = t => t === 'ok' || t === 'success' ? '✅' : t === 'warn' || t === 'warning' ? '⚠️' : t === 'error' ? '❌' : '🔔';
-    const timeAgo = iso => {
-      const s = Math.floor((Date.now() - new Date(iso)) / 1000);
-      if (s < 60) return 'Just now';
-      if (s < 3600) return `${Math.floor(s/60)}m ago`;
-      if (s < 86400) return `${Math.floor(s/3600)}h ago`;
-      return new Date(iso).toLocaleDateString('en-GB', { day:'2-digit', month:'short' });
-    };
-    content.innerHTML = `
-      <div class="page-header">
-        <div><h2>Notifications</h2><p>${notifs.length} notification${notifs.length !== 1 ? 's' : ''}</p></div>
-        <button class="btn btn-secondary btn-sm" onclick="markAllNotifsRead();this.disabled=true;this.textContent='Marked'">Mark all read</button>
-      </div>
-      ${notifs.length === 0
-        ? `<div class="card" style="text-align:center;padding:48px 24px">
-            <div style="font-size:40px;margin-bottom:16px">🔔</div>
-            <div style="font-weight:600;font-size:15px;margin-bottom:6px">All clear!</div>
-            <p style="color:var(--text-muted);font-size:13px">No notifications right now.</p>
-          </div>`
-        : notifs.map(n => {
-            const st = typeStyles[n.type] || typeStyles.info;
-            return `<div style="background:${st.bg};border:1px solid ${st.border};border-radius:10px;padding:14px 16px;margin-bottom:10px;display:flex;gap:12px;align-items:flex-start${n.read ? ';opacity:0.7' : ''}">
-              <span style="font-size:20px;flex-shrink:0;margin-top:1px">${iconFor(n.type)}</span>
-              <div style="flex:1;min-width:0">
-                <div style="font-weight:700;font-size:13px;margin-bottom:3px">${esc(n.title || '')}</div>
-                <div style="font-size:12px;color:var(--text-muted);line-height:1.5">${esc(n.body || n.message || '')}</div>
-                <div style="font-size:11px;color:var(--text-light);margin-top:4px">${n.createdAt ? timeAgo(n.createdAt) : ''}</div>
-              </div>
             </div>`;
           }).join('')}
     `;
@@ -21454,74 +17808,6 @@ async function deleteBranch(id) {
 }
 
 // ══════════════════════════════════════════════════════════════
-// AUDIT LOGS (manager + admin view)
-// ══════════════════════════════════════════════════════════════
-async function renderAuditLogs() {
-  const content = document.getElementById('main-content');
-  if (!content) return;
-  content.innerHTML = '<div class="loading">Loading audit logs…</div>';
-  try {
-    const params = new URLSearchParams({ limit: 50 });
-    const data = await api('/api/audit-logs?' + params.toString());
-    const logs = data.logs || data.data || [];
-    const total = data.total || logs.length;
-
-    const severityColor = s => ({ critical: '#dc2626', high: '#ea580c', medium: '#d97706', low: '#2563eb', info: '#6b7280' }[s] || '#6b7280');
-    const severityBg    = s => ({ critical: '#fef2f2', high: '#fff7ed', medium: '#fffbeb', low: '#eff6ff', info: '#f9fafb' }[s] || '#f9fafb');
-
-    content.innerHTML = `
-      <div style="max-width:900px;margin:0 auto">
-        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px;flex-wrap:wrap;gap:10px">
-          <div>
-            <h2 style="font-size:20px;font-weight:800;margin:0 0 2px">Audit Logs</h2>
-            <p style="color:#64748b;font-size:13px;margin:0">${total.toLocaleString()} records</p>
-          </div>
-          <div style="display:flex;gap:8px;flex-wrap:wrap">
-            <select id="al-severity" onchange="renderAuditLogs()" style="padding:7px 10px;border:1.5px solid #e2e8f0;border-radius:8px;font-size:13px">
-              <option value="">All severities</option>
-              <option value="critical">Critical</option>
-              <option value="high">High</option>
-              <option value="medium">Medium</option>
-              <option value="low">Low</option>
-              <option value="info">Info</option>
-            </select>
-            <input id="al-from" type="date" onchange="renderAuditLogs()" style="padding:7px 10px;border:1.5px solid #e2e8f0;border-radius:8px;font-size:13px">
-            <input id="al-to"   type="date" onchange="renderAuditLogs()" style="padding:7px 10px;border:1.5px solid #e2e8f0;border-radius:8px;font-size:13px">
-          </div>
-        </div>
-
-        ${!logs.length ? `
-          <div style="text-align:center;padding:48px;background:#f8fafc;border-radius:14px;border:1.5px dashed #e2e8f0">
-            <div style="font-size:36px;margin-bottom:10px">📋</div>
-            <p style="font-weight:700;margin-bottom:4px">No audit logs found</p>
-            <p style="color:#64748b;font-size:13px">Actions taken in the system will appear here.</p>
-          </div>` : `
-          <div style="display:flex;flex-direction:column;gap:8px">
-            ${logs.map(log => `
-              <div style="background:#fff;border:1.5px solid #e2e8f0;border-left:4px solid ${severityColor(log.severity)};border-radius:10px;padding:12px 16px">
-                <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:10px;flex-wrap:wrap">
-                  <div style="flex:1;min-width:0">
-                    <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px;flex-wrap:wrap">
-                      <span style="font-size:11px;font-weight:700;padding:2px 8px;border-radius:999px;background:${severityBg(log.severity)};color:${severityColor(log.severity)}">${(log.severity || 'info').toUpperCase()}</span>
-                      <span style="font-size:12px;font-weight:700;color:#1e293b">${esc(log.action || '—')}</span>
-                      ${log.resource ? `<span style="font-size:11px;color:#64748b">${esc(log.resource)}</span>` : ''}
-                    </div>
-                    <div style="font-size:13px;color:#334155">${esc(log.description || log.details || '—')}</div>
-                    ${log.actor?.name ? `<div style="font-size:12px;color:#64748b;margin-top:4px">By <strong>${esc(log.actor.name)}</strong>${log.actor.email ? ` (${esc(log.actor.email)})` : ''}</div>` : ''}
-                  </div>
-                  <div style="font-size:11px;color:#94a3b8;white-space:nowrap">${log.createdAt ? new Date(log.createdAt).toLocaleString() : '—'}</div>
-                </div>
-              </div>`).join('')}
-          </div>
-          ${total > 50 ? `<p style="text-align:center;color:#64748b;font-size:13px;margin-top:16px">Showing 50 of ${total.toLocaleString()} entries. Use filters to narrow results.</p>` : ''}
-        `}
-      </div>`;
-  } catch(e) {
-    content.innerHTML = `<div style="color:#dc2626;padding:20px">Error loading audit logs: ${esc(e.message)}</div>`;
-  }
-}
-
-// ══════════════════════════════════════════════════════════════
 // WHITE-LABEL BRANDING
 // ══════════════════════════════════════════════════════════════
 async function renderBranding() {
@@ -21770,9 +18056,9 @@ async function viewMeetingAttendance(meetingId, title) {
   container.innerHTML = '<div class="modal-overlay" onclick="closeModal(event)"><div class="modal" onclick="event.stopPropagation()" style="max-width:700px;width:95%"><div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px"><h3 style="margin:0">Meeting Attendance</h3><button onclick="closeModal()" style="background:none;border:none;font-size:20px;cursor:pointer">×</button></div><div id="meeting-attendance-body"><div class="loading">Loading...</div></div></div></div>';
 
   try {
-    const data = await api('/api/meetings/' + meetingId + '/attendance');
-    const attendance = (data.data || data.attendance || []);
-    const total = data.total || attendance.length;
+    const data = await api('/api/zoom/' + meetingId + '/attendance');
+    const attendance = data.attendance || [];
+    const total = data.total || 0;
     const statusColor = { present: '#22c55e', partial: '#f59e0b', absent: '#ef4444' };
 
     let rows = '';
@@ -21789,7 +18075,7 @@ async function viewMeetingAttendance(meetingId, title) {
     }
 
     const token = localStorage.getItem('token') || localStorage.getItem('dikly_token') || '';
-    const csvUrl = '/api/meetings/' + meetingId + '/attendance/pdf?token=' + token;
+    const csvUrl = '/api/zoom/' + meetingId + '/attendance/csv?token=' + token;
 
     let tableHtml = attendance.length
       ? '<table style="width:100%"><thead><tr><th>Name</th><th>Email / Index</th><th>Joined</th><th>Left</th><th>Duration</th><th>Status</th></tr></thead><tbody>' + rows + '</tbody></table>'
@@ -21811,8 +18097,8 @@ async function viewMeetingAttendance(meetingId, title) {
 
 async function printMeetingAttendance(meetingId, title) {
   try {
-    const data = await api('/api/meetings/' + meetingId + '/attendance');
-    const attendance = (data.data || data.attendance || []);
+    const data = await api('/api/zoom/' + meetingId + '/attendance');
+    const attendance = data.attendance || [];
     const statusColor = { present: '#22c55e', partial: '#f59e0b', absent: '#ef4444' };
 
     let rows = '';
@@ -22461,450 +18747,6 @@ async function submitHodRequest() {
     openConvo(c._id, others[0]?.user?.name || 'HOD', 'hod_request');
   } catch(e) {
     toastError(e.message || 'Failed to submit request');
-  }
-}
-
-// ── Course Videos ─────────────────────────────────────────────────────────────
-function renderCourseVideos() {
-  const content = document.getElementById('main-content');
-  if (!content) return;
-
-  const isLecturer = ['lecturer','admin','superadmin','hod'].includes(currentUser?.role);
-
-  if (isLecturer) {
-    content.innerHTML = `
-      <div class="page-header">
-        <div>
-          <h1 style="margin:0 0 .25rem">Course Videos</h1>
-          <p style="margin:0;color:var(--text-light);font-size:.9rem">Upload and manage video resources for your courses</p>
-        </div>
-      </div>
-
-      <div class="cv-lecturer-grid" style="display:grid;grid-template-columns:340px 1fr;gap:1.5rem;align-items:start">
-        <div class="card" style="position:sticky;top:1.5rem">
-          <div style="display:flex;align-items:center;gap:.6rem;margin-bottom:1.25rem;padding-bottom:1rem;border-bottom:1px solid var(--border)">
-            <div style="width:36px;height:36px;border-radius:8px;background:var(--primary-ultra-light,#eff6ff);display:flex;align-items:center;justify-content:center;flex-shrink:0">
-              ${svgIcon('<polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2" ry="2"/>', 18, 'var(--primary)')}
-            </div>
-            <div>
-              <h3 style="margin:0;font-size:1rem;font-weight:600">Add New Video</h3>
-              <p style="margin:0;font-size:.78rem;color:var(--text-light)">YouTube · Vimeo · Drive · Loom</p>
-            </div>
-          </div>
-          <div class="form-group">
-            <label>Course</label>
-            <select id="cv-course-sel"><option value="">Loading courses…</option></select>
-          </div>
-          <div class="form-group">
-            <label>Video Title</label>
-            <input id="cv-title" placeholder="e.g. Introduction to Algebra">
-          </div>
-          <div class="form-group">
-            <label>Description <span style="color:var(--text-muted);font-weight:400">(optional)</span></label>
-            <input id="cv-desc" placeholder="Brief description of the video">
-          </div>
-          <div class="form-group" style="margin-bottom:1.25rem">
-            <label>Video URL</label>
-            <input id="cv-url" placeholder="Paste a YouTube, Vimeo, Drive or Loom link">
-          </div>
-          <button class="btn btn-primary" style="width:100%" onclick="cvAddVideo()">
-            ${svgIcon('<line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>', 15)}
-            Add Video
-          </button>
-        </div>
-
-        <div id="cv-list-area">
-          <div class="empty-state" style="padding:3rem 1rem">
-            ${svgIcon('<rect x="2" y="2" width="20" height="20" rx="2.18" ry="2.18"/><line x1="7" y1="2" x2="7" y2="22"/><line x1="17" y1="2" x2="17" y2="22"/><line x1="2" y1="12" x2="22" y2="12"/><line x1="2" y1="7" x2="7" y2="7"/><line x1="17" y1="7" x2="22" y2="7"/><line x1="17" y1="17" x2="22" y2="17"/><line x1="2" y1="17" x2="7" y2="17"/>', 40, 'var(--text-muted)')}
-            <p style="margin:.75rem 0 0;font-size:.9rem">Select a course to see its videos</p>
-          </div>
-        </div>
-      </div>`;
-
-    _cvLoadCourses();
-  } else {
-    content.innerHTML = `
-      <div class="page-header">
-        <div>
-          <h1 style="margin:0 0 .25rem">Course Videos</h1>
-          <p style="margin:0;color:var(--text-light);font-size:.9rem">Watch video resources shared by your lecturers</p>
-        </div>
-      </div>
-      <div id="cv-body">
-        <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:1rem">
-          ${Array(6).fill(0).map(() => `<div class="card" style="padding:0;overflow:hidden;">
-            <div style="aspect-ratio:16/9;background:var(--border);animation:pulse 1.5s ease-in-out infinite"></div>
-            <div style="padding:.75rem">
-              <div style="height:13px;background:var(--border);border-radius:4px;margin-bottom:.5rem;width:75%;animation:pulse 1.5s ease-in-out infinite"></div>
-              <div style="height:11px;background:var(--border);border-radius:4px;width:50%;animation:pulse 1.5s ease-in-out infinite"></div>
-            </div>
-          </div>`).join('')}
-        </div>
-      </div>`;
-    _renderStudentVideos();
-  }
-}
-
-async function _cvLoadCourses() {
-  const sel = document.getElementById('cv-course-sel');
-  if (!sel) return;
-  try {
-    const d = await api('/api/courses');
-    const courses = (d && d.courses) ? d.courses : [];
-    if (!courses.length) {
-      sel.innerHTML = '<option value="">No courses found — create a course first</option>';
-      return;
-    }
-    sel.innerHTML = courses.map(c =>
-      `<option value="${c._id}">${escHtml(c.title)}${c.code ? ' (' + escHtml(c.code) + ')' : ''}</option>`
-    ).join('');
-    sel.addEventListener('change', () => cvLoadList(sel.value));
-    cvLoadList(sel.value);
-  } catch(e) {
-    if (sel) sel.innerHTML = `<option value="">Error: ${escHtml(e.message)}</option>`;
-  }
-}
-
-async function cvLoadList(courseId) {
-  if (!courseId) return;
-  const area = document.getElementById('cv-list-area');
-  if (!area) return;
-  area.innerHTML = `<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:1rem">${
-    Array(3).fill(0).map(() => `<div class="card" style="padding:0;overflow:hidden;animation:pulse 1.5s ease-in-out infinite">
-      <div style="aspect-ratio:16/9;background:var(--border)"></div>
-      <div style="padding:.85rem">
-        <div style="height:14px;background:var(--border);border-radius:4px;margin-bottom:.5rem;width:75%"></div>
-        <div style="height:11px;background:var(--border);border-radius:4px;width:50%"></div>
-      </div>
-    </div>`).join('')
-  }</div>`;
-  try {
-    const d = await api(`/api/course-videos/${courseId}`);
-    const videos = d.videos || [];
-    if (!videos.length) {
-      area.innerHTML = `<div class="empty-state" style="padding:3rem 1rem">
-        ${svgIcon('<circle cx="12" cy="12" r="10"/><polygon points="10 8 16 12 10 16 10 8"/>', 40, 'var(--text-muted)')}
-        <p style="margin:.75rem 0 0;font-size:.9rem">No videos yet for this course</p>
-      </div>`;
-      return;
-    }
-    const platformColors = { youtube:'#ff0000', vimeo:'#1ab7ea', googledrive:'#34a853', loom:'#625df5' };
-    area.innerHTML = `<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:1rem">${
-      videos.map(v => {
-        const color = platformColors[(v.platform||'').toLowerCase()] || 'var(--primary)';
-        return `<div class="card" style="padding:0;overflow:hidden;cursor:pointer;transition:transform .15s,box-shadow .15s" onmouseover="this.style.transform='translateY(-3px)';this.style.boxShadow='var(--shadow-lg)'" onmouseout="this.style.transform='';this.style.boxShadow=''">
-          <div style="position:relative;aspect-ratio:16/9;background:#0d1117;overflow:hidden" onclick="cvWatchVideo(${JSON.stringify(v.embedUrl)},${JSON.stringify(v.title)})">
-            ${v.thumbnail
-              ? `<img src="${escHtml(v.thumbnail)}" style="width:100%;height:100%;object-fit:cover;display:block">`
-              : `<div style="width:100%;height:100%;display:flex;align-items:center;justify-content:center;background:linear-gradient(135deg,#1e293b,#334155)">${svgIcon('<circle cx="12" cy="12" r="10"/><polygon points="10 8 16 12 10 16 10 8"/>', 36, 'rgba(255,255,255,.4)')}</div>`}
-            <div style="position:absolute;inset:0;background:rgba(0,0,0,.35);display:flex;align-items:center;justify-content:center;opacity:0;transition:opacity .15s" onmouseover="this.style.opacity=1" onmouseout="this.style.opacity=0">
-              <div style="width:44px;height:44px;border-radius:50%;background:rgba(255,255,255,.95);display:flex;align-items:center;justify-content:center">
-                ${svgIcon('<polygon points="5 3 19 12 5 21 5 3"/>', 18, '#1e293b')}
-              </div>
-            </div>
-            <div style="position:absolute;top:.5rem;left:.5rem;background:${color};color:#fff;font-size:.65rem;font-weight:600;letter-spacing:.04em;text-transform:uppercase;padding:.2rem .45rem;border-radius:4px;line-height:1.4">${escHtml(v.platform||'video')}</div>
-          </div>
-          <div style="padding:.85rem">
-            <p style="margin:0 0 .25rem;font-weight:600;font-size:.88rem;line-height:1.4;overflow:hidden;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical">${escHtml(v.title)}</p>
-            ${v.description ? `<p style="margin:0 0 .75rem;font-size:.78rem;color:var(--text-light);overflow:hidden;display:-webkit-box;-webkit-line-clamp:1;-webkit-box-orient:vertical">${escHtml(v.description)}</p>` : '<div style="margin-bottom:.75rem"></div>'}
-            <div style="display:flex;gap:.5rem">
-              <button class="btn btn-sm btn-primary" style="flex:1;font-size:.78rem" onclick="cvWatchVideo(${JSON.stringify(v.embedUrl)},${JSON.stringify(v.title)})">
-                ${svgIcon('<polygon points="5 3 19 12 5 21 5 3"/>', 12)} Watch
-              </button>
-              <button class="btn btn-sm btn-ghost" style="padding:.35rem .55rem;color:var(--error);border-color:var(--border)" onclick="cvDeleteVideo('${v._id}','${escHtml(courseId)}')" title="Delete">
-                ${svgIcon('<polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4h6v2"/>', 14, 'var(--error)')}
-              </button>
-            </div>
-          </div>
-        </div>`;
-      }).join('')
-    }</div>`;
-  } catch(e) {
-    area.innerHTML = `<div class="empty-state"><p style="color:var(--error)">${escHtml(e.message)}</p></div>`;
-  }
-}
-
-window.cvAddVideo = async function() {
-  const courseId = document.getElementById('cv-course-sel')?.value;
-  const title    = document.getElementById('cv-title')?.value?.trim();
-  const desc     = document.getElementById('cv-desc')?.value?.trim();
-  const url      = document.getElementById('cv-url')?.value?.trim();
-  if (!courseId || !title || !url) { toastError('Course, title and URL are required'); return; }
-  try {
-    await api('/api/course-videos', { method: 'POST', body: JSON.stringify({ courseId, title, description: desc, url }) });
-    document.getElementById('cv-title').value = '';
-    document.getElementById('cv-desc').value  = '';
-    document.getElementById('cv-url').value   = '';
-    toastSuccess('Video added');
-    cvLoadList(courseId);
-  } catch(e) { toastError(e.message); }
-};
-
-window.cvDeleteVideo = async function(id, courseId) {
-  if (!confirm('Delete this video?')) return;
-  try {
-    await api(`/api/course-videos/${id}`, { method: 'DELETE' });
-    toastSuccess('Deleted');
-    cvLoadList(courseId);
-  } catch(e) { toastError(e.message); }
-};
-
-window.cvWatchVideo = function(embedUrl, title) {
-  const overlay = document.createElement('div');
-  overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.88);z-index:9999;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:1rem;backdrop-filter:blur(4px)';
-  overlay.innerHTML = `
-    <div style="width:100%;max-width:940px;animation:fadeIn .2s ease">
-      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:.85rem">
-        <div style="display:flex;align-items:center;gap:.6rem;min-width:0">
-          <div style="width:32px;height:32px;border-radius:6px;background:rgba(255,255,255,.12);display:flex;align-items:center;justify-content:center;flex-shrink:0">
-            ${svgIcon('<polygon points="5 3 19 12 5 21 5 3"/>', 14, '#fff')}
-          </div>
-          <h3 style="color:#fff;margin:0;font-size:1rem;font-weight:600;overflow:hidden;white-space:nowrap;text-overflow:ellipsis">${escHtml(title)}</h3>
-        </div>
-        <button id="cv-close-btn" style="background:rgba(255,255,255,.12);border:none;color:#fff;width:34px;height:34px;border-radius:8px;cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0;margin-left:.75rem;transition:background .15s" onmouseover="this.style.background='rgba(255,255,255,.22)'" onmouseout="this.style.background='rgba(255,255,255,.12)'">
-          ${svgIcon('<line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>', 16, '#fff')}
-        </button>
-      </div>
-      <div style="position:relative;padding-bottom:56.25%;height:0;overflow:hidden;border-radius:12px;background:#000;box-shadow:0 24px 60px rgba(0,0,0,.6)">
-        <iframe src="${escHtml(embedUrl)}" style="position:absolute;top:0;left:0;width:100%;height:100%;border:0" allow="accelerometer;autoplay;clipboard-write;encrypted-media;gyroscope;picture-in-picture" allowfullscreen></iframe>
-      </div>
-      <p style="color:rgba(255,255,255,.45);text-align:center;font-size:.75rem;margin:.75rem 0 0">Click outside or press Esc to close</p>
-    </div>`;
-  document.body.appendChild(overlay);
-  const close = () => { overlay.style.opacity='0'; overlay.style.transition='opacity .15s'; setTimeout(() => overlay.remove(), 150); };
-  overlay.querySelector('#cv-close-btn').onclick = close;
-  overlay.addEventListener('click', e => { if (e.target === overlay) close(); });
-  const onKey = e => { if (e.key === 'Escape') { close(); document.removeEventListener('keydown', onKey); } };
-  document.addEventListener('keydown', onKey);
-};
-
-async function _renderStudentVideos() {
-  const body = document.getElementById('cv-body');
-  if (!body) return;
-  try {
-    const d = await api('/api/course-videos/my-courses');
-    const courses = d.courses || [];
-    if (!courses.length) {
-      body.innerHTML = `<div class="empty-state" style="padding:4rem 1rem">
-        ${svgIcon('<circle cx="12" cy="12" r="10"/><polygon points="10 8 16 12 10 16 10 8"/>', 48, 'var(--text-muted)')}
-        <p style="margin:.75rem 0 .25rem;font-size:1rem;font-weight:600">No videos yet</p>
-        <p style="margin:0;font-size:.85rem;color:var(--text-light)">Your lecturers haven't added any videos for your courses.</p>
-      </div>`;
-      return;
-    }
-    const platformColors = { youtube:'#ff0000', vimeo:'#1ab7ea', googledrive:'#34a853', loom:'#625df5' };
-    body.innerHTML = courses.map(({ course, videos }) => `
-      <div style="margin-bottom:2rem">
-        <div style="display:flex;align-items:center;gap:.6rem;margin-bottom:1rem;padding-bottom:.75rem;border-bottom:1px solid var(--border)">
-          <div style="width:32px;height:32px;border-radius:8px;background:var(--primary-ultra-light,#eff6ff);display:flex;align-items:center;justify-content:center;flex-shrink:0">
-            ${svgIcon('<path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/>', 16, 'var(--primary)')}
-          </div>
-          <div>
-            <h3 style="margin:0;font-size:.95rem;font-weight:600">${escHtml(course?.title||'Unknown Course')}</h3>
-            ${course?.code ? `<p style="margin:0;font-size:.75rem;color:var(--text-light)">${escHtml(course.code)}</p>` : ''}
-          </div>
-          <span style="margin-left:auto;font-size:.75rem;color:var(--text-muted);font-weight:500">${videos.length} video${videos.length!==1?'s':''}</span>
-        </div>
-        <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:1rem">
-          ${videos.map(v => {
-            const color = platformColors[(v.platform||'').toLowerCase()] || 'var(--primary)';
-            return `<div class="card" style="padding:0;overflow:hidden;cursor:pointer;transition:transform .15s,box-shadow .15s" onclick="cvWatchVideo(${JSON.stringify(v.embedUrl)},${JSON.stringify(v.title)})" onmouseover="this.style.transform='translateY(-3px)';this.style.boxShadow='var(--shadow-lg)'" onmouseout="this.style.transform='';this.style.boxShadow=''">
-              <div style="position:relative;aspect-ratio:16/9;background:#0d1117;overflow:hidden">
-                ${v.thumbnail
-                  ? `<img src="${escHtml(v.thumbnail)}" style="width:100%;height:100%;object-fit:cover;display:block">`
-                  : `<div style="width:100%;height:100%;display:flex;align-items:center;justify-content:center;background:linear-gradient(135deg,#1e293b,#334155)">${svgIcon('<circle cx="12" cy="12" r="10"/><polygon points="10 8 16 12 10 16 10 8"/>', 32, 'rgba(255,255,255,.35)')}</div>`}
-                <div style="position:absolute;inset:0;background:rgba(0,0,0,.3);display:flex;align-items:center;justify-content:center">
-                  <div style="width:40px;height:40px;border-radius:50%;background:rgba(255,255,255,.92);display:flex;align-items:center;justify-content:center">
-                    ${svgIcon('<polygon points="5 3 19 12 5 21 5 3"/>', 16, '#1e293b')}
-                  </div>
-                </div>
-                <div style="position:absolute;top:.5rem;left:.5rem;background:${color};color:#fff;font-size:.62rem;font-weight:700;letter-spacing:.05em;text-transform:uppercase;padding:.18rem .42rem;border-radius:4px">${escHtml(v.platform||'video')}</div>
-              </div>
-              <div style="padding:.75rem">
-                <p style="margin:0;font-weight:600;font-size:.85rem;line-height:1.4;overflow:hidden;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical">${escHtml(v.title)}</p>
-                ${v.description ? `<p style="margin:.25rem 0 0;font-size:.75rem;color:var(--text-light);overflow:hidden;display:-webkit-box;-webkit-line-clamp:1;-webkit-box-orient:vertical">${escHtml(v.description)}</p>` : ''}
-              </div>
-            </div>`;
-          }).join('')}
-        </div>
-      </div>`).join('');
-  } catch(e) {
-    body.innerHTML = `<div class="empty-state"><p style="color:var(--error)">${escHtml(e.message)}</p></div>`;
-  }
-}
-
-// ── Class Rep: Announcements ──────────────────────────────────────────────────
-async function renderClassAnnouncements() {
-  const content = document.getElementById('main-content');
-  if (!content) return;
-  if (!currentUser.isClassRep) {
-    content.innerHTML = `<div class="card" style="text-align:center;padding:40px 20px">
-      <div style="font-size:36px;margin-bottom:12px">🔒</div>
-      <h3 style="font-size:16px;font-weight:700;margin-bottom:6px">Class Representatives Only</h3>
-      <p style="color:var(--text-muted);font-size:13px">Only designated class representatives can post class announcements.</p>
-    </div>`;
-    return;
-  }
-  content.innerHTML = '<div class="loading">Loading…</div>';
-
-  try {
-    const [annData] = await Promise.all([api('/api/announcements')]);
-    const allAnns = annData.announcements || [];
-    // Show announcements for this class group (posted by any class rep of the same group)
-    const classAnns = allAnns.filter(a => {
-      if (String(a.author?._id || a.author) === String(currentUser._id)) return true;
-      if (a.audience === 'class_group' && a.classGroup) {
-        return (
-          String(a.classGroup.studentLevel || '') === String(currentUser.studentLevel || '') &&
-          String(a.classGroup.studentGroup  || '') === String(currentUser.studentGroup  || '') &&
-          String(a.classGroup.sessionType   || '') === String(currentUser.sessionType   || '') &&
-          String(a.classGroup.semester      || '') === String(currentUser.semester      || '') &&
-          String(a.classGroup.programme     || '') === String(currentUser.programme     || '')
-        );
-      }
-      if (a.audience === 'course' && String(a.targetCourse) === String(currentUser.classRepCourse)) return true;
-      return false;
-    });
-
-    content.innerHTML = `
-      <div class="page-header" style="margin-bottom:20px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px">
-        <div>
-          <h2 style="font-size:22px;font-weight:800;letter-spacing:-.5px;color:#0f172a;margin-bottom:2px">Class Announcements</h2>
-          <p style="color:#64748b;font-size:13px">Post announcements visible only to your class group</p>
-        </div>
-        <button onclick="openClassRepAnnouncementModal()" style="display:inline-flex;align-items:center;gap:8px;padding:10px 18px;background:linear-gradient(135deg,#6366f1,#8b5cf6);color:#fff;border:none;border-radius:10px;font-size:14px;font-weight:600;cursor:pointer;box-shadow:0 4px 12px rgba(99,102,241,.35)">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
-          Post Announcement
-        </button>
-      </div>
-      <div id="class-ann-list">
-        ${classAnns.length === 0
-          ? `<div style="background:#fff;border:1px solid #e8eaed;border-radius:16px;padding:60px 20px;text-align:center">
-              <div style="font-size:40px;margin-bottom:12px">📢</div>
-              <h3 style="font-size:16px;font-weight:700;color:#0f172a;margin-bottom:6px">No announcements yet</h3>
-              <p style="color:#64748b;font-size:13px">Post your first announcement to your class group above.</p>
-            </div>`
-          : classAnns.map(a => `
-            <div style="background:#fff;border:1px solid #e8eaed;border-radius:14px;padding:20px 24px;margin-bottom:12px;box-shadow:0 1px 4px rgba(0,0,0,.05)">
-              <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:12px;margin-bottom:8px">
-                <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
-                  <span style="font-size:18px">${ANN_ICONS[a.type]||'ℹ️'}</span>
-                  <span style="font-weight:700;font-size:15px;color:#0f172a">${esc(a.title)}</span>
-                  <span style="background:#ede9fe;color:#7c3aed;font-size:11px;font-weight:600;padding:2px 8px;border-radius:20px">Class Group</span>
-                </div>
-                ${String(a.author?._id||a.author)===String(currentUser._id)
-                  ? `<button onclick="annDelete('${a._id}')" style="background:#fff;border:1px solid #fca5a5;color:#ef4444;border-radius:8px;padding:4px 10px;font-size:12px;cursor:pointer">Delete</button>`
-                  : ''}
-              </div>
-              <p style="color:#374151;font-size:14px;line-height:1.6;margin:0 0 8px">${esc(a.body)}</p>
-              <span style="color:#94a3b8;font-size:11px">${new Date(a.createdAt).toLocaleString()}</span>
-            </div>`).join('')
-        }
-      </div>`;
-  } catch(e) {
-    content.innerHTML = `<div class="card"><p style="color:var(--danger)">${esc(e.message)}</p></div>`;
-  }
-}
-
-function openClassRepAnnouncementModal() {
-  const container = document.getElementById('modal-container');
-  container.classList.remove('hidden');
-  container.innerHTML = `
-    <div class="modal-overlay" onclick="closeModal(event)">
-      <div class="modal" onclick="event.stopPropagation()" style="max-width:480px">
-        <h3 style="margin:0 0 18px;font-size:18px;font-weight:800">Post Class Announcement</h3>
-        <p style="color:#64748b;font-size:13px;margin:-10px 0 18px">This announcement will only be visible to students in your class group.</p>
-        <div class="form-group" style="margin-bottom:14px">
-          <label style="font-size:13px;font-weight:600;color:#374151;display:block;margin-bottom:6px">Title <span style="color:red">*</span></label>
-          <input id="cr-ann-title" type="text" placeholder="Announcement title…" style="width:100%;padding:10px 12px;border:1.5px solid #e2e8f0;border-radius:8px;font-size:14px;font-family:inherit;outline:none">
-        </div>
-        <div class="form-group" style="margin-bottom:14px">
-          <label style="font-size:13px;font-weight:600;color:#374151;display:block;margin-bottom:6px">Message <span style="color:red">*</span></label>
-          <textarea id="cr-ann-body" rows="5" placeholder="Write your message…" style="width:100%;padding:10px 12px;border:1.5px solid #e2e8f0;border-radius:8px;font-size:14px;font-family:inherit;resize:vertical;outline:none"></textarea>
-        </div>
-        <div class="form-group" style="margin-bottom:20px">
-          <label style="font-size:13px;font-weight:600;color:#374151;display:block;margin-bottom:6px">Type</label>
-          <select id="cr-ann-type" style="width:100%;padding:10px 12px;border:1.5px solid #e2e8f0;border-radius:8px;font-size:14px;font-family:inherit">
-            <option value="info">ℹ️ Info</option>
-            <option value="warning">⚠️ Warning</option>
-            <option value="success">✅ Reminder</option>
-            <option value="urgent">🚨 Urgent</option>
-          </select>
-        </div>
-        <div style="display:flex;gap:10px;justify-content:flex-end">
-          <button onclick="closeModal()" style="padding:10px 18px;background:#f1f5f9;border:none;border-radius:8px;font-size:14px;font-weight:600;cursor:pointer;color:#64748b">Cancel</button>
-          <button onclick="submitClassRepAnnouncement()" style="padding:10px 20px;background:linear-gradient(135deg,#6366f1,#8b5cf6);color:#fff;border:none;border-radius:8px;font-size:14px;font-weight:600;cursor:pointer">Post</button>
-        </div>
-      </div>
-    </div>`;
-}
-
-async function submitClassRepAnnouncement() {
-  const title = document.getElementById('cr-ann-title')?.value?.trim();
-  const body  = document.getElementById('cr-ann-body')?.value?.trim();
-  const type  = document.getElementById('cr-ann-type')?.value || 'info';
-  if (!title || !body) return toastError('Title and message are required.');
-  try {
-    await api('/api/announcements', {
-      method: 'POST',
-      body: JSON.stringify({
-        title,
-        body,
-        type,
-        audience: 'class_group',
-        classGroup: {
-          studentLevel: currentUser.studentLevel,
-          studentGroup: currentUser.studentGroup,
-          sessionType:  currentUser.sessionType,
-          semester:     currentUser.semester,
-          programme:    currentUser.programme,
-        },
-      }),
-    });
-    closeModal();
-    toastSuccess('Announcement posted to your class group!');
-    renderClassAnnouncements();
-  } catch(e) {
-    toastError(e.message || 'Failed to post announcement.');
-  }
-}
-
-// ── Class Rep: Timetable (editable) ──────────────────────────────────────────
-async function renderClassTimetable() {
-  const content = document.getElementById('main-content');
-  if (!content) return;
-  content.innerHTML = '<div class="loading">Loading timetable…</div>';
-  try {
-    const [slotData, courseData] = await Promise.all([
-      api('/api/timetable'),
-      api('/api/courses'),
-    ]);
-    _timetableSlots   = slotData.slots || [];
-    _timetableCourses = (courseData.courses || courseData.data || []).filter(c =>
-      String(c._id) === String(currentUser.classRepCourse)
-    );
-
-    content.innerHTML = `
-      <div class="page-header" style="margin-bottom:20px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px">
-        <div>
-          <h2 style="font-size:22px;font-weight:800;letter-spacing:-.5px;color:#0f172a;margin-bottom:2px">Class Timetable</h2>
-          <p style="color:#64748b;font-size:13px">Manage the weekly schedule for your class group</p>
-        </div>
-        <button onclick="openAddSlotModal()" style="display:inline-flex;align-items:center;gap:8px;padding:10px 18px;background:linear-gradient(135deg,#6366f1,#8b5cf6);color:#fff;border:none;border-radius:10px;font-size:14px;font-weight:600;cursor:pointer;box-shadow:0 4px 12px rgba(99,102,241,.35)">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
-          Add Slot
-        </button>
-      </div>
-      ${_timetableSlots.length === 0
-        ? `<div style="background:#fff;border:1px solid #e8eaed;border-radius:16px;padding:60px 20px;text-align:center">
-            <div style="font-size:40px;margin-bottom:12px">📅</div>
-            <h3 style="font-size:16px;font-weight:700;color:#0f172a;margin-bottom:6px">No timetable slots yet</h3>
-            <p style="color:#64748b;font-size:13px">Click "Add Slot" to create the first class entry.</p>
-          </div>`
-        : `<div style="background:#fff;border:1px solid #e8eaed;border-radius:14px;overflow-x:auto;box-shadow:0 1px 4px rgba(0,0,0,.05)">${_timetableGrid(_timetableSlots, true)}</div>`
-      }`;
-  } catch(e) {
-    content.innerHTML = `<div class="card"><p style="color:var(--danger)">${esc(e.message)}</p></div>`;
   }
 }
 

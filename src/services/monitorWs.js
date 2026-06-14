@@ -1,148 +1,115 @@
 'use strict';
-const { WebSocketServer } = require('ws');
-const jwt = require('jsonwebtoken');
+const WebSocket = require('ws');
+const jwt       = require('jsonwebtoken');
 
-// meetingId → Set<WebSocket>
-const rooms = new Map();
+// ── Registry: meetingId → Set<WebSocket> ─────────────────────────────────────
+const wsClients = new Map();
 
-function _getRoomClients(meetingId) {
-  const key = String(meetingId);
-  if (!rooms.has(key)) rooms.set(key, new Set());
-  return rooms.get(key);
-}
+// ── Attach WS server to an existing HTTP server ───────────────────────────────
+function attachMonitorWs(server) {
+  const wss = new WebSocket.Server({ server, path: '/ws/monitor' });
 
-function _removeClient(ws) {
-  for (const [key, clients] of rooms) {
-    clients.delete(ws);
-    if (clients.size === 0) rooms.delete(key);
-  }
-}
-
-function _send(ws, type, payload) {
-  if (ws.readyState !== ws.OPEN) return;
-  try { ws.send(JSON.stringify({ type, payload })); } catch (_) {}
-}
-
-/**
- * Broadcast a monitoring event to every dashboard connected to meetingId.
- * Called from meetingMonitorController when participant state changes.
- */
-function broadcast(meetingId, type, payload) {
-  const clients = rooms.get(String(meetingId));
-  if (!clients) return;
-  const msg = JSON.stringify({ type, payload });
-  for (const ws of clients) {
-    if (ws.readyState === ws.OPEN) {
-      try { ws.send(msg); } catch (_) {}
-    }
-  }
-}
-
-/**
- * Attach the WebSocket monitoring server to an existing HTTP server.
- * Clients connect to wss://monitor.dikly.live/ws/monitor?token=<JWT>
- *
- * After connection, client sends:
- *   { type: 'subscribe', meetingId: '<id>' }
- * and receives:
- *   { type: 'subscribed', payload: { meetingId } }
- *   { type: '<event>', payload: { ... } }   ← broadcasts from backend
- */
-function attachToServer(httpServer) {
-  const wss = new WebSocketServer({ noServer: true });
-
-  httpServer.on('upgrade', async (req, socket, head) => {
-    const url = new URL(req.url, 'http://localhost');
-    if (url.pathname !== '/ws/monitor') return;
-
-    const token = url.searchParams.get('token');
-    if (!token) {
-      socket.write('HTTP/1.1 401 Unauthorized\r\n\r\n');
-      socket.destroy();
-      return;
-    }
-
+  wss.on('connection', (ws, req) => {
+    // ── Auth: validate JWT from query param ?token= ──────────────────────────
     let decoded;
     try {
+      const url    = new URL(req.url, 'http://localhost');
+      const token  = url.searchParams.get('token');
+      if (!token) throw new Error('missing token');
       decoded = jwt.verify(token, process.env.JWT_SECRET);
-    } catch {
-      socket.write('HTTP/1.1 401 Unauthorized\r\n\r\n');
-      socket.destroy();
+    } catch (err) {
+      ws.close(4001, 'Unauthorized');
       return;
     }
 
-    const User = require('../models/User');
-    let dbUser;
-    try {
-      dbUser = await User.findById(decoded.id).select('role company isActive').lean();
-    } catch {
-      socket.write('HTTP/1.1 500 Internal Server Error\r\n\r\n');
-      socket.destroy();
-      return;
-    }
-    if (!dbUser || !dbUser.isActive) {
-      socket.write('HTTP/1.1 401 Unauthorized\r\n\r\n');
-      socket.destroy();
-      return;
-    }
-    const MONITOR_ROLES = ['lecturer', 'manager', 'admin', 'superadmin', 'hod'];
-    if (!MONITOR_ROLES.includes((dbUser.role || '').toLowerCase())) {
-      socket.write('HTTP/1.1 403 Forbidden\r\n\r\n');
-      socket.destroy();
-      return;
-    }
+    ws.isAlive    = true;
+    ws.meetingId  = null;
+    ws._userId    = decoded._id || decoded.id || decoded.sub || null;
 
-    wss.handleUpgrade(req, socket, head, ws => {
-      ws._user = { id: dbUser._id, role: dbUser.role, company: String(dbUser.company) };
-      wss.emit('connection', ws, req);
-    });
-  });
+    // ── Heartbeat pong ───────────────────────────────────────────────────────
+    ws.on('pong', () => { ws.isAlive = true; });
 
-  wss.on('connection', ws => {
-    // 30-second heartbeat: send ping, expect pong within 10s
-    ws._alive = true;
-    ws.on('pong', () => { ws._alive = true; });
-
-    const hb = setInterval(() => {
-      if (!ws._alive) { ws.terminate(); return; }
-      ws._alive = false;
-      try { ws.ping(); } catch (_) {}
-    }, 30000);
-
-    ws.on('message', raw => {
+    // ── Incoming messages ────────────────────────────────────────────────────
+    ws.on('message', (raw) => {
       let msg;
-      try { msg = JSON.parse(raw); } catch { return; }
+      try { msg = JSON.parse(raw); } catch (_) { return; }
 
       if (msg.type === 'subscribe' && msg.meetingId) {
-        // Remove from any previous room, then subscribe to new one
-        _removeClient(ws);
-        _getRoomClients(msg.meetingId).add(ws);
-        ws._meetingId = String(msg.meetingId);
-        _send(ws, 'subscribed', { meetingId: ws._meetingId });
-      }
+        const mid = String(msg.meetingId);
 
-      // Quiz monitoring room — keyed as "quiz::<quizId>"
-      if (msg.type === 'subscribe' && msg.quizId) {
-        _removeClient(ws);
-        const roomId = `quiz::${msg.quizId}`;
-        _getRoomClients(roomId).add(ws);
-        ws._quizId = String(msg.quizId);
-        _send(ws, 'subscribed', { quizId: ws._quizId });
+        // Unsubscribe from previous meeting if any
+        if (ws.meetingId && ws.meetingId !== mid) {
+          wsClients.get(ws.meetingId)?.delete(ws);
+          if (wsClients.get(ws.meetingId)?.size === 0) wsClients.delete(ws.meetingId);
+        }
+
+        ws.meetingId = mid;
+        if (!wsClients.has(mid)) wsClients.set(mid, new Set());
+        wsClients.get(mid).add(ws);
+
+        // Welcome acknowledgement
+        safeSend(ws, { event: 'subscribed', meetingId: mid });
       }
     });
 
-    ws.on('close', () => {
-      clearInterval(hb);
-      _removeClient(ws);
-    });
-
-    ws.on('error', () => {
-      clearInterval(hb);
-      _removeClient(ws);
+    // ── Cleanup on disconnect ────────────────────────────────────────────────
+    ws.on('close', () => { removeClient(ws); });
+    ws.on('error', (err) => {
+      console.error('[monitorWs] client error:', err.message);
+      removeClient(ws);
     });
   });
 
-  return wss;
+  wss.on('error', (err) => {
+    console.error('[monitorWs] server error:', err.message);
+  });
+
+  // ── Heartbeat interval: ping all clients every 30s ───────────────────────
+  const heartbeat = setInterval(() => {
+    wss.clients.forEach((ws) => {
+      if (!ws.isAlive) {
+        removeClient(ws);
+        return ws.terminate();
+      }
+      ws.isAlive = false;
+      ws.ping();
+    });
+  }, 30000);
+
+  wss.on('close', () => { clearInterval(heartbeat); });
+
+  console.log('[monitorWs] WebSocket monitor service attached at /ws/monitor');
 }
 
-module.exports = { attachToServer, broadcast };
+// ── Broadcast to all WS clients subscribed to a meeting ──────────────────────
+function broadcastMonitorWs(meetingId, eventType, data) {
+  const clients = wsClients.get(String(meetingId));
+  if (!clients || clients.size === 0) return;
+  const payload = JSON.stringify({ event: eventType, data, ts: Date.now() });
+  for (const ws of clients) {
+    if (ws.readyState === WebSocket.OPEN) {
+      try { ws.send(payload); } catch (err) {
+        console.error('[monitorWs] send error:', err.message);
+      }
+    }
+  }
+}
+
+// ── Internal: remove a client from the registry ──────────────────────────────
+function removeClient(ws) {
+  if (!ws.meetingId) return;
+  const set = wsClients.get(ws.meetingId);
+  if (!set) return;
+  set.delete(ws);
+  if (set.size === 0) wsClients.delete(ws.meetingId);
+}
+
+// ── Internal: safe JSON send ──────────────────────────────────────────────────
+function safeSend(ws, obj) {
+  if (ws.readyState !== WebSocket.OPEN) return;
+  try { ws.send(JSON.stringify(obj)); } catch (err) {
+    console.error('[monitorWs] safeSend error:', err.message);
+  }
+}
+
+module.exports = { attachMonitorWs, broadcastMonitorWs };
