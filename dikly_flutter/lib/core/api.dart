@@ -1001,7 +1001,30 @@ class ApiService {
     };
   }
 
-  // Student dashboard stats  (attendance %, active assignments, course count)
+  // Corporate admin dashboard data
+  Future<Map<String, dynamic>> getCorporateAdminDashboard() async {
+    final results = await Future.wait([
+      _dio.get('/api/employee-profiles').catchError((_) => Response(requestOptions: RequestOptions(), data: {'employees': [], 'total': 0})),
+      _dio.get('/api/corporate-attendance/today').catchError((_) => Response(requestOptions: RequestOptions(), data: {'records': []})),
+      _dio.get('/api/approvals/pending').catchError((_) => Response(requestOptions: RequestOptions(), data: {'pending': []})),
+      _dio.get('/api/corporate-attendance').catchError((_) => Response(requestOptions: RequestOptions(), data: {'records': [], 'total': 0})),
+    ]);
+    final employeesData = (results[0].data ?? {}) as Map<String, dynamic>;
+    final todayData = (results[1].data ?? {}) as Map<String, dynamic>;
+    final approvalsData = (results[2].data ?? {}) as Map<String, dynamic>;
+    final allData = (results[3].data ?? {}) as Map<String, dynamic>;
+    final todayRecords = (todayData['records'] as List?) ?? [];
+    final activeSessions = todayRecords.where((r) => r['clockIn'] != null && r['clockOut'] == null).length;
+    return {
+      'totalUsers': employeesData['total'] ?? (employeesData['employees'] as List?)?.length ?? 0,
+      'activeSessions': activeSessions,
+      'totalSessions': allData['total'] ?? (allData['records'] as List?)?.length ?? 0,
+      'pendingApprovals': (approvalsData['pending'] as List?)?.length ?? 0,
+      'recentSessions': todayRecords.take(5).toList(),
+    };
+  }
+
+
   Future<Map<String, dynamic>> getStudentStats() async {
     final data = await _cachedGet('/api/students/dashboard-stats', 'student_stats');
     return (data['stats'] ?? data['data'] ?? data) as Map<String, dynamic>;
