@@ -2,6 +2,8 @@ import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:url_launcher/url_launcher.dart';
+import '../core/update_checker.dart';
 
 class SplashScreen extends StatefulWidget {
   const SplashScreen({super.key});
@@ -17,6 +19,9 @@ class _SplashScreenState extends State<SplashScreen>
   late Animation<double> _logoScale;
   late Animation<double> _subtitleFade;
   late Animation<double> _glowPulse;
+
+  // Kick off update check immediately so it runs during the animation.
+  late final Future<UpdateInfo?> _updateFuture = UpdateChecker.check();
 
   @override
   void initState() {
@@ -45,9 +50,71 @@ class _SplashScreenState extends State<SplashScreen>
 
     _ctrl.forward();
 
-    Future.delayed(const Duration(milliseconds: 3200), () {
-      if (mounted) context.go('/portal');
+    Future.delayed(const Duration(milliseconds: 3200), () async {
+      if (!mounted) return;
+      final update = await _updateFuture;
+      if (!mounted) return;
+      if (update != null) {
+        await _showUpdateDialog(update);
+      } else {
+        context.go('/portal');
+      }
     });
+  }
+
+  Future<void> _showUpdateDialog(UpdateInfo update) async {
+    await showDialog<void>(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: const Color(0xFF0E2440),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: Row(
+          children: [
+            const Icon(Icons.system_update_rounded, color: Color(0xFF00E5FF), size: 22),
+            const SizedBox(width: 10),
+            Text(
+              'Update Available',
+              style: GoogleFonts.dmSans(
+                color: Colors.white,
+                fontWeight: FontWeight.w700,
+                fontSize: 17,
+              ),
+            ),
+          ],
+        ),
+        content: Text(
+          'A new version of DIKLY is available.\n\nDownload and install it — your data will be kept.',
+          style: GoogleFonts.dmSans(color: Colors.white70, fontSize: 14, height: 1.5),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () {
+              UpdateChecker.markSeen(update.releaseId);
+              Navigator.of(ctx).pop();
+            },
+            child: Text('Later', style: GoogleFonts.dmSans(color: Colors.white54)),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFF00BCD4),
+              foregroundColor: Colors.white,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+            ),
+            onPressed: () async {
+              UpdateChecker.markSeen(update.releaseId);
+              Navigator.of(ctx).pop();
+              await launchUrl(
+                Uri.parse(update.downloadUrl),
+                mode: LaunchMode.externalApplication,
+              );
+            },
+            child: Text('Download Update', style: GoogleFonts.dmSans(fontWeight: FontWeight.w600)),
+          ),
+        ],
+      ),
+    );
+    if (mounted) context.go('/portal');
   }
 
   @override
