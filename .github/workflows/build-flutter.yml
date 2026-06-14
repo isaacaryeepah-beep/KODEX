@@ -3,8 +3,6 @@ name: Build Flutter APK
 on:
   push:
     branches: [main, claude/update-resume-aVv3d]
-    paths:
-      - 'dikly_flutter/**'
   workflow_dispatch:
 
 jobs:
@@ -70,3 +68,23 @@ jobs:
           name: Dikly-Android-AAB
           path: dikly_flutter/build/app/outputs/bundle/release/app-release.aab
           retention-days: 30
+
+      - name: Publish APK to public Dikly_releases repo
+        run: |
+          cp dikly_flutter/build/app/outputs/flutter-apk/app-release.apk dikly-flutter.apk
+          gh release delete flutter-latest --yes --cleanup-tag \
+            --repo isaacaryeepah-beep/Dikly_releases 2>/dev/null || true
+          gh release create flutter-latest dikly-flutter.apk \
+            --repo isaacaryeepah-beep/Dikly_releases \
+            --title "DIKLY Flutter App — Latest Build" \
+            --notes "**DIKLY Flutter Android App** — latest build (build #${{ github.run_number }}).
+
+          ### How to install
+          1. Download **dikly-flutter.apk** below
+          2. On your Android phone: open the file and tap **Install**
+             *(Enable \"Install from unknown sources\" in Settings if prompted)*
+
+          > iOS version coming soon." \
+            --latest
+        env:
+          GH_TOKEN: ${{ secrets.RELEASES_PAT }}
