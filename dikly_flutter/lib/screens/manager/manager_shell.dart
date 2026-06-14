@@ -24,8 +24,7 @@ class _ManagerShellState extends ConsumerState<ManagerShell> {
   @override
   void initState() { super.initState(); _index = widget.initialTab; }
 
-  // Cyan accent per spec
-  static const _color = Color(0xFF0891B2);
+  static const _color = Color(0xFF0891B2); // cyan-600 — manager accent
 
   static const _labels = ['Dashboard', 'Team', 'Leave', 'Timesheets'];
   static const _icons = [
@@ -39,21 +38,35 @@ class _ManagerShellState extends ConsumerState<ManagerShell> {
     DrawerSection(items: [
       DrawerItem(Icons.dashboard_outlined, 'Dashboard', '/dashboard/manager'),
     ]),
-    DrawerSection(header: 'MANAGEMENT', items: [
+    DrawerSection(header: 'MANAGE', items: [
+      DrawerItem(Icons.check_circle_outline, 'Approvals', '/manager/leave-requests'),
       DrawerItem(Icons.people_outlined, 'Team', '/manager/team'),
-      DrawerItem(Icons.event_note_outlined, 'Leave Requests', '/manager/leave-requests'),
-      DrawerItem(Icons.receipt_long_outlined, 'Timesheets', '/manager/timesheets'),
     ]),
-    DrawerSection(header: 'ATTENDANCE', items: [
+    DrawerSection(header: 'WORKFORCE', items: [
       DrawerItem(Icons.login_outlined, 'Sign In / Out', '/sign-in-out'),
-      DrawerItem(Icons.event_available_outlined, 'Attendance', '/corporate-attendance'),
+      DrawerItem(Icons.event_available_outlined, 'Team Attendance', '/corporate-attendance'),
+      DrawerItem(Icons.access_time_outlined, 'Shifts', '/shifts'),
+      DrawerItem(Icons.event_note_outlined, 'Leave', '/manager/leave-requests'),
+      DrawerItem(Icons.receipt_long_outlined, 'Timesheets', '/manager/timesheets'),
+      DrawerItem(Icons.attach_money_outlined, 'Expenses', '/expenses'),
+      DrawerItem(Icons.trending_up_outlined, 'Performance', '/performance'),
+      DrawerItem(Icons.business_outlined, 'Branches', '/admin/branches'),
+    ]),
+    DrawerSection(header: 'COMMUNICATE', items: [
+      DrawerItem(Icons.campaign_outlined, 'Announcements', '/announcements'),
+      DrawerItem(Icons.message_outlined, 'Messages', '/messages'),
+      DrawerItem(Icons.video_call_outlined, 'Meetings', '/meetings'),
     ]),
     DrawerSection(header: 'INSIGHTS', items: [
       DrawerItem(Icons.assessment_outlined, 'Reports', '/reports'),
+      DrawerItem(Icons.history_outlined, 'Audit Logs', '/reports'),
     ]),
-    DrawerSection(header: 'ACCOUNT', items: [
+    DrawerSection(header: 'SUPPORT', items: [
       DrawerItem(Icons.card_membership_outlined, 'Subscription', '/subscription'),
       DrawerItem(Icons.person_outlined, 'My Profile', '/profile'),
+      DrawerItem(Icons.help_outline, 'FAQ Center', '/faq'),
+      DrawerItem(Icons.phone_outlined, 'Contact Us', '/contact'),
+      DrawerItem(Icons.info_outline, 'About', '/about'),
     ]),
   ];
 
