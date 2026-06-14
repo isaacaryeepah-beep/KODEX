@@ -27,16 +27,9 @@ class _AdminShellState extends ConsumerState<AdminShell> {
     _index = widget.initialTab;
   }
 
-  static const _accent = Color(0xFFDC2626); // Admin red accent
-  static const _labels = ['Dashboard', 'Users', 'Courses', 'Reports'];
-  static const _icons = [
-    Icons.dashboard_outlined,
-    Icons.people_outlined,
-    Icons.book_outlined,
-    Icons.bar_chart_outlined,
-  ];
+  static const _accent = Color(0xFFDC2626);
 
-  static const _sections = [
+  static const _academicSections = [
     DrawerSection(items: [
       DrawerItem(Icons.dashboard_outlined, 'Dashboard', '/dashboard/admin'),
     ]),
@@ -73,15 +66,51 @@ class _AdminShellState extends ConsumerState<AdminShell> {
     ]),
   ];
 
+  static const _corporateSections = [
+    DrawerSection(items: [
+      DrawerItem(Icons.dashboard_outlined, 'Dashboard', '/dashboard/admin'),
+    ]),
+    DrawerSection(header: 'MANAGE', items: [
+      DrawerItem(Icons.check_circle_outline, 'Approvals', '/admin/approvals'),
+      DrawerItem(Icons.search_outlined, 'Search', '/admin/search'),
+      DrawerItem(Icons.people_outlined, 'Users', '/admin/users'),
+      DrawerItem(Icons.play_circle_outline, 'Sessions', '/admin/sessions'),
+    ]),
+    DrawerSection(header: 'WORKFORCE', items: [
+      DrawerItem(Icons.login_outlined, 'Sign In / Out', '/sign-in-out'),
+      DrawerItem(Icons.groups_outlined, 'Team Attendance', '/corporate-attendance'),
+      DrawerItem(Icons.schedule_outlined, 'Shifts', '/shifts'),
+      DrawerItem(Icons.event_note_outlined, 'Leave Requests', '/manager/leave-requests'),
+      DrawerItem(Icons.trending_up_outlined, 'Performance', '/performance'),
+      DrawerItem(Icons.receipt_long_outlined, 'Timesheets', '/manager/timesheets'),
+      DrawerItem(Icons.attach_money_outlined, 'Expenses', '/expenses'),
+      DrawerItem(Icons.campaign_outlined, 'Announcements', '/announcements'),
+      DrawerItem(Icons.account_balance_outlined, 'Branches', '/admin/branches'),
+    ]),
+    DrawerSection(header: 'INSIGHTS', items: [
+      DrawerItem(Icons.assessment_outlined, 'Reports', '/admin/reports'),
+    ]),
+    DrawerSection(header: 'SUPPORT', items: [
+      DrawerItem(Icons.card_membership_outlined, 'Subscription', '/subscription'),
+      DrawerItem(Icons.person_outlined, 'Profile', '/profile'),
+    ]),
+  ];
+
   @override
   Widget build(BuildContext context) {
     final user = ref.watch(authProvider).user;
-    final screens = const [
-      AdminHomeScreen(),
-      AdminUsersScreen(),
-      AdminCoursesScreen(),
-      AdminReportsScreen(),
-    ];
+    final isCorporate = user?.isCorporate ?? false;
+
+    final labels = isCorporate
+        ? const ['Dashboard', 'Users', 'Attendance', 'Reports']
+        : const ['Dashboard', 'Users', 'Courses', 'Reports'];
+    final icons = isCorporate
+        ? const [Icons.dashboard_outlined, Icons.people_outlined, Icons.groups_outlined, Icons.bar_chart_outlined]
+        : const [Icons.dashboard_outlined, Icons.people_outlined, Icons.book_outlined, Icons.bar_chart_outlined];
+    final screens = isCorporate
+        ? const [AdminHomeScreen(), AdminUsersScreen(), AdminUsersScreen(), AdminReportsScreen()]
+        : const [AdminHomeScreen(), AdminUsersScreen(), AdminCoursesScreen(), AdminReportsScreen()];
+    final sections = isCorporate ? _corporateSections : _academicSections;
 
     return Scaffold(
       backgroundColor: DiklyColors.background,
@@ -199,8 +228,8 @@ class _AdminShellState extends ConsumerState<AdminShell> {
         accentColor: _accent,
         userName: user?.name ?? '',
         userEmail: user?.email ?? '',
-        userRole: 'Administrator',
-        sections: _sections,
+        userRole: isCorporate ? 'Company Admin' : 'Administrator',
+        sections: sections,
         onSignOut: () async {
           Navigator.pop(context);
           await ref.read(authProvider.notifier).logout();
@@ -221,7 +250,7 @@ class _AdminShellState extends ConsumerState<AdminShell> {
         elevation: 8,
         items: List.generate(
           4,
-          (i) => BottomNavigationBarItem(icon: Icon(_icons[i]), label: _labels[i]),
+          (i) => BottomNavigationBarItem(icon: Icon(icons[i]), label: labels[i]),
         ),
       ),
     );
