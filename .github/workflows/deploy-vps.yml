@@ -3,11 +3,15 @@ name: Deploy to VPS
 on:
   push:
     branches: [main]
+  workflow_dispatch:
 
 jobs:
   deploy:
     runs-on: ubuntu-latest
     steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
       - name: Setup SSH key
         run: |
           mkdir -p ~/.ssh
@@ -17,7 +21,7 @@ jobs:
         env:
           VPS_SSH_KEY: ${{ secrets.VPS_SSH_KEY }}
 
-      - name: Deploy
+      - name: Deploy server code
         run: |
           ssh -i ~/.ssh/deploy_key \
               -o StrictHostKeyChecking=no \
@@ -27,11 +31,11 @@ jobs:
           cd /root/KODEX
 
           git fetch origin main
-          git checkout jitsi-config/web/custom-config.js
+          git checkout jitsi-config/web/custom-config.js 2>/dev/null || true
           git reset --hard origin/main
 
-          docker restart kodex-app-1
-          docker restart kodex-web-1
+          docker compose up -d --build app
+          docker restart kodex-web-1 2>/dev/null || true
 
           git diff HEAD~1 --name-only 2>/dev/null | grep -q docker-compose.jitsi.yml \
             && docker compose -f docker-compose.jitsi.yml restart coturn \
