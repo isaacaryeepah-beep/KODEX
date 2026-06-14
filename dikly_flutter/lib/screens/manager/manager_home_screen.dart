@@ -1,11 +1,11 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../../core/auth.dart';
 import '../../core/api.dart';
 import '../../core/theme.dart';
-import '../../widgets/ds/dikly_ds.dart';
 
 final _managerDashProvider = FutureProvider.autoDispose<Map<String, dynamic>>(
   (ref) => apiService.getManagerDashboardData(),
@@ -26,14 +26,14 @@ class ManagerHomeScreen extends ConsumerWidget {
     final dashAsync = ref.watch(_managerDashProvider);
     final user = ref.watch(authProvider).user;
     final firstName = (user?.name ?? 'Manager').split(' ').first;
-    final institution = user?.company ?? '';
+    final companyCode = user?.institutionCode ?? '';
 
     return RefreshIndicator(
       onRefresh: () async => ref.invalidate(_managerDashProvider),
       child: ListView(
-        padding: const EdgeInsets.all(16),
+        padding: const EdgeInsets.fromLTRB(16, 20, 16, 32),
         children: [
-          // Welcome row
+          // ── Greeting + Company Code ──────────────────────────────
           Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
@@ -42,396 +42,510 @@ class ManagerHomeScreen extends ConsumerWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      '${_greeting()}, $firstName',
-                      style: GoogleFonts.dmSans(fontSize: 22, fontWeight: FontWeight.w800, color: DiklyColors.text, height: 1.2),
+                      '${_greeting()}, $firstName 👋',
+                      style: GoogleFonts.dmSans(
+                        fontSize: 22,
+                        fontWeight: FontWeight.w800,
+                        color: DiklyColors.text,
+                        height: 1.2,
+                      ),
                     ),
-                    const SizedBox(height: 4),
+                    const SizedBox(height: 3),
                     Text(
-                      '${institution.isNotEmpty ? '$institution · ' : ''}Manager Portal',
-                      style: const TextStyle(fontSize: 13, color: DiklyColors.textLight),
+                      'Manager Portal → Dikly.co',
+                      style: GoogleFonts.dmSans(
+                        fontSize: 13,
+                        color: DiklyColors.textLight,
+                      ),
                     ),
                   ],
                 ),
               ),
-              dashAsync.when(
-                loading: () => const SizedBox.shrink(),
-                error: (_, __) => const SizedBox.shrink(),
-                data: (data) {
-                  final pending = (data['pendingApprovals'] as List).length;
-                  return Row(
-                    children: [
-                      OutlinedButton(
-                        onPressed: () => context.push('/corporate-attendance'),
-                        style: OutlinedButton.styleFrom(
-                          foregroundColor: DiklyColors.primary,
-                          side: const BorderSide(color: DiklyColors.primary),
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+              if (companyCode.isNotEmpty)
+                GestureDetector(
+                  onTap: () {
+                    Clipboard.setData(ClipboardData(text: companyCode));
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(content: Text('Company code copied'), duration: Duration(seconds: 2)),
+                    );
+                  },
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                    decoration: BoxDecoration(
+                      color: DiklyColors.background,
+                      border: Border.all(color: DiklyColors.border),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Column(
+                          crossAxisAlignment: CrossAxisAlignment.end,
+                          children: [
+                            Text(
+                              'COMPANY CODE',
+                              style: GoogleFonts.dmSans(fontSize: 9, color: DiklyColors.textLight, fontWeight: FontWeight.w600, letterSpacing: 0.6),
+                            ),
+                            Text(
+                              companyCode,
+                              style: GoogleFonts.dmSans(fontSize: 14, fontWeight: FontWeight.w800, color: DiklyColors.text, letterSpacing: 1),
+                            ),
+                          ],
                         ),
-                        child: const Text('Team Attendance', style: TextStyle(fontSize: 12)),
-                      ),
-                      const SizedBox(width: 8),
-                      Stack(
-                        clipBehavior: Clip.none,
-                        children: [
-                          OutlinedButton(
-                            onPressed: () => context.push('/sessions'),
-                            style: OutlinedButton.styleFrom(
-                              foregroundColor: DiklyColors.textSecondary,
-                              side: const BorderSide(color: DiklyColors.border),
-                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                            ),
-                            child: const Text('Approvals', style: TextStyle(fontSize: 12)),
-                          ),
-                          if (pending > 0)
-                            Positioned(
-                              right: -4,
-                              top: -4,
-                              child: Container(
-                                padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
-                                decoration: BoxDecoration(color: DiklyColors.error, borderRadius: BorderRadius.circular(20)),
-                                child: Text('$pending', style: const TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.w700)),
-                              ),
-                            ),
-                        ],
-                      ),
-                    ],
-                  );
-                },
-              ),
+                        const SizedBox(width: 6),
+                        const Icon(Icons.copy_outlined, size: 14, color: DiklyColors.textLight),
+                      ],
+                    ),
+                  ),
+                ),
             ],
           ),
           const SizedBox(height: 20),
 
+          // ── Stats / Error ────────────────────────────────────────
           dashAsync.when(
-            loading: () => const Center(child: Padding(padding: EdgeInsets.all(40), child: CircularProgressIndicator(color: DiklyColors.primary))),
-            error: (e, _) => DiklyCard(
-              padding: const EdgeInsets.all(24),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  const Icon(Icons.wifi_off_rounded, size: 36, color: DiklyColors.textLight),
-                  const SizedBox(height: 10),
-                  const Text('Failed to load manager data', style: TextStyle(fontWeight: FontWeight.w600)),
-                  const SizedBox(height: 14),
-                  ElevatedButton.icon(
-                    onPressed: () => ref.invalidate(_managerDashProvider),
-                    icon: const Icon(Icons.refresh, size: 16),
-                    label: const Text('Retry'),
-                    style: ElevatedButton.styleFrom(backgroundColor: DiklyColors.primary, foregroundColor: Colors.white, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8))),
-                  ),
-                ],
+            loading: () => const Center(
+              child: Padding(
+                padding: EdgeInsets.all(40),
+                child: CircularProgressIndicator(color: Color(0xFF0891B2)),
               ),
             ),
-            data: (data) {
-              final summary = data['todaySummary'] as Map<String, dynamic>;
-              final todayRecords = data['todayRecords'] as List;
-              final teamOverview = data['teamOverview'] as List;
-              final pendingList = data['pendingApprovals'] as List;
-              final announcements = data['announcements'] as List;
-
-              final late = todayRecords.where((r) => r['status'] == 'late').toList();
-              final absent = todayRecords.where((r) => r['status'] == 'absent').toList();
-
-              return Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  // Today's attendance section label
-                  const DiklySectionLabel(label: "Today's Attendance"),
-                  const SizedBox(height: 10),
-                  SingleChildScrollView(
-                    scrollDirection: Axis.horizontal,
-                    child: Row(
-                      children: [
-                        _TodayStat(value: '${summary['present'] ?? 0}', label: 'Present', color: const Color(0xFF16A34A)),
-                        const SizedBox(width: 10),
-                        _TodayStat(value: '${summary['late'] ?? 0}', label: 'Late', color: const Color(0xFFD97706)),
-                        const SizedBox(width: 10),
-                        _TodayStat(value: '${summary['absent'] ?? 0}', label: 'Absent', color: const Color(0xFFDC2626)),
-                        const SizedBox(width: 10),
-                        _TodayStat(value: '${summary['on_leave'] ?? 0}', label: 'On Leave', color: const Color(0xFF0891B2)),
-                        const SizedBox(width: 10),
-                        _TodayStat(value: '${summary['total_clocked'] ?? 0}', label: 'Clocked In', color: DiklyColors.primary),
-                      ],
+            error: (e, _) => _ErrorCard(onRetry: () => ref.invalidate(_managerDashProvider)),
+            data: (data) => Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // 5 stat cards — 2-column grid
+                GridView.count(
+                  shrinkWrap: true,
+                  physics: const NeverScrollableScrollPhysics(),
+                  crossAxisCount: 2,
+                  crossAxisSpacing: 10,
+                  mainAxisSpacing: 10,
+                  childAspectRatio: 1.55,
+                  children: [
+                    _StatCard(
+                      label: 'TOTAL EMPLOYEES',
+                      value: '${data['totalEmployees'] ?? 0}',
+                      sub: 'Active workforce',
+                      icon: Icons.people_outline,
+                      iconColor: const Color(0xFF0369A1),
                     ),
-                  ),
-                  const SizedBox(height: 20),
+                    _StatCard(
+                      label: 'ACTIVE SESSIONS',
+                      value: '${data['activeSessions'] ?? 0}',
+                      sub: 'Currently clocked in',
+                      icon: Icons.check_circle_outline,
+                      iconColor: const Color(0xFF16A34A),
+                    ),
+                    _StatCard(
+                      label: 'HOURS THIS MONTH',
+                      value: '${data['hoursThisMonth'] ?? 0}',
+                      sub: 'From approved timesheets',
+                      icon: Icons.access_time_outlined,
+                      iconColor: const Color(0xFFD97706),
+                    ),
+                    _StatCard(
+                      label: 'LEAVE REQUESTS',
+                      value: '${data['leaveRequests'] ?? 0}',
+                      sub: 'Pending review',
+                      icon: Icons.event_note_outlined,
+                      iconColor: const Color(0xFFDC2626),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 10),
+                _StatCard(
+                  label: 'DEPARTMENTS',
+                  value: '${data['departments'] ?? 0}',
+                  sub: 'Across company',
+                  icon: Icons.business_outlined,
+                  iconColor: const Color(0xFF0891B2),
+                  fullWidth: true,
+                ),
+                const SizedBox(height: 24),
 
-                  // Exception alerts + Team performance
-                  Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
+                // ── Quick Actions ──────────────────────────────────
+                Text(
+                  'QUICK ACTIONS',
+                  style: GoogleFonts.dmSans(fontSize: 11, fontWeight: FontWeight.w700, color: DiklyColors.textLight, letterSpacing: 1),
+                ),
+                const SizedBox(height: 10),
+                SingleChildScrollView(
+                  scrollDirection: Axis.horizontal,
+                  child: Row(
                     children: [
-                      Expanded(
-                        child: DiklyCard(
-                          padding: const EdgeInsets.all(14),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Row(
-                                children: [
-                                  const Expanded(child: Text('Exception Alerts', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: DiklyColors.text))),
-                                  const Text('Today', style: TextStyle(fontSize: 11, color: DiklyColors.textLight)),
-                                ],
-                              ),
-                              const SizedBox(height: 12),
-                              if (late.isEmpty && absent.isEmpty)
-                                const Text('✓ No exceptions today', style: TextStyle(fontSize: 13, color: Color(0xFF16A34A), fontWeight: FontWeight.w600))
-                              else ...[
-                                if (late.isNotEmpty) ...[
-                                  Text('Late Arrivals (${late.length})', style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: Color(0xFFD97706))),
-                                  const SizedBox(height: 6),
-                                  ...late.take(3).map((r) => Padding(
-                                    padding: const EdgeInsets.only(bottom: 4),
-                                    child: Row(
-                                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                                      children: [
-                                        Expanded(child: Text(r['employee']?['name'] ?? '—', style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: DiklyColors.text), overflow: TextOverflow.ellipsis)),
-                                        Text('+${r['lateMinutes'] ?? 0}m', style: const TextStyle(fontSize: 11, color: Color(0xFFD97706))),
-                                      ],
-                                    ),
-                                  )),
-                                ],
-                                if (absent.isNotEmpty) ...[
-                                  const SizedBox(height: 8),
-                                  Text('Absent (${absent.length})', style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: Color(0xFFDC2626))),
-                                  const SizedBox(height: 4),
-                                  ...absent.take(3).map((r) => Padding(
-                                    padding: const EdgeInsets.only(bottom: 4),
-                                    child: Text(r['employee']?['name'] ?? '—', style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: DiklyColors.text), overflow: TextOverflow.ellipsis),
-                                  )),
-                                ],
-                              ],
-                              const SizedBox(height: 10),
-                              GestureDetector(
-                                onTap: () => context.push('/corporate-attendance'),
-                                child: const Text('View Full Report →', style: TextStyle(fontSize: 12, color: DiklyColors.primary, fontWeight: FontWeight.w600)),
-                              ),
-                            ],
-                          ),
-                        ),
+                      _QuickAction(
+                        label: 'Live attendance',
+                        icon: Icons.radio_button_checked,
+                        color: const Color(0xFF16A34A),
+                        onTap: () => context.push('/corporate-attendance'),
                       ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: DiklyCard(
-                          padding: const EdgeInsets.all(14),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Row(
-                                children: [
-                                  const Expanded(child: Text('Team Performance', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: DiklyColors.text))),
-                                  GestureDetector(
-                                    onTap: () => context.push('/performance'),
-                                    child: const Text('Full View', style: TextStyle(fontSize: 11, color: DiklyColors.primary, fontWeight: FontWeight.w600)),
-                                  ),
-                                ],
-                              ),
-                              const SizedBox(height: 12),
-                              if (teamOverview.isEmpty)
-                                const Text('No performance data yet.', style: TextStyle(fontSize: 12, color: DiklyColors.textLight))
-                              else ...[
-                                ...teamOverview.take(4).map((o) => Padding(
-                                  padding: const EdgeInsets.only(bottom: 8),
-                                  child: Row(
-                                    children: [
-                                      Expanded(child: Text(o['employee']?['name'] ?? '—', style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: DiklyColors.text), overflow: TextOverflow.ellipsis)),
-                                      Text('${o['completedGoals'] ?? 0}/${o['totalGoals'] ?? 0}', style: const TextStyle(fontSize: 11, color: DiklyColors.textLight)),
-                                    ],
-                                  ),
-                                )),
-                              ],
-                            ],
-                          ),
-                        ),
+                      const SizedBox(width: 8),
+                      _QuickAction(
+                        label: 'Add employee',
+                        icon: Icons.person_add_outlined,
+                        color: const Color(0xFF0369A1),
+                        onTap: () => context.push('/manager/team'),
+                      ),
+                      const SizedBox(width: 8),
+                      _QuickAction(
+                        label: 'Announce',
+                        icon: Icons.campaign_outlined,
+                        color: const Color(0xFFD97706),
+                        onTap: () => context.push('/announcements'),
+                      ),
+                      const SizedBox(width: 8),
+                      _QuickAction(
+                        label: 'Payroll',
+                        icon: Icons.attach_money_outlined,
+                        color: const Color(0xFF6B7280),
+                        onTap: () => context.push('/expenses'),
+                      ),
+                      const SizedBox(width: 8),
+                      _QuickAction(
+                        label: 'Manage shifts',
+                        icon: Icons.schedule_outlined,
+                        color: const Color(0xFF0891B2),
+                        onTap: () => context.push('/shifts'),
                       ),
                     ],
                   ),
-                  const SizedBox(height: 16),
+                ),
+                const SizedBox(height: 24),
 
-                  // Pending approvals + Announcements
-                  Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Expanded(
-                        child: DiklyCard(
-                          padding: const EdgeInsets.all(14),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Row(
-                                children: [
-                                  const Expanded(child: Text('Pending Approvals', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700))),
-                                  Container(
-                                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                                    decoration: BoxDecoration(color: const Color(0xFFFEE2E2), borderRadius: BorderRadius.circular(20)),
-                                    child: Text('${pendingList.length}', style: const TextStyle(color: Color(0xFFDC2626), fontSize: 11, fontWeight: FontWeight.w700)),
-                                  ),
-                                ],
-                              ),
-                              const SizedBox(height: 10),
-                              if (pendingList.isEmpty)
-                                const Text('No pending approvals', style: TextStyle(fontSize: 12, color: DiklyColors.textLight))
-                              else
-                                ...pendingList.take(4).map((p) => Padding(
-                                  padding: const EdgeInsets.only(bottom: 8),
-                                  child: Row(
-                                    children: [
-                                      Expanded(child: Column(
-                                        crossAxisAlignment: CrossAxisAlignment.start,
-                                        children: [
-                                          Text(p['requestedBy']?['name'] ?? p['name'] ?? '—', style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600), overflow: TextOverflow.ellipsis),
-                                          Text(p['type'] ?? 'Request', style: const TextStyle(fontSize: 11, color: DiklyColors.textLight)),
-                                        ],
-                                      )),
-                                      GestureDetector(
-                                        onTap: () => context.push('/manager/leave-requests'),
-                                        child: Container(
-                                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                                          decoration: BoxDecoration(color: DiklyColors.primary.withOpacity(0.1), borderRadius: BorderRadius.circular(6)),
-                                          child: const Text('Review', style: TextStyle(fontSize: 11, color: DiklyColors.primary, fontWeight: FontWeight.w600)),
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                )),
-                            ],
-                          ),
-                        ),
-                      ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: DiklyCard(
-                          padding: const EdgeInsets.all(14),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Row(
-                                children: [
-                                  const Expanded(child: Text('Announcements', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700))),
-                                  GestureDetector(
-                                    onTap: () => context.push('/announcements'),
-                                    child: const Text('Manage', style: TextStyle(fontSize: 11, color: DiklyColors.primary, fontWeight: FontWeight.w600)),
-                                  ),
-                                ],
-                              ),
-                              const SizedBox(height: 10),
-                              if (announcements.isEmpty)
-                                const Text('No announcements', style: TextStyle(fontSize: 12, color: DiklyColors.textLight))
-                              else
-                                ...announcements.take(4).map((a) {
-                                  final dotColor = _annColor(a['type']?.toString());
-                                  return Padding(
-                                    padding: const EdgeInsets.only(bottom: 8),
-                                    child: Row(
-                                      crossAxisAlignment: CrossAxisAlignment.start,
-                                      children: [
-                                        Container(
-                                          width: 7,
-                                          height: 7,
-                                          margin: const EdgeInsets.only(right: 8, top: 4),
-                                          decoration: BoxDecoration(color: dotColor, shape: BoxShape.circle),
-                                        ),
-                                        Expanded(child: Text(a['title'] ?? '', style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600), maxLines: 2, overflow: TextOverflow.ellipsis)),
-                                      ],
-                                    ),
-                                  );
-                                }),
-                            ],
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 16),
+                // ── Recent Sessions ────────────────────────────────
+                _SectionHeader(title: 'Recent Sessions', actionLabel: 'View all', onAction: () => context.push('/corporate-attendance')),
+                const SizedBox(height: 10),
+                _RecentSessionsCard(sessions: (data['recentSessions'] as List?) ?? []),
+                const SizedBox(height: 20),
 
-                  // Quick actions
-                  const DiklySectionLabel('Quick Actions'),
-                  const SizedBox(height: 10),
-                  Row(
-                    children: [
-                      Expanded(child: _ManagerAction(icon: Icons.people_outlined, label: 'View Team', color: const Color(0xFF0891B2), onTap: () => context.push('/manager/team'))),
-                      const SizedBox(width: 10),
-                      Expanded(child: _ManagerAction(icon: Icons.event_note_outlined, label: 'Leave Requests', color: DiklyColors.warning, onTap: () => context.push('/manager/leave-requests'))),
-                      const SizedBox(width: 10),
-                      Expanded(child: _ManagerAction(icon: Icons.receipt_long_outlined, label: 'Timesheets', color: DiklyColors.primary, onTap: () => context.push('/manager/timesheets'))),
-                    ],
-                  ),
-                ],
-              );
-            },
+                // ── Team by Department ─────────────────────────────
+                _SectionHeader(title: 'Team by Department', actionLabel: 'Manage', onAction: () => context.push('/manager/team')),
+                const SizedBox(height: 10),
+                _TeamByDepartmentCard(teams: (data['teams'] as List?) ?? []),
+                const SizedBox(height: 20),
+
+                // ── Team Overview ──────────────────────────────────
+                _SectionHeader(title: 'Team Overview', actionLabel: 'Full roster', onAction: () => context.push('/manager/team')),
+                const SizedBox(height: 10),
+                _TeamOverviewCard(employees: (data['teamOverview'] as List?) ?? []),
+              ],
+            ),
           ),
-          const SizedBox(height: 24),
         ],
       ),
     );
   }
-
-  Color _annColor(String? type) {
-    switch (type) {
-      case 'info': return const Color(0xFF3B82F6);
-      case 'warning': return const Color(0xFFF59E0B);
-      case 'success': return DiklyColors.success;
-      case 'urgent': return DiklyColors.error;
-      default: return DiklyColors.textLight;
-    }
-  }
 }
 
-class _TodayStat extends StatelessWidget {
-  final String value;
+class _StatCard extends StatelessWidget {
   final String label;
-  final Color color;
+  final String value;
+  final String sub;
+  final IconData icon;
+  final Color iconColor;
+  final bool fullWidth;
 
-  const _TodayStat({required this.value, required this.label, required this.color});
+  const _StatCard({
+    required this.label,
+    required this.value,
+    required this.sub,
+    required this.icon,
+    required this.iconColor,
+    this.fullWidth = false,
+  });
 
   @override
   Widget build(BuildContext context) {
     return Container(
-      width: 90,
-      padding: const EdgeInsets.all(12),
+      padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
         color: DiklyColors.surface,
-        borderRadius: BorderRadius.circular(10),
-        border: Border(top: BorderSide(color: color, width: 3)),
-        boxShadow: AppTheme.shadowSm,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: DiklyColors.border),
+        boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.03), blurRadius: 8, offset: const Offset(0, 2))],
       ),
-      child: Column(
+      child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(value, style: TextStyle(fontSize: 22, fontWeight: FontWeight.w800, color: color, height: 1)),
-          const SizedBox(height: 3),
-          Text(label, style: const TextStyle(fontSize: 10, color: DiklyColors.textLight, fontWeight: FontWeight.w600)),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text(label, style: GoogleFonts.dmSans(fontSize: 10, fontWeight: FontWeight.w600, color: DiklyColors.textLight, letterSpacing: 0.5)),
+                const SizedBox(height: 6),
+                Text(value, style: GoogleFonts.dmSans(fontSize: fullWidth ? 28 : 24, fontWeight: FontWeight.w800, color: DiklyColors.text, height: 1)),
+                const SizedBox(height: 4),
+                Text(sub, style: GoogleFonts.dmSans(fontSize: 11, color: DiklyColors.textLight), maxLines: 1, overflow: TextOverflow.ellipsis),
+              ],
+            ),
+          ),
+          Container(
+            width: 36,
+            height: 36,
+            decoration: BoxDecoration(color: iconColor.withOpacity(0.1), borderRadius: BorderRadius.circular(8)),
+            child: Icon(icon, size: 18, color: iconColor),
+          ),
         ],
       ),
     );
   }
 }
 
-class _ManagerAction extends StatelessWidget {
-  final IconData icon;
+class _QuickAction extends StatelessWidget {
   final String label;
+  final IconData icon;
   final Color color;
   final VoidCallback onTap;
 
-  const _ManagerAction({required this.icon, required this.label, required this.color, required this.onTap});
+  const _QuickAction({required this.label, required this.icon, required this.color, required this.onTap});
 
   @override
   Widget build(BuildContext context) {
-    return DiklyCard(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 14),
+    return GestureDetector(
       onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+        decoration: BoxDecoration(
+          color: color.withOpacity(0.08),
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(color: color.withOpacity(0.2)),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(icon, size: 15, color: color),
+            const SizedBox(width: 6),
+            Text(label, style: GoogleFonts.dmSans(fontSize: 13, fontWeight: FontWeight.w600, color: color)),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _SectionHeader extends StatelessWidget {
+  final String title;
+  final String actionLabel;
+  final VoidCallback onAction;
+
+  const _SectionHeader({required this.title, required this.actionLabel, required this.onAction});
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      children: [
+        Text(title, style: GoogleFonts.dmSans(fontSize: 15, fontWeight: FontWeight.w700, color: DiklyColors.text)),
+        GestureDetector(
+          onTap: onAction,
+          child: Text('$actionLabel →', style: GoogleFonts.dmSans(fontSize: 13, color: const Color(0xFF0891B2), fontWeight: FontWeight.w600)),
+        ),
+      ],
+    );
+  }
+}
+
+class _RecentSessionsCard extends StatelessWidget {
+  final List sessions;
+
+  const _RecentSessionsCard({required this.sessions});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: DiklyColors.surface,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: DiklyColors.border),
+      ),
+      child: sessions.isEmpty
+          ? Center(
+              child: Padding(
+                padding: const EdgeInsets.symmetric(vertical: 16),
+                child: Text('No sessions yet', style: GoogleFonts.dmSans(fontSize: 13, color: DiklyColors.textLight)),
+              ),
+            )
+          : Column(
+              children: sessions.map<Widget>((s) {
+                final name = s['employee']?['name'] ?? s['name'] ?? '—';
+                final clockIn = s['clockIn']?['time']?.toString() ?? s['clockIn']?.toString() ?? '—';
+                final status = s['status']?.toString() ?? 'present';
+                return Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 8),
+                  child: Row(
+                    children: [
+                      CircleAvatar(
+                        radius: 16,
+                        backgroundColor: const Color(0xFF0891B2).withOpacity(0.12),
+                        child: Text(name.isNotEmpty ? name[0].toUpperCase() : '?', style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: Color(0xFF0891B2))),
+                      ),
+                      const SizedBox(width: 10),
+                      Expanded(child: Text(name, style: GoogleFonts.dmSans(fontSize: 13, fontWeight: FontWeight.w600, color: DiklyColors.text), overflow: TextOverflow.ellipsis)),
+                      Text(clockIn, style: GoogleFonts.dmSans(fontSize: 12, color: DiklyColors.textLight)),
+                      const SizedBox(width: 8),
+                      _StatusBadge(status: status),
+                    ],
+                  ),
+                );
+              }).toList(),
+            ),
+    );
+  }
+}
+
+class _TeamByDepartmentCard extends StatelessWidget {
+  final List teams;
+
+  const _TeamByDepartmentCard({required this.teams});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: DiklyColors.surface,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: DiklyColors.border),
+      ),
+      child: teams.isEmpty
+          ? Center(
+              child: Padding(
+                padding: const EdgeInsets.symmetric(vertical: 16),
+                child: Text('Unassigned · 100%', style: GoogleFonts.dmSans(fontSize: 13, color: DiklyColors.textLight)),
+              ),
+            )
+          : Column(
+              children: teams.map<Widget>((t) {
+                final name = t['name']?.toString() ?? 'Unassigned';
+                final count = (t['memberCount'] ?? t['members']?.length ?? 0) as int;
+                return Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 6),
+                  child: Row(
+                    children: [
+                      Expanded(child: Text(name, style: GoogleFonts.dmSans(fontSize: 13, fontWeight: FontWeight.w600, color: DiklyColors.text))),
+                      Text('$count', style: GoogleFonts.dmSans(fontSize: 13, color: DiklyColors.textLight)),
+                    ],
+                  ),
+                );
+              }).toList(),
+            ),
+    );
+  }
+}
+
+class _TeamOverviewCard extends StatelessWidget {
+  final List employees;
+
+  const _TeamOverviewCard({required this.employees});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      decoration: BoxDecoration(
+        color: DiklyColors.surface,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: DiklyColors.border),
+      ),
+      child: employees.isEmpty
+          ? Padding(
+              padding: const EdgeInsets.all(24),
+              child: Center(child: Text('No team members yet', style: GoogleFonts.dmSans(fontSize: 13, color: DiklyColors.textLight))),
+            )
+          : Column(
+              children: employees.map<Widget>((e) {
+                final name = e['name']?.toString() ?? e['user']?['name']?.toString() ?? '—';
+                final role = e['role']?.toString() ?? e['position']?.toString() ?? 'Employee';
+                final isActive = e['status']?.toString().toLowerCase() == 'active' || e['isActive'] == true;
+                return Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                  decoration: const BoxDecoration(border: Border(bottom: BorderSide(color: DiklyColors.border))),
+                  child: Row(
+                    children: [
+                      CircleAvatar(
+                        radius: 18,
+                        backgroundColor: const Color(0xFF0891B2).withOpacity(0.12),
+                        child: Text(name.isNotEmpty ? name[0].toUpperCase() : '?', style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: Color(0xFF0891B2))),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(name, style: GoogleFonts.dmSans(fontSize: 13, fontWeight: FontWeight.w600, color: DiklyColors.text), overflow: TextOverflow.ellipsis),
+                            Text(role, style: GoogleFonts.dmSans(fontSize: 11, color: DiklyColors.textLight)),
+                          ],
+                        ),
+                      ),
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                        decoration: BoxDecoration(
+                          color: isActive ? const Color(0xFF16A34A).withOpacity(0.1) : DiklyColors.border,
+                          borderRadius: BorderRadius.circular(20),
+                        ),
+                        child: Text(
+                          isActive ? 'Active' : 'Inactive',
+                          style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: isActive ? const Color(0xFF16A34A) : DiklyColors.textLight),
+                        ),
+                      ),
+                    ],
+                  ),
+                );
+              }).toList(),
+            ),
+    );
+  }
+}
+
+class _StatusBadge extends StatelessWidget {
+  final String status;
+  const _StatusBadge({required this.status});
+
+  @override
+  Widget build(BuildContext context) {
+    Color color;
+    switch (status.toLowerCase()) {
+      case 'present': color = const Color(0xFF16A34A); break;
+      case 'late': color = const Color(0xFFD97706); break;
+      case 'absent': color = const Color(0xFFDC2626); break;
+      default: color = DiklyColors.textLight;
+    }
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+      decoration: BoxDecoration(color: color.withOpacity(0.1), borderRadius: BorderRadius.circular(10)),
+      child: Text(status, style: TextStyle(fontSize: 10, fontWeight: FontWeight.w600, color: color)),
+    );
+  }
+}
+
+class _ErrorCard extends StatelessWidget {
+  final VoidCallback onRetry;
+  const _ErrorCard({required this.onRetry});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(24),
+      decoration: BoxDecoration(
+        color: DiklyColors.surface,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: DiklyColors.border),
+      ),
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Container(
-            width: 40,
-            height: 40,
-            decoration: BoxDecoration(color: color.withOpacity(0.1), borderRadius: BorderRadius.circular(10)),
-            child: Icon(icon, size: 20, color: color),
+          const Icon(Icons.wifi_off_rounded, size: 36, color: DiklyColors.textLight),
+          const SizedBox(height: 10),
+          const Text('Failed to load dashboard', style: TextStyle(fontWeight: FontWeight.w600)),
+          const SizedBox(height: 14),
+          ElevatedButton.icon(
+            onPressed: onRetry,
+            icon: const Icon(Icons.refresh, size: 16),
+            label: const Text('Retry'),
+            style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF0891B2), foregroundColor: Colors.white, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8))),
           ),
-          const SizedBox(height: 8),
-          Text(label, textAlign: TextAlign.center, style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: DiklyColors.textSecondary)),
         ],
       ),
     );
