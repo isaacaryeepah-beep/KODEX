@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:google_fonts/google_fonts.dart';
 import '../../core/auth.dart';
 import '../../core/theme.dart';
 import '../../widgets/dikly_drawer.dart';
@@ -18,7 +19,7 @@ class EmployeeShell extends ConsumerStatefulWidget {
 
 class _EmployeeShellState extends ConsumerState<EmployeeShell> {
   late int _index;
-  static const _color = Color(0xFF0369A1); // blue-700 — employee accent
+  static const _color = Color(0xFF059669); // green — employee accent (web design token)
 
   static const _labels = ['Home', 'Attendance', 'Leave', 'More'];
   static const _icons = [
@@ -89,17 +90,39 @@ class _EmployeeShellState extends ConsumerState<EmployeeShell> {
 
     return Scaffold(
       appBar: AppBar(
-        backgroundColor: const Color(0xFF047857),
-        foregroundColor: Colors.white,
+        backgroundColor: Colors.white,
+        foregroundColor: const Color(0xFF0D1117),
         elevation: 0,
+        shadowColor: Colors.transparent,
         surfaceTintColor: Colors.transparent,
+        shape: const Border(bottom: BorderSide(color: Color(0xFFE5E7EB), width: 1)),
         leading: Builder(
           builder: (ctx) => IconButton(
-            icon: const Icon(Icons.menu_outlined, color: Colors.white),
+            icon: const Icon(Icons.menu_outlined, color: Color(0xFF0D1117)),
             onPressed: () => Scaffold.of(ctx).openDrawer(),
           ),
         ),
-        title: Text(tabTitle, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w700)),
+        title: Row(
+          children: [
+            Container(
+              width: 3, height: 20,
+              decoration: BoxDecoration(
+                color: _color,
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+            const SizedBox(width: 10),
+            Text(
+              'Employee Portal',
+              style: GoogleFonts.dmSans(
+                fontSize: 17,
+                fontWeight: FontWeight.w700,
+                color: const Color(0xFF0D1117),
+                letterSpacing: -0.3,
+              ),
+            ),
+          ],
+        ),
         actions: [
           PopupMenuButton<String>(
             offset: const Offset(0, 48),
@@ -108,10 +131,10 @@ class _EmployeeShellState extends ConsumerState<EmployeeShell> {
               padding: const EdgeInsets.symmetric(horizontal: 12),
               child: CircleAvatar(
                 radius: 18,
-                backgroundColor: Colors.white.withOpacity(0.25),
+                backgroundColor: _color.withOpacity(0.12),
                 child: Text(
                   (user?.name ?? 'E').substring(0, 1).toUpperCase(),
-                  style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w700, fontSize: 14),
+                  style: TextStyle(color: _color, fontWeight: FontWeight.w700, fontSize: 14),
                 ),
               ),
             ),

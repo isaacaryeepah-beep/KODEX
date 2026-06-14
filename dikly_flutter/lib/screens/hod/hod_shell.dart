@@ -90,21 +90,40 @@ class _HodShellState extends ConsumerState<HodShell> {
 
     return Scaffold(
       key: _scaffoldKey,
-      backgroundColor: const Color(0xFFF1F5F9),
+      backgroundColor: DiklyColors.background,
       appBar: AppBar(
-        backgroundColor: const Color(0xFF0E7490),
-        foregroundColor: Colors.white,
+        backgroundColor: Colors.white,
+        foregroundColor: const Color(0xFF0D1117),
         elevation: 0,
+        shadowColor: Colors.transparent,
         surfaceTintColor: Colors.transparent,
+        shape: const Border(bottom: BorderSide(color: Color(0xFFE5E7EB), width: 1)),
         leading: Builder(
           builder: (ctx) => IconButton(
-            icon: const Icon(Icons.menu_outlined, color: Colors.white),
+            icon: const Icon(Icons.menu_outlined, color: Color(0xFF0D1117)),
             onPressed: () => _scaffoldKey.currentState?.openDrawer(),
           ),
         ),
-        title: Text(
-          'HOD Portal',
-          style: GoogleFonts.dmSans(fontSize: 17, fontWeight: FontWeight.w700, color: Colors.white),
+        title: Row(
+          children: [
+            Container(
+              width: 3, height: 20,
+              decoration: BoxDecoration(
+                color: _color,
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+            const SizedBox(width: 10),
+            Text(
+              'HOD Portal',
+              style: GoogleFonts.dmSans(
+                fontSize: 17,
+                fontWeight: FontWeight.w700,
+                color: const Color(0xFF0D1117),
+                letterSpacing: -0.3,
+              ),
+            ),
+          ],
         ),
         actions: [
           PopupMenuButton<String>(

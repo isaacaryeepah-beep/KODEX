@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:google_fonts/google_fonts.dart';
 import '../../core/auth.dart';
 import '../../core/theme.dart';
 import '../../widgets/dikly_drawer.dart';
@@ -83,24 +84,38 @@ class _StudentShellState extends ConsumerState<StudentShell> {
     return Scaffold(
       backgroundColor: DiklyColors.background,
       appBar: AppBar(
-        backgroundColor: const Color(0xFF6D28D9),
-        foregroundColor: Colors.white,
+        backgroundColor: Colors.white,
+        foregroundColor: const Color(0xFF0D1117),
         elevation: 0,
         shadowColor: Colors.transparent,
         surfaceTintColor: Colors.transparent,
+        shape: const Border(bottom: BorderSide(color: Color(0xFFE5E7EB), width: 1)),
         leading: Builder(
           builder: (ctx) => IconButton(
-            icon: const Icon(Icons.menu_outlined, color: Colors.white),
+            icon: const Icon(Icons.menu_outlined, color: Color(0xFF0D1117)),
             onPressed: () => Scaffold.of(ctx).openDrawer(),
           ),
         ),
-        title: const Text(
-          'Student Portal',
-          style: TextStyle(
-            fontSize: 17,
-            fontWeight: FontWeight.w700,
-            color: Colors.white,
-          ),
+        title: Row(
+          children: [
+            Container(
+              width: 3, height: 20,
+              decoration: BoxDecoration(
+                color: _accent,
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+            const SizedBox(width: 10),
+            Text(
+              'Student Portal',
+              style: GoogleFonts.dmSans(
+                fontSize: 17,
+                fontWeight: FontWeight.w700,
+                color: const Color(0xFF0D1117),
+                letterSpacing: -0.3,
+              ),
+            ),
+          ],
         ),
         actions: [
           Padding(
@@ -114,11 +129,11 @@ class _StudentShellState extends ConsumerState<StudentShell> {
               elevation: 4,
               child: CircleAvatar(
                 radius: 18,
-                backgroundColor: const Color(0xFF7C3AED),
+                backgroundColor: _accent.withOpacity(0.12),
                 child: Text(
                   initial,
-                  style: const TextStyle(
-                    color: Colors.white,
+                  style: TextStyle(
+                    color: _accent,
                     fontWeight: FontWeight.w700,
                     fontSize: 14,
                   ),
@@ -196,7 +211,7 @@ class _StudentShellState extends ConsumerState<StudentShell> {
       bottomNavigationBar: Container(
         decoration: const BoxDecoration(
           color: Colors.white,
-          border: Border(top: BorderSide(color: Color(0xFFE4E4E7), width: 1)),
+          border: Border(top: BorderSide(color: Color(0xFFE5E7EB), width: 1)),
           boxShadow: [
             BoxShadow(color: Color(0x0D000000), blurRadius: 12, offset: Offset(0, -2)),
             BoxShadow(color: Color(0x08000000), blurRadius: 4,  offset: Offset(0, -1)),

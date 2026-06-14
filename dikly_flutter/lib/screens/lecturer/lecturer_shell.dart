@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:google_fonts/google_fonts.dart';
 import '../../core/auth.dart';
 import '../../core/theme.dart';
 import '../../widgets/dikly_drawer.dart';
@@ -27,7 +28,7 @@ class _LecturerShellState extends ConsumerState<LecturerShell> {
     _index = widget.initialTab;
   }
 
-  static const _accentColor = Color(0xFF7C3AED);
+  static const _accentColor = Color(0xFFD97706);
 
   static const _labels = [
     'Dashboard',
@@ -105,25 +106,40 @@ class _LecturerShellState extends ConsumerState<LecturerShell> {
 
     return Scaffold(
       key: _scaffoldKey,
-      backgroundColor: const Color(0xFFF1F5F9),
+      backgroundColor: DiklyColors.background,
       appBar: AppBar(
-        backgroundColor: const Color(0xFFB45309),
-        foregroundColor: Colors.white,
+        backgroundColor: Colors.white,
+        foregroundColor: const Color(0xFF0D1117),
         elevation: 0,
+        shadowColor: Colors.transparent,
         surfaceTintColor: Colors.transparent,
+        shape: const Border(bottom: BorderSide(color: Color(0xFFE5E7EB), width: 1)),
         leading: Builder(
           builder: (ctx) => IconButton(
-            icon: const Icon(Icons.menu_outlined, color: Colors.white),
+            icon: const Icon(Icons.menu_outlined, color: Color(0xFF0D1117)),
             onPressed: () => _scaffoldKey.currentState?.openDrawer(),
           ),
         ),
-        title: const Text(
-          'Lecturer Portal',
-          style: TextStyle(
-            fontSize: 18,
-            fontWeight: FontWeight.w700,
-            color: Colors.white,
-          ),
+        title: Row(
+          children: [
+            Container(
+              width: 3, height: 20,
+              decoration: BoxDecoration(
+                color: _accentColor,
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+            const SizedBox(width: 10),
+            Text(
+              'Lecturer Portal',
+              style: GoogleFonts.dmSans(
+                fontSize: 17,
+                fontWeight: FontWeight.w700,
+                color: const Color(0xFF0D1117),
+                letterSpacing: -0.3,
+              ),
+            ),
+          ],
         ),
         actions: [
           PopupMenuButton<String>(
@@ -136,7 +152,7 @@ class _LecturerShellState extends ConsumerState<LecturerShell> {
                 backgroundColor: _accentColor.withOpacity(0.12),
                 child: Text(
                   (user?.name.isNotEmpty == true ? user!.name[0] : 'L').toUpperCase(),
-                  style: const TextStyle(
+                  style: TextStyle(
                     color: _accentColor,
                     fontWeight: FontWeight.w700,
                     fontSize: 14,
@@ -227,7 +243,7 @@ class _MorePlaceholder extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return const Scaffold(
-      backgroundColor: Color(0xFFF1F5F9),
+      backgroundColor: Color(0xFFF4F6F9),
       body: Center(child: CircularProgressIndicator()),
     );
   }
