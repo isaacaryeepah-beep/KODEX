@@ -116,29 +116,17 @@ class DiklyHeroSection extends StatelessWidget {
           if (stats.isNotEmpty) ...[
             const SizedBox(height: 20),
             Row(
-              children: stats
-                  .map((s) => Expanded(child: s))
-                  .toList()
-                  ..insertBetween(
-                    const SizedBox(width: 10),
-                  ),
+              children: [
+                for (int i = 0; i < stats.length; i++) ...[
+                  if (i > 0) const SizedBox(width: 10),
+                  Expanded(child: stats[i]),
+                ],
+              ],
             ),
           ],
         ],
       ),
     );
-  }
-}
-
-extension _ListInsert<T> on List<T> {
-  void insertBetween(T item) {
-    final result = <T>[];
-    for (int i = 0; i < length; i++) {
-      result.add(this[i]);
-      if (i < length - 1) result.add(item);
-    }
-    clear();
-    addAll(result);
   }
 }
 
