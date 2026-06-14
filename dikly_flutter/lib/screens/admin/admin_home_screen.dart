@@ -34,7 +34,7 @@ class AdminHomeScreen extends ConsumerWidget {
             data: (d) => DiklyHeroSection(
               gradient: _theme.gradient,
               greeting: '$greeting, $firstName',
-              subtitle: user?.institution ?? 'Admin Portal',
+              subtitle: user?.institutionCode ?? 'Admin Portal',
               badge: instCode.isNotEmpty ? _CodeBadge(code: instCode) : null,
               stats: [
                 DiklyHeaderStat(value: '${d['totalUsers'] ?? 0}', label: 'Users', icon: Icons.people_outlined),
@@ -45,7 +45,7 @@ class AdminHomeScreen extends ConsumerWidget {
             loading: () => DiklyHeroSection(
               gradient: _theme.gradient,
               greeting: '$greeting, $firstName',
-              subtitle: user?.institution ?? 'Admin Portal',
+              subtitle: user?.institutionCode ?? 'Admin Portal',
               stats: const [
                 DiklyHeaderStat(value: '—', label: 'Users'),
                 DiklyHeaderStat(value: '—', label: 'Active'),
@@ -55,7 +55,7 @@ class AdminHomeScreen extends ConsumerWidget {
             error: (_, __) => DiklyHeroSection(
               gradient: _theme.gradient,
               greeting: '$greeting, $firstName',
-              subtitle: user?.institution ?? 'Admin Portal',
+              subtitle: user?.institutionCode ?? 'Admin Portal',
               stats: const [],
             ),
           ),
