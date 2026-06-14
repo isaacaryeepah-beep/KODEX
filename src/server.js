@@ -155,6 +155,7 @@ app.get("/anticheat",      (req, res) => res.sendFile(path.join(__dirname, "publ
 app.get("/monitor",        (req, res) => res.sendFile(path.join(__dirname, "public", "monitor-standalone.html")));
 app.get("/meeting-join",   (req, res) => res.sendFile(path.join(__dirname, "public", "meeting-monitor.html")));
 app.get("/about",          (req, res) => res.sendFile(path.join(__dirname, "public", "about.html")));
+app.get("/download",       (req, res) => res.sendFile(path.join(__dirname, "public", "download.html")));
 app.get("/founder",        (req, res) => res.sendFile(path.join(__dirname, "public", "founder.html")));
 app.get("/contact",        (req, res) => res.sendFile(path.join(__dirname, "public", "contact.html")));
 app.get("/privacy",        (req, res) => res.sendFile(path.join(__dirname, "public", "privacy.html")));

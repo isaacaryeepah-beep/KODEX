@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:url_launcher/url_launcher.dart';
 import '../../core/theme.dart';
 
 class AboutScreen extends StatelessWidget {
@@ -90,6 +91,51 @@ class AboutScreen extends StatelessWidget {
           ),
           const SizedBox(height: 12),
           ..._offers.map((o) => _OfferCard(icon: o.$1, title: o.$2, desc: o.$3)),
+
+          const SizedBox(height: 24),
+
+          // ── Download section ────────────────────────────────────────
+          const Text(
+            'Download DIKLY',
+            style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: Color(0xFF111827)),
+          ),
+          const SizedBox(height: 4),
+          const Text(
+            'Get the app on other platforms',
+            style: TextStyle(fontSize: 13, color: Color(0xFF6B7280)),
+          ),
+          const SizedBox(height: 12),
+          _DownloadCard(
+            icon: Icons.android_rounded,
+            iconColor: const Color(0xFF16A34A),
+            iconBg: const Color(0xFFDCFCE7),
+            label: 'Android APK',
+            note: 'Latest build — installs over existing app',
+            url: 'https://github.com/isaacaryeepah-beep/Dikly_releases/releases/download/flutter-latest/dikly-flutter.apk',
+          ),
+          _DownloadCard(
+            icon: Icons.desktop_windows_outlined,
+            iconColor: const Color(0xFF2563EB),
+            iconBg: const Color(0xFFEFF6FF),
+            label: 'Windows Installer',
+            note: 'dikly-windows-setup.exe — Windows 10 / 11',
+            url: 'https://github.com/isaacaryeepah-beep/Dikly_releases/releases/download/windows-latest/dikly-windows-setup.exe',
+          ),
+          _DownloadCard(
+            icon: Icons.laptop_mac_outlined,
+            iconColor: const Color(0xFF7C3AED),
+            iconBg: const Color(0xFFF5F3FF),
+            label: 'macOS DMG',
+            note: 'dikly-mac.dmg — macOS 11+',
+            url: 'https://github.com/isaacaryeepah-beep/Dikly_releases/releases/download/mac-latest/dikly-mac.dmg',
+          ),
+          const SizedBox(height: 8),
+          const Center(
+            child: Text(
+              '📱 iOS — App Store coming soon',
+              style: TextStyle(fontSize: 12, color: Color(0xFF9CA3AF)),
+            ),
+          ),
         ],
       ),
     );
@@ -103,6 +149,46 @@ const _offers = [
   (Icons.grade_outlined, 'Grade Book', 'Comprehensive grading and academic performance tracking'),
   (Icons.people_outlined, 'Multi-role Portal', 'Student, lecturer, HOD, admin, manager, and employee portals'),
 ];
+
+class _DownloadCard extends StatelessWidget {
+  final IconData icon;
+  final Color iconColor, iconBg;
+  final String label, note, url;
+
+  const _DownloadCard({
+    required this.icon,
+    required this.iconColor,
+    required this.iconBg,
+    required this.label,
+    required this.note,
+    required this.url,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 10),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: DiklyColors.border),
+      ),
+      child: ListTile(
+        contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
+        leading: Container(
+          width: 40,
+          height: 40,
+          decoration: BoxDecoration(color: iconBg, borderRadius: BorderRadius.circular(10)),
+          child: Icon(icon, color: iconColor, size: 20),
+        ),
+        title: Text(label, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: Color(0xFF111827))),
+        subtitle: Text(note, style: const TextStyle(fontSize: 11, color: Color(0xFF6B7280))),
+        trailing: Icon(Icons.download_rounded, color: iconColor, size: 20),
+        onTap: () => launchUrl(Uri.parse(url), mode: LaunchMode.externalApplication),
+      ),
+    );
+  }
+}
 
 class _OfferCard extends StatelessWidget {
   final IconData icon;
