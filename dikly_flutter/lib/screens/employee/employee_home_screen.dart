@@ -6,6 +6,7 @@ import 'package:intl/intl.dart';
 import '../../core/api.dart';
 import '../../core/auth.dart';
 import '../../widgets/ds/home_widgets.dart';
+import '../../core/theme.dart';
 
 final _signInStatusProvider = FutureProvider.autoDispose<Map<String, dynamic>>(
     (ref) => apiService.getSignInStatus());
@@ -252,7 +253,6 @@ class _EmployeeHomeScreenState extends ConsumerState<EmployeeHomeScreen> {
             ),
           ),
         ],
-      ),
     );
   }
 }
@@ -520,37 +520,6 @@ class _LeaveBalanceCard extends StatelessWidget {
                 'Request Leave',
                 style: GoogleFonts.dmSans(fontSize: 13, fontWeight: FontWeight.w700, color: color),
               ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _LeaveRow extends StatelessWidget {
-  final String label;
-  final int left;
-  final int total;
-  final Color barColor;
-
-  const _LeaveRow({required this.label, required this.left, required this.total, required this.barColor});
-
-  @override
-  Widget build(BuildContext context) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          children: [
-            Text(
-              label,
-              style: GoogleFonts.dmSans(fontSize: 12, color: const Color(0xFF6B7280)),
-            ),
-            Text(
-              '$left / $total days',
-              style: GoogleFonts.dmSans(fontSize: 12, fontWeight: FontWeight.w600, color: const Color(0xFF374151)),
             ),
           ),
         ],

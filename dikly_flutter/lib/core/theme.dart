@@ -2,11 +2,11 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 
 class DiklyColors {
-  // Primary — blue (matches web portal #2563EB)
-  static const Color primary       = Color(0xFF2563EB);  // blue-600
-  static const Color primaryDark   = Color(0xFF1D4ED8);  // blue-700
-  static const Color primaryLight  = Color(0xFF3B82F6);  // blue-500
-  static const Color primaryULight = Color(0xFFEFF6FF);  // blue-50
+  // Primary — Dikly brand blue-purple (#4F6EF7)
+  static const Color primary       = Color(0xFF4F6EF7);
+  static const Color primaryDark   = Color(0xFF3B55D6);
+  static const Color primaryLight  = Color(0xFF7C93FB);
+  static const Color primaryULight = Color(0xFFEEF2FF);
 
   // Semantic (NextUI tokens)
   static const Color success       = Color(0xFF17C964);

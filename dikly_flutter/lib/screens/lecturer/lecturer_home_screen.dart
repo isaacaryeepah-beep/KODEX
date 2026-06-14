@@ -29,7 +29,7 @@ class LecturerHomeScreen extends ConsumerWidget {
             data: (d) => DiklyHeroSection(
               gradient: _theme.gradient,
               greeting: 'Hello, $firstName 👋',
-              subtitle: '${user?.department ?? user?.institution ?? 'Lecturer Portal'} · ${DateFormat('EEE, MMM d').format(DateTime.now())}',
+              subtitle: '${user?.department ?? user?.institutionCode ?? 'Lecturer Portal'} · ${DateFormat('EEE, MMM d').format(DateTime.now())}',
               stats: [
                 DiklyHeaderStat(value: '${d['totalStudents'] ?? 0}', label: 'Students', icon: Icons.people_outlined),
                 DiklyHeaderStat(value: '${d['activeCourses'] ?? 0}', label: 'Courses', icon: Icons.school_outlined),
@@ -39,7 +39,7 @@ class LecturerHomeScreen extends ConsumerWidget {
             loading: () => DiklyHeroSection(
               gradient: _theme.gradient,
               greeting: 'Hello, $firstName 👋',
-              subtitle: user?.institution ?? 'Lecturer Portal',
+              subtitle: user?.institutionCode ?? 'Lecturer Portal',
               stats: [
                 const DiklyHeaderStat(value: '—', label: 'Students'),
                 const DiklyHeaderStat(value: '—', label: 'Courses'),
@@ -49,7 +49,7 @@ class LecturerHomeScreen extends ConsumerWidget {
             error: (_, __) => DiklyHeroSection(
               gradient: _theme.gradient,
               greeting: 'Hello, $firstName 👋',
-              subtitle: user?.institution ?? 'Lecturer Portal',
+              subtitle: user?.institutionCode ?? 'Lecturer Portal',
               stats: const [],
             ),
           ),

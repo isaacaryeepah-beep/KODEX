@@ -9,11 +9,11 @@ import '../../core/theme.dart';
 import '../../widgets/ds/dikly_ds.dart';
 
 final _hodDashProvider = FutureProvider.autoDispose<Map<String, dynamic>>(
-  (ref) => apiService.getHodDashboardData(),
+  (ref) => apiService.getHodOverview(),
 );
 final _hodApprovalsProvider = FutureProvider.autoDispose<int>((ref) async {
   try {
-    final data = await apiService.getHodPendingApprovals();
+    final data = await apiService.getPendingApprovals();
     return (data as List?)?.length ?? 0;
   } catch (_) { return 0; }
 });
@@ -37,7 +37,7 @@ class HodHomeScreen extends ConsumerWidget {
             data: (d) => DiklyHeroSection(
               gradient: _theme.gradient,
               greeting: 'Welcome, $firstName 👋',
-              subtitle: '${user?.department ?? 'Department'} · ${user?.institution ?? 'HOD Portal'}',
+              subtitle: '${user?.department ?? 'Department'} · ${user?.institutionCode ?? 'HOD Portal'}',
               stats: [
                 DiklyHeaderStat(value: '${d['lecturers'] ?? 0}', label: 'Lecturers', icon: Icons.person_outlined),
                 DiklyHeaderStat(value: '${d['students'] ?? 0}', label: 'Students', icon: Icons.people_outlined),
@@ -47,7 +47,7 @@ class HodHomeScreen extends ConsumerWidget {
             loading: () => DiklyHeroSection(
               gradient: _theme.gradient,
               greeting: 'Welcome, $firstName 👋',
-              subtitle: user?.institution ?? 'HOD Portal',
+              subtitle: user?.institutionCode ?? 'HOD Portal',
               stats: const [
                 DiklyHeaderStat(value: '—', label: 'Lecturers'),
                 DiklyHeaderStat(value: '—', label: 'Students'),
@@ -57,7 +57,7 @@ class HodHomeScreen extends ConsumerWidget {
             error: (_, __) => DiklyHeroSection(
               gradient: _theme.gradient,
               greeting: 'Welcome, $firstName 👋',
-              subtitle: user?.institution ?? 'HOD Portal',
+              subtitle: user?.institutionCode ?? 'HOD Portal',
               stats: const [],
             ),
           ),
@@ -237,7 +237,8 @@ class _DepartmentWarning extends StatelessWidget {
               style: GoogleFonts.dmSans(fontSize: 12, color: const Color(0xFF92400E), height: 1.4),
             ),
           ),
-      ],
+        ],
+      ),
     );
   }
 }

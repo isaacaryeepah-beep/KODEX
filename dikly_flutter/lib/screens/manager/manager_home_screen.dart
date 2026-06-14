@@ -86,39 +86,8 @@ class ManagerHomeScreen extends ConsumerWidget {
                         ),
                       ],
                     ),
-                    _StatCard(
-                      label: 'ACTIVE SESSIONS',
-                      value: '${data['activeSessions'] ?? 0}',
-                      sub: 'Currently clocked in',
-                      icon: Icons.check_circle_outline,
-                      iconColor: const Color(0xFF16A34A),
-                    ),
-                    _StatCard(
-                      label: 'HOURS THIS MONTH',
-                      value: '${data['hoursThisMonth'] ?? 0}',
-                      sub: 'From approved timesheets',
-                      icon: Icons.access_time_outlined,
-                      iconColor: const Color(0xFFD97706),
-                    ),
-                    _StatCard(
-                      label: 'LEAVE REQUESTS',
-                      value: '${data['leaveRequests'] ?? 0}',
-                      sub: 'Pending review',
-                      icon: Icons.event_note_outlined,
-                      iconColor: const Color(0xFFDC2626),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 10),
-                _StatCard(
-                  label: 'DEPARTMENTS',
-                  value: '${data['departments'] ?? 0}',
-                  sub: 'Across company',
-                  icon: Icons.business_outlined,
-                  iconColor: const Color(0xFF0891B2),
-                  fullWidth: true,
-                ),
-                const SizedBox(height: 24),
+                  ),
+                  const SizedBox(height: 20),
 
                   dashAsync.when(
                     loading: () => const Column(
@@ -300,7 +269,6 @@ class ManagerHomeScreen extends ConsumerWidget {
             ),
           ),
         ],
-      ),
     );
   }
 }
