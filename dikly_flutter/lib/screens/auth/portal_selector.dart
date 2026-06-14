@@ -38,19 +38,15 @@ class _PortalSelectorScreenState extends State<PortalSelectorScreen> {
                       Row(
                         mainAxisSize: MainAxisSize.min,
                         children: [
-                          // DIKLY logo icon
-                          Container(
-                            width: 52,
-                            height: 52,
-                            decoration: BoxDecoration(
-                              gradient: const LinearGradient(
-                                begin: Alignment.topLeft,
-                                end: Alignment.bottomRight,
-                                colors: [Color(0xFF4F6EF7), Color(0xFF312E81)],
-                              ),
-                              borderRadius: BorderRadius.circular(14),
+                          // DIKLY logo icon — uses the same D-logo app icon
+                          ClipRRect(
+                            borderRadius: BorderRadius.circular(14),
+                            child: Image.asset(
+                              'assets/icon.png',
+                              width: 52,
+                              height: 52,
+                              fit: BoxFit.cover,
                             ),
-                            child: CustomPaint(painter: _DiklyLogoPainter()),
                           ),
                           const SizedBox(width: 14),
                           Column(
@@ -192,50 +188,6 @@ class _PortalSelectorScreenState extends State<PortalSelectorScreen> {
                         ),
                       ),
 
-                      const SizedBox(height: 20),
-
-                      // ── Download section ──────────────────────────────
-                      Container(
-                        decoration: BoxDecoration(
-                          color: Colors.white.withOpacity(0.08),
-                          borderRadius: BorderRadius.circular(16),
-                          border: Border.all(color: Colors.white.withOpacity(0.12)),
-                        ),
-                        padding: const EdgeInsets.fromLTRB(16, 16, 16, 14),
-                        child: Column(
-                          children: [
-                            const Text(
-                              'DOWNLOAD DIKLY',
-                              style: TextStyle(
-                                fontSize: 11,
-                                fontWeight: FontWeight.w700,
-                                color: Colors.white,
-                                letterSpacing: 1.5,
-                              ),
-                            ),
-                            const SizedBox(height: 2),
-                            Text(
-                              'Free on Android & Desktop',
-                              style: TextStyle(fontSize: 11, color: Colors.white.withOpacity(0.5)),
-                            ),
-                            const SizedBox(height: 12),
-                            Row(
-                              children: [
-                                Expanded(child: _DownloadBtn(label: 'Android', tag: '+ APK', color: const Color(0xFF16A34A))),
-                                const SizedBox(width: 8),
-                                Expanded(child: _DownloadBtn(label: 'Windows', tag: '+ EXE', color: const Color(0xFF2563EB))),
-                                const SizedBox(width: 8),
-                                Expanded(child: _DownloadBtn(label: 'macOS', tag: '+ DMG', color: const Color(0xFF7C3AED))),
-                              ],
-                            ),
-                            const SizedBox(height: 8),
-                            Text(
-                              '• iOS — App Store coming soon',
-                              style: TextStyle(fontSize: 10, color: Colors.white.withOpacity(0.4)),
-                            ),
-                          ],
-                        ),
-                      ),
 
                       const SizedBox(height: 20),
 
@@ -578,71 +530,3 @@ class _GridPortalCard extends StatelessWidget {
   }
 }
 
-// ── Download Button ───────────────────────────────────────────────────────────
-
-class _DownloadBtn extends StatelessWidget {
-  final String label, tag;
-  final Color color;
-  const _DownloadBtn({required this.label, required this.tag, required this.color});
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 6),
-      decoration: BoxDecoration(
-        color: color.withOpacity(0.12),
-        borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: color.withOpacity(0.3)),
-      ),
-      child: Column(
-        children: [
-          Text(label, style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: Colors.white)),
-          const SizedBox(height: 2),
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-            decoration: BoxDecoration(color: color, borderRadius: BorderRadius.circular(4)),
-            child: Text(tag, style: const TextStyle(fontSize: 9, fontWeight: FontWeight.w700, color: Colors.white)),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-// ── DIKLY Logo Painter (diagonal swoosh design matching website) ──────────────
-
-class _DiklyLogoPainter extends CustomPainter {
-  @override
-  void paint(Canvas canvas, Size size) {
-    final paint = Paint()
-      ..color = Colors.white
-      ..style = PaintingStyle.fill;
-
-    final w = size.width;
-    final h = size.height;
-
-    // Draw two diagonal white bars forming a stylized D/swoosh
-    // Bar 1: thick diagonal from lower-left to upper-right
-    final path1 = Path();
-    path1.moveTo(w * 0.18, h * 0.78);
-    path1.lineTo(w * 0.38, h * 0.78);
-    path1.lineTo(w * 0.82, h * 0.22);
-    path1.lineTo(w * 0.62, h * 0.22);
-    path1.close();
-    canvas.drawPath(path1, paint);
-
-    // Bar 2: second diagonal bar offset to the right
-    final path2 = Path();
-    path2.moveTo(w * 0.42, h * 0.78);
-    path2.lineTo(w * 0.58, h * 0.78);
-    path2.lineTo(w * 0.58, h * 0.62);
-    path2.lineTo(w * 0.82, h * 0.22);
-    path2.lineTo(w * 0.66, h * 0.22);
-    path2.lineTo(w * 0.42, h * 0.62);
-    path2.close();
-    canvas.drawPath(path2, paint);
-  }
-
-  @override
-  bool shouldRepaint(_) => false;
-}
