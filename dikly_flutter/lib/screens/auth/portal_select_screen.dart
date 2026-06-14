@@ -232,9 +232,11 @@ class _PortalSelectScreenState extends State<PortalSelectScreen> {
               ],
             ),
           ),
-        ],
+        ),
       ),
-    );
+    ],
+  ),
+);
   }
 }
 

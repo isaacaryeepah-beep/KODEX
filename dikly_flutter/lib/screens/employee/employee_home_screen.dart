@@ -16,6 +16,8 @@ final _myLeavesProvider = FutureProvider.autoDispose<List<Map<String, dynamic>>>
 final _monthlyAttendanceProvider = FutureProvider.autoDispose<Map<String, dynamic>>(
     (ref) => apiService.getMyMonthlyAttendance());
 
+const _accent = Color(0xFF0369A1);
+
 class EmployeeHomeScreen extends ConsumerStatefulWidget {
   const EmployeeHomeScreen({super.key});
 
@@ -550,6 +552,31 @@ class _LeaveRow extends StatelessWidget {
               '$left / $total days',
               style: GoogleFonts.dmSans(fontSize: 12, fontWeight: FontWeight.w600, color: const Color(0xFF374151)),
             ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _LeaveRow extends StatelessWidget {
+  final String label;
+  final int left;
+  final int total;
+  final Color barColor;
+
+  const _LeaveRow({required this.label, required this.left, required this.total, required this.barColor});
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            Text(label, style: GoogleFonts.dmSans(fontSize: 11, color: DiklyColors.textSecondary)),
+            Text('$left / $total days', style: GoogleFonts.dmSans(fontSize: 11, fontWeight: FontWeight.w600, color: DiklyColors.text)),
           ],
         ),
         const SizedBox(height: 6),
@@ -563,6 +590,116 @@ class _LeaveRow extends StatelessWidget {
           ),
         ),
       ],
+    );
+  }
+}
+
+// ── Notifications Card ────────────────────────────────────────────────────────
+
+class _NotificationsCard extends StatelessWidget {
+  const _NotificationsCard();
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: DiklyColors.surface,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: DiklyColors.border),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text('Notifications', style: GoogleFonts.dmSans(fontSize: 13, fontWeight: FontWeight.w700, color: DiklyColors.text)),
+          const SizedBox(height: 12),
+          Row(
+            children: [
+              const Icon(Icons.check_circle_outline, size: 16, color: Color(0xFF16A34A)),
+              const SizedBox(width: 6),
+              Expanded(child: Text('All clear — no alerts', style: GoogleFonts.dmSans(fontSize: 12, color: DiklyColors.textSecondary))),
+            ],
+          ),
+          const SizedBox(height: 12),
+          GestureDetector(
+            onTap: () => context.push('/announcements'),
+            child: Text('View All →', style: GoogleFonts.dmSans(fontSize: 12, color: _accent, fontWeight: FontWeight.w600)),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// ── Quick Action Chip ─────────────────────────────────────────────────────────
+
+class _QuickChip extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final VoidCallback onTap;
+
+  const _QuickChip({required this.icon, required this.label, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+        decoration: BoxDecoration(
+          color: _accent.withOpacity(0.07),
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(color: _accent.withOpacity(0.18)),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(icon, size: 14, color: _accent),
+            const SizedBox(width: 5),
+            Text(label, style: GoogleFonts.dmSans(fontSize: 12, fontWeight: FontWeight.w600, color: _accent)),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+// ── Misc Helpers ──────────────────────────────────────────────────────────────
+
+class _CardSkeleton extends StatelessWidget {
+  final double height;
+  const _CardSkeleton({required this.height});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      height: height,
+      decoration: BoxDecoration(color: DiklyColors.border.withOpacity(0.4), borderRadius: BorderRadius.circular(12)),
+    );
+  }
+}
+
+class _EmptyCard extends StatelessWidget {
+  final IconData icon;
+  final String message;
+  const _EmptyCard({required this.icon, required this.message});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(24),
+      decoration: BoxDecoration(
+        color: DiklyColors.surface,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: DiklyColors.border),
+      ),
+      child: Column(
+        children: [
+          Icon(icon, size: 36, color: DiklyColors.border),
+          const SizedBox(height: 8),
+          Text(message, style: const TextStyle(color: DiklyColors.textSecondary, fontSize: 13)),
+        ],
+      ),
     );
   }
 }
