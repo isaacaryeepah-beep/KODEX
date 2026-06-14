@@ -44,6 +44,7 @@ flutter:
   assets:
     - assets/icon.png
     - assets/login-bg.jpg
+    - assets/bg_office.jpg
 
 flutter_launcher_icons:
   android: true

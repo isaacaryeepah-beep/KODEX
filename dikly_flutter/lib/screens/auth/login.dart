@@ -127,76 +127,51 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     final badge = _info['badge'] as String;
 
     return Scaffold(
-      backgroundColor: DiklyColors.authBg,
-      body: SafeArea(
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const SizedBox(height: 8),
+      backgroundColor: Colors.black,
+      body: Stack(
+        fit: StackFit.expand,
+        children: [
+          // Office background
+          Image.asset('assets/bg_office.jpg', fit: BoxFit.cover),
+          // Dark overlay
+          Container(color: const Color(0xB5141628)),
+          // Content
+          SafeArea(
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const SizedBox(height: 8),
 
-              // ── Back arrow ─────────────────────────────────────────────────
-              GestureDetector(
-                onTap: () => context.pop(),
-                child: Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 12,
-                    vertical: 8,
-                  ),
-                  decoration: BoxDecoration(
-                    color: DiklyColors.surface,
-                    borderRadius: BorderRadius.circular(8),
-                    border: Border.all(color: DiklyColors.border),
-                  ),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      const Icon(
-                        Icons.arrow_back_ios_rounded,
-                        size: 14,
-                        color: DiklyColors.textSecondary,
+                  // ── Back arrow ───────────────────────────────────────────
+                  GestureDetector(
+                    onTap: () => context.pop(),
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                      decoration: BoxDecoration(
+                        color: Colors.white.withOpacity(0.12),
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(color: Colors.white.withOpacity(0.2)),
                       ),
-                      const SizedBox(width: 4),
-                      Text(
-                        'Back',
-                        style: GoogleFonts.dmSans(
-                          fontSize: 13,
-                          fontWeight: FontWeight.w500,
-                          color: DiklyColors.textSecondary,
-                        ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          const Icon(Icons.arrow_back_ios_rounded, size: 14, color: Colors.white70),
+                          const SizedBox(width: 4),
+                          Text('Back', style: GoogleFonts.dmSans(fontSize: 13, fontWeight: FontWeight.w500, color: Colors.white70)),
+                        ],
                       ),
-                    ],
+                    ),
                   ),
-                ),
-              ),
               const SizedBox(height: 24),
 
-              // ── Logo (small) ───────────────────────────────────────────────
+              // ── Logo (small) ────────────────────────────────────────────
               Row(
                 children: [
-                  Container(
-                    width: 36,
-                    height: 36,
-                    decoration: BoxDecoration(
-                      gradient: const LinearGradient(
-                        begin: Alignment.topLeft,
-                        end: Alignment.bottomRight,
-                        colors: [Color(0xFF2563EB), Color(0xFF1D4ED8)],
-                      ),
-                      borderRadius: BorderRadius.circular(9),
-                    ),
-                    child: Center(
-                      child: Text(
-                        'D',
-                        style: GoogleFonts.dmSans(
-                          fontSize: 16,
-                          fontWeight: FontWeight.w800,
-                          color: Colors.white,
-                          height: 1.0,
-                        ),
-                      ),
-                    ),
+                  ClipRRect(
+                    borderRadius: BorderRadius.circular(9),
+                    child: Image.asset('assets/icon.png', width: 36, height: 36, fit: BoxFit.contain),
                   ),
                   const SizedBox(width: 10),
                   Text(
@@ -204,7 +179,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                     style: GoogleFonts.dmSans(
                       fontSize: 22,
                       fontWeight: FontWeight.w800,
-                      color: const Color(0xFF1E1B4B),
+                      color: Colors.white,
                       letterSpacing: 1,
                     ),
                   ),
@@ -537,19 +512,15 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                 child: Column(
                   children: [
                     Text(
-                      'DIKLY · Secure Academic Portal',
-                      style: GoogleFonts.dmSans(fontSize: 12, color: DiklyColors.textMuted),
+                      'DIKLY · Secure Portal',
+                      style: GoogleFonts.dmSans(fontSize: 12, color: Colors.white54),
                     ),
                     const SizedBox(height: 4),
                     GestureDetector(
                       onTap: () => context.go('/portal'),
                       child: Text(
                         'Switch portal',
-                        style: GoogleFonts.dmSans(
-                          fontSize: 12,
-                          color: DiklyColors.primary,
-                          fontWeight: FontWeight.w500,
-                        ),
+                        style: GoogleFonts.dmSans(fontSize: 12, color: Colors.white70, fontWeight: FontWeight.w500),
                       ),
                     ),
                   ],
@@ -559,6 +530,8 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
             ],
           ),
         ),
+      ),
+        ],
       ),
     );
   }
