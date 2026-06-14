@@ -30,8 +30,6 @@ router.get('/upcoming',    meetCtrl.upcomingMeetings);
 router.get('/live',        meetCtrl.liveMeetings);
 router.get('/my-meetings', meetCtrl.myMeetings);
 router.get('/validate-token', meetCtrl.validateMeetingToken);
-// Jitsi infrastructure health: verifies JWT generation + BOSH reachability
-router.get('/jitsi/health',  meetCtrl.jitsiHealth);
 router.get('/',              meetCtrl.listMeetings);
 
 // ─── CREATE ───────────────────────────────────────────────────────────────────
@@ -47,28 +45,19 @@ router.post('/:id/cancel', loadMeeting, isOwner, meetCtrl.cancelMeeting);
 router.delete('/:id/delete', loadMeeting, isOwner, meetCtrl.deleteMeeting);
 
 // ─── ROOM CONTROL (moderator) ─────────────────────────────────────────────────
-router.post('/:id/lock',                      loadMeeting, isModerator, meetCtrl.lockRoom);
-router.post('/:id/unlock',                    loadMeeting, isModerator, meetCtrl.unlockRoom);
-router.post('/:id/mute-all',                  loadMeeting, isModerator, meetCtrl.muteAll);
-router.post('/:id/participants/:uid/mute',    loadMeeting, isModerator, meetCtrl.muteParticipant);
+router.post('/:id/lock',   loadMeeting, isModerator, meetCtrl.lockRoom);
+router.post('/:id/unlock', loadMeeting, isModerator, meetCtrl.unlockRoom);
 
 // ─── INVIGILATOR MANAGEMENT (owner only) ─────────────────────────────────────
 router.post('/:id/invigilators/add',    loadMeeting, isOwner, meetCtrl.addInvigilator);
 router.post('/:id/invigilators/remove', loadMeeting, isOwner, meetCtrl.removeInvigilator);
 
-// ─── PRE-FLIGHT (monitoring initialises BEFORE Jitsi join) ───────────────────
-// Students must POST here first; monitoring activates, then join is returned
-router.post('/:id/preflight',  preflight.runPreflight);
-router.post('/:id/reconnect',  preflight.handleReconnect);
-
 // ─── JOIN ─────────────────────────────────────────────────────────────────────
 router.get('/:id/join', loadMeeting, requireNoDeviceLock, canJoin, meetCtrl.joinMeeting);
 
-// ─── PREFLIGHT (monitoring init before Jitsi join) ────────────────────────────
-router.post('/:id/preflight', loadMeeting, requireNoDeviceLock, canJoin, meetCtrl.preflightMeeting);
-
-// ─── RECONNECT (monitoring restore after Jitsi reconnect) ─────────────────────
-router.post('/:id/reconnect', meetCtrl.reconnectMeeting);
+// ─── PRE-FLIGHT & RECONNECT ───────────────────────────────────────────────────
+router.post('/:id/preflight', preflight.runPreflight);
+router.post('/:id/reconnect', preflight.handleReconnect);
 
 // ─── LIVE MONITORING (SSE + polling) ─────────────────────────────────────────
 // Monitor dashboard data (moderators/invigilators only — enforced inside controller)
