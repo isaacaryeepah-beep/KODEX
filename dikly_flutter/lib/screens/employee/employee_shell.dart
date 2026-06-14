@@ -89,16 +89,17 @@ class _EmployeeShellState extends ConsumerState<EmployeeShell> {
 
     return Scaffold(
       appBar: AppBar(
-        backgroundColor: DiklyColors.surface,
+        backgroundColor: const Color(0xFF047857),
+        foregroundColor: Colors.white,
         elevation: 0,
         surfaceTintColor: Colors.transparent,
         leading: Builder(
           builder: (ctx) => IconButton(
-            icon: const Icon(Icons.menu_outlined, color: DiklyColors.text),
+            icon: const Icon(Icons.menu_outlined, color: Colors.white),
             onPressed: () => Scaffold.of(ctx).openDrawer(),
           ),
         ),
-        title: Text(tabTitle),
+        title: Text(tabTitle, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w700)),
         actions: [
           PopupMenuButton<String>(
             offset: const Offset(0, 48),
@@ -107,10 +108,10 @@ class _EmployeeShellState extends ConsumerState<EmployeeShell> {
               padding: const EdgeInsets.symmetric(horizontal: 12),
               child: CircleAvatar(
                 radius: 18,
-                backgroundColor: _color.withOpacity(0.12),
+                backgroundColor: Colors.white.withOpacity(0.25),
                 child: Text(
                   (user?.name ?? 'E').substring(0, 1).toUpperCase(),
-                  style: const TextStyle(color: _color, fontWeight: FontWeight.w700, fontSize: 14),
+                  style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w700, fontSize: 14),
                 ),
               ),
             ),

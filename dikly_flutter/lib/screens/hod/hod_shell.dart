@@ -92,22 +92,19 @@ class _HodShellState extends ConsumerState<HodShell> {
       key: _scaffoldKey,
       backgroundColor: const Color(0xFFF1F5F9),
       appBar: AppBar(
-        backgroundColor: Colors.white,
+        backgroundColor: const Color(0xFF0E7490),
+        foregroundColor: Colors.white,
         elevation: 0,
         surfaceTintColor: Colors.transparent,
         leading: Builder(
           builder: (ctx) => IconButton(
-            icon: const Icon(Icons.menu_outlined, color: DiklyColors.text),
+            icon: const Icon(Icons.menu_outlined, color: Colors.white),
             onPressed: () => _scaffoldKey.currentState?.openDrawer(),
           ),
         ),
         title: Text(
           'HOD Portal',
-          style: GoogleFonts.dmSans(fontSize: 17, fontWeight: FontWeight.w700, color: DiklyColors.text),
-        ),
-        bottom: PreferredSize(
-          preferredSize: const Size.fromHeight(1),
-          child: Container(height: 1, color: DiklyColors.border),
+          style: GoogleFonts.dmSans(fontSize: 17, fontWeight: FontWeight.w700, color: Colors.white),
         ),
         actions: [
           PopupMenuButton<String>(

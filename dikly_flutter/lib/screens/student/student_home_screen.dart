@@ -15,484 +15,348 @@ final _studentDashProvider = FutureProvider.autoDispose<Map<String, dynamic>>(
 class StudentHomeScreen extends ConsumerWidget {
   const StudentHomeScreen({super.key});
 
+  static const _theme = DiklyRoleTheme.student;
+
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final user = ref.watch(authProvider).user;
     final dashAsync = ref.watch(_studentDashProvider);
     final firstName = (user?.name ?? 'Student').split(' ').first;
 
-    // Device lock banner data (derived from user object directly)
     final isLocked = user?.deviceLocked == true &&
         user?.deviceLockedUntil != null &&
         user!.deviceLockedUntil!.isAfter(DateTime.now());
     final lockUntil = user?.deviceLockedUntil;
 
-    return RefreshIndicator(
-      onRefresh: () async { ref.invalidate(_studentDashProvider); },
-      child: ListView(
-        padding: const EdgeInsets.all(16),
-        children: [
-          // Header
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'Welcome back, $firstName',
-                      style: GoogleFonts.dmSans(fontSize: 22, fontWeight: FontWeight.w800, color: DiklyColors.text, height: 1.2),
-                    ),
-                    const SizedBox(height: 4),
-                    RichText(
-                      text: TextSpan(
-                        style: const TextStyle(fontSize: 13, color: DiklyColors.textLight),
-                        children: [
-                          TextSpan(text: user?.company ?? 'Your institution'),
-                          if (user?.indexNumber != null && user!.indexNumber!.isNotEmpty)
-                            TextSpan(text: ' · ${user.indexNumber}'),
-                        ],
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 20),
-
-          // Device lock banner
-          if (isLocked && lockUntil != null) ...[
-            Builder(builder: (_) {
-              final remaining = lockUntil.difference(DateTime.now());
-              final hrs = remaining.inHours;
-              final mins = remaining.inMinutes % 60;
-              final timeStr = hrs > 0 ? '${hrs}h ${mins}m' : '${mins}m';
-              return Container(
-                padding: const EdgeInsets.all(14),
-                decoration: BoxDecoration(
-                  color: const Color(0xFFFFFBEB),
-                  border: Border.all(color: const Color(0xFFF59E0B), width: 1.5),
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const Text('🔒', style: TextStyle(fontSize: 20)),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          const Text('Account Temporarily Locked — New Device Detected', style: TextStyle(fontWeight: FontWeight.w700, color: Color(0xFF92400E), fontSize: 13)),
-                          const SizedBox(height: 4),
-                          Text(
-                            'Attendance, quizzes and meetings are blocked for $timeStr (until ${lockUntil.hour.toString().padLeft(2, '0')}:${lockUntil.minute.toString().padLeft(2, '0')}). Contact your admin or HOD to unlock early.',
-                            style: const TextStyle(fontSize: 12, color: Color(0xFF78350F)),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ],
-                ),
-              );
-            }),
-            const SizedBox(height: 16),
-          ],
-
+    return Column(
+      children: [
+          // ── Hero ─────────────────────────────────────────────────
           dashAsync.when(
-            loading: () => const Center(child: Padding(padding: EdgeInsets.all(32), child: CircularProgressIndicator(color: DiklyColors.primary))),
-            error: (e, _) => DiklyCard(
-              padding: const EdgeInsets.all(24),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  const Icon(Icons.error_outline, size: 36, color: DiklyColors.error),
-                  const SizedBox(height: 10),
-                  const Text('Failed to load dashboard'),
-                  const SizedBox(height: 10),
-                  TextButton(onPressed: () => ref.invalidate(_studentDashProvider), child: const Text('Retry')),
-                ],
-              ),
+            data: (d) => DiklyHeroSection(
+              gradient: _theme.gradient,
+              greeting: 'Hi, $firstName 👋',
+              subtitle: '${user?.institution ?? 'Student Portal'} · ${DateFormat('EEE, MMM d').format(DateTime.now())}',
+              stats: [
+                DiklyHeaderStat(
+                  value: '${d['totalCheckIns'] ?? 0}',
+                  label: 'Check-ins',
+                  icon: Icons.fact_check_outlined,
+                ),
+                DiklyHeaderStat(
+                  value: '${d['attendanceRate'] ?? 0}%',
+                  label: 'Attendance',
+                  icon: Icons.trending_up_rounded,
+                ),
+                DiklyHeaderStat(
+                  value: '${d['enrolledCourses'] ?? 0}',
+                  label: 'Courses',
+                  icon: Icons.school_outlined,
+                ),
+              ],
             ),
-            data: (dash) {
-              final activeSession = dash['activeSession'] as Map?;
-              final totalCheckins = dash['totalCheckins'] ?? 0;
-              final attendanceRate = dash['attendanceRate'] ?? 0;
-              final enrolledCourses = dash['enrolledCourses'] ?? 0;
-              final quizzesTaken = dash['quizzesTaken'] ?? 0;
-              final upcomingAssignments = (dash['upcomingAssignments'] as List?) ?? [];
-              final attendanceRecords = (dash['attendanceRecords'] as List?) ?? [];
-
-              return Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  // Active session banner
-                  if (activeSession != null) ...[
-                    GestureDetector(
-                      onTap: () => context.push('/attendance'),
-                      child: Container(
-                        padding: const EdgeInsets.all(16),
-                        decoration: BoxDecoration(
-                          color: const Color(0xFFF0FDF4),
-                          border: Border.all(color: DiklyColors.success, width: 1.5),
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                        child: Row(
-                          children: [
-                            Container(
-                              padding: const EdgeInsets.all(10),
-                              decoration: BoxDecoration(color: DiklyColors.success, borderRadius: BorderRadius.circular(10)),
-                              child: const Icon(Icons.task_alt, color: Colors.white, size: 22),
-                            ),
-                            const SizedBox(width: 14),
-                            Expanded(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  const Text('Active Session — Mark Now', style: TextStyle(fontSize: 11, color: DiklyColors.success, fontWeight: FontWeight.w700, letterSpacing: 0.4)),
-                                  const SizedBox(height: 2),
-                                  Text(
-                                    activeSession['title']?.toString() ?? 'Untitled Session',
-                                    style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w700, color: DiklyColors.text),
-                                  ),
-                                ],
-                              ),
-                            ),
-                            Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                              decoration: BoxDecoration(color: DiklyColors.success, borderRadius: BorderRadius.circular(20)),
-                              child: const Text('LIVE', style: TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.w800)),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
-                    const SizedBox(height: 16),
-                  ],
-
-                  // Stats row
-                  Row(
-                    children: [
-                      _StatCard(value: '$totalCheckins', label: 'TOTAL CHECK-INS', color: DiklyColors.primary),
-                      const SizedBox(width: 8),
-                      _StatCard(value: '$attendanceRate%', label: 'ATTENDANCE RATE', color: (attendanceRate as int) >= 75 ? DiklyColors.success : DiklyColors.warning),
-                      const SizedBox(width: 8),
-                      _StatCard(value: '$enrolledCourses', label: 'ENROLLED COURSES', color: const Color(0xFF7C3AED)),
-                      const SizedBox(width: 8),
-                      _StatCard(value: '$quizzesTaken', label: 'QUIZZES TAKEN', color: const Color(0xFF0891B2)),
-                    ],
-                  ),
-                  const SizedBox(height: 16),
-
-                  // Quick Actions
-                  SingleChildScrollView(
-                    scrollDirection: Axis.horizontal,
-                    child: Row(
-                      children: [
-                        _QAButton(label: 'Mark Attendance', filled: true, onTap: () => context.push('/attendance')),
-                        const SizedBox(width: 8),
-                        _QAButton(label: 'View History', onTap: () => context.push('/attendance')),
-                        const SizedBox(width: 8),
-                        _QAButton(label: 'My Courses', onTap: () => context.push('/courses')),
-                        const SizedBox(width: 8),
-                        _QAButton(label: 'Quizzes', onTap: () => context.push('/quizzes')),
-                        const SizedBox(width: 8),
-                        _QAButton(label: 'Report Card', icon: Icons.check_box_outlined, onTap: () => context.push('/quiz-history')),
-                      ],
-                    ),
-                  ),
-                  const SizedBox(height: 24),
-
-                  // Upcoming Assignments
-                  if (upcomingAssignments.isNotEmpty) ...[
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        const Text('Upcoming Assignments', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700, color: DiklyColors.text)),
-                        TextButton(onPressed: () => context.push('/assignments'), child: const Text('View All', style: TextStyle(fontSize: 13, color: DiklyColors.primary))),
-                      ],
-                    ),
-                    const SizedBox(height: 8),
-                    DiklyCard(
-                      padding: EdgeInsets.zero,
-                      child: Column(
-                        children: upcomingAssignments.take(5).map<Widget>((a) => _AssignmentRow(a: a as Map)).toList(),
-                      ),
-                    ),
-                    const SizedBox(height: 24),
-                  ],
-
-                  // Recent Attendance
-                  const Text('Recent Attendance', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700, color: DiklyColors.text)),
-                  const SizedBox(height: 8),
-                  attendanceRecords.isEmpty
-                      ? DiklyEmptyState(
-                          icon: Icons.fingerprint,
-                          title: 'No attendance records yet',
-                          subtitle: 'Mark attendance when a session is active.',
-                        )
-                      : DiklyCard(
-                          padding: EdgeInsets.zero,
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              // Table header
-                              Container(
-                                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 9),
-                                decoration: const BoxDecoration(
-                                  color: Color(0xFFF9FAFB),
-                                  border: Border(bottom: BorderSide(color: DiklyColors.border)),
-                                  borderRadius: BorderRadius.vertical(top: Radius.circular(10)),
-                                ),
-                                child: const Row(
-                                  children: [
-                                    Expanded(flex: 3, child: _TableHeader('SESSION')),
-                                    Expanded(flex: 2, child: _TableHeader('STATUS')),
-                                    Expanded(flex: 2, child: _TableHeader('METHOD')),
-                                    Expanded(flex: 3, child: _TableHeader('CHECK-IN TIME')),
-                                  ],
-                                ),
-                              ),
-                              ...attendanceRecords.take(5).map<Widget>((r) => _AttendanceRow(r: r as Map)),
-                            ],
-                          ),
-                        ),
-                  const SizedBox(height: 24),
-                ],
-              );
-            },
+            loading: () => DiklyHeroSection(
+              gradient: _theme.gradient,
+              greeting: 'Hi, $firstName 👋',
+              subtitle: user?.institution ?? 'Student Portal',
+              stats: [
+                const DiklyHeaderStat(value: '—', label: 'Check-ins'),
+                const DiklyHeaderStat(value: '—', label: 'Attendance'),
+                const DiklyHeaderStat(value: '—', label: 'Courses'),
+              ],
+            ),
+            error: (_, __) => DiklyHeroSection(
+              gradient: _theme.gradient,
+              greeting: 'Hi, $firstName 👋',
+              subtitle: user?.institution ?? 'Student Portal',
+              stats: const [],
+            ),
           ),
-        ],
-      ),
-    );
-  }
-}
 
-class _StatCard extends StatelessWidget {
-  final String value;
-  final String label;
-  final Color color;
-
-  const _StatCard({required this.value, required this.label, required this.color});
-
-  @override
-  Widget build(BuildContext context) {
-    return Expanded(
-      child: Container(
-        padding: const EdgeInsets.fromLTRB(10, 10, 10, 10),
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(10),
-          border: Border.all(color: const Color(0xFFE5E7EB)),
-          boxShadow: const [BoxShadow(color: Color(0x08000000), blurRadius: 4, offset: Offset(0, 1))],
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Container(height: 3, decoration: BoxDecoration(color: color, borderRadius: BorderRadius.circular(2))),
-            const SizedBox(height: 8),
-            Text(value, style: TextStyle(fontSize: 20, fontWeight: FontWeight.w800, color: color, height: 1)),
-            const SizedBox(height: 2),
-            Text(label, style: const TextStyle(fontSize: 8, fontWeight: FontWeight.w700, color: Color(0xFF9CA3AF), letterSpacing: 0.2)),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _QAButton extends StatelessWidget {
-  final String label;
-  final bool filled;
-  final IconData? icon;
-  final VoidCallback onTap;
-
-  const _QAButton({required this.label, required this.onTap, this.filled = false, this.icon});
-
-  @override
-  Widget build(BuildContext context) {
-    const blue = Color(0xFF2563EB);
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 9),
-        decoration: BoxDecoration(
-          color: filled ? blue : Colors.white,
-          borderRadius: BorderRadius.circular(20),
-          border: Border.all(color: filled ? blue : const Color(0xFFD1D5DB)),
-        ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            if (icon != null) ...[
-              Icon(icon, size: 14, color: filled ? Colors.white : const Color(0xFF374151)),
-              const SizedBox(width: 5),
-            ],
-            Text(
-              label,
-              style: TextStyle(
-                fontSize: 13,
-                fontWeight: FontWeight.w600,
-                color: filled ? Colors.white : const Color(0xFF374151),
+          // ── Body ─────────────────────────────────────────────────
+          DiklyPageBody(
+            child: RefreshIndicator(
+              onRefresh: () async => ref.invalidate(_studentDashProvider),
+              color: _theme.primary,
+              child: dashAsync.when(
+                loading: () => ListView(
+                  padding: const EdgeInsets.all(16),
+                  children: const [
+                    DiklyShimmerCard(height: 48, borderRadius: 999),
+                    SizedBox(height: 20),
+                    DiklyShimmerGrid(),
+                    SizedBox(height: 20),
+                    DiklyShimmerList(count: 4),
+                  ],
+                ),
+                error: (e, _) => ListView(
+                  padding: const EdgeInsets.all(24),
+                  children: [
+                    DiklyErrorView(
+                      message: e.toString().replaceAll('Exception: ', ''),
+                      onRetry: () => ref.invalidate(_studentDashProvider),
+                    ),
+                  ],
+                ),
+                data: (d) => _buildContent(context, ref, d, user, isLocked, lockUntil),
               ),
             ),
-          ],
-        ),
-      ),
+          ),
+      ],
     );
   }
-}
 
-class _AssignmentRow extends StatelessWidget {
-  final Map a;
-  const _AssignmentRow({required this.a});
+  Widget _buildContent(
+    BuildContext context,
+    WidgetRef ref,
+    Map<String, dynamic> d,
+    dynamic user,
+    bool isLocked,
+    DateTime? lockUntil,
+  ) {
+    final assignments = (d['upcomingAssignments'] as List? ?? []);
+    final attendance = (d['recentAttendance'] as List? ?? []);
+    final activeSession = d['activeSession'] as Map<String, dynamic>?;
 
-  @override
-  Widget build(BuildContext context) {
-    final dueDate = a['dueDate'] != null ? DateTime.tryParse(a['dueDate'].toString()) : null;
-    final hoursLeft = dueDate != null ? dueDate.difference(DateTime.now()).inHours : null;
-    final daysLeft = hoursLeft != null ? (hoursLeft / 24).floor() : null;
+    return ListView(
+      padding: const EdgeInsets.fromLTRB(16, 20, 16, 24),
+      children: [
+        // Device lock warning
+        if (isLocked && lockUntil != null) ...[
+          _DeviceLockBanner(until: lockUntil),
+          const SizedBox(height: 12),
+        ],
 
-    Color urgencyColor;
-    String timeLabel;
-    if (hoursLeft == null) {
-      urgencyColor = DiklyColors.textLight;
-      timeLabel = '';
-    } else if (hoursLeft <= 24) {
-      urgencyColor = DiklyColors.error;
-      timeLabel = hoursLeft >= 1 ? '${hoursLeft}h left' : 'Due soon';
-    } else if (hoursLeft <= 48) {
-      urgencyColor = DiklyColors.warning;
-      timeLabel = '${daysLeft}d left';
-    } else {
-      urgencyColor = DiklyColors.textLight;
-      timeLabel = '${daysLeft}d left';
-    }
+        // Active session banner
+        if (activeSession != null) ...[
+          DiklyFadeIn(
+            child: _ActiveSessionBanner(session: activeSession, accentColor: _theme.primary),
+          ),
+          const SizedBox(height: 16),
+        ],
 
-    final submission = a['submission'] as Map?;
-    final subStatus = submission?['status']?.toString();
-    String badgeText;
-    Color badgeColor;
-    if (subStatus == 'graded') { badgeText = 'Graded'; badgeColor = DiklyColors.success; }
-    else if (subStatus != null) { badgeText = 'Submitted'; badgeColor = DiklyColors.primary; }
-    else { badgeText = 'Pending'; badgeColor = DiklyColors.warning; }
-
-    final courseMap = a['course'] as Map?;
-    final courseText = [courseMap?['code'], courseMap?['title']].where((s) => s != null && s.toString().isNotEmpty).join(' ');
-
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-      decoration: BoxDecoration(border: Border(bottom: BorderSide(color: DiklyColors.border, width: 0.5))),
-      child: Row(
-        children: [
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
+        // Quick actions
+        DiklyFadeIn(
+          delay: const Duration(milliseconds: 60),
+          child: SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            child: Row(
               children: [
-                Text(a['title']?.toString() ?? '', style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 14, color: DiklyColors.text), maxLines: 1, overflow: TextOverflow.ellipsis),
-                if (courseText.isNotEmpty)
-                  Text(courseText, style: const TextStyle(fontSize: 12, color: DiklyColors.textLight)),
+                DiklyQuickChip(icon: Icons.qr_code_scanner_rounded, label: 'Mark Attendance', color: _theme.primary, onTap: () => context.push('/attendance')),
+                DiklyQuickChip(icon: Icons.history_rounded, label: 'History', color: const Color(0xFF0891B2), onTap: () => context.push('/attendance')),
+                DiklyQuickChip(icon: Icons.school_outlined, label: 'My Courses', color: const Color(0xFF059669), onTap: () => context.push('/courses')),
+                DiklyQuickChip(icon: Icons.quiz_outlined, label: 'Quizzes', color: const Color(0xFFD97706), onTap: () => context.push('/quizzes')),
+                DiklyQuickChip(icon: Icons.grade_outlined, label: 'Report Card', color: const Color(0xFFDC2626), onTap: () => context.push('/gradebook')),
               ],
             ),
           ),
-          const SizedBox(width: 8),
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-            decoration: BoxDecoration(color: badgeColor.withOpacity(0.12), borderRadius: BorderRadius.circular(8)),
-            child: Text(badgeText, style: TextStyle(fontSize: 11, color: badgeColor, fontWeight: FontWeight.w600)),
+        ),
+        const SizedBox(height: 22),
+
+        // Stats grid
+        DiklyFadeIn(
+          delay: const Duration(milliseconds: 100),
+          child: GridView.count(
+            shrinkWrap: true,
+            physics: const NeverScrollableScrollPhysics(),
+            crossAxisCount: 2,
+            mainAxisSpacing: 10,
+            crossAxisSpacing: 10,
+            childAspectRatio: 1.55,
+            children: [
+              DiklyGradientStat(value: '${d['totalCheckIns'] ?? 0}', label: 'Total Check-ins', icon: Icons.fact_check_rounded, color: _theme.primary),
+              DiklyGradientStat(value: '${d['attendanceRate'] ?? 0}%', label: 'Attendance Rate', icon: Icons.trending_up_rounded, color: const Color(0xFF059669)),
+              DiklyGradientStat(value: '${d['enrolledCourses'] ?? 0}', label: 'Enrolled Courses', icon: Icons.school_rounded, color: const Color(0xFF0891B2)),
+              DiklyGradientStat(value: '${d['quizzesTaken'] ?? 0}', label: 'Quizzes Taken', icon: Icons.quiz_rounded, color: const Color(0xFFD97706)),
+            ],
           ),
-          if (timeLabel.isNotEmpty) ...[
-            const SizedBox(width: 6),
-            Text(timeLabel, style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: urgencyColor)),
-          ],
+        ),
+        const SizedBox(height: 22),
+
+        // Upcoming assignments
+        if (assignments.isNotEmpty) ...[
+          DiklyFadeIn(
+            delay: const Duration(milliseconds: 140),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                DiklySectionRow(
+                  title: 'Upcoming Assignments',
+                  count: assignments.length,
+                  onViewAll: () => context.push('/assignments'),
+                ),
+                ...assignments.take(3).map((a) => _assignmentTile(a)),
+              ],
+            ),
+          ),
+          const SizedBox(height: 20),
         ],
+
+        // Recent attendance
+        DiklyFadeIn(
+          delay: const Duration(milliseconds: 180),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              DiklySectionRow(
+                title: 'Recent Attendance',
+                onViewAll: () => context.push('/attendance'),
+              ),
+              if (attendance.isEmpty)
+                const DiklyEmptyCard(
+                  icon: Icons.fact_check_outlined,
+                  message: 'No attendance records yet',
+                )
+              else
+                ...attendance.take(5).map((a) => _attendanceTile(a)),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _assignmentTile(Map<String, dynamic> a) {
+    final status = (a['status'] ?? 'pending').toString().toLowerCase();
+    final Color statusColor;
+    if (status == 'graded') statusColor = const Color(0xFF059669);
+    else if (status == 'submitted') statusColor = DiklyColors.primary;
+    else statusColor = const Color(0xFFD97706);
+
+    return DiklyListTile(
+      title: a['title'] ?? 'Assignment',
+      subtitle: a['course'] ?? '',
+      accentColor: statusColor,
+      badge: DiklyStatusPill(label: status, color: statusColor),
+      leadingIcon: Icons.assignment_outlined,
+    );
+  }
+
+  Widget _attendanceTile(Map<String, dynamic> a) {
+    final status = (a['status'] ?? '').toString().toLowerCase();
+    final Color color;
+    if (status == 'present') color = const Color(0xFF059669);
+    else if (status == 'late') color = const Color(0xFFD97706);
+    else color = const Color(0xFFDC2626);
+
+    return DiklyListTile(
+      title: a['session'] ?? a['sessionTitle'] ?? 'Session',
+      subtitle: a['checkInTime'] ?? a['date'] ?? '',
+      accentColor: color,
+      badge: DiklyStatusPill(label: a['status'] ?? '', color: color),
+    );
+  }
+}
+
+// ── Device lock banner ────────────────────────────────────────────────────────
+
+class _DeviceLockBanner extends StatelessWidget {
+  final DateTime until;
+  const _DeviceLockBanner({required this.until});
+
+  @override
+  Widget build(BuildContext context) {
+    final remaining = until.difference(DateTime.now());
+    final hours = remaining.inHours;
+    final mins = remaining.inMinutes % 60;
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: const Color(0xFFFEF3C7),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: const Color(0xFFFCD34D)),
+      ),
+      child: Row(
+        children: [
+          const Icon(Icons.lock_outline_rounded, color: Color(0xFFD97706), size: 20),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text(
+              'New device detected. Quiz/meeting access unlocks in ${hours}h ${mins}m.',
+              style: GoogleFonts.dmSans(fontSize: 12, color: const Color(0xFF92400E), height: 1.4),
+            ),
+          ),
+      ],
+    );
+  }
+}
+
+// ── Active session banner ─────────────────────────────────────────────────────
+
+class _ActiveSessionBanner extends StatelessWidget {
+  final Map<String, dynamic> session;
+  final Color accentColor;
+  const _ActiveSessionBanner({required this.session, required this.accentColor});
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: () => context.push('/attendance'),
+      child: Container(
+        padding: const EdgeInsets.all(14),
+        decoration: BoxDecoration(
+          gradient: LinearGradient(colors: [accentColor, accentColor.withOpacity(0.8)]),
+          borderRadius: BorderRadius.circular(14),
+          boxShadow: [BoxShadow(color: accentColor.withOpacity(0.3), blurRadius: 12, offset: const Offset(0, 4))],
+        ),
+        child: Row(
+          children: [
+            const _LiveDot(color: Colors.white),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text('Session Active', style: GoogleFonts.dmSans(fontSize: 12, fontWeight: FontWeight.w700, color: Colors.white70)),
+                  Text(session['title'] ?? 'Active Session', style: GoogleFonts.dmSans(fontSize: 14, fontWeight: FontWeight.w800, color: Colors.white)),
+                ],
+              ),
+            ),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+              decoration: BoxDecoration(color: Colors.white.withOpacity(0.2), borderRadius: BorderRadius.circular(20)),
+              child: Text('Mark Now', style: GoogleFonts.dmSans(fontSize: 12, fontWeight: FontWeight.w700, color: Colors.white)),
+            ),
+          ],
+        ),
       ),
     );
   }
 }
 
-class _TableHeader extends StatelessWidget {
-  final String label;
-  const _TableHeader(this.label);
+class _LiveDot extends StatefulWidget {
+  final Color color;
+  const _LiveDot({required this.color});
 
   @override
-  Widget build(BuildContext context) {
-    return Text(
-      label,
-      style: const TextStyle(fontSize: 10, fontWeight: FontWeight.w700, color: Color(0xFF9CA3AF), letterSpacing: 0.4),
-    );
-  }
+  State<_LiveDot> createState() => _LiveDotState();
 }
 
-class _AttendanceRow extends StatelessWidget {
-  final Map r;
-  const _AttendanceRow({required this.r});
+class _LiveDotState extends State<_LiveDot> with SingleTickerProviderStateMixin {
+  late AnimationController _ctrl;
+  late Animation<double> _anim;
 
-  static const _methodLabels = {
-    'qr_mark': 'QR Code', 'code_mark': 'Code Entry', 'ble_mark': 'BLE',
-    'esp32_ap': 'esp32_ap', 'jitsi_join': 'Meeting', 'manual': 'Manual',
-    'qr': 'QR Code', 'ble': 'BLE',
-  };
+  @override
+  void initState() {
+    super.initState();
+    _ctrl = AnimationController(vsync: this, duration: const Duration(milliseconds: 900))
+      ..repeat(reverse: true);
+    _anim = CurvedAnimation(parent: _ctrl, curve: Curves.easeInOut);
+  }
+
+  @override
+  void dispose() {
+    _ctrl.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
-    final status = r['status']?.toString() ?? '';
-    final method = r['method']?.toString() ?? '';
-    final methodLabel = _methodLabels[method] ?? method;
-    final checkIn = r['checkInTime'] != null ? DateTime.tryParse(r['checkInTime'].toString()) : null;
-    final statusColor = status == 'present' ? DiklyColors.success : status == 'late' ? DiklyColors.warning : DiklyColors.error;
-    final sessionTitle = (r['session'] as Map?)?['title']?.toString() ?? 'Session';
-    final checkInStr = checkIn != null ? DateFormat('M/d/yyyy, h:mm:ss a').format(checkIn) : '';
-
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 11),
-      decoration: const BoxDecoration(border: Border(bottom: BorderSide(color: DiklyColors.border, width: 0.5))),
-      child: Row(
-        children: [
-          Expanded(
-            flex: 3,
-            child: Text(
-              sessionTitle,
-              style: const TextStyle(fontWeight: FontWeight.w500, fontSize: 12, color: DiklyColors.text),
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-            ),
-          ),
-          Expanded(
-            flex: 2,
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
-              decoration: BoxDecoration(
-                color: statusColor.withOpacity(0.1),
-                borderRadius: BorderRadius.circular(10),
-              ),
-              child: Text(
-                status,
-                style: TextStyle(fontSize: 11, color: statusColor, fontWeight: FontWeight.w600),
-              ),
-            ),
-          ),
-          Expanded(
-            flex: 2,
-            child: Text(
-              methodLabel,
-              style: const TextStyle(fontSize: 11, color: Color(0xFF6B7280)),
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-            ),
-          ),
-          Expanded(
-            flex: 3,
-            child: Text(
-              checkInStr,
-              style: const TextStyle(fontSize: 11, color: Color(0xFF6B7280)),
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-            ),
-          ),
-        ],
+    return FadeTransition(
+      opacity: _anim,
+      child: Container(
+        width: 8,
+        height: 8,
+        decoration: BoxDecoration(color: widget.color, shape: BoxShape.circle),
       ),
     );
   }

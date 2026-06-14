@@ -107,12 +107,13 @@ class _LecturerShellState extends ConsumerState<LecturerShell> {
       key: _scaffoldKey,
       backgroundColor: const Color(0xFFF1F5F9),
       appBar: AppBar(
-        backgroundColor: Colors.white,
+        backgroundColor: const Color(0xFFB45309),
+        foregroundColor: Colors.white,
         elevation: 0,
         surfaceTintColor: Colors.transparent,
         leading: Builder(
           builder: (ctx) => IconButton(
-            icon: const Icon(Icons.menu_outlined),
+            icon: const Icon(Icons.menu_outlined, color: Colors.white),
             onPressed: () => _scaffoldKey.currentState?.openDrawer(),
           ),
         ),
@@ -121,7 +122,7 @@ class _LecturerShellState extends ConsumerState<LecturerShell> {
           style: TextStyle(
             fontSize: 18,
             fontWeight: FontWeight.w700,
-            color: Color(0xFF111827),
+            color: Colors.white,
           ),
         ),
         actions: [
