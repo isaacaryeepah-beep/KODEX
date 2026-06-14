@@ -1,4 +1,6 @@
 import 'package:dio/dio.dart';
+import 'package:open_file/open_file.dart';
+import 'package:path_provider/path_provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 class UpdateChecker {
@@ -37,6 +39,27 @@ class UpdateChecker {
     } catch (_) {
       return null;
     }
+  }
+
+  /// Downloads the APK and opens the system installer.
+  /// [onProgress] receives values 0.0–1.0.
+  static Future<void> downloadAndInstall(
+    UpdateInfo update, {
+    void Function(double)? onProgress,
+  }) async {
+    final dir = await getTemporaryDirectory();
+    final apkPath = '${dir.path}/dikly-update.apk';
+
+    await Dio().download(
+      update.downloadUrl,
+      apkPath,
+      onReceiveProgress: (received, total) {
+        if (total > 0) onProgress?.call(received / total);
+      },
+    );
+
+    await OpenFile.open(apkPath);
+    await markSeen(update.releaseId);
   }
 
   static Future<void> markSeen(int releaseId) async {
