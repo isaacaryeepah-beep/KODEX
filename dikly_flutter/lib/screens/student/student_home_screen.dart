@@ -340,11 +340,11 @@ class _BorderedStat extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Icon(icon, size: 16, color: color),
+          Row(mainAxisAlignment: MainAxisAlignment.end, children: [Icon(icon, size: 18, color: color)]),
           const Spacer(),
           Text(
             value,
-            style: GoogleFonts.dmSans(fontSize: 26, fontWeight: FontWeight.w800, color: color, height: 1),
+            style: GoogleFonts.dmSans(fontSize: 26, fontWeight: FontWeight.w800, color: const Color(0xFF0D1117), height: 1),
           ),
           const SizedBox(height: 2),
           Text(

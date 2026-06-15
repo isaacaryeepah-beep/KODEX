@@ -394,13 +394,21 @@ class ApiService {
     final pending = results[2].data['pending'] ?? [];
     final announcements = results[3].data['announcements'] ?? [];
     final activeSessions = (sessions as List).where((s) => ['active','live','paused','locked'].contains(s['status'])).length;
+    // Compute role breakdown for chart
+    final roleMap = <String, int>{};
+    for (final u in users as List) {
+      final role = (u['role'] ?? 'other').toString().toLowerCase();
+      roleMap[role] = (roleMap[role] ?? 0) + 1;
+    }
     return {
       'sessions': sessions,
+      'recentSessions': sessions,
       'totalSessions': results[0].data['pagination']?['total'] ?? sessions.length,
-      'totalUsers': (users as List).length,
+      'totalUsers': users.length,
       'activeSessions': activeSessions,
       'pendingApprovals': (pending as List).length,
       'announcements': announcements,
+      'usersByRole': roleMap,
     };
   }
 
