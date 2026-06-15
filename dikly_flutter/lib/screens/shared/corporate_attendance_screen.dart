@@ -241,38 +241,15 @@ class _SummaryStats extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return GridView.count(
-      crossAxisCount: 4,
-      shrinkWrap: true,
-      physics: const NeverScrollableScrollPhysics(),
-      crossAxisSpacing: 10,
-      mainAxisSpacing: 10,
-      childAspectRatio: 1.0,
+    return Row(
       children: [
-        _StatBox(
-          label: 'Present',
-          value: present.toString(),
-          color: DiklyColors.success,
-          icon: Icons.check_circle_outline,
-        ),
-        _StatBox(
-          label: 'Absent',
-          value: absent.toString(),
-          color: DiklyColors.error,
-          icon: Icons.cancel_outlined,
-        ),
-        _StatBox(
-          label: 'Late',
-          value: lateCount.toString(),
-          color: DiklyColors.warning,
-          icon: Icons.access_time_outlined,
-        ),
-        _StatBox(
-          label: 'On Leave',
-          value: onLeave.toString(),
-          color: DiklyColors.primary,
-          icon: Icons.event_outlined,
-        ),
+        Expanded(child: _StatBox(label: 'Present', value: present.toString(), color: DiklyColors.success, icon: Icons.check_circle_outline)),
+        const SizedBox(width: 8),
+        Expanded(child: _StatBox(label: 'Absent', value: absent.toString(), color: DiklyColors.error, icon: Icons.cancel_outlined)),
+        const SizedBox(width: 8),
+        Expanded(child: _StatBox(label: 'Late', value: lateCount.toString(), color: DiklyColors.warning, icon: Icons.access_time_outlined)),
+        const SizedBox(width: 8),
+        Expanded(child: _StatBox(label: 'On Leave', value: onLeave.toString(), color: DiklyColors.primary, icon: Icons.event_outlined)),
       ],
     );
   }
@@ -294,33 +271,28 @@ class _StatBox extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.all(10),
+      padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 6),
       decoration: BoxDecoration(
         color: color.withOpacity(0.08),
         borderRadius: BorderRadius.circular(12),
         border: Border.all(color: color.withOpacity(0.2)),
       ),
       child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
+        mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(icon, color: color, size: 20),
+          Icon(icon, color: color, size: 18),
           const SizedBox(height: 4),
           Text(
             value,
-            style: TextStyle(
-              fontSize: 18,
-              fontWeight: FontWeight.w800,
-              color: color,
-            ),
+            style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800, color: color),
           ),
+          const SizedBox(height: 2),
           Text(
             label,
-            style: const TextStyle(
-              fontSize: 10,
-              fontWeight: FontWeight.w500,
-              color: DiklyColors.textSecondary,
-            ),
+            style: const TextStyle(fontSize: 9, fontWeight: FontWeight.w500, color: DiklyColors.textSecondary),
             textAlign: TextAlign.center,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
           ),
         ],
       ),
