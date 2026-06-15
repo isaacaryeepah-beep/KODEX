@@ -59,7 +59,7 @@ router.post('/generate-questions', authenticate, async (req, res) => {
     return res.json(data.body);
   } catch (err) {
     console.error('[AI Proxy] Error:', err.message);
-    return res.status(502).json({ error: err.message || 'Failed to reach AI service' });
+    return res.status(502).json({ error: 'Failed to reach AI service' });
   }
 });
 

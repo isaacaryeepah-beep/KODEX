@@ -49,7 +49,7 @@ exports.generatePairingCode = async (req, res) => {
 
     res.json({ success: true, code, expiresAt });
   } catch (err) {
-    res.status(500).json({ message: 'Server error', error: err.message });
+    res.status(500).json({ message: 'Server error' });
   }
 };
 
@@ -121,7 +121,7 @@ exports.pairDevice = async (req, res) => {
     res.status(201).json({ success: true, message: 'Device paired successfully.', token, deviceId: device.deviceId });
   } catch (err) {
     if (err.code === 11000) return res.status(409).json({ message: 'Device already has a device registered.' });
-    res.status(500).json({ message: 'Server error', error: err.message });
+    res.status(500).json({ message: 'Server error' });
   }
 };
 
@@ -181,7 +181,7 @@ exports.registerDevice = async (req, res) => {
     if (err.code === 11000) {
       return res.status(400).json({ message: 'Device ID or lecturer already has a device registered.' });
     }
-    res.status(500).json({ message: 'Server error', error: err.message });
+    res.status(500).json({ message: 'Server error' });
   }
 };
 
@@ -261,7 +261,7 @@ exports.heartbeat = async (req, res) => {
     });
   } catch (err) {
     console.error('[device heartbeat]', err);
-    res.status(500).json({ message: 'Server error', error: err.message });
+    res.status(500).json({ message: 'Server error' });
   }
 };
 
@@ -411,7 +411,7 @@ exports.syncOfflineRecords = async (req, res) => {
     res.json({ success: true, synced, skipped, errors, sessionIdMap });
   } catch (err) {
     console.error('[device sync]', err);
-    res.status(500).json({ message: 'Server error', error: err.message });
+    res.status(500).json({ message: 'Server error' });
   }
 };
 
@@ -438,7 +438,7 @@ exports.getRoster = async (req, res) => {
     res.json({ ok: true, roster, count: roster.length });
   } catch (err) {
     console.error('[device roster]', err);
-    res.status(500).json({ message: 'Server error', error: err.message });
+    res.status(500).json({ message: 'Server error' });
   }
 };
 
@@ -468,7 +468,7 @@ exports.updateNetworks = async (req, res) => {
 
     res.json({ success: true, message: 'Networks updated', data: safe });
   } catch (err) {
-    res.status(500).json({ message: 'Server error', error: err.message });
+    res.status(500).json({ message: 'Server error' });
   }
 };
 
@@ -541,7 +541,7 @@ exports.getMyDevice = async (req, res) => {
       }
     });
   } catch (err) {
-    res.status(500).json({ message: 'Server error', error: err.message });
+    res.status(500).json({ message: 'Server error' });
   }
 };
 
@@ -589,7 +589,7 @@ exports.getDeviceStatus = async (req, res) => {
       }
     });
   } catch (err) {
-    res.status(500).json({ message: 'Server error', error: err.message });
+    res.status(500).json({ message: 'Server error' });
   }
 };
 
@@ -616,7 +616,7 @@ exports.unlinkDevice = async (req, res) => {
     await Device.deleteOne({ _id: device._id });
     res.json({ success: true, message: 'Device unlinked successfully.' });
   } catch (err) {
-    res.status(500).json({ message: 'Server error', error: err.message });
+    res.status(500).json({ message: 'Server error' });
   }
 };
 
@@ -671,7 +671,7 @@ exports.assignGroup = async (req, res) => {
       },
     });
   } catch (err) {
-    res.status(500).json({ message: 'Server error', error: err.message });
+    res.status(500).json({ message: 'Server error' });
   }
 };
 
@@ -691,7 +691,7 @@ exports.renameDevice = async (req, res) => {
 
     res.json({ success: true, deviceName: device.deviceName });
   } catch (err) {
-    res.status(500).json({ message: 'Server error', error: err.message });
+    res.status(500).json({ message: 'Server error' });
   }
 };
 
@@ -740,7 +740,7 @@ exports.getDeviceActivity = async (req, res) => {
 
     res.json({ success: true, events: events.slice(0, 20) });
   } catch (err) {
-    res.status(500).json({ message: 'Server error', error: err.message });
+    res.status(500).json({ message: 'Server error' });
   }
 };
 
@@ -789,7 +789,7 @@ exports.scanWifi = async (req, res) => {
       });
     }
   } catch (err) {
-    res.status(500).json({ message: 'Server error', error: err.message });
+    res.status(500).json({ message: 'Server error' });
   }
 };
 
@@ -860,7 +860,7 @@ exports.configureWifi = async (req, res) => {
       });
     }
   } catch (err) {
-    res.status(500).json({ message: 'Server error', error: err.message });
+    res.status(500).json({ message: 'Server error' });
   }
 };
 
@@ -889,7 +889,7 @@ exports.assignClassRep = async (req, res) => {
     }
     await device.save({ validateModifiedOnly: true });
     res.json({ ok: true });
-  } catch (e) { res.status(500).json({ error: e.message }); }
+  } catch (e) { res.status(500).json({ error: 'Server error' }); }
 };
 
 // ─── GET AVAILABLE DEVICES FOR A COURSE ──────────────────────────────────────
@@ -946,7 +946,7 @@ exports.listAllDevices = async (req, res) => {
     res.json({ success: true, devices: result });
   } catch (err) {
     console.error('[listAllDevices]', err);
-    res.status(500).json({ message: 'Server error', error: err.message });
+    res.status(500).json({ message: 'Server error' });
   }
 };
 
@@ -1043,7 +1043,7 @@ exports.getAvailableDevices = async (req, res) => {
     res.json({ success: true, devices: result });
   } catch (err) {
     console.error('[getAvailableDevices]', err);
-    res.status(500).json({ message: 'Server error', error: err.message });
+    res.status(500).json({ message: 'Server error' });
   }
 };
 
@@ -1131,7 +1131,7 @@ exports.assignLecturer = async (req, res) => {
     res.json({ success: true, message: 'Lecturer assigned to device.', data: device.assignedLecturers });
   } catch (err) {
     console.error('[assignLecturer]', err);
-    res.status(500).json({ message: 'Server error', error: err.message });
+    res.status(500).json({ message: 'Server error' });
   }
 };
 
@@ -1182,7 +1182,7 @@ exports.removeLecturer = async (req, res) => {
     res.json({ success: true, message: 'Lecturer removed from device.', data: device.assignedLecturers });
   } catch (err) {
     console.error('[removeLecturer]', err);
-    res.status(500).json({ message: 'Server error', error: err.message });
+    res.status(500).json({ message: 'Server error' });
   }
 };
 
@@ -1206,7 +1206,7 @@ exports.removeDevice = async (req, res) => {
     res.json({ message: 'Device removed' });
   } catch (err) {
     console.error('[removeDevice]', err);
-    res.status(500).json({ message: 'Server error', error: err.message });
+    res.status(500).json({ message: 'Server error' });
   }
 };
 
@@ -1244,7 +1244,7 @@ exports.factoryResetDevice = async (req, res) => {
     res.json({ success: true, message: 'Factory reset initiated. The device will wipe itself on next heartbeat.' });
   } catch (err) {
     console.error('[factoryResetDevice]', err);
-    res.status(500).json({ message: 'Server error', error: err.message });
+    res.status(500).json({ message: 'Server error' });
   }
 };
 
@@ -1268,7 +1268,7 @@ exports.getDeviceLecturers = async (req, res) => {
     res.json({ success: true, assignedLecturers: device.assignedLecturers });
   } catch (err) {
     console.error('[getDeviceLecturers]', err);
-    res.status(500).json({ message: 'Server error', error: err.message });
+    res.status(500).json({ message: 'Server error' });
   }
 };
 
@@ -1328,7 +1328,7 @@ exports.getLecturersForAssignment = async (req, res) => {
     res.json({ success: true, lecturers: result });
   } catch (err) {
     console.error('[getLecturersForAssignment]', err);
-    res.status(500).json({ message: 'Server error', error: err.message });
+    res.status(500).json({ message: 'Server error' });
   }
 };
 
@@ -1368,6 +1368,6 @@ exports.transferDevice = async (req, res) => {
 
     res.json({ success: true, message: 'Device ownership transferred', data: device });
   } catch (err) {
-    res.status(500).json({ message: 'Server error', error: err.message });
+    res.status(500).json({ message: 'Server error' });
   }
 };

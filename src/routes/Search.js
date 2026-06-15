@@ -5,6 +5,8 @@ const { requireRole } = require("../middleware/role");
 const mongoose = require("mongoose");
 const User = require("../models/User");
 
+const escapeRegex = s => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
 router.use(authenticate);
 
 // GET /api/search?q=john&role=student
@@ -26,13 +28,8 @@ router.get(
       }
       companyId = String(companyId);
 
-      console.log("[SEARCH] q:", q, "| companyId:", companyId, "| role filter:", role);
 
-      // Find all users in the same company first (no regex yet) to debug
-      const allInCompany = await User.find({ company: companyId }).select("name").lean();
-      console.log("[SEARCH] Total users in company:", allInCompany.length, allInCompany.map(u => u.name));
-
-      const searchRegex = new RegExp(q.trim(), "i");
+      const searchRegex = new RegExp(escapeRegex(q.trim()), "i");
 
       const filter = {
         company: companyId,
@@ -54,12 +51,10 @@ router.get(
         .limit(50)
         .lean();
 
-      console.log("[SEARCH] Results found:", users.length);
-
       return res.json({ users });
     } catch (e) {
       console.error("[SEARCH] Error:", e);
-      return res.status(500).json({ error: "Search failed: " + e.message });
+      return res.status(500).json({ error: "Search failed" });
     }
   }
 );

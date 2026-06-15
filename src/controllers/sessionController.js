@@ -74,7 +74,7 @@ exports.startSession = async (req, res) => {
       }
     });
   } catch (err) {
-    res.status(500).json({ message: 'Server error', error: err.message });
+    res.status(500).json({ message: 'Server error' });
   }
 };
 
@@ -101,7 +101,7 @@ exports.endSession = async (req, res) => {
 
     res.json({ success: true, message: 'Session ended', data: session });
   } catch (err) {
-    res.status(500).json({ message: 'Server error', error: err.message });
+    res.status(500).json({ message: 'Server error' });
   }
 };
 
@@ -145,7 +145,7 @@ exports.getActiveSession = async (req, res) => {
       }
     });
   } catch (err) {
-    res.status(500).json({ message: 'Server error', error: err.message });
+    res.status(500).json({ message: 'Server error' });
   }
 };
 
@@ -226,7 +226,7 @@ exports.validateAttendance = async (req, res) => {
       throw e;
     }
   } catch (err) {
-    res.status(500).json({ message: 'Server error', error: err.message });
+    res.status(500).json({ message: 'Server error' });
   }
 };
 
