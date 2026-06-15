@@ -378,7 +378,10 @@ exports.handleBeacon = async (req, res) => {
     let payload = {};
     if (req.body) {
       if (typeof req.body === "string") {
-        try { payload = JSON.parse(req.body); } catch (_) {}
+        try { payload = JSON.parse(req.body); } catch (err) {
+          console.warn('[offlineSync:beacon] Malformed JSON in beacon body:', err.message);
+          return res.status(400).end();
+        }
       } else if (typeof req.body === "object") {
         payload = req.body;
       }

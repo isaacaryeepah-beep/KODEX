@@ -355,9 +355,40 @@ app.use((req, res) => {
   }
 });
 
-app.use((err, req, res, next) => {
-  console.error("Unhandled error:", err);
-  res.status(500).json({ error: "Internal server error" });
+app.use((err, req, res, _next) => {
+  // Determine status code: use err.statusCode (AppError) or fall back to 500
+  const statusCode = err.statusCode && err.statusCode >= 400 ? err.statusCode : 500;
+
+  // Log server errors (5xx) with full stack; client errors (4xx) with message only
+  if (statusCode >= 500) {
+    console.error(`[ERROR] ${req.method} ${req.originalUrl}:`, err);
+  } else {
+    console.warn(`[WARN] ${req.method} ${req.originalUrl}: ${err.message}`);
+  }
+
+  // Mongoose validation errors → 400
+  if (err.name === 'ValidationError') {
+    const messages = Object.values(err.errors || {}).map(e => e.message);
+    return res.status(400).json({ error: messages.join(', ') || err.message });
+  }
+
+  // Mongoose duplicate key → 409
+  if (err.code === 11000) {
+    return res.status(409).json({ error: 'Duplicate entry. A record with this value already exists.' });
+  }
+
+  // Mongoose CastError (invalid ObjectId) → 400
+  if (err.name === 'CastError') {
+    return res.status(400).json({ error: `Invalid ${err.path}: ${err.value}` });
+  }
+
+  // JWT errors → 401
+  if (err.name === 'JsonWebTokenError' || err.name === 'TokenExpiredError') {
+    return res.status(401).json({ error: 'Invalid or expired token' });
+  }
+
+  const message = err.isOperational ? err.message : 'Internal server error';
+  res.status(statusCode).json({ error: message });
 });
 
 const { validateJitsiConfig } = require('./services/jitsiConfigValidator');

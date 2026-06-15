@@ -209,7 +209,7 @@ exports.createUser = async (req, res) => {
           name: user.name,
           institutionName: company.name,
           department: userData.department || null,
-        }).catch(() => {});
+        }).catch((err) => { console.warn('[user:create] HOD welcome email failed:', err.message); });
       } else if (targetRole === 'lecturer' && user.email) {
         emailService.sendLecturerWelcome({
           email: user.email,
@@ -217,16 +217,18 @@ exports.createUser = async (req, res) => {
           institutionName: company.name,
           department: userData.department || null,
           isApproved: true,
-        }).catch(() => {});
+        }).catch((err) => { console.warn('[user:create] Lecturer welcome email failed:', err.message); });
       } else if (targetRole === 'employee' && user.email) {
         emailService.sendEmployeeWelcome({
           email: user.email,
           name: user.name,
           companyName: company.name,
           employeeId: user.employeeId || '',
-        }).catch(() => {});
+        }).catch((err) => { console.warn('[user:create] Employee welcome email failed:', err.message); });
       }
-    } catch (_) {}
+    } catch (err) {
+      console.warn('[user:create] Failed to send welcome email:', err.message);
+    }
 
     res.status(201).json({ user });
   } catch (error) {
@@ -512,7 +514,9 @@ exports.bulkImportStudents = async (req, res) => {
           userData.email = row.email.toLowerCase().trim();
         }
         if (row.phone) {
-          try { userData.phone = normalisePhone(row.phone); } catch (_) {}
+          try { userData.phone = normalisePhone(row.phone); } catch (err) {
+            console.warn(`[user:bulkImport] Invalid phone for row ${row.IndexNumber}:`, err.message);
+          }
         }
         if (row.department)   userData.department   = row.department;
         if (row.programme)    userData.programme    = row.programme;

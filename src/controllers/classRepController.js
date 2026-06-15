@@ -4,17 +4,17 @@ const Course = require('../models/Course');
 const User = require('../models/User');
 
 // GET /api/class-rep/device
-exports.getMyDevice = async (req, res) => {
+exports.getMyDevice = async (req, res, next) => {
   try {
     if (!req.user.isClassRep) return res.status(403).json({ error: 'Not a class rep' });
     const device = await Device.findOne({ classRepId: req.user._id, companyId: req.user.company, isActive: true })
       .populate('activeLecturerId', 'name email');
     res.json({ device: device || null });
-  } catch (e) { res.status(500).json({ error: e.message }); }
+  } catch (e) { next(e); }
 };
 
 // GET /api/class-rep/lecturers — lecturers who teach the class rep's course(s)
-exports.getCourseLecturers = async (req, res) => {
+exports.getCourseLecturers = async (req, res, next) => {
   try {
     if (!req.user.isClassRep) return res.status(403).json({ error: 'Not a class rep' });
     const user = await User.findById(req.user._id).select('classRepCourse programme studentLevel studentGroup sessionType semester');
@@ -41,11 +41,11 @@ exports.getCourseLecturers = async (req, res) => {
       }));
 
     res.json({ lecturers });
-  } catch (e) { res.status(500).json({ error: e.message }); }
+  } catch (e) { next(e); }
 };
 
 // GET /api/class-rep/search-lecturers?q=... — search lecturers in the rep's department
-exports.searchLecturers = async (req, res) => {
+exports.searchLecturers = async (req, res, next) => {
   try {
     if (!req.user.isClassRep) return res.status(403).json({ error: 'Not a class rep' });
     const q = (req.query.q || req.query.search || '').trim();
@@ -61,11 +61,11 @@ exports.searchLecturers = async (req, res) => {
     if (rep && rep.department) filter.department = rep.department;
     const lecturers = await User.find(filter).select('_id name email').limit(10).lean();
     res.json({ users: lecturers });
-  } catch (e) { res.status(500).json({ error: e.message }); }
+  } catch (e) { next(e); }
 };
 
 // POST /api/class-rep/connect — connect device to a lecturer for this session
-exports.connectDevice = async (req, res) => {
+exports.connectDevice = async (req, res, next) => {
   try {
     if (!req.user.isClassRep) return res.status(403).json({ error: 'Not a class rep' });
     const { lecturerId, courseId, lecturerPin } = req.body;
@@ -100,11 +100,11 @@ exports.connectDevice = async (req, res) => {
     await device.save({ validateModifiedOnly: true });
 
     res.json({ ok: true, message: course ? `Device connected to ${lecturer.name} — ${course.code}` : `Device connected to ${lecturer.name}` });
-  } catch (e) { res.status(500).json({ error: e.message }); }
+  } catch (e) { next(e); }
 };
 
 // POST /api/class-rep/disconnect — release device after session
-exports.disconnectDevice = async (req, res) => {
+exports.disconnectDevice = async (req, res, next) => {
   try {
     if (!req.user.isClassRep) return res.status(403).json({ error: 'Not a class rep' });
     const device = await Device.findOne({ classRepId: req.user._id, companyId: req.user.company, isActive: true });
@@ -116,11 +116,11 @@ exports.disconnectDevice = async (req, res) => {
     await device.save({ validateModifiedOnly: true });
 
     res.json({ ok: true, message: 'Device released successfully' });
-  } catch (e) { res.status(500).json({ error: e.message }); }
+  } catch (e) { next(e); }
 };
 
 // POST /api/class-rep/set-pin — lecturer sets their 4-digit PIN
-exports.setLecturerPin = async (req, res) => {
+exports.setLecturerPin = async (req, res, next) => {
   try {
     if (req.user.role !== 'lecturer') return res.status(403).json({ error: 'Only lecturers can set a PIN' });
     const { pin } = req.body;
@@ -128,20 +128,20 @@ exports.setLecturerPin = async (req, res) => {
     const hashed = await bcrypt.hash(String(pin), 10);
     await User.findByIdAndUpdate(req.user._id, { classRepPin: hashed });
     res.json({ ok: true, message: 'PIN set successfully' });
-  } catch (e) { res.status(500).json({ error: e.message }); }
+  } catch (e) { next(e); }
 };
 
 // DELETE /api/class-rep/set-pin — lecturer clears their PIN (allows open connection)
-exports.clearLecturerPin = async (req, res) => {
+exports.clearLecturerPin = async (req, res, next) => {
   try {
     if (req.user.role !== 'lecturer') return res.status(403).json({ error: 'Only lecturers can clear a PIN' });
     await User.findByIdAndUpdate(req.user._id, { $unset: { classRepPin: 1 } });
     res.json({ ok: true, message: 'PIN cleared. Class reps can now connect without a PIN.' });
-  } catch (e) { res.status(500).json({ error: e.message }); }
+  } catch (e) { next(e); }
 };
 
 // GET /api/class-rep/scan-wifi — server-side proxy so mixed-content is avoided
-exports.scanWifi = async (req, res) => {
+exports.scanWifi = async (req, res, next) => {
   try {
     if (!req.user.isClassRep) return res.status(403).json({ error: 'Not a class rep' });
     const device = await Device.findOne({ classRepId: req.user._id, isActive: true }).select('localIp').lean();
@@ -160,11 +160,11 @@ exports.scanWifi = async (req, res) => {
       clearTimeout(timer);
       res.status(502).json({ message: 'Could not reach the device. Make sure the server and device are on the same network.', error: e.message });
     }
-  } catch (e) { res.status(500).json({ error: e.message }); }
+  } catch (e) { next(e); }
 };
 
 // POST /api/class-rep/configure-wifi — server-side proxy to reconfigure device WiFi
-exports.configureWifi = async (req, res) => {
+exports.configureWifi = async (req, res, next) => {
   try {
     if (!req.user.isClassRep) return res.status(403).json({ error: 'Not a class rep' });
     const { ssid, password } = req.body;
@@ -190,5 +190,5 @@ exports.configureWifi = async (req, res) => {
       const timedOut = e.name === 'AbortError' || (e.message || '').includes('aborted');
       res.status(timedOut ? 504 : 502).json({ message: timedOut ? 'Timed out — device may be rebooting on the new network' : e.message });
     }
-  } catch (e) { res.status(500).json({ error: e.message }); }
+  } catch (e) { next(e); }
 };

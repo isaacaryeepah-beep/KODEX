@@ -242,13 +242,15 @@ exports.emailStudents = async (req, res) => {
     const students = course.enrolledStudents.filter(s => s.email);
     let sentCount = 0;
     let devMode = false;
-    await Promise.allSettled(students.map(async (s) => {
-      try {
-        const result = await send({ to: s.email, subject, html: `<p>Hi ${s.name},</p><p>${message.replace(/\n/g, '<br>')}</p><p style="margin-top:16px;font-size:12px;color:#6b7280">— ${course.title} (${course.code})</p>` });
-        if (result?.dev) { devMode = true; }
-        else if (result?.ok) { sentCount++; }
-      } catch (_) {}
+    const results = await Promise.allSettled(students.map(async (s) => {
+      const result = await send({ to: s.email, subject, html: `<p>Hi ${s.name},</p><p>${message.replace(/\n/g, '<br>')}</p><p style="margin-top:16px;font-size:12px;color:#6b7280">— ${course.title} (${course.code})</p>` });
+      if (result?.dev) { devMode = true; }
+      else if (result?.ok) { sentCount++; }
     }));
+    const failures = results.filter(r => r.status === 'rejected');
+    if (failures.length > 0) {
+      console.warn(`[course:emailStudents] ${failures.length}/${students.length} emails failed for course ${course.code}`);
+    }
 
     res.json({ sentCount, total: students.length, devMode });
   } catch (e) {

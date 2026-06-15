@@ -327,7 +327,9 @@ exports.registerLecturer = async (req, res) => {
 
     try {
       await User.updateOne({ _id: hod._id }, { $inc: { pendingApprovals: 1 } });
-    } catch (_) {}
+    } catch (err) {
+      console.warn('[auth:register] Failed to increment HOD pending approvals:', err.message);
+    }
 
     // Auto-create Jitsi meeting identity for the new lecturer
     await createMeetingIdentity(user, company._id);
@@ -1044,7 +1046,9 @@ exports.logout = async (req, res) => {
           { tokenHash: hash, userId: req.user._id },
           { $set: { revoked: true, revokedAt: new Date() } }
         );
-      } catch (_) {}
+      } catch (err) {
+        console.warn('[auth:logout] Failed to revoke refresh token:', err.message);
+      }
     }
 
     res.json({
@@ -1308,9 +1312,11 @@ exports.resetPassword = async (req, res) => {
           targetUserRole: user.role,
           targetUserEmail: user.email || user.IndexNumber,
           institutionName: companyDoc?.name || '',
-        }).catch(() => {});
+        }).catch((err) => { console.warn('[auth:resetPassword] Admin notice email failed:', err.message); });
       }
-    } catch(_) {}
+    } catch (err) {
+      console.warn('[auth:resetPassword] Failed to send admin notification:', err.message);
+    }
 
     res.json({ message: "Password has been reset successfully" });
   } catch (error) {
@@ -1560,9 +1566,11 @@ exports.resetPasswordEmail = async (req, res) => {
           targetUserRole: user.role,
           targetUserEmail: user.email || user.IndexNumber,
           institutionName: companyDoc?.name || '',
-        }).catch(() => {});
+        }).catch((err) => { console.warn('[auth:forgotPasswordEmail] Admin notice failed:', err.message); });
       }
-    } catch(_) {}
+    } catch (err) {
+      console.warn('[auth:forgotPasswordEmail] Failed to send admin notification:', err.message);
+    }
 
     res.json({ message: "Password reset successfully. You can now sign in." });
   } catch (error) {
