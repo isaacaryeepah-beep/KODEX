@@ -253,7 +253,6 @@ class _EmployeeHomeScreenState extends ConsumerState<EmployeeHomeScreen> {
             ),
           ),
         ],
-      ),
     );
   }
 }
@@ -351,7 +350,6 @@ class _ClockBanner extends StatelessWidget {
                   ),
           ),
         ],
-      ),
     );
   }
 }
@@ -381,7 +379,6 @@ class _ClockBannerError extends StatelessWidget {
           ),
           TextButton(onPressed: onRetry, child: const Text('Retry')),
         ],
-      ),
     );
   }
 }
@@ -524,7 +521,6 @@ class _LeaveBalanceCard extends StatelessWidget {
             ),
           ),
         ],
-      ),
     );
   }
 }
@@ -597,7 +593,6 @@ class _NotificationsCard extends StatelessWidget {
             child: Text('View All →', style: GoogleFonts.dmSans(fontSize: 12, color: _accent, fontWeight: FontWeight.w600)),
           ),
         ],
-      ),
     );
   }
 }
@@ -670,7 +665,6 @@ class _EmptyCard extends StatelessWidget {
           const SizedBox(height: 8),
           Text(message, style: const TextStyle(color: DiklyColors.textSecondary, fontSize: 13)),
         ],
-      ),
     );
   }
 }
