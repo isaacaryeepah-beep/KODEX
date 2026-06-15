@@ -4,10 +4,7 @@ const Course            = require('../models/Course');
 const User              = require('../models/User');
 const { send }          = require('../services/emailService');
 const { sendSms }       = require('../services/smsService');
-
-function getCompanyId(req) {
-  return req.user.company || req.user.companyId;
-}
+const { getCompanyId }  = require('../utils/controllerHelpers');
 
 // ─── POST /courses/create ─────────────────────────────────────────────────────
 exports.createCourse = async (req, res) => {

@@ -4,18 +4,14 @@ const Question = require("../models/Question");
 const Attempt = require("../models/Attempt");
 const Answer = require("../models/Answer");
 const Course = require("../models/Course");
+const { validateObjectId, handleControllerError } = require("../utils/controllerHelpers");
+const { getEnrolledCourseIds } = require("../utils/queryHelpers");
 
 exports.listQuizzes = async (req, res) => {
   try {
     const { courseId } = req.query;
 
-    const enrolledCourses = await Course.find({
-      companyId: req.user.company,
-      enrolledStudents: req.user._id,
-      isActive: true,
-    }).select("_id");
-
-    const enrolledIds = enrolledCourses.map((c) => c._id);
+    const enrolledIds = await getEnrolledCourseIds(req.user.company, req.user._id);
 
     if (enrolledIds.length === 0) {
       return res.json({ quizzes: [] });
@@ -107,17 +103,14 @@ exports.listQuizzes = async (req, res) => {
 
     res.json({ quizzes: result });
   } catch (error) {
-    console.error("Student list quizzes error:", error);
-    res.status(500).json({ error: "Failed to fetch quizzes" });
+    handleControllerError(res, error, "Student list quizzes error:", { defaultMessage: "Failed to fetch quizzes" });
   }
 };
 
 exports.getQuiz = async (req, res) => {
   try {
     const { id } = req.params;
-    if (!mongoose.Types.ObjectId.isValid(id)) {
-      return res.status(400).json({ error: "Invalid quiz ID" });
-    }
+    if (!validateObjectId(res, id, "quiz ID")) return;
 
     const quiz = await Quiz.findOne({ _id: id, company: req.user.company, isActive: true })
       .populate("course", "title code enrolledStudents")
@@ -149,17 +142,14 @@ exports.getQuiz = async (req, res) => {
       attempt: attempt || null,
     });
   } catch (error) {
-    console.error("Student get quiz error:", error);
-    res.status(500).json({ error: "Failed to fetch quiz" });
+    handleControllerError(res, error, "Student get quiz error:", { defaultMessage: "Failed to fetch quiz" });
   }
 };
 
 exports.startAttempt = async (req, res) => {
   try {
     const { id } = req.params;
-    if (!mongoose.Types.ObjectId.isValid(id)) {
-      return res.status(400).json({ error: "Invalid quiz ID" });
-    }
+    if (!validateObjectId(res, id, "quiz ID")) return;
 
     const quiz = await Quiz.findOne({ _id: id, company: req.user.company, isActive: true })
       .populate("course", "enrolledStudents");
@@ -255,9 +245,7 @@ exports.submitAttempt = async (req, res) => {
     const { id } = req.params;
     const { answers } = req.body;
 
-    if (!mongoose.Types.ObjectId.isValid(id)) {
-      return res.status(400).json({ error: "Invalid quiz ID" });
-    }
+    if (!validateObjectId(res, id, "quiz ID")) return;
 
     const quiz = await Quiz.findOne({ _id: id, company: req.user.company, isActive: true })
       .populate("course", "enrolledStudents");
@@ -371,17 +359,14 @@ exports.submitAttempt = async (req, res) => {
       maxAttempts: quiz.maxAttempts,
     });
   } catch (error) {
-    console.error("Submit attempt error:", error);
-    res.status(500).json({ error: "Failed to submit quiz" });
+    handleControllerError(res, error, "Submit attempt error:", { defaultMessage: "Failed to submit quiz" });
   }
 };
 
 exports.getMyResult = async (req, res) => {
   try {
     const { id } = req.params;
-    if (!mongoose.Types.ObjectId.isValid(id)) {
-      return res.status(400).json({ error: "Invalid quiz ID" });
-    }
+    if (!validateObjectId(res, id, "quiz ID")) return;
 
     const attempt = await Attempt.findOne({ quiz: id, student: req.user._id, isSubmitted: true })
       .populate("quiz", "title description timeLimit totalMarks startTime endTime");
@@ -395,7 +380,6 @@ exports.getMyResult = async (req, res) => {
 
     res.json({ attempt, answers });
   } catch (error) {
-    console.error("Get result error:", error);
-    res.status(500).json({ error: "Failed to fetch result" });
+    handleControllerError(res, error, "Get result error:", { defaultMessage: "Failed to fetch result" });
   }
 };

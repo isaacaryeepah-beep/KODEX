@@ -6,6 +6,7 @@ const AttendanceRecord = require("../models/AttendanceRecord");
 const QrToken = require("../models/QrToken");
 const Company = require("../models/Company");
 const Device  = require("../models/Device");
+const { isValidObjectId, validateObjectId, handleControllerError } = require("../utils/controllerHelpers");
 
 // Heartbeat freshness windows.
 const DEVICE_ONLINE_WINDOW_MS = 20_000;   // session start gate
@@ -351,10 +352,7 @@ exports.startSession = async (req, res) => {
 exports.stopSession = async (req, res) => {
   try {
     const { id } = req.params;
-
-    if (!mongoose.Types.ObjectId.isValid(id)) {
-      return res.status(400).json({ error: "Invalid session ID" });
-    }
+    if (!validateObjectId(res, id, "session ID")) return;
 
     const stopFilter = { _id: id, ...req.companyFilter };
     if (req.user.role === "lecturer") {
@@ -431,7 +429,7 @@ exports.listSessions = async (req, res) => {
       }).select("_id").lean();
       const enrolledIds = enrolledCourses.map(c => c._id);
 
-      if (courseId && mongoose.Types.ObjectId.isValid(courseId)) {
+      if (courseId && isValidObjectId(courseId)) {
         const isEnrolled = enrolledIds.some(id => id.toString() === courseId);
         if (!isEnrolled) {
           return res.status(403).json({ error: "You are not enrolled in that course" });
@@ -440,7 +438,7 @@ exports.listSessions = async (req, res) => {
       } else {
         filter.course = { $in: enrolledIds };
       }
-    } else if (courseId && mongoose.Types.ObjectId.isValid(courseId)) {
+    } else if (courseId && isValidObjectId(courseId)) {
       // Non-student role: apply course filter directly
       filter.course = courseId;
     }
@@ -528,10 +526,7 @@ exports.getActiveSession = async (req, res) => {
 exports.getSession = async (req, res) => {
   try {
     const { id } = req.params;
-
-    if (!mongoose.Types.ObjectId.isValid(id)) {
-      return res.status(400).json({ error: "Invalid session ID" });
-    }
+    if (!validateObjectId(res, id, "session ID")) return;
 
     const getFilter = { _id: id, ...req.companyFilter };
     if (req.user.role === "lecturer") {
@@ -567,9 +562,7 @@ exports.getSession = async (req, res) => {
 exports.getCurrentCode = async (req, res) => {
   try {
     const { id } = req.params;
-    if (!mongoose.Types.ObjectId.isValid(id)) {
-      return res.status(400).json({ error: "Invalid session ID" });
-    }
+    if (!validateObjectId(res, id, "session ID")) return;
 
     // Only the creator of the session (or admin/superadmin) can view the code.
     // Students must be blocked at the route layer.
@@ -606,9 +599,7 @@ exports.getCurrentCode = async (req, res) => {
 exports.getSessionRecords = async (req, res) => {
   try {
     const { id } = req.params;
-    if (!mongoose.Types.ObjectId.isValid(id)) {
-      return res.status(400).json({ error: "Invalid session ID" });
-    }
+    if (!validateObjectId(res, id, "session ID")) return;
 
     const sessionFilter = { _id: id, ...req.companyFilter };
     if (req.user.role === "lecturer") sessionFilter.createdBy = req.user._id;
@@ -663,7 +654,7 @@ exports.markAttendance = async (req, res) => {
     let session;
     let resolvedSessionId = sessionId;
 
-    if (resolvedSessionId && mongoose.Types.ObjectId.isValid(resolvedSessionId)) {
+    if (resolvedSessionId && isValidObjectId(resolvedSessionId)) {
       session = await AttendanceSession.findOne({
         _id: resolvedSessionId,
         company: req.user.company,
@@ -1437,7 +1428,7 @@ exports.getFlaggedNewDevices = async (req, res) => {
     const { sessionId, limit = 50, page = 1 } = req.query;
     const filter = { company: req.user.company, newDeviceFlag: true };
 
-    if (sessionId && mongoose.Types.ObjectId.isValid(sessionId)) {
+    if (sessionId && isValidObjectId(sessionId)) {
       filter.session = sessionId;
     }
 
@@ -1483,9 +1474,7 @@ exports.getFlaggedNewDevices = async (req, res) => {
 exports.resolveFlaggedRecord = async (req, res) => {
   try {
     const { recordId } = req.params;
-    if (!mongoose.Types.ObjectId.isValid(recordId)) {
-      return res.status(400).json({ error: 'Invalid record ID' });
-    }
+    if (!validateObjectId(res, recordId, "record ID")) return;
 
     const record = await AttendanceRecord.findOne({
       _id:     recordId,
@@ -1520,9 +1509,7 @@ exports.resolveFlaggedRecord = async (req, res) => {
 exports.trustFlaggedDevice = async (req, res) => {
   try {
     const { recordId } = req.params;
-    if (!mongoose.Types.ObjectId.isValid(recordId)) {
-      return res.status(400).json({ error: 'Invalid record ID' });
-    }
+    if (!validateObjectId(res, recordId, "record ID")) return;
 
     const record = await AttendanceRecord.findOne({
       _id:     recordId,

@@ -6,6 +6,7 @@ const AssignmentSubmission = require("../models/AssignmentSubmission");
 const Course   = require("../models/Course");
 const { uploadBrief, uploadSubmission, BRIEF_DIR, SUBMISSION_DIR } = require("../config/uploadConfig");
 const notif    = require("../services/notificationService");
+const { validateObjectId, handleControllerError } = require("../utils/controllerHelpers");
 
 // ─── Grading helper ────────────────────────────────────────────────────────
 function gradeAnswers(questions, answers) {
@@ -79,8 +80,7 @@ exports.createAssignment = async (req, res) => {
 
   if (!title || !courseId || !releaseDate || !dueDate)
     return res.status(400).json({ error: "title, courseId, releaseDate and dueDate are required" });
-  if (!mongoose.Types.ObjectId.isValid(courseId))
-    return res.status(400).json({ error: "Invalid course ID" });
+  if (!validateObjectId(res, courseId, "course ID")) return;
   if (!req.user.company)
     return res.status(400).json({ error: "User has no company assigned" });
 
@@ -199,7 +199,7 @@ exports.listAssignments = async (req, res) => {
     const { courseId } = req.query;
     const filter = { company: req.user.company, isActive: true };
     if (req.user.role === "lecturer") filter.createdBy = req.user._id;
-    if (courseId && mongoose.Types.ObjectId.isValid(courseId)) filter.course = courseId;
+    if (courseId && validateObjectId(res, courseId, "course ID")) filter.course = courseId;
 
     const assignments = await Assignment.find(filter)
       .select("-questions.correctAnswers -questions.explanation")
@@ -238,7 +238,7 @@ exports.listAssignments = async (req, res) => {
 exports.getAssignment = async (req, res) => {
   try {
     const { id } = req.params;
-    if (!mongoose.Types.ObjectId.isValid(id)) return res.status(400).json({ error: "Invalid ID" });
+    if (!validateObjectId(res, id, "assignment ID")) return;
 
     const assignment = await Assignment.findOne({ _id: id, company: req.user.company })
       .populate("course", "title code")
@@ -444,8 +444,7 @@ exports.deleteQuestion = async (req, res) => {
 exports.getSubmission = async (req, res) => {
   try {
     const { submissionId } = req.params;
-    if (!mongoose.Types.ObjectId.isValid(submissionId))
-      return res.status(400).json({ error: "Invalid ID" });
+    if (!validateObjectId(res, submissionId, "submission ID")) return;
 
     const sub = await AssignmentSubmission.findById(submissionId)
       .populate("student", "name IndexNumber email")
@@ -467,7 +466,7 @@ exports.gradeSubmission = async (req, res) => {
   try {
     const { submissionId } = req.params;
     const { manualGrade, feedback } = req.body;
-    if (!mongoose.Types.ObjectId.isValid(submissionId)) return res.status(400).json({ error: "Invalid ID" });
+    if (!validateObjectId(res, submissionId, "submission ID")) return;
 
     const sub = await AssignmentSubmission.findById(submissionId).populate("assignment", "company totalMarks");
     if (!sub) return res.status(404).json({ error: "Submission not found" });
@@ -569,7 +568,7 @@ exports.studentList = async (req, res) => {
 exports.studentGet = async (req, res) => {
   try {
     const { id } = req.params;
-    if (!mongoose.Types.ObjectId.isValid(id)) return res.status(400).json({ error: "Invalid ID" });
+    if (!validateObjectId(res, id, "assignment ID")) return;
 
     const now = new Date();
     const assignment = await Assignment.findOne({ _id: id, company: req.user.company, isActive: true, releaseDate: { $lte: now } })
@@ -610,7 +609,7 @@ exports.studentSubmit = (req, res) => {
 
     try {
       const { id } = req.params;
-      if (!mongoose.Types.ObjectId.isValid(id)) return res.status(400).json({ error: "Invalid ID" });
+      if (!validateObjectId(res, id, "assignment ID")) return;
 
       const now = new Date();
       const assignment = await Assignment.findOne({ _id: id, company: req.user.company, isActive: true })

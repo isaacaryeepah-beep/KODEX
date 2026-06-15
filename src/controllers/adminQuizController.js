@@ -4,16 +4,17 @@ const Question = require("../models/Question");
 const Attempt = require("../models/Attempt");
 const Answer = require("../models/Answer");
 const User = require("../models/User");
+const { isValidObjectId, validateObjectId, validateObjectIds, handleControllerError } = require("../utils/controllerHelpers");
 
 exports.listQuizzes = async (req, res) => {
   try {
     const { courseId, lecturerId } = req.query;
     const filter = { company: req.user.company };
 
-    if (courseId && mongoose.Types.ObjectId.isValid(courseId)) {
+    if (courseId && isValidObjectId(courseId)) {
       filter.course = courseId;
     }
-    if (lecturerId && mongoose.Types.ObjectId.isValid(lecturerId)) {
+    if (lecturerId && isValidObjectId(lecturerId)) {
       filter.createdBy = lecturerId;
     }
 
@@ -59,9 +60,7 @@ exports.listQuizzes = async (req, res) => {
 exports.getQuiz = async (req, res) => {
   try {
     const { id } = req.params;
-    if (!mongoose.Types.ObjectId.isValid(id)) {
-      return res.status(400).json({ error: "Invalid quiz ID" });
-    }
+    if (!validateObjectId(res, id, "quiz ID")) return;
 
     const quiz = await Quiz.findOne({ _id: id, company: req.user.company })
       .populate("course", "title code enrolledStudents")
@@ -158,9 +157,7 @@ exports.getAttemptDetail = async (req, res) => {
   try {
     const { id, attemptId } = req.params;
 
-    if (!mongoose.Types.ObjectId.isValid(id) || !mongoose.Types.ObjectId.isValid(attemptId)) {
-      return res.status(400).json({ error: "Invalid ID" });
-    }
+    if (!validateObjectIds(res, { "quiz ID": id, "attempt ID": attemptId })) return;
 
     const quiz = await Quiz.findOne({ _id: id, company: req.user.company });
     if (!quiz) {
@@ -188,8 +185,7 @@ exports.getAttemptDetail = async (req, res) => {
 exports.deleteQuiz = async (req, res) => {
   try {
     const { id } = req.params;
-    if (!mongoose.Types.ObjectId.isValid(id))
-      return res.status(400).json({ error: "Invalid quiz ID" });
+    if (!validateObjectId(res, id, "quiz ID")) return;
 
     const quiz = await Quiz.findOne({ _id: id, company: req.user.company });
     if (!quiz) return res.status(404).json({ error: "Quiz not found" });
