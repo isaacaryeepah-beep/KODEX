@@ -35,7 +35,7 @@ class StudentHomeScreen extends ConsumerWidget {
             data: (d) => DiklyHeroSection(
               gradient: _theme.gradient,
               greeting: 'Hi, $firstName 👋',
-              subtitle: '${user?.institution ?? 'Student Portal'} · ${DateFormat('EEE, MMM d').format(DateTime.now())}',
+              subtitle: '${user?.institutionCode ?? 'Student Portal'} · ${DateFormat('EEE, MMM d').format(DateTime.now())}',
               stats: [
                 DiklyHeaderStat(
                   value: '${d['totalCheckIns'] ?? 0}',
@@ -57,7 +57,7 @@ class StudentHomeScreen extends ConsumerWidget {
             loading: () => DiklyHeroSection(
               gradient: _theme.gradient,
               greeting: 'Hi, $firstName 👋',
-              subtitle: user?.institution ?? 'Student Portal',
+              subtitle: user?.institutionCode ?? 'Student Portal',
               stats: [
                 const DiklyHeaderStat(value: '—', label: 'Check-ins'),
                 const DiklyHeaderStat(value: '—', label: 'Attendance'),
@@ -67,7 +67,7 @@ class StudentHomeScreen extends ConsumerWidget {
             error: (_, __) => DiklyHeroSection(
               gradient: _theme.gradient,
               greeting: 'Hi, $firstName 👋',
-              subtitle: user?.institution ?? 'Student Portal',
+              subtitle: user?.institutionCode ?? 'Student Portal',
               stats: const [],
             ),
           ),
@@ -275,7 +275,8 @@ class _DeviceLockBanner extends StatelessWidget {
               style: GoogleFonts.dmSans(fontSize: 12, color: const Color(0xFF92400E), height: 1.4),
             ),
           ),
-      ],
+        ],
+      ),
     );
   }
 }

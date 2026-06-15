@@ -9,11 +9,11 @@ import '../../core/theme.dart';
 import '../../widgets/ds/dikly_ds.dart';
 
 final _hodDashProvider = FutureProvider.autoDispose<Map<String, dynamic>>(
-  (ref) => apiService.getHodDashboardData(),
+  (ref) => apiService.getHodOverview(),
 );
 final _hodApprovalsProvider = FutureProvider.autoDispose<int>((ref) async {
   try {
-    final data = await apiService.getHodPendingApprovals();
+    final data = await apiService.getPendingApprovals();
     return (data as List?)?.length ?? 0;
   } catch (_) { return 0; }
 });
@@ -237,7 +237,8 @@ class _DepartmentWarning extends StatelessWidget {
               style: GoogleFonts.dmSans(fontSize: 12, color: const Color(0xFF92400E), height: 1.4),
             ),
           ),
-      ],
+        ],
+      ),
     );
   }
 }
