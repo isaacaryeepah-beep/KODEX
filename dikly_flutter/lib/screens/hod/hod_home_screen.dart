@@ -129,17 +129,17 @@ class HodHomeScreen extends ConsumerWidget {
             crossAxisCount: 2,
             mainAxisSpacing: 10,
             crossAxisSpacing: 10,
-            childAspectRatio: 1.55,
+            childAspectRatio: 1.35,
             children: [
-              DiklyGradientStat(value: '${d['lecturers'] ?? 0}', label: 'Lecturers', icon: Icons.person_rounded, color: _theme.primary),
-              DiklyGradientStat(value: '${d['students'] ?? 0}', label: 'Students', icon: Icons.people_rounded, color: const Color(0xFF7C3AED)),
-              DiklyGradientStat(value: '${d['recentSessionsCount'] ?? sessions.length}', label: 'Sessions', icon: Icons.video_call_rounded, color: const Color(0xFF059669)),
-              DiklyGradientStat(
+              WebStatCard(value: '${d['lecturers'] ?? 0}', label: 'Lecturers', subtitle: 'Department staff', icon: Icons.person_rounded, color: _theme.primary),
+              WebStatCard(value: '${d['students'] ?? 0}', label: 'Students', subtitle: 'Enrolled', icon: Icons.people_rounded, color: const Color(0xFF7C3AED)),
+              WebStatCard(value: '${d['recentSessionsCount'] ?? sessions.length}', label: 'Sessions', subtitle: 'All time', icon: Icons.video_call_rounded, color: const Color(0xFF059669)),
+              WebStatCard(
                 value: '${d['liveNow'] ?? 0}',
                 label: 'Live Now',
+                subtitle: (d['liveNow'] != null && (d['liveNow'] as num) > 0) ? 'In progress' : 'None active',
                 icon: Icons.live_tv_rounded,
                 color: const Color(0xFFDC2626),
-                trend: (d['liveNow'] != null && (d['liveNow'] as num) > 0) ? 'LIVE' : null,
               ),
             ],
           ),

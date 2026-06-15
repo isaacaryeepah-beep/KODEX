@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
 import '../../core/api.dart';
 import '../../core/auth.dart';
@@ -22,6 +24,7 @@ class _LecturerDashboardState extends ConsumerState<LecturerDashboard> {
   List<Meeting> _meetings = [];
   List<Course> _courses = [];
   bool _loading = true;
+  String? _error;
 
   @override
   void initState() {
@@ -64,112 +67,136 @@ class _LecturerDashboardState extends ConsumerState<LecturerDashboard> {
   Widget _buildContent(String name) {
     final liveMeetings = _meetings.where((m) => m.isLive).toList();
     final upcomingMeetings = _meetings.where((m) => m.isScheduled).toList();
+    final firstName = name.split(' ').first;
 
     return ListView(
-      padding: const EdgeInsets.all(16),
+      padding: EdgeInsets.zero,
       children: [
-        // Header
-        Container(
-          padding: const EdgeInsets.all(20),
-          decoration: BoxDecoration(
-            gradient: const LinearGradient(
-              colors: [Color(0xFF7C3AED), Color(0xFF5B21B6)],
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
-            ),
-            borderRadius: BorderRadius.circular(16),
-          ),
+        // Flat greeting header matching web
+        WebGreetingHeader(
+          greeting: '${_getGreeting()}, $firstName 👋',
+          subtitle: 'Dikly · ${DateFormat('EEEE, d MMMM').format(DateTime.now())}',
+          institutionCode: 'DIKLY',
+          onCopyCode: () {
+            HapticFeedback.lightImpact();
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(content: Text('Code copied!'), duration: Duration(seconds: 1)),
+            );
+          },
+        ),
+
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 20, 16, 24),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(
-                '${_getGreeting()},',
-                style: const TextStyle(color: Colors.white70, fontSize: 14),
+              // Stats — 2x2 grid with top-border cards
+              GridView.count(
+                crossAxisCount: 2,
+                crossAxisSpacing: 12,
+                mainAxisSpacing: 12,
+                childAspectRatio: 1.35,
+                shrinkWrap: true,
+                physics: const NeverScrollableScrollPhysics(),
+                children: [
+                  WebStatCard(
+                    label: 'My Courses',
+                    value: '${_courses.length}',
+                    subtitle: 'Teaching this term',
+                    icon: Icons.school_outlined,
+                    color: const Color(0xFF7C3AED),
+                  ),
+                  WebStatCard(
+                    label: 'Live Now',
+                    value: '${liveMeetings.length}',
+                    subtitle: liveMeetings.isEmpty ? 'None active' : 'In session',
+                    icon: Icons.fiber_manual_record_rounded,
+                    color: DiklyColors.success,
+                  ),
+                  WebStatCard(
+                    label: 'Upcoming',
+                    value: '${upcomingMeetings.length}',
+                    subtitle: 'Scheduled sessions',
+                    icon: Icons.schedule_outlined,
+                    color: DiklyColors.warning,
+                  ),
+                  WebStatCard(
+                    label: 'Total Sessions',
+                    value: '${_meetings.length}',
+                    subtitle: 'All time',
+                    icon: Icons.video_call_outlined,
+                    color: DiklyColors.primary,
+                  ),
+                ],
               ),
-              const SizedBox(height: 4),
-              Text(
-                name,
-                style: const TextStyle(color: Colors.white, fontSize: 22, fontWeight: FontWeight.w700),
+
+              const SizedBox(height: 24),
+
+              // Quick Actions — pill buttons
+              const WebSectionLabel(label: 'Quick Actions'),
+              SingleChildScrollView(
+                scrollDirection: Axis.horizontal,
+                child: Row(
+                  children: [
+                    QuickActionPill(
+                      icon: Icons.add_circle_outline,
+                      label: 'New Session',
+                      color: const Color(0xFF7C3AED),
+                      onTap: () => context.push('/sessions/create'),
+                    ),
+                    const SizedBox(width: 8),
+                    QuickActionPill(
+                      icon: Icons.fact_check_outlined,
+                      label: 'Attendance',
+                      color: DiklyColors.success,
+                      onTap: () => context.go('/attendance'),
+                    ),
+                    const SizedBox(width: 8),
+                    QuickActionPill(
+                      icon: Icons.assignment_outlined,
+                      label: 'Assignments',
+                      color: DiklyColors.warning,
+                      onTap: () => context.go('/assignments'),
+                    ),
+                    const SizedBox(width: 8),
+                    QuickActionPill(
+                      icon: Icons.grade_outlined,
+                      label: 'Grade Book',
+                      color: DiklyColors.primary,
+                      onTap: () => context.go('/gradebook'),
+                    ),
+                  ],
+                ),
               ),
-              const SizedBox(height: 8),
-              Text(
-                DateFormat('EEEE, MMMM d').format(DateTime.now()),
-                style: const TextStyle(color: Colors.white70, fontSize: 13),
+
+              const SizedBox(height: 24),
+
+              // Live meetings
+              if (liveMeetings.isNotEmpty) ...[
+                WebSectionHeader(title: 'Live Now'),
+                ...liveMeetings.take(2).map((meeting) => MeetingCard(
+                  meeting: meeting,
+                  onJoin: () => _joinMeeting(meeting),
+                  onEnd: () => _endMeeting(meeting),
+                )),
+                const SizedBox(height: 16),
+              ],
+
+              // My Courses
+              WebSectionHeader(
+                title: 'My Courses',
+                actionLabel: 'View all →',
+                onAction: () => context.go('/courses'),
               ),
+              if (_courses.isEmpty)
+                const WebEmptyCard(message: 'No courses assigned yet')
+              else
+                ..._courses.take(3).map((course) => _CourseTile(course: course)),
+
+              const SizedBox(height: 32),
             ],
           ),
         ),
-        const SizedBox(height: 20),
-        // Stats
-        Text('Overview', style: Theme.of(context).textTheme.titleLarge),
-        const SizedBox(height: 12),
-        GridView.count(
-          crossAxisCount: 2,
-          crossAxisSpacing: 12,
-          mainAxisSpacing: 12,
-          childAspectRatio: 1.8,
-          shrinkWrap: true,
-          physics: const NeverScrollableScrollPhysics(),
-          children: [
-            DiklyStatCard(label: 'My Courses', value: '${_courses.length}', color: const Color(0xFF7C3AED), icon: Icons.school_outlined),
-            DiklyStatCard(label: 'Live Now', value: '${liveMeetings.length}', color: DiklyColors.success, icon: Icons.fiber_manual_record_rounded),
-            DiklyStatCard(label: 'Upcoming', value: '${upcomingMeetings.length}', color: DiklyColors.warning, icon: Icons.schedule_outlined),
-            DiklyStatCard(label: 'Total Sessions', value: '${_meetings.length}', color: DiklyColors.primary, icon: Icons.video_call_outlined),
-          ],
-        ),
-        const SizedBox(height: 20),
-        // Quick Actions
-        Text('Quick Actions', style: Theme.of(context).textTheme.titleLarge),
-        const SizedBox(height: 12),
-        Wrap(
-          spacing: 12,
-          runSpacing: 12,
-          children: [
-            _ActionChip(label: 'New Session', icon: Icons.add_circle_outline, onTap: () => context.push('/sessions/create')),
-            _ActionChip(label: 'Attendance', icon: Icons.fact_check_outlined, onTap: () => context.go('/attendance')),
-            _ActionChip(label: 'Assignments', icon: Icons.assignment_outlined, onTap: () => context.go('/assignments')),
-            _ActionChip(label: 'Grade Book', icon: Icons.grade_outlined, onTap: () => context.go('/gradebook')),
-            _ActionChip(label: 'Reports', icon: Icons.bar_chart_outlined, onTap: () => context.go('/reports')),
-          ],
-        ),
-        const SizedBox(height: 20),
-        // Live meetings
-        if (liveMeetings.isNotEmpty) ...[
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Text('Live Now', style: Theme.of(context).textTheme.titleLarge),
-              Container(
-                width: 10,
-                height: 10,
-                decoration: const BoxDecoration(color: DiklyColors.success, shape: BoxShape.circle),
-              ),
-            ],
-          ),
-          const SizedBox(height: 8),
-          for (final meeting in liveMeetings.take(2))
-            MeetingCard(
-              meeting: meeting,
-              onJoin: () => _joinMeeting(meeting),
-              onEnd: () => _endMeeting(meeting),
-            ),
-          const SizedBox(height: 12),
-        ],
-        // My Courses
-        Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          children: [
-            Text('My Courses', style: Theme.of(context).textTheme.titleLarge),
-            TextButton(onPressed: () => context.go('/courses'), child: const Text('See all')),
-          ],
-        ),
-        const SizedBox(height: 8),
-        if (_courses.isEmpty)
-          const DiklyEmptyState(icon: Icons.school_outlined, title: 'No courses', subtitle: 'Your courses will appear here')
-        else
-          for (final course in _courses.take(3))
-            _CourseTile(course: course),
-        const SizedBox(height: 32),
       ],
     );
   }
@@ -197,31 +224,9 @@ class _LecturerDashboardState extends ConsumerState<LecturerDashboard> {
 
   String _getGreeting() {
     final hour = DateTime.now().hour;
-    if (hour < 12) return 'Good Morning';
-    if (hour < 17) return 'Good Afternoon';
-    return 'Good Evening';
-  }
-}
-
-class _ActionChip extends StatelessWidget {
-  final String label;
-  final IconData icon;
-  final VoidCallback onTap;
-
-  const _ActionChip({required this.label, required this.icon, required this.onTap});
-
-  @override
-  Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: onTap,
-      child: Chip(
-        avatar: Icon(icon, size: 16, color: DiklyColors.primary),
-        label: Text(label, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w500)),
-        backgroundColor: DiklyColors.primary.withOpacity(0.08),
-        side: BorderSide(color: DiklyColors.primary.withOpacity(0.2)),
-        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
-      ),
-    );
+    if (hour < 12) return 'Good morning';
+    if (hour < 17) return 'Good afternoon';
+    return 'Good evening';
   }
 }
 
@@ -232,38 +237,53 @@ class _CourseTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      margin: const EdgeInsets.only(bottom: 10),
+      margin: const EdgeInsets.only(bottom: 8),
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-        color: DiklyColors.surface,
+        color: Colors.white,
         borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: DiklyColors.border),
+        border: Border.all(color: const Color(0xFFE5E7EB)),
       ),
       child: Row(
         children: [
           Container(
-            width: 42,
-            height: 42,
+            width: 38,
+            height: 38,
             decoration: BoxDecoration(
               color: const Color(0xFF7C3AED).withOpacity(0.1),
-              borderRadius: BorderRadius.circular(10),
+              borderRadius: BorderRadius.circular(8),
             ),
-            child: const Icon(Icons.school_outlined, color: Color(0xFF7C3AED), size: 20),
+            child: const Icon(Icons.school_outlined, color: Color(0xFF7C3AED), size: 18),
           ),
           const SizedBox(width: 12),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(course.title, style: Theme.of(context).textTheme.bodyMedium?.copyWith(fontWeight: FontWeight.w600), overflow: TextOverflow.ellipsis),
+                Text(
+                  course.title,
+                  style: GoogleFonts.dmSans(fontSize: 14, fontWeight: FontWeight.w600, color: DiklyColors.text),
+                  overflow: TextOverflow.ellipsis,
+                ),
                 if (course.code != null)
-                  Text(course.code!, style: Theme.of(context).textTheme.bodySmall?.copyWith(color: DiklyColors.textSecondary)),
+                  Text(
+                    course.code!,
+                    style: GoogleFonts.dmSans(fontSize: 12, color: DiklyColors.textMuted),
+                  ),
               ],
             ),
           ),
-          Text('${course.studentCount ?? 0}', style: Theme.of(context).textTheme.labelMedium?.copyWith(color: DiklyColors.textSecondary)),
-          const SizedBox(width: 4),
-          const Icon(Icons.people_outline, size: 14, color: DiklyColors.textSecondary),
+          Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                '${course.studentCount ?? 0}',
+                style: GoogleFonts.dmSans(fontSize: 12, color: DiklyColors.textMuted, fontWeight: FontWeight.w500),
+              ),
+              const SizedBox(width: 3),
+              const Icon(Icons.people_outline, size: 14, color: DiklyColors.textMuted),
+            ],
+          ),
         ],
       ),
     );

@@ -6,6 +6,7 @@ import 'package:google_fonts/google_fonts.dart';
 import '../../core/auth.dart';
 import '../../core/api.dart';
 import '../../widgets/ds/home_widgets.dart';
+import '../../widgets/ds/dikly_ds.dart';
 import '../../core/theme.dart';
 
 final _managerDashProvider = FutureProvider.autoDispose<Map<String, dynamic>>(
@@ -116,29 +117,33 @@ class ManagerHomeScreen extends ConsumerWidget {
                               crossAxisCount: 2,
                               crossAxisSpacing: 10,
                               mainAxisSpacing: 10,
-                              childAspectRatio: 1.6,
+                              childAspectRatio: 1.35,
                               children: [
-                                DiklyGradientStat(
+                                WebStatCard(
                                   value: '${data['totalEmployees'] ?? 0}',
                                   label: 'Total Employees',
+                                  subtitle: 'Your team',
                                   icon: Icons.people_outline,
                                   color: theme.primary,
                                 ),
-                                DiklyGradientStat(
+                                WebStatCard(
                                   value: '${data['activeSessions'] ?? 0}',
                                   label: 'Active Sessions',
+                                  subtitle: 'In progress',
                                   icon: Icons.check_circle_outline,
                                   color: const Color(0xFF16A34A),
                                 ),
-                                DiklyGradientStat(
+                                WebStatCard(
                                   value: '${data['hoursThisMonth'] ?? 0}',
                                   label: 'Hours This Month',
+                                  subtitle: 'Tracked time',
                                   icon: Icons.access_time_outlined,
                                   color: const Color(0xFFD97706),
                                 ),
-                                DiklyGradientStat(
+                                WebStatCard(
                                   value: '${data['leaveRequests'] ?? 0}',
                                   label: 'Leave Requests',
+                                  subtitle: 'Pending review',
                                   icon: Icons.event_note_outlined,
                                   color: const Color(0xFFDC2626),
                                 ),

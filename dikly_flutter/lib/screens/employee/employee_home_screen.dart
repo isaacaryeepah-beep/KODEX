@@ -5,6 +5,7 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
 import '../../core/api.dart';
 import '../../core/auth.dart';
+import '../../widgets/ds/dikly_ds.dart';
 import '../../widgets/ds/home_widgets.dart';
 import '../../core/theme.dart';
 
@@ -402,12 +403,6 @@ class _StatGrid extends StatelessWidget {
     required this.theme,
   });
 
-  Color _rateColor(int rate) {
-    if (rate >= 80) return const Color(0xFF16A34A);
-    if (rate >= 60) return const Color(0xFFD97706);
-    return const Color(0xFFDC2626);
-  }
-
   @override
   Widget build(BuildContext context) {
     return GridView.count(
@@ -416,29 +411,37 @@ class _StatGrid extends StatelessWidget {
       crossAxisCount: 2,
       crossAxisSpacing: 10,
       mainAxisSpacing: 10,
-      childAspectRatio: 1.6,
+      childAspectRatio: 1.35,
       children: [
-        DiklyGradientStat(
+        WebStatCard(
           value: '$attRate%',
           label: 'Monthly Rate',
+          subtitle: attRate >= 80 ? 'Good standing' : 'Needs improvement',
           icon: Icons.trending_up,
-          color: _rateColor(attRate),
+          color: attRate >= 80
+              ? const Color(0xFF16A34A)
+              : attRate >= 60
+                  ? const Color(0xFFD97706)
+                  : const Color(0xFFDC2626),
         ),
-        DiklyGradientStat(
+        WebStatCard(
           value: '$lateDays',
           label: 'Late Days',
+          subtitle: lateDays == 0 ? 'Perfect record' : 'This month',
           icon: Icons.watch_later_outlined,
           color: const Color(0xFFD97706),
         ),
-        DiklyGradientStat(
+        WebStatCard(
           value: '${totalHrs.toStringAsFixed(1)}h',
           label: 'Hours This Month',
+          subtitle: 'Tracked time',
           icon: Icons.access_time_outlined,
           color: theme.primary,
         ),
-        DiklyGradientStat(
+        WebStatCard(
           value: '$annualLeft',
           label: 'Annual Days Left',
+          subtitle: 'Remaining balance',
           icon: Icons.event_available_outlined,
           color: const Color(0xFF7C3AED),
         ),
