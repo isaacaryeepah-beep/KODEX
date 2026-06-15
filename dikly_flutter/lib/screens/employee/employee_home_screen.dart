@@ -253,7 +253,6 @@ class _EmployeeHomeScreenState extends ConsumerState<EmployeeHomeScreen> {
             ),
           ),
         ],
-      ),
     );
   }
 }
