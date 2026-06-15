@@ -94,7 +94,7 @@ class _PortalSelectorScreenState extends State<PortalSelectorScreen> {
                       const SizedBox(height: 20),
 
                       Text(
-                        'ENTERPRISE ATTENDANCE\nMANAGEMENT PLATFORM',
+                        'ATTENDANCE & WORKFORCE\nMANAGEMENT PLATFORM',
                         textAlign: TextAlign.center,
                         style: TextStyle(
                           fontSize: 15,
@@ -144,7 +144,7 @@ class _PortalSelectorScreenState extends State<PortalSelectorScreen> {
                               children: [
                                 Expanded(
                                   child: _WorkspaceCard(
-                                    label: 'Corporate',
+                                    label: 'Workforce',
                                     subtitle: 'Businesses &\norganisations',
                                     icon: Icons.work_outline_rounded,
                                     iconColor: const Color(0xFFB45309),
