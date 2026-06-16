@@ -6212,125 +6212,260 @@ async function generateVerbalCode(sessionId) {
 }
 
 
+// ── Shared helper: render a single user row card ──────────────────────────────
+function _userRowCard(u, canManage) {
+  const roleAvatarColor = {
+    admin: '#dc2626', superadmin: '#0d1117', hod: '#0891b2',
+    lecturer: '#a16207', student: '#7c3aed', manager: '#1d4ed8', employee: '#15803d'
+  };
+  const initials  = (u.name || '?').split(' ').map(w => w[0]).join('').slice(0,2).toUpperCase();
+  const avatarBg  = roleAvatarColor[u.role] || '#6b7280';
+  const identifier = u.indexNumber || u.IndexNumber || u.employeeId || '';
+  const emailOrId  = u.email ? u.email : identifier || 'N/A';
+  const tags = u.role === 'student' ? [
+    u.programme    ? `<span style="background:#ede9fe;color:#7c3aed;padding:2px 7px;border-radius:20px;font-size:10px;font-weight:700">${esc(u.programme)}</span>` : '',
+    u.studentLevel ? `<span style="background:#dbeafe;color:#1d4ed8;padding:2px 7px;border-radius:20px;font-size:10px;font-weight:700">L${esc(u.studentLevel)}</span>` : '',
+    u.studentGroup ? `<span style="background:#ecfdf5;color:#059669;padding:2px 7px;border-radius:20px;font-size:10px;font-weight:700">Grp ${esc(u.studentGroup)}</span>` : '',
+    u.sessionType  ? `<span style="background:#fff7ed;color:#c2410c;padding:2px 7px;border-radius:20px;font-size:10px;font-weight:600">${esc(u.sessionType)}</span>` : '',
+  ].filter(Boolean).join(' ') : '';
+  return `
+  <div id="user-row-${u._id}" style="display:flex;align-items:center;gap:14px;padding:14px 16px;border-bottom:1px solid var(--border);transition:background .15s" onmouseover="this.style.background='var(--card-hover)'" onmouseout="this.style.background=''">
+    ${canManage ? `<input type="checkbox" class="user-checkbox" value="${u._id}" onchange="updateBulkActions()" style="flex-shrink:0;width:16px;height:16px;accent-color:var(--primary);cursor:pointer">` : ''}
+    <div style="width:42px;height:42px;border-radius:50%;background:${avatarBg};display:flex;align-items:center;justify-content:center;flex-shrink:0;font-weight:700;font-size:14px;color:#fff">${initials}</div>
+    <div style="flex:1;min-width:0">
+      <div style="display:flex;align-items:center;gap:7px;flex-wrap:wrap">
+        <span style="font-weight:700;font-size:14px;color:var(--text)">${esc(u.name)}</span>
+        <span class="role-badge role-${u.role}" style="flex-shrink:0">${u.role}</span>
+        ${u.isActive
+          ? `<span style="background:#dcfce7;color:#15803d;font-size:10px;font-weight:700;padding:2px 7px;border-radius:20px;flex-shrink:0">Active</span>`
+          : `<span style="background:#fee2e2;color:#dc2626;font-size:10px;font-weight:700;padding:2px 7px;border-radius:20px;flex-shrink:0">Inactive</span>`}
+      </div>
+      <div style="font-size:12px;color:var(--text-light);margin-top:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(emailOrId)}${identifier && u.email ? ` · ${esc(identifier)}` : ''}</div>
+      ${tags ? `<div style="display:flex;gap:4px;flex-wrap:wrap;margin-top:5px">${tags}</div>` : ''}
+    </div>
+    ${canManage ? `
+    <div style="display:flex;gap:6px;flex-wrap:wrap;flex-shrink:0">
+      ${u.isActive
+        ? `<button class="btn btn-sm" style="background:#f59e0b;color:#fff;font-size:11px;padding:5px 10px" onclick="deactivateUser('${u._id}')">Deactivate</button>`
+        : `<button class="btn btn-sm" style="background:#22c55e;color:#fff;font-size:11px;padding:5px 10px" onclick="activateUser('${u._id}')">Activate</button>`}
+      <button class="btn btn-sm" style="background:#6366f1;color:#fff;font-size:11px;padding:5px 10px" onclick="adminResetStudentPassword('${u._id}', this)">🔑 Reset</button>
+      ${u.role === 'student' && u.deviceId ? `<button class="btn btn-sm" style="background:#f97316;color:#fff;font-size:11px;padding:5px 10px" onclick="clearStudentDeviceLock('${u._id}', this)">🔓 Unlock</button>` : ''}
+      <button class="btn btn-danger btn-sm" style="font-size:11px;padding:5px 10px" onclick="deleteUserPermanently('${u._id}', this)">Delete</button>
+    </div>` : ''}
+  </div>`;
+}
+
+// ── Department drill-down view ─────────────────────────────────────────────────
+function renderDepartmentUsers(deptName, allUsers) {
+  const content = document.getElementById('main-content');
+  if (!content) return;
+  const canManage = ['admin','superadmin'].includes(currentUser.role);
+  const deptUsers = deptName === '__none__'
+    ? allUsers.filter(u => !u.department)
+    : allUsers.filter(u => u.department === deptName);
+
+  const roleOrder = ['admin','hod','lecturer','student','employee','manager'];
+  const roleLabel = { admin:'Admins', hod:'Head of Department', lecturer:'Lecturers', student:'Students', employee:'Employees', manager:'Managers' };
+  const roleSectionColor = { hod:'#0891b2', lecturer:'#a16207', student:'#7c3aed', admin:'#dc2626', employee:'#15803d', manager:'#1d4ed8' };
+
+  const grouped = {};
+  for (const r of roleOrder) {
+    const members = deptUsers.filter(u => u.role === r);
+    if (members.length) grouped[r] = members;
+  }
+
+  const sections = Object.entries(grouped).map(([role, members]) => `
+    <div style="margin-bottom:20px">
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px">
+        <div style="width:4px;height:20px;border-radius:2px;background:${roleSectionColor[role]||'#6b7280'}"></div>
+        <span style="font-weight:700;font-size:14px;color:var(--text)">${roleLabel[role]||role}</span>
+        <span style="background:${roleSectionColor[role]||'#6b7280'}20;color:${roleSectionColor[role]||'#6b7280'};font-size:11px;font-weight:700;padding:2px 9px;border-radius:20px">${members.length}</span>
+      </div>
+      <div class="card" style="padding:0;overflow:hidden">
+        ${members.map(u => _userRowCard(u, canManage)).join('')}
+      </div>
+    </div>
+  `).join('');
+
+  const displayName = deptName === '__none__' ? 'Unassigned Users' : esc(deptName);
+  content.innerHTML = `
+    <div style="display:flex;align-items:center;gap:12px;margin-bottom:20px;flex-wrap:wrap">
+      <button onclick="renderUsers()" style="display:flex;align-items:center;gap:6px;background:none;border:1.5px solid var(--border);border-radius:10px;padding:8px 14px;font-size:13px;font-weight:600;color:var(--text);cursor:pointer">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M19 12H5M12 5l-7 7 7 7"/></svg>
+        Departments
+      </button>
+      <div>
+        <h2 style="margin:0;font-size:20px">${displayName}</h2>
+        <p style="color:var(--text-light);font-size:13px;margin-top:2px">${deptUsers.length} member${deptUsers.length!==1?'s':''}</p>
+      </div>
+      ${canManage ? `<button class="btn btn-primary btn-sm" style="margin-left:auto" onclick="showCreateUserModal()">+ Add User</button>` : ''}
+    </div>
+    ${sections || `<div class="card" style="padding:48px;text-align:center">
+      <div style="font-size:36px;margin-bottom:10px">👥</div>
+      <div style="font-weight:600;color:var(--text)">No members in this department</div>
+    </div>`}
+  `;
+}
+
+// ── Main users page ────────────────────────────────────────────────────────────
 async function renderUsers(filterRole='', filterDept='', filterSearch='') {
   const content = document.getElementById('main-content');
   if (!content) return;
+  content.innerHTML = '<div class="loading">Loading…</div>';
   try {
-    let url = '/api/users';
-    const params = [];
-    if (filterRole) params.push('role=' + encodeURIComponent(filterRole));
-    if (filterDept) params.push('department=' + encodeURIComponent(filterDept));
-    if (params.length) url += '?' + params.join('&');
-
-    const data = await api(url);
+    const data = await api('/api/users');
     const mode = currentUser.company?.mode || 'corporate';
     const isManager = currentUser.role === 'manager';
     const canManage = ['manager', 'admin', 'superadmin'].includes(currentUser.role);
-    const pageTitle = isManager ? 'Employees' : 'Users';
-    const pageDesc = isManager ? 'Manage your employees' : 'Manage team members';
     const addLabel = isManager ? 'Add Employee' : 'Add User';
 
-    let otherUsers = data.users.filter(u => u._id !== currentUser.id);
-    if (filterSearch) {
-      const q = filterSearch.toLowerCase();
-      otherUsers = otherUsers.filter(u =>
-        u.name?.toLowerCase().includes(q) ||
-        u.email?.toLowerCase().includes(q) ||
-        u.indexNumber?.toLowerCase().includes(q) ||
-        u.department?.toLowerCase().includes(q)
-      );
+    const allUsers = (data.users || []).filter(u => u._id !== currentUser.id);
+
+    // ── Corporate / flat list (unchanged behaviour) ─────────────────────────
+    if (mode !== 'academic') {
+      let list = allUsers;
+      if (filterSearch) {
+        const q = filterSearch.toLowerCase();
+        list = list.filter(u => u.name?.toLowerCase().includes(q) || u.email?.toLowerCase().includes(q) || u.indexNumber?.toLowerCase().includes(q));
+      }
+      if (filterRole) list = list.filter(u => u.role === filterRole);
+
+      content.innerHTML = `
+        <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;margin-bottom:16px">
+          <div>
+            <h2 style="margin:0;font-size:20px">${isManager ? 'Employees' : 'Users'}</h2>
+            <p style="color:var(--text-light);font-size:13px;margin-top:2px"><b>${list.length}</b> member${list.length!==1?'s':''}</p>
+          </div>
+          <div style="display:flex;gap:8px;flex-wrap:wrap">
+            ${canManage ? `<button class="btn btn-primary btn-sm" onclick="showCreateUserModal()">+ ${addLabel}</button>` : ''}
+            ${['admin','superadmin'].includes(currentUser.role) ? `<button class="btn btn-sm" style="background:#f59e0b;color:#fff" onclick="renderResetLogs()">🔐 Reset Log</button>` : ''}
+          </div>
+        </div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px">
+          <div style="position:relative;flex:1;min-width:180px">
+            <svg style="position:absolute;left:10px;top:50%;transform:translateY(-50%);color:var(--text-muted);pointer-events:none" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
+            <input placeholder="Search…" value="${filterSearch}" oninput="renderUsers(document.getElementById('_uf-role').value,'',this.value)"
+              style="width:100%;padding:8px 11px 8px 32px;border:1.5px solid var(--border);border-radius:10px;font-size:13px;font-family:inherit;outline:none;background:var(--card);color:var(--text)">
+          </div>
+          <select id="_uf-role" onchange="renderUsers(this.value,'',document.querySelector('[placeholder=\\'Search…\\']').value)"
+            style="padding:8px 10px;border:1.5px solid var(--border);border-radius:10px;font-size:13px;font-family:inherit;outline:none;background:var(--card);color:var(--text)">
+            <option value="">All Roles</option>
+            <option value="admin" ${filterRole==='admin'?'selected':''}>Admin</option>
+            <option value="manager" ${filterRole==='manager'?'selected':''}>Manager</option>
+            <option value="employee" ${filterRole==='employee'?'selected':''}>Employee</option>
+          </select>
+        </div>
+        <div id="bulk-actions" style="display:none;gap:8px;align-items:center;background:var(--primary-ultra-light);border:1px solid #bfdbfe;border-radius:10px;padding:10px 14px;margin-bottom:10px">
+          <span id="selected-count" style="font-size:13px;color:var(--text-light);flex:1">0 selected</span>
+          <button class="btn btn-sm" style="background:#22c55e;color:#fff" onclick="bulkUserAction('activate')">Activate</button>
+          <button class="btn btn-sm" style="background:#f59e0b;color:#fff" onclick="bulkUserAction('deactivate')">Deactivate</button>
+          <button class="btn btn-danger btn-sm" onclick="bulkUserAction('delete')">Delete</button>
+        </div>
+        <div class="card" style="padding:0;overflow:hidden">
+          ${canManage && list.length ? `<div style="padding:10px 16px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:10px;background:var(--border-light)">
+            <input type="checkbox" id="select-all-users" onchange="toggleSelectAllUsers()" style="width:16px;height:16px;accent-color:var(--primary);cursor:pointer">
+            <span style="font-size:12px;color:var(--text-muted);font-weight:600;letter-spacing:.4px;text-transform:uppercase">Select All</span>
+          </div>` : ''}
+          ${list.length ? list.map(u => _userRowCard(u, canManage)).join('') : `<div style="text-align:center;padding:48px;color:var(--text-muted)"><div style="font-size:32px;margin-bottom:8px">👥</div><div style="font-weight:600">No users found</div></div>`}
+        </div>`;
+      return;
     }
 
-    // Collect unique departments for filter dropdown
-    const allDepts = [...new Set((data.users || []).map(u => u.department).filter(Boolean))].sort();
+    // ── Academic mode: department cards ─────────────────────────────────────
+    const deptMap = {};
+    for (const u of allUsers) {
+      const key = u.department || '__none__';
+      if (!deptMap[key]) deptMap[key] = { hod:[], lecturer:[], student:[], other:[] };
+      if (u.role === 'hod')           deptMap[key].hod.push(u);
+      else if (u.role === 'lecturer') deptMap[key].lecturer.push(u);
+      else if (u.role === 'student')  deptMap[key].student.push(u);
+      else                            deptMap[key].other.push(u);
+    }
+
+    const deptGradients = [
+      'linear-gradient(135deg,#4f6ef7,#7c3aed)',
+      'linear-gradient(135deg,#0891b2,#059669)',
+      'linear-gradient(135deg,#d97706,#dc2626)',
+      'linear-gradient(135deg,#7c3aed,#0891b2)',
+      'linear-gradient(135deg,#059669,#4f6ef7)',
+      'linear-gradient(135deg,#dc2626,#d97706)',
+    ];
+
+    const deptNames = Object.keys(deptMap).filter(k => k !== '__none__').sort();
+    const unassigned = deptMap['__none__'];
+
+    const deptCards = deptNames.map((dept, i) => {
+      const d = deptMap[dept];
+      const total = d.hod.length + d.lecturer.length + d.student.length + d.other.length;
+      const grad = deptGradients[i % deptGradients.length];
+      const hodName = d.hod[0] ? esc(d.hod[0].name.split(' ').slice(0,2).join(' ')) : '—';
+      const safeId = JSON.stringify(dept);
+      return `
+      <div onclick="renderDepartmentUsers(${safeId}, _cachedAllUsers)"
+        style="background:var(--card);border:1px solid var(--border);border-radius:16px;overflow:hidden;cursor:pointer;transition:transform .18s,box-shadow .18s;box-shadow:var(--shadow-md)"
+        onmouseover="this.style.transform='translateY(-3px)';this.style.boxShadow='var(--shadow-lg)'"
+        onmouseout="this.style.transform='';this.style.boxShadow='var(--shadow-md)'">
+        <div style="background:${grad};padding:18px 20px 14px">
+          <div style="font-size:11px;font-weight:700;letter-spacing:.8px;text-transform:uppercase;color:rgba(255,255,255,.75);margin-bottom:4px">Department</div>
+          <div style="font-weight:800;font-size:17px;color:#fff;line-height:1.3">${esc(dept)}</div>
+          <div style="font-size:12px;color:rgba(255,255,255,.8);margin-top:6px">${total} member${total!==1?'s':''}</div>
+        </div>
+        <div style="padding:14px 20px">
+          ${d.hod.length ? `<div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">
+            <span style="font-size:18px">👤</span>
+            <div><div style="font-size:10px;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:.4px">HOD</div>
+            <div style="font-size:13px;font-weight:600;color:var(--text)">${hodName}</div></div>
+          </div>` : ''}
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:4px">
+            <div style="background:#fef9c3;border-radius:10px;padding:10px 12px;text-align:center">
+              <div style="font-size:22px;font-weight:800;color:#a16207">${d.lecturer.length}</div>
+              <div style="font-size:10px;font-weight:700;color:#92400e;text-transform:uppercase;letter-spacing:.4px">Lecturers</div>
+            </div>
+            <div style="background:#ede9fe;border-radius:10px;padding:10px 12px;text-align:center">
+              <div style="font-size:22px;font-weight:800;color:#7c3aed">${d.student.length}</div>
+              <div style="font-size:10px;font-weight:700;color:#6d28d9;text-transform:uppercase;letter-spacing:.4px">Students</div>
+            </div>
+          </div>
+          ${d.other.length ? `<div style="margin-top:8px;font-size:11px;color:var(--text-muted)">${d.other.length} other member${d.other.length!==1?'s':''}</div>` : ''}
+        </div>
+      </div>`;
+    }).join('');
+
+    const unassignedTotal = unassigned ? (unassigned.hod.length + unassigned.lecturer.length + unassigned.student.length + unassigned.other.length) : 0;
+
+    window._cachedAllUsers = allUsers;
 
     content.innerHTML = `
-      <div class="page-header"><h2>${pageTitle}</h2><p>${pageDesc} · ${otherUsers.length} shown</p></div>
-      <div class="actions-bar" style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:10px;">
-        ${canManage ? `<button class="btn btn-primary btn-sm" onclick="showCreateUserModal()">${addLabel}</button>` : ''}
-        ${['admin','superadmin'].includes(currentUser.role) && mode === 'academic' ? `<button class="btn btn-sm btn-secondary" onclick="showBulkImportModal()">📥 Bulk Import Students</button>` : ''}
-        ${['admin','superadmin'].includes(currentUser.role) ? `<button class="btn btn-sm" style="background:#f59e0b;color:#fff" onclick="renderResetLogs()">🔐 Password Reset Log</button>` : ''}
-        <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin-left:auto;">
-          <input id="user-search-input" placeholder="Search name / email / ID…" value="${filterSearch}"
-            oninput="renderUsers(document.getElementById('user-role-filter').value, document.getElementById('user-dept-filter').value, this.value)"
-            style="padding:7px 11px;border:1.5px solid var(--border);border-radius:8px;font-size:13px;font-family:inherit;outline:none;min-width:180px;">
-          <select id="user-role-filter" onchange="renderUsers(this.value, document.getElementById('user-dept-filter').value, document.getElementById('user-search-input').value)"
-            style="padding:7px 10px;border:1.5px solid var(--border);border-radius:8px;font-size:13px;font-family:inherit;outline:none;">
-            <option value="" ${!filterRole?'selected':''}>All Roles</option>
-            ${currentUser.role === 'superadmin'
-              ? `<option value="admin"     ${filterRole==='admin'?'selected':''}>Admin</option>
-                 <option value="manager"   ${filterRole==='manager'?'selected':''}>Manager</option>
-                 <option value="hod"       ${filterRole==='hod'?'selected':''}>HOD</option>
-                 <option value="lecturer"  ${filterRole==='lecturer'?'selected':''}>Lecturer</option>
-                 <option value="employee"  ${filterRole==='employee'?'selected':''}>Employee</option>
-                 <option value="student"   ${filterRole==='student'?'selected':''}>Student</option>`
-              : mode === 'academic'
-                ? `<option value="admin"    ${filterRole==='admin'?'selected':''}>Admin</option>
-                   <option value="hod"      ${filterRole==='hod'?'selected':''}>HOD</option>
-                   <option value="lecturer" ${filterRole==='lecturer'?'selected':''}>Lecturer</option>
-                   <option value="student"  ${filterRole==='student'?'selected':''}>Student</option>`
-                : `<option value="admin"    ${filterRole==='admin'?'selected':''}>Admin</option>
-                   <option value="manager"  ${filterRole==='manager'?'selected':''}>Manager</option>
-                   <option value="employee" ${filterRole==='employee'?'selected':''}>Employee</option>`}
-          </select>
-          ${mode === 'academic' && allDepts.length > 0 ? `
-          <select id="user-dept-filter" onchange="renderUsers(document.getElementById('user-role-filter').value, this.value, document.getElementById('user-search-input').value)"
-            style="padding:7px 10px;border:1.5px solid var(--border);border-radius:8px;font-size:13px;font-family:inherit;outline:none;">
-            <option value="" ${!filterDept?'selected':''}>All Departments</option>
-            ${allDepts.map(d => `<option value="${d}" ${filterDept===d?'selected':''}>${d}</option>`).join('')}
-          </select>` : `<select id="user-dept-filter" style="display:none;"></select>`}
-          ${filterRole || filterDept || filterSearch ? `<button class="btn btn-xs btn-secondary" onclick="renderUsers()">✕ Clear</button>` : ''}
+      <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;margin-bottom:20px">
+        <div>
+          <h2 style="margin:0;font-size:20px">Departments</h2>
+          <p style="color:var(--text-light);font-size:13px;margin-top:2px">${deptNames.length} department${deptNames.length!==1?'s':''} · ${allUsers.length} members total</p>
         </div>
-        ${canManage ? `
-          <div id="bulk-actions" style="display:none;gap:8px;align-items:center;margin-left:auto">
-            <span id="selected-count" style="font-size:13px;color:var(--text-light)">0 selected</span>
-            <button class="btn btn-sm" style="background:#22c55e;color:#fff" onclick="bulkUserAction('activate')">Activate</button>
-            <button class="btn btn-sm" style="background:#f59e0b;color:#fff" onclick="bulkUserAction('deactivate')">Deactivate</button>
-            <button class="btn btn-danger btn-sm" onclick="bulkUserAction('delete')">Delete</button>
-          </div>
-        ` : ''}
+        <div style="display:flex;gap:8px;flex-wrap:wrap">
+          ${canManage ? `<button class="btn btn-primary btn-sm" onclick="showCreateUserModal()">+ Add User</button>` : ''}
+          ${canManage ? `<button class="btn btn-sm btn-secondary" onclick="showBulkImportModal()">📥 Bulk Import</button>` : ''}
+          ${['admin','superadmin'].includes(currentUser.role) ? `<button class="btn btn-sm" style="background:#f59e0b;color:#fff" onclick="renderResetLogs()">🔐 Reset Log</button>` : ''}
+        </div>
       </div>
-      <div class="card">
-        ${otherUsers.length ? `
-          <table>
-            <thead><tr>
-              ${canManage ? '<th style="width:40px"><input type="checkbox" id="select-all-users" onchange="toggleSelectAllUsers()"></th>' : ''}
-              <th>Name</th>${mode === 'corporate' ? '<th>Employee ID</th>' : ''}<th>Email / Index</th><th>Role</th>${mode !== 'corporate' ? '<th>Classification</th>' : ''}<th>Status</th>${canManage ? '<th>Actions</th>' : ''}
-            </tr></thead>
-            <tbody>${otherUsers.map(u => `
-              <tr id="user-row-${u._id}">
-                ${canManage ? `<td><input type="checkbox" class="user-checkbox" value="${u._id}" onchange="updateBulkActions()"></td>` : ''}
-                <td>${u.name}</td>
-                ${mode === 'corporate' ? `<td>${u.employeeId || '-'}</td>` : ''}
-                <td>${u.email || u.IndexNumber || u.indexNumber || 'N/A'}</td>
-                <td><span class="role-badge role-${u.role}">${u.role}</span>${u.department ? `<span style="font-size:10px;margin-left:5px;padding:2px 6px;border-radius:20px;background:#ecfeff;color:#0891b2;font-weight:600;">${u.department}</span>` : ''}</td>
-                ${mode !== 'corporate' ? `<td style="font-size:11px;white-space:nowrap">
-                  ${u.role === 'student' ? `
-                    ${u.programme ? `<span style="background:#ede9fe;color:#7c3aed;padding:1px 6px;border-radius:20px;font-weight:700;margin-right:2px">${esc(u.programme)}</span>` : ''}
-                    ${u.studentLevel ? `<span style="background:#dbeafe;color:#1d4ed8;padding:1px 6px;border-radius:20px;font-weight:700;margin-right:2px">L${esc(u.studentLevel)}</span>` : ''}
-                    ${u.studentGroup ? `<span style="background:#ecfdf5;color:#059669;padding:1px 6px;border-radius:20px;font-weight:700;margin-right:2px">Grp ${esc(u.studentGroup)}</span>` : ''}
-                    ${u.sessionType ? `<span style="background:#fff7ed;color:#c2410c;padding:1px 6px;border-radius:20px;font-weight:600;margin-right:2px">${esc(u.sessionType)}</span>` : ''}
-                    ${u.semester ? `<span style="color:var(--text-muted)">Sem ${esc(u.semester)}</span>` : ''}
-                    ${!u.programme && !u.studentLevel ? '<span style="color:var(--text-muted)">—</span>' : ''}
-                  ` : '<span style="color:var(--text-muted)">—</span>'}
-                </td>` : ''}
-                <td><span class="status-badge ${u.isActive ? 'status-active' : 'status-stopped'}">${u.isActive ? 'Active' : 'Inactive'}</span></td>
-                ${canManage ? `<td style="white-space:nowrap">
-                  ${u.isActive
-                    ? `<button class="btn btn-sm" style="background:#f59e0b;color:#fff;font-size:11px" onclick="deactivateUser('${u._id}')">Deactivate</button>`
-                    : `<button class="btn btn-sm" style="background:#22c55e;color:#fff;font-size:11px" onclick="activateUser('${u._id}')">Activate</button>`}
-                  <button class="btn btn-sm" style="background:#6366f1;color:#fff;font-size:11px" onclick="adminResetStudentPassword('${u._id}', this)">🔑 Reset</button>
-                  ${u.role === 'student' && u.deviceId ? `<button class="btn btn-sm" style="background:#f97316;color:#fff;font-size:11px" onclick="clearStudentDeviceLock('${u._id}', this)">🔓 Unlock</button>` : ''}
-                  <button class="btn btn-danger btn-sm" style="font-size:11px" onclick="deleteUserPermanently('${u._id}', this)">Delete</button>
-                </td>` : ''}
-              </tr>
-            `).join('')}</tbody>
-          </table>
-        ` : '<div class="empty-state"><p>No users found</p></div>'}
+
+      <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:16px">
+        ${deptCards}
+        ${unassignedTotal > 0 ? `
+        <div onclick="renderDepartmentUsers('__none__', _cachedAllUsers)"
+          style="background:var(--card);border:1.5px dashed var(--border);border-radius:16px;overflow:hidden;cursor:pointer;transition:transform .18s,box-shadow .18s"
+          onmouseover="this.style.transform='translateY(-3px)';this.style.boxShadow='var(--shadow-lg)'"
+          onmouseout="this.style.transform='';this.style.boxShadow=''">
+          <div style="background:linear-gradient(135deg,#6b7280,#374151);padding:18px 20px 14px">
+            <div style="font-size:11px;font-weight:700;letter-spacing:.8px;text-transform:uppercase;color:rgba(255,255,255,.7);margin-bottom:4px">No Department</div>
+            <div style="font-weight:800;font-size:17px;color:#fff">Unassigned</div>
+            <div style="font-size:12px;color:rgba(255,255,255,.75);margin-top:6px">${unassignedTotal} member${unassignedTotal!==1?'s':''}</div>
+          </div>
+          <div style="padding:14px 20px;color:var(--text-muted);font-size:13px">Users without a department assignment</div>
+        </div>` : ''}
       </div>
     `;
   } catch (e) {
-    content.innerHTML = `<div class="card"><p>Error: ${e.message}</p></div>`;
+    content.innerHTML = `<div class="card" style="padding:24px"><p style="color:var(--danger)">Error: ${esc(e.message)}</p></div>`;
   }
 }
 

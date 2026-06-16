@@ -82,6 +82,7 @@ import '../screens/splash_screen.dart';
 import '../screens/hod/hod_sessions_screen.dart';
 import '../screens/hod/hod_quiz_monitor_screen.dart';
 import '../screens/attendance/my_attendance_screen.dart';
+import '../screens/attendance/offline_attendance_screen.dart';
 import '../screens/student/student_course_videos_screen.dart';
 
 // Smooth fade+slide transition used for all routes
@@ -169,7 +170,8 @@ final routerProvider = Provider<GoRouter>((ref) {
       }),
 
       // Attendance
-      GoRoute(path: '/my-attendance', builder: (context, state) => const MyAttendanceScreen()),
+      GoRoute(path: '/my-attendance',      builder: (context, state) => const MyAttendanceScreen()),
+      GoRoute(path: '/offline-attendance', builder: (context, state) => const OfflineAttendanceScreen()),
       GoRoute(
         path: '/attendance',
         builder: (context, state) => Scaffold(
