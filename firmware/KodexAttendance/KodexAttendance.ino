@@ -107,6 +107,15 @@ bool     timeSynced = false;
 uint8_t  hbFailCount = 0;
 bool     wifiReconnectNeeded = false;
 
+// ─── Offline attendance mode ─────────────────────────────────────────────────
+bool     offlineMode          = false;   // true when running as standalone AP
+bool     offlineSessionActive = false;
+String   offlineSessionTitle;
+String   offlineSessionCourse;
+uint32_t offlineSessionStart  = 0;
+int      offlineRecordCount   = 0;
+bool     offlineSyncPending   = false;
+
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 static void log(const String& s) { Serial.print("[KODEX] "); Serial.println(s); }
 
@@ -520,6 +529,460 @@ static void startApPortal() {
   localHttp.begin();
 }
 
+// ─── Offline attendance HTML pages ───────────────────────────────────────────
+static const char OFFLINE_HOME_HTML[] PROGMEM = R"HTML(<!doctype html>
+<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Dikly Attendance</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:system-ui,sans-serif;background:#0f172a;color:#e2e8f0;min-height:100vh;display:flex;align-items:center;justify-content:center;padding:20px}
+.card{background:#1e293b;border-radius:16px;padding:28px 24px;max-width:400px;width:100%;border:1px solid #334155}
+.logo{font-size:28px;font-weight:800;color:#6366f1;margin-bottom:4px}
+.sub{font-size:13px;color:#64748b;margin-bottom:24px}
+.session-box{background:#0f172a;border-radius:10px;padding:16px;margin-bottom:20px;border:1px solid #334155}
+.session-label{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.6px;color:#6366f1;margin-bottom:4px}
+.session-title{font-size:18px;font-weight:700;color:#f1f5f9;margin-bottom:2px}
+.session-course{font-size:13px;color:#94a3b8}
+label{display:block;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:#64748b;margin:14px 0 5px}
+input{width:100%;padding:11px 13px;border-radius:8px;border:1px solid #334155;background:#0f172a;color:#e2e8f0;font-size:14px;outline:none}
+input:focus{border-color:#6366f1}
+.btn{width:100%;padding:13px;border-radius:8px;border:0;font-size:15px;font-weight:700;cursor:pointer;margin-top:16px}
+.btn-primary{background:#6366f1;color:#fff}
+.btn-primary:active{background:#4f46e5}
+.btn-secondary{background:#1e293b;color:#94a3b8;border:1px solid #334155;margin-top:8px;font-size:13px}
+.divider{border:none;border-top:1px solid #1e293b;margin:20px 0}
+.msg{font-size:13px;color:#64748b;text-align:center;margin-top:12px}
+.err{color:#f87171}
+.ok{color:#4ade80;font-size:18px;font-weight:700;text-align:center;margin:20px 0}
+.count{font-size:13px;color:#94a3b8;text-align:center;margin-top:8px}
+</style></head>
+<body><div class="card">
+  <div class="logo">Dikly</div>
+  <div class="sub">Offline Attendance</div>
+  <div id="app"></div>
+</div>
+<script>
+const S=JSON.parse(atob('SESSION_JSON_B64'));
+const app=document.getElementById('app');
+
+function showStudent(){
+  if(!S.active){
+    app.innerHTML='<div style="text-align:center;padding:20px"><div style="font-size:40px">📋</div><p style="color:#94a3b8;margin-top:12px;font-size:14px">No session started yet.<br>Ask your lecturer to start one.</p><a href="/lecturer" style="display:block;margin-top:20px;color:#6366f1;font-size:12px;text-align:center">Lecturer login →</a></div>';
+    return;
+  }
+  app.innerHTML=`<div class="session-box">
+    <div class="session-label">Active Session</div>
+    <div class="session-title">${S.title}</div>
+    <div class="session-course">${S.course}</div>
+  </div>
+  <form id="mf">
+    <label>Full Name</label><input id="nm" placeholder="Your full name" required autocomplete="name">
+    <label>Student ID / Index Number</label><input id="idx" placeholder="e.g. STU/2023/001" required autocomplete="off">
+    <button class="btn btn-primary" type="submit">Mark Attendance</button>
+  </form>
+  <div id="msg" class="msg"></div>
+  <hr class="divider">
+  <a href="/lecturer" style="display:block;color:#334155;font-size:11px;text-align:center">Lecturer →</a>`;
+  document.getElementById('mf').onsubmit=async e=>{
+    e.preventDefault();
+    const b=e.target.querySelector('[type=submit]');
+    b.disabled=true;b.textContent='Marking…';
+    const m=document.getElementById('msg');
+    try{
+      const r=await fetch('/student/mark',{method:'POST',headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({name:document.getElementById('nm').value.trim(),indexNumber:document.getElementById('idx').value.trim()})});
+      const j=await r.json();
+      if(!r.ok)throw new Error(j.error||'Failed');
+      app.innerHTML='<div class="ok">✓ Attendance Marked!</div><div class="count">You are student #'+j.count+'</div><p style="color:#64748b;font-size:12px;text-align:center;margin-top:12px">Your record is saved and will sync when the device reconnects.</p>';
+    }catch(err){m.className='msg err';m.textContent=err.message;b.disabled=false;b.textContent='Mark Attendance';}
+  };
+}
+
+showStudent();
+</script></body></html>
+)HTML";
+
+static const char OFFLINE_LECTURER_HTML[] PROGMEM = R"HTML(<!doctype html>
+<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Dikly — Lecturer</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:system-ui,sans-serif;background:#0f172a;color:#e2e8f0;min-height:100vh;display:flex;align-items:center;justify-content:center;padding:20px}
+.card{background:#1e293b;border-radius:16px;padding:28px 24px;max-width:420px;width:100%;border:1px solid #334155}
+.logo{font-size:22px;font-weight:800;color:#6366f1;margin-bottom:4px}
+.sub{font-size:13px;color:#64748b;margin-bottom:24px}
+label{display:block;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:#64748b;margin:14px 0 5px}
+input{width:100%;padding:11px 13px;border-radius:8px;border:1px solid #334155;background:#0f172a;color:#e2e8f0;font-size:14px;outline:none}
+input:focus{border-color:#6366f1}
+.btn{width:100%;padding:13px;border-radius:8px;border:0;font-size:15px;font-weight:700;cursor:pointer;margin-top:16px}
+.btn-green{background:#22c55e;color:#fff}
+.btn-red{background:#ef4444;color:#fff;margin-top:8px}
+.btn-back{background:transparent;color:#64748b;border:1px solid #334155;font-size:13px;margin-top:8px}
+.session-box{background:#0f172a;border-radius:10px;padding:14px;margin-bottom:16px;border:1px solid #334155}
+.stat{display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:1px solid #1e293b;font-size:13px}
+.stat:last-child{border-bottom:0}
+.stat-val{font-weight:700;color:#f1f5f9}
+.err{color:#f87171;font-size:12px;margin-top:8px}
+.ok{color:#4ade80;font-size:12px;margin-top:8px}
+.record-list{max-height:200px;overflow-y:auto;margin-top:10px}
+.record{padding:8px 10px;border-radius:6px;background:#0f172a;margin-bottom:4px;font-size:12px;display:flex;justify-content:space-between}
+.record-name{font-weight:600;color:#f1f5f9}
+.record-id{color:#64748b}
+</style></head>
+<body><div class="card">
+  <div class="logo">Dikly <span style="color:#64748b;font-size:14px;font-weight:400">Lecturer</span></div>
+  <div class="sub">Offline Attendance Control</div>
+  <div id="app"></div>
+</div>
+<script>
+const S=JSON.parse(atob('SESSION_JSON_B64'));
+const PIN='DEVICE_PIN';
+const app=document.getElementById('app');
+
+let authed=sessionStorage.getItem('lpin')===PIN;
+
+function showPin(){
+  app.innerHTML=`<form id="pf">
+    <label>Lecturer PIN <span style="color:#334155;font-weight:400">(shown on device display)</span></label>
+    <input id="pin" type="password" maxlength="6" placeholder="Enter PIN" required>
+    <button class="btn btn-green" type="submit">Unlock</button>
+  </form><div id="perr" class="err"></div>
+  <a href="/" style="display:block;text-align:center;color:#334155;font-size:12px;margin-top:16px">← Back to student page</a>`;
+  document.getElementById('pf').onsubmit=e=>{
+    e.preventDefault();
+    const v=document.getElementById('pin').value;
+    if(v===PIN){sessionStorage.setItem('lpin',PIN);authed=true;showMain();}
+    else{document.getElementById('perr').textContent='Incorrect PIN. Check the device display.';}
+  };
+}
+
+function showMain(){
+  if(S.active){showSession();}else{showStart();}
+}
+
+function showStart(){
+  app.innerHTML=`<form id="sf">
+    <label>Course Code / Name</label><input id="course" placeholder="e.g. CS101 — Intro to Computing" required>
+    <label>Session Title</label><input id="title" placeholder="e.g. Week 3 Lecture" required>
+    <button class="btn btn-green" type="submit">▶ Start Session</button>
+  </form>
+  <div id="smsg" class="ok" style="display:none"></div>
+  <button class="btn btn-back" onclick="location.href='/'">← Student page</button>`;
+  document.getElementById('sf').onsubmit=async e=>{
+    e.preventDefault();
+    const b=e.target.querySelector('[type=submit]');
+    b.disabled=true;b.textContent='Starting…';
+    try{
+      const r=await fetch('/lecturer/start',{method:'POST',headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({course:document.getElementById('course').value.trim(),title:document.getElementById('title').value.trim(),pin:PIN})});
+      const j=await r.json();
+      if(!r.ok)throw new Error(j.error||'Failed');
+      S.active=true;S.title=j.title;S.course=j.course;
+      showSession();
+    }catch(err){b.disabled=false;b.textContent='▶ Start Session';document.getElementById('smsg').style.display='block';document.getElementById('smsg').className='err';document.getElementById('smsg').textContent=err.message;}
+  };
+}
+
+async function loadRecords(){
+  try{
+    const r=await fetch('/lecturer/records');
+    const j=await r.json();
+    const list=document.getElementById('rec-list');
+    if(!list)return;
+    list.innerHTML=j.records.map((r,i)=>`<div class="record"><span class="record-name">${i+1}. ${r.name}</span><span class="record-id">${r.indexNumber}</span></div>`).join('')||'<div style="color:#64748b;font-size:12px;text-align:center;padding:10px">No records yet</div>';
+    document.getElementById('rec-count').textContent=j.records.length+' student'+(j.records.length!==1?'s':'');
+  }catch(e){}
+}
+
+function showSession(){
+  app.innerHTML=`<div class="session-box">
+    <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.6px;color:#22c55e;margin-bottom:6px">● Session Active</div>
+    <div style="font-size:17px;font-weight:700;color:#f1f5f9;margin-bottom:2px">${S.title}</div>
+    <div style="font-size:13px;color:#94a3b8">${S.course}</div>
+  </div>
+  <div style="font-size:12px;font-weight:700;color:#64748b;text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px">Attendance Records — <span id="rec-count">loading…</span></div>
+  <div id="rec-list" class="record-list"></div>
+  <button class="btn" style="background:#1e3a5f;color:#60a5fa;margin-top:12px" onclick="loadRecords()">↻ Refresh</button>
+  <button class="btn btn-red" onclick="endSession()">■ End Session</button>
+  <button class="btn btn-back" onclick="location.href='/'">← Student page</button>`;
+  loadRecords();
+  setInterval(loadRecords,5000);
+}
+
+async function endSession(){
+  if(!confirm('End the session? Students can no longer mark attendance.'))return;
+  try{
+    const r=await fetch('/lecturer/end',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({pin:PIN})});
+    const j=await r.json();
+    if(!r.ok)throw new Error(j.error||'Failed');
+    S.active=false;location.reload();
+  }catch(e){alert('Error: '+e.message);}
+}
+
+if(authed){showMain();}else{showPin();}
+</script></body></html>
+)HTML";
+
+// ─── Offline mode helpers ─────────────────────────────────────────────────────
+static String offlineSessionJson() {
+  String j = "{\"active\":";
+  j += offlineSessionActive ? "true" : "false";
+  if (offlineSessionActive) {
+    j += ",\"title\":\"" + offlineSessionTitle + "\"";
+    j += ",\"course\":\"" + offlineSessionCourse + "\"";
+    j += ",\"count\":" + String(offlineRecordCount);
+  }
+  j += "}";
+  return j;
+}
+
+// Base64 encode (simple, no line breaks needed for short strings)
+static String b64Encode(const String& s) {
+  static const char* T = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+  String out;
+  int i = 0;
+  const uint8_t* b = (const uint8_t*)s.c_str();
+  int len = s.length();
+  while (i < len) {
+    uint32_t v = (uint32_t)b[i++] << 16;
+    if (i < len) v |= (uint32_t)b[i++] << 8;
+    if (i < len) v |= b[i++];
+    out += T[(v >> 18) & 63];
+    out += T[(v >> 12) & 63];
+    out += (i-2 < len) ? T[(v >> 6) & 63] : '=';
+    out += (i-1 < len) ? T[v & 63] : '=';
+  }
+  return out;
+}
+
+static String buildOfflinePage(const char* tmpl, const String& pin) {
+  String page = FPSTR(tmpl);
+  String encoded = b64Encode(offlineSessionJson());
+  page.replace("SESSION_JSON_B64", encoded);
+  page.replace("DEVICE_PIN", pin);
+  return page;
+}
+
+static String offlinePIN() {
+  // Last 6 chars of MAC suffix = device PIN shown on OLED
+  return getMacSuffix();
+}
+
+static void saveOfflineRecord(const String& name, const String& indexNumber) {
+  // Load existing JSON array from NVS, append, save back
+  Preferences p;
+  p.begin("offlineRec", false);
+  String records = p.getString("data", "[]");
+  p.end();
+
+  // Remove closing bracket, append new record
+  records.trim();
+  if (records.endsWith("]")) records = records.substring(0, records.length() - 1);
+  if (records.length() > 1) records += ",";  // not empty array
+  uint32_t ts = (uint32_t)time(nullptr);
+  records += "{\"name\":\"" + name + "\",\"indexNumber\":\"" + indexNumber + "\",\"ts\":" + String(ts) + "}]";
+
+  p.begin("offlineRec", false);
+  p.putString("data", records);
+  p.end();
+  offlineRecordCount++;
+  offlineSyncPending = true;
+}
+
+static void clearOfflineRecords() {
+  Preferences p;
+  p.begin("offlineRec", false);
+  p.putString("data", "[]");
+  p.end();
+  offlineRecordCount = 0;
+}
+
+static String loadOfflineRecords() {
+  Preferences p;
+  p.begin("offlineRec", true);
+  String s = p.getString("data", "[]");
+  p.end();
+  return s;
+}
+
+static void saveOfflineSession() {
+  Preferences p;
+  p.begin("offlineSess", false);
+  p.putBool("active",  offlineSessionActive);
+  p.putString("title", offlineSessionTitle);
+  p.putString("course",offlineSessionCourse);
+  p.putUInt("start",   offlineSessionStart);
+  p.putInt("count",    offlineRecordCount);
+  p.end();
+}
+
+static void loadOfflineSession() {
+  Preferences p;
+  p.begin("offlineSess", true);
+  offlineSessionActive = p.getBool("active", false);
+  offlineSessionTitle  = p.getString("title",  "");
+  offlineSessionCourse = p.getString("course", "");
+  offlineSessionStart  = p.getUInt("start",   0);
+  offlineRecordCount   = p.getInt("count",    0);
+  p.end();
+}
+
+static bool syncOfflineRecords() {
+  if (!offlineSyncPending && offlineRecordCount == 0) return true;
+  String records = loadOfflineRecords();
+  if (records == "[]") { offlineSyncPending = false; return true; }
+
+  WiFiClientSecure client;
+  client.setInsecure();
+  HTTPClient http;
+  String url = apiBase + "/api/attendance-sessions/offline-sync";
+  http.begin(client, url);
+  http.addHeader("Content-Type", "application/json");
+  http.addHeader("Authorization", "Bearer " + deviceJWT);
+
+  String body = "{\"deviceId\":\"" + deviceId + "\",\"course\":\"" + offlineSessionCourse +
+                "\",\"title\":\"" + offlineSessionTitle + "\",\"startedAt\":" +
+                String(offlineSessionStart) + ",\"records\":" + records + "}";
+  int code = http.POST(body);
+  http.end();
+  if (code == 200 || code == 201) {
+    log("Offline sync OK — " + String(offlineRecordCount) + " records");
+    clearOfflineRecords();
+    offlineSessionActive = false;
+    saveOfflineSession();
+    offlineSyncPending = false;
+    return true;
+  }
+  log("Offline sync failed: HTTP " + String(code));
+  return false;
+}
+
+// ─── Offline captive-portal HTTP routes ──────────────────────────────────────
+static void registerOfflineHttp() {
+  String pin = offlinePIN();
+
+  // Captive portal triggers (Android, iOS, Windows all use different paths)
+  auto serveHome = [pin](){
+    localHttp.sendHeader("Cache-Control", "no-store");
+    String page = buildOfflinePage(OFFLINE_HOME_HTML, pin);
+    localHttp.send(200, "text/html", page);
+  };
+  localHttp.on("/",                   HTTP_GET, serveHome);
+  localHttp.on("/generate_204",       HTTP_GET, serveHome);
+  localHttp.on("/hotspot-detect.html",HTTP_GET, serveHome);
+  localHttp.on("/ncsi.txt",           HTTP_GET, serveHome);
+  localHttp.on("/connecttest.txt",    HTTP_GET, serveHome);
+  localHttp.onNotFound(serveHome);
+
+  // Lecturer page
+  localHttp.on("/lecturer", HTTP_GET, [pin](){
+    String page = buildOfflinePage(OFFLINE_LECTURER_HTML, pin);
+    localHttp.send(200, "text/html", page);
+  });
+
+  // POST /lecturer/start  { course, title, pin }
+  localHttp.on("/lecturer/start", HTTP_POST, [pin](){
+    localHttp.sendHeader("Access-Control-Allow-Origin", "*");
+    StaticJsonDocument<256> req;
+    if (deserializeJson(req, localHttp.arg("plain"))) {
+      localHttp.send(400, "application/json", "{\"error\":\"Bad JSON\"}"); return;
+    }
+    if (String(req["pin"] | "") != pin) {
+      localHttp.send(403, "application/json", "{\"error\":\"Wrong PIN\"}"); return;
+    }
+    if (offlineSessionActive) {
+      localHttp.send(409, "application/json", "{\"error\":\"Session already active\"}"); return;
+    }
+    offlineSessionCourse = req["course"] | "";
+    offlineSessionTitle  = req["title"]  | "";
+    if (!offlineSessionCourse.length() || !offlineSessionTitle.length()) {
+      localHttp.send(400, "application/json", "{\"error\":\"course and title required\"}"); return;
+    }
+    offlineSessionActive = true;
+    offlineSessionStart  = (uint32_t)time(nullptr);
+    offlineRecordCount   = 0;
+    clearOfflineRecords();
+    saveOfflineSession();
+    log("Offline session started: " + offlineSessionTitle);
+    oledShow("OFFLINE", offlineSessionTitle.substring(0,16), "Students: 0");
+    String resp = "{\"ok\":true,\"title\":\"" + offlineSessionTitle + "\",\"course\":\"" + offlineSessionCourse + "\"}";
+    localHttp.send(200, "application/json", resp);
+  });
+
+  // POST /lecturer/end  { pin }
+  localHttp.on("/lecturer/end", HTTP_POST, [pin](){
+    localHttp.sendHeader("Access-Control-Allow-Origin", "*");
+    StaticJsonDocument<128> req;
+    deserializeJson(req, localHttp.arg("plain"));
+    if (String(req["pin"] | "") != pin) {
+      localHttp.send(403, "application/json", "{\"error\":\"Wrong PIN\"}"); return;
+    }
+    offlineSessionActive = false;
+    saveOfflineSession();
+    offlineSyncPending = true;
+    log("Offline session ended, sync pending");
+    oledShow("OFFLINE", "Session ended", "Syncing soon");
+    localHttp.send(200, "application/json", "{\"ok\":true,\"count\":" + String(offlineRecordCount) + "}");
+  });
+
+  // GET /lecturer/records
+  localHttp.on("/lecturer/records", HTTP_GET, [](){
+    localHttp.sendHeader("Access-Control-Allow-Origin", "*");
+    String data = loadOfflineRecords();
+    localHttp.send(200, "application/json", "{\"records\":" + data + ",\"count\":" + String(offlineRecordCount) + "}");
+  });
+
+  // POST /student/mark  { name, indexNumber }
+  localHttp.on("/student/mark", HTTP_POST, [](){
+    localHttp.sendHeader("Access-Control-Allow-Origin", "*");
+    if (!offlineSessionActive) {
+      localHttp.send(503, "application/json", "{\"error\":\"No active session\"}"); return;
+    }
+    StaticJsonDocument<256> req;
+    if (deserializeJson(req, localHttp.arg("plain"))) {
+      localHttp.send(400, "application/json", "{\"error\":\"Bad JSON\"}"); return;
+    }
+    String name  = req["name"]        | "";
+    String idx   = req["indexNumber"] | "";
+    if (!name.length() || !idx.length()) {
+      localHttp.send(400, "application/json", "{\"error\":\"name and indexNumber required\"}"); return;
+    }
+    saveOfflineRecord(name, idx);
+    saveOfflineSession();
+    String display = name.length() > 12 ? name.substring(0,12) + ".." : name;
+    oledShow("OFFLINE", display, "Students: " + String(offlineRecordCount));
+    log("Offline mark: " + name + " / " + idx);
+    localHttp.send(200, "application/json", "{\"ok\":true,\"count\":" + String(offlineRecordCount) + "}");
+  });
+
+  // GET /offline-status  — JSON summary (for Flutter app awareness)
+  localHttp.on("/offline-status", HTTP_GET, [](){
+    localHttp.sendHeader("Access-Control-Allow-Origin", "*");
+    localHttp.send(200, "application/json", offlineSessionJson());
+  });
+}
+
+// ─── Start offline standalone hotspot ────────────────────────────────────────
+static void startOfflineMode() {
+  offlineMode = true;
+  loadOfflineSession();
+
+  String apName = "Dikly-Classroom-" + getMacSuffix();
+  WiFi.mode(WIFI_AP);
+  WiFi.softAP(apName.c_str());   // open network — no password needed to join
+
+  IPAddress ip = WiFi.softAPIP();
+  log("Offline AP: " + apName + " @ " + ip.toString());
+  log("Lecturer PIN: " + offlinePIN());
+
+  // Show PIN on OLED so only the physical lecturer sees it
+  oledShow("OFFLINE MODE", "AP: " + apName.substring(6), "PIN: " + offlinePIN());
+
+  dns.start(53, "*", ip);   // captive portal DNS
+  registerOfflineHttp();
+  localHttp.begin();
+}
+
 // ─── Local HTTP API (used by the Attendance Device page WiFi proxy) ──────────
 static void registerLocalHttp() {
   // POST /token  { userId: "<studentId>" }
@@ -739,8 +1202,8 @@ void setup() {
     delay(250);
   }
   if (WiFi.status() != WL_CONNECTED) {
-    log("WiFi failed — falling back to AP mode for re-config");
-    startApPortal();
+    log("WiFi failed — entering offline attendance mode");
+    startOfflineMode();
     return;
   }
   digitalWrite(STATUS_LED_PIN, HIGH);
@@ -756,7 +1219,41 @@ void loop() {
   localHttp.handleClient();
 
   // Pairing-portal path: nothing else to do.
-  if (deviceJWT.length() == 0 || WiFi.getMode() == WIFI_AP) {
+  if (deviceJWT.length() == 0) { delay(20); return; }
+
+  // Offline mode: try reconnecting to school WiFi periodically,
+  // and sync records when we succeed.
+  if (offlineMode) {
+    static uint32_t lastOfflineReconnect = 0;
+    uint32_t nowMs = millis();
+    if (nowMs - lastOfflineReconnect >= 30000) {
+      lastOfflineReconnect = nowMs;
+      log("Offline mode — attempting school WiFi reconnect");
+      WiFi.mode(WIFI_AP_STA);
+      WiFi.begin(wifiSSID.c_str(), wifiPass.c_str());
+      uint32_t t0 = millis();
+      while (WiFi.status() != WL_CONNECTED && millis() - t0 < 8000) delay(200);
+      if (WiFi.status() == WL_CONNECTED) {
+        log("WiFi reconnected in offline mode — syncing records");
+        configTime(0, 0, "pool.ntp.org");
+        if (syncOfflineRecords()) {
+          log("Sync complete — rebooting to online mode");
+          delay(1000);
+          ESP.restart();
+        } else {
+          // Sync failed — drop back to pure AP
+          WiFi.mode(WIFI_AP);
+        }
+      } else {
+        WiFi.mode(WIFI_AP);
+      }
+    }
+    delay(20);
+    return;
+  }
+
+  // Pure AP without a device token = pairing portal; nothing else to do.
+  if (WiFi.getMode() == WIFI_AP) {
     delay(20);
     return;
   }

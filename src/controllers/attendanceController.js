@@ -1593,3 +1593,63 @@ exports.trustFlaggedDevice = async (req, res) => {
 // Legacy `exports.esp32Sync` removed. Offline sync now lives at
 // POST /api/devices/sync (deviceController.syncOfflineRecords) with
 // proper device-JWT authentication.
+
+// ─── Offline sync — called by ESP32 after offline attendance session ──────────
+// Auth: device Bearer JWT (same token issued at pairing time)
+// Body: { deviceId, course, title, startedAt (unix), records: [{name, indexNumber, ts}] }
+exports.offlineSync = async (req, res) => {
+  try {
+    const authHeader = req.headers.authorization || "";
+    const token = authHeader.startsWith("Bearer ") ? authHeader.slice(7) : null;
+    if (!token) return res.status(401).json({ error: "Device token required" });
+
+    // Validate device JWT (stored as `token` in Device model)
+    const device = await Device.findOne({ token });
+    if (!device) return res.status(401).json({ error: "Unknown device" });
+
+    const { course, title, startedAt, records } = req.body;
+    if (!title || !Array.isArray(records) || records.length === 0) {
+      return res.status(400).json({ error: "title and records[] required" });
+    }
+
+    // Create the session
+    const session = await AttendanceSession.create({
+      company:     device.companyId,
+      title:       title || "Offline Session",
+      courseTitle: course || "",
+      device:      device._id,
+      status:      "closed",
+      startedAt:   startedAt ? new Date(startedAt * 1000) : new Date(),
+      closedAt:    new Date(),
+    });
+
+    // Match records to users by indexNumber where possible, else store as-is
+    const created = [];
+    for (const rec of records) {
+      const user = await User.findOne({
+        $or: [
+          { indexNumber: rec.indexNumber },
+          { IndexNumber: rec.indexNumber },
+        ],
+        company: device.companyId,
+      }).lean();
+
+      await AttendanceRecord.create({
+        session:     session._id,
+        company:     device.companyId,
+        user:        user?._id || null,
+        name:        rec.name || user?.name || "Unknown",
+        indexNumber: rec.indexNumber || "",
+        status:      "present",
+        checkInTime: rec.ts ? new Date(rec.ts * 1000) : new Date(),
+        method:      "offline-esp32",
+      });
+      created.push(rec.indexNumber);
+    }
+
+    res.json({ ok: true, sessionId: session._id, synced: created.length });
+  } catch (e) {
+    console.error("offlineSync error:", e);
+    res.status(500).json({ error: e.message });
+  }
+};
