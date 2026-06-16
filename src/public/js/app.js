@@ -6244,89 +6244,120 @@ async function renderUsers(filterRole='', filterDept='', filterSearch='') {
     // Collect unique departments for filter dropdown
     const allDepts = [...new Set((data.users || []).map(u => u.department).filter(Boolean))].sort();
 
-    content.innerHTML = `
-      <div class="page-header"><h2>${pageTitle}</h2><p>${pageDesc} · ${otherUsers.length} shown</p></div>
-      <div class="actions-bar" style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:10px;">
-        ${canManage ? `<button class="btn btn-primary btn-sm" onclick="showCreateUserModal()">${addLabel}</button>` : ''}
-        ${['admin','superadmin'].includes(currentUser.role) && mode === 'academic' ? `<button class="btn btn-sm btn-secondary" onclick="showBulkImportModal()">📥 Bulk Import Students</button>` : ''}
-        ${['admin','superadmin'].includes(currentUser.role) ? `<button class="btn btn-sm" style="background:#f59e0b;color:#fff" onclick="renderResetLogs()">🔐 Password Reset Log</button>` : ''}
-        <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin-left:auto;">
-          <input id="user-search-input" placeholder="Search name / email / ID…" value="${filterSearch}"
-            oninput="renderUsers(document.getElementById('user-role-filter').value, document.getElementById('user-dept-filter').value, this.value)"
-            style="padding:7px 11px;border:1.5px solid var(--border);border-radius:8px;font-size:13px;font-family:inherit;outline:none;min-width:180px;">
-          <select id="user-role-filter" onchange="renderUsers(this.value, document.getElementById('user-dept-filter').value, document.getElementById('user-search-input').value)"
-            style="padding:7px 10px;border:1.5px solid var(--border);border-radius:8px;font-size:13px;font-family:inherit;outline:none;">
-            <option value="" ${!filterRole?'selected':''}>All Roles</option>
-            ${currentUser.role === 'superadmin'
-              ? `<option value="admin"     ${filterRole==='admin'?'selected':''}>Admin</option>
-                 <option value="manager"   ${filterRole==='manager'?'selected':''}>Manager</option>
-                 <option value="hod"       ${filterRole==='hod'?'selected':''}>HOD</option>
-                 <option value="lecturer"  ${filterRole==='lecturer'?'selected':''}>Lecturer</option>
-                 <option value="employee"  ${filterRole==='employee'?'selected':''}>Employee</option>
-                 <option value="student"   ${filterRole==='student'?'selected':''}>Student</option>`
-              : mode === 'academic'
-                ? `<option value="admin"    ${filterRole==='admin'?'selected':''}>Admin</option>
-                   <option value="hod"      ${filterRole==='hod'?'selected':''}>HOD</option>
-                   <option value="lecturer" ${filterRole==='lecturer'?'selected':''}>Lecturer</option>
-                   <option value="student"  ${filterRole==='student'?'selected':''}>Student</option>`
-                : `<option value="admin"    ${filterRole==='admin'?'selected':''}>Admin</option>
-                   <option value="manager"  ${filterRole==='manager'?'selected':''}>Manager</option>
-                   <option value="employee" ${filterRole==='employee'?'selected':''}>Employee</option>`}
-          </select>
-          ${mode === 'academic' && allDepts.length > 0 ? `
-          <select id="user-dept-filter" onchange="renderUsers(document.getElementById('user-role-filter').value, this.value, document.getElementById('user-search-input').value)"
-            style="padding:7px 10px;border:1.5px solid var(--border);border-radius:8px;font-size:13px;font-family:inherit;outline:none;">
-            <option value="" ${!filterDept?'selected':''}>All Departments</option>
-            ${allDepts.map(d => `<option value="${d}" ${filterDept===d?'selected':''}>${d}</option>`).join('')}
-          </select>` : `<select id="user-dept-filter" style="display:none;"></select>`}
-          ${filterRole || filterDept || filterSearch ? `<button class="btn btn-xs btn-secondary" onclick="renderUsers()">✕ Clear</button>` : ''}
+    const roleAvatarColor = {
+      admin: '#dc2626', superadmin: '#0d1117', hod: '#0891b2',
+      lecturer: '#a16207', student: '#7c3aed', manager: '#1d4ed8', employee: '#15803d'
+    };
+    const userCards = otherUsers.map(u => {
+      const initials = (u.name || '?').split(' ').map(w => w[0]).join('').slice(0,2).toUpperCase();
+      const avatarBg = roleAvatarColor[u.role] || '#6b7280';
+      const identifier = u.indexNumber || u.IndexNumber || u.employeeId || '';
+      const emailOrId = u.email ? u.email : identifier || 'N/A';
+      const classificationTags = u.role === 'student' ? [
+        u.programme   ? `<span style="background:#ede9fe;color:#7c3aed;padding:2px 7px;border-radius:20px;font-size:10px;font-weight:700">${esc(u.programme)}</span>` : '',
+        u.studentLevel ? `<span style="background:#dbeafe;color:#1d4ed8;padding:2px 7px;border-radius:20px;font-size:10px;font-weight:700">L${esc(u.studentLevel)}</span>` : '',
+        u.studentGroup ? `<span style="background:#ecfdf5;color:#059669;padding:2px 7px;border-radius:20px;font-size:10px;font-weight:700">Grp ${esc(u.studentGroup)}</span>` : '',
+        u.sessionType  ? `<span style="background:#fff7ed;color:#c2410c;padding:2px 7px;border-radius:20px;font-size:10px;font-weight:600">${esc(u.sessionType)}</span>` : '',
+      ].filter(Boolean).join(' ') : '';
+      return `
+      <div id="user-row-${u._id}" style="display:flex;align-items:center;gap:14px;padding:14px 16px;border-bottom:1px solid var(--border);transition:background .15s" onmouseover="this.style.background='var(--card-hover)'" onmouseout="this.style.background=''">
+        ${canManage ? `<input type="checkbox" class="user-checkbox" value="${u._id}" onchange="updateBulkActions()" style="flex-shrink:0;width:16px;height:16px;accent-color:var(--primary);cursor:pointer">` : ''}
+        <div style="width:42px;height:42px;border-radius:50%;background:${avatarBg};display:flex;align-items:center;justify-content:center;flex-shrink:0;font-weight:700;font-size:14px;color:#fff;letter-spacing:.5px">${initials}</div>
+        <div style="flex:1;min-width:0">
+          <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+            <span style="font-weight:700;font-size:14px;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(u.name)}</span>
+            <span class="role-badge role-${u.role}" style="flex-shrink:0">${u.role}</span>
+            ${u.isActive
+              ? `<span style="background:#dcfce7;color:#15803d;font-size:10px;font-weight:700;padding:2px 7px;border-radius:20px;flex-shrink:0">Active</span>`
+              : `<span style="background:#fee2e2;color:#dc2626;font-size:10px;font-weight:700;padding:2px 7px;border-radius:20px;flex-shrink:0">Inactive</span>`}
+          </div>
+          <div style="font-size:12px;color:var(--text-light);margin-top:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(emailOrId)}${identifier && u.email ? ` · ${esc(identifier)}` : ''}</div>
+          ${u.department ? `<div style="font-size:11px;color:#0891b2;font-weight:600;margin-top:2px">${esc(u.department)}</div>` : ''}
+          ${classificationTags ? `<div style="display:flex;gap:4px;flex-wrap:wrap;margin-top:5px">${classificationTags}</div>` : ''}
         </div>
         ${canManage ? `
-          <div id="bulk-actions" style="display:none;gap:8px;align-items:center;margin-left:auto">
-            <span id="selected-count" style="font-size:13px;color:var(--text-light)">0 selected</span>
-            <button class="btn btn-sm" style="background:#22c55e;color:#fff" onclick="bulkUserAction('activate')">Activate</button>
-            <button class="btn btn-sm" style="background:#f59e0b;color:#fff" onclick="bulkUserAction('deactivate')">Deactivate</button>
-            <button class="btn btn-danger btn-sm" onclick="bulkUserAction('delete')">Delete</button>
+        <div style="display:flex;gap:6px;flex-wrap:wrap;flex-shrink:0">
+          ${u.isActive
+            ? `<button class="btn btn-sm" style="background:#f59e0b;color:#fff;font-size:11px;padding:5px 10px" onclick="deactivateUser('${u._id}')">Deactivate</button>`
+            : `<button class="btn btn-sm" style="background:#22c55e;color:#fff;font-size:11px;padding:5px 10px" onclick="activateUser('${u._id}')">Activate</button>`}
+          <button class="btn btn-sm" style="background:#6366f1;color:#fff;font-size:11px;padding:5px 10px" onclick="adminResetStudentPassword('${u._id}', this)">🔑 Reset</button>
+          ${u.role === 'student' && u.deviceId ? `<button class="btn btn-sm" style="background:#f97316;color:#fff;font-size:11px;padding:5px 10px" onclick="clearStudentDeviceLock('${u._id}', this)">🔓 Unlock</button>` : ''}
+          <button class="btn btn-danger btn-sm" style="font-size:11px;padding:5px 10px" onclick="deleteUserPermanently('${u._id}', this)">Delete</button>
+        </div>` : ''}
+      </div>`;
+    }).join('');
+
+    content.innerHTML = `
+      <div class="page-header" style="margin-bottom:16px">
+        <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px">
+          <div>
+            <h2 style="margin:0;font-size:20px">${pageTitle}</h2>
+            <p style="color:var(--text-light);font-size:13px;margin-top:2px">${pageDesc} · <b>${otherUsers.length}</b> ${otherUsers.length === 1 ? 'member' : 'members'}</p>
           </div>
-        ` : ''}
+          <div style="display:flex;gap:8px;flex-wrap:wrap">
+            ${canManage ? `<button class="btn btn-primary btn-sm" onclick="showCreateUserModal()">+ ${addLabel}</button>` : ''}
+            ${['admin','superadmin'].includes(currentUser.role) && mode === 'academic' ? `<button class="btn btn-sm btn-secondary" onclick="showBulkImportModal()">📥 Bulk Import</button>` : ''}
+            ${['admin','superadmin'].includes(currentUser.role) ? `<button class="btn btn-sm" style="background:#f59e0b;color:#fff" onclick="renderResetLogs()">🔐 Reset Log</button>` : ''}
+          </div>
+        </div>
       </div>
-      <div class="card">
-        ${otherUsers.length ? `
-          <table>
-            <thead><tr>
-              ${canManage ? '<th style="width:40px"><input type="checkbox" id="select-all-users" onchange="toggleSelectAllUsers()"></th>' : ''}
-              <th>Name</th>${mode === 'corporate' ? '<th>Employee ID</th>' : ''}<th>Email / Index</th><th>Role</th>${mode !== 'corporate' ? '<th>Classification</th>' : ''}<th>Status</th>${canManage ? '<th>Actions</th>' : ''}
-            </tr></thead>
-            <tbody>${otherUsers.map(u => `
-              <tr id="user-row-${u._id}">
-                ${canManage ? `<td><input type="checkbox" class="user-checkbox" value="${u._id}" onchange="updateBulkActions()"></td>` : ''}
-                <td>${u.name}</td>
-                ${mode === 'corporate' ? `<td>${u.employeeId || '-'}</td>` : ''}
-                <td>${u.email || u.IndexNumber || u.indexNumber || 'N/A'}</td>
-                <td><span class="role-badge role-${u.role}">${u.role}</span>${u.department ? `<span style="font-size:10px;margin-left:5px;padding:2px 6px;border-radius:20px;background:#ecfeff;color:#0891b2;font-weight:600;">${u.department}</span>` : ''}</td>
-                ${mode !== 'corporate' ? `<td style="font-size:11px;white-space:nowrap">
-                  ${u.role === 'student' ? `
-                    ${u.programme ? `<span style="background:#ede9fe;color:#7c3aed;padding:1px 6px;border-radius:20px;font-weight:700;margin-right:2px">${esc(u.programme)}</span>` : ''}
-                    ${u.studentLevel ? `<span style="background:#dbeafe;color:#1d4ed8;padding:1px 6px;border-radius:20px;font-weight:700;margin-right:2px">L${esc(u.studentLevel)}</span>` : ''}
-                    ${u.studentGroup ? `<span style="background:#ecfdf5;color:#059669;padding:1px 6px;border-radius:20px;font-weight:700;margin-right:2px">Grp ${esc(u.studentGroup)}</span>` : ''}
-                    ${u.sessionType ? `<span style="background:#fff7ed;color:#c2410c;padding:1px 6px;border-radius:20px;font-weight:600;margin-right:2px">${esc(u.sessionType)}</span>` : ''}
-                    ${u.semester ? `<span style="color:var(--text-muted)">Sem ${esc(u.semester)}</span>` : ''}
-                    ${!u.programme && !u.studentLevel ? '<span style="color:var(--text-muted)">—</span>' : ''}
-                  ` : '<span style="color:var(--text-muted)">—</span>'}
-                </td>` : ''}
-                <td><span class="status-badge ${u.isActive ? 'status-active' : 'status-stopped'}">${u.isActive ? 'Active' : 'Inactive'}</span></td>
-                ${canManage ? `<td style="white-space:nowrap">
-                  ${u.isActive
-                    ? `<button class="btn btn-sm" style="background:#f59e0b;color:#fff;font-size:11px" onclick="deactivateUser('${u._id}')">Deactivate</button>`
-                    : `<button class="btn btn-sm" style="background:#22c55e;color:#fff;font-size:11px" onclick="activateUser('${u._id}')">Activate</button>`}
-                  <button class="btn btn-sm" style="background:#6366f1;color:#fff;font-size:11px" onclick="adminResetStudentPassword('${u._id}', this)">🔑 Reset</button>
-                  ${u.role === 'student' && u.deviceId ? `<button class="btn btn-sm" style="background:#f97316;color:#fff;font-size:11px" onclick="clearStudentDeviceLock('${u._id}', this)">🔓 Unlock</button>` : ''}
-                  <button class="btn btn-danger btn-sm" style="font-size:11px" onclick="deleteUserPermanently('${u._id}', this)">Delete</button>
-                </td>` : ''}
-              </tr>
-            `).join('')}</tbody>
-          </table>
-        ` : '<div class="empty-state"><p>No users found</p></div>'}
+
+      <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:12px">
+        <div style="position:relative;flex:1;min-width:200px">
+          <svg style="position:absolute;left:10px;top:50%;transform:translateY(-50%);color:var(--text-muted);pointer-events:none" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
+          <input id="user-search-input" placeholder="Search name, email or ID…" value="${filterSearch}"
+            oninput="renderUsers(document.getElementById('user-role-filter').value, document.getElementById('user-dept-filter').value, this.value)"
+            style="width:100%;padding:8px 11px 8px 32px;border:1.5px solid var(--border);border-radius:10px;font-size:13px;font-family:inherit;outline:none;background:var(--card);color:var(--text)">
+        </div>
+        <select id="user-role-filter" onchange="renderUsers(this.value, document.getElementById('user-dept-filter').value, document.getElementById('user-search-input').value)"
+          style="padding:8px 10px;border:1.5px solid var(--border);border-radius:10px;font-size:13px;font-family:inherit;outline:none;background:var(--card);color:var(--text)">
+          <option value="" ${!filterRole?'selected':''}>All Roles</option>
+          ${currentUser.role === 'superadmin'
+            ? `<option value="admin"     ${filterRole==='admin'?'selected':''}>Admin</option>
+               <option value="manager"   ${filterRole==='manager'?'selected':''}>Manager</option>
+               <option value="hod"       ${filterRole==='hod'?'selected':''}>HOD</option>
+               <option value="lecturer"  ${filterRole==='lecturer'?'selected':''}>Lecturer</option>
+               <option value="employee"  ${filterRole==='employee'?'selected':''}>Employee</option>
+               <option value="student"   ${filterRole==='student'?'selected':''}>Student</option>`
+            : mode === 'academic'
+              ? `<option value="admin"    ${filterRole==='admin'?'selected':''}>Admin</option>
+                 <option value="hod"      ${filterRole==='hod'?'selected':''}>HOD</option>
+                 <option value="lecturer" ${filterRole==='lecturer'?'selected':''}>Lecturer</option>
+                 <option value="student"  ${filterRole==='student'?'selected':''}>Student</option>`
+              : `<option value="admin"    ${filterRole==='admin'?'selected':''}>Admin</option>
+                 <option value="manager"  ${filterRole==='manager'?'selected':''}>Manager</option>
+                 <option value="employee" ${filterRole==='employee'?'selected':''}>Employee</option>`}
+        </select>
+        ${mode === 'academic' && allDepts.length > 0 ? `
+        <select id="user-dept-filter" onchange="renderUsers(document.getElementById('user-role-filter').value, this.value, document.getElementById('user-search-input').value)"
+          style="padding:8px 10px;border:1.5px solid var(--border);border-radius:10px;font-size:13px;font-family:inherit;outline:none;background:var(--card);color:var(--text)">
+          <option value="" ${!filterDept?'selected':''}>All Depts</option>
+          ${allDepts.map(d => `<option value="${d}" ${filterDept===d?'selected':''}>${d}</option>`).join('')}
+        </select>` : `<select id="user-dept-filter" style="display:none"></select>`}
+        ${filterRole || filterDept || filterSearch ? `<button class="btn btn-xs btn-secondary" onclick="renderUsers()">✕ Clear</button>` : ''}
+      </div>
+
+      ${canManage ? `
+      <div id="bulk-actions" style="display:none;gap:8px;align-items:center;background:var(--primary-ultra-light);border:1px solid #bfdbfe;border-radius:10px;padding:10px 14px;margin-bottom:10px">
+        <span id="selected-count" style="font-size:13px;color:var(--text-light);flex:1">0 selected</span>
+        <button class="btn btn-sm" style="background:#22c55e;color:#fff" onclick="bulkUserAction('activate')">Activate</button>
+        <button class="btn btn-sm" style="background:#f59e0b;color:#fff" onclick="bulkUserAction('deactivate')">Deactivate</button>
+        <button class="btn btn-danger btn-sm" onclick="bulkUserAction('delete')">Delete</button>
+      </div>` : ''}
+
+      <div class="card" style="padding:0;overflow:hidden">
+        ${canManage && otherUsers.length ? `
+        <div style="padding:10px 16px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:10px;background:var(--border-light)">
+          <input type="checkbox" id="select-all-users" onchange="toggleSelectAllUsers()" style="width:16px;height:16px;accent-color:var(--primary);cursor:pointer">
+          <span style="font-size:12px;color:var(--text-muted);font-weight:600;letter-spacing:.4px;text-transform:uppercase">Select All</span>
+        </div>` : ''}
+        ${otherUsers.length
+          ? userCards
+          : `<div class="empty-state" style="padding:48px;text-align:center">
+               <div style="font-size:36px;margin-bottom:10px">👥</div>
+               <div style="font-weight:600;color:var(--text)">No users found</div>
+               <div style="color:var(--text-muted);font-size:13px;margin-top:4px">Try adjusting your filters</div>
+             </div>`}
       </div>
     `;
   } catch (e) {
