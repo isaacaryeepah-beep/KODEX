@@ -2666,7 +2666,13 @@ function navigateTo(view) {
     case 'badges':        _safeRender(content, renderBadges,       'Badges');        break;
     case 'transcripts':   _safeRender(content, renderTranscripts,  'Transcripts');   break;
     case 'evaluations':   _safeRender(content, renderEvaluations,  'Evaluations');   break;
-    case 'live-attendance': _safeRender(content, renderLiveAttendance, 'Live Attendance'); break;
+    case 'live-attendance':
+      if (currentUser?.role === 'lecturer' || currentUser?.role === 'hod') {
+        _safeRender(content, renderLecturerAttendance, 'Attendance');
+      } else {
+        _safeRender(content, renderLiveAttendance, 'Live Attendance');
+      }
+      break;
     case 'branches':        _safeRender(content, renderBranches,       'Branches');        break;
     case 'my-profile':      renderProfile(); break;
     default: renderDashboard();
@@ -7070,6 +7076,19 @@ async function showCreateMeetingModal() {
           </select>
         </div>
 
+        <div class="form-group">
+          <label>Target Audience <span style="color:var(--text-muted);font-weight:400;font-size:12px">(optional)</span></label>
+          <select id="meeting-audience" style="width:100%;padding:9px 12px;border:1.5px solid var(--border);border-radius:8px;font-size:13px" onchange="document.getElementById('meeting-group-row').style.display=this.value==='group'?'block':'none'">
+            <option value="all">All enrolled students</option>
+            <option value="group">Specific group only</option>
+          </select>
+        </div>
+        <div class="form-group" id="meeting-group-row" style="display:none">
+          <label>Group</label>
+          <input type="text" id="meeting-group" placeholder="e.g. A, B, C" style="width:100%;padding:9px 12px;border:1.5px solid var(--border);border-radius:8px;font-size:13px">
+          <p style="font-size:11px;color:var(--text-muted);margin-top:4px">Only students in this group will see this meeting.</p>
+        </div>
+
         <div id="meeting-error" style="color:#ef4444;margin:8px 0;display:none;font-size:13px;"></div>
 
         <div class="modal-actions" style="gap:8px;margin-top:18px;">
@@ -7094,6 +7113,8 @@ async function createMeeting() {
   const end   = document.getElementById('meeting-end')?.value;
   const desc  = document.getElementById('meeting-desc')?.value.trim();
   const courseId = document.getElementById('meeting-course')?.value || undefined;
+  const targetAudience = document.getElementById('meeting-audience')?.value || 'all';
+  const targetGroup = (document.getElementById('meeting-group')?.value || '').trim();
   const errEl = document.getElementById('meeting-error');
 
   if (!title) { errEl.textContent = 'Please enter a meeting title.'; errEl.style.display = 'block'; return; }
@@ -7110,6 +7131,8 @@ async function createMeeting() {
       scheduledEnd: end,
       description: desc || undefined,
       courseId: courseId || undefined,
+      targetAudience,
+      targetGroup: targetAudience === 'group' ? targetGroup || undefined : undefined,
     }) });
     closeModal();
     renderMeetings();
@@ -8250,6 +8273,64 @@ async function viewLecturerQuizDetail(quizId) {
 
 function openLiveMonitor(quizId) {
   window.open('/proctor-dashboard.html?quizId=' + quizId, '_blank');
+}
+
+async function renderLecturerAttendance() {
+  const content = document.getElementById('main-content');
+  if (!content) return;
+  try {
+    const data = await api('/api/attendance-sessions');
+    const sessions = data.sessions || data || [];
+    const fmt = d => new Date(d).toLocaleString('en-GB',{day:'numeric',month:'short',year:'numeric',hour:'2-digit',minute:'2-digit'});
+    const statusBadge = s => {
+      if (s.status === 'active') return `<span style="background:#dcfce7;color:#166534;padding:2px 9px;border-radius:20px;font-size:11px;font-weight:700;display:inline-flex;align-items:center;gap:4px"><span style="width:6px;height:6px;border-radius:50%;background:#16a34a;animation:pulse 1.8s infinite"></span>Live</span>`;
+      if (s.status === 'stopped') return `<span style="background:#f1f5f9;color:#475569;padding:2px 9px;border-radius:20px;font-size:11px;font-weight:700">Ended</span>`;
+      return `<span style="background:#fef3c7;color:#92400e;padding:2px 9px;border-radius:20px;font-size:11px;font-weight:700">Scheduled</span>`;
+    };
+    content.innerHTML = `
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:10px;margin-bottom:20px">
+        <div>
+          <h2 style="font-size:22px;font-weight:800;color:#0f172a;margin-bottom:2px">Attendance Sessions</h2>
+          <p style="color:#64748b;font-size:13px">Manage and review attendance for your classes</p>
+        </div>
+        <button class="btn btn-primary" onclick="navigateTo('attendance-device')" style="display:flex;align-items:center;gap:6px">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+          New Session
+        </button>
+      </div>
+      ${!sessions.length ? `
+        <div style="text-align:center;padding:60px 20px;background:#fff;border:1px solid #e8eaed;border-radius:16px">
+          <div style="width:56px;height:56px;border-radius:16px;background:#eff6ff;display:flex;align-items:center;justify-content:center;margin:0 auto 16px">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#2563eb" stroke-width="1.8"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+          </div>
+          <h3 style="font-size:17px;font-weight:700;color:#0f172a;margin-bottom:6px">No attendance sessions yet</h3>
+          <p style="color:#64748b;font-size:13px;margin-bottom:20px">Start a session from your Attendance Device page</p>
+          <button class="btn btn-primary" onclick="navigateTo('attendance-device')">Go to Attendance Device</button>
+        </div>` :
+        sessions.map(s => `
+          <div style="background:#fff;border:1px solid #e8eaed;border-radius:14px;padding:16px 20px;margin-bottom:12px;box-shadow:0 1px 4px rgba(0,0,0,.04)">
+            <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:12px;flex-wrap:wrap">
+              <div>
+                <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px">
+                  <span style="font-size:14px;font-weight:700;color:#0f172a">${esc(s.course?.code || s.courseCode || 'Session')}</span>
+                  ${statusBadge(s)}
+                </div>
+                <div style="font-size:12px;color:#64748b">${esc(s.course?.title || '')}${s.startTime ? ' · Started ' + fmt(s.startTime) : ''}</div>
+              </div>
+              <div style="display:flex;gap:6px;flex-wrap:wrap;flex-shrink:0">
+                <a href="/api/attendance-sessions/${s._id}/records" target="_blank" class="btn btn-sm" style="background:#eff6ff;color:#2563eb;border:1px solid #bfdbfe;font-weight:600">View Records</a>
+              </div>
+            </div>
+            <div style="display:flex;gap:16px;margin-top:12px;padding:10px 12px;background:#f8fafc;border-radius:8px;flex-wrap:wrap">
+              <span style="font-size:12px;color:#64748b"><strong style="color:#0f172a">${s.presentCount ?? s.attendance?.length ?? '—'}</strong> present</span>
+              ${s.absentCount != null ? `<span style="font-size:12px;color:#64748b"><strong style="color:#0f172a">${s.absentCount}</strong> absent</span>` : ''}
+              ${s.code ? `<span style="font-size:12px;color:#64748b">Code: <strong style="color:#0f172a;font-family:monospace">${s.code}</strong></span>` : ''}
+            </div>
+          </div>`).join('')}
+    `;
+  } catch (e) {
+    content.innerHTML = `<div class="card"><p style="color:#dc2626">Error: ${e.message}</p></div>`;
+  }
 }
 
 function copyQuizId(id) {
