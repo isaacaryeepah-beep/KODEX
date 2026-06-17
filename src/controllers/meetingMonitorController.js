@@ -57,7 +57,7 @@ async function buildSnapshot(meetingId) {
 }
 
 // ── GET /api/meetings/:id/monitor ─────────────────────────────────────────────
-exports.getMonitorData = async (req, res) => {
+exports.getMonitorData = async (req, res, next) => {
   try {
     const meeting = await Meeting.findOne({ _id: req.params.id, company: req.user.company, isActive: true })
       .populate('creatorId',   'name email role')
@@ -85,7 +85,7 @@ exports.getMonitorData = async (req, res) => {
 };
 
 // ── GET /api/meetings/:id/monitor/stream  (SSE — moderator dashboard) ─────────
-exports.monitorStream = async (req, res) => {
+exports.monitorStream = async (req, res, next) => {
   try {
     const meeting = await Meeting.findOne({ _id: req.params.id, company: req.user.company, isActive: true });
     if (!meeting) return res.status(404).json({ error: 'Meeting not found' });
@@ -143,7 +143,7 @@ exports.participantStream = (req, res) => {
 };
 
 // ── POST /api/meetings/:id/participants/status  (client heartbeat) ────────────
-exports.updateParticipantStatus = async (req, res) => {
+exports.updateParticipantStatus = async (req, res, next) => {
   try {
     const { cameraOff, micMuted, screenSharing, connectionQuality, jitsiParticipantId, tabSwitch } = req.body;
     const userId = req.user._id;
@@ -200,7 +200,7 @@ exports.updateParticipantStatus = async (req, res) => {
 };
 
 // ── POST /api/meetings/:id/participants/:uid/flag ─────────────────────────────
-exports.flagParticipant = async (req, res) => {
+exports.flagParticipant = async (req, res, next) => {
   try {
     const { reason = 'Suspicious activity' } = req.body;
     const p = await MeetingParticipant.findOne({ meeting: req.params.id, user: req.params.uid, company: req.user.company });
@@ -211,11 +211,11 @@ exports.flagParticipant = async (req, res) => {
     broadcastMonitor(req.params.id, 'participant_flagged', { userId: req.params.uid, reason, isFlagged: true });
     broadcastMonitorWs(req.params.id, 'participant_flagged', { userId: req.params.uid, reason, isFlagged: true });
     res.json({ success: true, message: 'Participant flagged' });
-  } catch (err) { res.status(500).json({ error: err.message }); }
+  } catch (err) { next(err); }
 };
 
 // ── POST /api/meetings/:id/participants/:uid/warn ─────────────────────────────
-exports.sendWarning = async (req, res) => {
+exports.sendWarning = async (req, res, next) => {
   try {
     const { message = 'Your behaviour has been noted by an invigilator. Please follow exam rules.' } = req.body;
     const p = await MeetingParticipant.findOne({ meeting: req.params.id, user: req.params.uid, company: req.user.company });
@@ -226,11 +226,11 @@ exports.sendWarning = async (req, res) => {
     broadcastMonitorWs(req.params.id, 'warning_sent', { userId: req.params.uid, message });
     broadcastParticipant(req.params.id, req.params.uid, 'warning', { message });
     res.json({ success: true, message: 'Warning sent' });
-  } catch (err) { res.status(500).json({ error: err.message }); }
+  } catch (err) { next(err); }
 };
 
 // ── POST /api/meetings/:id/participants/:uid/kick ─────────────────────────────
-exports.kickParticipant = async (req, res) => {
+exports.kickParticipant = async (req, res, next) => {
   try {
     const { reason = 'Removed by invigilator' } = req.body;
     const p = await MeetingParticipant.findOne({ meeting: req.params.id, user: req.params.uid, company: req.user.company });
@@ -254,15 +254,15 @@ exports.kickParticipant = async (req, res) => {
           `${process.env.JITSI_JICOFO_URL}/conference/${meeting.roomName}/participants/${p.jitsiParticipantId}/kick`,
           {}, { headers: { Authorization: `Bearer ${process.env.JITSI_JICOFO_SECRET || ''}` }, timeout: 3000 }
         );
-      } catch (_) { /* client-side kick via External API takes over */ }
+      } catch (err) { console.warn('[monitor:kick] Jitsi server-side kick failed, client-side will take over:', err.message); }
     }
 
     res.json({ success: true, message: 'Participant removed from meeting' });
-  } catch (err) { res.status(500).json({ error: err.message }); }
+  } catch (err) { next(err); }
 };
 
 // ── POST /api/meetings/:id/participants/:uid/unflag ────────────────────────────
-exports.unflagParticipant = async (req, res) => {
+exports.unflagParticipant = async (req, res, next) => {
   try {
     const p = await MeetingParticipant.findOne({ meeting: req.params.id, user: req.params.uid, company: req.user.company });
     if (!p) return res.status(404).json({ error: 'Participant not found' });
@@ -271,12 +271,12 @@ exports.unflagParticipant = async (req, res) => {
     broadcastMonitor(req.params.id, 'participant_flagged', { userId: req.params.uid, isFlagged: false });
     broadcastMonitorWs(req.params.id, 'participant_flagged', { userId: req.params.uid, isFlagged: false });
     res.json({ success: true });
-  } catch (err) { res.status(500).json({ error: err.message }); }
+  } catch (err) { next(err); }
 };
 
 
 // ── POST /api/meetings/:id/monitor/invigilation-mode (moderator) ──────────────
-exports.setInvigilationMode = async (req, res) => {
+exports.setInvigilationMode = async (req, res, next) => {
   try {
     const { mode } = req.body;
     const allowed = ['ai', 'human', 'hybrid'];
@@ -284,5 +284,5 @@ exports.setInvigilationMode = async (req, res) => {
     broadcastMonitor(req.params.id, 'invigilation_mode', { mode });
     broadcastMonitorWs(req.params.id, 'invigilation_mode', { mode });
     res.json({ success: true, mode });
-  } catch (err) { res.status(500).json({ error: err.message }); }
+  } catch (err) { next(err); }
 };

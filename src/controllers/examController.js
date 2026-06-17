@@ -8,7 +8,7 @@ const MODERATOR_ROLES = ['lecturer', 'manager', 'admin', 'superadmin', 'hod'];
 function isMod(role) { return MODERATOR_ROLES.includes((role || '').toLowerCase()); }
 
 // ── POST /api/exam/sessions  (student starts exam) ────────────────────────────
-exports.startSession = async (req, res) => {
+exports.startSession = async (req, res, next) => {
   try {
     const { meetingId } = req.body;
     if (!meetingId) return res.status(400).json({ error: 'meetingId is required' });
@@ -29,11 +29,11 @@ exports.startSession = async (req, res) => {
     });
 
     res.status(201).json({ success: true, data: { sessionId: session._id } });
-  } catch (err) { res.status(500).json({ error: err.message }); }
+  } catch (err) { next(err); }
 };
 
 // ── POST /api/exam/sessions/:id/snapshot  (student posts AI snapshot) ────────
-exports.submitSnapshot = async (req, res) => {
+exports.submitSnapshot = async (req, res, next) => {
   try {
     const session = await ExamSession.findOne({ _id: req.params.id, student: req.user._id, status: 'active' });
     if (!session) return res.status(404).json({ error: 'Active session not found' });
@@ -64,11 +64,11 @@ exports.submitSnapshot = async (req, res) => {
         snapshotCount:  session.snapshotCount,
       },
     });
-  } catch (err) { res.status(500).json({ error: err.message }); }
+  } catch (err) { next(err); }
 };
 
 // ── POST /api/exam/sessions/:id/event  (browser event: tab switch, etc.) ─────
-exports.submitEvent = async (req, res) => {
+exports.submitEvent = async (req, res, next) => {
   try {
     const session = await ExamSession.findOne({ _id: req.params.id, student: req.user._id, status: 'active' });
     if (!session) return res.status(404).json({ error: 'Active session not found' });
@@ -90,11 +90,11 @@ exports.submitEvent = async (req, res) => {
     await session.save();
 
     res.json({ success: true, data: { riskScore: session.riskScore } });
-  } catch (err) { res.status(500).json({ error: err.message }); }
+  } catch (err) { next(err); }
 };
 
 // ── POST /api/exam/sessions/:id/end  (student finishes exam) ─────────────────
-exports.endSession = async (req, res) => {
+exports.endSession = async (req, res, next) => {
   try {
     const session = await ExamSession.findOne({ _id: req.params.id, student: req.user._id, status: 'active' });
     if (!session) return res.status(404).json({ error: 'Active session not found' });
@@ -105,11 +105,11 @@ exports.endSession = async (req, res) => {
     await session.save();
 
     res.json({ success: true, data: { report: session.report, riskScore: session.riskScore } });
-  } catch (err) { res.status(500).json({ error: err.message }); }
+  } catch (err) { next(err); }
 };
 
 // ── GET /api/exam/sessions/:id/report  (lecturer gets report) ────────────────
-exports.getReport = async (req, res) => {
+exports.getReport = async (req, res, next) => {
   try {
     if (!isMod(req.user.role)) return res.status(403).json({ error: 'Moderators only' });
 
@@ -120,11 +120,11 @@ exports.getReport = async (req, res) => {
     if (!session) return res.status(404).json({ error: 'Session not found' });
 
     res.json({ success: true, data: session });
-  } catch (err) { res.status(500).json({ error: err.message }); }
+  } catch (err) { next(err); }
 };
 
 // ── GET /api/exam/meetings/:meetingId/sessions  (lecturer views all students) ─
-exports.listSessions = async (req, res) => {
+exports.listSessions = async (req, res, next) => {
   try {
     if (!isMod(req.user.role)) return res.status(403).json({ error: 'Moderators only' });
     if (!mongoose.isValidObjectId(req.params.meetingId)) return res.status(400).json({ error: 'Invalid meetingId' });
@@ -135,5 +135,5 @@ exports.listSessions = async (req, res) => {
       .lean();
 
     res.json({ success: true, data: sessions });
-  } catch (err) { res.status(500).json({ error: err.message }); }
+  } catch (err) { next(err); }
 };

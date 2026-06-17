@@ -105,7 +105,7 @@ function buildJitsiConfig(meeting, user, isMod) {
 }
 
 // ─── CREATE ───────────────────────────────────────────────────────────────────
-exports.createMeeting = async (req, res) => {
+exports.createMeeting = async (req, res, next) => {
   try {
     const {
       title, description, meetingType,
@@ -179,7 +179,7 @@ exports.createMeeting = async (req, res) => {
 };
 
 // ─── LIST ─────────────────────────────────────────────────────────────────────
-exports.listMeetings = async (req, res) => {
+exports.listMeetings = async (req, res, next) => {
   try {
     const { status, meetingType, page = 1, limit = 20 } = req.query;
     const skip = (page - 1) * limit;
@@ -216,11 +216,11 @@ exports.listMeetings = async (req, res) => {
       success: true, data: safe,
       pagination: { page: Number(page), limit: Number(limit), total, pages: Math.ceil(total / Number(limit)) },
     });
-  } catch (err) { res.status(500).json({ error: err.message }); }
+  } catch (err) { next(err); }
 };
 
 // ─── GET ONE ──────────────────────────────────────────────────────────────────
-exports.getMeeting = async (req, res) => {
+exports.getMeeting = async (req, res, next) => {
   try {
     const meeting = await Meeting.findOne({ _id: req.params.id, company: req.user.company })
       .populate('creatorId',     'name email role')
@@ -231,11 +231,11 @@ exports.getMeeting = async (req, res) => {
     if (!meeting) return res.status(404).json({ error: 'Meeting not found' });
     if (!isMeetingModerator(meeting, req.user)) delete meeting.roomPassword;
     res.json({ success: true, data: meeting });
-  } catch (err) { res.status(500).json({ error: err.message }); }
+  } catch (err) { next(err); }
 };
 
 // ─── UPDATE ───────────────────────────────────────────────────────────────────
-exports.updateMeeting = async (req, res) => {
+exports.updateMeeting = async (req, res, next) => {
   try {
     const meeting = req.meeting;
     if (meeting.status !== 'scheduled') return res.status(400).json({ error: 'Only scheduled meetings can be updated' });
@@ -247,11 +247,11 @@ exports.updateMeeting = async (req, res) => {
     allowed.forEach(f => { if (req.body[f] !== undefined) meeting[f] = req.body[f]; });
     await meeting.save();
     res.json({ success: true, message: 'Meeting updated', data: meeting });
-  } catch (err) { res.status(500).json({ error: err.message }); }
+  } catch (err) { next(err); }
 };
 
 // ─── START ────────────────────────────────────────────────────────────────────
-exports.startMeeting = async (req, res) => {
+exports.startMeeting = async (req, res, next) => {
   try {
     const meeting = req.meeting;
     if (meeting.status === 'ended')     return res.status(400).json({ error: 'Meeting already ended' });
@@ -278,11 +278,11 @@ exports.startMeeting = async (req, res) => {
         monitorUrl:  `${MONITOR_BASE_URL}/monitor?meeting=${meeting._id}`,
       },
     });
-  } catch (err) { res.status(500).json({ error: err.message }); }
+  } catch (err) { next(err); }
 };
 
 // ─── END ──────────────────────────────────────────────────────────────────────
-exports.endMeeting = async (req, res) => {
+exports.endMeeting = async (req, res, next) => {
   try {
     const meeting = req.meeting;
     if (meeting.status === 'ended') return res.status(400).json({ error: 'Meeting already ended' });
@@ -307,7 +307,9 @@ exports.endMeeting = async (req, res) => {
       try {
         const { calculateStatus } = require('../utils/attendanceCalculator');
         rec.attendanceStatus = calculateStatus(rec.totalMinutes, meeting.scheduledStart, meeting.scheduledEnd);
-      } catch (_) {}
+      } catch (err) {
+        console.warn('[meeting:end] Failed to calculate attendance status:', err.message);
+      }
       await rec.save();
     }
 
@@ -321,11 +323,11 @@ exports.endMeeting = async (req, res) => {
     broadcastMonitor(meeting._id.toString(), 'meeting_ended', { meetingId: meeting._id });
 
     res.json({ success: true, message: 'Meeting ended', data: meeting });
-  } catch (err) { res.status(500).json({ error: err.message }); }
+  } catch (err) { next(err); }
 };
 
 // ─── CANCEL ───────────────────────────────────────────────────────────────────
-exports.cancelMeeting = async (req, res) => {
+exports.cancelMeeting = async (req, res, next) => {
   try {
     const meeting = req.meeting;
     if (['ended','cancelled'].includes(meeting.status))
@@ -334,30 +336,30 @@ exports.cancelMeeting = async (req, res) => {
     meeting.isActive = false;
     await meeting.save();
     res.json({ success: true, message: 'Meeting cancelled' });
-  } catch (err) { res.status(500).json({ error: err.message }); }
+  } catch (err) { next(err); }
 };
 
 // ─── LOCK / UNLOCK ROOM ───────────────────────────────────────────────────────
-exports.lockRoom = async (req, res) => {
+exports.lockRoom = async (req, res, next) => {
   try {
     req.meeting.isLocked = true;
     await req.meeting.save();
     broadcastMonitor(String(req.params.id), 'room_locked', { isLocked: true });
     res.json({ success: true, message: 'Room locked — no new participants can join' });
-  } catch (err) { res.status(500).json({ error: err.message }); }
+  } catch (err) { next(err); }
 };
 
-exports.unlockRoom = async (req, res) => {
+exports.unlockRoom = async (req, res, next) => {
   try {
     req.meeting.isLocked = false;
     await req.meeting.save();
     broadcastMonitor(String(req.params.id), 'room_locked', { isLocked: false });
     res.json({ success: true, message: 'Room unlocked' });
-  } catch (err) { res.status(500).json({ error: err.message }); }
+  } catch (err) { next(err); }
 };
 
 // ─── ADD / REMOVE INVIGILATOR ─────────────────────────────────────────────────
-exports.addInvigilator = async (req, res) => {
+exports.addInvigilator = async (req, res, next) => {
   try {
     const { userId } = req.body;
     if (!userId) return res.status(400).json({ error: 'userId is required' });
@@ -369,21 +371,21 @@ exports.addInvigilator = async (req, res) => {
       await meeting.save();
     }
     res.json({ success: true, message: `${user.name} added as invigilator` });
-  } catch (err) { res.status(500).json({ error: err.message }); }
+  } catch (err) { next(err); }
 };
 
-exports.removeInvigilator = async (req, res) => {
+exports.removeInvigilator = async (req, res, next) => {
   try {
     const { userId } = req.body;
     if (!userId) return res.status(400).json({ error: 'userId is required' });
     req.meeting.invigilators = req.meeting.invigilators.filter(i => String(i) !== String(userId));
     await req.meeting.save();
     res.json({ success: true, message: 'Invigilator removed' });
-  } catch (err) { res.status(500).json({ error: err.message }); }
+  } catch (err) { next(err); }
 };
 
 // ─── JOIN (returns Jitsi config + JWT) ───────────────────────────────────────
-exports.joinMeeting = async (req, res) => {
+exports.joinMeeting = async (req, res, next) => {
   try {
     const meeting = req.meeting;
     const user    = req.user;
@@ -423,11 +425,11 @@ exports.joinMeeting = async (req, res) => {
           : null,
       },
     });
-  } catch (err) { res.status(500).json({ error: err.message }); }
+  } catch (err) { next(err); }
 };
 
 // ─── VALIDATE TOKEN ───────────────────────────────────────────────────────────
-exports.validateMeetingToken = async (req, res) => {
+exports.validateMeetingToken = async (req, res, next) => {
   try {
     const { token } = req.query;
     if (!token) return res.status(400).json({ error: 'Missing token' });
@@ -448,21 +450,21 @@ exports.validateMeetingToken = async (req, res) => {
         roomPassword: meeting.settings.enablePassword ? meeting.roomPassword : undefined,
       },
     });
-  } catch (err) { res.status(500).json({ error: err.message }); }
+  } catch (err) { next(err); }
 };
 
 // ─── DELETE ───────────────────────────────────────────────────────────────────
-exports.deleteMeeting = async (req, res) => {
+exports.deleteMeeting = async (req, res, next) => {
   try {
     if (req.meeting.status === 'live') return res.status(400).json({ error: 'End the meeting before deleting it' });
     req.meeting.isActive = false;
     await req.meeting.save();
     res.json({ success: true, message: 'Meeting deleted' });
-  } catch (err) { res.status(500).json({ error: err.message }); }
+  } catch (err) { next(err); }
 };
 
 // ─── UPCOMING / LIVE / MY MEETINGS ───────────────────────────────────────────
-exports.upcomingMeetings = async (req, res) => {
+exports.upcomingMeetings = async (req, res, next) => {
   try {
     const role  = (req.user.role || '').toLowerCase();
     const query = {
@@ -477,10 +479,10 @@ exports.upcomingMeetings = async (req, res) => {
     const meetings = await Meeting.find(query).sort({ scheduledStart: 1 }).limit(10)
       .populate('creatorId','name').lean();
     res.json({ success: true, data: meetings });
-  } catch (err) { res.status(500).json({ error: err.message }); }
+  } catch (err) { next(err); }
 };
 
-exports.liveMeetings = async (req, res) => {
+exports.liveMeetings = async (req, res, next) => {
   try {
     const role  = (req.user.role || '').toLowerCase();
     const query = { company: req.user.company, isActive: true, status: 'live' };
@@ -488,15 +490,15 @@ exports.liveMeetings = async (req, res) => {
       query.$or = [{ creatorId: req.user._id }, { invigilators: req.user._id }];
     const meetings = await Meeting.find(query).populate('creatorId','name').lean();
     res.json({ success: true, data: meetings });
-  } catch (err) { res.status(500).json({ error: err.message }); }
+  } catch (err) { next(err); }
 };
 
-exports.myMeetings = async (req, res) => {
+exports.myMeetings = async (req, res, next) => {
   try {
     const meetings = await Meeting.find({
       company: req.user.company, isActive: true,
       $or: [{ creatorId: req.user._id }, { invigilators: req.user._id }],
     }).sort({ scheduledStart: -1 }).limit(50).lean();
     res.json({ success: true, data: meetings });
-  } catch (err) { res.status(500).json({ error: err.message }); }
+  } catch (err) { next(err); }
 };
