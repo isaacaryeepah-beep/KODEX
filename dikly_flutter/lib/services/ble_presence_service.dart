@@ -14,7 +14,7 @@ class BlePresenceService {
   // RSSI threshold: signals weaker than this (further away) are ignored.
   // -80 dBm ≈ 10-20 metres in a typical indoor classroom.
   static const int _rssiThreshold = -80;
-  static const int _lossTimeoutSec = 90;
+  static const int _lossTimeoutSec = 300; // 5 min grace period (washroom etc.)
 
   StreamSubscription<List<ScanResult>>? _scanSub;
   Timer? _lossTimer;

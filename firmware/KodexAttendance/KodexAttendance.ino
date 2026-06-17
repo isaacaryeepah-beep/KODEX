@@ -510,7 +510,9 @@ static void checkPresenceTimeouts() {
   int present = 0, flagged = 0;
 
   for (int i = 0; i < presenceCount; i++) {
-    if (!presenceTable[i].flaggedLeft && (now - presenceTable[i].lastHeartbeat) > 90) {
+    // Yellow "no signal" window: 0–300 s (5 min) — student may be in washroom.
+    // Red "flagged left" only fires after 360 s (6 min) of total silence.
+    if (!presenceTable[i].flaggedLeft && (now - presenceTable[i].lastHeartbeat) > 360) {
       presenceTable[i].flaggedLeft = true;
       log(String("Heartbeat timeout: ") + presenceTable[i].idx);
     }
@@ -1095,7 +1097,7 @@ async function loadPresence(){
     document.getElementById('sum-total').textContent=j.total;
     el.innerHTML=j.entries.map(e=>{
       const gone=e.left;
-      const weak=!e.left&&e.lastSeen>60;
+      const weak=!e.left&&e.lastSeen>300;
       const cls=gone?'badge-red':weak?'badge-yellow':'badge-green';
       const lbl=gone?'Left early':weak?'No signal':'Present';
       const ago=e.lastSeen<5?'just now':e.lastSeen+'s ago';
