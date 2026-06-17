@@ -2,10 +2,7 @@ const svc              = require('../services/sessionDashboardService');
 const reportSvc        = require('../services/sessionReportService');
 const { verifyNetworkAccess } = require('../services/networkVerificationService');
 const AttendanceRecord = require('../models/AttendanceRecord');
-
-function getCompanyId(req) {
-  return req.user.company || req.user.companyId;
-}
+const { getCompanyId } = require('../utils/controllerHelpers');
 
 function getClientIp(req) {
   return (req.headers['x-forwarded-for'] || req.ip || '').split(',')[0].trim();

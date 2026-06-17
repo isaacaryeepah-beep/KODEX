@@ -8,6 +8,8 @@ const Quiz = require("../models/Quiz");
 const QuizSubmission = require("../models/QuizSubmission"); // legacy — kept for reference
 const Attempt = require("../models/Attempt");
 const Company = require("../models/Company");
+const { buildDateFilter } = require("../utils/controllerHelpers");
+const pdf = require("../utils/pdfHelpers");
 
 // In-memory store for one-time download tokens (TTL: 3 minutes)
 const _downloadTokens = new Map();
@@ -60,68 +62,11 @@ exports.downloadByToken = async (req, res) => {
   return handler(fakeReq, res);
 };
 
-function drawHeader(doc, title, institution) {
-  doc.fontSize(22).font("Helvetica-Bold").text(title, { align: "center" });
-  doc.moveDown(0.3);
-  if (institution) {
-    doc.fontSize(12).font("Helvetica").text(institution, { align: "center" });
-    doc.moveDown(0.3);
-  }
-  doc.fontSize(9).font("Helvetica").fillColor("#666666")
-    .text(`Generated: ${new Date().toLocaleString()}`, { align: "center" });
-  doc.fillColor("#000000");
-  doc.moveDown(0.5);
-  doc.moveTo(50, doc.y).lineTo(doc.page.width - 50, doc.y).strokeColor("#cccccc").stroke();
-  doc.moveDown(1);
-}
-
-function drawTableRow(doc, columns, y, options = {}) {
-  const { bold = false, bg = null, fontSize = 9 } = options;
-  const startX = 50;
-  const rowHeight = 20;
-
-  if (bg) {
-    doc.rect(startX, y - 2, doc.page.width - 100, rowHeight).fill(bg);
-    doc.fillColor("#000000");
-  }
-
-  doc.fontSize(fontSize).font(bold ? "Helvetica-Bold" : "Helvetica");
-  let x = startX;
-  columns.forEach(({ text, width }) => {
-    doc.text(text || "", x + 4, y, { width: width - 8, height: rowHeight, ellipsis: true });
-    x += width;
-  });
-
-  return y + rowHeight;
-}
-
-function checkPage(doc, y, margin = 60) {
-  if (y > doc.page.height - margin) {
-    doc.addPage();
-    return 50;
-  }
-  return y;
-}
-
-function drawSummaryBox(doc, label, value) {
-  const boxW = 120;
-  const boxH = 50;
-  const x = doc._summaryX || 50;
-  const y = doc._summaryY || doc.y;
-
-  doc.rect(x, y, boxW, boxH).fill("#f3f4f6");
-  doc.fillColor("#6b7280").fontSize(8).font("Helvetica")
-    .text(label, x, y + 8, { width: boxW, align: "center" });
-  doc.fillColor("#111827").fontSize(16).font("Helvetica-Bold")
-    .text(String(value), x, y + 22, { width: boxW, align: "center" });
-  doc.fillColor("#000000");
-
-  doc._summaryX = x + boxW + 12;
-  if (doc._summaryX + boxW > doc.page.width - 50) {
-    doc._summaryX = 50;
-    doc._summaryY = y + boxH + 8;
-  }
-}
+// PDF helpers imported from shared utility
+const drawHeader = pdf.drawSimpleHeader;
+const drawTableRow = pdf.drawTableRow;
+const checkPage = (doc, y, margin = 60) => pdf.checkPage(doc, y, { margin });
+const drawSummaryBox = pdf.drawSummaryBox;
 
 exports.attendanceReport = async (req, res) => {
   try {

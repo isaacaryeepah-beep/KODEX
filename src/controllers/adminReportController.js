@@ -8,87 +8,16 @@ const Quiz = require("../models/Quiz");
 const QuizSubmission = require("../models/QuizSubmission"); // legacy
 const Attempt = require("../models/Attempt");
 const Company = require("../models/Company");
+const { buildDateFilter } = require("../utils/controllerHelpers");
+const pdf = require("../utils/pdfHelpers");
 
-function drawHeader(doc, title, institution) {
-  doc.rect(0, 0, doc.page.width, 90).fill("#4f46e5");
-  doc.fillColor("#ffffff").fontSize(24).font("Helvetica-Bold")
-    .text(title, 50, 25, { align: "center" });
-  if (institution) {
-    doc.fontSize(11).font("Helvetica")
-      .text(institution, 50, 55, { align: "center" });
-  }
-  doc.fillColor("#000000");
-  doc.y = 110;
-  doc.fontSize(9).font("Helvetica").fillColor("#888888")
-    .text(`Generated: ${new Date().toLocaleString()}`, { align: "right" });
-  doc.fillColor("#000000");
-  doc.moveDown(1);
-}
-
-function drawSectionTitle(doc, title) {
-  const y = doc.y;
-  doc.rect(50, y, doc.page.width - 100, 26).fill("#f3f4f6");
-  doc.fillColor("#1f2937").fontSize(13).font("Helvetica-Bold")
-    .text(title, 58, y + 6);
-  doc.fillColor("#000000");
-  doc.y = y + 34;
-}
-
-function drawSummaryRow(doc, items) {
-  const totalW = doc.page.width - 100;
-  const boxW = Math.min(130, (totalW - (items.length - 1) * 10) / items.length);
-  const startX = 50;
-  const y = doc.y;
-
-  items.forEach((item, i) => {
-    const x = startX + i * (boxW + 10);
-    doc.rect(x, y, boxW, 52).lineWidth(1).strokeColor("#e5e7eb").stroke();
-    doc.fillColor("#6b7280").fontSize(8).font("Helvetica")
-      .text(item.label, x, y + 8, { width: boxW, align: "center" });
-    doc.fillColor("#111827").fontSize(18).font("Helvetica-Bold")
-      .text(String(item.value), x, y + 24, { width: boxW, align: "center" });
-    doc.fillColor("#000000");
-  });
-
-  doc.y = y + 62;
-}
-
-function drawTableHeader(doc, columns, y) {
-  doc.rect(50, y - 2, doc.page.width - 100, 20).fill("#4f46e5");
-  doc.fillColor("#ffffff").fontSize(8).font("Helvetica-Bold");
-  let x = 54;
-  columns.forEach(({ text, width }) => {
-    doc.text(text, x, y + 2, { width: width - 8, height: 16, ellipsis: true });
-    x += width;
-  });
-  doc.fillColor("#000000");
-  return y + 20;
-}
-
-function drawTableRow(doc, columns, y, even) {
-  if (even) {
-    doc.rect(50, y - 1, doc.page.width - 100, 18).fill("#f9fafb");
-    doc.fillColor("#000000");
-  }
-  doc.fontSize(8).font("Helvetica");
-  let x = 54;
-  columns.forEach(({ text, width }) => {
-    doc.text(text || "-", x, y + 2, { width: width - 8, height: 16, ellipsis: true });
-    x += width;
-  });
-  return y + 18;
-}
-
-function checkPage(doc, y, columns) {
-  if (y > doc.page.height - 60) {
-    doc.addPage();
-    if (columns) {
-      return drawTableHeader(doc, columns, 50);
-    }
-    return 50;
-  }
-  return y;
-}
+// PDF helpers imported from shared utility
+const drawHeader       = pdf.drawBrandedHeader;
+const drawSectionTitle = pdf.drawSectionTitle;
+const drawSummaryRow   = pdf.drawSummaryRow;
+const drawTableHeader  = pdf.drawTableHeader;
+const drawTableRow     = (doc, columns, y, even) => pdf.drawTableRow(doc, columns, y, { bg: even ? "#f9fafb" : null, fontSize: 8, rowHeight: 18, startX: 50 });
+const checkPage        = (doc, y, columns) => pdf.checkPage(doc, y, { margin: 60, columns });
 
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 // 1️⃣  ATTENDANCE REPORT (Institution Overview)
