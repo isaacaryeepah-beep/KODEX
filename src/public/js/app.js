@@ -2594,7 +2594,10 @@ function navigateTo(view) {
     case 'meetings': renderMeetings(); break;
     case 'courses': renderCourses(); break;
     case 'quizzes': renderQuizzes(); break;
-    case 'snap-quiz': window.open('/snap-quiz.html', '_blank'); navigateTo('quizzes'); break;
+    case 'snap-quiz':
+      if (currentUser?.role === 'student') { window.open('/snap-quiz.html', '_blank'); }
+      else { navigateTo('quizzes'); }
+      break;
     case 'quiz-history': renderStudentQuizHistory(); break;
     case 'lecturer-performance': renderLecturerPerformance(); break;
     case 'timetable': currentUser.role === 'student' ? renderStudentTimetable() : renderLecturerTimetable(); break;
