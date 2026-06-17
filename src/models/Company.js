@@ -183,6 +183,12 @@ const companySchema = new mongoose.Schema(
       type: String,
       default: null,
     },
+    // 32-byte HMAC key (hex) used to sign offline attendance credentials.
+    // Generated once per institution; pushed to paired ESP32 devices via heartbeat.
+    offlineHmacKey: {
+      type: String,
+      default: null,
+    },
     isActive: {
       type: Boolean,
       default: true,
@@ -257,6 +263,9 @@ companySchema.pre("save", async function () {
 
   if (!this.qrSeed) {
     this.qrSeed = crypto.randomBytes(32).toString("hex");
+  }
+  if (!this.offlineHmacKey) {
+    this.offlineHmacKey = crypto.randomBytes(32).toString("hex");
   }
   if (!this.bleLocationId) {
     this.bleLocationId = `BLE-${crypto.randomBytes(8).toString("hex").toUpperCase()}`;

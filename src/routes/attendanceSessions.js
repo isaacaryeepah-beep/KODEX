@@ -8,6 +8,9 @@ const requireNoDeviceLock = require("../middleware/requireNoDeviceLock");
 const attendanceController = require("../controllers/attendanceController");
 const router = express.Router();
 
+// POST /offline-sync — called by ESP32 device JWT (not user JWT), must be before authenticate
+router.post("/offline-sync", attendanceController.offlineSync);
+
 router.use(authenticate);
 router.use(requireActiveSubscription);
 
@@ -27,6 +30,5 @@ router.post("/flagged/:recordId/trust", requireRole("lecturer", "hod", "admin", 
 router.get("/:id/current-code", requireRole("lecturer", "admin", "superadmin"), companyIsolation, attendanceController.getCurrentCode);
 router.get("/:id/records", requireRole("lecturer", "hod", "admin", "superadmin", "manager"), companyIsolation, attendanceController.getSessionRecords);
 router.get("/:id", requireRole("lecturer", "hod", "admin", "superadmin", "manager"), companyIsolation, attendanceController.getSession);
-
 
 module.exports = router;

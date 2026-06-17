@@ -4,6 +4,7 @@ const AttendanceRecord  = require('../models/AttendanceRecord');
 const User              = require('../models/User');
 const AuditLog          = require('../models/AuditLog');
 const { AUDIT_ACTIONS } = require('../models/AuditLog');
+const Company           = require('../models/Company');
 const crypto            = require('crypto');
 const jwt               = require('jsonwebtoken');
 
@@ -242,11 +243,17 @@ exports.heartbeat = async (req, res) => {
       studentsMarked = await AttendanceRecord.countDocuments({ session: session._id });
     }
 
+    // Include offline HMAC key so device can verify student credentials
+    const company = await Company.findById(device.companyId)
+      .select('offlineHmacKey').lean();
+    const offlineKey = company?.offlineHmacKey || null;
+
     return res.json({
       ok:         true,
       success:    true,
       serverTime: new Date().toISOString(),
       lastSeenAt: device.lastHeartbeat,
+      offlineKey,
       activeSession: session ? {
         sessionId:       session._id,
         title:           session.title || '',
@@ -416,26 +423,67 @@ exports.syncOfflineRecords = async (req, res) => {
 };
 
 // ─── DEVICE ROSTER ───────────────────────────────────────────────────────────
-// Returns all active students for this device's institution so the device can
-// validate student IDs offline during attendance marking.
+// Returns per-course enrollment data so the device can validate offline
+// credentials (only enrolled students for the active course can mark).
+// Also returns flat roster for backward-compat with older firmware.
 exports.getRoster = async (req, res) => {
   try {
     const device = req.device;
     if (!device) return res.status(401).json({ message: 'Device authentication missing' });
 
+    const StudentCourseEnrollment = require('../models/StudentCourseEnrollment');
+    const Course = require('../models/Course');
+
+    // All active students in this institution
     const students = await User.find({
       company: device.companyId,
       role: 'student',
       isActive: { $ne: false },
-    }).select('_id indexNumber IndexNumber name email').lean();
+    }).select('_id indexNumber IndexNumber name').lean();
 
+    const studentById = {};
+    for (const s of students) {
+      studentById[s._id.toString()] = (s.indexNumber || s.IndexNumber || '').toUpperCase();
+    }
+
+    // Flat roster (backward-compat)
     const roster = students.map(s => ({
       id:          s._id.toString(),
       indexNumber: (s.indexNumber || s.IndexNumber || '').toUpperCase(),
-      name:        s.name || s.email || '',
-    })).filter(s => s.indexNumber || s.id);
+      name:        s.name || '',
+    })).filter(s => s.indexNumber);
 
-    res.json({ ok: true, roster, count: roster.length });
+    // Per-course enrollment — courses assigned to this device's lecturers
+    const lecturerIds = (device.assignedLecturers || []).map(al => al.lecturerId);
+    const courseIds   = (device.assignedLecturers || []).map(al => al.courseId);
+
+    const courses = await Course.find({
+      _id: { $in: courseIds },
+      companyId: device.companyId,
+    }).select('_id code title lecturerId').lean();
+
+    const courseRoster = [];
+    for (const course of courses) {
+      const enrollments = await StudentCourseEnrollment.find({
+        company: device.companyId,
+        course:  course._id,
+        status:  'active',
+      }).select('student').lean();
+
+      const studentIndexes = enrollments
+        .map(e => studentById[e.student?.toString()])
+        .filter(Boolean);
+
+      courseRoster.push({
+        courseId:   course._id.toString(),
+        courseCode: course.code || '',
+        title:      course.title || '',
+        lecturerId: course.lecturerId?.toString() || '',
+        students:   studentIndexes,
+      });
+    }
+
+    res.json({ ok: true, roster, count: roster.length, courses: courseRoster });
   } catch (err) {
     console.error('[device roster]', err);
     res.status(500).json({ message: 'Server error', error: err.message });

@@ -8,7 +8,6 @@ import '../../widgets/dikly_drawer.dart';
 import 'manager_home_screen.dart';
 import 'manager_employees_screen.dart';
 import 'manager_leave_screen.dart';
-import 'manager_reports_screen.dart';
 import 'timesheets_screen.dart';
 
 class ManagerShell extends ConsumerStatefulWidget {
@@ -159,6 +158,7 @@ class _ManagerShellState extends ConsumerState<ManagerShell> {
         userName: user?.name ?? '',
         userEmail: user?.email ?? '',
         userRole: 'Manager',
+        institutionCode: user?.institutionCode ?? '',
         sections: _sections,
         onSignOut: () async {
           Navigator.pop(context);

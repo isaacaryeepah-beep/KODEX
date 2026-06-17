@@ -29,6 +29,8 @@ class _LecturerDashboardState extends ConsumerState<LecturerDashboard> {
     _loadData();
   }
 
+  String? _error;
+
   Future<void> _loadData() async {
     setState(() { _loading = true; _error = null; });
     try {
@@ -68,33 +70,20 @@ class _LecturerDashboardState extends ConsumerState<LecturerDashboard> {
     return ListView(
       padding: const EdgeInsets.all(16),
       children: [
-        // Header
+        // Page header (web style — flat)
         Container(
-          padding: const EdgeInsets.all(20),
-          decoration: BoxDecoration(
-            gradient: const LinearGradient(
-              colors: [Color(0xFF7C3AED), Color(0xFF5B21B6)],
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
-            ),
-            borderRadius: BorderRadius.circular(16),
-          ),
+          padding: const EdgeInsets.symmetric(vertical: 8),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
-                '${_getGreeting()},',
-                style: const TextStyle(color: Colors.white70, fontSize: 14),
+                '${_getGreeting()}, $name',
+                style: const TextStyle(color: Color(0xFF0D1117), fontSize: 20, fontWeight: FontWeight.w700),
               ),
-              const SizedBox(height: 4),
-              Text(
-                name,
-                style: const TextStyle(color: Colors.white, fontSize: 22, fontWeight: FontWeight.w700),
-              ),
-              const SizedBox(height: 8),
+              const SizedBox(height: 2),
               Text(
                 DateFormat('EEEE, MMMM d').format(DateTime.now()),
-                style: const TextStyle(color: Colors.white70, fontSize: 13),
+                style: const TextStyle(color: Color(0xFF6B7280), fontSize: 13),
               ),
             ],
           ),

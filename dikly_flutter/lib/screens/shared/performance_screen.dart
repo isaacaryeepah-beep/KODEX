@@ -1,22 +1,20 @@
-import 'package:fl_chart/fl_chart.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:google_fonts/google_fonts.dart';
 import '../../core/api.dart';
 import '../../core/auth.dart';
 import '../../core/theme.dart';
+import '../../widgets/ds/dikly_ds.dart';
 
-final _studentPerformanceProvider =
-    FutureProvider.autoDispose<Map<String, dynamic>>(
+final _studentPerformanceProvider = FutureProvider.autoDispose<Map<String, dynamic>>(
   (ref) => apiService.getPerformance(),
 );
 
-final _lecturerPerformanceProvider =
-    FutureProvider.autoDispose<Map<String, dynamic>>(
+final _lecturerPerformanceProvider = FutureProvider.autoDispose<Map<String, dynamic>>(
   (ref) => apiService.getLecturerPerformance(),
 );
 
-final _corporatePerformanceProvider =
-    FutureProvider.autoDispose<Map<String, dynamic>>(
+final _corporatePerformanceProvider = FutureProvider.autoDispose<Map<String, dynamic>>(
   (ref) => apiService.getCorporatePerformance(),
 );
 
@@ -27,23 +25,20 @@ class PerformanceScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final user = ref.watch(currentUserProvider);
     final role = user?.role ?? 'student';
-    final isLecturer = role == 'lecturer';
+    final name = user?.name ?? '';
     final isCorporate = role == 'admin' || role == 'manager' || role == 'employee';
-
-    final title = isCorporate ? 'My Performance' : 'My Performance';
+    final isLecturer = role == 'lecturer';
 
     if (isCorporate) {
       final async = ref.watch(_corporatePerformanceProvider);
       return _buildScaffold(
         context: context,
-        title: title,
         body: async.when(
           loading: () => const Center(child: CircularProgressIndicator()),
-          error: (e, _) => _ErrorView(
-              onRetry: () => ref.refresh(_corporatePerformanceProvider)),
+          error: (e, _) => _ErrorView(onRetry: () => ref.refresh(_corporatePerformanceProvider)),
           data: (data) => RefreshIndicator(
             onRefresh: () async => ref.refresh(_corporatePerformanceProvider),
-            child: _PerformanceBody(data: data, isLecturer: false),
+            child: _CorporatePerformanceBody(data: data, userName: name),
           ),
         ),
       );
@@ -53,14 +48,12 @@ class PerformanceScreen extends ConsumerWidget {
       final async = ref.watch(_lecturerPerformanceProvider);
       return _buildScaffold(
         context: context,
-        title: title,
         body: async.when(
           loading: () => const Center(child: CircularProgressIndicator()),
-          error: (e, _) => _ErrorView(
-              onRetry: () => ref.refresh(_lecturerPerformanceProvider)),
+          error: (e, _) => _ErrorView(onRetry: () => ref.refresh(_lecturerPerformanceProvider)),
           data: (data) => RefreshIndicator(
             onRefresh: () async => ref.refresh(_lecturerPerformanceProvider),
-            child: _PerformanceBody(data: data, isLecturer: true),
+            child: _AcademicPerformanceBody(data: data, isLecturer: true, userName: name),
           ),
         ),
       );
@@ -69,28 +62,25 @@ class PerformanceScreen extends ConsumerWidget {
     final async = ref.watch(_studentPerformanceProvider);
     return _buildScaffold(
       context: context,
-      title: title,
       body: async.when(
         loading: () => const Center(child: CircularProgressIndicator()),
-        error: (e, _) =>
-            _ErrorView(onRetry: () => ref.refresh(_studentPerformanceProvider)),
+        error: (e, _) => _ErrorView(onRetry: () => ref.refresh(_studentPerformanceProvider)),
         data: (data) => RefreshIndicator(
           onRefresh: () async => ref.refresh(_studentPerformanceProvider),
-          child: _PerformanceBody(data: data, isLecturer: false),
+          child: _AcademicPerformanceBody(data: data, isLecturer: false, userName: name),
         ),
       ),
     );
   }
 
-  Widget _buildScaffold({
-    required BuildContext context,
-    required String title,
-    required Widget body,
-  }) {
+  Widget _buildScaffold({required BuildContext context, required Widget body}) {
     return Scaffold(
       backgroundColor: DiklyColors.background,
       appBar: AppBar(
-        title: Text(title),
+        title: const Text('My Performance'),
+        backgroundColor: DiklyColors.surface,
+        elevation: 0,
+        surfaceTintColor: Colors.transparent,
         leading: BackButton(onPressed: () => Navigator.of(context).maybePop()),
       ),
       body: body,
@@ -98,9 +88,314 @@ class PerformanceScreen extends ConsumerWidget {
   }
 }
 
+// ── Corporate Performance (Employee / Manager) ────────────────────────────────
+
+class _CorporatePerformanceBody extends StatelessWidget {
+  final Map<String, dynamic> data;
+  final String userName;
+  const _CorporatePerformanceBody({required this.data, required this.userName});
+
+  @override
+  Widget build(BuildContext context) {
+    final attendanceRate = (data['attendanceRate'] as num?)?.toStringAsFixed(0) ?? '0';
+    final lateDays = (data['lateDays'] as num?)?.toInt() ?? 0;
+    final hoursWorked = (data['hoursWorked'] as num?)?.toStringAsFixed(0) ?? '0';
+    final performanceScore = (data['performanceScore'] as num?)?.toStringAsFixed(0);
+    final attendanceLogs = data['attendanceLogs'] as List? ?? [];
+    final goals = data['goals'] as List? ?? [];
+
+    return ListView(
+      padding: const EdgeInsets.all(16),
+      children: [
+        DiklyScreenHeader(
+          title: 'My Performance',
+          subtitle: 'Last 90 days · $userName',
+        ),
+
+        // ── 4 stat cards ────────────────────────────────────────────────
+        GridView.count(
+          shrinkWrap: true,
+          physics: const NeverScrollableScrollPhysics(),
+          crossAxisCount: 2,
+          mainAxisSpacing: 10,
+          crossAxisSpacing: 10,
+          childAspectRatio: 1.6,
+          children: [
+            _StatCard(value: '$attendanceRate%', label: 'ATTENDANCE RATE', color: const Color(0xFF2563EB)),
+            _StatCard(value: '$lateDays', label: 'LATE DAYS', color: const Color(0xFFD97706)),
+            _StatCard(value: '${hoursWorked}h', label: 'HOURS WORKED', color: const Color(0xFF059669)),
+            _StatCard(value: performanceScore != null ? '$performanceScore' : '—', label: 'PERFORMANCE SCORE', color: const Color(0xFF7C3AED)),
+          ],
+        ),
+        const SizedBox(height: 16),
+
+        // ── Two trend chart placeholders ─────────────────────────────────
+        Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Expanded(
+              child: _TrendCard(
+                title: 'Attendance Trend (30 days)',
+                hasData: attendanceLogs.isNotEmpty,
+              ),
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: _TrendCard(
+                title: 'Work Hours Trend (30 days)',
+                hasData: false,
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 16),
+
+        // ── Attendance Log ───────────────────────────────────────────────
+        Container(
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(10),
+            border: Border.all(color: DiklyColors.border),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text('Attendance Log',
+                  style: GoogleFonts.dmSans(fontSize: 14, fontWeight: FontWeight.w700, color: DiklyColors.text)),
+              const SizedBox(height: 12),
+              if (attendanceLogs.isEmpty)
+                Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 16),
+                  child: Center(
+                    child: Text('No attendance records found.',
+                        style: GoogleFonts.dmSans(fontSize: 13, color: DiklyColors.textMuted)),
+                  ),
+                )
+              else
+                ...attendanceLogs.take(10).map((log) => _LogRow(log: log as Map<String, dynamic>)),
+            ],
+          ),
+        ),
+        const SizedBox(height: 16),
+
+        // ── My Goals ─────────────────────────────────────────────────────
+        Container(
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(10),
+            border: Border.all(color: DiklyColors.border),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Expanded(
+                    child: Text('My Goals',
+                        style: GoogleFonts.dmSans(fontSize: 14, fontWeight: FontWeight.w700, color: DiklyColors.text)),
+                  ),
+                  OutlinedButton.icon(
+                    onPressed: () {},
+                    icon: const Icon(Icons.add, size: 14),
+                    label: Text('Add Goal', style: GoogleFonts.dmSans(fontSize: 12, fontWeight: FontWeight.w600)),
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: const Color(0xFF2563EB),
+                      side: const BorderSide(color: Color(0xFF2563EB)),
+                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
+                    ),
+                  ),
+                ],
+              ),
+              if (goals.isEmpty) ...[
+                const SizedBox(height: 16),
+                Center(
+                  child: Text('No goals set yet.',
+                      style: GoogleFonts.dmSans(fontSize: 13, color: DiklyColors.textMuted)),
+                ),
+              ],
+            ],
+          ),
+        ),
+        const SizedBox(height: 32),
+      ],
+    );
+  }
+}
+
+class _TrendCard extends StatelessWidget {
+  final String title;
+  final bool hasData;
+  const _TrendCard({required this.title, required this.hasData});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: DiklyColors.border),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(title,
+              style: GoogleFonts.dmSans(fontSize: 12, fontWeight: FontWeight.w700, color: DiklyColors.text)),
+          const SizedBox(height: 20),
+          Center(
+            child: Text(
+              hasData ? '' : 'No data yet.',
+              style: GoogleFonts.dmSans(fontSize: 12, color: DiklyColors.textMuted),
+            ),
+          ),
+          const SizedBox(height: 20),
+        ],
+      ),
+    );
+  }
+}
+
+class _LogRow extends StatelessWidget {
+  final Map<String, dynamic> log;
+  const _LogRow({required this.log});
+
+  @override
+  Widget build(BuildContext context) {
+    final date = log['date']?.toString() ?? '';
+    final status = log['status']?.toString() ?? '';
+    Color color;
+    switch (status.toLowerCase()) {
+      case 'present': color = const Color(0xFF059669); break;
+      case 'late': color = const Color(0xFFD97706); break;
+      case 'absent': color = const Color(0xFFDC2626); break;
+      default: color = const Color(0xFF6B7280);
+    }
+    return Container(
+      padding: const EdgeInsets.symmetric(vertical: 8),
+      decoration: const BoxDecoration(border: Border(bottom: BorderSide(color: DiklyColors.border))),
+      child: Row(
+        children: [
+          Container(width: 8, height: 8, decoration: BoxDecoration(color: color, shape: BoxShape.circle)),
+          const SizedBox(width: 10),
+          Expanded(child: Text(date, style: GoogleFonts.dmSans(fontSize: 13, color: DiklyColors.text))),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+            decoration: BoxDecoration(color: color.withOpacity(0.1), borderRadius: BorderRadius.circular(20)),
+            child: Text(status.toUpperCase(), style: TextStyle(fontSize: 10, fontWeight: FontWeight.w700, color: color)),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// ── Academic Performance (Student / Lecturer) ─────────────────────────────────
+
+class _AcademicPerformanceBody extends StatelessWidget {
+  final Map<String, dynamic> data;
+  final bool isLecturer;
+  final String userName;
+  const _AcademicPerformanceBody({required this.data, required this.isLecturer, required this.userName});
+
+  @override
+  Widget build(BuildContext context) {
+    final List<_StatItem> stats = isLecturer ? [
+      _StatItem(value: '${(data['totalSessions'] as num?)?.toInt() ?? 0}', label: 'TOTAL SESSIONS', color: const Color(0xFF2563EB)),
+      _StatItem(value: '${(data['avgAttendance'] as num?)?.toStringAsFixed(1) ?? '0'}%', label: 'AVG ATTENDANCE', color: const Color(0xFF059669)),
+      _StatItem(value: '${(data['coursesActive'] as num?)?.toInt() ?? 0}', label: 'ACTIVE COURSES', color: const Color(0xFFD97706)),
+      _StatItem(value: '${(data['studentsFeedbackScore'] as num?)?.toStringAsFixed(1) ?? '—'}/5', label: 'FEEDBACK SCORE', color: const Color(0xFF7C3AED)),
+    ] : [
+      _StatItem(value: '${(data['attendanceRate'] as num?)?.toStringAsFixed(0) ?? '0'}%', label: 'ATTENDANCE RATE', color: const Color(0xFF2563EB)),
+      _StatItem(value: '${(data['assignmentsCompleted'] as num?)?.toInt() ?? 0}', label: 'ASSIGNMENTS DONE', color: const Color(0xFF059669)),
+      _StatItem(value: '${(data['averageGrade'] as num?)?.toStringAsFixed(0) ?? '0'}%', label: 'AVERAGE GRADE', color: const Color(0xFFD97706)),
+      _StatItem(value: '${(data['sessionsAttended'] as num?)?.toInt() ?? 0}', label: 'SESSIONS ATTENDED', color: const Color(0xFF7C3AED)),
+    ];
+
+    return ListView(
+      padding: const EdgeInsets.all(16),
+      children: [
+        DiklyScreenHeader(
+          title: 'My Performance',
+          subtitle: 'Last 90 days · $userName',
+        ),
+        GridView.count(
+          shrinkWrap: true,
+          physics: const NeverScrollableScrollPhysics(),
+          crossAxisCount: 2,
+          mainAxisSpacing: 10,
+          crossAxisSpacing: 10,
+          childAspectRatio: 1.6,
+          children: stats.map((s) => _StatCard(value: s.value, label: s.label, color: s.color)).toList(),
+        ),
+        const SizedBox(height: 16),
+        Container(
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(10),
+            border: Border.all(color: DiklyColors.border),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text('Performance Overview',
+                  style: GoogleFonts.dmSans(fontSize: 14, fontWeight: FontWeight.w700, color: DiklyColors.text)),
+              const SizedBox(height: 12),
+              Center(
+                child: Text('No data yet.',
+                    style: GoogleFonts.dmSans(fontSize: 13, color: DiklyColors.textMuted)),
+              ),
+              const SizedBox(height: 12),
+            ],
+          ),
+        ),
+        const SizedBox(height: 32),
+      ],
+    );
+  }
+}
+
+class _StatItem {
+  final String value;
+  final String label;
+  final Color color;
+  const _StatItem({required this.value, required this.label, required this.color});
+}
+
+class _StatCard extends StatelessWidget {
+  final String value;
+  final String label;
+  final Color color;
+  const _StatCard({required this.value, required this.label, required this.color});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: DiklyColors.border),
+      ),
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Text(value,
+              style: GoogleFonts.dmSans(fontSize: 26, fontWeight: FontWeight.w800, color: color)),
+          const SizedBox(height: 4),
+          Text(label,
+              textAlign: TextAlign.center,
+              style: GoogleFonts.dmSans(fontSize: 9, fontWeight: FontWeight.w600, color: DiklyColors.textMuted, letterSpacing: 0.6)),
+        ],
+      ),
+    );
+  }
+}
+
 class _ErrorView extends StatelessWidget {
   final VoidCallback onRetry;
-
   const _ErrorView({required this.onRetry});
 
   @override
@@ -114,292 +409,6 @@ class _ErrorView extends StatelessWidget {
           const Text('Failed to load performance data'),
           const SizedBox(height: 8),
           TextButton(onPressed: onRetry, child: const Text('Retry')),
-        ],
-      ),
-    );
-  }
-}
-
-class _PerformanceBody extends StatelessWidget {
-  final Map<String, dynamic> data;
-  final bool isLecturer;
-
-  const _PerformanceBody({required this.data, required this.isLecturer});
-
-  List<_MetricItem> get _metrics {
-    if (isLecturer) {
-      return [
-        _MetricItem(
-          label: 'Total Sessions',
-          value: '${(data['totalSessions'] as num?)?.toInt() ?? 0}',
-          icon: Icons.video_library_outlined,
-          color: DiklyColors.primary,
-        ),
-        _MetricItem(
-          label: 'Avg Attendance',
-          value: '${(data['avgAttendance'] as num?)?.toStringAsFixed(1) ?? '0'}%',
-          icon: Icons.people_outline_rounded,
-          color: DiklyColors.success,
-        ),
-        _MetricItem(
-          label: 'Active Courses',
-          value: '${(data['coursesActive'] as num?)?.toInt() ?? 0}',
-          icon: Icons.book_outlined,
-          color: DiklyColors.warning,
-        ),
-        _MetricItem(
-          label: 'Feedback Score',
-          value: '${(data['studentsFeedbackScore'] as num?)?.toStringAsFixed(1) ?? '0'}/5',
-          icon: Icons.star_outline_rounded,
-          color: const Color(0xFF7C3AED),
-        ),
-      ];
-    }
-    return [
-      _MetricItem(
-        label: 'Attendance Rate',
-        value: '${(data['attendanceRate'] as num?)?.toStringAsFixed(1) ?? '0'}%',
-        icon: Icons.check_circle_outline_rounded,
-        color: DiklyColors.success,
-      ),
-      _MetricItem(
-        label: 'Assignments Done',
-        value: '${(data['assignmentsCompleted'] as num?)?.toInt() ?? 0}',
-        icon: Icons.assignment_turned_in_outlined,
-        color: DiklyColors.primary,
-      ),
-      _MetricItem(
-        label: 'Average Grade',
-        value: '${(data['averageGrade'] as num?)?.toStringAsFixed(1) ?? '0'}%',
-        icon: Icons.grade_outlined,
-        color: DiklyColors.warning,
-      ),
-      _MetricItem(
-        label: 'Sessions Attended',
-        value: '${(data['sessionsAttended'] as num?)?.toInt() ?? 0}',
-        icon: Icons.calendar_today_outlined,
-        color: const Color(0xFF7C3AED),
-      ),
-    ];
-  }
-
-  // Generate sample weekly attendance bar data from the main attendance metric
-  List<BarChartGroupData> _buildBarGroups() {
-    double base;
-    if (isLecturer) {
-      base = (data['avgAttendance'] as num?)?.toDouble() ?? 0.0;
-    } else {
-      base = (data['attendanceRate'] as num?)?.toDouble() ?? 0.0;
-    }
-    if (base <= 0) return [];
-
-    // Generate 6 weeks of plausible data around base
-    final offsets = [-8.0, -3.0, 5.0, -6.0, 2.0, 0.0];
-    return List.generate(offsets.length, (i) {
-      final val = (base + offsets[i]).clamp(0.0, 100.0);
-      return BarChartGroupData(
-        x: i,
-        barRods: [
-          BarChartRodData(
-            toY: val,
-            color: DiklyColors.primary,
-            width: 18,
-            borderRadius: const BorderRadius.vertical(top: Radius.circular(4)),
-          ),
-        ],
-      );
-    });
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final barGroups = _buildBarGroups();
-
-    return ListView(
-      padding: const EdgeInsets.all(16),
-      children: [
-        // 2x2 metric grid
-        GridView.count(
-          crossAxisCount: 2,
-          crossAxisSpacing: 12,
-          mainAxisSpacing: 12,
-          shrinkWrap: true,
-          physics: const NeverScrollableScrollPhysics(),
-          childAspectRatio: 1.4,
-          children: _metrics.map((m) => _MetricCard(metric: m)).toList(),
-        ),
-        const SizedBox(height: 24),
-        // Attendance chart
-        Text(
-          'Attendance Over Weeks',
-          style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700),
-        ),
-        const SizedBox(height: 12),
-        Container(
-          height: 200,
-          padding: const EdgeInsets.fromLTRB(8, 16, 16, 8),
-          decoration: BoxDecoration(
-            color: DiklyColors.surface,
-            borderRadius: BorderRadius.circular(12),
-            border: Border.all(color: DiklyColors.border),
-          ),
-          child: barGroups.isEmpty
-              ? const Center(
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Icon(Icons.bar_chart_rounded,
-                          size: 40, color: DiklyColors.textSecondary),
-                      SizedBox(height: 8),
-                      Text(
-                        'No data yet',
-                        style: TextStyle(color: DiklyColors.textSecondary),
-                      ),
-                    ],
-                  ),
-                )
-              : BarChart(
-                  BarChartData(
-                    maxY: 100,
-                    minY: 0,
-                    barGroups: barGroups,
-                    gridData: FlGridData(
-                      show: true,
-                      drawVerticalLine: false,
-                      horizontalInterval: 25,
-                      getDrawingHorizontalLine: (v) => FlLine(
-                        color: DiklyColors.border,
-                        strokeWidth: 1,
-                      ),
-                    ),
-                    borderData: FlBorderData(show: false),
-                    titlesData: FlTitlesData(
-                      leftTitles: AxisTitles(
-                        sideTitles: SideTitles(
-                          showTitles: true,
-                          reservedSize: 36,
-                          interval: 25,
-                          getTitlesWidget: (v, _) => Text(
-                            '${v.toInt()}%',
-                            style: const TextStyle(
-                              fontSize: 10,
-                              color: DiklyColors.textSecondary,
-                            ),
-                          ),
-                        ),
-                      ),
-                      rightTitles: const AxisTitles(
-                          sideTitles: SideTitles(showTitles: false)),
-                      topTitles: const AxisTitles(
-                          sideTitles: SideTitles(showTitles: false)),
-                      bottomTitles: AxisTitles(
-                        sideTitles: SideTitles(
-                          showTitles: true,
-                          getTitlesWidget: (v, _) {
-                            const weeks = ['W1', 'W2', 'W3', 'W4', 'W5', 'W6'];
-                            final idx = v.toInt();
-                            if (idx < 0 || idx >= weeks.length) {
-                              return const SizedBox.shrink();
-                            }
-                            return Padding(
-                              padding: const EdgeInsets.only(top: 4),
-                              child: Text(
-                                weeks[idx],
-                                style: const TextStyle(
-                                  fontSize: 10,
-                                  color: DiklyColors.textSecondary,
-                                ),
-                              ),
-                            );
-                          },
-                        ),
-                      ),
-                    ),
-                    barTouchData: BarTouchData(
-                      touchTooltipData: BarTouchTooltipData(
-                        getTooltipItem: (group, groupIndex, rod, rodIndex) {
-                          return BarTooltipItem(
-                            '${rod.toY.toStringAsFixed(1)}%',
-                            const TextStyle(
-                              color: Colors.white,
-                              fontSize: 11,
-                              fontWeight: FontWeight.w600,
-                            ),
-                          );
-                        },
-                      ),
-                    ),
-                  ),
-                ),
-        ),
-        const SizedBox(height: 32),
-      ],
-    );
-  }
-}
-
-class _MetricItem {
-  final String label;
-  final String value;
-  final IconData icon;
-  final Color color;
-
-  const _MetricItem({
-    required this.label,
-    required this.value,
-    required this.icon,
-    required this.color,
-  });
-}
-
-class _MetricCard extends StatelessWidget {
-  final _MetricItem metric;
-
-  const _MetricCard({required this.metric});
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      decoration: BoxDecoration(
-        color: DiklyColors.surface,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: DiklyColors.border),
-      ),
-      padding: const EdgeInsets.all(14),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [
-          Container(
-            padding: const EdgeInsets.all(8),
-            decoration: BoxDecoration(
-              color: metric.color.withOpacity(0.1),
-              borderRadius: BorderRadius.circular(8),
-            ),
-            child: Icon(metric.icon, size: 20, color: metric.color),
-          ),
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                metric.value,
-                style: TextStyle(
-                  fontSize: 20,
-                  fontWeight: FontWeight.w700,
-                  color: metric.color,
-                ),
-              ),
-              Text(
-                metric.label,
-                style: const TextStyle(
-                  fontSize: 11,
-                  color: DiklyColors.textSecondary,
-                  fontWeight: FontWeight.w500,
-                ),
-              ),
-            ],
-          ),
         ],
       ),
     );

@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:google_fonts/google_fonts.dart';
 import '../../core/api.dart';
 import '../../core/theme.dart';
+import '../../widgets/ds/dikly_ds.dart';
 
 final _myShiftProvider = FutureProvider.autoDispose<Map<String, dynamic>>((ref) =>
     apiService.getMyShift());
@@ -35,30 +37,49 @@ class EmployeeShiftScreen extends ConsumerWidget {
 
     return Scaffold(
       backgroundColor: DiklyColors.background,
-      appBar: AppBar(
-        title: const Text('My Shift'),
-        backgroundColor: DiklyColors.surface,
-      ),
       body: RefreshIndicator(
         onRefresh: () async => ref.refresh(_myShiftProvider),
         child: async.when(
           loading: () => const Center(child: CircularProgressIndicator()),
-          error: (e, _) => Center(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                const Icon(Icons.error_outline, size: 48, color: DiklyColors.error),
-                const SizedBox(height: 12),
-                const Text('Failed to load shift'),
-                TextButton(
-                  onPressed: () => ref.refresh(_myShiftProvider),
-                  child: const Text('Retry'),
-                ),
-              ],
-            ),
+          error: (e, _) => ListView(
+            padding: const EdgeInsets.all(16),
+            children: [
+              DiklyScreenHeader(title: 'My Shift', subtitle: 'Your assigned working hours'),
+              DiklyErrorView(message: 'Failed to load shift', onRetry: () => ref.refresh(_myShiftProvider)),
+            ],
           ),
           data: (shift) {
-            final name = shift['shiftName']?.toString() ?? 'Unnamed Shift';
+            // Empty / no shift assigned
+            if (shift.isEmpty || (shift['shiftName'] == null && shift['name'] == null)) {
+              return ListView(
+                padding: const EdgeInsets.all(16),
+                children: [
+                  DiklyScreenHeader(title: 'My Shift', subtitle: 'Your assigned working hours'),
+                  Container(
+                    padding: const EdgeInsets.symmetric(vertical: 48),
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(10),
+                      border: Border.all(color: DiklyColors.border),
+                    ),
+                    child: Column(
+                      children: [
+                        Icon(Icons.calendar_today_outlined, size: 48, color: DiklyColors.border),
+                        const SizedBox(height: 12),
+                        Text('No shift assigned',
+                            style: GoogleFonts.dmSans(fontSize: 15, fontWeight: FontWeight.w600, color: DiklyColors.text)),
+                        const SizedBox(height: 6),
+                        Text('Contact your manager to get a shift assigned to you.',
+                            style: GoogleFonts.dmSans(fontSize: 13, color: DiklyColors.textMuted),
+                            textAlign: TextAlign.center),
+                      ],
+                    ),
+                  ),
+                ],
+              );
+            }
+
+            final name = shift['shiftName']?.toString() ?? shift['name']?.toString() ?? 'Shift';
             final startTime = shift['startTime']?.toString() ?? '--:--';
             final endTime = shift['endTime']?.toString() ?? '--:--';
             final days = shift['days'] as List? ?? [];
@@ -68,163 +89,88 @@ class EmployeeShiftScreen extends ConsumerWidget {
             return ListView(
               padding: const EdgeInsets.all(16),
               children: [
-                // Main Shift Card
+                DiklyScreenHeader(title: 'My Shift', subtitle: 'Your assigned working hours'),
+
+                // ── Shift detail card ───────────────────────────────────
                 Container(
-                  padding: const EdgeInsets.all(24),
+                  padding: const EdgeInsets.all(16),
                   decoration: BoxDecoration(
-                    gradient: const LinearGradient(
-                      colors: [Color(0xFF0369A1), Color(0xFF2563EB)],
-                      begin: Alignment.topLeft,
-                      end: Alignment.bottomRight,
-                    ),
-                    borderRadius: BorderRadius.circular(20),
-                    boxShadow: [
-                      BoxShadow(
-                        color: _accent.withOpacity(0.3),
-                        blurRadius: 20,
-                        offset: const Offset(0, 8),
-                      ),
-                    ],
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(10),
+                    border: Border.all(color: DiklyColors.border),
                   ),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
+                      Text(name,
+                          style: GoogleFonts.dmSans(fontSize: 16, fontWeight: FontWeight.w700, color: DiklyColors.text)),
+                      const SizedBox(height: 12),
                       Row(
                         children: [
-                          const Icon(Icons.schedule, color: Colors.white70, size: 18),
-                          const SizedBox(width: 8),
-                          const Text(
-                            'My Shift',
-                            style: TextStyle(
-                              color: Colors.white70,
-                              fontSize: 13,
-                              letterSpacing: 0.5,
-                            ),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 8),
-                      Text(
-                        name,
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontSize: 26,
-                          fontWeight: FontWeight.w800,
-                        ),
-                      ),
-                      const SizedBox(height: 20),
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          _TimeBlock(label: 'START', time: startTime),
-                          Padding(
-                            padding: const EdgeInsets.symmetric(horizontal: 16),
-                            child: Column(
-                              children: [
-                                Container(
-                                  width: 40,
-                                  height: 2,
-                                  color: Colors.white.withOpacity(0.4),
-                                ),
-                                const SizedBox(height: 4),
-                                const Icon(Icons.arrow_forward, color: Colors.white60, size: 16),
-                              ],
-                            ),
-                          ),
-                          _TimeBlock(label: 'END', time: endTime),
+                          const Icon(Icons.access_time_outlined, size: 15, color: DiklyColors.textMuted),
+                          const SizedBox(width: 6),
+                          Text('$startTime → $endTime',
+                              style: GoogleFonts.dmSans(fontSize: 13, fontWeight: FontWeight.w600, color: DiklyColors.text)),
                         ],
                       ),
                       if (location != null && location.isNotEmpty) ...[
-                        const SizedBox(height: 16),
+                        const SizedBox(height: 8),
                         Row(
                           children: [
-                            const Icon(Icons.location_on_outlined, color: Colors.white70, size: 16),
+                            const Icon(Icons.location_on_outlined, size: 15, color: DiklyColors.textMuted),
                             const SizedBox(width: 6),
-                            Text(
-                              location,
-                              style: const TextStyle(
-                                color: Colors.white,
-                                fontSize: 14,
-                                fontWeight: FontWeight.w500,
-                              ),
-                            ),
+                            Text(location,
+                                style: GoogleFonts.dmSans(fontSize: 13, color: DiklyColors.textSecondary)),
                           ],
+                        ),
+                      ],
+                      if (days.isNotEmpty) ...[
+                        const SizedBox(height: 12),
+                        const Divider(height: 1),
+                        const SizedBox(height: 12),
+                        Text('Working Days',
+                            style: GoogleFonts.dmSans(fontSize: 12, fontWeight: FontWeight.w600, color: DiklyColors.textMuted)),
+                        const SizedBox(height: 8),
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: _allDays.map((day) {
+                            final isActive = _isDayActive(days, day);
+                            return Column(
+                              children: [
+                                Container(
+                                  width: 36,
+                                  height: 36,
+                                  decoration: BoxDecoration(
+                                    color: isActive ? _accent : DiklyColors.background,
+                                    shape: BoxShape.circle,
+                                    border: Border.all(color: isActive ? _accent : DiklyColors.border),
+                                  ),
+                                  child: Center(
+                                    child: Text(day[0],
+                                        style: TextStyle(
+                                          fontSize: 13,
+                                          fontWeight: FontWeight.w700,
+                                          color: isActive ? Colors.white : DiklyColors.textMuted,
+                                        )),
+                                  ),
+                                ),
+                                const SizedBox(height: 4),
+                                Text(day,
+                                    style: GoogleFonts.dmSans(fontSize: 9, color: isActive ? _accent : DiklyColors.textMuted)),
+                              ],
+                            );
+                          }).toList(),
                         ),
                       ],
                     ],
                   ),
                 ),
-                const SizedBox(height: 20),
-                // Days of Week Chips
-                const Text(
-                  'Scheduled Days',
-                  style: TextStyle(
-                    fontSize: 15,
-                    fontWeight: FontWeight.w700,
-                    color: DiklyColors.textPrimary,
-                  ),
-                ),
-                const SizedBox(height: 12),
-                Container(
-                  padding: const EdgeInsets.all(16),
-                  decoration: BoxDecoration(
-                    color: DiklyColors.surface,
-                    borderRadius: BorderRadius.circular(14),
-                    border: Border.all(color: DiklyColors.border),
-                  ),
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                    children: _allDays.map((day) {
-                      final isActive = _isDayActive(days, day);
-                      return Column(
-                        children: [
-                          Container(
-                            width: 40,
-                            height: 40,
-                            decoration: BoxDecoration(
-                              color: isActive ? _accent : DiklyColors.background,
-                              shape: BoxShape.circle,
-                              border: Border.all(
-                                color: isActive ? _accent : DiklyColors.border,
-                                width: 1.5,
-                              ),
-                            ),
-                            child: Center(
-                              child: Text(
-                                day.substring(0, 1),
-                                style: TextStyle(
-                                  fontSize: 14,
-                                  fontWeight: FontWeight.w700,
-                                  color: isActive ? Colors.white : DiklyColors.textSecondary,
-                                ),
-                              ),
-                            ),
-                          ),
-                          const SizedBox(height: 6),
-                          Text(
-                            day,
-                            style: TextStyle(
-                              fontSize: 10,
-                              fontWeight: FontWeight.w500,
-                              color: isActive ? _accent : DiklyColors.textSecondary,
-                            ),
-                          ),
-                        ],
-                      );
-                    }).toList(),
-                  ),
-                ),
-                const SizedBox(height: 20),
-                // This Week View
-                const Text(
-                  'This Week',
-                  style: TextStyle(
-                    fontSize: 15,
-                    fontWeight: FontWeight.w700,
-                    color: DiklyColors.textPrimary,
-                  ),
-                ),
-                const SizedBox(height: 12),
+                const SizedBox(height: 16),
+
+                // ── This Week ───────────────────────────────────────────
+                Text('This Week',
+                    style: GoogleFonts.dmSans(fontSize: 14, fontWeight: FontWeight.w700, color: DiklyColors.text)),
+                const SizedBox(height: 10),
                 _WeekView(weekSchedule: weekSchedule),
                 const SizedBox(height: 32),
               ],

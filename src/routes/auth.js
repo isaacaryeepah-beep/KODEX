@@ -33,4 +33,7 @@ router.get("/departments", authController.getDepartments);
 router.get("/my-devices",               authenticate, authController.getMyDevices);
 router.delete("/my-devices/:deviceId",  authenticate, authController.removeMyDevice);
 
+// Offline attendance credential — signed 30-day token for ESP32 captive portal auth
+router.get("/offline-credential",       authenticate, authController.getOfflineCredential);
+
 module.exports = router;

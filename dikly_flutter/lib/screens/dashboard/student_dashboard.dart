@@ -76,37 +76,24 @@ class _StudentDashboardState extends ConsumerState<StudentDashboard> {
     return ListView(
       padding: const EdgeInsets.all(16),
       children: [
-        // Greeting
+        // Page header (web style — flat white)
         Container(
-          padding: const EdgeInsets.all(20),
-          decoration: BoxDecoration(
-            gradient: const LinearGradient(
-              colors: [DiklyColors.primary, DiklyColors.primaryDark],
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
-            ),
-            borderRadius: BorderRadius.circular(16),
-          ),
+          padding: const EdgeInsets.symmetric(vertical: 8),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
-                '$greeting,',
-                style: const TextStyle(color: Colors.white70, fontSize: 14),
-              ),
-              const SizedBox(height: 4),
-              Text(
-                name,
+                '$greeting, $name',
                 style: const TextStyle(
-                  color: Colors.white,
-                  fontSize: 22,
+                  color: Color(0xFF0D1117),
+                  fontSize: 20,
                   fontWeight: FontWeight.w700,
                 ),
               ),
-              const SizedBox(height: 8),
+              const SizedBox(height: 2),
               Text(
                 DateFormat('EEEE, MMMM d').format(DateTime.now()),
-                style: const TextStyle(color: Colors.white70, fontSize: 13),
+                style: const TextStyle(color: Color(0xFF6B7280), fontSize: 13),
               ),
             ],
           ),

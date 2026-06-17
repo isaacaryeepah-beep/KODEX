@@ -218,6 +218,7 @@ class _AdminShellState extends ConsumerState<AdminShell> {
         userName: user?.name ?? '',
         userEmail: user?.email ?? '',
         userRole: 'Administrator',
+        institutionCode: user?.institutionCode ?? '',
         sections: _sections,
         onSignOut: () async {
           Navigator.pop(context);

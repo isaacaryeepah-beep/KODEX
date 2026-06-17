@@ -1,3 +1,5 @@
+import 'dart:async';
+import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -6,6 +8,8 @@ import '../../core/auth.dart';
 import '../../core/cache.dart';
 import '../../core/connectivity.dart';
 import '../../core/theme.dart';
+import '../../services/ble_presence_service.dart';
+import '../../services/offline_credential_service.dart';
 
 // ── Providers ─────────────────────────────────────────────────────────────────
 
@@ -36,11 +40,85 @@ class _OfflineAttendanceScreenState extends ConsumerState<OfflineAttendanceScree
   String? _lastMessage;
   bool _lastSuccess = false;
   Map<String, dynamic>? _esp32Info;
+  bool _credentialSent = false;
+
+  // Presence heartbeat — sent every 30 s after successful mark
+  Timer? _heartbeatTimer;
+  String? _markedIndexNumber;
+  String  _deviceIp = '192.168.4.1';
+
+  // BLE presence — scans for the ESP32 classroom beacon in background
+  BlePresenceService? _bleService;
+  bool _bleInRange = false;
 
   @override
   void dispose() {
+    _stopHeartbeat();
+    _bleService?.stop();
     _codeCtrl.dispose();
     super.dispose();
+  }
+
+  void _startHeartbeat(String indexNumber, String deviceIp) {
+    _markedIndexNumber = indexNumber;
+    _deviceIp = deviceIp;
+    _heartbeatTimer?.cancel();
+    _sendHeartbeat();  // immediate
+    _heartbeatTimer = Timer.periodic(
+      const Duration(seconds: 30),
+      (_) => _sendHeartbeat(),
+    );
+
+    // Also start BLE scanning — detects device beacon even without captive portal
+    _bleService?.stop();
+    _bleService = BlePresenceService(
+      onPresenceChanged: (inRange, rssi) {
+        if (!mounted) return;
+        setState(() => _bleInRange = inRange);
+        if (!inRange) {
+          // Student left BLE range → send explicit left signal to device
+          _sendLeftSignal();
+        }
+      },
+    );
+    _bleService!.start();
+  }
+
+  void _stopHeartbeat() {
+    _heartbeatTimer?.cancel();
+    _heartbeatTimer = null;
+    if (_markedIndexNumber != null) _sendLeftSignal();
+  }
+
+  Future<void> _sendHeartbeat() async {
+    if (_markedIndexNumber == null) return;
+    try {
+      final localDio = Dio(BaseOptions(
+        connectTimeout: const Duration(seconds: 3),
+        receiveTimeout: const Duration(seconds: 3),
+      ));
+      await localDio.post(
+        'http://$_deviceIp/student/heartbeat',
+        data: {'indexNumber': _markedIndexNumber},
+        options: Options(headers: {'Content-Type': 'application/json'}),
+      );
+    } catch (_) {}
+  }
+
+  Future<void> _sendLeftSignal() async {
+    if (_markedIndexNumber == null) return;
+    try {
+      final localDio = Dio(BaseOptions(
+        connectTimeout: const Duration(seconds: 3),
+        receiveTimeout: const Duration(seconds: 3),
+      ));
+      await localDio.post(
+        'http://$_deviceIp/student/left',
+        data: {'indexNumber': _markedIndexNumber},
+        options: Options(headers: {'Content-Type': 'application/json'}),
+      );
+      _markedIndexNumber = null;
+    } catch (_) {}
   }
 
   void _refreshQueue() {
@@ -53,9 +131,38 @@ class _OfflineAttendanceScreenState extends ConsumerState<OfflineAttendanceScree
     if (info != null) {
       setState(() => _esp32Info = info);
       ref.read(_esp32StatusProvider.notifier).state = _Esp32Status.found;
+      // Auto-send credential so enrollment is verified before the student types
+      if (!_credentialSent) _autoSendCredential(info);
     } else {
       ref.read(_esp32StatusProvider.notifier).state = _Esp32Status.notFound;
     }
+  }
+
+  /// Automatically send the cached offline credential to the ESP32 device.
+  /// This authorizes the user before they even touch the form.
+  Future<void> _autoSendCredential(Map<String, dynamic> deviceInfo) async {
+    final user = ref.read(authProvider).user;
+    if (user == null) return;
+
+    final role = user.role ?? 'student';
+    // ESP32 AP always assigns itself 192.168.4.1 as the gateway
+    final deviceIp = (deviceInfo['localIp'] as String?)?.isNotEmpty == true
+        ? deviceInfo['localIp'] as String
+        : '192.168.4.1';
+
+    final result = await OfflineCredentialService.sendToDevice(deviceIp, role);
+    if (!mounted) return;
+
+    if (result != null && result['ok'] == true) {
+      setState(() {
+        _credentialSent = true;
+        _lastSuccess = true;
+        _lastMessage = role == 'lecturer'
+            ? 'Verified as lecturer — you can start the session.'
+            : 'Identity verified — you are enrolled in this course.';
+      });
+    }
+    // Failure is silent — student can still mark via the form (roster check on device)
   }
 
   Future<void> _submitCode() async {
@@ -74,10 +181,12 @@ class _OfflineAttendanceScreenState extends ConsumerState<OfflineAttendanceScree
       );
       if (ok) {
         _codeCtrl.clear();
+        // Start presence heartbeat — keeps signalling device even without captive portal open
+        _startHeartbeat(user.indexNumber ?? user.id, _deviceIp);
         setState(() {
           _submitting = false;
           _lastSuccess = true;
-          _lastMessage = 'Attendance marked via local device!';
+          _lastMessage = 'Attendance marked! Presence tracking active.';
         });
         return;
       }

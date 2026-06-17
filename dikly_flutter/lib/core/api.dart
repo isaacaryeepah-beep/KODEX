@@ -83,6 +83,12 @@ class ApiService {
   }
 
   /// Flush all queued writes when back online.
+  /// Generic authenticated GET — returns parsed response data.
+  Future<dynamic> get(String path) async {
+    final response = await _dio.get(path);
+    return response.data;
+  }
+
   Future<void> flushWriteQueue() async {
     final queue = CacheService.getPendingWrites();
     if (queue.isEmpty) return;
@@ -378,6 +384,10 @@ class ApiService {
     final data = response.data;
     final list = data['users'] ?? data['data'] ?? [];
     return (list as List).map((e) => User.fromJson(e as Map<String, dynamic>)).toList();
+  }
+
+  Future<void> deleteUser(String userId) async {
+    await _dio.delete('/api/users/$userId');
   }
 
   // Admin-level pending approvals
@@ -921,6 +931,13 @@ class ApiService {
     final response = await _dio.get('/api/leaves/my');
     final data = response.data;
     final list = data['leaveRequests'] ?? data['leaves'] ?? data['data'] ?? [];
+    return (list as List).cast<Map<String, dynamic>>();
+  }
+
+  Future<List<Map<String, dynamic>>> getMyLeaveBalances() async {
+    final response = await _dio.get('/api/leave-balances/my');
+    final data = response.data;
+    final list = data['balances'] ?? [];
     return (list as List).cast<Map<String, dynamic>>();
   }
 
