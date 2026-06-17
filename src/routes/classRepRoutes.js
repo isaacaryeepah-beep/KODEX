@@ -1,8 +1,10 @@
 const express = require('express');
 const router = express.Router();
 const authenticate = require('../middleware/auth');
+const authenticateDevice = require('../middleware/deviceAuth');
 const ctrl = require('../controllers/classRepController');
 
+router.get('/bundle', authenticateDevice, ctrl.getDeviceBundle);
 router.get('/device',      authenticate, ctrl.getMyDevice);
 router.get('/lecturers',   authenticate, ctrl.getCourseLecturers);
 router.get('/search-lecturers', authenticate, ctrl.searchLecturers);

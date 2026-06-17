@@ -141,6 +141,7 @@ const userSchema = new mongoose.Schema(
     isClassRep:     { type: Boolean, default: false },
     classRepCourse: { type: mongoose.Schema.Types.ObjectId, ref: 'Course', sparse: true },
     classRepPin:    { type: String, select: false }, // 4-digit PIN lecturers set for verification
+    offlinePinHash: { type: String, select: false }, // HMAC hash for device-side offline PIN verification
 
     // ── Corporate profile fields ──────────────────────────────────────────
     // Granular corporate role used alongside the coarse `role` field.

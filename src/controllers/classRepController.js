@@ -1,7 +1,10 @@
 const bcrypt = require('bcryptjs');
+const crypto = require('crypto');
 const Device = require('../models/Device');
 const Course = require('../models/Course');
 const User = require('../models/User');
+
+const OFFLINE_PIN_PEPPER = 'dikly_offline_v1';
 
 const escapeRegex = s => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
@@ -128,8 +131,97 @@ exports.setLecturerPin = async (req, res, next) => {
     const { pin } = req.body;
     if (!pin || !/^\d{4}$/.test(String(pin))) return res.status(400).json({ error: 'PIN must be exactly 4 digits' });
     const hashed = await bcrypt.hash(String(pin), 10);
-    await User.findByIdAndUpdate(req.user._id, { classRepPin: hashed });
-    res.json({ ok: true, message: 'PIN set successfully' });
+    // Offline hash: HMAC-SHA256(pepper, lecturerId:pin) — verified by the ESP32 device without internet
+    const offlinePinHash = crypto.createHmac('sha256', OFFLINE_PIN_PEPPER)
+      .update(`${req.user._id}:${pin}`)
+      .digest('hex');
+    await User.findByIdAndUpdate(req.user._id, { classRepPin: hashed, offlinePinHash });
+    res.json({ ok: true, message: 'PIN set successfully', hasOfflinePin: true });
+  } catch (e) { next(e); }
+};
+
+// GET /api/class-rep/bundle — device fetches pre-auth bundle for offline session start
+// Authenticated with device JWT (authenticateDevice middleware)
+exports.getDeviceBundle = async (req, res, next) => {
+  try {
+    const device = req.device;
+    if (!device.classRepId) return res.status(400).json({ error: 'No class rep assigned to this device' });
+
+    const rep = await User.findById(device.classRepId)
+      .select('classRepCourse studentLevel studentGroup programme sessionType semester')
+      .lean();
+    if (!rep) return res.status(404).json({ error: 'Class rep not found' });
+
+    // Find all courses for this rep's class group
+    const query = { companyId: device.companyId, isActive: true };
+    if (rep.studentLevel) query.level   = rep.studentLevel;
+    if (rep.studentGroup) query.group   = rep.studentGroup;
+    if (rep.sessionType)  query.sessionType = rep.sessionType;
+    if (rep.semester)     query.semester = rep.semester;
+    if (rep.programme)    query.qualificationType = rep.programme;
+
+    const courses = await Course.find(query)
+      .select('_id title code lecturerId')
+      .lean();
+
+    // Collect all unique lecturer IDs across courses
+    const lecturerIds = [...new Set(courses.map(c => c.lecturerId?.toString()).filter(Boolean))];
+
+    // Also include lecturers from CourseLecturerAssignment if that model exists
+    let extraAssignments = [];
+    try {
+      const CLA = require('../models/CourseLecturerAssignment');
+      extraAssignments = await CLA.find({
+        course: { $in: courses.map(c => c._id) },
+        isActive: { $ne: false },
+      }).select('course lecturer').lean();
+      extraAssignments.forEach(a => {
+        const id = a.lecturer?.toString();
+        if (id && !lecturerIds.includes(id)) lecturerIds.push(id);
+      });
+    } catch (_) { /* model may not exist */ }
+
+    // Fetch lecturers with their offline hash
+    const lecturers = await User.find({
+      _id: { $in: lecturerIds },
+      company: device.companyId,
+      role: 'lecturer',
+      isActive: true,
+    }).select('+offlinePinHash name email').lean();
+
+    const lecturerMap = {};
+    lecturers.forEach(l => { lecturerMap[l._id.toString()] = l; });
+
+    // Build bundle: one entry per course, list of eligible lecturers
+    const bundleCourses = courses.map(course => {
+      const courseLecturerIds = [course.lecturerId?.toString()].filter(Boolean);
+      extraAssignments
+        .filter(a => a.course.toString() === course._id.toString())
+        .forEach(a => {
+          const id = a.lecturer?.toString();
+          if (id && !courseLecturerIds.includes(id)) courseLecturerIds.push(id);
+        });
+
+      return {
+        courseId:   course._id,
+        courseCode: course.code,
+        courseName: course.title,
+        lecturers: courseLecturerIds
+          .map(id => lecturerMap[id])
+          .filter(Boolean)
+          .map(l => ({
+            id:             l._id,
+            name:           l.name,
+            offlinePinHash: l.offlinePinHash || null,
+          })),
+      };
+    }).filter(c => c.lecturers.length > 0);
+
+    res.json({
+      bundle:    bundleCourses,
+      issuedAt:  Math.floor(Date.now() / 1000),
+      expiresAt: Math.floor(Date.now() / 1000) + 48 * 3600, // 48 h validity
+    });
   } catch (e) { next(e); }
 };
 
