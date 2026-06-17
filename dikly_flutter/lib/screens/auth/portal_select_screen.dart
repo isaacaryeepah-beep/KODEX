@@ -184,7 +184,13 @@ class _PortalSelectScreenState extends State<PortalSelectScreen> {
                             const SizedBox(height: 10),
                             Padding(
                               padding: const EdgeInsets.symmetric(horizontal: 12),
-                              child: Column(
+                              child: GridView.count(
+                                crossAxisCount: 2,
+                                crossAxisSpacing: 10,
+                                mainAxisSpacing: 10,
+                                childAspectRatio: 1.4,
+                                shrinkWrap: true,
+                                physics: const NeverScrollableScrollPhysics(),
                                 children: (_mode == 'corp' ? _corpRoles : _acadRoles)
                                     .map((r) => _RoleCard(
                                           role: r,
@@ -232,11 +238,9 @@ class _PortalSelectScreenState extends State<PortalSelectScreen> {
               ],
             ),
           ),
-        ),
+        ],
       ),
-    ],
-  ),
-);
+    );
   }
 }
 
@@ -364,21 +368,14 @@ class _RoleCard extends StatelessWidget {
     return GestureDetector(
       onTap: onTap,
       child: Container(
-        margin: const EdgeInsets.only(bottom: 8),
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 13),
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 16),
         decoration: BoxDecoration(
-          color: Colors.white,
+          color: const Color(0xFFF9FAFB),
           borderRadius: BorderRadius.circular(12),
           border: Border.all(color: const Color(0xFFE5E7EB)),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withOpacity(0.03),
-              blurRadius: 6,
-              offset: const Offset(0, 2),
-            ),
-          ],
         ),
-        child: Row(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
           children: [
             Container(
               width: 40,
@@ -389,33 +386,25 @@ class _RoleCard extends StatelessWidget {
               ),
               child: Icon(role.icon, color: role.color, size: 20),
             ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    role.label,
-                    style: GoogleFonts.dmSans(
-                      fontSize: 14,
-                      fontWeight: FontWeight.w700,
-                      color: const Color(0xFF111827),
-                    ),
-                  ),
-                  Text(
-                    role.sublabel,
-                    style: GoogleFonts.dmSans(
-                      fontSize: 12,
-                      color: const Color(0xFF6B7280),
-                    ),
-                  ),
-                ],
+            const SizedBox(height: 10),
+            Text(
+              role.label,
+              style: GoogleFonts.dmSans(
+                fontSize: 14,
+                fontWeight: FontWeight.w700,
+                color: const Color(0xFF111827),
               ),
             ),
-            const Icon(
-              Icons.arrow_forward_ios_rounded,
-              size: 14,
-              color: Color(0xFF9CA3AF),
+            const SizedBox(height: 2),
+            Text(
+              role.sublabel,
+              textAlign: TextAlign.center,
+              style: GoogleFonts.dmSans(
+                fontSize: 11,
+                color: const Color(0xFF6B7280),
+              ),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
             ),
           ],
         ),

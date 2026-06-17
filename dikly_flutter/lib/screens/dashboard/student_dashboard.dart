@@ -106,31 +106,35 @@ class _StudentDashboardState extends ConsumerState<StudentDashboard> {
           crossAxisCount: 2,
           crossAxisSpacing: 12,
           mainAxisSpacing: 12,
-          childAspectRatio: 1.8,
+          childAspectRatio: 1.35,
           shrinkWrap: true,
           physics: const NeverScrollableScrollPhysics(),
           children: [
-            DiklyStatCard(
+            WebStatCard(
               label: 'Pending Tasks',
               value: '$_pendingAssignments',
+              subtitle: _pendingAssignments > 0 ? 'Needs attention' : 'All clear',
               color: DiklyColors.warning,
               icon: Icons.assignment_outlined,
             ),
-            DiklyStatCard(
+            WebStatCard(
               label: 'Attended',
               value: '$_presentSessions',
+              subtitle: 'Sessions',
               color: DiklyColors.success,
               icon: Icons.fact_check_outlined,
             ),
-            DiklyStatCard(
+            WebStatCard(
               label: 'Upcoming',
               value: '${_meetings.length}',
+              subtitle: 'Scheduled',
               color: DiklyColors.primary,
               icon: Icons.video_call_outlined,
             ),
-            DiklyStatCard(
+            WebStatCard(
               label: 'Sessions',
               value: '${_sessions.length}',
+              subtitle: 'All time',
               color: const Color(0xFF7C3AED),
               icon: Icons.school_outlined,
             ),
