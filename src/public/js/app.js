@@ -7879,6 +7879,18 @@ async function showCreateQuizModal() {
             <option value="">Select a course</option>
             ${courses.map(c => `<option value="${c._id}">${esc(c.title)}${c.level?' · L'+c.level:''}${c.group?' · Grp '+c.group:''}</option>`).join('')}
           </select></div>
+          <div class="form-group">
+            <label>Target Audience</label>
+            <select id="cq-audience" style="width:100%;padding:8px;border:1px solid #d1d5db;border-radius:6px;" onchange="document.getElementById('cq-group-row').style.display=this.value==='group'?'block':'none'">
+              <option value="all">All enrolled students</option>
+              <option value="group">Specific group only</option>
+            </select>
+          </div>
+          <div class="form-group" id="cq-group-row" style="display:none">
+            <label>Group *</label>
+            <input type="text" id="cq-group" placeholder="e.g. A, B, C" style="width:100%;padding:8px;border:1px solid #d1d5db;border-radius:6px;">
+            <p style="font-size:11px;color:#9ca3af;margin-top:4px">Only students in this group will see the quiz.</p>
+          </div>
           <div class="form-group"><label>Time Limit (minutes)</label><input type="number" id="cq-timelimit" value="30" min="1" style="width:100%;padding:8px;border:1px solid #d1d5db;border-radius:6px;"></div>
           <div class="form-group"><label>Start Time *</label><input type="datetime-local" id="cq-start" style="width:100%;padding:8px;border:1px solid #d1d5db;border-radius:6px;"></div>
           <div class="form-group"><label>End Time *</label><input type="datetime-local" id="cq-end" style="width:100%;padding:8px;border:1px solid #d1d5db;border-radius:6px;"></div>
@@ -7915,10 +7927,17 @@ async function submitCreateQuiz() {
   const endTime = document.getElementById('cq-end').value;
   const maxAttempts = parseInt(document.getElementById('cq-max-attempts')?.value ?? '1');
   const scorePolicy = document.getElementById('cq-score-policy')?.value || 'best';
+  const targetAudience = document.getElementById('cq-audience')?.value || 'all';
+  const targetGroup = (document.getElementById('cq-group')?.value || '').trim();
   const errEl = document.getElementById('cq-error');
 
   if (!title || !courseId || !startTime || !endTime) {
     errEl.textContent = 'Please fill in all required fields.';
+    errEl.style.display = 'block';
+    return;
+  }
+  if (targetAudience === 'group' && !targetGroup) {
+    errEl.textContent = 'Please enter the group name/letter.';
     errEl.style.display = 'block';
     return;
   }
@@ -7928,7 +7947,7 @@ async function submitCreateQuiz() {
   try {
     const data = await api('/api/lecturer/quizzes', {
       method: 'POST',
-      body: JSON.stringify({ title, description, courseId, timeLimit, startTime: new Date(startTime).toISOString(), endTime: new Date(endTime).toISOString(), maxAttempts: isNaN(maxAttempts) ? 1 : maxAttempts, scorePolicy })
+      body: JSON.stringify({ title, description, courseId, timeLimit, startTime: new Date(startTime).toISOString(), endTime: new Date(endTime).toISOString(), maxAttempts: isNaN(maxAttempts) ? 1 : maxAttempts, scorePolicy, targetAudience, targetGroup: targetAudience === 'group' ? targetGroup : null })
     });
     closeQuizModal();
     showAddQuestionsView(data.quiz._id);
