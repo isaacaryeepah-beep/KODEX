@@ -25,73 +25,36 @@ class LecturerHomeScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final user      = ref.watch(authProvider).user;
     final dashAsync = ref.watch(_lecturerDashProvider);
-    final firstName = (user?.name ?? 'Lecturer').split(' ').first;
 
-    return Column(
-      children: [
-        // ── Page header ───────────────────────────────────────────────
-        dashAsync.when(
-          data: (d) => DiklyHeroSection(
-            gradient: _theme.gradient,
-            greeting: 'Welcome back, $firstName',
-            subtitle: [
-              user?.department ?? '',
-              user?.company ?? user?.institutionCode ?? 'Lecturer Portal',
-            ].where((s) => s.isNotEmpty).join(' · '),
-            stats: [
-              DiklyHeaderStat(value: '${d['totalStudents'] ?? 0}',  label: 'Students', icon: Icons.people_outlined),
-              DiklyHeaderStat(value: '${d['activeCourses'] ?? 0}',  label: 'Courses',  icon: Icons.school_outlined),
-              DiklyHeaderStat(value: '${d['totalSessions'] ?? 0}',  label: 'Sessions', icon: Icons.video_call_outlined),
+    return Container(
+      color: const Color(0xFFF4F6F9),
+      child: RefreshIndicator(
+        onRefresh: () async => ref.invalidate(_lecturerDashProvider),
+        color: _theme.primary,
+        child: dashAsync.when(
+          loading: () => ListView(
+            padding: const EdgeInsets.all(16),
+            children: const [
+              SizedBox(height: 8),
+              DiklyShimmerCard(height: 72),
+              SizedBox(height: 16),
+              DiklyShimmerGrid(),
+              SizedBox(height: 20),
+              DiklyShimmerList(count: 4),
             ],
           ),
-          loading: () => DiklyHeroSection(
-            gradient: _theme.gradient,
-            greeting: 'Welcome back, $firstName',
-            subtitle: user?.institutionCode ?? 'Lecturer Portal',
-            stats: const [
-              DiklyHeaderStat(value: '—', label: 'Students'),
-              DiklyHeaderStat(value: '—', label: 'Courses'),
-              DiklyHeaderStat(value: '—', label: 'Sessions'),
+          error: (e, _) => ListView(
+            padding: const EdgeInsets.all(24),
+            children: [
+              DiklyErrorView(
+                message: e.toString().replaceAll('Exception: ', ''),
+                onRetry: () => ref.invalidate(_lecturerDashProvider),
+              ),
             ],
           ),
-          error: (_, __) => DiklyHeroSection(
-            gradient: _theme.gradient,
-            greeting: 'Welcome back, $firstName',
-            subtitle: user?.institutionCode ?? 'Lecturer Portal',
-            stats: const [],
-          ),
+          data: (d) => _buildContent(context, ref, d, user),
         ),
-
-        // ── Body ─────────────────────────────────────────────────────
-        DiklyPageBody(
-          child: RefreshIndicator(
-            onRefresh: () async => ref.invalidate(_lecturerDashProvider),
-            color: _theme.primary,
-            child: dashAsync.when(
-              loading: () => ListView(
-                padding: const EdgeInsets.all(16),
-                children: const [
-                  DiklyShimmerCard(height: 48, borderRadius: 999),
-                  SizedBox(height: 20),
-                  DiklyShimmerGrid(),
-                  SizedBox(height: 20),
-                  DiklyShimmerList(count: 4),
-                ],
-              ),
-              error: (e, _) => ListView(
-                padding: const EdgeInsets.all(24),
-                children: [
-                  DiklyErrorView(
-                    message: e.toString().replaceAll('Exception: ', ''),
-                    onRetry: () => ref.invalidate(_lecturerDashProvider),
-                  ),
-                ],
-              ),
-              data: (d) => _buildContent(context, ref, d, user),
-            ),
-          ),
-        ),
-      ],
+      ),
     );
   }
 
@@ -332,6 +295,7 @@ class _WebStatCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
+      clipBehavior: Clip.antiAlias,
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(12),
@@ -340,32 +304,39 @@ class _WebStatCard extends StatelessWidget {
           BoxShadow(color: Color(0x08000000), blurRadius: 4, offset: Offset(0, 1)),
         ],
       ),
-      child: Center(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Text(
-              value,
-              style: GoogleFonts.dmSans(
-                fontSize: 26,
-                fontWeight: FontWeight.w800,
-                color: color,
-                height: 1.1,
+      child: Column(
+        children: [
+          Container(height: 4, color: color),
+          Expanded(
+            child: Center(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    value,
+                    style: GoogleFonts.dmSans(
+                      fontSize: 26,
+                      fontWeight: FontWeight.w800,
+                      color: color,
+                      height: 1.1,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    label,
+                    textAlign: TextAlign.center,
+                    style: GoogleFonts.dmSans(
+                      fontSize: 10,
+                      fontWeight: FontWeight.w600,
+                      color: const Color(0xFF6B7280),
+                      letterSpacing: 0.8,
+                    ),
+                  ),
+                ],
               ),
             ),
-            const SizedBox(height: 4),
-            Text(
-              label,
-              textAlign: TextAlign.center,
-              style: GoogleFonts.dmSans(
-                fontSize: 10,
-                fontWeight: FontWeight.w600,
-                color: const Color(0xFF6B7280),
-                letterSpacing: 0.8,
-              ),
-            ),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }

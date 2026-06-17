@@ -27,75 +27,41 @@ class StudentHomeScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final user = ref.watch(authProvider).user;
     final dashAsync = ref.watch(_studentDashProvider);
-    final firstName = (user?.name ?? 'Student').split(' ').first;
 
     final isLocked = user?.deviceLocked == true &&
         user?.deviceLockedUntil != null &&
         user!.deviceLockedUntil!.isAfter(DateTime.now());
     final lockUntil = user?.deviceLockedUntil;
 
-    return Column(
-      children: [
-        // ── Page header (web style: white, clean) ─────────────────────
-        dashAsync.when(
-          data: (d) => DiklyHeroSection(
-            gradient: _theme.gradient,
-            greeting: 'Welcome back, $firstName',
-            subtitle: user?.company ?? user?.institutionCode ?? 'Student Portal',
-            stats: [
-              DiklyHeaderStat(value: '${d['totalCheckIns'] ?? 0}',   label: 'Check-ins',  icon: Icons.fact_check_outlined),
-              DiklyHeaderStat(value: '${d['attendanceRate'] ?? 0}%', label: 'Attendance', icon: Icons.trending_up_rounded),
-              DiklyHeaderStat(value: '${d['enrolledCourses'] ?? 0}', label: 'Courses',    icon: Icons.school_outlined),
+    return Container(
+      color: const Color(0xFFF4F6F9),
+      child: RefreshIndicator(
+        onRefresh: () async => ref.invalidate(_studentDashProvider),
+        color: _theme.primary,
+        child: dashAsync.when(
+          loading: () => ListView(
+            padding: const EdgeInsets.all(16),
+            children: const [
+              SizedBox(height: 8),
+              DiklyShimmerCard(height: 72),
+              SizedBox(height: 16),
+              DiklyShimmerGrid(),
+              SizedBox(height: 20),
+              DiklyShimmerList(count: 4),
             ],
           ),
-          loading: () => DiklyHeroSection(
-            gradient: _theme.gradient,
-            greeting: 'Welcome back, $firstName',
-            subtitle: user?.institutionCode ?? 'Student Portal',
-            stats: const [
-              DiklyHeaderStat(value: '—', label: 'Check-ins'),
-              DiklyHeaderStat(value: '—', label: 'Attendance'),
-              DiklyHeaderStat(value: '—', label: 'Courses'),
+          error: (e, _) => ListView(
+            padding: const EdgeInsets.all(24),
+            children: [
+              DiklyErrorView(
+                message: e.toString().replaceAll('Exception: ', ''),
+                onRetry: () => ref.invalidate(_studentDashProvider),
+              ),
             ],
           ),
-          error: (_, __) => DiklyHeroSection(
-            gradient: _theme.gradient,
-            greeting: 'Welcome back, $firstName',
-            subtitle: user?.institutionCode ?? 'Student Portal',
-            stats: const [],
-          ),
+          data: (d) => _buildContent(context, ref, d, user, isLocked, lockUntil),
         ),
-
-        // ── Body ──────────────────────────────────────────────────────
-        DiklyPageBody(
-          child: RefreshIndicator(
-            onRefresh: () async => ref.invalidate(_studentDashProvider),
-            color: _theme.primary,
-            child: dashAsync.when(
-              loading: () => ListView(
-                padding: const EdgeInsets.all(16),
-                children: const [
-                  DiklyShimmerCard(height: 48, borderRadius: 999),
-                  SizedBox(height: 20),
-                  DiklyShimmerGrid(),
-                  SizedBox(height: 20),
-                  DiklyShimmerList(count: 4),
-                ],
-              ),
-              error: (e, _) => ListView(
-                padding: const EdgeInsets.all(24),
-                children: [
-                  DiklyErrorView(
-                    message: e.toString().replaceAll('Exception: ', ''),
-                    onRetry: () => ref.invalidate(_studentDashProvider),
-                  ),
-                ],
-              ),
-              data: (d) => _buildContent(context, ref, d, user, isLocked, lockUntil),
-            ),
-          ),
-        ),
-      ],
+      ),
     );
   }
 
@@ -111,9 +77,43 @@ class StudentHomeScreen extends ConsumerWidget {
     final attendance  = (d['recentAttendance']    as List? ?? []);
     final activeSession = d['activeSession'] as Map<String, dynamic>?;
 
+    final firstName = (user?.name ?? 'Student').split(' ').first;
+    final instCode  = user?.institutionCode ?? '';
+
     return ListView(
       padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
       children: [
+        // ── Greeting row (flat white, web style) ──────────────────────
+        DiklyFadeIn(
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Welcome back, $firstName',
+                      style: GoogleFonts.dmSans(
+                        fontSize: 22,
+                        fontWeight: FontWeight.w800,
+                        color: DiklyColors.text,
+                        height: 1.2,
+                      ),
+                    ),
+                    const SizedBox(height: 3),
+                    Text(
+                      user?.company ?? user?.institutionCode ?? 'Student Portal',
+                      style: GoogleFonts.dmSans(fontSize: 13, color: DiklyColors.textMuted),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 16),
+
         // Device lock warning
         if (isLocked && lockUntil != null) ...[
           _DeviceLockBanner(until: lockUntil),
@@ -276,6 +276,7 @@ class _WebStatCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
+      clipBehavior: Clip.antiAlias,
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(12),
@@ -284,32 +285,39 @@ class _WebStatCard extends StatelessWidget {
           BoxShadow(color: Color(0x08000000), blurRadius: 4, offset: Offset(0, 1)),
         ],
       ),
-      child: Center(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Text(
-              value,
-              style: GoogleFonts.dmSans(
-                fontSize: 26,
-                fontWeight: FontWeight.w800,
-                color: color,
-                height: 1.1,
+      child: Column(
+        children: [
+          Container(height: 4, color: color),
+          Expanded(
+            child: Center(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    value,
+                    style: GoogleFonts.dmSans(
+                      fontSize: 26,
+                      fontWeight: FontWeight.w800,
+                      color: color,
+                      height: 1.1,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    label,
+                    textAlign: TextAlign.center,
+                    style: GoogleFonts.dmSans(
+                      fontSize: 10,
+                      fontWeight: FontWeight.w600,
+                      color: const Color(0xFF6B7280),
+                      letterSpacing: 0.8,
+                    ),
+                  ),
+                ],
               ),
             ),
-            const SizedBox(height: 4),
-            Text(
-              label,
-              textAlign: TextAlign.center,
-              style: GoogleFonts.dmSans(
-                fontSize: 10,
-                fontWeight: FontWeight.w600,
-                color: const Color(0xFF6B7280),
-                letterSpacing: 0.8,
-              ),
-            ),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }
