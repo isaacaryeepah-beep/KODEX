@@ -1,7 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:google_fonts/google_fonts.dart';
+import 'package:intl/intl.dart';
 import '../../core/api.dart';
 import '../../core/theme.dart';
+import '../../widgets/ds/dikly_ds.dart';
 
 final _corporateAttendanceProvider = FutureProvider.autoDispose<List<Map<String, dynamic>>>((ref) =>
     apiService.getCorporateAttendance());
@@ -14,211 +17,113 @@ class CorporateAttendanceScreen extends ConsumerStatefulWidget {
 }
 
 class _CorporateAttendanceScreenState extends ConsumerState<CorporateAttendanceScreen> {
-  late DateTime _weekStart;
-  late DateTime _weekEnd;
+  int _tabIndex = 0; // 0 = Records, 1 = Blocked Attempts
+  late DateTime _from;
+  late DateTime _to;
 
   @override
   void initState() {
     super.initState();
-    _setCurrentWeek();
-  }
-
-  void _setCurrentWeek() {
     final now = DateTime.now();
-    _weekStart = now.subtract(Duration(days: now.weekday - 1));
-    _weekStart = DateTime(_weekStart.year, _weekStart.month, _weekStart.day);
-    _weekEnd = _weekStart.add(const Duration(days: 6));
+    _from = now.subtract(const Duration(days: 30));
+    _to = now;
   }
 
-  void _previousWeek() {
-    setState(() {
-      _weekStart = _weekStart.subtract(const Duration(days: 7));
-      _weekEnd = _weekEnd.subtract(const Duration(days: 7));
-    });
-  }
-
-  void _nextWeek() {
-    setState(() {
-      _weekStart = _weekStart.add(const Duration(days: 7));
-      _weekEnd = _weekEnd.add(const Duration(days: 7));
-    });
-  }
-
-  String _formatDate(DateTime d) =>
-      '${d.day}/${d.month}/${d.year}';
-
-  String _formatShort(DateTime d) {
-    const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-    return '${d.day} ${months[d.month - 1]}';
+  Future<void> _pickDate({required bool isFrom}) async {
+    final picked = await showDatePicker(
+      context: context,
+      initialDate: isFrom ? _from : _to,
+      firstDate: DateTime(2020),
+      lastDate: DateTime.now().add(const Duration(days: 1)),
+      builder: (ctx, child) => Theme(
+        data: Theme.of(ctx).copyWith(
+          colorScheme: const ColorScheme.light(primary: Color(0xFF1D4ED8)),
+        ),
+        child: child!,
+      ),
+    );
+    if (picked != null) {
+      setState(() {
+        if (isFrom) {
+          _from = picked;
+        } else {
+          _to = picked;
+        }
+      });
+    }
   }
 
   @override
   Widget build(BuildContext context) {
     final async = ref.watch(_corporateAttendanceProvider);
+    final dateFmt = DateFormat('MM/dd/yyyy');
 
     return Scaffold(
       backgroundColor: DiklyColors.background,
       appBar: AppBar(
         title: const Text('Team Attendance'),
         backgroundColor: DiklyColors.surface,
+        elevation: 0,
+        surfaceTintColor: Colors.transparent,
       ),
       body: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Date Range Filter
+          // ── Tabs ────────────────────────────────────────────────────────
           Container(
             color: DiklyColors.surface,
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-            child: Row(
+            padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                IconButton(
-                  icon: const Icon(Icons.chevron_left),
-                  onPressed: _previousWeek,
-                  visualDensity: VisualDensity.compact,
-                  style: IconButton.styleFrom(
-                    backgroundColor: DiklyColors.background,
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                  ),
+                Row(
+                  children: [
+                    _TabButton(label: 'Records', active: _tabIndex == 0, onTap: () => setState(() => _tabIndex = 0)),
+                    const SizedBox(width: 8),
+                    _TabButton(label: 'Blocked Attempts', active: _tabIndex == 1, onTap: () => setState(() => _tabIndex = 1)),
+                  ],
                 ),
-                Expanded(
-                  child: GestureDetector(
-                    onTap: () async {
-                      final range = await showDateRangePicker(
-                        context: context,
-                        firstDate: DateTime(2020),
-                        lastDate: DateTime.now().add(const Duration(days: 365)),
-                        initialDateRange: DateTimeRange(start: _weekStart, end: _weekEnd),
-                        builder: (ctx, child) => Theme(
-                          data: Theme.of(ctx).copyWith(
-                            colorScheme: const ColorScheme.light(
-                              primary: Color(0xFF0369A1),
-                            ),
-                          ),
-                          child: child!,
-                        ),
-                      );
-                      if (range != null) {
-                        setState(() {
-                          _weekStart = range.start;
-                          _weekEnd = range.end;
-                        });
-                      }
-                    },
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(vertical: 8),
-                      child: Column(
-                        children: [
-                          const Text(
-                            'Selected Range',
-                            style: TextStyle(
-                              fontSize: 11,
-                              color: DiklyColors.textSecondary,
-                            ),
-                          ),
-                          Text(
-                            '${_formatShort(_weekStart)} – ${_formatShort(_weekEnd)}',
-                            style: const TextStyle(
-                              fontSize: 14,
-                              fontWeight: FontWeight.w700,
-                              color: DiklyColors.textPrimary,
-                            ),
-                          ),
-                        ],
+                const SizedBox(height: 12),
+                // ── Date range ───────────────────────────────────────────
+                Row(
+                  children: [
+                    Text('From', style: GoogleFonts.dmSans(fontSize: 13, color: DiklyColors.textSecondary)),
+                    const SizedBox(width: 8),
+                    _DateBox(date: _from, fmt: dateFmt, onTap: () => _pickDate(isFrom: true)),
+                    const SizedBox(width: 10),
+                    Text('To', style: GoogleFonts.dmSans(fontSize: 13, color: DiklyColors.textSecondary)),
+                    const SizedBox(width: 8),
+                    _DateBox(date: _to, fmt: dateFmt, onTap: () => _pickDate(isFrom: false)),
+                    const SizedBox(width: 10),
+                    ElevatedButton(
+                      onPressed: () => ref.refresh(_corporateAttendanceProvider),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: const Color(0xFF1D4ED8),
+                        foregroundColor: Colors.white,
+                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
+                        elevation: 0,
                       ),
+                      child: Text('Filter', style: GoogleFonts.dmSans(fontSize: 13, fontWeight: FontWeight.w600)),
                     ),
-                  ),
+                  ],
                 ),
-                IconButton(
-                  icon: const Icon(Icons.chevron_right),
-                  onPressed: _nextWeek,
-                  visualDensity: VisualDensity.compact,
-                  style: IconButton.styleFrom(
-                    backgroundColor: DiklyColors.background,
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                  ),
-                ),
+                const SizedBox(height: 12),
               ],
             ),
           ),
           const Divider(height: 1),
+
+          // ── Body ────────────────────────────────────────────────────────
           Expanded(
-            child: async.when(
-              loading: () => const Center(child: CircularProgressIndicator()),
-              error: (e, _) => Center(
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    const Icon(Icons.error_outline, size: 48, color: DiklyColors.error),
-                    const SizedBox(height: 12),
-                    const Text('Failed to load attendance data'),
-                    TextButton(
-                      onPressed: () => ref.refresh(_corporateAttendanceProvider),
-                      child: const Text('Retry'),
-                    ),
-                  ],
-                ),
-              ),
-              data: (records) {
-                if (records.isEmpty) {
-                  return const Center(
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Icon(Icons.people_outline, size: 56, color: DiklyColors.border),
-                        SizedBox(height: 12),
-                        Text(
-                          'No attendance records found',
-                          style: TextStyle(color: DiklyColors.textSecondary),
-                        ),
-                      ],
-                    ),
-                  );
-                }
-
-                // Compute summary stats
-                int totalPresent = 0;
-                int totalAbsent = 0;
-                int totalLate = 0;
-                int totalOnLeave = 0;
-
-                for (final r in records) {
-                  final status = r['status']?.toString().toLowerCase() ?? '';
-                  final clockedIn = r['isClockedIn'] == true;
-                  if (clockedIn || status == 'present') totalPresent++;
-                  else if (status == 'absent') totalAbsent++;
-                  else if (status == 'late') totalLate++;
-                  else if (status == 'leave' || status == 'on_leave') totalOnLeave++;
-                }
-
-                return RefreshIndicator(
-                  onRefresh: () async => ref.refresh(_corporateAttendanceProvider),
-                  child: ListView(
-                    padding: const EdgeInsets.all(16),
-                    children: [
-                      _SummaryStats(
-                        present: totalPresent,
-                        absent: totalAbsent,
-                        lateCount: totalLate,
-                        onLeave: totalOnLeave,
-                      ),
-                      const SizedBox(height: 20),
-                      const Text(
-                        'Employee Attendance',
-                        style: TextStyle(
-                          fontSize: 15,
-                          fontWeight: FontWeight.w700,
-                          color: DiklyColors.textPrimary,
-                        ),
-                      ),
-                      const SizedBox(height: 12),
-                      ...records.map((r) => _EmployeeAttendanceRow(
-                        record: r,
-                        weekStart: _weekStart,
-                      )),
-                    ],
+            child: _tabIndex == 1
+                ? _BlockedAttemptsView()
+                : _RecordsView(
+                    async: async,
+                    from: _from,
+                    to: _to,
+                    onRefresh: () async => ref.refresh(_corporateAttendanceProvider),
                   ),
-                );
-              },
-            ),
           ),
         ],
       ),
@@ -226,203 +131,212 @@ class _CorporateAttendanceScreenState extends ConsumerState<CorporateAttendanceS
   }
 }
 
-class _SummaryStats extends StatelessWidget {
-  final int present;
-  final int absent;
-  final int lateCount;
-  final int onLeave;
-
-  const _SummaryStats({
-    required this.present,
-    required this.absent,
-    required this.lateCount,
-    required this.onLeave,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Row(
-      children: [
-        Expanded(child: _StatBox(label: 'Present', value: present.toString(), color: DiklyColors.success, icon: Icons.check_circle_outline)),
-        const SizedBox(width: 8),
-        Expanded(child: _StatBox(label: 'Absent', value: absent.toString(), color: DiklyColors.error, icon: Icons.cancel_outlined)),
-        const SizedBox(width: 8),
-        Expanded(child: _StatBox(label: 'Late', value: lateCount.toString(), color: DiklyColors.warning, icon: Icons.access_time_outlined)),
-        const SizedBox(width: 8),
-        Expanded(child: _StatBox(label: 'On Leave', value: onLeave.toString(), color: DiklyColors.primary, icon: Icons.event_outlined)),
-      ],
-    );
-  }
-}
-
-class _StatBox extends StatelessWidget {
+class _TabButton extends StatelessWidget {
   final String label;
-  final String value;
-  final Color color;
-  final IconData icon;
-
-  const _StatBox({
-    required this.label,
-    required this.value,
-    required this.color,
-    required this.icon,
-  });
+  final bool active;
+  final VoidCallback onTap;
+  const _TabButton({required this.label, required this.active, required this.onTap});
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 6),
-      decoration: BoxDecoration(
-        color: color.withOpacity(0.08),
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: color.withOpacity(0.2)),
-      ),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(icon, color: color, size: 18),
-          const SizedBox(height: 4),
-          Text(
-            value,
-            style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800, color: color),
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
+        decoration: BoxDecoration(
+          color: active ? const Color(0xFF1D4ED8) : Colors.transparent,
+          borderRadius: BorderRadius.circular(6),
+          border: Border.all(color: active ? const Color(0xFF1D4ED8) : DiklyColors.border),
+        ),
+        child: Text(
+          label,
+          style: GoogleFonts.dmSans(
+            fontSize: 13,
+            fontWeight: FontWeight.w600,
+            color: active ? Colors.white : DiklyColors.textSecondary,
           ),
-          const SizedBox(height: 2),
-          Text(
-            label,
-            style: const TextStyle(fontSize: 9, fontWeight: FontWeight.w500, color: DiklyColors.textSecondary),
-            textAlign: TextAlign.center,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-          ),
-        ],
+        ),
       ),
+    );
+  }
+}
+
+class _DateBox extends StatelessWidget {
+  final DateTime date;
+  final DateFormat fmt;
+  final VoidCallback onTap;
+  const _DateBox({required this.date, required this.fmt, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(6),
+          border: Border.all(color: DiklyColors.border),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(fmt.format(date), style: GoogleFonts.dmSans(fontSize: 13, color: DiklyColors.text)),
+            const SizedBox(width: 6),
+            const Icon(Icons.calendar_today_outlined, size: 14, color: DiklyColors.textMuted),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _RecordsView extends StatelessWidget {
+  final AsyncValue<List<Map<String, dynamic>>> async;
+  final DateTime from;
+  final DateTime to;
+  final Future<void> Function() onRefresh;
+
+  const _RecordsView({required this.async, required this.from, required this.to, required this.onRefresh});
+
+  @override
+  Widget build(BuildContext context) {
+    return async.when(
+      loading: () => const Center(child: CircularProgressIndicator()),
+      error: (e, _) => DiklyErrorView(message: 'Failed to load attendance data', onRetry: onRefresh),
+      data: (records) {
+        // Filter by date range
+        final filtered = records.where((r) {
+          final raw = r['date']?.toString() ?? '';
+          final dt = DateTime.tryParse(raw);
+          if (dt == null) return true;
+          return !dt.isBefore(from) && !dt.isAfter(to.add(const Duration(days: 1)));
+        }).toList();
+
+        if (filtered.isEmpty) {
+          return RefreshIndicator(
+            onRefresh: onRefresh,
+            child: ListView(
+              padding: const EdgeInsets.all(16),
+              children: [
+                Container(
+                  margin: const EdgeInsets.only(top: 20),
+                  padding: const EdgeInsets.symmetric(vertical: 40),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(10),
+                    border: Border.all(color: DiklyColors.border),
+                  ),
+                  child: Center(
+                    child: Text('No attendance records found for this period.',
+                        style: GoogleFonts.dmSans(fontSize: 13, color: DiklyColors.textMuted)),
+                  ),
+                ),
+              ],
+            ),
+          );
+        }
+
+        return RefreshIndicator(
+          onRefresh: onRefresh,
+          child: ListView(
+            padding: const EdgeInsets.all(16),
+            children: filtered.map((r) => _EmployeeAttendanceRow(record: r)).toList(),
+          ),
+        );
+      },
+    );
+  }
+}
+
+class _BlockedAttemptsView extends StatelessWidget {
+  @override
+  Widget build(BuildContext context) {
+    return ListView(
+      padding: const EdgeInsets.all(16),
+      children: [
+        Container(
+          margin: const EdgeInsets.only(top: 20),
+          padding: const EdgeInsets.symmetric(vertical: 40),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(10),
+            border: Border.all(color: DiklyColors.border),
+          ),
+          child: Center(
+            child: Text('No blocked attempts for this period.',
+                style: GoogleFonts.dmSans(fontSize: 13, color: DiklyColors.textMuted)),
+          ),
+        ),
+      ],
     );
   }
 }
 
 class _EmployeeAttendanceRow extends StatelessWidget {
   final Map<String, dynamic> record;
-  final DateTime weekStart;
+  const _EmployeeAttendanceRow({required this.record});
 
-  const _EmployeeAttendanceRow({required this.record, required this.weekStart});
-
-  static const _dayLetters = ['M', 'T', 'W', 'T', 'F', 'S', 'S'];
-
-  Color _dotColor(String? dayStatus) {
-    switch ((dayStatus ?? '').toLowerCase()) {
-      case 'present':
-      case 'clocked_in': return DiklyColors.success;
-      case 'absent': return DiklyColors.error;
-      case 'late': return DiklyColors.warning;
-      case 'leave':
-      case 'on_leave': return DiklyColors.primary;
-      default: return DiklyColors.border;
+  Color _statusColor(String? s) {
+    switch ((s ?? '').toLowerCase()) {
+      case 'present': case 'clocked_in': return const Color(0xFF059669);
+      case 'absent': return const Color(0xFFDC2626);
+      case 'late': return const Color(0xFFD97706);
+      case 'leave': case 'on_leave': return const Color(0xFF2563EB);
+      default: return const Color(0xFF6B7280);
     }
   }
 
   @override
   Widget build(BuildContext context) {
     final name = record['name']?.toString() ?? record['employeeName']?.toString() ?? 'Employee';
-    final initials = name.trim().isNotEmpty
-        ? name.trim().split(' ').take(2).map((w) => w.isNotEmpty ? w[0].toUpperCase() : '').join()
-        : 'E';
+    final initials = name.trim().split(' ').map((w) => w.isNotEmpty ? w[0].toUpperCase() : '').take(2).join();
+    final isClockedIn = record['isClockedIn'] == true;
+    final status = isClockedIn ? 'present' : record['status']?.toString() ?? '';
+    final color = _statusColor(status);
 
-    // Try to extract per-day data
-    final weekData = record['weekData'] as List? ??
-        record['days'] as List? ??
-        record['attendance'] as List? ??
-        [];
+    final date = record['date']?.toString();
+    String? dateLabel;
+    if (date != null) {
+      final dt = DateTime.tryParse(date);
+      if (dt != null) dateLabel = DateFormat('MMM d, yyyy').format(dt);
+    }
 
     return Container(
       margin: const EdgeInsets.only(bottom: 10),
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-        color: DiklyColors.surface,
-        borderRadius: BorderRadius.circular(12),
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(10),
         border: Border.all(color: DiklyColors.border),
       ),
       child: Row(
         children: [
           CircleAvatar(
             radius: 18,
-            backgroundColor: const Color(0xFF0369A1).withOpacity(0.12),
-            child: Text(
-              initials,
-              style: const TextStyle(
-                fontSize: 12,
-                fontWeight: FontWeight.w700,
-                color: Color(0xFF0369A1),
-              ),
-            ),
+            backgroundColor: const Color(0xFF1D4ED8).withOpacity(0.1),
+            child: Text(initials.isEmpty ? '?' : initials,
+                style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: Color(0xFF1D4ED8))),
           ),
           const SizedBox(width: 12),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(
-                  name,
-                  style: const TextStyle(
-                    fontSize: 14,
-                    fontWeight: FontWeight.w600,
-                    color: DiklyColors.textPrimary,
-                  ),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                ),
-                const SizedBox(height: 6),
-                Row(
-                  children: List.generate(7, (i) {
-                    String? dayStatus;
-                    if (weekData.length > i) {
-                      final dayRecord = weekData[i];
-                      if (dayRecord is Map) {
-                        dayStatus = dayRecord['status']?.toString();
-                      }
-                    } else {
-                      // Fallback: use overall status for "today" if known
-                      final today = DateTime.now();
-                      final dayDate = weekStart.add(Duration(days: i));
-                      if (dayDate.day == today.day &&
-                          dayDate.month == today.month &&
-                          dayDate.year == today.year) {
-                        dayStatus = record['isClockedIn'] == true ? 'present' : record['status']?.toString();
-                      }
-                    }
-
-                    final dotColor = _dotColor(dayStatus);
-
-                    return Expanded(
-                      child: Column(
-                        children: [
-                          Text(
-                            _dayLetters[i],
-                            style: const TextStyle(
-                              fontSize: 9,
-                              color: DiklyColors.textSecondary,
-                            ),
-                          ),
-                          const SizedBox(height: 3),
-                          Container(
-                            width: 18,
-                            height: 18,
-                            decoration: BoxDecoration(
-                              color: dotColor.withOpacity(dotColor == DiklyColors.border ? 0.3 : 0.15),
-                              shape: BoxShape.circle,
-                              border: Border.all(
-                                color: dotColor.withOpacity(dotColor == DiklyColors.border ? 0.2 : 0.5),
-                                width: 1.5,
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                    );
-                  }),
-                ),
+                Text(name,
+                    style: GoogleFonts.dmSans(fontSize: 13, fontWeight: FontWeight.w700, color: DiklyColors.text)),
+                if (dateLabel != null)
+                  Text(dateLabel, style: GoogleFonts.dmSans(fontSize: 11, color: DiklyColors.textMuted)),
               ],
             ),
           ),
+          if (status.isNotEmpty)
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+              decoration: BoxDecoration(color: color.withOpacity(0.1), borderRadius: BorderRadius.circular(20)),
+              child: Text(status.toUpperCase(),
+                  style: TextStyle(fontSize: 10, fontWeight: FontWeight.w700, color: color)),
+            ),
         ],
       ),
     );

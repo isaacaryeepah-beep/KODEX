@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:google_fonts/google_fonts.dart';
 import '../../core/api.dart';
 import '../../core/auth.dart';
 import '../../core/theme.dart';
+import '../../widgets/ds/dikly_ds.dart';
 
 final _shiftsProvider = FutureProvider.autoDispose<List<dynamic>>((ref) =>
     apiService.getShifts());
@@ -16,232 +18,74 @@ class ShiftsScreen extends ConsumerWidget {
     final isManager = user?.role == 'manager' || user?.role == 'admin';
     final async = ref.watch(_shiftsProvider);
 
-    return Scaffold(
-      backgroundColor: DiklyColors.background,
-      appBar: AppBar(
-        title: const Text('Shifts'),
-        backgroundColor: DiklyColors.surface,
-      ),
-      body: RefreshIndicator(
-        onRefresh: () async => ref.refresh(_shiftsProvider),
-        child: async.when(
-          loading: () => const Center(child: CircularProgressIndicator()),
-          error: (e, _) => Center(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                const Icon(Icons.error_outline, size: 48, color: DiklyColors.error),
-                const SizedBox(height: 12),
-                const Text('Failed to load shifts'),
-                TextButton(
-                  onPressed: () => ref.refresh(_shiftsProvider),
-                  child: const Text('Retry'),
-                ),
-              ],
-            ),
-          ),
-          data: (shifts) {
-            if (shifts.isEmpty) {
-              return Center(
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    const Icon(Icons.schedule_outlined, size: 56, color: DiklyColors.border),
-                    const SizedBox(height: 12),
-                    const Text(
-                      'No shifts found',
-                      style: TextStyle(color: DiklyColors.textSecondary, fontSize: 14),
-                    ),
-                    if (isManager)
-                      TextButton(
-                        onPressed: () => _showCreateShiftSheet(context, ref),
-                        child: const Text('Create First Shift'),
-                      ),
-                  ],
-                ),
-              );
-            }
-
-            return ListView.builder(
-              padding: const EdgeInsets.all(16),
-              itemCount: shifts.length,
-              itemBuilder: (ctx, i) {
-                final shift = shifts[i];
-                if (shift is Map<String, dynamic>) {
-                  return _ShiftCard(shift: shift);
-                }
-                return const SizedBox.shrink();
-              },
-            );
-          },
-        ),
-      ),
-      floatingActionButton: isManager
-          ? FloatingActionButton(
-              onPressed: () => _showCreateShiftSheet(context, ref),
-              backgroundColor: const Color(0xFF0369A1),
-              child: const Icon(Icons.add, color: Colors.white),
-            )
-          : null,
-    );
-  }
-
-  void _showCreateShiftSheet(BuildContext context, WidgetRef ref) {
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: DiklyColors.surface,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-      ),
-      builder: (_) => _CreateShiftForm(
-        onCreated: () => ref.refresh(_shiftsProvider),
-      ),
-    );
-  }
-}
-
-class _ShiftCard extends StatelessWidget {
-  final Map<String, dynamic> shift;
-  const _ShiftCard({required this.shift});
-
-  static const _dayAbbrevs = {
-    'monday': 'Mon', 'tuesday': 'Tue', 'wednesday': 'Wed',
-    'thursday': 'Thu', 'friday': 'Fri', 'saturday': 'Sat', 'sunday': 'Sun',
-    'mon': 'Mon', 'tue': 'Tue', 'wed': 'Wed',
-    'thu': 'Thu', 'fri': 'Fri', 'sat': 'Sat', 'sun': 'Sun',
-  };
-
-  String _abbreviateDay(String day) =>
-      _dayAbbrevs[day.toLowerCase()] ?? day.substring(0, day.length.clamp(0, 3));
-
-  @override
-  Widget build(BuildContext context) {
-    final name = shift['name']?.toString() ?? shift['shiftName']?.toString() ?? 'Shift';
-    final startTime = shift['startTime']?.toString() ?? '--:--';
-    final endTime = shift['endTime']?.toString() ?? '--:--';
-    final days = shift['days'] as List? ?? [];
-    final employeeCount = shift['employeeCount'] ?? shift['assignedCount'] ?? 0;
-    final department = shift['department']?.toString();
-
-    return Card(
-      margin: const EdgeInsets.only(bottom: 12),
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
+    return RefreshIndicator(
+      onRefresh: () async => ref.refresh(_shiftsProvider),
+      child: async.when(
+        loading: () => const Center(child: CircularProgressIndicator()),
+        error: (e, _) => ListView(
+          padding: const EdgeInsets.all(16),
           children: [
-            Row(
-              children: [
-                Container(
-                  width: 44,
-                  height: 44,
-                  decoration: BoxDecoration(
-                    color: const Color(0xFF0369A1).withOpacity(0.1),
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: const Icon(
-                    Icons.schedule,
-                    color: Color(0xFF0369A1),
-                    size: 22,
-                  ),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        name,
-                        style: const TextStyle(
-                          fontSize: 15,
-                          fontWeight: FontWeight.w700,
-                          color: DiklyColors.textPrimary,
-                        ),
-                      ),
-                      if (department != null)
-                        Text(
-                          department,
-                          style: const TextStyle(
-                            fontSize: 12,
-                            color: DiklyColors.textSecondary,
-                          ),
-                        ),
-                    ],
-                  ),
-                ),
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFF0369A1).withOpacity(0.08),
-                    borderRadius: BorderRadius.circular(20),
-                  ),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      const Icon(Icons.people_outline, size: 14, color: Color(0xFF0369A1)),
-                      const SizedBox(width: 4),
-                      Text(
-                        '$employeeCount',
-                        style: const TextStyle(
-                          fontSize: 12,
-                          fontWeight: FontWeight.w600,
-                          color: Color(0xFF0369A1),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ],
+            DiklyScreenHeader(
+              title: isManager ? 'Shift Management' : 'Shifts',
+              subtitle: isManager ? 'Create shifts and assign employees' : 'View your assigned shifts',
             ),
-            const SizedBox(height: 12),
-            const Divider(height: 1),
-            const SizedBox(height: 12),
-            Row(
-              children: [
-                const Icon(Icons.access_time, size: 16, color: DiklyColors.textSecondary),
-                const SizedBox(width: 6),
-                Text(
-                  '$startTime  →  $endTime',
-                  style: const TextStyle(
-                    fontSize: 14,
-                    fontWeight: FontWeight.w600,
-                    color: DiklyColors.textPrimary,
-                  ),
-                ),
-              ],
-            ),
-            if (days.isNotEmpty) ...[
-              const SizedBox(height: 10),
-              Wrap(
-                spacing: 6,
-                runSpacing: 6,
-                children: days.map((d) {
-                  return Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                    decoration: BoxDecoration(
-                      color: DiklyColors.background,
-                      borderRadius: BorderRadius.circular(6),
-                      border: Border.all(color: DiklyColors.border),
-                    ),
-                    child: Text(
-                      _abbreviateDay(d.toString()),
-                      style: const TextStyle(
-                        fontSize: 11,
-                        fontWeight: FontWeight.w600,
-                        color: DiklyColors.textSecondary,
-                      ),
-                    ),
-                  );
-                }).toList(),
-              ),
-            ],
+            DiklyErrorView(message: 'Failed to load shifts', onRetry: () => ref.refresh(_shiftsProvider)),
           ],
         ),
+        data: (shifts) {
+          return ListView(
+            padding: const EdgeInsets.all(16),
+            children: [
+              DiklyScreenHeader(
+                title: isManager ? 'Shift Management' : 'Shifts',
+                subtitle: isManager ? 'Create shifts and assign employees' : 'View your assigned shifts',
+              ),
+
+              // ── Create Shift form (managers/admin only) ──────────────
+              if (isManager) ...[
+                _CreateShiftForm(onCreated: () => ref.refresh(_shiftsProvider)),
+                const SizedBox(height: 20),
+              ],
+
+              // ── Shifts list ──────────────────────────────────────────
+              Container(
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(color: DiklyColors.border),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text('Shifts (${shifts.length})',
+                        style: GoogleFonts.dmSans(fontSize: 14, fontWeight: FontWeight.w700, color: DiklyColors.text)),
+                    const SizedBox(height: 12),
+                    if (shifts.isEmpty)
+                      Padding(
+                        padding: const EdgeInsets.symmetric(vertical: 20),
+                        child: Center(
+                          child: Text('No shifts created yet.',
+                              style: GoogleFonts.dmSans(fontSize: 13, color: DiklyColors.textMuted)),
+                        ),
+                      )
+                    else
+                      ...shifts.map((s) => s is Map<String, dynamic>
+                          ? _ShiftRow(shift: s)
+                          : const SizedBox.shrink()),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 32),
+            ],
+          );
+        },
       ),
     );
   }
 }
+
+// ── Create Shift inline form ─────────────────────────────────────────────────
 
 class _CreateShiftForm extends ConsumerStatefulWidget {
   final VoidCallback onCreated;
@@ -253,78 +97,75 @@ class _CreateShiftForm extends ConsumerStatefulWidget {
 
 class _CreateShiftFormState extends ConsumerState<_CreateShiftForm> {
   final _formKey = GlobalKey<FormState>();
-  final _nameController = TextEditingController();
-  final _startTimeController = TextEditingController();
-  final _endTimeController = TextEditingController();
-
-  final Set<String> _selectedDays = {};
+  final _nameCtrl = TextEditingController();
+  final _startCtrl = TextEditingController(text: '08:00');
+  final _endCtrl = TextEditingController(text: '17:00');
+  final _graceCtrl = TextEditingController(text: '15');
+  final Set<String> _days = {'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'};
   bool _loading = false;
 
-  static const _allDays = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
+  static const _allDays = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+  static const _fullDays = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
 
   @override
   void dispose() {
-    _nameController.dispose();
-    _startTimeController.dispose();
-    _endTimeController.dispose();
+    _nameCtrl.dispose();
+    _startCtrl.dispose();
+    _endCtrl.dispose();
+    _graceCtrl.dispose();
     super.dispose();
   }
 
-  Future<void> _pickTime(TextEditingController controller) async {
+  Future<void> _pickTime(TextEditingController ctrl) async {
+    final parts = ctrl.text.split(':');
+    final initial = TimeOfDay(
+      hour: int.tryParse(parts[0]) ?? 8,
+      minute: int.tryParse(parts.length > 1 ? parts[1] : '0') ?? 0,
+    );
     final picked = await showTimePicker(
       context: context,
-      initialTime: TimeOfDay.now(),
+      initialTime: initial,
       builder: (ctx, child) => Theme(
-        data: Theme.of(ctx).copyWith(
-          colorScheme: const ColorScheme.light(primary: Color(0xFF0369A1)),
-        ),
+        data: Theme.of(ctx).copyWith(colorScheme: const ColorScheme.light(primary: Color(0xFF1D4ED8))),
         child: child!,
       ),
     );
     if (picked != null) {
-      final hour = picked.hour.toString().padLeft(2, '0');
-      final minute = picked.minute.toString().padLeft(2, '0');
-      controller.text = '$hour:$minute';
+      ctrl.text = '${picked.hour.toString().padLeft(2, '0')}:${picked.minute.toString().padLeft(2, '0')}';
     }
   }
 
   Future<void> _submit() async {
     if (!_formKey.currentState!.validate()) return;
-    if (_selectedDays.isEmpty) {
+    if (_days.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Please select at least one day'),
-          backgroundColor: DiklyColors.warning,
-        ),
+        const SnackBar(content: Text('Select at least one working day'), backgroundColor: DiklyColors.warning),
       );
       return;
     }
-
     setState(() => _loading = true);
     try {
       await apiService.createShift({
-        'name': _nameController.text.trim(),
-        'startTime': _startTimeController.text.trim(),
-        'endTime': _endTimeController.text.trim(),
-        'days': _selectedDays.toList(),
+        'name': _nameCtrl.text.trim(),
+        'startTime': _startCtrl.text.trim(),
+        'endTime': _endCtrl.text.trim(),
+        'gracePeriod': int.tryParse(_graceCtrl.text.trim()) ?? 15,
+        'days': _days.toList(),
       });
       if (mounted) {
-        Navigator.pop(context);
+        _nameCtrl.clear();
+        _days.clear();
+        _days.addAll({'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'});
+        setState(() {});
         widget.onCreated();
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Shift created successfully'),
-            backgroundColor: DiklyColors.success,
-          ),
+          const SnackBar(content: Text('Shift created'), backgroundColor: DiklyColors.success),
         );
       }
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Failed to create shift: ${e.toString()}'),
-            backgroundColor: DiklyColors.error,
-          ),
+          SnackBar(content: Text('Failed: $e'), backgroundColor: DiklyColors.error),
         );
       }
     } finally {
@@ -334,186 +175,224 @@ class _CreateShiftFormState extends ConsumerState<_CreateShiftForm> {
 
   @override
   Widget build(BuildContext context) {
-    final bottomPadding = MediaQuery.of(context).viewInsets.bottom;
-
-    return Padding(
-      padding: EdgeInsets.fromLTRB(20, 20, 20, 20 + bottomPadding),
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: DiklyColors.border),
+      ),
       child: Form(
         key: _formKey,
         child: Column(
-          mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
+            Text('Create New Shift',
+                style: GoogleFonts.dmSans(fontSize: 14, fontWeight: FontWeight.w700, color: DiklyColors.text)),
+            const SizedBox(height: 14),
+            // Row: name + start + end + grace
             Row(
-              children: [
-                const Text(
-                  'Create New Shift',
-                  style: TextStyle(
-                    fontSize: 17,
-                    fontWeight: FontWeight.w700,
-                    color: DiklyColors.textPrimary,
-                  ),
-                ),
-                const Spacer(),
-                IconButton(
-                  icon: const Icon(Icons.close),
-                  onPressed: () => Navigator.pop(context),
-                  visualDensity: VisualDensity.compact,
-                ),
-              ],
-            ),
-            const SizedBox(height: 16),
-            const Text(
-              'Shift Name',
-              style: TextStyle(
-                fontSize: 13,
-                fontWeight: FontWeight.w600,
-                color: DiklyColors.textSecondary,
-              ),
-            ),
-            const SizedBox(height: 8),
-            TextFormField(
-              controller: _nameController,
-              decoration: const InputDecoration(
-                hintText: 'e.g. Morning Shift',
-                border: OutlineInputBorder(),
-              ),
-              validator: (v) {
-                if (v == null || v.trim().isEmpty) return 'Please enter a shift name';
-                return null;
-              },
-            ),
-            const SizedBox(height: 16),
-            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      const Text(
-                        'Start Time',
-                        style: TextStyle(
-                          fontSize: 13,
-                          fontWeight: FontWeight.w600,
-                          color: DiklyColors.textSecondary,
-                        ),
-                      ),
-                      const SizedBox(height: 8),
-                      TextFormField(
-                        controller: _startTimeController,
-                        readOnly: true,
-                        onTap: () => _pickTime(_startTimeController),
-                        decoration: const InputDecoration(
-                          hintText: '08:00',
-                          border: OutlineInputBorder(),
-                          suffixIcon: Icon(Icons.access_time, size: 18),
-                        ),
-                        validator: (v) {
-                          if (v == null || v.trim().isEmpty) return 'Required';
-                          return null;
-                        },
-                      ),
-                    ],
+                  flex: 3,
+                  child: _FormField(
+                    label: 'SHIFT NAME *',
+                    child: TextFormField(
+                      controller: _nameCtrl,
+                      decoration: _inputDecoration('e.g. Morning Shift'),
+                      validator: (v) => v == null || v.trim().isEmpty ? 'Required' : null,
+                      style: GoogleFonts.dmSans(fontSize: 13),
+                    ),
                   ),
                 ),
-                const SizedBox(width: 12),
+                const SizedBox(width: 10),
                 Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      const Text(
-                        'End Time',
-                        style: TextStyle(
-                          fontSize: 13,
-                          fontWeight: FontWeight.w600,
-                          color: DiklyColors.textSecondary,
-                        ),
-                      ),
-                      const SizedBox(height: 8),
-                      TextFormField(
-                        controller: _endTimeController,
-                        readOnly: true,
-                        onTap: () => _pickTime(_endTimeController),
-                        decoration: const InputDecoration(
-                          hintText: '17:00',
-                          border: OutlineInputBorder(),
-                          suffixIcon: Icon(Icons.access_time, size: 18),
-                        ),
-                        validator: (v) {
-                          if (v == null || v.trim().isEmpty) return 'Required';
-                          return null;
-                        },
-                      ),
-                    ],
+                  flex: 2,
+                  child: _FormField(
+                    label: 'START TIME *',
+                    child: TextFormField(
+                      controller: _startCtrl,
+                      readOnly: true,
+                      onTap: () => _pickTime(_startCtrl),
+                      decoration: _inputDecoration('08:00').copyWith(suffixIcon: const Icon(Icons.access_time, size: 16)),
+                      style: GoogleFonts.dmSans(fontSize: 13),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  flex: 2,
+                  child: _FormField(
+                    label: 'END TIME *',
+                    child: TextFormField(
+                      controller: _endCtrl,
+                      readOnly: true,
+                      onTap: () => _pickTime(_endCtrl),
+                      decoration: _inputDecoration('17:00').copyWith(suffixIcon: const Icon(Icons.access_time, size: 16)),
+                      style: GoogleFonts.dmSans(fontSize: 13),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  flex: 2,
+                  child: _FormField(
+                    label: 'GRACE PERIOD (MIN)',
+                    child: TextFormField(
+                      controller: _graceCtrl,
+                      keyboardType: TextInputType.number,
+                      decoration: _inputDecoration('15'),
+                      style: GoogleFonts.dmSans(fontSize: 13),
+                    ),
                   ),
                 ),
               ],
             ),
-            const SizedBox(height: 16),
-            const Text(
-              'Working Days',
-              style: TextStyle(
-                fontSize: 13,
-                fontWeight: FontWeight.w600,
-                color: DiklyColors.textSecondary,
-              ),
-            ),
+            const SizedBox(height: 14),
+            Text('WORKING DAYS',
+                style: GoogleFonts.dmSans(fontSize: 10, fontWeight: FontWeight.w600, color: DiklyColors.textMuted, letterSpacing: 0.5)),
             const SizedBox(height: 8),
-            Wrap(
-              spacing: 8,
-              runSpacing: 8,
-              children: _allDays.map((day) {
-                final isSelected = _selectedDays.contains(day);
-                return FilterChip(
-                  label: Text(day.substring(0, 3)),
-                  selected: isSelected,
-                  onSelected: (selected) {
-                    setState(() {
-                      if (selected) {
-                        _selectedDays.add(day);
-                      } else {
-                        _selectedDays.remove(day);
-                      }
-                    });
-                  },
-                  selectedColor: const Color(0xFF0369A1).withOpacity(0.15),
-                  checkmarkColor: const Color(0xFF0369A1),
-                  labelStyle: TextStyle(
-                    fontSize: 12,
-                    fontWeight: FontWeight.w600,
-                    color: isSelected ? const Color(0xFF0369A1) : DiklyColors.textSecondary,
+            Row(
+              children: List.generate(7, (i) {
+                final abbr = _allDays[i];
+                final full = _fullDays[i];
+                final selected = _days.contains(full);
+                return Padding(
+                  padding: const EdgeInsets.only(right: 6),
+                  child: GestureDetector(
+                    onTap: () => setState(() {
+                      if (selected) _days.remove(full); else _days.add(full);
+                    }),
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                      decoration: BoxDecoration(
+                        color: selected ? const Color(0xFF1D4ED8) : Colors.transparent,
+                        borderRadius: BorderRadius.circular(4),
+                        border: Border.all(color: selected ? const Color(0xFF1D4ED8) : DiklyColors.border),
+                      ),
+                      child: Text(abbr,
+                          style: GoogleFonts.dmSans(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w600,
+                            color: selected ? Colors.white : DiklyColors.textSecondary,
+                          )),
+                    ),
                   ),
                 );
-              }).toList(),
+              }),
             ),
-            const SizedBox(height: 20),
-            SizedBox(
-              width: double.infinity,
-              height: 50,
-              child: ElevatedButton(
-                onPressed: _loading ? null : _submit,
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFF0369A1),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                ),
-                child: _loading
-                    ? const SizedBox(
-                        width: 20,
-                        height: 20,
-                        child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
-                      )
-                    : const Text(
-                        'Create Shift',
-                        style: TextStyle(
-                          color: Colors.white,
-                          fontSize: 15,
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
+            const SizedBox(height: 16),
+            ElevatedButton.icon(
+              onPressed: _loading ? null : _submit,
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFF1D4ED8),
+                foregroundColor: Colors.white,
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
+                elevation: 0,
               ),
+              icon: _loading
+                  ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                  : const Icon(Icons.add, size: 18),
+              label: Text(_loading ? 'Creating...' : '+ Create Shift',
+                  style: GoogleFonts.dmSans(fontSize: 13, fontWeight: FontWeight.w600)),
             ),
           ],
         ),
+      ),
+    );
+  }
+
+  InputDecoration _inputDecoration(String hint) => InputDecoration(
+    hintText: hint,
+    hintStyle: GoogleFonts.dmSans(fontSize: 13, color: DiklyColors.textMuted),
+    contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+    border: OutlineInputBorder(borderRadius: BorderRadius.circular(6), borderSide: const BorderSide(color: DiklyColors.border)),
+    enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(6), borderSide: const BorderSide(color: DiklyColors.border)),
+    focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(6), borderSide: const BorderSide(color: Color(0xFF1D4ED8))),
+  );
+}
+
+class _FormField extends StatelessWidget {
+  final String label;
+  final Widget child;
+  const _FormField({required this.label, required this.child});
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(label, style: GoogleFonts.dmSans(fontSize: 10, fontWeight: FontWeight.w600, color: DiklyColors.textMuted, letterSpacing: 0.4)),
+        const SizedBox(height: 6),
+        child,
+      ],
+    );
+  }
+}
+
+// ── Shift row in the list ─────────────────────────────────────────────────────
+
+class _ShiftRow extends StatelessWidget {
+  final Map<String, dynamic> shift;
+  const _ShiftRow({required this.shift});
+
+  static const _dayAbbrevs = {
+    'monday': 'Mon', 'tuesday': 'Tue', 'wednesday': 'Wed',
+    'thursday': 'Thu', 'friday': 'Fri', 'saturday': 'Sat', 'sunday': 'Sun',
+    'mon': 'Mon', 'tue': 'Tue', 'wed': 'Wed',
+    'thu': 'Thu', 'fri': 'Fri', 'sat': 'Sat', 'sun': 'Sun',
+  };
+
+  String _abbr(String d) => _dayAbbrevs[d.toLowerCase()] ?? d.substring(0, d.length.clamp(0, 3));
+
+  @override
+  Widget build(BuildContext context) {
+    final name = shift['name']?.toString() ?? shift['shiftName']?.toString() ?? 'Shift';
+    final startTime = shift['startTime']?.toString() ?? '--:--';
+    final endTime = shift['endTime']?.toString() ?? '--:--';
+    final days = shift['days'] as List? ?? [];
+    final employeeCount = shift['employeeCount'] ?? shift['assignedCount'] ?? 0;
+
+    return Container(
+      padding: const EdgeInsets.symmetric(vertical: 12),
+      decoration: const BoxDecoration(border: Border(bottom: BorderSide(color: DiklyColors.border))),
+      child: Row(
+        children: [
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(name,
+                    style: GoogleFonts.dmSans(fontSize: 13, fontWeight: FontWeight.w700, color: DiklyColors.text)),
+                const SizedBox(height: 4),
+                Row(
+                  children: [
+                    const Icon(Icons.access_time_outlined, size: 12, color: DiklyColors.textMuted),
+                    const SizedBox(width: 4),
+                    Text('$startTime → $endTime',
+                        style: GoogleFonts.dmSans(fontSize: 12, color: DiklyColors.textSecondary)),
+                    if (days.isNotEmpty) ...[
+                      const SizedBox(width: 8),
+                      Text(days.map((d) => _abbr(d.toString())).join(', '),
+                          style: GoogleFonts.dmSans(fontSize: 11, color: DiklyColors.textMuted)),
+                    ],
+                  ],
+                ),
+              ],
+            ),
+          ),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+            decoration: BoxDecoration(
+              color: const Color(0xFF1D4ED8).withOpacity(0.1),
+              borderRadius: BorderRadius.circular(20),
+            ),
+            child: Text('$employeeCount emp',
+                style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: Color(0xFF1D4ED8))),
+          ),
+        ],
       ),
     );
   }
