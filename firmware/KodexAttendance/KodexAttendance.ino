@@ -64,6 +64,9 @@
 #include <time.h>
 #include <mbedtls/md.h>
 #include <mbedtls/base64.h>
+#include <esp_wifi.h>
+#include <BLEDevice.h>
+#include <BLEAdvertising.h>
 #include <ArduinoJson.h>
 #include <Adafruit_GFX.h>
 #include <Adafruit_SSD1306.h>
@@ -118,12 +121,31 @@ int      offlineRecordCount   = 0;
 bool     offlineSyncPending   = false;
 
 // ─── Offline authorization (credential + roster) ──────────────────────────────
-// HMAC key and course roster are pushed from server via heartbeat + roster API.
-// Students must be enrolled in the active course; the credential system adds
-// cryptographic proof on top of roster lookup.
 String   offlineHmacKey;        // 64-char hex HMAC-SHA256 key from heartbeat
 String   authorizedLecturerId;  // UID from verified lecturer credential
 static bool rosterDownloadNeeded = false;
+
+// ─── Live presence tracking ───────────────────────────────────────────────────
+// Tracks per-student heartbeat state during an offline session.
+// Students send POST /student/heartbeat every 30 s; missing 2+ beats = flagged.
+static const int MAX_PRESENCE = 200;
+struct PresenceEntry {
+  char     idx[32];
+  char     name[48];
+  uint32_t markedAt;
+  uint32_t lastHeartbeat;
+  bool     flaggedLeft;
+};
+static PresenceEntry presenceTable[MAX_PRESENCE];
+static int      presenceCount        = 0;
+static uint32_t lastPresenceCheckMs  = 0;
+
+// ─── BLE presence beacon ──────────────────────────────────────────────────────
+// Device advertises a BLE service UUID while offline session is active.
+// Student phones scan for this UUID; losing signal = student left the room.
+// UUID "DIKL" namespace: F000D1CE-D1CE-D1CE-D1CE-000000000000
+static const char DIKLY_BLE_UUID[] = "F000D1CE-D1CE-D1CE-D1CE-000000000000";
+static bool bleBeaconRunning = false;
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 static void log(const String& s) { Serial.print("[KODEX] "); Serial.println(s); }
@@ -361,6 +383,161 @@ static void downloadRoster() {
     log("Roster download failed: HTTP " + String(code));
   }
   http.end();
+}
+
+// ─── Presence helpers ─────────────────────────────────────────────────────────
+static int findPresence(const char* idx) {
+  for (int i = 0; i < presenceCount; i++)
+    if (strncmp(presenceTable[i].idx, idx, 31) == 0) return i;
+  return -1;
+}
+
+static void addOrUpdatePresence(const String& idx, const String& name) {
+  uint32_t now = (uint32_t)time(nullptr);
+  int i = findPresence(idx.c_str());
+  if (i >= 0) {
+    presenceTable[i].lastHeartbeat = now;
+    presenceTable[i].flaggedLeft   = false;
+    return;
+  }
+  if (presenceCount >= MAX_PRESENCE) return;
+  strncpy(presenceTable[presenceCount].idx,  idx.c_str(),  31);
+  strncpy(presenceTable[presenceCount].name, name.c_str(), 47);
+  presenceTable[presenceCount].markedAt      = now;
+  presenceTable[presenceCount].lastHeartbeat = now;
+  presenceTable[presenceCount].flaggedLeft   = false;
+  presenceCount++;
+}
+
+static void markPresenceLeft(const String& idx) {
+  int i = findPresence(idx.c_str());
+  if (i >= 0) presenceTable[i].flaggedLeft = true;
+}
+
+static void clearPresence() {
+  presenceCount = 0;
+}
+
+// Called every 60 s from loop; flags students whose heartbeat went silent.
+static void checkPresenceTimeouts() {
+  uint32_t now = (uint32_t)time(nullptr);
+  int present = 0, flagged = 0;
+  for (int i = 0; i < presenceCount; i++) {
+    if (!presenceTable[i].flaggedLeft && (now - presenceTable[i].lastHeartbeat) > 90) {
+      presenceTable[i].flaggedLeft = true;
+      log(String("Presence timeout: ") + presenceTable[i].idx);
+    }
+    presenceTable[i].flaggedLeft ? flagged++ : present++;
+  }
+  if (presenceCount > 0) {
+    String line2 = "Present:" + String(present);
+    String line3 = flagged ? ("⚠ Left:" + String(flagged)) : "All present";
+    oledShow("OFFLINE", line2, line3);
+  }
+}
+
+// Serialise presence table to JSON for /lecturer/presence endpoint.
+static String presenceJson() {
+  uint32_t now = (uint32_t)time(nullptr);
+  int present = 0, flagged = 0;
+  String arr = "[";
+  for (int i = 0; i < presenceCount; i++) {
+    if (i) arr += ",";
+    uint32_t elapsed = now > presenceTable[i].lastHeartbeat
+                       ? now - presenceTable[i].lastHeartbeat : 0;
+    bool left = presenceTable[i].flaggedLeft;
+    left ? flagged++ : present++;
+    arr += "{\"idx\":\"";
+    arr += presenceTable[i].idx;
+    arr += "\",\"name\":\"";
+    arr += presenceTable[i].name;
+    arr += "\",\"markedAt\":";
+    arr += presenceTable[i].markedAt;
+    arr += ",\"lastSeen\":";
+    arr += elapsed;
+    arr += ",\"left\":";
+    arr += left ? "true" : "false";
+    arr += "}";
+  }
+  arr += "]";
+  return "{\"ok\":true,\"total\":" + String(presenceCount) +
+         ",\"present\":"  + String(present) +
+         ",\"flagged\":"  + String(flagged) +
+         ",\"entries\":"  + arr + "}";
+}
+
+// ─── BLE presence beacon ─────────────────────────────────────────────────────
+// The device broadcasts a BLE advertisement so student phones can detect range.
+// Works even when students have closed the browser tab (background BLE scan).
+static void startBleBeacon() {
+  if (bleBeaconRunning) return;
+  BLEDevice::init("Dikly-Device");
+  BLEAdvertising* pAdv = BLEDevice::getAdvertising();
+
+  // Advertise the Dikly presence service UUID so phones identify this device
+  BLEAdvertisementData advData;
+  advData.setFlags(0x06);  // LE General Discoverable, BR/EDR not supported
+  advData.setCompleteServices(BLEUUID(DIKLY_BLE_UUID));
+
+  // Secondary scan-response includes device identifier so app knows which device
+  BLEAdvertisementData scanResp;
+  String devName = "DK-" + getMacSuffix();
+  scanResp.setName(devName.c_str());
+
+  pAdv->setAdvertisementData(advData);
+  pAdv->setScanResponseData(scanResp);
+  pAdv->setMinInterval(100);  // 62.5 ms (100 × 0.625 ms)
+  pAdv->setMaxInterval(200);
+  pAdv->start();
+
+  bleBeaconRunning = true;
+  log("BLE beacon ON — UUID " + String(DIKLY_BLE_UUID));
+}
+
+static void stopBleBeacon() {
+  if (!bleBeaconRunning) return;
+  BLEDevice::getAdvertising()->stop();
+  bleBeaconRunning = false;
+  log("BLE beacon OFF");
+}
+
+// ─── Active presence check (device-initiated) ────────────────────────────────
+// Called every 60 s from loop.  Does two things:
+//   1. Flags students whose heartbeat timer has expired (WiFi check)
+//   2. Compares actual WiFi AP station count vs marked-student count (headcount)
+static void checkPresenceTimeouts() {
+  uint32_t now = (uint32_t)time(nullptr);
+  int present = 0, flagged = 0;
+
+  for (int i = 0; i < presenceCount; i++) {
+    if (!presenceTable[i].flaggedLeft && (now - presenceTable[i].lastHeartbeat) > 90) {
+      presenceTable[i].flaggedLeft = true;
+      log(String("Heartbeat timeout: ") + presenceTable[i].idx);
+    }
+    presenceTable[i].flaggedLeft ? flagged++ : present++;
+  }
+
+  // Active WiFi AP station-count check — the device counts how many phones are
+  // currently connected to its hotspot, independent of heartbeat messages.
+  wifi_sta_list_t staList;
+  int apClients = 0;
+  if (esp_wifi_ap_get_sta_list(&staList) == ESP_OK) {
+    apClients = staList.num;
+  }
+
+  // If the AP headcount drops well below the marked count, flag the difference.
+  // (Some students may have disconnected WiFi while still in the room, so we
+  //  use a conservative threshold rather than flagging 1:1.)
+  if (presenceCount > 0 && apClients < presenceCount) {
+    int disconnected = presenceCount - apClients;
+    log("AP station check: " + String(apClients) + " connected / "
+        + String(presenceCount) + " marked (" + String(disconnected) + " offline)");
+  }
+
+  // Update OLED with live presence summary
+  String line2 = "Present:" + String(present) + " AP:" + String(apClients);
+  String line3 = flagged ? ("⚠ Flagged:" + String(flagged)) : "All present";
+  oledShow("OFFLINE", line2, line3);
 }
 
 static void factoryReset() {
@@ -712,12 +889,14 @@ input:focus{border-color:#6366f1}
 .btn{width:100%;padding:13px;border-radius:8px;border:0;font-size:15px;font-weight:700;cursor:pointer;margin-top:16px}
 .btn-primary{background:#6366f1;color:#fff}
 .btn-primary:active{background:#4f46e5}
-.btn-secondary{background:#1e293b;color:#94a3b8;border:1px solid #334155;margin-top:8px;font-size:13px}
 .divider{border:none;border-top:1px solid #1e293b;margin:20px 0}
 .msg{font-size:13px;color:#64748b;text-align:center;margin-top:12px}
 .err{color:#f87171}
 .ok{color:#4ade80;font-size:18px;font-weight:700;text-align:center;margin:20px 0}
 .count{font-size:13px;color:#94a3b8;text-align:center;margin-top:8px}
+.pulse{display:inline-block;width:8px;height:8px;border-radius:50%;background:#4ade80;margin-right:6px;animation:blink 2s infinite}
+@keyframes blink{0%,100%{opacity:1}50%{opacity:.3}}
+.tracking-bar{background:#052e16;border:1px solid #166534;border-radius:8px;padding:10px 14px;margin-top:16px;font-size:12px;color:#4ade80;display:flex;align-items:center}
 </style></head>
 <body><div class="card">
   <div class="logo">Dikly</div>
@@ -727,6 +906,27 @@ input:focus{border-color:#6366f1}
 <script>
 const S=JSON.parse(atob('SESSION_JSON_B64'));
 const app=document.getElementById('app');
+let _hbIdx=null,_hbTimer=null;
+
+function startHeartbeat(idx){
+  _hbIdx=idx;
+  // Send immediately, then every 30 s
+  function beat(){
+    fetch('/student/heartbeat',{method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({indexNumber:_hbIdx,t:Date.now()})}).catch(()=>{});
+  }
+  beat();
+  _hbTimer=setInterval(beat,30000);
+  // Instant "I left" signal when tab closes or student navigates away
+  window.addEventListener('visibilitychange',()=>{
+    if(document.visibilityState==='hidden')
+      navigator.sendBeacon('/student/left',JSON.stringify({indexNumber:_hbIdx}));
+  });
+  window.addEventListener('beforeunload',()=>{
+    if(_hbTimer)clearInterval(_hbTimer);
+    navigator.sendBeacon('/student/left',JSON.stringify({indexNumber:_hbIdx}));
+  });
+}
 
 function showStudent(){
   if(!S.active){
@@ -751,12 +951,18 @@ function showStudent(){
     const b=e.target.querySelector('[type=submit]');
     b.disabled=true;b.textContent='Marking…';
     const m=document.getElementById('msg');
+    const nm=document.getElementById('nm').value.trim();
+    const idx=document.getElementById('idx').value.trim();
     try{
       const r=await fetch('/student/mark',{method:'POST',headers:{'Content-Type':'application/json'},
-        body:JSON.stringify({name:document.getElementById('nm').value.trim(),indexNumber:document.getElementById('idx').value.trim()})});
+        body:JSON.stringify({name:nm,indexNumber:idx})});
       const j=await r.json();
       if(!r.ok)throw new Error(j.error||'Failed');
-      app.innerHTML='<div class="ok">✓ Attendance Marked!</div><div class="count">You are student #'+j.count+'</div><p style="color:#64748b;font-size:12px;text-align:center;margin-top:12px">Your record is saved and will sync when the device reconnects.</p>';
+      app.innerHTML='<div class="ok">✓ Attendance Marked!</div>'
+        +'<div class="count">You are student #'+j.count+'</div>'
+        +'<div class="tracking-bar"><span class="pulse"></span>Presence tracking active — stay connected to this WiFi</div>'
+        +'<p style="color:#475569;font-size:11px;text-align:center;margin-top:14px">Keep this page open. Closing it signals you have left.</p>';
+      startHeartbeat(idx);
     }catch(err){m.className='msg err';m.textContent=err.message;b.disabled=false;b.textContent='Mark Attendance';}
   };
 }
@@ -770,30 +976,47 @@ static const char OFFLINE_LECTURER_HTML[] PROGMEM = R"HTML(<!doctype html>
 <title>Dikly — Lecturer</title>
 <style>
 *{box-sizing:border-box;margin:0;padding:0}
-body{font-family:system-ui,sans-serif;background:#0f172a;color:#e2e8f0;min-height:100vh;display:flex;align-items:center;justify-content:center;padding:20px}
-.card{background:#1e293b;border-radius:16px;padding:28px 24px;max-width:420px;width:100%;border:1px solid #334155}
-.logo{font-size:22px;font-weight:800;color:#6366f1;margin-bottom:4px}
-.sub{font-size:13px;color:#64748b;margin-bottom:24px}
-label{display:block;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:#64748b;margin:14px 0 5px}
-input{width:100%;padding:11px 13px;border-radius:8px;border:1px solid #334155;background:#0f172a;color:#e2e8f0;font-size:14px;outline:none}
+body{font-family:system-ui,sans-serif;background:#0f172a;color:#e2e8f0;min-height:100vh;display:flex;align-items:center;justify-content:center;padding:16px}
+.card{background:#1e293b;border-radius:16px;padding:24px 20px;max-width:480px;width:100%;border:1px solid #334155}
+.logo{font-size:20px;font-weight:800;color:#6366f1;margin-bottom:2px}
+.sub{font-size:12px;color:#64748b;margin-bottom:20px}
+label{display:block;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:#64748b;margin:12px 0 4px}
+input{width:100%;padding:10px 12px;border-radius:8px;border:1px solid #334155;background:#0f172a;color:#e2e8f0;font-size:14px;outline:none}
 input:focus{border-color:#6366f1}
-.btn{width:100%;padding:13px;border-radius:8px;border:0;font-size:15px;font-weight:700;cursor:pointer;margin-top:16px}
+.btn{width:100%;padding:12px;border-radius:8px;border:0;font-size:14px;font-weight:700;cursor:pointer;margin-top:12px}
 .btn-green{background:#22c55e;color:#fff}
-.btn-red{background:#ef4444;color:#fff;margin-top:8px}
-.btn-back{background:transparent;color:#64748b;border:1px solid #334155;font-size:13px;margin-top:8px}
-.session-box{background:#0f172a;border-radius:10px;padding:14px;margin-bottom:16px;border:1px solid #334155}
-.stat{display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:1px solid #1e293b;font-size:13px}
-.stat:last-child{border-bottom:0}
-.stat-val{font-weight:700;color:#f1f5f9}
+.btn-red{background:#ef4444;color:#fff}
+.btn-blue{background:#1e3a5f;color:#60a5fa}
+.btn-back{background:transparent;color:#64748b;border:1px solid #334155;font-size:12px}
+.session-box{background:#0f172a;border-radius:10px;padding:12px;margin-bottom:14px;border:1px solid #334155}
 .err{color:#f87171;font-size:12px;margin-top:8px}
 .ok{color:#4ade80;font-size:12px;margin-top:8px}
-.record-list{max-height:200px;overflow-y:auto;margin-top:10px}
-.record{padding:8px 10px;border-radius:6px;background:#0f172a;margin-bottom:4px;font-size:12px;display:flex;justify-content:space-between}
-.record-name{font-weight:600;color:#f1f5f9}
-.record-id{color:#64748b}
+/* Tabs */
+.tabs{display:flex;gap:4px;margin-bottom:12px}
+.tab{flex:1;padding:8px;border-radius:6px;border:1px solid #334155;background:#0f172a;color:#64748b;font-size:12px;font-weight:700;cursor:pointer;text-align:center}
+.tab.active{background:#6366f1;color:#fff;border-color:#6366f1}
+.tab-panel{display:none}.tab-panel.active{display:block}
+/* Record rows */
+.rec-scroll{max-height:240px;overflow-y:auto;margin-top:8px}
+.rec-row{padding:8px 10px;border-radius:6px;background:#0f172a;margin-bottom:3px;font-size:12px;display:flex;justify-content:space-between;align-items:center;border-left:3px solid #334155}
+.rec-name{font-weight:600;color:#f1f5f9}
+.rec-id{color:#64748b;font-size:11px}
+/* Presence badges */
+.badge{font-size:10px;font-weight:700;padding:2px 7px;border-radius:20px}
+.badge-green{background:#052e16;color:#4ade80;border:1px solid #166534}
+.badge-yellow{background:#1c1403;color:#fbbf24;border:1px solid #92400e}
+.badge-red{background:#1f0b0b;color:#f87171;border:1px solid #7f1d1d}
+/* Summary bar */
+.summary{display:flex;gap:8px;margin-bottom:10px}
+.sum-box{flex:1;background:#0f172a;border-radius:8px;padding:8px;text-align:center;border:1px solid #334155}
+.sum-num{font-size:22px;font-weight:800;color:#f1f5f9}
+.sum-lbl{font-size:10px;color:#64748b;text-transform:uppercase;letter-spacing:.4px}
+.pulse{display:inline-block;width:7px;height:7px;border-radius:50%;background:#4ade80;margin-right:4px;animation:blink 2s infinite;vertical-align:middle}
+@keyframes blink{0%,100%{opacity:1}50%{opacity:.2}}
+.refresh-note{font-size:10px;color:#475569;text-align:right;margin-top:4px}
 </style></head>
 <body><div class="card">
-  <div class="logo">Dikly <span style="color:#64748b;font-size:14px;font-weight:400">Lecturer</span></div>
+  <div class="logo">Dikly <span style="color:#64748b;font-size:13px;font-weight:400">Lecturer</span></div>
   <div class="sub">Offline Attendance Control</div>
   <div id="app"></div>
 </div>
@@ -801,88 +1024,129 @@ input:focus{border-color:#6366f1}
 const S=JSON.parse(atob('SESSION_JSON_B64'));
 const PIN='DEVICE_PIN';
 const app=document.getElementById('app');
-
 let authed=sessionStorage.getItem('lpin')===PIN;
+let _activeTab='records';
 
 function showPin(){
   app.innerHTML=`<form id="pf">
-    <label>Lecturer PIN <span style="color:#334155;font-weight:400">(shown on device display)</span></label>
+    <label>Lecturer PIN <span style="color:#334155;font-weight:400">(shown on device screen)</span></label>
     <input id="pin" type="password" maxlength="6" placeholder="Enter PIN" required>
     <button class="btn btn-green" type="submit">Unlock</button>
   </form><div id="perr" class="err"></div>
-  <a href="/" style="display:block;text-align:center;color:#334155;font-size:12px;margin-top:16px">← Back to student page</a>`;
+  <a href="/" style="display:block;text-align:center;color:#334155;font-size:11px;margin-top:14px">← Student page</a>`;
   document.getElementById('pf').onsubmit=e=>{
     e.preventDefault();
     const v=document.getElementById('pin').value;
     if(v===PIN){sessionStorage.setItem('lpin',PIN);authed=true;showMain();}
-    else{document.getElementById('perr').textContent='Incorrect PIN. Check the device display.';}
+    else document.getElementById('perr').textContent='Wrong PIN — check device screen.';
   };
 }
 
-function showMain(){
-  if(S.active){showSession();}else{showStart();}
-}
+function showMain(){if(S.active)showSession();else showStart();}
 
 function showStart(){
   app.innerHTML=`<form id="sf">
-    <label>Course Code / Name</label><input id="course" placeholder="e.g. CS101 — Intro to Computing" required>
-    <label>Session Title</label><input id="title" placeholder="e.g. Week 3 Lecture" required>
+    <label>Course Code</label><input id="course" placeholder="e.g. CS101" required>
+    <label>Session Title</label><input id="title" placeholder="e.g. Week 3 — Data Structures" required>
     <button class="btn btn-green" type="submit">▶ Start Session</button>
-  </form>
-  <div id="smsg" class="ok" style="display:none"></div>
-  <button class="btn btn-back" onclick="location.href='/'">← Student page</button>`;
+  </form><div id="smsg" class="err" style="display:none"></div>
+  <button class="btn btn-back" style="margin-top:8px" onclick="location.href='/'">← Student page</button>`;
   document.getElementById('sf').onsubmit=async e=>{
     e.preventDefault();
     const b=e.target.querySelector('[type=submit]');
     b.disabled=true;b.textContent='Starting…';
     try{
       const r=await fetch('/lecturer/start',{method:'POST',headers:{'Content-Type':'application/json'},
-        body:JSON.stringify({course:document.getElementById('course').value.trim(),title:document.getElementById('title').value.trim(),pin:PIN})});
+        body:JSON.stringify({course:document.getElementById('course').value.trim(),
+          title:document.getElementById('title').value.trim(),pin:PIN})});
       const j=await r.json();
       if(!r.ok)throw new Error(j.error||'Failed');
-      S.active=true;S.title=j.title;S.course=j.course;
-      showSession();
-    }catch(err){b.disabled=false;b.textContent='▶ Start Session';document.getElementById('smsg').style.display='block';document.getElementById('smsg').className='err';document.getElementById('smsg').textContent=err.message;}
+      S.active=true;S.title=j.title;S.course=j.course;showSession();
+    }catch(err){b.disabled=false;b.textContent='▶ Start Session';
+      const m=document.getElementById('smsg');m.style.display='block';m.textContent=err.message;}
   };
+}
+
+function switchTab(t){
+  _activeTab=t;
+  document.querySelectorAll('.tab').forEach(el=>el.classList.toggle('active',el.dataset.t===t));
+  document.querySelectorAll('.tab-panel').forEach(el=>el.classList.toggle('active',el.dataset.t===t));
+  if(t==='records')loadRecords();else loadPresence();
 }
 
 async function loadRecords(){
   try{
-    const r=await fetch('/lecturer/records');
-    const j=await r.json();
-    const list=document.getElementById('rec-list');
-    if(!list)return;
-    list.innerHTML=j.records.map((r,i)=>`<div class="record"><span class="record-name">${i+1}. ${r.name}</span><span class="record-id">${r.indexNumber}</span></div>`).join('')||'<div style="color:#64748b;font-size:12px;text-align:center;padding:10px">No records yet</div>';
-    document.getElementById('rec-count').textContent=j.records.length+' student'+(j.records.length!==1?'s':'');
+    const r=await fetch('/lecturer/records');const j=await r.json();
+    const el=document.getElementById('rec-list');if(!el)return;
+    document.getElementById('rec-total').textContent=j.count;
+    el.innerHTML=j.records.map((r,i)=>`<div class="rec-row">
+      <div><div class="rec-name">${i+1}. ${r.name}</div><div class="rec-id">${r.indexNumber}</div></div>
+      <span style="color:#64748b;font-size:11px">${r.ts?new Date(r.ts*1000).toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'}):''}</span>
+    </div>`).join('')||'<div style="color:#64748b;font-size:12px;text-align:center;padding:12px">No records yet</div>';
+  }catch(e){}
+}
+
+async function loadPresence(){
+  try{
+    const r=await fetch('/lecturer/presence');const j=await r.json();
+    const el=document.getElementById('pres-list');if(!el)return;
+    document.getElementById('sum-present').textContent=j.present;
+    document.getElementById('sum-flagged').textContent=j.flagged;
+    document.getElementById('sum-total').textContent=j.total;
+    el.innerHTML=j.entries.map(e=>{
+      const gone=e.left;
+      const weak=!e.left&&e.lastSeen>60;
+      const cls=gone?'badge-red':weak?'badge-yellow':'badge-green';
+      const lbl=gone?'Left early':weak?'No signal':'Present';
+      const ago=e.lastSeen<5?'just now':e.lastSeen+'s ago';
+      return `<div class="rec-row" style="border-left-color:${gone?'#ef4444':weak?'#fbbf24':'#22c55e'}">
+        <div><div class="rec-name">${e.name||e.idx}</div><div class="rec-id">${e.idx}</div></div>
+        <div style="text-align:right">
+          <span class="badge ${cls}">${lbl}</span>
+          <div style="font-size:10px;color:#475569;margin-top:2px">${ago}</div>
+        </div>
+      </div>`;
+    }).join('')||'<div style="color:#64748b;font-size:12px;text-align:center;padding:12px">No students yet</div>';
   }catch(e){}
 }
 
 function showSession(){
   app.innerHTML=`<div class="session-box">
-    <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.6px;color:#22c55e;margin-bottom:6px">● Session Active</div>
-    <div style="font-size:17px;font-weight:700;color:#f1f5f9;margin-bottom:2px">${S.title}</div>
-    <div style="font-size:13px;color:#94a3b8">${S.course}</div>
+    <div style="font-size:10px;font-weight:700;text-transform:uppercase;color:#22c55e;margin-bottom:4px"><span class="pulse"></span>Session Active</div>
+    <div style="font-size:16px;font-weight:700;color:#f1f5f9">${S.title}</div>
+    <div style="font-size:12px;color:#94a3b8">${S.course}</div>
   </div>
-  <div style="font-size:12px;font-weight:700;color:#64748b;text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px">Attendance Records — <span id="rec-count">loading…</span></div>
-  <div id="rec-list" class="record-list"></div>
-  <button class="btn" style="background:#1e3a5f;color:#60a5fa;margin-top:12px" onclick="loadRecords()">↻ Refresh</button>
-  <button class="btn btn-red" onclick="endSession()">■ End Session</button>
-  <button class="btn btn-back" onclick="location.href='/'">← Student page</button>`;
-  loadRecords();
-  setInterval(loadRecords,5000);
+  <div class="summary">
+    <div class="sum-box"><div class="sum-num" id="rec-total">—</div><div class="sum-lbl">Marked</div></div>
+    <div class="sum-box"><div class="sum-num" id="sum-present" style="color:#4ade80">—</div><div class="sum-lbl">Present</div></div>
+    <div class="sum-box"><div class="sum-num" id="sum-flagged" style="color:#f87171">—</div><div class="sum-lbl">Left early</div></div>
+    <div class="sum-box"><div class="sum-num" id="sum-total" style="color:#94a3b8">—</div><div class="sum-lbl">Total</div></div>
+  </div>
+  <div class="tabs">
+    <div class="tab active" data-t="records" onclick="switchTab('records')">📋 Records</div>
+    <div class="tab" data-t="presence" onclick="switchTab('presence')">📡 Live Presence</div>
+  </div>
+  <div class="tab-panel active" data-t="records"><div id="rec-list" class="rec-scroll"></div></div>
+  <div class="tab-panel" data-t="presence">
+    <div class="refresh-note">Auto-refreshes every 5 s</div>
+    <div id="pres-list" class="rec-scroll"></div>
+  </div>
+  <button class="btn btn-red" style="margin-top:12px" onclick="endSession()">■ End Session</button>
+  <button class="btn btn-back" style="margin-top:6px" onclick="location.href='/'">← Student page</button>`;
+  loadRecords();loadPresence();
+  setInterval(()=>{if(_activeTab==='records')loadRecords();else loadPresence();},5000);
 }
 
 async function endSession(){
-  if(!confirm('End the session? Students can no longer mark attendance.'))return;
+  if(!confirm('End session? Students can no longer mark.'))return;
   try{
     const r=await fetch('/lecturer/end',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({pin:PIN})});
-    const j=await r.json();
-    if(!r.ok)throw new Error(j.error||'Failed');
+    const j=await r.json();if(!r.ok)throw new Error(j.error||'Failed');
     S.active=false;location.reload();
   }catch(e){alert('Error: '+e.message);}
 }
 
-if(authed){showMain();}else{showPin();}
+if(authed)showMain();else showPin();
 </script></body></html>
 )HTML";
 
@@ -1065,6 +1329,7 @@ static void registerOfflineHttp() {
     offlineSessionStart  = (uint32_t)time(nullptr);
     offlineRecordCount   = 0;
     clearOfflineRecords();
+    clearPresence();       // reset live tracking for new session
     saveOfflineSession();
     log("Offline session started: " + offlineSessionTitle);
     oledShow("OFFLINE", offlineSessionTitle.substring(0,16), "Students: 0");
@@ -1083,6 +1348,8 @@ static void registerOfflineHttp() {
     offlineSessionActive = false;
     saveOfflineSession();
     offlineSyncPending = true;
+    clearPresence();      // clear tracking table — session over
+    stopBleBeacon();      // stop advertising — students' phones will lose signal
     log("Offline session ended, sync pending");
     oledShow("OFFLINE", "Session ended", "Syncing soon");
     localHttp.send(200, "application/json", "{\"ok\":true,\"count\":" + String(offlineRecordCount) + "}");
@@ -1118,6 +1385,7 @@ static void registerOfflineHttp() {
       return;
     }
     saveOfflineRecord(name, idx);
+    addOrUpdatePresence(idx, name);   // start presence clock for this student
     saveOfflineSession();
     String display = name.length() > 12 ? name.substring(0,12) + ".." : name;
     oledShow("OFFLINE", display, "Students: " + String(offlineRecordCount));
@@ -1200,6 +1468,42 @@ static void registerOfflineHttp() {
     localHttp.send(200, "application/json", resp);
   });
 
+  // POST /student/heartbeat  { indexNumber }
+  // Student browser sends this every 30 s to prove they are still present.
+  localHttp.on("/student/heartbeat", HTTP_POST, [](){
+    localHttp.sendHeader("Access-Control-Allow-Origin", "*");
+    StaticJsonDocument<128> req;
+    if (!deserializeJson(req, localHttp.arg("plain"))) {
+      String idx = req["indexNumber"] | "";
+      idx.toUpperCase();
+      String name = req["name"] | "";
+      if (idx.length()) addOrUpdatePresence(idx, name);
+    }
+    localHttp.send(200, "application/json", "{\"ok\":true}");
+  });
+
+  // POST /student/left  { indexNumber }
+  // Sent via sendBeacon when student closes the tab or navigates away.
+  localHttp.on("/student/left", HTTP_POST, [](){
+    localHttp.sendHeader("Access-Control-Allow-Origin", "*");
+    StaticJsonDocument<128> req;
+    if (!deserializeJson(req, localHttp.arg("plain"))) {
+      String idx = req["indexNumber"] | "";
+      idx.toUpperCase();
+      if (idx.length()) {
+        markPresenceLeft(idx);
+        log("Student left (signal): " + idx);
+      }
+    }
+    localHttp.send(200, "application/json", "{\"ok\":true}");
+  });
+
+  // GET /lecturer/presence  — live presence table for the lecturer dashboard
+  localHttp.on("/lecturer/presence", HTTP_GET, [](){
+    localHttp.sendHeader("Access-Control-Allow-Origin", "*");
+    localHttp.send(200, "application/json", presenceJson());
+  });
+
   // GET /offline-status  — JSON summary (for Flutter app awareness)
   localHttp.on("/offline-status", HTTP_GET, [](){
     localHttp.sendHeader("Access-Control-Allow-Origin", "*");
@@ -1226,6 +1530,10 @@ static void startOfflineMode() {
   dns.start(53, "*", ip);   // captive portal DNS
   registerOfflineHttp();
   localHttp.begin();
+
+  // Start BLE beacon so student phones can detect the classroom device
+  // even when not on the captive portal (background BLE scan in Dikly app).
+  startBleBeacon();
 }
 
 // ─── Local HTTP API (used by the Attendance Device page WiFi proxy) ──────────
@@ -1532,6 +1840,13 @@ void loop() {
   if (now - lastHeartbeatMs >= HEARTBEAT_INTERVAL_MS) {
     lastHeartbeatMs = now;
     sendHeartbeat();
+  }
+
+  // Check presence timeouts every 60 s when an offline session is synced online
+  if (offlineSessionActive && presenceCount > 0 &&
+      now - lastPresenceCheckMs >= 60000) {
+    lastPresenceCheckMs = now;
+    checkPresenceTimeouts();
   }
 
   // Renders 4×/sec so the rotating-code countdown stays smooth.

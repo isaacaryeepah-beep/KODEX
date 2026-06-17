@@ -1,3 +1,5 @@
+import 'dart:async';
+import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -6,6 +8,7 @@ import '../../core/auth.dart';
 import '../../core/cache.dart';
 import '../../core/connectivity.dart';
 import '../../core/theme.dart';
+import '../../services/ble_presence_service.dart';
 import '../../services/offline_credential_service.dart';
 
 // ── Providers ─────────────────────────────────────────────────────────────────
@@ -39,10 +42,83 @@ class _OfflineAttendanceScreenState extends ConsumerState<OfflineAttendanceScree
   Map<String, dynamic>? _esp32Info;
   bool _credentialSent = false;
 
+  // Presence heartbeat — sent every 30 s after successful mark
+  Timer? _heartbeatTimer;
+  String? _markedIndexNumber;
+  String  _deviceIp = '192.168.4.1';
+
+  // BLE presence — scans for the ESP32 classroom beacon in background
+  BlePresenceService? _bleService;
+  bool _bleInRange = false;
+
   @override
   void dispose() {
+    _stopHeartbeat();
+    _bleService?.stop();
     _codeCtrl.dispose();
     super.dispose();
+  }
+
+  void _startHeartbeat(String indexNumber, String deviceIp) {
+    _markedIndexNumber = indexNumber;
+    _deviceIp = deviceIp;
+    _heartbeatTimer?.cancel();
+    _sendHeartbeat();  // immediate
+    _heartbeatTimer = Timer.periodic(
+      const Duration(seconds: 30),
+      (_) => _sendHeartbeat(),
+    );
+
+    // Also start BLE scanning — detects device beacon even without captive portal
+    _bleService?.stop();
+    _bleService = BlePresenceService(
+      onPresenceChanged: (inRange, rssi) {
+        if (!mounted) return;
+        setState(() => _bleInRange = inRange);
+        if (!inRange) {
+          // Student left BLE range → send explicit left signal to device
+          _sendLeftSignal();
+        }
+      },
+    );
+    _bleService!.start();
+  }
+
+  void _stopHeartbeat() {
+    _heartbeatTimer?.cancel();
+    _heartbeatTimer = null;
+    if (_markedIndexNumber != null) _sendLeftSignal();
+  }
+
+  Future<void> _sendHeartbeat() async {
+    if (_markedIndexNumber == null) return;
+    try {
+      final localDio = Dio(BaseOptions(
+        connectTimeout: const Duration(seconds: 3),
+        receiveTimeout: const Duration(seconds: 3),
+      ));
+      await localDio.post(
+        'http://$_deviceIp/student/heartbeat',
+        data: {'indexNumber': _markedIndexNumber},
+        options: Options(headers: {'Content-Type': 'application/json'}),
+      );
+    } catch (_) {}
+  }
+
+  Future<void> _sendLeftSignal() async {
+    if (_markedIndexNumber == null) return;
+    try {
+      final localDio = Dio(BaseOptions(
+        connectTimeout: const Duration(seconds: 3),
+        receiveTimeout: const Duration(seconds: 3),
+      ));
+      await localDio.post(
+        'http://$_deviceIp/student/left',
+        data: {'indexNumber': _markedIndexNumber},
+        options: Options(headers: {'Content-Type': 'application/json'}),
+      );
+      _markedIndexNumber = null;
+    } catch (_) {}
   }
 
   void _refreshQueue() {
@@ -105,10 +181,12 @@ class _OfflineAttendanceScreenState extends ConsumerState<OfflineAttendanceScree
       );
       if (ok) {
         _codeCtrl.clear();
+        // Start presence heartbeat — keeps signalling device even without captive portal open
+        _startHeartbeat(user.indexNumber ?? user.id, _deviceIp);
         setState(() {
           _submitting = false;
           _lastSuccess = true;
-          _lastMessage = 'Attendance marked via local device!';
+          _lastMessage = 'Attendance marked! Presence tracking active.';
         });
         return;
       }
