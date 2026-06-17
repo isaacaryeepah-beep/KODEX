@@ -386,6 +386,10 @@ class ApiService {
     return (list as List).map((e) => User.fromJson(e as Map<String, dynamic>)).toList();
   }
 
+  Future<void> deleteUser(String userId) async {
+    await _dio.delete('/api/users/$userId');
+  }
+
   // Admin-level pending approvals
   Future<Map<String, dynamic>> getAdminDashboardData() async {
     final today = DateTime.now().toIso8601String().substring(0, 10);
