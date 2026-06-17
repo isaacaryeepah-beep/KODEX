@@ -201,6 +201,7 @@ class _StudentShellState extends ConsumerState<StudentShell> {
         userName: user?.name ?? '',
         userEmail: user?.email ?? '',
         userRole: 'Student',
+        institutionCode: user?.institutionCode ?? '',
         sections: _sections,
         onSignOut: () async {
           Navigator.pop(context);

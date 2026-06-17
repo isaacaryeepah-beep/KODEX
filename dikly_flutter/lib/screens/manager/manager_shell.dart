@@ -159,6 +159,7 @@ class _ManagerShellState extends ConsumerState<ManagerShell> {
         userName: user?.name ?? '',
         userEmail: user?.email ?? '',
         userRole: 'Manager',
+        institutionCode: user?.institutionCode ?? '',
         sections: _sections,
         onSignOut: () async {
           Navigator.pop(context);

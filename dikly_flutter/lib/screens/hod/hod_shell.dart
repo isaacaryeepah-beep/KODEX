@@ -189,6 +189,7 @@ class _HodShellState extends ConsumerState<HodShell> {
         userName: user?.name ?? '',
         userEmail: user?.email ?? '',
         userRole: 'Head of Department',
+        institutionCode: user?.institutionCode ?? '',
         sections: _sections,
         onSignOut: () async {
           Navigator.pop(context);
