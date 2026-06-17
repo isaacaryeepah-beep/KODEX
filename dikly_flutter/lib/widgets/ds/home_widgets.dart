@@ -213,9 +213,12 @@ class DiklyQuickChip extends StatelessWidget {
         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
         margin: const EdgeInsets.only(right: 10),
         decoration: BoxDecoration(
-          color: color.withOpacity(0.08),
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: color.withOpacity(0.15)),
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(color: color.withValues(alpha: 0.35)),
+          boxShadow: [
+            BoxShadow(color: color.withValues(alpha: 0.06), blurRadius: 4, offset: const Offset(0, 1)),
+          ],
         ),
         child: Row(
           mainAxisSize: MainAxisSize.min,

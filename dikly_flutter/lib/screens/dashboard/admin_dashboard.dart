@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-import 'package:intl/intl.dart';
+import 'package:google_fonts/google_fonts.dart';
+
 import '../../core/api.dart';
 import '../../core/auth.dart';
 import '../../core/theme.dart';
@@ -23,6 +25,7 @@ class _AdminDashboardState extends ConsumerState<AdminDashboard> {
   List<Course> _courses = [];
   List<Meeting> _meetings = [];
   bool _loading = true;
+  String? _error;
 
   @override
   void initState() {
@@ -66,123 +69,198 @@ class _AdminDashboardState extends ConsumerState<AdminDashboard> {
   }
 
   Widget _buildContent(String name, bool isHod) {
-    final students = _users.where((u) => u.role == 'student').length;
-    final lecturers = _users.where((u) => u.role == 'lecturer').length;
+    final activeSessions = _meetings.where((m) => m.isLive).length;
+    final firstName = name.split(' ').first;
 
     return ListView(
-      padding: const EdgeInsets.all(16),
+      padding: EdgeInsets.zero,
       children: [
-        Container(
-          padding: const EdgeInsets.all(20),
-          decoration: BoxDecoration(
-            gradient: LinearGradient(
-              colors: isHod
-                  ? [const Color(0xFFDC2626), const Color(0xFFB91C1C)]
-                  : [const Color(0xFFD97706), const Color(0xFFB45309)],
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
-            ),
-            borderRadius: BorderRadius.circular(16),
-          ),
+        // Greeting header — matches web flat style
+        WebGreetingHeader(
+          greeting: '${_getGreeting()}, $firstName 👋',
+          subtitle: "Here's what's happening at Dikly today.",
+          institutionCode: 'DIKLY',
+          onCopyCode: () {
+            HapticFeedback.lightImpact();
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(content: Text('Code copied!'), duration: Duration(seconds: 1)),
+            );
+          },
+        ),
+
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 20, 16, 24),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text('${_getGreeting()},', style: const TextStyle(color: Colors.white70, fontSize: 14)),
-              const SizedBox(height: 4),
-              Text(name, style: const TextStyle(color: Colors.white, fontSize: 22, fontWeight: FontWeight.w700)),
-              const SizedBox(height: 8),
-              Text(DateFormat('EEEE, MMMM d').format(DateTime.now()), style: const TextStyle(color: Colors.white70, fontSize: 13)),
+              // Stat cards — 2x2 grid matching web's top-border style
+              GridView.count(
+                crossAxisCount: 2,
+                crossAxisSpacing: 12,
+                mainAxisSpacing: 12,
+                childAspectRatio: 1.35,
+                shrinkWrap: true,
+                physics: const NeverScrollableScrollPhysics(),
+                children: [
+                  WebStatCard(
+                    label: 'Total Users',
+                    value: '${_users.length}',
+                    subtitle: 'Employees & managers',
+                    icon: Icons.people_outlined,
+                    color: DiklyColors.primary,
+                  ),
+                  WebStatCard(
+                    label: 'Active Sessions',
+                    value: '$activeSessions',
+                    subtitle: activeSessions == 0 ? 'No active sessions' : 'Live now',
+                    icon: Icons.radio_button_checked,
+                    color: DiklyColors.success,
+                  ),
+                  WebStatCard(
+                    label: 'Total Sessions',
+                    value: '${_meetings.length}',
+                    subtitle: 'All time',
+                    icon: Icons.video_call_outlined,
+                    color: DiklyColors.primary,
+                  ),
+                  WebStatCard(
+                    label: 'Courses',
+                    value: '${_courses.length}',
+                    subtitle: 'All departments',
+                    icon: Icons.school_outlined,
+                    color: const Color(0xFF7C3AED),
+                  ),
+                ],
+              ),
+
+              const SizedBox(height: 24),
+
+              // Quick Actions — pill buttons
+              const WebSectionLabel(label: 'Quick Actions'),
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: [
+                  QuickActionPill(
+                    icon: Icons.person_add_outlined,
+                    label: 'Add user',
+                    color: DiklyColors.primary,
+                    onTap: () => context.go('/admin/users'),
+                  ),
+                  QuickActionPill(
+                    icon: Icons.campaign_outlined,
+                    label: 'Post announcement',
+                    color: DiklyColors.warning,
+                    onTap: () => context.go('/announcements'),
+                  ),
+                  QuickActionPill(
+                    icon: Icons.bar_chart_outlined,
+                    label: 'View reports',
+                    color: DiklyColors.textSecondary,
+                    onTap: () => context.go('/reports'),
+                  ),
+                ],
+              ),
+
+              const SizedBox(height: 24),
+
+              // Recent Sessions section
+              WebSectionHeader(
+                title: 'Recent sessions',
+                actionLabel: 'View all →',
+                onAction: () => context.go('/sessions'),
+              ),
+              if (_meetings.isEmpty)
+                const WebEmptyCard(message: 'No sessions yet')
+              else
+                ..._meetings.take(3).map((m) => _SessionTile(meeting: m)),
+
+              const SizedBox(height: 20),
+
+              // Recent Users
+              WebSectionHeader(
+                title: 'Team Members',
+                actionLabel: 'View all →',
+                onAction: () => context.go('/admin/users'),
+              ),
+              if (_users.isEmpty)
+                const WebEmptyCard(message: 'No users yet')
+              else
+                ..._users.take(5).map((u) => _UserTile(user: u)),
+
+              const SizedBox(height: 32),
             ],
           ),
         ),
-        const SizedBox(height: 20),
-        Text('Platform Overview', style: Theme.of(context).textTheme.titleLarge),
-        const SizedBox(height: 12),
-        GridView.count(
-          crossAxisCount: 2,
-          crossAxisSpacing: 12,
-          mainAxisSpacing: 12,
-          childAspectRatio: 1.8,
-          shrinkWrap: true,
-          physics: const NeverScrollableScrollPhysics(),
-          children: [
-            DiklyStatCard(label: 'Total Users', value: '${_users.length}', color: DiklyColors.primary, icon: Icons.people_outlined),
-            DiklyStatCard(label: 'Courses', value: '${_courses.length}', color: const Color(0xFF7C3AED), icon: Icons.school_outlined),
-            DiklyStatCard(label: 'Students', value: '$students', color: DiklyColors.success, icon: Icons.person_outlined),
-            DiklyStatCard(label: 'Lecturers', value: '$lecturers', color: DiklyColors.warning, icon: Icons.person_pin_outlined),
-          ],
-        ),
-        const SizedBox(height: 20),
-        Text('Quick Actions', style: Theme.of(context).textTheme.titleLarge),
-        const SizedBox(height: 12),
-        GridView.count(
-          crossAxisCount: 3,
-          crossAxisSpacing: 12,
-          mainAxisSpacing: 12,
-          childAspectRatio: 1.2,
-          shrinkWrap: true,
-          physics: const NeverScrollableScrollPhysics(),
-          children: [
-            _GridAction(label: 'Users', icon: Icons.people_rounded, color: DiklyColors.primary, onTap: () => context.go('/admin/users')),
-            _GridAction(label: 'Courses', icon: Icons.school_rounded, color: const Color(0xFF7C3AED), onTap: () => context.go('/courses')),
-            _GridAction(label: 'Sessions', icon: Icons.video_call_rounded, color: DiklyColors.success, onTap: () => context.go('/sessions')),
-            _GridAction(label: 'Meetings', icon: Icons.groups_rounded, color: DiklyColors.warning, onTap: () => context.go('/meetings')),
-            _GridAction(label: 'Reports', icon: Icons.bar_chart_rounded, color: const Color(0xFFDC2626), onTap: () => context.go('/reports')),
-            _GridAction(label: 'Announce', icon: Icons.campaign_rounded, color: DiklyColors.error, onTap: () => context.go('/announcements')),
-          ],
-        ),
-        const SizedBox(height: 20),
-        Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          children: [
-            Text('Recent Users', style: Theme.of(context).textTheme.titleLarge),
-            TextButton(onPressed: () => context.go('/admin/users'), child: const Text('See all')),
-          ],
-        ),
-        const SizedBox(height: 8),
-        for (final user in _users.take(5))
-          _UserTile(user: user),
-        const SizedBox(height: 32),
       ],
     );
   }
 
   String _getGreeting() {
     final hour = DateTime.now().hour;
-    if (hour < 12) return 'Good Morning';
-    if (hour < 17) return 'Good Afternoon';
-    return 'Good Evening';
+    if (hour < 12) return 'Good morning';
+    if (hour < 17) return 'Good afternoon';
+    return 'Good evening';
   }
 }
 
-class _GridAction extends StatelessWidget {
-  final String label;
-  final IconData icon;
-  final Color color;
-  final VoidCallback onTap;
-
-  const _GridAction({required this.label, required this.icon, required this.color, required this.onTap});
+class _SessionTile extends StatelessWidget {
+  final Meeting meeting;
+  const _SessionTile({required this.meeting});
 
   @override
   Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        decoration: BoxDecoration(
-          color: color.withOpacity(0.08),
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: color.withOpacity(0.2)),
-        ),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(icon, color: color, size: 26),
-            const SizedBox(height: 6),
-            Text(label, style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: color), textAlign: TextAlign.center),
-          ],
-        ),
+    return Container(
+      margin: const EdgeInsets.only(bottom: 8),
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: const Color(0xFFE5E7EB)),
+      ),
+      child: Row(
+        children: [
+          Container(
+            width: 8,
+            height: 8,
+            decoration: BoxDecoration(
+              color: meeting.isLive ? DiklyColors.success : DiklyColors.textMuted,
+              shape: BoxShape.circle,
+            ),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  meeting.title,
+                  style: GoogleFonts.dmSans(fontSize: 14, fontWeight: FontWeight.w600, color: DiklyColors.text),
+                  overflow: TextOverflow.ellipsis,
+                ),
+                if (meeting.createdBy != null)
+                  Text(
+                    meeting.createdBy!,
+                    style: GoogleFonts.dmSans(fontSize: 12, color: DiklyColors.textMuted),
+                  ),
+              ],
+            ),
+          ),
+          Text(
+            _formatTime(meeting.scheduledStart),
+            style: GoogleFonts.dmSans(fontSize: 11, color: DiklyColors.textMuted),
+          ),
+        ],
       ),
     );
+  }
+
+  String _formatTime(DateTime? dt) {
+    if (dt == null) return '';
+    final diff = DateTime.now().difference(dt);
+    if (diff.inDays > 0) return '${diff.inDays}d ago';
+    if (diff.inHours > 0) return '${diff.inHours}h ago';
+    return '${diff.inMinutes}m ago';
   }
 }
 
@@ -196,6 +274,7 @@ class _UserTile extends StatelessWidget {
       case 'lecturer': return const Color(0xFF7C3AED);
       case 'admin': return DiklyColors.warning;
       case 'manager': return const Color(0xFF0D9488);
+      case 'employee': return DiklyColors.success;
       default: return DiklyColors.textSecondary;
     }
   }
@@ -213,24 +292,24 @@ class _UserTile extends StatelessWidget {
       margin: const EdgeInsets.only(bottom: 8),
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
-        color: DiklyColors.surface,
+        color: Colors.white,
         borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: DiklyColors.border),
+        border: Border.all(color: const Color(0xFFE5E7EB)),
       ),
       child: Row(
         children: [
           CircleAvatar(
-            radius: 20,
+            radius: 18,
             backgroundColor: _roleColor.withOpacity(0.1),
-            child: Text(_initials, style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: _roleColor)),
+            child: Text(_initials, style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: _roleColor)),
           ),
           const SizedBox(width: 12),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(user.name, style: Theme.of(context).textTheme.bodyMedium?.copyWith(fontWeight: FontWeight.w600), overflow: TextOverflow.ellipsis),
-                Text(user.email, style: Theme.of(context).textTheme.bodySmall?.copyWith(color: DiklyColors.textSecondary), overflow: TextOverflow.ellipsis),
+                Text(user.name, style: GoogleFonts.dmSans(fontSize: 14, fontWeight: FontWeight.w600, color: DiklyColors.text), overflow: TextOverflow.ellipsis),
+                Text(user.email, style: GoogleFonts.dmSans(fontSize: 12, color: DiklyColors.textMuted), overflow: TextOverflow.ellipsis),
               ],
             ),
           ),
@@ -240,7 +319,10 @@ class _UserTile extends StatelessWidget {
               color: _roleColor.withOpacity(0.1),
               borderRadius: BorderRadius.circular(6),
             ),
-            child: Text(user.role.toUpperCase(), style: TextStyle(fontSize: 9, fontWeight: FontWeight.w700, color: _roleColor, letterSpacing: 0.5)),
+            child: Text(
+              user.role.toUpperCase(),
+              style: TextStyle(fontSize: 9, fontWeight: FontWeight.w700, color: _roleColor, letterSpacing: 0.5),
+            ),
           ),
         ],
       ),

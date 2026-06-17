@@ -235,17 +235,23 @@ class _HodHeader extends StatelessWidget {
       children: [
         Text(
           'Department Overview',
-          style: GoogleFonts.dmSans(fontSize: 13, fontWeight: FontWeight.w700, color: DiklyColors.textMuted, letterSpacing: 0.3),
+          style: GoogleFonts.dmSans(fontSize: 22, fontWeight: FontWeight.w800, color: DiklyColors.text, height: 1.2),
         ),
-        const SizedBox(height: 2),
-        Text(
-          'Welcome back, $name',
-          style: GoogleFonts.dmSans(fontSize: 20, fontWeight: FontWeight.w800, color: DiklyColors.text),
-        ),
-        const SizedBox(height: 6),
+        const SizedBox(height: 4),
         Row(
           children: [
-            if (department != null && department!.isNotEmpty) ...[
+            Expanded(
+              child: Text(
+                'Welcome back, $name',
+                style: GoogleFonts.dmSans(fontSize: 13, color: DiklyColors.textMuted),
+              ),
+            ),
+          ],
+        ),
+        if (department != null && department!.isNotEmpty) ...[
+          const SizedBox(height: 8),
+          Row(
+            children: [
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                 decoration: BoxDecoration(
@@ -259,13 +265,19 @@ class _HodHeader extends StatelessWidget {
                 ),
               ),
               const SizedBox(width: 8),
+              Text(
+                '— $company',
+                style: GoogleFonts.dmSans(fontSize: 12, color: DiklyColors.textMuted),
+              ),
             ],
-            Text(
-              company,
-              style: GoogleFonts.dmSans(fontSize: 12, color: DiklyColors.textMuted),
-            ),
-          ],
-        ),
+          ),
+        ] else ...[
+          const SizedBox(height: 2),
+          Text(
+            company,
+            style: GoogleFonts.dmSans(fontSize: 12, color: DiklyColors.textMuted),
+          ),
+        ],
       ],
     );
   }

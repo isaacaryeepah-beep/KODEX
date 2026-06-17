@@ -1,3 +1,4 @@
+import 'package:fl_chart/fl_chart.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -209,6 +210,25 @@ class AdminHomeScreen extends ConsumerWidget {
             ],
           ),
         ),
+        const SizedBox(height: 22),
+
+        // ── Attendance Trend (Last 14 Days) chart ───────────────────────
+        DiklyFadeIn(
+          delay: const Duration(milliseconds: 200),
+          child: _AttendanceTrendChart(
+            attendanceTrend: (d['attendanceTrend'] as List?) ?? [],
+          ),
+        ),
+        const SizedBox(height: 22),
+
+        // ── Users by Role chart ─────────────────────────────────────────
+        DiklyFadeIn(
+          delay: const Duration(milliseconds: 240),
+          child: _UsersByRoleChart(
+            totalUsers: d['totalUsers'] as int? ?? 0,
+            usersByRole: d['usersByRole'] as Map<String, dynamic>? ?? {},
+          ),
+        ),
       ],
     );
   }
@@ -382,6 +402,219 @@ class _AdminStatCard extends StatelessWidget {
             ),
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// ── Attendance Trend Line Chart ───────────────────────────────────────────────
+
+class _AttendanceTrendChart extends StatelessWidget {
+  final List<dynamic> attendanceTrend;
+
+  const _AttendanceTrendChart({required this.attendanceTrend});
+
+  @override
+  Widget build(BuildContext context) {
+    final spots = <FlSpot>[];
+    for (var i = 0; i < attendanceTrend.length; i++) {
+      final item = attendanceTrend[i];
+      final count = (item is Map ? (item['count'] ?? item['total'] ?? 0) : 0);
+      spots.add(FlSpot(i.toDouble(), (count as num).toDouble()));
+    }
+    if (spots.isEmpty) {
+      for (var i = 0; i < 14; i++) {
+        spots.add(FlSpot(i.toDouble(), 0));
+      }
+    }
+
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: const Color(0xFFE5E7EB)),
+        boxShadow: const [BoxShadow(color: Color(0x06000000), blurRadius: 4, offset: Offset(0, 1))],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'Attendance Trend (Last 14 Days)',
+            style: GoogleFonts.dmSans(fontSize: 14, fontWeight: FontWeight.w700, color: DiklyColors.text),
+          ),
+          const SizedBox(height: 16),
+          SizedBox(
+            height: 180,
+            child: LineChart(
+              LineChartData(
+                gridData: FlGridData(
+                  show: true,
+                  drawVerticalLine: false,
+                  horizontalInterval: 1,
+                  getDrawingHorizontalLine: (_) => FlLine(
+                    color: const Color(0xFFE5E7EB),
+                    strokeWidth: 0.8,
+                  ),
+                ),
+                titlesData: FlTitlesData(
+                  leftTitles: AxisTitles(
+                    sideTitles: SideTitles(
+                      showTitles: true,
+                      reservedSize: 30,
+                      getTitlesWidget: (v, _) => Text(
+                        v.toInt().toString(),
+                        style: GoogleFonts.dmSans(fontSize: 10, color: const Color(0xFF9CA3AF)),
+                      ),
+                    ),
+                  ),
+                  bottomTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
+                  topTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
+                  rightTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
+                ),
+                borderData: FlBorderData(show: false),
+                lineBarsData: [
+                  LineChartBarData(
+                    spots: spots,
+                    isCurved: true,
+                    color: const Color(0xFF2563EB),
+                    barWidth: 2.5,
+                    isStrokeCapRound: true,
+                    dotData: const FlDotData(show: false),
+                    belowBarData: BarAreaData(
+                      show: true,
+                      color: const Color(0xFF2563EB).withValues(alpha: 0.08),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// ── Users by Role Donut Chart ─────────────────────────────────────────────────
+
+class _UsersByRoleChart extends StatelessWidget {
+  final int totalUsers;
+  final Map<String, dynamic> usersByRole;
+
+  const _UsersByRoleChart({required this.totalUsers, required this.usersByRole});
+
+  static const _roleColors = <String, Color>{
+    'admin':    Color(0xFF2563EB),
+    'lecturer': Color(0xFFD97706),
+    'student':  Color(0xFF059669),
+    'hod':      Color(0xFF7C3AED),
+    'manager':  Color(0xFF0891B2),
+    'employee': Color(0xFFDC2626),
+  };
+
+  @override
+  Widget build(BuildContext context) {
+    final sections = <PieChartSectionData>[];
+    final legends  = <MapEntry<String, int>>[];
+
+    usersByRole.forEach((role, count) {
+      final c = (count is num) ? count.toInt() : 0;
+      if (c > 0) {
+        legends.add(MapEntry(role, c));
+        sections.add(PieChartSectionData(
+          value: c.toDouble(),
+          color: _roleColors[role.toLowerCase()] ?? const Color(0xFF6B7280),
+          radius: 22,
+          showTitle: false,
+        ));
+      }
+    });
+
+    if (sections.isEmpty) {
+      sections.add(PieChartSectionData(
+        value: 1,
+        color: const Color(0xFFE5E7EB),
+        radius: 22,
+        showTitle: false,
+      ));
+    }
+
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: const Color(0xFFE5E7EB)),
+        boxShadow: const [BoxShadow(color: Color(0x06000000), blurRadius: 4, offset: Offset(0, 1))],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'Users by Role',
+            style: GoogleFonts.dmSans(fontSize: 14, fontWeight: FontWeight.w700, color: DiklyColors.text),
+          ),
+          const SizedBox(height: 16),
+          Row(
+            children: [
+              SizedBox(
+                width: 120,
+                height: 120,
+                child: PieChart(
+                  PieChartData(
+                    sections: sections,
+                    centerSpaceRadius: 36,
+                    sectionsSpace: 2,
+                  ),
+                ),
+              ),
+              const SizedBox(width: 20),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      '$totalUsers',
+                      style: GoogleFonts.dmSans(fontSize: 26, fontWeight: FontWeight.w800, color: DiklyColors.text),
+                    ),
+                    Text(
+                      'Total Users',
+                      style: GoogleFonts.dmSans(fontSize: 11, color: const Color(0xFF9CA3AF)),
+                    ),
+                    const SizedBox(height: 10),
+                    ...legends.map((e) => Padding(
+                      padding: const EdgeInsets.only(bottom: 4),
+                      child: Row(
+                        children: [
+                          Container(
+                            width: 10,
+                            height: 10,
+                            decoration: BoxDecoration(
+                              color: _roleColors[e.key.toLowerCase()] ?? const Color(0xFF6B7280),
+                              borderRadius: BorderRadius.circular(2),
+                            ),
+                          ),
+                          const SizedBox(width: 6),
+                          Expanded(
+                            child: Text(
+                              '${e.key[0].toUpperCase()}${e.key.substring(1)}',
+                              style: GoogleFonts.dmSans(fontSize: 11, color: DiklyColors.textSecondary),
+                            ),
+                          ),
+                          Text(
+                            '${e.value}',
+                            style: GoogleFonts.dmSans(fontSize: 11, fontWeight: FontWeight.w700, color: DiklyColors.text),
+                          ),
+                        ],
+                      ),
+                    )),
+                  ],
+                ),
+              ),
+            ],
           ),
         ],
       ),
