@@ -8,7 +8,6 @@ import '../../widgets/dikly_drawer.dart';
 import 'manager_home_screen.dart';
 import 'manager_employees_screen.dart';
 import 'manager_leave_screen.dart';
-import 'manager_reports_screen.dart';
 import 'timesheets_screen.dart';
 
 class ManagerShell extends ConsumerStatefulWidget {
