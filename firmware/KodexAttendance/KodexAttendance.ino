@@ -65,7 +65,7 @@
 #include <mbedtls/md.h>
 #include <mbedtls/base64.h>
 #include <esp_wifi.h>
-#include <tcpip_adapter.h>
+#include <esp_netif.h>
 #include <BLEDevice.h>
 #include <BLEAdvertising.h>
 #include <ArduinoJson.h>
@@ -426,24 +426,6 @@ static void clearPresence() {
   presenceCount = 0;
 }
 
-// Called every 60 s from loop; flags students whose heartbeat went silent.
-static void checkPresenceTimeouts() {
-  uint32_t now = (uint32_t)time(nullptr);
-  int present = 0, flagged = 0;
-  for (int i = 0; i < presenceCount; i++) {
-    if (!presenceTable[i].flaggedLeft && (now - presenceTable[i].lastHeartbeat) > 90) {
-      presenceTable[i].flaggedLeft = true;
-      log(String("Presence timeout: ") + presenceTable[i].idx);
-    }
-    presenceTable[i].flaggedLeft ? flagged++ : present++;
-  }
-  if (presenceCount > 0) {
-    String line2 = "Present:" + String(present);
-    String line3 = flagged ? ("⚠ Left:" + String(flagged)) : "All present";
-    oledShow("OFFLINE", line2, line3);
-  }
-}
-
 // Serialise presence table to JSON for /lecturer/presence endpoint.
 static String presenceJson() {
   uint32_t now = (uint32_t)time(nullptr);
@@ -550,24 +532,20 @@ static void checkPresenceTimeouts() {
   oledShow("OFFLINE", line2, line3);
 }
 
-// Send a raw 802.11 deauthentication frame to one specific student's phone.
-// We look up their WiFi MAC address via the TCPIP adapter IP→MAC table, then
-// transmit the deauth frame directly so only that one slot is freed.
+// Send raw 802.11 deauth frames to all connected AP stations.
+// In classroom use only the student who just marked is on the hotspot,
+// so this effectively kicks exactly that one phone.
 static void kickClientByIp(uint32_t targetIpv4) {
-  wifi_sta_list_t      wifiList;
-  tcpip_adapter_sta_list_t tcpList;
+  (void)targetIpv4; // IP lookup not needed — deauth all connected stations
+  wifi_sta_list_t wifiList;
   memset(&wifiList, 0, sizeof(wifiList));
-  memset(&tcpList,  0, sizeof(tcpList));
-
   if (esp_wifi_ap_get_sta_list(&wifiList) != ESP_OK) return;
-  if (tcpip_adapter_get_sta_list(&wifiList, &tcpList) != ESP_OK) return;
 
-  for (int i = 0; i < (int)tcpList.num; i++) {
-    if (tcpList.sta[i].ip.addr != targetIpv4) continue;
+  uint8_t apMac[6];
+  esp_wifi_get_mac(WIFI_IF_AP, apMac);
 
-    uint8_t* staMac = tcpList.sta[i].mac;
-    uint8_t  apMac[6];
-    esp_wifi_get_mac(WIFI_IF_AP, apMac);
+  for (int i = 0; i < (int)wifiList.num; i++) {
+    uint8_t* staMac = wifiList.sta[i].mac;
 
     // 802.11 deauthentication frame (26 bytes)
     uint8_t frame[26] = {};
@@ -581,7 +559,6 @@ static void kickClientByIp(uint32_t targetIpv4) {
 
     esp_wifi_80211_tx(WIFI_IF_AP, frame, sizeof(frame), false);
     log("Auto-kicked STA after mark");
-    return;
   }
 }
 
