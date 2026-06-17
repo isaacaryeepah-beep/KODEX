@@ -65,6 +65,7 @@
 #include <mbedtls/md.h>
 #include <mbedtls/base64.h>
 #include <esp_wifi.h>
+#include <tcpip_adapter.h>
 #include <BLEDevice.h>
 #include <BLEAdvertising.h>
 #include <ArduinoJson.h>
@@ -139,6 +140,13 @@ struct PresenceEntry {
 static PresenceEntry presenceTable[MAX_PRESENCE];
 static int      presenceCount        = 0;
 static uint32_t lastPresenceCheckMs  = 0;
+
+// ─── Deferred kick queue ─────────────────────────────────────────────────────
+// After a student marks, we queue their IP for deauth 1.5 s later so the
+// success HTTP response is fully delivered before the WiFi association drops.
+struct KickEntry { uint32_t ip; uint32_t at; };
+static KickEntry kickQueue[8];
+static int       kickQueueLen = 0;
 
 // ─── BLE presence beacon ──────────────────────────────────────────────────────
 // Device advertises a BLE service UUID while offline session is active.
@@ -540,6 +548,54 @@ static void checkPresenceTimeouts() {
   String line2 = "Present:" + String(present) + " AP:" + String(apClients);
   String line3 = flagged ? ("⚠ Flagged:" + String(flagged)) : "All present";
   oledShow("OFFLINE", line2, line3);
+}
+
+// Send a raw 802.11 deauthentication frame to one specific student's phone.
+// We look up their WiFi MAC address via the TCPIP adapter IP→MAC table, then
+// transmit the deauth frame directly so only that one slot is freed.
+static void kickClientByIp(uint32_t targetIpv4) {
+  wifi_sta_list_t      wifiList;
+  tcpip_adapter_sta_list_t tcpList;
+  memset(&wifiList, 0, sizeof(wifiList));
+  memset(&tcpList,  0, sizeof(tcpList));
+
+  if (esp_wifi_ap_get_sta_list(&wifiList) != ESP_OK) return;
+  if (tcpip_adapter_get_sta_list(&wifiList, &tcpList) != ESP_OK) return;
+
+  for (int i = 0; i < (int)tcpList.num; i++) {
+    if (tcpList.sta[i].ip.addr != targetIpv4) continue;
+
+    uint8_t* staMac = tcpList.sta[i].mac;
+    uint8_t  apMac[6];
+    esp_wifi_get_mac(WIFI_IF_AP, apMac);
+
+    // 802.11 deauthentication frame (26 bytes)
+    uint8_t frame[26] = {};
+    frame[0]  = 0xC0; frame[1]  = 0x00;  // Frame control: deauth
+    frame[2]  = 0x3A; frame[3]  = 0x01;  // Duration field
+    memcpy(frame + 4,  staMac, 6);        // DA: the student's phone
+    memcpy(frame + 10, apMac,  6);        // SA: this AP
+    memcpy(frame + 16, apMac,  6);        // BSSID: this AP
+    frame[22] = 0x00; frame[23] = 0x00;   // Sequence control
+    frame[24] = 0x03; frame[25] = 0x00;   // Reason 3: STA is leaving
+
+    esp_wifi_80211_tx(WIFI_IF_AP, frame, sizeof(frame), false);
+    log("Auto-kicked STA after mark");
+    return;
+  }
+}
+
+// Process the deferred kick queue — called from loop() every cycle.
+static void processKickQueue() {
+  uint32_t now = millis();
+  for (int i = 0; i < kickQueueLen; ) {
+    if (now >= kickQueue[i].at) {
+      kickClientByIp(kickQueue[i].ip);
+      kickQueue[i] = kickQueue[--kickQueueLen]; // remove by swapping with last
+    } else {
+      i++;
+    }
+  }
 }
 
 static void factoryReset() {
@@ -1367,6 +1423,9 @@ static void registerOfflineHttp() {
   // POST /student/mark  { name, indexNumber }
   localHttp.on("/student/mark", HTTP_POST, [](){
     localHttp.sendHeader("Access-Control-Allow-Origin", "*");
+    // Capture client IP before any early-return so we always have it for the kick
+    uint32_t clientIpv4 = (uint32_t)localHttp.client().remoteIP();
+
     if (!offlineSessionActive) {
       localHttp.send(503, "application/json", "{\"error\":\"No active session\"}"); return;
     }
@@ -1393,6 +1452,12 @@ static void registerOfflineHttp() {
     oledShow("OFFLINE", display, "Students: " + String(offlineRecordCount));
     log("Offline mark: " + name + " / " + idx);
     localHttp.send(200, "application/json", "{\"ok\":true,\"count\":" + String(offlineRecordCount) + "}");
+
+    // Queue deauth 1.5 s from now — gives the TCP stack time to flush the
+    // response to the student's phone before the WiFi slot is freed.
+    if (kickQueueLen < 8) {
+      kickQueue[kickQueueLen++] = { clientIpv4, millis() + 1500 };
+    }
   });
 
   // POST /student/credential  { credential: "base64url.hmachex" }
@@ -1803,6 +1868,8 @@ void loop() {
         WiFi.mode(WIFI_AP);
       }
     }
+    processKickQueue();
+    checkPresenceTimeouts();
     delay(20);
     return;
   }
