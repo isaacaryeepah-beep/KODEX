@@ -16,6 +16,10 @@
 require("dotenv").config();
 const mongoose = require("mongoose");
 const bcrypt   = require("bcryptjs");
+const crypto   = require("crypto");
+
+const REVIEWER_PASSWORD = process.env.REVIEWER_PASSWORD
+  || crypto.randomBytes(24).toString('base64url');
 
 const INSTITUTION_NAME = "DIKLY Demo University";
 const INSTITUTION_MODE = "academic";
@@ -24,13 +28,13 @@ const ACCOUNTS = [
   {
     name:     "Review Admin",
     email:    "reviewer.admin@dikly.sbs",
-    password: "Reviewer@2025!",
+    password: REVIEWER_PASSWORD,
     role:     "admin",
   },
   {
     name:        "Review Student",
     email:       "reviewer.student@dikly.sbs",
-    password:    "Reviewer@2025!",
+    password:    REVIEWER_PASSWORD,
     role:        "student",
     IndexNumber: "DU/REV/001",
     programme:   "BSc",
@@ -92,11 +96,11 @@ async function run() {
   console.log("");
   console.log("Admin account");
   console.log("  Email   : reviewer.admin@dikly.sbs");
-  console.log("  Password: Reviewer@2025!");
+  console.log(`  Password: ${REVIEWER_PASSWORD}`);
   console.log("");
   console.log("Student account");
   console.log("  Email   : reviewer.student@dikly.sbs");
-  console.log("  Password: Reviewer@2025!");
+  console.log(`  Password: ${REVIEWER_PASSWORD}`);
   console.log("─────────────────────────────────────────\n");
 
   process.exit(0);

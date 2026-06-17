@@ -553,7 +553,7 @@ exports.bulkImportStudents = async (req, res) => {
             createdStudents.push({ name: row.name, IndexNumber: row.IndexNumber, email: row.email || "", tempPassword: "(existing)", course: "", status: "skipped" });
           } else {
             results.skipped++;
-            results.errors.push({ row: row.IndexNumber, error: err.message });
+            results.errors.push({ row: row.IndexNumber, error: "Creation failed" });
           }
         }
       }
@@ -565,7 +565,7 @@ exports.bulkImportStudents = async (req, res) => {
       });
     } catch (err) {
       console.error("Bulk import error:", err);
-      res.status(500).json({ error: "Bulk import failed: " + err.message });
+      res.status(500).json({ error: "Bulk import failed" });
     }
   });
 };
@@ -722,8 +722,8 @@ exports.adminResetStudentPassword = async (req, res) => {
       userEmail: target.email || target.IndexNumber,
     });
   } catch (error) {
-    console.error("Admin reset student password error:", error.message, error.stack);
-    res.status(500).json({ error: error.message || "Failed to reset password" });
+    console.error("Admin reset student password error:", error.message);
+    res.status(500).json({ error: "Failed to reset password" });
   }
 };
 

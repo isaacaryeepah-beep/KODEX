@@ -9,6 +9,8 @@ const Course        = require('../models/Course');
 const User          = require('../models/User');
 const StudentRoster = require('../models/StudentRoster');
 
+const escapeRegex = s => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
 /**
  * Enroll a single student manually.
  */
@@ -128,7 +130,7 @@ async function removeStudent(courseId, studentId, companyId) {
     if (indexNum) {
       await StudentRoster.deleteOne({
         course:    course._id,
-        studentId: { $regex: new RegExp(`^${indexNum}$`, 'i') },
+        studentId: { $regex: new RegExp(`^${escapeRegex(indexNum)}$`, 'i') },
       });
     }
   }

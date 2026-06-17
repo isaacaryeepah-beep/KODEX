@@ -69,7 +69,23 @@ app.use((req, res, next) => {
 });
 
 app.use(helmet({
-  contentSecurityPolicy: false,
+  contentSecurityPolicy: {
+    useDefaults: true,
+    directives: {
+      "default-src":     ["'self'"],
+      "script-src":      ["'self'", "'unsafe-inline'", "https://cdn.jsdelivr.net", "https://meet.dikly.live"],
+      "script-src-attr": ["'unsafe-inline'"],
+      "style-src":       ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com", "https://cdn.jsdelivr.net"],
+      "font-src":        ["'self'", "https://fonts.gstatic.com", "https://cdn.jsdelivr.net", "data:"],
+      "img-src":         ["'self'", "data:", "blob:", "https:"],
+      "connect-src":     ["'self'", "https://api.anthropic.com", "https://*.dikly.sbs", "https://*.dikly.live", "wss://*.dikly.sbs", "wss://*.dikly.live", "wss://*.livekit.cloud"],
+      "frame-src":       ["'self'", "https://meet.dikly.live", "https://*.livekit.cloud"],
+      "media-src":       ["'self'", "blob:"],
+      "object-src":      ["'none'"],
+      "base-uri":        ["'self'"],
+      "form-action":     ["'self'"],
+    },
+  },
   crossOriginEmbedderPolicy: false,
   referrerPolicy: { policy: "strict-origin-when-cross-origin" },
   hsts: { maxAge: 31536000, includeSubDomains: true },
