@@ -379,6 +379,51 @@ bool     pairPending     = false;
 String   pairPendingInst = "";
 String   pairPendingCode = "";
 
+// ── Live presence tracking (BPM — BLE Presence Monitoring) ───────────────────
+// Populated by POST /student/heartbeat from the Flutter app.
+// Stale entries (no heartbeat for >2 min) are pruned on each /students request.
+struct PresenceEntry { char userId[64]; uint32_t lastMs; };
+static const int PRESENCE_MAX = 150;
+static PresenceEntry presenceList[PRESENCE_MAX];
+static int    presenceCount   = 0;
+static String presenceSession = "";
+
+static void presenceClear() { presenceCount = 0; presenceSession = ""; }
+
+static void presenceHeartbeat(const String& uid) {
+  if (presenceSession != sessionId) { presenceClear(); presenceSession = sessionId; }
+  uint32_t now = millis();
+  for (int i = 0; i < presenceCount; i++) {
+    if (String(presenceList[i].userId) == uid) { presenceList[i].lastMs = now; return; }
+  }
+  if (presenceCount < PRESENCE_MAX) {
+    strncpy(presenceList[presenceCount].userId, uid.c_str(), 63);
+    presenceList[presenceCount].lastMs = now;
+    presenceCount++;
+  }
+}
+
+static void presenceRemove(const String& uid) {
+  for (int i = 0; i < presenceCount; i++) {
+    if (String(presenceList[i].userId) == uid) {
+      for (int j = i; j < presenceCount - 1; j++) presenceList[j] = presenceList[j + 1];
+      presenceCount--;
+      return;
+    }
+  }
+}
+
+static int presencePruneAndCount() {
+  uint32_t cutoff = millis() - 120000; // 2 min stale threshold
+  for (int i = presenceCount - 1; i >= 0; i--) {
+    if (presenceList[i].lastMs < cutoff) {
+      for (int j = i; j < presenceCount - 1; j++) presenceList[j] = presenceList[j + 1];
+      presenceCount--;
+    }
+  }
+  return presenceCount;
+}
+
 // Screen state machine
 enum Screen { SPLASH, SETUP, WIFI_SCAN, WIFI_RECONFIG, CONNECTING, READY, SESSION_START, SESSION, SUMMARY, SETTINGS, DEVICE_INFO, PAIR_SCREEN, CHECKIN_MONITOR, PRESENCE_MONITOR };
 Screen curScreen = SPLASH;
@@ -3521,12 +3566,15 @@ static void registerLocalHttp() {
     String submittedCode = req["code"] | "";
     String indexNum      = req["indexNumber"] | "";
     String userId        = req["userId"] | "";
+    String bleSlotStr    = req["bleSlot"] | "";
+    String bleHmacStr    = req["bleHmac"] | "";
     submittedCode.trim();
+    bool usingBle = (!bleSlotStr.isEmpty() && !bleHmacStr.isEmpty());
     if (userId.isEmpty() && indexNum.isEmpty()) {
       localHttp.send(400, "application/json",
         "{\"error\":\"Login to the Dikly app to mark attendance\"}"); return;
     }
-    if (submittedCode.length() != 6) {
+    if (!usingBle && submittedCode.length() != 6) {
       localHttp.send(400, "application/json", "{\"error\":\"Code must be 6 digits\"}"); return;
     }
     // Use NTP time if available; fall back to millis-based offset if clock not synced
@@ -3560,11 +3608,34 @@ static void registerLocalHttp() {
       }
     }
 
-    // Validate against current and previous window (±20s clock tolerance)
-    bool valid = (submittedCode == deriveCode(sessionSeed, (uint32_t)now)) ||
-                 (submittedCode == deriveCode(sessionSeed, (uint32_t)(now - WINDOW_SECONDS)));
-    if (!valid) {
-      localHttp.send(403, "application/json", "{\"error\":\"Incorrect code. Check the screen and try again.\"}"); return;
+    // Validate via BLE token OR 6-digit code
+    bool valid = false;
+    if (usingBle) {
+      uint32_t bSlot   = (uint32_t)strtoul(bleSlotStr.c_str(), nullptr, 10);
+      uint32_t curSlot = (uint32_t)(now / 30);
+      if (bSlot == curSlot || bSlot == curSlot - 1) {
+        char msg[32];
+        snprintf(msg, sizeof(msg), "ble:%lu", (unsigned long)bSlot);
+        uint8_t expected[32];
+        hmacSha256((const uint8_t*)sessionSeed.c_str(), sessionSeed.length(),
+                   (const uint8_t*)msg, strlen(msg), expected);
+        char expectedHex[17];
+        for (int i = 0; i < 8; i++) sprintf(expectedHex + i * 2, "%02x", expected[i]);
+        expectedHex[16] = '\0';
+        bleHmacStr.toLowerCase();
+        valid = (bleHmacStr == String(expectedHex));
+      }
+      if (!valid) {
+        localHttp.send(403, "application/json",
+          "{\"error\":\"Invalid BLE token. Move closer to the classroom device.\"}"); return;
+      }
+    } else {
+      valid = (submittedCode == deriveCode(sessionSeed, (uint32_t)now)) ||
+              (submittedCode == deriveCode(sessionSeed, (uint32_t)(now - WINDOW_SECONDS)));
+      if (!valid) {
+        localHttp.send(403, "application/json",
+          "{\"error\":\"Incorrect code. Check the screen and try again.\"}"); return;
+      }
     }
     // ── Duplicate guard — check both indexNumber AND userId to prevent double-marking ──
     if (dedupSession != sessionId) dedupClear(sessionId);
@@ -3657,6 +3728,47 @@ static void registerLocalHttp() {
     if (gotMac) deauthStation(clientMac);
   });
 
+  // /student/heartbeat — Flutter app calls this every 30 s after marking.
+  // Keeps the live presence list current on the device.
+  localHttp.on("/student/heartbeat", HTTP_POST, []() {
+    localHttp.sendHeader("Access-Control-Allow-Origin", "*");
+    JsonDocument req;
+    if (deserializeJson(req, localHttp.arg("plain"))) {
+      localHttp.send(400, "application/json", "{\"error\":\"Bad JSON\"}"); return;
+    }
+    String uid = req["userId"] | req["indexNumber"] | "";
+    if (uid.isEmpty()) {
+      localHttp.send(400, "application/json", "{\"error\":\"userId required\"}"); return;
+    }
+    presenceHeartbeat(uid);
+    localHttp.send(200, "application/json", "{\"ok\":true}");
+  });
+
+  // /student/left — Flutter app calls this when BLE signal is lost or app closes.
+  localHttp.on("/student/left", HTTP_POST, []() {
+    localHttp.sendHeader("Access-Control-Allow-Origin", "*");
+    JsonDocument req;
+    if (deserializeJson(req, localHttp.arg("plain"))) {
+      localHttp.send(400, "application/json", "{\"error\":\"Bad JSON\"}"); return;
+    }
+    String uid = req["userId"] | req["indexNumber"] | "";
+    if (!uid.isEmpty()) presenceRemove(uid);
+    localHttp.send(200, "application/json", "{\"ok\":true}");
+  });
+
+  // /students — returns live presence list (admin portal, device screen, etc.)
+  localHttp.on("/students", HTTP_GET, []() {
+    localHttp.sendHeader("Access-Control-Allow-Origin", "*");
+    int count = presencePruneAndCount();
+    JsonDocument doc;
+    doc["count"] = count;
+    if (!sessionId.isEmpty()) doc["sessionId"] = sessionId;
+    JsonArray arr = doc["students"].to<JsonArray>();
+    for (int i = 0; i < count; i++) arr.add(presenceList[i].userId);
+    String s; serializeJson(doc, s);
+    localHttp.send(200, "application/json", s);
+  });
+
   // /session/start — lecturer creates a session locally (no internet required)
   localHttp.on("/session/start", HTTP_POST, []() {
     JsonDocument req;
@@ -3737,6 +3849,7 @@ static void registerLocalHttp() {
     sessionTitle = ""; sessionCourse = ""; sessionLecturer = "";
     studentsMarked = 0;
     bleStop();
+    presenceClear();
     localHttp.sendHeader("Access-Control-Allow-Origin", "*");
     localHttp.send(200, "application/json", "{\"ok\":true}");
   });
