@@ -1779,3 +1779,44 @@ exports.removeMyDevice = async (req, res) => {
     res.status(500).json({ error: 'Failed to remove device' });
   }
 };
+
+// ─── OFFLINE CREDENTIAL ──────────────────────────────────────────────────────
+// Issues a 30-day signed HMAC credential the student/lecturer's app stores and
+// auto-sends to the ESP32 captive portal for offline attendance authorization.
+// Format: base64url(payload_json) + "." + hmac_sha256_hex
+exports.getOfflineCredential = async (req, res) => {
+  try {
+    const user = await User.findById(req.user._id)
+      .select('_id indexNumber IndexNumber name role company')
+      .lean();
+    if (!user) return res.status(404).json({ error: 'User not found' });
+
+    const company = await Company.findById(user.company)
+      .select('offlineHmacKey _id')
+      .lean();
+    if (!company?.offlineHmacKey) {
+      return res.status(503).json({ error: 'Institution offline key not yet provisioned' });
+    }
+
+    // Build payload
+    const payload = {
+      v:   1,
+      uid: user._id.toString(),
+      idx: (user.indexNumber || user.IndexNumber || '').toUpperCase(),
+      role: user.role,
+      cid: company._id.toString(),
+      exp: Math.floor(Date.now() / 1000) + 30 * 24 * 3600, // 30 days
+    };
+
+    const payloadB64 = Buffer.from(JSON.stringify(payload)).toString('base64url');
+    const sig = crypto
+      .createHmac('sha256', Buffer.from(company.offlineHmacKey, 'hex'))
+      .update(payloadB64)
+      .digest('hex');
+
+    res.json({ ok: true, credential: `${payloadB64}.${sig}` });
+  } catch (e) {
+    console.error('getOfflineCredential error:', e);
+    res.status(500).json({ error: 'Failed to issue offline credential' });
+  }
+};

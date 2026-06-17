@@ -1,179 +1,245 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
+import 'package:google_fonts/google_fonts.dart';
+import 'package:intl/intl.dart';
 import '../../core/api.dart';
 import '../../core/theme.dart';
+import '../../widgets/ds/dikly_ds.dart';
 
-final _myAttendanceProvider = FutureProvider.autoDispose<List<Map<String, dynamic>>>((ref) async {
-  final list = await apiService.getMyAttendance();
-  return list;
-});
+final _empAttendanceProvider = FutureProvider.autoDispose<Map<String, dynamic>>(
+  (ref) => apiService.getMyMonthlyAttendance(),
+);
 
 class EmployeeAttendanceScreen extends ConsumerWidget {
   const EmployeeAttendanceScreen({super.key});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final async = ref.watch(_myAttendanceProvider);
+    final async = ref.watch(_empAttendanceProvider);
+    final monthLabel = DateFormat('MMMM yyyy').format(DateTime.now());
 
     return RefreshIndicator(
-      onRefresh: () async => ref.refresh(_myAttendanceProvider),
-      child: async.when(
-        loading: () => const Center(child: CircularProgressIndicator()),
-        error: (e, _) => Center(
-          child: Column(mainAxisSize: MainAxisSize.min, children: [
-            const Icon(Icons.error_outline, size: 48, color: DiklyColors.error),
-            const SizedBox(height: 12),
-            const Text('Failed to load attendance'),
-            TextButton(
-              onPressed: () => ref.refresh(_myAttendanceProvider),
-              child: const Text('Retry'),
-            ),
-          ]),
-        ),
-        data: (records) => records.isEmpty
-            ? ListView(
-                children: const [
-                  SizedBox(height: 120),
-                  Center(
-                    child: Column(children: [
-                      Icon(Icons.check_circle_outline, size: 64, color: DiklyColors.border),
-                      SizedBox(height: 12),
-                      Text('No attendance records', style: TextStyle(color: DiklyColors.textSecondary)),
-                    ]),
+      onRefresh: () async => ref.invalidate(_empAttendanceProvider),
+      child: ListView(
+        padding: const EdgeInsets.all(16),
+        children: [
+          DiklyScreenHeader(
+            title: 'My Attendance',
+            subtitle: monthLabel,
+          ),
+
+          async.when(
+            loading: () => const _StatsShimmer(),
+            error: (_, __) => const SizedBox.shrink(),
+            data: (monthly) {
+              final records = (monthly['records'] as List?) ?? [];
+              final presentDays = records.where((r) => r['status'] == 'present' || r['status'] == 'late').length;
+              final lateDays = records.where((r) => r['status'] == 'late').length;
+              final totalHrs = records.fold<double>(
+                0, (s, r) => s + ((r['hoursWorked'] as num?)?.toDouble() ?? 0));
+              final recordedDays = records.where((r) => r['clockIn']?['time'] != null || r['clockIn'] != null).length;
+              final rate = recordedDays > 0 ? (presentDays / recordedDays * 100).round() : 0;
+
+              return Column(
+                children: [
+                  // ── 4 stat cards ─────────────────────────────────────────
+                  GridView.count(
+                    shrinkWrap: true,
+                    physics: const NeverScrollableScrollPhysics(),
+                    crossAxisCount: 2,
+                    mainAxisSpacing: 10,
+                    crossAxisSpacing: 10,
+                    childAspectRatio: 1.5,
+                    children: [
+                      _StatCard(value: '$rate%', label: 'ATTENDANCE RATE', color: const Color(0xFF2563EB)),
+                      _StatCard(value: '$presentDays', label: 'DAYS PRESENT', color: const Color(0xFF059669)),
+                      _StatCard(value: '${totalHrs.toStringAsFixed(1)}h', label: 'HOURS WORKED', color: const Color(0xFFD97706)),
+                      _StatCard(value: '$lateDays', label: 'LATE ARRIVALS', color: const Color(0xFFDC2626)),
+                    ],
+                  ),
+                  const SizedBox(height: 20),
+
+                  // ── Attendance Records ────────────────────────────────────
+                  Container(
+                    padding: const EdgeInsets.all(16),
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(10),
+                      border: Border.all(color: DiklyColors.border),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          children: [
+                            Expanded(
+                              child: Text('Attendance Records',
+                                  style: GoogleFonts.dmSans(fontSize: 14, fontWeight: FontWeight.w700, color: DiklyColors.text)),
+                            ),
+                            ElevatedButton.icon(
+                              onPressed: () => context.push('/sign-in-out'),
+                              icon: const Icon(Icons.login_outlined, size: 14),
+                              label: const Text('Clock In / Out', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600)),
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: const Color(0xFF059669),
+                                foregroundColor: Colors.white,
+                                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                                elevation: 0,
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 12),
+                        if (records.isEmpty)
+                          Padding(
+                            padding: const EdgeInsets.symmetric(vertical: 24),
+                            child: Center(
+                              child: Text(
+                                'No attendance records this month. Use Clock In / Out to start.',
+                                style: GoogleFonts.dmSans(fontSize: 13, color: DiklyColors.textMuted),
+                                textAlign: TextAlign.center,
+                              ),
+                            ),
+                          )
+                        else
+                          ...records.reversed.take(20).map((r) => _AttendanceRow(record: r)),
+                      ],
+                    ),
                   ),
                 ],
-              )
-            : ListView(
-                padding: const EdgeInsets.all(16),
-                children: [
-                  _AttendanceSummary(records: records),
-                  const SizedBox(height: 20),
-                  const Text('Attendance History', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700, color: DiklyColors.textPrimary)),
-                  const SizedBox(height: 12),
-                  ...records.map((r) => _AttendanceCard(record: r)),
-                ],
-              ),
+              );
+            },
+          ),
+          const SizedBox(height: 32),
+        ],
       ),
     );
   }
 }
 
-class _AttendanceSummary extends StatelessWidget {
-  final List<Map<String, dynamic>> records;
-  const _AttendanceSummary({required this.records});
-
-  @override
-  Widget build(BuildContext context) {
-    final present = records.where((r) => r['status'] == 'present').length;
-    final absent = records.where((r) => r['status'] == 'absent').length;
-    final late = records.where((r) => r['status'] == 'late').length;
-    final total = records.length;
-
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        gradient: const LinearGradient(
-          colors: [Color(0xFF0369A1), Color(0xFF2563EB)],
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-        ),
-        borderRadius: BorderRadius.circular(16),
-        boxShadow: [BoxShadow(color: const Color(0xFF0369A1).withOpacity(0.25), blurRadius: 16, offset: const Offset(0, 6))],
-      ),
-      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        const Text('Attendance Summary', style: TextStyle(color: Colors.white70, fontSize: 12, letterSpacing: 0.5)),
-        const SizedBox(height: 4),
-        Text('$present / $total Days Present', style: const TextStyle(color: Colors.white, fontSize: 22, fontWeight: FontWeight.w800)),
-        const SizedBox(height: 16),
-        Row(children: [
-          _SumStat(label: 'Present', value: present.toString(), color: const Color(0xFF86EFAC)),
-          const SizedBox(width: 16),
-          _SumStat(label: 'Absent', value: absent.toString(), color: const Color(0xFFFCA5A5)),
-          const SizedBox(width: 16),
-          _SumStat(label: 'Late', value: late.toString(), color: const Color(0xFFFDE68A)),
-        ]),
-      ]),
-    );
-  }
-}
-
-class _SumStat extends StatelessWidget {
-  final String label;
+class _StatCard extends StatelessWidget {
   final String value;
+  final String label;
   final Color color;
-  const _SumStat({required this.label, required this.value, required this.color});
+  const _StatCard({required this.value, required this.label, required this.color});
 
   @override
   Widget build(BuildContext context) {
-    return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-      Text(value, style: TextStyle(color: color, fontSize: 20, fontWeight: FontWeight.w700)),
-      Text(label, style: const TextStyle(color: Colors.white70, fontSize: 11)),
-    ]);
+    return Container(
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: DiklyColors.border),
+      ),
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Text(value,
+              style: GoogleFonts.dmSans(fontSize: 24, fontWeight: FontWeight.w800, color: color)),
+          const SizedBox(height: 4),
+          Text(label,
+              textAlign: TextAlign.center,
+              style: GoogleFonts.dmSans(fontSize: 9, fontWeight: FontWeight.w600, color: DiklyColors.textMuted, letterSpacing: 0.6)),
+        ],
+      ),
+    );
   }
 }
 
-class _AttendanceCard extends StatelessWidget {
+class _AttendanceRow extends StatelessWidget {
   final Map<String, dynamic> record;
-  const _AttendanceCard({required this.record});
+  const _AttendanceRow({required this.record});
 
-  Color _statusColor(String status) {
-    switch (status.toLowerCase()) {
-      case 'present': return DiklyColors.success;
-      case 'absent': return DiklyColors.error;
-      case 'late': return DiklyColors.warning;
-      case 'leave': return DiklyColors.primary;
-      default: return DiklyColors.textSecondary;
+  Color _statusColor(String s) {
+    switch (s.toLowerCase()) {
+      case 'present': return const Color(0xFF059669);
+      case 'late': return const Color(0xFFD97706);
+      case 'absent': return const Color(0xFFDC2626);
+      default: return const Color(0xFF6B7280);
+    }
+  }
+
+  String _fmtTime(dynamic t) {
+    if (t == null) return '—';
+    final s = t.toString();
+    if (s.isEmpty) return '—';
+    try {
+      final dt = DateTime.parse(s);
+      return DateFormat('h:mm a').format(dt.toLocal());
+    } catch (_) {
+      return s;
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    final status = record['status']?.toString() ?? 'unknown';
+    final status = (record['status'] ?? '').toString();
     final date = record['date']?.toString() ?? '';
-    final clockIn = record['clockIn']?.toString() ?? '--:--';
-    final clockOut = record['clockOut']?.toString() ?? '--:--';
-    final hours = record['hoursWorked']?.toString() ?? '0';
+    final clockIn = _fmtTime(record['clockIn']?['time'] ?? record['clockIn']);
+    final clockOut = _fmtTime(record['clockOut']?['time'] ?? record['clockOut']);
+    final hours = (record['hoursWorked'] as num?)?.toDouble() ?? 0;
+    final color = _statusColor(status);
 
-    return Card(
-      margin: const EdgeInsets.only(bottom: 10),
-      child: Padding(
-        padding: const EdgeInsets.all(14),
-        child: Row(children: [
+    String fmtDate(String raw) {
+      try {
+        return DateFormat('MMM d').format(DateTime.parse(raw));
+      } catch (_) {
+        return raw;
+      }
+    }
+
+    return Container(
+      padding: const EdgeInsets.symmetric(vertical: 10),
+      decoration: const BoxDecoration(border: Border(bottom: BorderSide(color: DiklyColors.border))),
+      child: Row(
+        children: [
           Container(
-            width: 40,
-            height: 40,
-            decoration: BoxDecoration(
-              color: _statusColor(status).withOpacity(0.1),
-              borderRadius: BorderRadius.circular(10),
-            ),
-            child: Icon(
-              status == 'present' ? Icons.check_circle : status == 'absent' ? Icons.cancel : Icons.access_time,
-              color: _statusColor(status),
-              size: 20,
-            ),
+            width: 8, height: 8,
+            decoration: BoxDecoration(color: color, shape: BoxShape.circle),
           ),
-          const SizedBox(width: 12),
+          const SizedBox(width: 10),
           Expanded(
-            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              Text(date, style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 14, color: DiklyColors.textPrimary)),
-              const SizedBox(height: 2),
-              Text('In: $clockIn  ·  Out: $clockOut', style: const TextStyle(fontSize: 12, color: DiklyColors.textSecondary)),
-            ]),
+            child: Text(fmtDate(date),
+                style: GoogleFonts.dmSans(fontSize: 13, fontWeight: FontWeight.w600, color: DiklyColors.text)),
           ),
-          Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-              decoration: BoxDecoration(
-                color: _statusColor(status).withOpacity(0.1),
-                borderRadius: BorderRadius.circular(8),
-              ),
-              child: Text(status.toUpperCase(), style: TextStyle(fontSize: 10, fontWeight: FontWeight.w600, color: _statusColor(status))),
-            ),
-            const SizedBox(height: 4),
-            Text('${hours}h', style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: DiklyColors.textSecondary)),
-          ]),
-        ]),
+          Text('$clockIn → $clockOut',
+              style: GoogleFonts.dmSans(fontSize: 11, color: DiklyColors.textMuted)),
+          const SizedBox(width: 10),
+          Text('${hours.toStringAsFixed(1)}h',
+              style: GoogleFonts.dmSans(fontSize: 11, fontWeight: FontWeight.w600, color: DiklyColors.textSecondary)),
+          const SizedBox(width: 8),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+            decoration: BoxDecoration(color: color.withOpacity(0.1), borderRadius: BorderRadius.circular(10)),
+            child: Text(status, style: TextStyle(fontSize: 10, fontWeight: FontWeight.w700, color: color)),
+          ),
+        ],
       ),
+    );
+  }
+}
+
+class _StatsShimmer extends StatelessWidget {
+  const _StatsShimmer();
+
+  @override
+  Widget build(BuildContext context) {
+    return GridView.count(
+      shrinkWrap: true,
+      physics: const NeverScrollableScrollPhysics(),
+      crossAxisCount: 2,
+      mainAxisSpacing: 10,
+      crossAxisSpacing: 10,
+      childAspectRatio: 1.5,
+      children: List.generate(4, (_) => Container(
+        decoration: BoxDecoration(
+          color: const Color(0xFFF3F4F6),
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(color: DiklyColors.border),
+        ),
+      )),
     );
   }
 }

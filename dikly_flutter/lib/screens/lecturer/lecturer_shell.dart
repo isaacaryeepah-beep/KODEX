@@ -208,6 +208,7 @@ class _LecturerShellState extends ConsumerState<LecturerShell> {
         userName: user?.name ?? '',
         userEmail: user?.email ?? '',
         userRole: 'Lecturer',
+        institutionCode: user?.institutionCode ?? '',
         sections: _sections,
         onSignOut: () async {
           Navigator.pop(context);

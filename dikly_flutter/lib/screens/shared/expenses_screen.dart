@@ -3,51 +3,20 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
 import '../../core/api.dart';
+import '../../core/auth.dart';
 import '../../core/theme.dart';
 import '../../widgets/ds/dikly_ds.dart';
 
 final _expensesProvider = FutureProvider.autoDispose<List<dynamic>>((ref) =>
     apiService.getExpenses());
 
-class ExpensesScreen extends ConsumerStatefulWidget {
+class ExpensesScreen extends ConsumerWidget {
   const ExpensesScreen({super.key});
 
   @override
-  ConsumerState<ExpensesScreen> createState() => _ExpensesScreenState();
-}
-
-class _ExpensesScreenState extends ConsumerState<ExpensesScreen>
-    with SingleTickerProviderStateMixin {
-  late TabController _tabController;
-
-  @override
-  void initState() {
-    super.initState();
-    _tabController = TabController(length: 3, vsync: this);
-  }
-
-  @override
-  void dispose() {
-    _tabController.dispose();
-    super.dispose();
-  }
-
-  void _showNewExpenseSheet() {
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: DiklyColors.surface,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-      ),
-      builder: (_) => _NewExpenseSheet(
-        onSubmitted: () => ref.refresh(_expensesProvider),
-      ),
-    );
-  }
-
-  @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final user = ref.watch(currentUserProvider);
+    final isManager = user?.role == 'manager' || user?.role == 'admin';
     final async = ref.watch(_expensesProvider);
 
     return Scaffold(
@@ -56,246 +25,240 @@ class _ExpensesScreenState extends ConsumerState<ExpensesScreen>
         backgroundColor: DiklyColors.surface,
         elevation: 0,
         surfaceTintColor: Colors.transparent,
+        leading: BackButton(onPressed: () => Navigator.of(context).maybePop()),
         title: Text(
-          'Expenses',
+          isManager ? 'Expense Claims' : 'My Expenses',
           style: GoogleFonts.dmSans(fontSize: 17, fontWeight: FontWeight.w700, color: DiklyColors.text),
         ),
-        leading: BackButton(onPressed: () => Navigator.of(context).maybePop()),
-        bottom: PreferredSize(
-          preferredSize: const Size.fromHeight(49),
-          child: Container(
-            decoration: const BoxDecoration(
-              border: Border(
-                bottom: BorderSide(color: DiklyColors.border),
-                top: BorderSide(color: DiklyColors.border),
-              ),
-            ),
-            child: TabBar(
-              controller: _tabController,
-              labelColor: DiklyColors.primary,
-              unselectedLabelColor: DiklyColors.textLight,
-              indicatorColor: DiklyColors.primary,
-              indicatorWeight: 2,
-              labelStyle: GoogleFonts.dmSans(fontSize: 13, fontWeight: FontWeight.w600),
-              unselectedLabelStyle: GoogleFonts.dmSans(fontSize: 13, fontWeight: FontWeight.w400),
-              tabs: const [
-                Tab(text: 'Pending'),
-                Tab(text: 'Approved'),
-                Tab(text: 'All'),
-              ],
-            ),
-          ),
-        ),
       ),
-      body: async.when(
-        loading: () => const Center(child: CircularProgressIndicator()),
-        error: (e, _) => Center(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
+      body: RefreshIndicator(
+        onRefresh: () async => ref.refresh(_expensesProvider),
+        child: async.when(
+          loading: () => const Center(child: CircularProgressIndicator()),
+          error: (e, _) => ListView(
+            padding: const EdgeInsets.all(16),
             children: [
-              const Icon(Icons.error_outline, size: 48, color: DiklyColors.error),
-              const SizedBox(height: 12),
-              Text('Failed to load expenses', style: GoogleFonts.dmSans(color: DiklyColors.textSecondary)),
-              const SizedBox(height: 8),
-              TextButton(
-                onPressed: () => ref.refresh(_expensesProvider),
-                child: const Text('Retry'),
+              DiklyScreenHeader(
+                title: isManager ? 'Expense Claims' : 'My Expenses',
+                subtitle: isManager ? 'Review and approve employee expense claims' : 'Submit and track your expense claims',
               ),
+              DiklyErrorView(message: 'Failed to load expenses', onRetry: () => ref.refresh(_expensesProvider)),
             ],
           ),
-        ),
-        data: (expenses) {
-          final all = expenses.whereType<Map<String, dynamic>>().toList();
-          final pending = all.where((e) => e['status']?.toString() == 'pending').toList();
-          final approved = all.where((e) => e['status']?.toString() == 'approved').toList();
+          data: (expenses) {
+            final all = expenses.whereType<Map<String, dynamic>>().toList();
+            final pending = all.where((e) => e['status']?.toString() == 'pending').toList();
+            final approved = all.where((e) => e['status']?.toString() == 'approved').toList();
+            final totalApproved = approved.fold<double>(
+              0, (s, e) => s + (num.tryParse(e['amount']?.toString() ?? '') ?? 0).toDouble());
 
-          return TabBarView(
-            controller: _tabController,
-            children: [
-              _ExpenseList(expenses: pending, onRefresh: () async => ref.refresh(_expensesProvider), emptyMessage: 'No pending expenses'),
-              _ExpenseList(expenses: approved, onRefresh: () async => ref.refresh(_expensesProvider), emptyMessage: 'No approved expenses'),
-              _ExpenseList(expenses: all, onRefresh: () async => ref.refresh(_expensesProvider), emptyMessage: 'No expenses yet'),
-            ],
-          );
-        },
+            return ListView(
+              padding: const EdgeInsets.all(16),
+              children: [
+                DiklyScreenHeader(
+                  title: isManager ? 'Expense Claims' : 'My Expenses',
+                  subtitle: isManager ? 'Review and approve employee expense claims' : 'Submit and track your expense claims',
+                ),
+
+                // ── Stats ────────────────────────────────────────────────
+                GridView.count(
+                  shrinkWrap: true,
+                  physics: const NeverScrollableScrollPhysics(),
+                  crossAxisCount: 2,
+                  mainAxisSpacing: 10,
+                  crossAxisSpacing: 10,
+                  childAspectRatio: 1.6,
+                  children: [
+                    _StatCard(value: '${all.length}', label: 'TOTAL CLAIMS', color: const Color(0xFF2563EB)),
+                    _StatCard(value: '${pending.length}', label: 'PENDING', color: const Color(0xFFD97706)),
+                    _StatCard(value: '${approved.length}', label: 'APPROVED', color: const Color(0xFF059669)),
+                    _StatCard(value: 'GHS ${totalApproved.toStringAsFixed(2)}', label: 'TOTAL APPROVED (GHS)', color: const Color(0xFF7C3AED)),
+                  ],
+                ),
+                const SizedBox(height: 16),
+
+                // ── Claims list ──────────────────────────────────────────
+                Container(
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(10),
+                    border: Border.all(color: DiklyColors.border),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          Expanded(
+                            child: Text('All Claims',
+                                style: GoogleFonts.dmSans(fontSize: 14, fontWeight: FontWeight.w700, color: DiklyColors.text)),
+                          ),
+                          if (!isManager)
+                            ElevatedButton.icon(
+                              onPressed: () => _showNewExpenseSheet(context, ref),
+                              icon: const Icon(Icons.add, size: 16),
+                              label: const Text('New Claim', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: const Color(0xFF2563EB),
+                                foregroundColor: Colors.white,
+                                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
+                                elevation: 0,
+                              ),
+                            ),
+                        ],
+                      ),
+                      const SizedBox(height: 12),
+                      if (all.isEmpty)
+                        Padding(
+                          padding: const EdgeInsets.symmetric(vertical: 24),
+                          child: Center(
+                            child: Text('No expense claims yet.',
+                                style: GoogleFonts.dmSans(fontSize: 13, color: DiklyColors.textMuted)),
+                          ),
+                        )
+                      else
+                        ...all.map((e) => _ExpenseRow(expense: e, isManager: isManager, onAction: () => ref.refresh(_expensesProvider))),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 32),
+              ],
+            );
+          },
+        ),
       ),
-      floatingActionButton: FloatingActionButton.extended(
-        onPressed: _showNewExpenseSheet,
-        backgroundColor: DiklyColors.primary,
-        foregroundColor: Colors.white,
-        icon: const Icon(Icons.add),
-        label: Text('New Expense', style: GoogleFonts.dmSans(fontWeight: FontWeight.w600)),
+      floatingActionButton: ref.watch(_expensesProvider).maybeWhen(
+        data: (_) => !isManager
+            ? FloatingActionButton.extended(
+                onPressed: () => _showNewExpenseSheet(context, ref),
+                backgroundColor: const Color(0xFF2563EB),
+                foregroundColor: Colors.white,
+                icon: const Icon(Icons.add),
+                label: Text('New Claim', style: GoogleFonts.dmSans(fontWeight: FontWeight.w600)),
+              )
+            : null,
+        orElse: () => null,
       ),
+    );
+  }
+
+  void _showNewExpenseSheet(BuildContext context, WidgetRef ref) {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: DiklyColors.surface,
+      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
+      builder: (_) => _NewExpenseSheet(onSubmitted: () => ref.refresh(_expensesProvider)),
     );
   }
 }
 
-// ── Expense List ──────────────────────────────────────────────────────────────
-
-class _ExpenseList extends StatelessWidget {
-  final List<Map<String, dynamic>> expenses;
-  final Future<void> Function() onRefresh;
-  final String emptyMessage;
-
-  const _ExpenseList({required this.expenses, required this.onRefresh, required this.emptyMessage});
+class _StatCard extends StatelessWidget {
+  final String value;
+  final String label;
+  final Color color;
+  const _StatCard({required this.value, required this.label, required this.color});
 
   @override
   Widget build(BuildContext context) {
-    if (expenses.isEmpty) {
-      return DiklyEmptyState(
-        icon: Icons.receipt_long_outlined,
-        title: emptyMessage,
-        subtitle: 'Submitted expenses will appear here',
-      );
-    }
-
-    return RefreshIndicator(
-      onRefresh: onRefresh,
-      child: ListView.builder(
-        padding: const EdgeInsets.fromLTRB(16, 16, 16, 100),
-        itemCount: expenses.length,
-        itemBuilder: (ctx, i) => _ExpenseCard(expense: expenses[i]),
+    return Container(
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: DiklyColors.border),
+      ),
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Text(value,
+              style: GoogleFonts.dmSans(fontSize: 24, fontWeight: FontWeight.w800, color: color)),
+          const SizedBox(height: 4),
+          Text(label,
+              textAlign: TextAlign.center,
+              style: GoogleFonts.dmSans(fontSize: 9, fontWeight: FontWeight.w600, color: DiklyColors.textMuted, letterSpacing: 0.6)),
+        ],
       ),
     );
   }
 }
 
-// ── Expense Card ──────────────────────────────────────────────────────────────
-
-class _ExpenseCard extends StatelessWidget {
+class _ExpenseRow extends StatelessWidget {
   final Map<String, dynamic> expense;
-  const _ExpenseCard({required this.expense});
-
-  static final _fmt = DateFormat('MMM d, yyyy');
-
-  IconData _icon(String? cat) {
-    switch ((cat ?? '').toLowerCase()) {
-      case 'travel': return Icons.flight_outlined;
-      case 'meals':
-      case 'food': return Icons.restaurant_outlined;
-      case 'accommodation':
-      case 'hotel': return Icons.hotel_outlined;
-      case 'transport':
-      case 'fuel': return Icons.local_gas_station_outlined;
-      case 'supplies':
-      case 'office': return Icons.inventory_2_outlined;
-      case 'medical':
-      case 'health': return Icons.local_hospital_outlined;
-      case 'entertainment': return Icons.celebration_outlined;
-      default: return Icons.receipt_outlined;
-    }
-  }
-
-  Color _catColor(String? cat) {
-    switch ((cat ?? '').toLowerCase()) {
-      case 'travel': return DiklyColors.primary;
-      case 'meals':
-      case 'food': return DiklyColors.warning;
-      case 'accommodation':
-      case 'hotel': return const Color(0xFF7C3AED);
-      case 'transport':
-      case 'fuel': return DiklyColors.success;
-      case 'medical':
-      case 'health': return DiklyColors.error;
-      default: return DiklyColors.textLight;
-    }
-  }
+  final bool isManager;
+  final VoidCallback onAction;
+  const _ExpenseRow({required this.expense, required this.isManager, required this.onAction});
 
   Color _statusColor(String s) {
     switch (s.toLowerCase()) {
-      case 'approved': return DiklyColors.success;
-      case 'rejected': return DiklyColors.error;
-      default: return DiklyColors.warning;
+      case 'approved': return const Color(0xFF059669);
+      case 'rejected': return const Color(0xFFDC2626);
+      default: return const Color(0xFFD97706);
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    final category = expense['category']?.toString();
+    final category = expense['category']?.toString() ?? 'Other';
     final description = expense['description']?.toString() ?? 'No description';
-    final amount = expense['amount'];
-    final dateStr = expense['date']?.toString() ?? '';
+    final amount = num.tryParse(expense['amount']?.toString() ?? '') ?? 0;
     final status = expense['status']?.toString() ?? 'pending';
-    final color = _catColor(category);
+    final dateStr = expense['date']?.toString() ?? '';
     final statusColor = _statusColor(status);
+    String? dateLabel;
+    try {
+      if (dateStr.isNotEmpty) dateLabel = DateFormat('MMM d, yyyy').format(DateTime.parse(dateStr));
+    } catch (_) {}
+    final employeeName = expense['employee']?['name']?.toString() ?? expense['employeeName']?.toString();
 
-    DateTime? date;
-    try { date = dateStr.isNotEmpty ? DateTime.parse(dateStr) : null; } catch (_) {}
-
-    final amountNum = num.tryParse(amount?.toString() ?? '') ?? 0;
-
-    return DiklyCard(
-      margin: const EdgeInsets.only(bottom: 12),
-      padding: const EdgeInsets.all(16),
+    return Container(
+      padding: const EdgeInsets.symmetric(vertical: 12),
+      decoration: const BoxDecoration(border: Border(bottom: BorderSide(color: DiklyColors.border))),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Container(
-            width: 44,
-            height: 44,
-            decoration: BoxDecoration(
-              color: color.withOpacity(0.1),
-              borderRadius: BorderRadius.circular(12),
-            ),
-            child: Icon(_icon(category), color: color, size: 22),
-          ),
-          const SizedBox(width: 12),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Expanded(
-                      child: Text(
-                        description,
-                        style: GoogleFonts.dmSans(fontSize: 14, fontWeight: FontWeight.w600, color: DiklyColors.text),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                    ),
-                    const SizedBox(width: 8),
-                    Text(
-                      'GHS ${amountNum.toStringAsFixed(2)}',
-                      style: GoogleFonts.dmSans(fontSize: 15, fontWeight: FontWeight.w800, color: DiklyColors.text),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 6),
+                Text(description,
+                    style: GoogleFonts.dmSans(fontSize: 13, fontWeight: FontWeight.w600, color: DiklyColors.text),
+                    maxLines: 1, overflow: TextOverflow.ellipsis),
+                const SizedBox(height: 3),
                 Row(
                   children: [
-                    if (category != null) ...[
-                      Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
-                        decoration: BoxDecoration(
-                          color: color.withOpacity(0.1),
-                          borderRadius: BorderRadius.circular(6),
-                        ),
-                        child: Text(
-                          category,
-                          style: GoogleFonts.dmSans(fontSize: 11, fontWeight: FontWeight.w600, color: color),
-                        ),
-                      ),
-                      const SizedBox(width: 8),
+                    Text(category, style: GoogleFonts.dmSans(fontSize: 11, color: DiklyColors.textMuted)),
+                    if (dateLabel != null) ...[
+                      const SizedBox(width: 6),
+                      Text('· $dateLabel', style: GoogleFonts.dmSans(fontSize: 11, color: DiklyColors.textMuted)),
                     ],
-                    if (date != null) ...[
-                      const Icon(Icons.calendar_today_outlined, size: 11, color: DiklyColors.textLight),
-                      const SizedBox(width: 3),
-                      Text(
-                        _fmt.format(date),
-                        style: GoogleFonts.dmSans(fontSize: 11, color: DiklyColors.textLight),
-                      ),
+                    if (isManager && employeeName != null) ...[
+                      const SizedBox(width: 6),
+                      Text('· $employeeName', style: GoogleFonts.dmSans(fontSize: 11, color: DiklyColors.textMuted)),
                     ],
-                    const Spacer(),
-                    DiklyBadge(
-                      label: status.toUpperCase(),
-                      color: statusColor,
-                    ),
                   ],
                 ),
               ],
             ),
+          ),
+          const SizedBox(width: 10),
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.end,
+            children: [
+              Text('GHS ${amount.toStringAsFixed(2)}',
+                  style: GoogleFonts.dmSans(fontSize: 13, fontWeight: FontWeight.w700, color: DiklyColors.text)),
+              const SizedBox(height: 4),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                decoration: BoxDecoration(
+                  color: statusColor.withOpacity(0.1),
+                  borderRadius: BorderRadius.circular(20),
+                ),
+                child: Text(status.toUpperCase(),
+                    style: TextStyle(fontSize: 10, fontWeight: FontWeight.w700, color: statusColor)),
+              ),
+            ],
           ),
         ],
       ),
@@ -378,13 +341,11 @@ class _NewExpenseSheetState extends ConsumerState<_NewExpenseSheet> {
 
   InputDecoration _deco({String? hint}) => InputDecoration(
     hintText: hint,
-    filled: true,
-    fillColor: DiklyColors.surface,
+    contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
     border: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: const BorderSide(color: DiklyColors.border)),
     enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: const BorderSide(color: DiklyColors.border)),
-    focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: const BorderSide(color: DiklyColors.primary, width: 2)),
-    contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-    hintStyle: GoogleFonts.dmSans(color: DiklyColors.textMuted, fontSize: 14),
+    focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: const BorderSide(color: Color(0xFF2563EB), width: 2)),
+    hintStyle: GoogleFonts.dmSans(color: DiklyColors.textMuted, fontSize: 13),
   );
 
   @override
@@ -399,7 +360,6 @@ class _NewExpenseSheetState extends ConsumerState<_NewExpenseSheet> {
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // Handle
               Center(
                 child: Container(
                   width: 40, height: 4,
@@ -409,47 +369,44 @@ class _NewExpenseSheetState extends ConsumerState<_NewExpenseSheet> {
               const SizedBox(height: 16),
               Row(
                 children: [
-                  Text(
-                    'Submit Expense',
-                    style: GoogleFonts.dmSans(fontSize: 17, fontWeight: FontWeight.w700, color: DiklyColors.text),
-                  ),
+                  Text('Submit Expense', style: GoogleFonts.dmSans(fontSize: 17, fontWeight: FontWeight.w700, color: DiklyColors.text)),
                   const Spacer(),
                   IconButton(
                     onPressed: () => Navigator.pop(context),
-                    icon: const Icon(Icons.close, color: DiklyColors.textLight, size: 20),
-                    padding: const EdgeInsets.all(4),
-                    constraints: const BoxConstraints(),
+                    icon: const Icon(Icons.close, size: 20),
                     visualDensity: VisualDensity.compact,
                   ),
                 ],
               ),
               const Divider(height: 20),
 
-              const DiklySectionLabel('CATEGORY'),
+              Text('CATEGORY', style: GoogleFonts.dmSans(fontSize: 10, fontWeight: FontWeight.w600, color: DiklyColors.textMuted, letterSpacing: 0.5)),
               const SizedBox(height: 6),
               DropdownButtonFormField<String>(
                 value: _category,
                 decoration: _deco(),
-                items: _categories.map((c) => DropdownMenuItem(value: c, child: Text(c, style: GoogleFonts.dmSans(fontSize: 14)))).toList(),
+                items: _categories.map((c) => DropdownMenuItem(value: c, child: Text(c, style: GoogleFonts.dmSans(fontSize: 13)))).toList(),
                 onChanged: (v) => setState(() => _category = v ?? _category),
               ),
               const SizedBox(height: 14),
 
               Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Expanded(
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        const DiklySectionLabel('AMOUNT (GHS)'),
+                        Text('AMOUNT (GHS)', style: GoogleFonts.dmSans(fontSize: 10, fontWeight: FontWeight.w600, color: DiklyColors.textMuted, letterSpacing: 0.5)),
                         const SizedBox(height: 6),
                         TextFormField(
                           controller: _amountCtrl,
                           keyboardType: const TextInputType.numberWithOptions(decimal: true),
                           decoration: _deco(hint: '0.00'),
+                          style: GoogleFonts.dmSans(fontSize: 13),
                           validator: (v) {
                             if (v == null || v.trim().isEmpty) return 'Required';
-                            if (double.tryParse(v.trim()) == null) return 'Invalid amount';
+                            if (double.tryParse(v.trim()) == null) return 'Invalid';
                             return null;
                           },
                         ),
@@ -461,28 +418,24 @@ class _NewExpenseSheetState extends ConsumerState<_NewExpenseSheet> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        const DiklySectionLabel('DATE'),
+                        Text('DATE', style: GoogleFonts.dmSans(fontSize: 10, fontWeight: FontWeight.w600, color: DiklyColors.textMuted, letterSpacing: 0.5)),
                         const SizedBox(height: 6),
                         GestureDetector(
                           onTap: _pickDate,
                           child: Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 13),
+                            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 13),
                             decoration: BoxDecoration(
-                              color: DiklyColors.surface,
                               border: Border.all(color: DiklyColors.border),
                               borderRadius: BorderRadius.circular(8),
                             ),
                             child: Row(
                               children: [
-                                const Icon(Icons.calendar_today_outlined, size: 16, color: DiklyColors.textLight),
+                                const Icon(Icons.calendar_today_outlined, size: 15, color: DiklyColors.textMuted),
                                 const SizedBox(width: 8),
                                 Expanded(
                                   child: Text(
                                     _date != null ? DateFormat('MMM d, yyyy').format(_date!) : 'Select date',
-                                    style: GoogleFonts.dmSans(
-                                      fontSize: 13,
-                                      color: _date != null ? DiklyColors.text : DiklyColors.textMuted,
-                                    ),
+                                    style: GoogleFonts.dmSans(fontSize: 13, color: _date != null ? DiklyColors.text : DiklyColors.textMuted),
                                     overflow: TextOverflow.ellipsis,
                                   ),
                                 ),
@@ -497,20 +450,32 @@ class _NewExpenseSheetState extends ConsumerState<_NewExpenseSheet> {
               ),
               const SizedBox(height: 14),
 
-              const DiklySectionLabel('DESCRIPTION'),
+              Text('DESCRIPTION', style: GoogleFonts.dmSans(fontSize: 10, fontWeight: FontWeight.w600, color: DiklyColors.textMuted, letterSpacing: 0.5)),
               const SizedBox(height: 6),
               TextFormField(
                 controller: _descCtrl,
                 maxLines: 2,
                 decoration: _deco(hint: 'Describe the expense...'),
+                style: GoogleFonts.dmSans(fontSize: 13),
                 validator: (v) => (v == null || v.trim().isEmpty) ? 'Please add a description' : null,
               ),
               const SizedBox(height: 20),
 
-              DiklyPrimaryButton(
-                label: 'Submit Expense',
-                loading: _loading,
-                onPressed: _submit,
+              SizedBox(
+                width: double.infinity,
+                child: ElevatedButton(
+                  onPressed: _loading ? null : _submit,
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFF2563EB),
+                    foregroundColor: Colors.white,
+                    padding: const EdgeInsets.symmetric(vertical: 13),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                    elevation: 0,
+                  ),
+                  child: _loading
+                      ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                      : Text('Submit Expense', style: GoogleFonts.dmSans(fontSize: 14, fontWeight: FontWeight.w700)),
+                ),
               ),
               const SizedBox(height: 8),
             ],

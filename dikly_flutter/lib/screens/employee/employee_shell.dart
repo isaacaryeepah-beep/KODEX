@@ -170,6 +170,7 @@ class _EmployeeShellState extends ConsumerState<EmployeeShell> {
         userName: user?.name ?? '',
         userEmail: user?.email ?? '',
         userRole: 'Employee',
+        institutionCode: user?.institutionCode ?? '',
         sections: _sections,
         onSignOut: () async {
           Navigator.pop(context);

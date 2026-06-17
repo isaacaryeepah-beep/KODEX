@@ -7,7 +7,7 @@ import '../../core/theme.dart';
 import '../../widgets/dikly_drawer.dart';
 import 'admin_home_screen.dart';
 import 'admin_users_screen.dart';
-import 'admin_courses_screen.dart';
+import 'admin_sessions_screen.dart';
 import 'admin_reports_screen.dart';
 
 class AdminShell extends ConsumerStatefulWidget {
@@ -28,46 +28,50 @@ class _AdminShellState extends ConsumerState<AdminShell> {
   }
 
   static const _accent = Color(0xFFDC2626); // Admin red accent
-  static const _labels = ['Dashboard', 'Users', 'Courses', 'Reports'];
+  static const _labels = ['Dashboard', 'Sessions', 'Users', 'Reports'];
   static const _icons = [
     Icons.dashboard_outlined,
+    Icons.play_circle_outline,
     Icons.people_outlined,
-    Icons.book_outlined,
     Icons.bar_chart_outlined,
   ];
 
   static const _sections = [
-    DrawerSection(items: [
-      DrawerItem(Icons.dashboard_outlined, 'Dashboard', '/dashboard/admin'),
-    ]),
     DrawerSection(header: 'MANAGE', items: [
       DrawerItem(Icons.check_circle_outline, 'Approvals', '/admin/approvals'),
       DrawerItem(Icons.search_outlined, 'Search', '/admin/search'),
       DrawerItem(Icons.people_outlined, 'Users', '/admin/users'),
-      DrawerItem(Icons.play_circle_outline, 'Sessions', '/admin/sessions'),
+      DrawerItem(Icons.play_circle_outline, 'Sessions', '/sessions'),
     ]),
-    DrawerSection(header: 'ACADEMIC', items: [
-      DrawerItem(Icons.book_outlined, 'Courses', '/courses'),
-      DrawerItem(Icons.task_alt_outlined, 'Course Approvals', '/admin/course-approvals'),
-      DrawerItem(Icons.shield_outlined, 'Proctored/Snap Quiz', '/admin/quizzes'),
-      DrawerItem(Icons.grade_outlined, 'Grade Book', '/gradebook'),
+    DrawerSection(header: 'WORKFORCE', items: [
+      DrawerItem(Icons.login_outlined, 'Sign In / Out', '/sign-in-out'),
+      DrawerItem(Icons.groups_outlined, 'Team Attendance', '/corporate-attendance'),
+      DrawerItem(Icons.schedule_outlined, 'Shifts', '/shifts'),
+      DrawerItem(Icons.beach_access_outlined, 'Leave Requests', '/manager/leave-requests'),
+      DrawerItem(Icons.school_outlined, 'Training & Assessments', '/quizzes'),
+      DrawerItem(Icons.trending_up_outlined, 'Performance', '/performance'),
+      DrawerItem(Icons.access_time_outlined, 'Timesheets', '/manager/timesheets'),
+      DrawerItem(Icons.receipt_long_outlined, 'Expenses', '/expenses'),
+      DrawerItem(Icons.inventory_2_outlined, 'Assets', '/admin/assets'),
+      DrawerItem(Icons.palette_outlined, 'Branding', '/admin/branding'),
+      DrawerItem(Icons.account_tree_outlined, 'Branches', '/admin/branches'),
+    ]),
+    DrawerSection(header: 'ADMIN', items: [
+      DrawerItem(Icons.analytics_outlined, 'Analytics', '/reports'),
       DrawerItem(Icons.campaign_outlined, 'Announcements', '/announcements'),
-      DrawerItem(Icons.school_outlined, 'Programmes', '/admin/programmes'),
-      DrawerItem(Icons.lock_open_outlined, 'Unlock Students', '/admin/unlock-students'),
-      DrawerItem(Icons.people_alt_outlined, 'Class Reps', '/admin/class-reps'),
-      DrawerItem(Icons.devices_outlined, 'Classroom Devices', '/admin/devices'),
+      DrawerItem(Icons.history_outlined, 'Audit Logs', '/admin/audit-logs'),
     ]),
     DrawerSection(header: 'COMMUNICATE', items: [
       DrawerItem(Icons.message_outlined, 'Messages', '/messages'),
       DrawerItem(Icons.video_call_outlined, 'Meetings', '/meetings'),
     ]),
     DrawerSection(header: 'INSIGHTS', items: [
-      DrawerItem(Icons.assessment_outlined, 'Reports', '/admin/reports'),
+      DrawerItem(Icons.assessment_outlined, 'Reports', '/reports'),
     ]),
     DrawerSection(header: 'SUPPORT', items: [
-      DrawerItem(Icons.card_membership_outlined, 'Subscription', '/subscription'),
-      DrawerItem(Icons.person_outlined, 'Profile', '/profile'),
       DrawerItem(Icons.help_outline, 'FAQ Center', '/faq'),
+      DrawerItem(Icons.card_membership_outlined, 'Subscription', '/subscription'),
+      DrawerItem(Icons.person_outlined, 'My Profile', '/profile'),
       DrawerItem(Icons.phone_outlined, 'Contact Us', '/contact'),
       DrawerItem(Icons.info_outline, 'About', '/about'),
     ]),
@@ -78,8 +82,8 @@ class _AdminShellState extends ConsumerState<AdminShell> {
     final user = ref.watch(authProvider).user;
     final screens = const [
       AdminHomeScreen(),
+      AdminSessionsScreen(),
       AdminUsersScreen(),
-      AdminCoursesScreen(),
       AdminReportsScreen(),
     ];
 
@@ -214,6 +218,7 @@ class _AdminShellState extends ConsumerState<AdminShell> {
         userName: user?.name ?? '',
         userEmail: user?.email ?? '',
         userRole: 'Administrator',
+        institutionCode: user?.institutionCode ?? '',
         sections: _sections,
         onSignOut: () async {
           Navigator.pop(context);

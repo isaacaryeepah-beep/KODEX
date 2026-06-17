@@ -83,6 +83,12 @@ class ApiService {
   }
 
   /// Flush all queued writes when back online.
+  /// Generic authenticated GET — returns parsed response data.
+  Future<dynamic> get(String path) async {
+    final response = await _dio.get(path);
+    return response.data;
+  }
+
   Future<void> flushWriteQueue() async {
     final queue = CacheService.getPendingWrites();
     if (queue.isEmpty) return;
@@ -380,6 +386,10 @@ class ApiService {
     return (list as List).map((e) => User.fromJson(e as Map<String, dynamic>)).toList();
   }
 
+  Future<void> deleteUser(String userId) async {
+    await _dio.delete('/api/users/$userId');
+  }
+
   // Admin-level pending approvals
   Future<Map<String, dynamic>> getAdminDashboardData() async {
     final today = DateTime.now().toIso8601String().substring(0, 10);
@@ -394,13 +404,21 @@ class ApiService {
     final pending = results[2].data['pending'] ?? [];
     final announcements = results[3].data['announcements'] ?? [];
     final activeSessions = (sessions as List).where((s) => ['active','live','paused','locked'].contains(s['status'])).length;
+    // Compute role breakdown for chart
+    final roleMap = <String, int>{};
+    for (final u in users as List) {
+      final role = (u['role'] ?? 'other').toString().toLowerCase();
+      roleMap[role] = (roleMap[role] ?? 0) + 1;
+    }
     return {
       'sessions': sessions,
+      'recentSessions': sessions,
       'totalSessions': results[0].data['pagination']?['total'] ?? sessions.length,
-      'totalUsers': (users as List).length,
+      'totalUsers': users.length,
       'activeSessions': activeSessions,
       'pendingApprovals': (pending as List).length,
       'announcements': announcements,
+      'usersByRole': roleMap,
     };
   }
 
@@ -913,6 +931,13 @@ class ApiService {
     final response = await _dio.get('/api/leaves/my');
     final data = response.data;
     final list = data['leaveRequests'] ?? data['leaves'] ?? data['data'] ?? [];
+    return (list as List).cast<Map<String, dynamic>>();
+  }
+
+  Future<List<Map<String, dynamic>>> getMyLeaveBalances() async {
+    final response = await _dio.get('/api/leave-balances/my');
+    final data = response.data;
+    final list = data['balances'] ?? [];
     return (list as List).cast<Map<String, dynamic>>();
   }
 

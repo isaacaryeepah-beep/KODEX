@@ -12,6 +12,10 @@ final _lecturerDashProvider = FutureProvider.autoDispose<Map<String, dynamic>>(
   (ref) => apiService.getLecturerDashboardData(),
 );
 
+// Lecturer role color: amber
+const _lecturerColor = Color(0xFFD97706);
+const _statPrimary   = Color(0xFF2563EB);
+
 class LecturerHomeScreen extends ConsumerWidget {
   const LecturerHomeScreen({super.key});
 
@@ -19,92 +23,123 @@ class LecturerHomeScreen extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final user = ref.watch(authProvider).user;
+    final user      = ref.watch(authProvider).user;
     final dashAsync = ref.watch(_lecturerDashProvider);
     final firstName = (user?.name ?? 'Lecturer').split(' ').first;
 
     return Column(
       children: [
-          dashAsync.when(
-            data: (d) => DiklyHeroSection(
-              gradient: _theme.gradient,
-              greeting: 'Hello, $firstName 👋',
-              subtitle: '${user?.department ?? user?.institutionCode ?? 'Lecturer Portal'} · ${DateFormat('EEE, MMM d').format(DateTime.now())}',
-              stats: [
-                DiklyHeaderStat(value: '${d['totalStudents'] ?? 0}', label: 'Students', icon: Icons.people_outlined),
-                DiklyHeaderStat(value: '${d['activeCourses'] ?? 0}', label: 'Courses', icon: Icons.school_outlined),
-                DiklyHeaderStat(value: '${d['totalSessions'] ?? 0}', label: 'Sessions', icon: Icons.video_call_outlined),
-              ],
-            ),
-            loading: () => DiklyHeroSection(
-              gradient: _theme.gradient,
-              greeting: 'Hello, $firstName 👋',
-              subtitle: user?.institutionCode ?? 'Lecturer Portal',
-              stats: [
-                const DiklyHeaderStat(value: '—', label: 'Students'),
-                const DiklyHeaderStat(value: '—', label: 'Courses'),
-                const DiklyHeaderStat(value: '—', label: 'Sessions'),
-              ],
-            ),
-            error: (_, __) => DiklyHeroSection(
-              gradient: _theme.gradient,
-              greeting: 'Hello, $firstName 👋',
-              subtitle: user?.institutionCode ?? 'Lecturer Portal',
-              stats: const [],
-            ),
+        // ── Page header ───────────────────────────────────────────────
+        dashAsync.when(
+          data: (d) => DiklyHeroSection(
+            gradient: _theme.gradient,
+            greeting: 'Welcome back, $firstName',
+            subtitle: [
+              user?.department ?? '',
+              user?.company ?? user?.institutionCode ?? 'Lecturer Portal',
+            ].where((s) => s.isNotEmpty).join(' · '),
+            stats: [
+              DiklyHeaderStat(value: '${d['totalStudents'] ?? 0}',  label: 'Students', icon: Icons.people_outlined),
+              DiklyHeaderStat(value: '${d['activeCourses'] ?? 0}',  label: 'Courses',  icon: Icons.school_outlined),
+              DiklyHeaderStat(value: '${d['totalSessions'] ?? 0}',  label: 'Sessions', icon: Icons.video_call_outlined),
+            ],
           ),
-          DiklyPageBody(
-            child: RefreshIndicator(
-              onRefresh: () async => ref.invalidate(_lecturerDashProvider),
-              color: _theme.primary,
-              child: dashAsync.when(
-                loading: () => ListView(
-                  padding: const EdgeInsets.all(16),
-                  children: const [
-                    DiklyShimmerCard(height: 48, borderRadius: 999),
-                    SizedBox(height: 20),
-                    DiklyShimmerGrid(),
-                    SizedBox(height: 20),
-                    DiklyShimmerList(count: 4),
-                  ],
-                ),
-                error: (e, _) => ListView(
-                  padding: const EdgeInsets.all(24),
-                  children: [DiklyErrorView(message: e.toString().replaceAll('Exception: ', ''), onRetry: () => ref.invalidate(_lecturerDashProvider))],
-                ),
-                data: (d) => _buildContent(context, ref, d, user),
+          loading: () => DiklyHeroSection(
+            gradient: _theme.gradient,
+            greeting: 'Welcome back, $firstName',
+            subtitle: user?.institutionCode ?? 'Lecturer Portal',
+            stats: const [
+              DiklyHeaderStat(value: '—', label: 'Students'),
+              DiklyHeaderStat(value: '—', label: 'Courses'),
+              DiklyHeaderStat(value: '—', label: 'Sessions'),
+            ],
+          ),
+          error: (_, __) => DiklyHeroSection(
+            gradient: _theme.gradient,
+            greeting: 'Welcome back, $firstName',
+            subtitle: user?.institutionCode ?? 'Lecturer Portal',
+            stats: const [],
+          ),
+        ),
+
+        // ── Body ─────────────────────────────────────────────────────
+        DiklyPageBody(
+          child: RefreshIndicator(
+            onRefresh: () async => ref.invalidate(_lecturerDashProvider),
+            color: _theme.primary,
+            child: dashAsync.when(
+              loading: () => ListView(
+                padding: const EdgeInsets.all(16),
+                children: const [
+                  DiklyShimmerCard(height: 48, borderRadius: 999),
+                  SizedBox(height: 20),
+                  DiklyShimmerGrid(),
+                  SizedBox(height: 20),
+                  DiklyShimmerList(count: 4),
+                ],
               ),
+              error: (e, _) => ListView(
+                padding: const EdgeInsets.all(24),
+                children: [
+                  DiklyErrorView(
+                    message: e.toString().replaceAll('Exception: ', ''),
+                    onRetry: () => ref.invalidate(_lecturerDashProvider),
+                  ),
+                ],
+              ),
+              data: (d) => _buildContent(context, ref, d, user),
             ),
           ),
+        ),
       ],
     );
   }
 
-  Widget _buildContent(BuildContext context, WidgetRef ref, Map<String, dynamic> d, dynamic user) {
-    final sessions = (d['recentSessions'] as List? ?? []);
+  Widget _buildContent(
+    BuildContext context,
+    WidgetRef ref,
+    Map<String, dynamic> d,
+    dynamic user,
+  ) {
+    final sessions = (d['recentSessions']    as List? ?? []);
     final meetings = (d['scheduledMeetings'] as List? ?? []);
 
     return ListView(
-      padding: const EdgeInsets.fromLTRB(16, 20, 16, 24),
+      padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
       children: [
-        // Quick actions
+        // Page sub-header
         DiklyFadeIn(
+          child: _LecturerHeader(
+            name: (user?.name ?? 'Lecturer').split(' ').first,
+            company: user?.company ?? user?.institutionCode ?? 'Dikly',
+            department: user?.department,
+          ),
+        ),
+        const SizedBox(height: 14),
+
+        // Quick actions button row
+        DiklyFadeIn(
+          delay: const Duration(milliseconds: 60),
           child: SingleChildScrollView(
             scrollDirection: Axis.horizontal,
             child: Row(
               children: [
-                DiklyQuickChip(icon: Icons.play_circle_outline_rounded, label: 'Start Session', color: _theme.primary, onTap: () => context.push('/sessions')),
-                DiklyQuickChip(icon: Icons.school_outlined, label: 'Create Course', color: const Color(0xFF059669), onTap: () => context.push('/courses')),
-                DiklyQuickChip(icon: Icons.quiz_outlined, label: 'Create Quiz', color: const Color(0xFF7C3AED), onTap: () => context.push('/quizzes')),
-                DiklyQuickChip(icon: Icons.fact_check_outlined, label: 'Attendance', color: const Color(0xFF0891B2), onTap: () => context.push('/attendance')),
-                DiklyQuickChip(icon: Icons.bar_chart_rounded, label: 'Reports', color: const Color(0xFFDC2626), onTap: () => context.push('/reports')),
+                _QuickBtn(label: 'Start Session',  filled: true,  onTap: () => context.push('/sessions')),
+                const SizedBox(width: 8),
+                _QuickBtn(label: 'Create Course',  filled: false, onTap: () => context.push('/courses')),
+                const SizedBox(width: 8),
+                _QuickBtn(label: 'Create Quiz',    filled: false, onTap: () => context.push('/quizzes')),
+                const SizedBox(width: 8),
+                _QuickBtn(label: 'Attendance',     filled: false, onTap: () => context.push('/attendance')),
+                const SizedBox(width: 8),
+                _QuickBtn(label: 'Reports',        filled: false, onTap: () => context.push('/reports')),
               ],
             ),
           ),
         ),
-        const SizedBox(height: 22),
+        const SizedBox(height: 20),
 
-        // Stats grid
+        // Stat cards — web style (centered, no icon)
         DiklyFadeIn(
           delay: const Duration(milliseconds: 80),
           child: GridView.count(
@@ -113,18 +148,18 @@ class LecturerHomeScreen extends ConsumerWidget {
             crossAxisCount: 2,
             mainAxisSpacing: 10,
             crossAxisSpacing: 10,
-            childAspectRatio: 1.35,
+            childAspectRatio: 1.4,
             children: [
-              WebStatCard(value: '${d['totalStudents'] ?? 0}', label: 'Total Students', subtitle: 'All courses', icon: Icons.people_rounded, color: _theme.primary),
-              WebStatCard(value: '${d['activeCourses'] ?? 0}', label: 'Active Courses', subtitle: 'This term', icon: Icons.school_rounded, color: const Color(0xFF059669)),
-              WebStatCard(value: '${d['totalSessions'] ?? 0}', label: 'Sessions Run', subtitle: 'All time', icon: Icons.video_call_rounded, color: const Color(0xFF0891B2)),
-              WebStatCard(value: '${d['quizzesCreated'] ?? 0}', label: 'Quizzes Created', subtitle: 'Published', icon: Icons.quiz_rounded, color: const Color(0xFF7C3AED)),
+              _WebStatCard(value: '${d['totalStudents'] ?? 0}',  label: 'STUDENTS',         color: _statPrimary),
+              _WebStatCard(value: '${d['activeCourses'] ?? 0}',  label: 'COURSES',           color: _statPrimary),
+              _WebStatCard(value: '${d['totalSessions'] ?? 0}',  label: 'SESSIONS',          color: _statPrimary),
+              _WebStatCard(value: '${d['quizzesCreated'] ?? 0}', label: 'QUIZZES CREATED',   color: _statPrimary),
             ],
           ),
         ),
         const SizedBox(height: 22),
 
-        // Recent sessions
+        // Recent sessions list
         DiklyFadeIn(
           delay: const Duration(milliseconds: 120),
           child: Column(
@@ -152,7 +187,7 @@ class LecturerHomeScreen extends ConsumerWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 DiklySectionRow(
-                  title: 'Upcoming Meetings',
+                  title: 'Scheduled Meetings',
                   count: meetings.length,
                   onViewAll: () => context.push('/meetings'),
                 ),
@@ -168,7 +203,7 @@ class LecturerHomeScreen extends ConsumerWidget {
   Widget _sessionTile(Map<String, dynamic> s, BuildContext context) {
     final status = (s['status'] ?? 'closed').toString().toLowerCase();
     final isLive = status == 'active' || status == 'open';
-    final color = isLive ? const Color(0xFF16A34A) : const Color(0xFF6B7280);
+    final color  = isLive ? const Color(0xFF16A34A) : const Color(0xFF6B7280);
     return DiklyListTile(
       title: s['title'] ?? s['courseTitle'] ?? 'Session',
       subtitle: s['startedAt'] != null
@@ -182,14 +217,12 @@ class LecturerHomeScreen extends ConsumerWidget {
   }
 
   Widget _meetingTile(Map<String, dynamic> m, BuildContext context) {
-    final now = DateTime.now();
+    final now   = DateTime.now();
     final start = DateTime.tryParse(m['startTime']?.toString() ?? '');
-    final end = DateTime.tryParse(m['endTime']?.toString() ?? '');
+    final end   = DateTime.tryParse(m['endTime']?.toString()   ?? '');
     final isLive = start != null && end != null && now.isAfter(start) && now.isBefore(end);
-    final color = isLive ? const Color(0xFF16A34A) : DiklyColors.primary;
-
-    String subtitle = '';
-    if (start != null) subtitle = DateFormat('MMM d · h:mm a').format(start);
+    final color  = isLive ? const Color(0xFF16A34A) : _statPrimary;
+    final subtitle = start != null ? DateFormat('MMM d · h:mm a').format(start) : '';
 
     return DiklyListTile(
       title: m['title'] ?? 'Meeting',
@@ -198,6 +231,142 @@ class LecturerHomeScreen extends ConsumerWidget {
       badge: DiklyStatusPill(label: isLive ? 'LIVE' : 'Scheduled', color: color, live: isLive),
       onTap: () => context.push('/meetings'),
       leadingIcon: Icons.groups_outlined,
+    );
+  }
+}
+
+// ── Lecturer page header ──────────────────────────────────────────────────────
+
+class _LecturerHeader extends StatelessWidget {
+  final String name;
+  final String company;
+  final String? department;
+
+  const _LecturerHeader({required this.name, required this.company, this.department});
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          'Welcome back, $name',
+          style: GoogleFonts.dmSans(fontSize: 20, fontWeight: FontWeight.w700, color: DiklyColors.text),
+        ),
+        const SizedBox(height: 4),
+        Row(
+          children: [
+            Text(
+              company,
+              style: GoogleFonts.dmSans(fontSize: 13, color: DiklyColors.textMuted),
+            ),
+            if (department != null && department!.isNotEmpty) ...[
+              const SizedBox(width: 8),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFFEF3C7),
+                  borderRadius: BorderRadius.circular(20),
+                  border: Border.all(color: const Color(0xFFFCD34D)),
+                ),
+                child: Text(
+                  department!,
+                  style: GoogleFonts.dmSans(
+                    fontSize: 10,
+                    fontWeight: FontWeight.w700,
+                    color: const Color(0xFF92400E),
+                  ),
+                ),
+              ),
+            ],
+          ],
+        ),
+      ],
+    );
+  }
+}
+
+// ── Quick action button ───────────────────────────────────────────────────────
+
+class _QuickBtn extends StatelessWidget {
+  final String label;
+  final bool filled;
+  final VoidCallback onTap;
+
+  const _QuickBtn({required this.label, required this.filled, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    const color = _lecturerColor;
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+        decoration: BoxDecoration(
+          color: filled ? color : Colors.white,
+          borderRadius: BorderRadius.circular(8),
+          border: Border.all(color: filled ? color : const Color(0xFFD1D5DB)),
+        ),
+        child: Text(
+          label,
+          style: GoogleFonts.dmSans(
+            fontSize: 13,
+            fontWeight: FontWeight.w600,
+            color: filled ? Colors.white : DiklyColors.textSecondary,
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+// ── Web-style centered stat card (no icon) ────────────────────────────────────
+
+class _WebStatCard extends StatelessWidget {
+  final String value;
+  final String label;
+  final Color color;
+
+  const _WebStatCard({required this.value, required this.label, required this.color});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: const Color(0xFFE5E7EB)),
+        boxShadow: const [
+          BoxShadow(color: Color(0x08000000), blurRadius: 4, offset: Offset(0, 1)),
+        ],
+      ),
+      child: Center(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              value,
+              style: GoogleFonts.dmSans(
+                fontSize: 26,
+                fontWeight: FontWeight.w800,
+                color: color,
+                height: 1.1,
+              ),
+            ),
+            const SizedBox(height: 4),
+            Text(
+              label,
+              textAlign: TextAlign.center,
+              style: GoogleFonts.dmSans(
+                fontSize: 10,
+                fontWeight: FontWeight.w600,
+                color: const Color(0xFF6B7280),
+                letterSpacing: 0.8,
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 }
