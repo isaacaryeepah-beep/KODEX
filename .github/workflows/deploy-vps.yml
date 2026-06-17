@@ -34,7 +34,7 @@ jobs:
           git checkout jitsi-config/web/custom-config.js 2>/dev/null || true
           git reset --hard origin/main
 
-          docker compose up -d --build app
+          docker compose up -d --build --force-recreate --remove-orphans app
           docker restart kodex-web-1 2>/dev/null || true
 
           git diff HEAD~1 --name-only 2>/dev/null | grep -q docker-compose.jitsi.yml \
