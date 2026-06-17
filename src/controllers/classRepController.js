@@ -3,6 +3,8 @@ const Device = require('../models/Device');
 const Course = require('../models/Course');
 const User = require('../models/User');
 
+const escapeRegex = s => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
 // GET /api/class-rep/device
 exports.getMyDevice = async (req, res) => {
   try {
@@ -51,7 +53,7 @@ exports.searchLecturers = async (req, res) => {
     const q = (req.query.q || req.query.search || '').trim();
     if (q.length < 2) return res.json({ users: [] });
     const rep = await User.findById(req.user._id).select('department').lean();
-    const regex = new RegExp(q, 'i');
+    const regex = new RegExp(escapeRegex(q), 'i');
     const filter = {
       company: req.user.company,
       role: 'lecturer',

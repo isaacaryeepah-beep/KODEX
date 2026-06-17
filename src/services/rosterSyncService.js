@@ -14,6 +14,8 @@ const Course        = require('../models/Course');
 const StudentRoster = require('../models/StudentRoster');
 const User          = require('../models/User');
 
+const escapeRegex = s => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
 /**
  * After a student registers, find all roster entries matching their
  * index number in the same company and auto-enroll them.
@@ -28,9 +30,8 @@ async function syncStudentToRoster(studentId, companyId) {
     const indexNum = (student.indexNumber || student.IndexNumber || '').trim().toUpperCase();
     if (!indexNum) return { enrolled: 0, skipped: 0 };
 
-    // Find roster entries for this index number
     const rosterEntries = await StudentRoster.find({
-      studentId: { $regex: new RegExp(`^${indexNum}$`, 'i') },
+      studentId: { $regex: new RegExp(`^${escapeRegex(indexNum)}$`, 'i') },
     }).lean();
 
     if (!rosterEntries.length) return { enrolled: 0, skipped: 0 };
@@ -85,10 +86,11 @@ async function removeStudentFromEnrollment(courseId, indexNumber) {
     const normIndex = (indexNumber || '').trim().toUpperCase();
     if (!normIndex) return;
 
+    const escaped = escapeRegex(normIndex);
     const student = await User.findOne({
       $or: [
-        { indexNumber: { $regex: new RegExp(`^${normIndex}$`, 'i') } },
-        { IndexNumber: { $regex: new RegExp(`^${normIndex}$`, 'i') } },
+        { indexNumber: { $regex: new RegExp(`^${escaped}$`, 'i') } },
+        { IndexNumber: { $regex: new RegExp(`^${escaped}$`, 'i') } },
       ],
     }).select('_id').lean();
 

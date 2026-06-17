@@ -70,6 +70,7 @@ function sanitizeInputs(req, res, next) {
   }
 
   if (req.params && typeof req.params === 'object') {
+    req.params = stripMongoOperators(req.params);
     req.params = sanitizeObject(req.params);
   }
 

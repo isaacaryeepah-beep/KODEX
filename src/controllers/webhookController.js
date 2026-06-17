@@ -35,12 +35,13 @@ function addYears(date, n) {
 
 // ── Signature verification ────────────────────────────────────────────────────
 function verifySignature(rawBody, signature) {
-  if (!PAYSTACK_SECRET_KEY) return false;
-  const hash = crypto
+  if (!PAYSTACK_SECRET_KEY || !signature) return false;
+  const expected = crypto
     .createHmac("sha512", PAYSTACK_SECRET_KEY)
     .update(rawBody)
     .digest("hex");
-  return hash === signature;
+  if (expected.length !== signature.length) return false;
+  return crypto.timingSafeEqual(Buffer.from(expected), Buffer.from(signature));
 }
 
 // ── Main webhook handler ──────────────────────────────────────────────────────
