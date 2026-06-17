@@ -3,6 +3,8 @@ const Quiz = require("../models/Quiz");
 const Question = require("../models/Question");
 const QuizSubmission = require("../models/QuizSubmission");
 const Course = require("../models/Course");
+const { validateObjectId, handleControllerError } = require("../utils/controllerHelpers");
+const { getEnrolledCourseIds, buildTargetAudienceFilter } = require("../utils/queryHelpers");
 
 exports.createQuiz = async (req, res) => {
   try {
@@ -12,9 +14,7 @@ exports.createQuiz = async (req, res) => {
       return res.status(400).json({ error: "Title, courseId, questions, startTime, and endTime are required" });
     }
 
-    if (!mongoose.Types.ObjectId.isValid(courseId)) {
-      return res.status(400).json({ error: "Invalid course ID" });
-    }
+    if (!validateObjectId(res, courseId, "course ID")) return;
 
     const courseFilter = { _id: courseId, companyId: req.user.company };
     if (req.user.role === "lecturer") {
@@ -54,12 +54,7 @@ exports.createQuiz = async (req, res) => {
 
     res.status(201).json({ quiz: populated });
   } catch (error) {
-    if (error.name === "ValidationError") {
-      const messages = Object.values(error.errors).map((e) => e.message);
-      return res.status(400).json({ error: messages.join(", ") });
-    }
-    console.error("Create quiz error:", error);
-    res.status(500).json({ error: "Failed to create quiz" });
+    handleControllerError(res, error, "Create quiz error:", { defaultMessage: "Failed to create quiz" });
   }
 };
 
@@ -72,12 +67,7 @@ exports.listQuizzes = async (req, res) => {
       filter.createdBy = req.user._id;
       if (courseId) filter.course = courseId;
     } else if (req.user.role === "student") {
-      const enrolledCourses = await Course.find({
-        companyId: req.user.company,
-        enrolledStudents: req.user._id,
-        isActive: true,
-      }).select("_id");
-      const enrolledCourseIds = enrolledCourses.map((c) => c._id);
+      const enrolledCourseIds = await getEnrolledCourseIds(req.user.company, req.user._id);
       filter.course = { $in: enrolledCourseIds };
       if (courseId) {
         if (!enrolledCourseIds.some((id) => id.toString() === courseId)) {
@@ -86,10 +76,7 @@ exports.listQuizzes = async (req, res) => {
         filter.course = courseId;
       }
       // Only show quizzes this student's group is allowed to see
-      filter.$or = [
-        { targetAudience: 'all' },
-        { targetAudience: 'group', targetGroup: req.user.studentGroup || '__none__' },
-      ];
+      filter.$or = buildTargetAudienceFilter(req.user);
     } else {
       if (courseId) filter.course = courseId;
     }
@@ -101,17 +88,14 @@ exports.listQuizzes = async (req, res) => {
 
     res.json({ quizzes });
   } catch (error) {
-    console.error("List quizzes error:", error);
-    res.status(500).json({ error: "Failed to fetch quizzes" });
+    handleControllerError(res, error, "List quizzes error:", { defaultMessage: "Failed to fetch quizzes" });
   }
 };
 
 exports.getQuiz = async (req, res) => {
   try {
     const { id } = req.params;
-    if (!mongoose.Types.ObjectId.isValid(id)) {
-      return res.status(400).json({ error: "Invalid quiz ID" });
-    }
+    if (!validateObjectId(res, id, "quiz ID")) return;
 
     const quizFilter = { _id: id, ...req.companyFilter };
     if (req.user.role === "lecturer") {
@@ -153,8 +137,7 @@ exports.getQuiz = async (req, res) => {
 
     res.json({ quiz: result, submissions });
   } catch (error) {
-    console.error("Get quiz error:", error);
-    res.status(500).json({ error: "Failed to fetch quiz" });
+    handleControllerError(res, error, "Get quiz error:", { defaultMessage: "Failed to fetch quiz" });
   }
 };
 
@@ -163,9 +146,7 @@ exports.submitQuiz = async (req, res) => {
     const { id } = req.params;
     const { answers } = req.body;
 
-    if (!mongoose.Types.ObjectId.isValid(id)) {
-      return res.status(400).json({ error: "Invalid quiz ID" });
-    }
+    if (!validateObjectId(res, id, "quiz ID")) return;
 
     const quiz = await Quiz.findOne({ _id: id, company: req.user.company, isActive: true });
     if (!quiz) {
@@ -241,10 +222,9 @@ exports.submitQuiz = async (req, res) => {
 
     res.status(201).json({ submission });
   } catch (error) {
-    if (error.code === 11000) {
-      return res.status(409).json({ error: "Quiz already submitted" });
-    }
-    console.error("Submit quiz error:", error);
-    res.status(500).json({ error: "Failed to submit quiz" });
+    handleControllerError(res, error, "Submit quiz error:", {
+      defaultMessage: "Failed to submit quiz",
+      duplicateMessage: "Quiz already submitted",
+    });
   }
 };

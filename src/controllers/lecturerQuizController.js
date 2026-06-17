@@ -4,6 +4,8 @@ const Question = require("../models/Question");
 const Attempt = require("../models/Attempt");
 const Answer = require("../models/Answer");
 const Course = require("../models/Course");
+const { validateObjectId, validateObjectIds, handleControllerError } = require("../utils/controllerHelpers");
+const { getLecturerCourseIds } = require("../utils/queryHelpers");
 
 exports.createQuiz = async (req, res) => {
   try {
@@ -13,9 +15,7 @@ exports.createQuiz = async (req, res) => {
       return res.status(400).json({ error: "Title, courseId, startTime, and endTime are required" });
     }
 
-    if (!mongoose.Types.ObjectId.isValid(courseId)) {
-      return res.status(400).json({ error: "Invalid course ID" });
-    }
+    if (!validateObjectId(res, courseId, "course ID")) return;
 
     const course = await Course.findOne({
       _id: courseId,
@@ -74,12 +74,7 @@ exports.createQuiz = async (req, res) => {
 
     res.status(201).json({ quiz: { ...populated.toObject(), questions: qQuestions } });
   } catch (error) {
-    if (error.name === "ValidationError") {
-      const messages = Object.values(error.errors).map((e) => e.message);
-      return res.status(400).json({ error: messages.join(", ") });
-    }
-    console.error("Create quiz error:", error);
-    res.status(500).json({ error: "Failed to create quiz" });
+    handleControllerError(res, error, "Create quiz error:", { defaultMessage: "Failed to create quiz" });
   }
 };
 
@@ -103,13 +98,10 @@ exports.listQuizzes = async (req, res) => {
         filter.course = { $in: deptCourses.map(c => c._id) };
       }
     } else {
-      const myCourses = await Course.find({
-        companyId: req.user.company,
-        lecturerId: req.user._id,
-      }).select('_id').lean();
+      const myCourseIds = await getLecturerCourseIds(req.user.company, req.user._id);
       filter = {
         company: req.user.company,
-        course: { $in: myCourses.map(c => c._id) },
+        course: { $in: myCourseIds },
       };
     }
 
@@ -122,9 +114,7 @@ exports.listQuizzes = async (req, res) => {
     }
 
     if (courseId) {
-      if (!mongoose.Types.ObjectId.isValid(courseId)) {
-        return res.status(400).json({ error: "Invalid course ID" });
-      }
+      if (!validateObjectId(res, courseId, "course ID")) return;
       filter.course = courseId;
     }
 
@@ -205,17 +195,14 @@ exports.listQuizzes = async (req, res) => {
 
     res.json({ quizzes: result });
   } catch (error) {
-    console.error("List lecturer quizzes error:", error);
-    res.status(500).json({ error: "Failed to fetch quizzes" });
+    handleControllerError(res, error, "List lecturer quizzes error:", { defaultMessage: "Failed to fetch quizzes" });
   }
 };
 
 exports.getQuiz = async (req, res) => {
   try {
     const { id } = req.params;
-    if (!mongoose.Types.ObjectId.isValid(id)) {
-      return res.status(400).json({ error: "Invalid quiz ID" });
-    }
+    if (!validateObjectId(res, id, "quiz ID")) return;
 
     const quiz = await Quiz.findOne({ _id: id, company: req.user.company, createdBy: req.user._id })
       .populate("course", "title code")
@@ -233,17 +220,14 @@ exports.getQuiz = async (req, res) => {
 
     res.json({ quiz: { ...quiz.toObject(), questions }, attempts });
   } catch (error) {
-    console.error("Get quiz error:", error);
-    res.status(500).json({ error: "Failed to fetch quiz" });
+    handleControllerError(res, error, "Get quiz error:", { defaultMessage: "Failed to fetch quiz" });
   }
 };
 
 exports.updateQuiz = async (req, res) => {
   try {
     const { id } = req.params;
-    if (!mongoose.Types.ObjectId.isValid(id)) {
-      return res.status(400).json({ error: "Invalid quiz ID" });
-    }
+    if (!validateObjectId(res, id, "quiz ID")) return;
 
     const quiz = await Quiz.findOne({ _id: id, company: req.user.company, createdBy: req.user._id });
     if (!quiz) {
@@ -272,17 +256,14 @@ exports.updateQuiz = async (req, res) => {
 
     res.json({ quiz: populated });
   } catch (error) {
-    console.error("Update quiz error:", error);
-    res.status(500).json({ error: "Failed to update quiz" });
+    handleControllerError(res, error, "Update quiz error:", { defaultMessage: "Failed to update quiz" });
   }
 };
 
 exports.deleteQuiz = async (req, res) => {
   try {
     const { id } = req.params;
-    if (!mongoose.Types.ObjectId.isValid(id)) {
-      return res.status(400).json({ error: "Invalid quiz ID" });
-    }
+    if (!validateObjectId(res, id, "quiz ID")) return;
 
     const quiz = await Quiz.findOne({ _id: id, company: req.user.company, createdBy: req.user._id });
     if (!quiz) {
@@ -301,8 +282,7 @@ exports.deleteQuiz = async (req, res) => {
 
     res.json({ message: "Quiz deleted successfully" });
   } catch (error) {
-    console.error("Delete quiz error:", error);
-    res.status(500).json({ error: "Failed to delete quiz" });
+    handleControllerError(res, error, "Delete quiz error:", { defaultMessage: "Failed to delete quiz" });
   }
 };
 
@@ -311,9 +291,7 @@ exports.addQuestion = async (req, res) => {
     const { id } = req.params;
     const { questionText, options, correctAnswer, correctAnswers, questionType, marks, correctAnswerText, acceptedAnswers } = req.body;
 
-    if (!mongoose.Types.ObjectId.isValid(id)) {
-      return res.status(400).json({ error: "Invalid quiz ID" });
-    }
+    if (!validateObjectId(res, id, "quiz ID")) return;
 
     const quiz = await Quiz.findOne({ _id: id, company: req.user.company, createdBy: req.user._id });
     if (!quiz) {
@@ -372,12 +350,7 @@ exports.addQuestion = async (req, res) => {
 
     res.status(201).json({ question, totalMarks: quiz.totalMarks });
   } catch (error) {
-    if (error.name === "ValidationError") {
-      const messages = Object.values(error.errors).map((e) => e.message);
-      return res.status(400).json({ error: messages.join(", ") });
-    }
-    console.error("Add question error:", error);
-    res.status(500).json({ error: "Failed to add question" });
+    handleControllerError(res, error, "Add question error:", { defaultMessage: "Failed to add question" });
   }
 };
 
@@ -385,9 +358,7 @@ exports.updateQuestion = async (req, res) => {
   try {
     const { id, questionId } = req.params;
 
-    if (!mongoose.Types.ObjectId.isValid(id) || !mongoose.Types.ObjectId.isValid(questionId)) {
-      return res.status(400).json({ error: "Invalid ID" });
-    }
+    if (!validateObjectIds(res, { "quiz ID": id, "question ID": questionId })) return;
 
     const quiz = await Quiz.findOne({ _id: id, company: req.user.company, createdBy: req.user._id });
     if (!quiz) {
@@ -421,8 +392,7 @@ exports.updateQuestion = async (req, res) => {
 
     res.json({ question, totalMarks: quiz.totalMarks });
   } catch (error) {
-    console.error("Update question error:", error);
-    res.status(500).json({ error: "Failed to update question" });
+    handleControllerError(res, error, "Update question error:", { defaultMessage: "Failed to update question" });
   }
 };
 
@@ -430,9 +400,7 @@ exports.deleteQuestion = async (req, res) => {
   try {
     const { id, questionId } = req.params;
 
-    if (!mongoose.Types.ObjectId.isValid(id) || !mongoose.Types.ObjectId.isValid(questionId)) {
-      return res.status(400).json({ error: "Invalid ID" });
-    }
+    if (!validateObjectIds(res, { "quiz ID": id, "question ID": questionId })) return;
 
     const quiz = await Quiz.findOne({ _id: id, company: req.user.company, createdBy: req.user._id });
     if (!quiz) {
@@ -452,17 +420,14 @@ exports.deleteQuestion = async (req, res) => {
 
     res.json({ message: "Question deleted", totalMarks: quiz.totalMarks });
   } catch (error) {
-    console.error("Delete question error:", error);
-    res.status(500).json({ error: "Failed to delete question" });
+    handleControllerError(res, error, "Delete question error:", { defaultMessage: "Failed to delete question" });
   }
 };
 
 exports.getQuizResults = async (req, res) => {
   try {
     const { id } = req.params;
-    if (!mongoose.Types.ObjectId.isValid(id)) {
-      return res.status(400).json({ error: "Invalid quiz ID" });
-    }
+    if (!validateObjectId(res, id, "quiz ID")) return;
 
     const quiz = await Quiz.findOne({ _id: id, company: req.user.company, createdBy: req.user._id })
       .populate("course", "title code enrolledStudents");
@@ -541,8 +506,7 @@ exports.getQuizResults = async (req, res) => {
       },
     });
   } catch (error) {
-    console.error("Get quiz results error:", error);
-    res.status(500).json({ error: "Failed to fetch results" });
+    handleControllerError(res, error, "Get quiz results error:", { defaultMessage: "Failed to fetch results" });
   }
 };
 
@@ -570,7 +534,6 @@ exports.getStudentAnswers = async (req, res) => {
       answers,
     });
   } catch (error) {
-    console.error("Get student answers error:", error);
-    res.status(500).json({ error: "Failed to fetch student answers" });
+    handleControllerError(res, error, "Get student answers error:", { defaultMessage: "Failed to fetch student answers" });
   }
 };

@@ -1,9 +1,6 @@
 const crypto       = require('crypto');
 const Announcement = require('../models/Announcement');
-
-function getCompanyId(req) {
-  return req.user.company || req.user.companyId;
-}
+const { getCompanyId } = require('../utils/controllerHelpers');
 
 // ─── POST /announcements ──────────────────────────────────────────────────────
 exports.createAnnouncement = async (req, res) => {
