@@ -214,7 +214,7 @@ class _LecturerHeader extends StatelessWidget {
       children: [
         Text(
           'Welcome back, $name',
-          style: GoogleFonts.dmSans(fontSize: 20, fontWeight: FontWeight.w700, color: DiklyColors.text),
+          style: GoogleFonts.dmSans(fontSize: 22, fontWeight: FontWeight.w800, color: DiklyColors.text, height: 1.2),
         ),
         const SizedBox(height: 4),
         Row(
@@ -224,21 +224,16 @@ class _LecturerHeader extends StatelessWidget {
               style: GoogleFonts.dmSans(fontSize: 13, color: DiklyColors.textMuted),
             ),
             if (department != null && department!.isNotEmpty) ...[
-              const SizedBox(width: 8),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                decoration: BoxDecoration(
-                  color: const Color(0xFFFEF3C7),
-                  borderRadius: BorderRadius.circular(20),
-                  border: Border.all(color: const Color(0xFFFCD34D)),
-                ),
-                child: Text(
-                  department!,
-                  style: GoogleFonts.dmSans(
-                    fontSize: 10,
-                    fontWeight: FontWeight.w700,
-                    color: const Color(0xFF92400E),
-                  ),
+              Text(
+                ' · ',
+                style: GoogleFonts.dmSans(fontSize: 13, color: DiklyColors.textMuted),
+              ),
+              Text(
+                department!.toUpperCase(),
+                style: GoogleFonts.dmSans(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w700,
+                  color: const Color(0xFFD97706),
                 ),
               ),
             ],
