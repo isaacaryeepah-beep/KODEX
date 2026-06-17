@@ -25,6 +25,10 @@ final _syncingProvider = StateProvider<bool>((ref) => false);
 
 enum _Esp32Status { unknown, probing, found, notFound }
 
+// ── Auto-mark state ───────────────────────────────────────────────────────────
+
+enum _MarkState { idle, marking, success, failed }
+
 // ── Screen ────────────────────────────────────────────────────────────────────
 
 class OfflineAttendanceScreen extends ConsumerStatefulWidget {
@@ -35,21 +39,40 @@ class OfflineAttendanceScreen extends ConsumerStatefulWidget {
 }
 
 class _OfflineAttendanceScreenState extends ConsumerState<OfflineAttendanceScreen> {
-  final _codeCtrl = TextEditingController();
-  bool _submitting = false;
-  String? _lastMessage;
-  bool _lastSuccess = false;
+  // Auto-mark state
+  _MarkState _markState = _MarkState.idle;
+  String?    _markMessage;
+
+  // Manual fallback
+  bool _showManual = false;
+  final _codeCtrl  = TextEditingController();
+  bool _manualSubmitting = false;
+  String? _manualMessage;
+  bool    _manualSuccess = false;
+
+  // Device info
   Map<String, dynamic>? _esp32Info;
-  bool _credentialSent = false;
+  String _deviceIp = '192.168.4.1';
 
-  // Presence heartbeat — sent every 30 s after successful mark
-  Timer? _heartbeatTimer;
-  String? _markedIndexNumber;
-  String  _deviceIp = '192.168.4.1';
-
-  // BLE presence — scans for the ESP32 classroom beacon in background
+  // BLE presence
   BlePresenceService? _bleService;
-  bool _bleInRange = false;
+  bool       _bleInRange  = false;
+  BleToken?  _bleToken;
+
+  // Presence heartbeat (after marking)
+  Timer?  _heartbeatTimer;
+  String? _markedUserId;
+  bool    _marked = false;
+
+  // Connection token (from device /session endpoint)
+  Map<String, dynamic>? _connectionToken;
+
+  @override
+  void initState() {
+    super.initState();
+    // Auto-probe device when screen opens
+    WidgetsBinding.instance.addPostFrameCallback((_) => _probeESP32());
+  }
 
   @override
   void dispose() {
@@ -59,176 +82,225 @@ class _OfflineAttendanceScreenState extends ConsumerState<OfflineAttendanceScree
     super.dispose();
   }
 
-  void _startHeartbeat(String indexNumber, String deviceIp) {
-    _markedIndexNumber = indexNumber;
-    _deviceIp = deviceIp;
-    _heartbeatTimer?.cancel();
-    _sendHeartbeat();  // immediate
-    _heartbeatTimer = Timer.periodic(
-      const Duration(seconds: 30),
-      (_) => _sendHeartbeat(),
-    );
-
-    // Also start BLE scanning — detects device beacon even without captive portal
-    _bleService?.stop();
-    _bleService = BlePresenceService(
-      onPresenceChanged: (inRange, rssi) {
-        if (!mounted) return;
-        setState(() => _bleInRange = inRange);
-        if (!inRange) {
-          // Student left BLE range → send explicit left signal to device
-          _sendLeftSignal();
-        }
-      },
-    );
-    _bleService!.start();
-  }
-
-  void _stopHeartbeat() {
-    _heartbeatTimer?.cancel();
-    _heartbeatTimer = null;
-    if (_markedIndexNumber != null) _sendLeftSignal();
-  }
-
-  Future<void> _sendHeartbeat() async {
-    if (_markedIndexNumber == null) return;
-    try {
-      final localDio = Dio(BaseOptions(
-        connectTimeout: const Duration(seconds: 3),
-        receiveTimeout: const Duration(seconds: 3),
-      ));
-      await localDio.post(
-        'http://$_deviceIp/student/heartbeat',
-        data: {'indexNumber': _markedIndexNumber},
-        options: Options(headers: {'Content-Type': 'application/json'}),
-      );
-    } catch (_) {}
-  }
-
-  Future<void> _sendLeftSignal() async {
-    if (_markedIndexNumber == null) return;
-    try {
-      final localDio = Dio(BaseOptions(
-        connectTimeout: const Duration(seconds: 3),
-        receiveTimeout: const Duration(seconds: 3),
-      ));
-      await localDio.post(
-        'http://$_deviceIp/student/left',
-        data: {'indexNumber': _markedIndexNumber},
-        options: Options(headers: {'Content-Type': 'application/json'}),
-      );
-      _markedIndexNumber = null;
-    } catch (_) {}
-  }
-
-  void _refreshQueue() {
-    ref.read(_queueProvider.notifier).state = CacheService.getPendingWrites();
-  }
+  // ── Device probe ────────────────────────────────────────────────────────────
 
   Future<void> _probeESP32() async {
     ref.read(_esp32StatusProvider.notifier).state = _Esp32Status.probing;
     final info = await apiService.probeESP32();
+    if (!mounted) return;
     if (info != null) {
-      setState(() => _esp32Info = info);
+      setState(() {
+        _esp32Info = info;
+        _deviceIp  = (info['localIp'] as String?)?.isNotEmpty == true
+            ? info['localIp'] as String
+            : '192.168.4.1';
+      });
       ref.read(_esp32StatusProvider.notifier).state = _Esp32Status.found;
-      // Auto-send credential so enrollment is verified before the student types
-      if (!_credentialSent) _autoSendCredential(info);
+      // Fetch connection token and start BLE scan simultaneously
+      final user = ref.read(authProvider).user;
+      if (user != null && !_marked) {
+        _fetchConnectionToken(user.id);
+        _startBleScanning();
+      }
     } else {
       ref.read(_esp32StatusProvider.notifier).state = _Esp32Status.notFound;
     }
   }
 
-  /// Automatically send the cached offline credential to the ESP32 device.
-  /// This authorizes the user before they even touch the form.
-  Future<void> _autoSendCredential(Map<String, dynamic> deviceInfo) async {
-    final user = ref.read(authProvider).user;
-    if (user == null) return;
+  // ── Connection token ────────────────────────────────────────────────────────
 
-    final role = user.role ?? 'student';
-    // ESP32 AP always assigns itself 192.168.4.1 as the gateway
-    final deviceIp = (deviceInfo['localIp'] as String?)?.isNotEmpty == true
-        ? deviceInfo['localIp'] as String
-        : '192.168.4.1';
-
-    final result = await OfflineCredentialService.sendToDevice(deviceIp, role);
+  Future<void> _fetchConnectionToken(String userId) async {
+    final token = await apiService.getESP32ConnectionToken(userId, ip: _deviceIp);
     if (!mounted) return;
-
-    if (result != null && result['ok'] == true) {
-      setState(() {
-        _credentialSent = true;
-        _lastSuccess = true;
-        _lastMessage = role == 'lecturer'
-            ? 'Verified as lecturer — you can start the session.'
-            : 'Identity verified — you are enrolled in this course.';
-      });
+    if (token != null) {
+      setState(() => _connectionToken = token);
+      _maybeAutoMark();
     }
-    // Failure is silent — student can still mark via the form (roster check on device)
   }
 
-  Future<void> _submitCode() async {
+  // ── BLE scanning ────────────────────────────────────────────────────────────
+
+  void _startBleScanning() {
+    _bleService?.stop();
+    _bleService = BlePresenceService(
+      onPresenceChanged: (inRange, rssi) {
+        if (!mounted) return;
+        setState(() => _bleInRange = inRange);
+        if (!inRange && _marked) _sendLeftSignal();
+      },
+      onTokenReceived: (token) {
+        if (!mounted) return;
+        setState(() => _bleToken = token);
+        _maybeAutoMark();
+      },
+    );
+    _bleService!.start();
+  }
+
+  // ── Auto-mark trigger ────────────────────────────────────────────────────────
+
+  void _maybeAutoMark() {
+    if (_marked || _markState == _MarkState.marking || _markState == _MarkState.success) return;
+    if (_bleToken == null || _connectionToken == null) return;
+    _autoMark();
+  }
+
+  Future<void> _autoMark() async {
+    final user = ref.read(authProvider).user;
+    if (user == null) return;
+    setState(() {
+      _markState   = _MarkState.marking;
+      _markMessage = null;
+    });
+
+    // Path 1: Direct to device with BLE token (offline-first)
+    final directOk = await apiService.submitToESP32WithBle(
+      userId:      user.id,
+      indexNumber: user.indexNumber ?? user.id,
+      bleSlot:     _bleToken!.slot,
+      bleHmac:     _bleToken!.hmac,
+      ip:          _deviceIp,
+    );
+
+    if (directOk) {
+      _onMarkedSuccess(user);
+      // Also submit to backend for cloud record (with BLE + connection token)
+      _submitToBackendBle(user);
+      return;
+    }
+
+    // Path 2: Backend with BLE + connection token
+    try {
+      await apiService.markAttendanceBle(
+        bleToken: {'slot': _bleToken!.slot, 'hmac': _bleToken!.hmac},
+        connectionToken: _connectionToken!,
+      );
+      _onMarkedSuccess(user);
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _markState   = _MarkState.failed;
+        _markMessage = e.toString().replaceAll('Exception: ', '');
+      });
+    }
+  }
+
+  void _onMarkedSuccess(dynamic user) {
+    if (!mounted) return;
+    setState(() {
+      _markState   = _MarkState.success;
+      _marked      = true;
+      _markedUserId = user.indexNumber ?? user.id;
+    });
+    _startHeartbeat(_markedUserId!, _deviceIp);
+    _refreshQueue();
+  }
+
+  // Fire-and-forget backend BLE mark (does not affect UI on failure)
+  Future<void> _submitToBackendBle(dynamic user) async {
+    if (_bleToken == null || _connectionToken == null) return;
+    try {
+      await apiService.markAttendanceBle(
+        bleToken: {'slot': _bleToken!.slot, 'hmac': _bleToken!.hmac},
+        connectionToken: _connectionToken!,
+      );
+    } catch (_) {}
+  }
+
+  // ── Manual fallback ────────────────────────────────────────────────────────
+
+  Future<void> _submitManual() async {
     final code = _codeCtrl.text.trim();
     if (code.isEmpty) return;
-
     final user = ref.read(authProvider).user;
-    setState(() { _submitting = true; _lastMessage = null; });
+    setState(() { _manualSubmitting = true; _manualMessage = null; });
 
-    // 1. Try ESP32 local WiFi first (fastest, works without internet)
+    // Try ESP32 direct
     if (ref.read(_esp32StatusProvider) == _Esp32Status.found && user != null) {
       final ok = await apiService.submitToESP32(
-        code,
-        userId: user.id,
-        indexNumber: user.indexNumber ?? user.id,
+        code, userId: user.id, indexNumber: user.indexNumber ?? user.id,
       );
       if (ok) {
         _codeCtrl.clear();
-        // Start presence heartbeat — keeps signalling device even without captive portal open
         _startHeartbeat(user.indexNumber ?? user.id, _deviceIp);
-        setState(() {
-          _submitting = false;
-          _lastSuccess = true;
-          _lastMessage = 'Attendance marked! Presence tracking active.';
-        });
+        setState(() { _manualSubmitting = false; _manualSuccess = true; _marked = true;
+          _manualMessage = 'Attendance marked!'; });
         return;
       }
     }
 
-    // 2. Try connectionToken flow (standard firmware)
+    // Try connectionToken flow
     if (ref.read(_esp32StatusProvider) == _Esp32Status.found && user != null) {
-      final token = await apiService.getESP32ConnectionToken(user.id);
+      final token = await apiService.getESP32ConnectionToken(user.id, ip: _deviceIp);
       if (token != null) {
         try {
           await apiService.markAttendance(code, connectionToken: token);
           _codeCtrl.clear();
           _refreshQueue();
-          setState(() {
-            _submitting = false;
-            _lastSuccess = true;
-            _lastMessage = 'Attendance submitted via local WiFi!';
-          });
+          setState(() { _manualSubmitting = false; _manualSuccess = true; _marked = true;
+            _manualMessage = 'Attendance submitted via local WiFi!'; });
           return;
         } catch (_) {}
       }
     }
 
-    // 3. Online mark or queue for later
+    // Online/queue fallback
     try {
       await apiService.markAttendance(code);
       _codeCtrl.clear();
       _refreshQueue();
       final isOnline = ref.read(isOnlineProvider);
       setState(() {
-        _submitting = false;
-        _lastSuccess = true;
-        _lastMessage = isOnline ? 'Attendance marked!' : 'Saved offline — will sync when connected.';
+        _manualSubmitting = false; _manualSuccess = true; _marked = true;
+        _manualMessage = isOnline ? 'Attendance marked!' : 'Saved offline — will sync when connected.';
       });
     } catch (e) {
-      setState(() {
-        _submitting = false;
-        _lastSuccess = false;
-        _lastMessage = 'Error: ${e.toString().replaceAll('Exception: ', '')}';
-      });
+      setState(() { _manualSubmitting = false; _manualSuccess = false;
+        _manualMessage = 'Error: ${e.toString().replaceAll('Exception: ', '')}'; });
     }
     _refreshQueue();
+  }
+
+  // ── Presence heartbeat ──────────────────────────────────────────────────────
+
+  void _startHeartbeat(String userId, String deviceIp) {
+    _markedUserId = userId;
+    _deviceIp     = deviceIp;
+    _heartbeatTimer?.cancel();
+    _sendHeartbeat();
+    _heartbeatTimer = Timer.periodic(const Duration(seconds: 30), (_) => _sendHeartbeat());
+  }
+
+  void _stopHeartbeat() {
+    _heartbeatTimer?.cancel();
+    _heartbeatTimer = null;
+    if (_markedUserId != null) _sendLeftSignal();
+  }
+
+  Future<void> _sendHeartbeat() async {
+    if (_markedUserId == null) return;
+    try {
+      final d = Dio(BaseOptions(connectTimeout: const Duration(seconds: 3), receiveTimeout: const Duration(seconds: 3)));
+      await d.post('http://$_deviceIp/student/heartbeat',
+          data: {'userId': _markedUserId},
+          options: Options(headers: {'Content-Type': 'application/json'}));
+    } catch (_) {}
+  }
+
+  Future<void> _sendLeftSignal() async {
+    if (_markedUserId == null) return;
+    final uid = _markedUserId;
+    _markedUserId = null;
+    try {
+      final d = Dio(BaseOptions(connectTimeout: const Duration(seconds: 3), receiveTimeout: const Duration(seconds: 3)));
+      await d.post('http://$_deviceIp/student/left',
+          data: {'userId': uid},
+          options: Options(headers: {'Content-Type': 'application/json'}));
+    } catch (_) {}
+  }
+
+  void _refreshQueue() {
+    ref.read(_queueProvider.notifier).state = CacheService.getPendingWrites();
   }
 
   Future<void> _syncNow() async {
@@ -253,12 +325,14 @@ class _OfflineAttendanceScreenState extends ConsumerState<OfflineAttendanceScree
     }
   }
 
+  // ── Build ────────────────────────────────────────────────────────────────────
+
   @override
   Widget build(BuildContext context) {
-    final isOnline = ref.watch(isOnlineProvider);
-    final queue = ref.watch(_queueProvider);
+    final isOnline    = ref.watch(isOnlineProvider);
+    final queue       = ref.watch(_queueProvider);
     final esp32Status = ref.watch(_esp32StatusProvider);
-    final syncing = ref.watch(_syncingProvider);
+    final syncing     = ref.watch(_syncingProvider);
 
     return Scaffold(
       backgroundColor: const Color(0xFFF4F6F9),
@@ -267,10 +341,8 @@ class _OfflineAttendanceScreenState extends ConsumerState<OfflineAttendanceScree
         elevation: 0,
         surfaceTintColor: Colors.transparent,
         leading: const BackButton(),
-        title: Text(
-          'Offline Attendance',
-          style: GoogleFonts.dmSans(fontSize: 17, fontWeight: FontWeight.w700, color: const Color(0xFF111827)),
-        ),
+        title: Text('Attendance',
+            style: GoogleFonts.dmSans(fontSize: 17, fontWeight: FontWeight.w700, color: const Color(0xFF111827))),
         actions: [
           if (queue.isNotEmpty)
             Padding(
@@ -280,7 +352,8 @@ class _OfflineAttendanceScreenState extends ConsumerState<OfflineAttendanceScree
                 icon: syncing
                     ? const SizedBox(width: 14, height: 14, child: CircularProgressIndicator(strokeWidth: 2))
                     : const Icon(Icons.sync, size: 16),
-                label: Text(syncing ? 'Syncing…' : 'Sync Now', style: GoogleFonts.dmSans(fontSize: 13, fontWeight: FontWeight.w600)),
+                label: Text(syncing ? 'Syncing…' : 'Sync Now',
+                    style: GoogleFonts.dmSans(fontSize: 13, fontWeight: FontWeight.w600)),
               ),
             ),
         ],
@@ -288,21 +361,56 @@ class _OfflineAttendanceScreenState extends ConsumerState<OfflineAttendanceScree
       body: ListView(
         padding: const EdgeInsets.fromLTRB(16, 16, 16, 32),
         children: [
-          // ── Network Status Card ───────────────────────────────────────────
-          _StatusCard(isOnline: isOnline, esp32Status: esp32Status, esp32Info: _esp32Info, onProbe: _probeESP32),
+          _ConnectivityCard(
+            isOnline: isOnline,
+            esp32Status: esp32Status,
+            esp32Info: _esp32Info,
+            bleInRange: _bleInRange,
+            onRescan: _probeESP32,
+          ),
           const SizedBox(height: 16),
 
-          // ── Code Entry ────────────────────────────────────────────────────
-          _CodeEntryCard(
-            controller: _codeCtrl,
-            submitting: _submitting,
-            onSubmit: _submitCode,
-            lastMessage: _lastMessage,
-            lastSuccess: _lastSuccess,
+          // ── Auto-mark card ─────────────────────────────────────────────────
+          _AutoMarkCard(
+            esp32Status: esp32Status,
+            bleInRange: _bleInRange,
+            bleToken: _bleToken,
+            connectionToken: _connectionToken,
+            markState: _markState,
+            markMessage: _markMessage,
+            marked: _marked,
+            onRetry: _maybeAutoMark,
           ),
+          const SizedBox(height: 12),
+
+          // ── Manual fallback ───────────────────────────────────────────────
+          GestureDetector(
+            onTap: () => setState(() => _showManual = !_showManual),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Text(
+                  _showManual ? 'Hide manual entry' : 'Enter code manually (fallback)',
+                  style: GoogleFonts.dmSans(fontSize: 12, color: const Color(0xFF6B7280),
+                      decoration: TextDecoration.underline),
+                ),
+                Icon(_showManual ? Icons.expand_less : Icons.expand_more,
+                    size: 16, color: const Color(0xFF6B7280)),
+              ],
+            ),
+          ),
+          if (_showManual) ...[
+            const SizedBox(height: 10),
+            _ManualCard(
+              controller: _codeCtrl,
+              submitting: _manualSubmitting,
+              onSubmit: _submitManual,
+              lastMessage: _manualMessage,
+              lastSuccess: _manualSuccess,
+            ),
+          ],
           const SizedBox(height: 20),
 
-          // ── Pending Queue ─────────────────────────────────────────────────
           _QueueSection(queue: queue, syncing: syncing, onSync: _syncNow, onRefresh: _refreshQueue),
         ],
       ),
@@ -310,19 +418,21 @@ class _OfflineAttendanceScreenState extends ConsumerState<OfflineAttendanceScree
   }
 }
 
-// ── Status Card ───────────────────────────────────────────────────────────────
+// ── Connectivity Card ─────────────────────────────────────────────────────────
 
-class _StatusCard extends StatelessWidget {
+class _ConnectivityCard extends StatelessWidget {
   final bool isOnline;
   final _Esp32Status esp32Status;
   final Map<String, dynamic>? esp32Info;
-  final VoidCallback onProbe;
+  final bool bleInRange;
+  final VoidCallback onRescan;
 
-  const _StatusCard({
+  const _ConnectivityCard({
     required this.isOnline,
     required this.esp32Status,
     required this.esp32Info,
-    required this.onProbe,
+    required this.bleInRange,
+    required this.onRescan,
   });
 
   @override
@@ -338,32 +448,37 @@ class _StatusCard extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text('Connectivity', style: GoogleFonts.dmSans(fontSize: 12, fontWeight: FontWeight.w700, color: const Color(0xFF9CA3AF), letterSpacing: 1.2)),
+          Text('Connectivity', style: GoogleFonts.dmSans(
+              fontSize: 11, fontWeight: FontWeight.w700, color: const Color(0xFF9CA3AF), letterSpacing: 1.2)),
           const SizedBox(height: 12),
-          Row(
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
             children: [
-              _StatusPill(
+              _Pill(
                 icon: isOnline ? Icons.wifi_rounded : Icons.wifi_off_rounded,
-                label: isOnline ? 'Internet Connected' : 'No Internet',
+                label: isOnline ? 'Internet' : 'No Internet',
                 color: isOnline ? const Color(0xFF16A34A) : const Color(0xFFDC2626),
               ),
-              const SizedBox(width: 10),
-              _StatusPill(
-                icon: esp32Status == _Esp32Status.found
-                    ? Icons.router_rounded
-                    : Icons.router_outlined,
+              _Pill(
+                icon: Icons.router_rounded,
                 label: esp32Status == _Esp32Status.found
-                    ? 'Device Found'
+                    ? 'Device found'
                     : esp32Status == _Esp32Status.probing
                         ? 'Scanning…'
                         : esp32Status == _Esp32Status.notFound
-                            ? 'No Device'
-                            : 'Local Device',
+                            ? 'No device'
+                            : 'Device',
                 color: esp32Status == _Esp32Status.found
                     ? const Color(0xFF2563EB)
                     : esp32Status == _Esp32Status.notFound
                         ? const Color(0xFF6B7280)
                         : const Color(0xFFD97706),
+              ),
+              _Pill(
+                icon: Icons.bluetooth_rounded,
+                label: bleInRange ? 'BLE in range' : 'BLE scanning…',
+                color: bleInRange ? const Color(0xFF7C3AED) : const Color(0xFF9CA3AF),
               ),
             ],
           ),
@@ -372,27 +487,24 @@ class _StatusCard extends StatelessWidget {
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
               decoration: BoxDecoration(
-                color: const Color(0xFFEFF6FF),
-                borderRadius: BorderRadius.circular(8),
-              ),
+                  color: const Color(0xFFEFF6FF), borderRadius: BorderRadius.circular(8)),
               child: Text(
-                'Session: ${esp32Info!['sessionId'] ?? '—'}  ·  Device: ${esp32Info!['deviceName'] ?? '—'}',
+                'Session: ${esp32Info!['sessionTitle'] ?? esp32Info!['sessionId'] ?? '—'}',
                 style: GoogleFonts.dmSans(fontSize: 11, color: const Color(0xFF1D4ED8)),
               ),
             ),
           ],
-          const SizedBox(height: 12),
+          const SizedBox(height: 10),
           SizedBox(
             width: double.infinity,
             child: OutlinedButton.icon(
-              onPressed: esp32Status == _Esp32Status.probing ? null : onProbe,
+              onPressed: esp32Status == _Esp32Status.probing ? null : onRescan,
               icon: esp32Status == _Esp32Status.probing
                   ? const SizedBox(width: 14, height: 14, child: CircularProgressIndicator(strokeWidth: 2))
                   : const Icon(Icons.search_rounded, size: 16),
               label: Text(
-                esp32Status == _Esp32Status.probing ? 'Scanning for device…' : 'Scan for Local Device (192.168.4.1)',
-                style: GoogleFonts.dmSans(fontSize: 13, fontWeight: FontWeight.w600),
-              ),
+                  esp32Status == _Esp32Status.probing ? 'Scanning…' : 'Scan for Classroom Device',
+                  style: GoogleFonts.dmSans(fontSize: 13, fontWeight: FontWeight.w600)),
               style: OutlinedButton.styleFrom(
                 side: const BorderSide(color: Color(0xFFD1D5DB)),
                 foregroundColor: const Color(0xFF374151),
@@ -403,7 +515,7 @@ class _StatusCard extends StatelessWidget {
           ),
           const SizedBox(height: 6),
           Text(
-            'Connect to the classroom WiFi hotspot to submit attendance directly to the hardware device — no internet required.',
+            'Connect your phone to the classroom WiFi hotspot (DIKLY-XXXXXX) — attendance marks automatically.',
             style: GoogleFonts.dmSans(fontSize: 11, color: const Color(0xFF9CA3AF), height: 1.4),
           ),
         ],
@@ -412,11 +524,11 @@ class _StatusCard extends StatelessWidget {
   }
 }
 
-class _StatusPill extends StatelessWidget {
+class _Pill extends StatelessWidget {
   final IconData icon;
   final String label;
   final Color color;
-  const _StatusPill({required this.icon, required this.label, required this.color});
+  const _Pill({required this.icon, required this.label, required this.color});
 
   @override
   Widget build(BuildContext context) {
@@ -439,16 +551,228 @@ class _StatusPill extends StatelessWidget {
   }
 }
 
-// ── Code Entry Card ───────────────────────────────────────────────────────────
+// ── Auto-mark Card ────────────────────────────────────────────────────────────
 
-class _CodeEntryCard extends StatelessWidget {
+class _AutoMarkCard extends StatelessWidget {
+  final _Esp32Status esp32Status;
+  final bool bleInRange;
+  final BleToken? bleToken;
+  final Map<String, dynamic>? connectionToken;
+  final _MarkState markState;
+  final String? markMessage;
+  final bool marked;
+  final VoidCallback onRetry;
+
+  const _AutoMarkCard({
+    required this.esp32Status,
+    required this.bleInRange,
+    required this.bleToken,
+    required this.connectionToken,
+    required this.markState,
+    required this.markMessage,
+    required this.marked,
+    required this.onRetry,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final deviceOk = esp32Status == _Esp32Status.found && connectionToken != null;
+    final bleOk    = bleInRange && bleToken != null;
+    final allReady = deviceOk && bleOk;
+
+    Color cardColor;
+    Color borderColor;
+    if (marked || markState == _MarkState.success) {
+      cardColor   = const Color(0xFFF0FDF4);
+      borderColor = const Color(0xFF16A34A);
+    } else if (markState == _MarkState.failed) {
+      cardColor   = const Color(0xFFFEF2F2);
+      borderColor = const Color(0xFFDC2626);
+    } else if (allReady) {
+      cardColor   = const Color(0xFFF5F3FF);
+      borderColor = const Color(0xFF7C3AED);
+    } else {
+      cardColor   = Colors.white;
+      borderColor = const Color(0xFFE5E7EB);
+    }
+
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: cardColor,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: borderColor.withOpacity(0.5)),
+        boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.04), blurRadius: 8, offset: const Offset(0, 2))],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text('Auto Attendance',
+              style: GoogleFonts.dmSans(fontSize: 11, fontWeight: FontWeight.w700,
+                  color: const Color(0xFF9CA3AF), letterSpacing: 1.2)),
+          const SizedBox(height: 14),
+
+          // Check list
+          _CheckRow(
+            label: 'On classroom WiFi hotspot',
+            done: esp32Status == _Esp32Status.found,
+            loading: esp32Status == _Esp32Status.probing,
+          ),
+          const SizedBox(height: 8),
+          _CheckRow(
+            label: 'WiFi proof received from device',
+            done: connectionToken != null,
+            loading: esp32Status == _Esp32Status.found && connectionToken == null,
+          ),
+          const SizedBox(height: 8),
+          _CheckRow(
+            label: 'BLE beacon in range (≤ 10 m)',
+            done: bleInRange,
+            loading: !bleInRange,
+          ),
+          const SizedBox(height: 8),
+          _CheckRow(
+            label: 'BLE token verified',
+            done: bleToken != null,
+            loading: bleInRange && bleToken == null,
+          ),
+          const SizedBox(height: 16),
+
+          // Status / action
+          if (marked || markState == _MarkState.success)
+            _StatusBanner(
+              icon: Icons.check_circle_rounded,
+              text: 'You are marked present. Live tracking active.',
+              color: const Color(0xFF16A34A),
+            )
+          else if (markState == _MarkState.marking)
+            _StatusBanner(
+              icon: Icons.autorenew_rounded,
+              text: 'Marking attendance…',
+              color: const Color(0xFF7C3AED),
+              spinning: true,
+            )
+          else if (markState == _MarkState.failed) ...[
+            _StatusBanner(
+              icon: Icons.error_outline_rounded,
+              text: markMessage ?? 'Could not mark attendance. Try manual entry below.',
+              color: const Color(0xFFDC2626),
+            ),
+            const SizedBox(height: 10),
+            SizedBox(
+              width: double.infinity,
+              child: OutlinedButton(
+                onPressed: onRetry,
+                style: OutlinedButton.styleFrom(
+                  side: const BorderSide(color: Color(0xFFDC2626)),
+                  foregroundColor: const Color(0xFFDC2626),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                ),
+                child: Text('Retry', style: GoogleFonts.dmSans(fontWeight: FontWeight.w700)),
+              ),
+            ),
+          ] else if (allReady)
+            _StatusBanner(
+              icon: Icons.radar_rounded,
+              text: 'All checks passed — marking attendance…',
+              color: const Color(0xFF7C3AED),
+              spinning: true,
+            )
+          else
+            _StatusBanner(
+              icon: Icons.info_outline_rounded,
+              text: 'Connect to the classroom WiFi hotspot (DIKLY-XXXXXX) and stay within BLE range — attendance marks automatically.',
+              color: const Color(0xFF6B7280),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+class _CheckRow extends StatelessWidget {
+  final String label;
+  final bool done;
+  final bool loading;
+  const _CheckRow({required this.label, required this.done, this.loading = false});
+
+  @override
+  Widget build(BuildContext context) {
+    final color = done
+        ? const Color(0xFF16A34A)
+        : loading
+            ? const Color(0xFFD97706)
+            : const Color(0xFF9CA3AF);
+    return Row(
+      children: [
+        SizedBox(
+          width: 20, height: 20,
+          child: done
+              ? const Icon(Icons.check_circle_rounded, size: 18, color: Color(0xFF16A34A))
+              : loading
+                  ? const SizedBox(
+                      width: 16, height: 16,
+                      child: CircularProgressIndicator(strokeWidth: 2, color: Color(0xFFD97706)),
+                    )
+                  : const Icon(Icons.radio_button_unchecked_rounded, size: 18, color: Color(0xFFD1D5DB)),
+        ),
+        const SizedBox(width: 10),
+        Expanded(
+          child: Text(label,
+              style: GoogleFonts.dmSans(
+                  fontSize: 13,
+                  color: color,
+                  fontWeight: done ? FontWeight.w600 : FontWeight.w400)),
+        ),
+      ],
+    );
+  }
+}
+
+class _StatusBanner extends StatelessWidget {
+  final IconData icon;
+  final String text;
+  final Color color;
+  final bool spinning;
+  const _StatusBanner({required this.icon, required this.text, required this.color, this.spinning = false});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      decoration: BoxDecoration(
+        color: color.withOpacity(0.08),
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: color.withOpacity(0.25)),
+      ),
+      child: Row(
+        children: [
+          spinning
+              ? SizedBox(
+                  width: 18, height: 18,
+                  child: CircularProgressIndicator(strokeWidth: 2, color: color))
+              : Icon(icon, size: 18, color: color),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text(text,
+                style: GoogleFonts.dmSans(fontSize: 13, color: color, height: 1.4)),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// ── Manual Entry Card ─────────────────────────────────────────────────────────
+
+class _ManualCard extends StatelessWidget {
   final TextEditingController controller;
   final bool submitting;
   final VoidCallback onSubmit;
   final String? lastMessage;
   final bool lastSuccess;
 
-  const _CodeEntryCard({
+  const _ManualCard({
     required this.controller,
     required this.submitting,
     required this.onSubmit,
@@ -464,12 +788,13 @@ class _CodeEntryCard extends StatelessWidget {
         color: Colors.white,
         borderRadius: BorderRadius.circular(14),
         border: Border.all(color: const Color(0xFFE5E7EB)),
-        boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.04), blurRadius: 8, offset: const Offset(0, 2))],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text('Mark Attendance', style: GoogleFonts.dmSans(fontSize: 12, fontWeight: FontWeight.w700, color: const Color(0xFF9CA3AF), letterSpacing: 1.2)),
+          Text('Manual Code Entry',
+              style: GoogleFonts.dmSans(fontSize: 11, fontWeight: FontWeight.w700,
+                  color: const Color(0xFF9CA3AF), letterSpacing: 1.2)),
           const SizedBox(height: 12),
           TextField(
             controller: controller,
@@ -478,9 +803,12 @@ class _CodeEntryCard extends StatelessWidget {
             decoration: InputDecoration(
               hintText: 'Enter session code',
               prefixIcon: const Icon(Icons.tag_rounded, size: 20),
-              border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: Color(0xFFE5E7EB))),
-              enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: Color(0xFFE5E7EB))),
-              focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: Color(0xFF2563EB))),
+              border: OutlineInputBorder(borderRadius: BorderRadius.circular(10),
+                  borderSide: const BorderSide(color: Color(0xFFE5E7EB))),
+              enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10),
+                  borderSide: const BorderSide(color: Color(0xFFE5E7EB))),
+              focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10),
+                  borderSide: const BorderSide(color: Color(0xFF2563EB))),
               contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
             ),
             onSubmitted: (_) => onSubmit(),
@@ -491,12 +819,13 @@ class _CodeEntryCard extends StatelessWidget {
             child: ElevatedButton.icon(
               onPressed: submitting ? null : onSubmit,
               icon: submitting
-                  ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                  ? const SizedBox(width: 16, height: 16,
+                      child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
                   : const Icon(Icons.check_circle_outline_rounded, size: 18),
-              label: Text(submitting ? 'Submitting…' : 'Submit Attendance', style: GoogleFonts.dmSans(fontSize: 14, fontWeight: FontWeight.w700)),
+              label: Text(submitting ? 'Submitting…' : 'Submit',
+                  style: GoogleFonts.dmSans(fontSize: 14, fontWeight: FontWeight.w700)),
               style: ElevatedButton.styleFrom(
-                backgroundColor: const Color(0xFF2563EB),
-                foregroundColor: Colors.white,
+                backgroundColor: const Color(0xFF2563EB), foregroundColor: Colors.white,
                 padding: const EdgeInsets.symmetric(vertical: 13),
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
                 elevation: 0,
@@ -510,34 +839,25 @@ class _CodeEntryCard extends StatelessWidget {
               decoration: BoxDecoration(
                 color: lastSuccess ? const Color(0xFFF0FDF4) : const Color(0xFFFEF2F2),
                 borderRadius: BorderRadius.circular(8),
-                border: Border.all(color: lastSuccess ? const Color(0xFF16A34A).withOpacity(0.3) : const Color(0xFFDC2626).withOpacity(0.3)),
+                border: Border.all(
+                    color: lastSuccess
+                        ? const Color(0xFF16A34A).withOpacity(0.3)
+                        : const Color(0xFFDC2626).withOpacity(0.3)),
               ),
               child: Row(
                 children: [
-                  Icon(
-                    lastSuccess ? Icons.check_circle_outline : Icons.error_outline,
-                    size: 16,
-                    color: lastSuccess ? const Color(0xFF16A34A) : const Color(0xFFDC2626),
-                  ),
+                  Icon(lastSuccess ? Icons.check_circle_outline : Icons.error_outline, size: 16,
+                      color: lastSuccess ? const Color(0xFF16A34A) : const Color(0xFFDC2626)),
                   const SizedBox(width: 8),
                   Expanded(
-                    child: Text(
-                      lastMessage!,
-                      style: GoogleFonts.dmSans(
-                        fontSize: 13,
-                        color: lastSuccess ? const Color(0xFF15803D) : const Color(0xFFDC2626),
-                      ),
-                    ),
+                    child: Text(lastMessage!,
+                        style: GoogleFonts.dmSans(fontSize: 13,
+                            color: lastSuccess ? const Color(0xFF15803D) : const Color(0xFFDC2626))),
                   ),
                 ],
               ),
             ),
           ],
-          const SizedBox(height: 8),
-          Text(
-            'Works online, on local device WiFi, or offline (queued for sync).',
-            style: GoogleFonts.dmSans(fontSize: 11, color: const Color(0xFF9CA3AF), height: 1.4),
-          ),
         ],
       ),
     );
@@ -566,16 +886,22 @@ class _QueueSection extends StatelessWidget {
       children: [
         Row(
           children: [
-            Text('PENDING SYNC', style: GoogleFonts.dmSans(fontSize: 10, fontWeight: FontWeight.w700, color: const Color(0xFF9CA3AF), letterSpacing: 1.5)),
+            Text('PENDING SYNC',
+                style: GoogleFonts.dmSans(fontSize: 10, fontWeight: FontWeight.w700,
+                    color: const Color(0xFF9CA3AF), letterSpacing: 1.5)),
             const SizedBox(width: 8),
             if (queue.isNotEmpty)
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
                 decoration: BoxDecoration(color: const Color(0xFFD97706), borderRadius: BorderRadius.circular(10)),
-                child: Text('${queue.length}', style: GoogleFonts.dmSans(fontSize: 10, fontWeight: FontWeight.w800, color: Colors.white)),
+                child: Text('${queue.length}',
+                    style: GoogleFonts.dmSans(fontSize: 10, fontWeight: FontWeight.w800, color: Colors.white)),
               ),
             const Spacer(),
-            IconButton(onPressed: onRefresh, icon: const Icon(Icons.refresh, size: 18, color: Color(0xFF9CA3AF)), padding: EdgeInsets.zero, constraints: const BoxConstraints()),
+            IconButton(
+                onPressed: onRefresh,
+                icon: const Icon(Icons.refresh, size: 18, color: Color(0xFF9CA3AF)),
+                padding: EdgeInsets.zero, constraints: const BoxConstraints()),
           ],
         ),
         const SizedBox(height: 8),
@@ -591,26 +917,24 @@ class _QueueSection extends StatelessWidget {
               children: [
                 const Icon(Icons.check_circle_rounded, color: Color(0xFF16A34A), size: 20),
                 const SizedBox(width: 10),
-                Text('All synced — no pending items', style: GoogleFonts.dmSans(fontSize: 13, color: const Color(0xFF374151))),
+                Text('All synced — no pending items',
+                    style: GoogleFonts.dmSans(fontSize: 13, color: const Color(0xFF374151))),
               ],
             ),
           )
         else
           Container(
             decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(12),
+              color: Colors.white, borderRadius: BorderRadius.circular(12),
               border: Border.all(color: const Color(0xFFE5E7EB)),
               boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.03), blurRadius: 4, offset: const Offset(0, 1))],
             ),
             child: Column(
               children: [
                 ...queue.asMap().entries.map((e) {
-                  final i = e.key;
-                  final op = e.value;
+                  final i = e.key; final op = e.value;
                   final path = op['path']?.toString() ?? '';
                   final queuedAt = op['queuedAt']?.toString() ?? '';
-                  final label = _labelFor(path);
                   return Container(
                     padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 11),
                     decoration: BoxDecoration(
@@ -621,12 +945,9 @@ class _QueueSection extends StatelessWidget {
                     child: Row(
                       children: [
                         Container(
-                          width: 32,
-                          height: 32,
+                          width: 32, height: 32,
                           decoration: BoxDecoration(
-                            color: const Color(0xFFFEF3C7),
-                            borderRadius: BorderRadius.circular(8),
-                          ),
+                              color: const Color(0xFFFEF3C7), borderRadius: BorderRadius.circular(8)),
                           child: const Icon(Icons.pending_rounded, size: 16, color: Color(0xFFD97706)),
                         ),
                         const SizedBox(width: 10),
@@ -634,9 +955,12 @@ class _QueueSection extends StatelessWidget {
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              Text(label, style: GoogleFonts.dmSans(fontSize: 13, fontWeight: FontWeight.w600, color: const Color(0xFF111827))),
+                              Text(_labelFor(path),
+                                  style: GoogleFonts.dmSans(fontSize: 13, fontWeight: FontWeight.w600,
+                                      color: const Color(0xFF111827))),
                               if (queuedAt.isNotEmpty)
-                                Text(_formatTime(queuedAt), style: GoogleFonts.dmSans(fontSize: 11, color: const Color(0xFF9CA3AF))),
+                                Text(_formatTime(queuedAt),
+                                    style: GoogleFonts.dmSans(fontSize: 11, color: const Color(0xFF9CA3AF))),
                             ],
                           ),
                         ),
@@ -649,20 +973,22 @@ class _QueueSection extends StatelessWidget {
                   padding: const EdgeInsets.all(12),
                   decoration: const BoxDecoration(
                     border: Border(top: BorderSide(color: Color(0xFFF3F4F6))),
-                    borderRadius: BorderRadius.only(bottomLeft: Radius.circular(12), bottomRight: Radius.circular(12)),
+                    borderRadius:
+                        BorderRadius.only(bottomLeft: Radius.circular(12), bottomRight: Radius.circular(12)),
                   ),
                   child: SizedBox(
                     width: double.infinity,
                     child: ElevatedButton.icon(
                       onPressed: syncing ? null : onSync,
                       icon: syncing
-                          ? const SizedBox(width: 14, height: 14, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                          ? const SizedBox(width: 14, height: 14,
+                              child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
                           : const Icon(Icons.sync_rounded, size: 16),
-                      label: Text(syncing ? 'Syncing…' : 'Sync ${queue.length} Item${queue.length == 1 ? '' : 's'} Now',
+                      label: Text(
+                          syncing ? 'Syncing…' : 'Sync ${queue.length} Item${queue.length == 1 ? '' : 's'} Now',
                           style: GoogleFonts.dmSans(fontSize: 13, fontWeight: FontWeight.w700)),
                       style: ElevatedButton.styleFrom(
-                        backgroundColor: const Color(0xFFD97706),
-                        foregroundColor: Colors.white,
+                        backgroundColor: const Color(0xFFD97706), foregroundColor: Colors.white,
                         padding: const EdgeInsets.symmetric(vertical: 10),
                         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                         elevation: 0,

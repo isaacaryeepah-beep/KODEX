@@ -797,7 +797,7 @@ exports.markAttendance = async (req, res) => {
       }
 
       // ── Factor 2: hotspot connection token (student-specific) ────────────────
-      const { sessionId: tokenSession, studentId: tokenStudent, issuedAt, sig } = connectionToken;
+      const { sessionId: tokenSession, studentId: tokenStudent, issuedAt, sig, nonce } = connectionToken;
 
       const tokenAgeMs = Date.now() - (Number(issuedAt) * 1000);
       if (!issuedAt || tokenAgeMs < 0 || tokenAgeMs > 10 * 60 * 1000) {
@@ -821,14 +821,29 @@ exports.markAttendance = async (req, res) => {
         });
       }
 
+      if (!nonce) {
+        return res.status(403).json({
+          error: 'Hotspot token missing nonce. Please update device firmware.',
+          networkMismatch: true,
+        });
+      }
+      const bleConnNonceKey = `${resolvedSessionId}:${nonce}`;
+      if (_usedNonces.has(bleConnNonceKey)) {
+        return res.status(403).json({
+          error: 'This attendance token has already been used. Please reconnect to the classroom hotspot.',
+          replayAttack: true,
+        });
+      }
+      _usedNonces.set(bleConnNonceKey, Date.now() + 600_000);
+
       const expectedConnSig = crypto
         .createHmac('sha256', session.esp32Seed)
-        .update(`conn:${tokenSession}:${tokenStudent}:${issuedAt}`)
+        .update(`conn:${tokenSession}:${tokenStudent}:${issuedAt}:${nonce}`)
         .digest('hex')
-        .slice(0, 32);
+        .slice(0, 64);
 
       const connSigClean = String(sig || '').toLowerCase().replace(/[^0-9a-f]/g, '');
-      if (connSigClean.length !== 32 ||
+      if (connSigClean.length !== 64 ||
           !crypto.timingSafeEqual(Buffer.from(connSigClean), Buffer.from(expectedConnSig))) {
         console.warn(`[MARK] Invalid hotspot sig (BLE+hotspot path) for ${req.user.name}`);
         return res.status(403).json({
