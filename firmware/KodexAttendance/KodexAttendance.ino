@@ -65,7 +65,7 @@
 #include <mbedtls/md.h>
 #include <mbedtls/base64.h>
 #include <esp_wifi.h>
-#include <tcpip_adapter.h>
+#include <esp_netif.h>
 #include <BLEDevice.h>
 #include <BLEAdvertising.h>
 #include <ArduinoJson.h>
@@ -555,12 +555,12 @@ static void checkPresenceTimeouts() {
 // transmit the deauth frame directly so only that one slot is freed.
 static void kickClientByIp(uint32_t targetIpv4) {
   wifi_sta_list_t      wifiList;
-  tcpip_adapter_sta_list_t tcpList;
+  esp_netif_sta_list_t tcpList;
   memset(&wifiList, 0, sizeof(wifiList));
   memset(&tcpList,  0, sizeof(tcpList));
 
   if (esp_wifi_ap_get_sta_list(&wifiList) != ESP_OK) return;
-  if (tcpip_adapter_get_sta_list(&wifiList, &tcpList) != ESP_OK) return;
+  if (esp_netif_get_sta_list(&wifiList, &tcpList) != ESP_OK) return;
 
   for (int i = 0; i < (int)tcpList.num; i++) {
     if (tcpList.sta[i].ip.addr != targetIpv4) continue;
