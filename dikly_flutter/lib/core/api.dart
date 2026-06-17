@@ -296,6 +296,53 @@ class ApiService {
     await _queueablePost('/api/attendance-sessions/mark', body);
   }
 
+  /// Mark attendance using BLE presence + WiFi hotspot proof — no code entry needed.
+  /// [bleToken]        from the ESP32 BLE beacon manufacturer data (slot + hmac)
+  /// [connectionToken] from GET http://192.168.4.1/session?studentId=<id>
+  Future<void> markAttendanceBle({
+    required Map<String, dynamic> bleToken,
+    required Map<String, dynamic> connectionToken,
+  }) async {
+    await _queueablePost('/api/attendance-sessions/mark', {
+      'method': 'ble',
+      'bleToken': bleToken,
+      'connectionToken': connectionToken,
+    });
+  }
+
+  /// Submit attendance to ESP32 using BLE token instead of 6-digit code.
+  /// Returns true if device accepted the submission.
+  Future<bool> submitToESP32WithBle({
+    required String userId,
+    required String indexNumber,
+    required int bleSlot,
+    required String bleHmac,
+    String ip = '192.168.4.1',
+  }) async {
+    final localDio = Dio(BaseOptions(
+      connectTimeout: const Duration(seconds: 8),
+      receiveTimeout: const Duration(seconds: 8),
+    ));
+    try {
+      final resp = await localDio.post(
+        'http://$ip/attend',
+        data: {
+          'userId': userId,
+          'indexNumber': indexNumber,
+          'bleSlot': bleSlot.toString(),
+          'bleHmac': bleHmac,
+        },
+      );
+      if (resp.statusCode == 200) {
+        final data = resp.data;
+        return data is Map && data['error'] == null;
+      }
+    } on DioException catch (e) {
+      if (e.response?.statusCode == 404 || e.response?.statusCode == 405) return false;
+    } catch (_) {}
+    return false;
+  }
+
   Future<void> markAttendanceQR(String qrToken) async {
     await _queueablePost('/api/attendance-sessions/mark', {
       'qrToken': qrToken,

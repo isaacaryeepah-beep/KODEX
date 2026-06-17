@@ -2469,11 +2469,13 @@ function buildSidebar() {
       break;
     case 'lecturer':
       links.push({ id: 'sessions', label: 'Sessions', icon: sessionsIcon() });
+      links.push({ id: 'live-attendance', label: 'Attendance', icon: attendanceIcon() });
       links.push({ id: 'attendance-device', label: 'Attendance Device', icon: svgIcon('<rect x="5" y="2" width="14" height="20" rx="2" ry="2"/><line x1="12" y1="18" x2="12.01" y2="18"/>') });
       links.push({ sep: true, label: 'CONTENT' });
       links.push({ id: 'search', label: 'Search', icon: svgIcon('<circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>') });
       links.push({ id: 'courses', label: 'Courses', icon: coursesIcon() });
       links.push({ id: 'quizzes', label: 'Quizzes', icon: quizzesIcon() });
+      links.push({ id: 'snap-quiz', label: 'Snap Quiz', icon: svgIcon('<polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/>') });
       links.push({ id: 'timetable', label: 'Schedule', icon: svgIcon('<rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/>') });
       links.push({ id: 'question-bank', label: 'Question Bank', icon: svgIcon('<ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"/><path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"/>') });
       links.push({ id: 'assignments', label: 'Assignments / Quiz', icon: assignmentsIcon() });
@@ -2583,6 +2585,7 @@ function navigateTo(view) {
     case 'meetings': renderMeetings(); break;
     case 'courses': renderCourses(); break;
     case 'quizzes': renderQuizzes(); break;
+    case 'snap-quiz': window.open('/snap-quiz.html', '_blank'); navigateTo('quizzes'); break;
     case 'quiz-history': renderStudentQuizHistory(); break;
     case 'lecturer-performance': renderLecturerPerformance(); break;
     case 'timetable': currentUser.role === 'student' ? renderStudentTimetable() : renderLecturerTimetable(); break;
