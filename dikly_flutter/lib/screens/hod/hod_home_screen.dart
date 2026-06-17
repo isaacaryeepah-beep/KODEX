@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
-import 'package:intl/intl.dart';
 import '../../core/api.dart';
 import '../../core/auth.dart';
 import '../../core/theme.dart';
@@ -15,7 +14,9 @@ final _hodApprovalsProvider = FutureProvider.autoDispose<int>((ref) async {
   try {
     final data = await apiService.getPendingApprovals();
     return (data as List?)?.length ?? 0;
-  } catch (_) { return 0; }
+  } catch (_) {
+    return 0;
+  }
 });
 
 class HodHomeScreen extends ConsumerWidget {
@@ -25,102 +26,99 @@ class HodHomeScreen extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final user = ref.watch(authProvider).user;
-    final dashAsync = ref.watch(_hodDashProvider);
+    final user           = ref.watch(authProvider).user;
+    final dashAsync      = ref.watch(_hodDashProvider);
     final approvalsAsync = ref.watch(_hodApprovalsProvider);
-    final firstName = (user?.name ?? 'HOD').split(' ').first;
-    final pendingCount = approvalsAsync.value ?? 0;
+    final firstName      = (user?.name ?? 'HOD').split(' ').first;
+    final pendingCount   = approvalsAsync.value ?? 0;
 
-    return Column(
-      children: [
-          dashAsync.when(
-            data: (d) => DiklyHeroSection(
-              gradient: _theme.gradient,
-              greeting: 'Welcome, $firstName 👋',
-              subtitle: '${user?.department ?? 'Department'} · ${user?.institutionCode ?? 'HOD Portal'}',
-              stats: [
-                DiklyHeaderStat(value: '${d['lecturers'] ?? 0}', label: 'Lecturers', icon: Icons.person_outlined),
-                DiklyHeaderStat(value: '${d['students'] ?? 0}', label: 'Students', icon: Icons.people_outlined),
-                DiklyHeaderStat(value: '${d['liveNow'] ?? 0}', label: 'Live Now', icon: Icons.live_tv_outlined),
-              ],
-            ),
-            loading: () => DiklyHeroSection(
-              gradient: _theme.gradient,
-              greeting: 'Welcome, $firstName 👋',
-              subtitle: user?.institutionCode ?? 'HOD Portal',
-              stats: const [
-                DiklyHeaderStat(value: '—', label: 'Lecturers'),
-                DiklyHeaderStat(value: '—', label: 'Students'),
-                DiklyHeaderStat(value: '—', label: 'Live Now'),
-              ],
-            ),
-            error: (_, __) => DiklyHeroSection(
-              gradient: _theme.gradient,
-              greeting: 'Welcome, $firstName 👋',
-              subtitle: user?.institutionCode ?? 'HOD Portal',
-              stats: const [],
-            ),
+    return Container(
+      color: const Color(0xFFF4F6F9),
+      child: RefreshIndicator(
+        onRefresh: () async {
+          ref.invalidate(_hodDashProvider);
+          ref.invalidate(_hodApprovalsProvider);
+        },
+        color: _theme.primary,
+        child: dashAsync.when(
+          loading: () => ListView(
+            padding: const EdgeInsets.all(16),
+            children: const [
+              DiklyShimmerCard(height: 80),
+              SizedBox(height: 16),
+              DiklyShimmerGrid(),
+              SizedBox(height: 20),
+              DiklyShimmerList(count: 4),
+            ],
           ),
-          DiklyPageBody(
-            child: RefreshIndicator(
-              onRefresh: () async {
-                ref.invalidate(_hodDashProvider);
-                ref.invalidate(_hodApprovalsProvider);
-              },
-              color: _theme.primary,
-              child: dashAsync.when(
-                loading: () => ListView(
-                  padding: const EdgeInsets.all(16),
-                  children: const [
-                    DiklyShimmerCard(height: 48, borderRadius: 999),
-                    SizedBox(height: 20),
-                    DiklyShimmerGrid(),
-                    SizedBox(height: 20),
-                    DiklyShimmerList(count: 4),
-                  ],
-                ),
-                error: (e, _) => ListView(
-                  padding: const EdgeInsets.all(24),
-                  children: [DiklyErrorView(message: e.toString().replaceAll('Exception: ', ''), onRetry: () => ref.invalidate(_hodDashProvider))],
-                ),
-                data: (d) => _buildContent(context, ref, d, user, pendingCount),
+          error: (e, _) => ListView(
+            padding: const EdgeInsets.all(24),
+            children: [
+              DiklyErrorView(
+                message: e.toString().replaceAll('Exception: ', ''),
+                onRetry: () => ref.invalidate(_hodDashProvider),
               ),
-            ),
+            ],
           ),
-      ],
+          data: (d) => _buildContent(context, ref, d, user, firstName, pendingCount),
+        ),
+      ),
     );
   }
 
-  Widget _buildContent(BuildContext context, WidgetRef ref, Map<String, dynamic> d, dynamic user, int pendingCount) {
+  Widget _buildContent(
+    BuildContext context,
+    WidgetRef ref,
+    Map<String, dynamic> d,
+    dynamic user,
+    String firstName,
+    int pendingCount,
+  ) {
     final sessions = (d['recentSessions'] as List? ?? []);
 
     return ListView(
-      padding: const EdgeInsets.fromLTRB(16, 20, 16, 24),
+      padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
       children: [
+        // ── Page header ───────────────────────────────────────────────
+        DiklyFadeIn(
+          child: _HodHeader(
+            name: firstName,
+            department: user?.department,
+            company: user?.company ?? user?.institutionCode ?? 'Dikly',
+          ),
+        ),
+        const SizedBox(height: 16),
+
         // Department warning
         if (user?.department == null || (user?.department?.isEmpty ?? true)) ...[
           _DepartmentWarning(),
-          const SizedBox(height: 16),
+          const SizedBox(height: 12),
         ],
 
         // Quick actions
         DiklyFadeIn(
+          delay: const Duration(milliseconds: 60),
           child: SingleChildScrollView(
             scrollDirection: Axis.horizontal,
             child: Row(
               children: [
-                DiklyQuickChip(icon: Icons.pending_actions_outlined, label: 'Approvals${pendingCount > 0 ? ' ($pendingCount)' : ''}', color: const Color(0xFFDC2626), onTap: () => context.push('/hod/approvals')),
-                DiklyQuickChip(icon: Icons.campaign_outlined, label: 'Announce', color: _theme.primary, onTap: () => context.push('/announcements')),
-                DiklyQuickChip(icon: Icons.bar_chart_rounded, label: 'Reports', color: const Color(0xFF7C3AED), onTap: () => context.push('/reports')),
-                DiklyQuickChip(icon: Icons.school_outlined, label: 'Courses', color: const Color(0xFF059669), onTap: () => context.push('/hod/course-approvals')),
-                DiklyQuickChip(icon: Icons.notifications_active_outlined, label: 'Alerts', color: const Color(0xFFD97706), onTap: () => context.push('/hod/alerts')),
+                DiklyQuickChip(
+                  icon: Icons.pending_actions_outlined,
+                  label: 'Approvals${pendingCount > 0 ? ' ($pendingCount)' : ''}',
+                  color: const Color(0xFFDC2626),
+                  onTap: () => context.push('/hod/approvals'),
+                ),
+                DiklyQuickChip(icon: Icons.campaign_outlined,             label: 'Announce',  color: _theme.primary,          onTap: () => context.push('/announcements')),
+                DiklyQuickChip(icon: Icons.bar_chart_rounded,             label: 'Reports',   color: const Color(0xFF7C3AED), onTap: () => context.push('/reports')),
+                DiklyQuickChip(icon: Icons.school_outlined,               label: 'Courses',   color: const Color(0xFF059669), onTap: () => context.push('/hod/course-approvals')),
+                DiklyQuickChip(icon: Icons.notifications_active_outlined, label: 'Alerts',    color: const Color(0xFFD97706), onTap: () => context.push('/hod/alerts')),
               ],
             ),
           ),
         ),
         const SizedBox(height: 22),
 
-        // Stats grid
+        // Stat cards (web style: 4px top border, centered values)
         DiklyFadeIn(
           delay: const Duration(milliseconds: 80),
           child: GridView.count(
@@ -129,17 +127,17 @@ class HodHomeScreen extends ConsumerWidget {
             crossAxisCount: 2,
             mainAxisSpacing: 10,
             crossAxisSpacing: 10,
-            childAspectRatio: 1.55,
+            childAspectRatio: 1.4,
             children: [
-              DiklyGradientStat(value: '${d['lecturers'] ?? 0}', label: 'Lecturers', icon: Icons.person_rounded, color: _theme.primary),
-              DiklyGradientStat(value: '${d['students'] ?? 0}', label: 'Students', icon: Icons.people_rounded, color: const Color(0xFF7C3AED)),
-              DiklyGradientStat(value: '${d['recentSessionsCount'] ?? sessions.length}', label: 'Sessions', icon: Icons.video_call_rounded, color: const Color(0xFF059669)),
-              DiklyGradientStat(
+              _HodStatCard(value: '${d['lecturers'] ?? 0}',               label: 'LECTURERS',        color: _theme.primary),
+              _HodStatCard(value: '${d['students'] ?? 0}',                label: 'STUDENTS',          color: _theme.primary),
+              _HodStatCard(value: '${d['recentSessionsCount'] ?? sessions.length}', label: 'SESSIONS RECENT', color: _theme.primary),
+              _HodStatCard(
                 value: '${d['liveNow'] ?? 0}',
-                label: 'Live Now',
-                icon: Icons.live_tv_rounded,
-                color: const Color(0xFFDC2626),
-                trend: (d['liveNow'] != null && (d['liveNow'] as num) > 0) ? 'LIVE' : null,
+                label: 'LIVE NOW',
+                color: ((d['liveNow'] as num?)?.toInt() ?? 0) > 0
+                    ? const Color(0xFF059669)
+                    : const Color(0xFF6B7280),
               ),
             ],
           ),
@@ -152,7 +150,11 @@ class HodHomeScreen extends ConsumerWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              DiklySectionRow(title: 'Recent Sessions', count: sessions.length, onViewAll: () => context.push('/sessions')),
+              DiklySectionRow(
+                title: 'Recent Sessions',
+                count: sessions.length,
+                onViewAll: () => context.push('/sessions'),
+              ),
               if (sessions.isEmpty)
                 const DiklyEmptyCard(icon: Icons.video_call_outlined, message: 'No sessions yet')
               else
@@ -168,7 +170,7 @@ class HodHomeScreen extends ConsumerWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const DiklySectionRow(title: 'Quick Menu'),
+              const DiklySectionRow(title: 'Quick Actions'),
               Container(
                 decoration: BoxDecoration(
                   color: Colors.white,
@@ -179,19 +181,19 @@ class HodHomeScreen extends ConsumerWidget {
                 padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
                 child: Column(
                   children: [
-                    DiklyMenuRow(icon: Icons.people_outlined, label: 'View Lecturers', color: _theme.primary, onTap: () => context.push('/hod/lecturers')),
+                    DiklyMenuRow(icon: Icons.people_outlined,          label: 'View Lecturers',        color: _theme.primary,          onTap: () => context.push('/hod/lecturers')),
                     const Divider(height: 1, color: Color(0xFFF3F4F6)),
-                    DiklyMenuRow(icon: Icons.school_outlined, label: 'View Students', color: const Color(0xFF7C3AED), onTap: () => context.push('/hod/locked-students')),
+                    DiklyMenuRow(icon: Icons.school_outlined,           label: 'View Students',          color: const Color(0xFF7C3AED), onTap: () => context.push('/hod/locked-students')),
                     const Divider(height: 1, color: Color(0xFFF3F4F6)),
-                    DiklyMenuRow(icon: Icons.bar_chart_outlined, label: 'Department Reports', color: const Color(0xFF059669), onTap: () => context.push('/reports')),
+                    DiklyMenuRow(icon: Icons.bar_chart_outlined,        label: 'Department Reports',     color: const Color(0xFF059669), onTap: () => context.push('/reports')),
                     const Divider(height: 1, color: Color(0xFFF3F4F6)),
-                    DiklyMenuRow(icon: Icons.trending_up_rounded, label: 'Performance Dashboard', color: const Color(0xFF0891B2), onTap: () => context.push('/hod/performance')),
+                    DiklyMenuRow(icon: Icons.trending_up_rounded,       label: 'Performance Dashboard',  color: _theme.primary,          onTap: () => context.push('/hod/performance')),
                     const Divider(height: 1, color: Color(0xFFF3F4F6)),
-                    DiklyMenuRow(icon: Icons.notifications_active_outlined, label: 'Smart Alerts', color: const Color(0xFFD97706), onTap: () => context.push('/hod/alerts')),
+                    DiklyMenuRow(icon: Icons.notifications_active_outlined, label: 'Smart Alerts',      color: const Color(0xFFD97706), onTap: () => context.push('/hod/alerts')),
                     const Divider(height: 1, color: Color(0xFFF3F4F6)),
-                    DiklyMenuRow(icon: Icons.pending_actions_outlined, label: 'Pending Approvals', color: const Color(0xFFDC2626), badge: pendingCount > 0 ? pendingCount : null, onTap: () => context.push('/hod/approvals')),
+                    DiklyMenuRow(icon: Icons.pending_actions_outlined,  label: 'Pending Approvals',      color: const Color(0xFFDC2626), badge: pendingCount > 0 ? pendingCount : null, onTap: () => context.push('/hod/approvals')),
                     const Divider(height: 1, color: Color(0xFFF3F4F6)),
-                    DiklyMenuRow(icon: Icons.book_outlined, label: 'Course Approvals', color: const Color(0xFF059669), onTap: () => context.push('/hod/course-approvals')),
+                    DiklyMenuRow(icon: Icons.book_outlined,             label: 'Course Approvals',       color: const Color(0xFF059669), onTap: () => context.push('/hod/course-approvals')),
                   ],
                 ),
               ),
@@ -206,7 +208,7 @@ class HodHomeScreen extends ConsumerWidget {
   Widget _sessionTile(Map<String, dynamic> s) {
     final status = (s['status'] ?? 'closed').toString().toLowerCase();
     final isLive = status == 'active' || status == 'open';
-    final color = isLive ? const Color(0xFF16A34A) : const Color(0xFF6B7280);
+    final color  = isLive ? const Color(0xFF16A34A) : const Color(0xFF6B7280);
     return DiklyListTile(
       title: s['title'] ?? 'Session',
       subtitle: s['createdBy'] ?? s['lecturer'] ?? '',
@@ -216,6 +218,104 @@ class HodHomeScreen extends ConsumerWidget {
     );
   }
 }
+
+// ── HOD page header ───────────────────────────────────────────────────────────
+
+class _HodHeader extends StatelessWidget {
+  final String name;
+  final String? department;
+  final String company;
+
+  const _HodHeader({required this.name, this.department, required this.company});
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          'Department Overview',
+          style: GoogleFonts.dmSans(fontSize: 13, fontWeight: FontWeight.w700, color: DiklyColors.textMuted, letterSpacing: 0.3),
+        ),
+        const SizedBox(height: 2),
+        Text(
+          'Welcome back, $name',
+          style: GoogleFonts.dmSans(fontSize: 20, fontWeight: FontWeight.w800, color: DiklyColors.text),
+        ),
+        const SizedBox(height: 6),
+        Row(
+          children: [
+            if (department != null && department!.isNotEmpty) ...[
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFE0F7FA),
+                  borderRadius: BorderRadius.circular(20),
+                  border: Border.all(color: const Color(0xFF80DEEA)),
+                ),
+                child: Text(
+                  department!,
+                  style: GoogleFonts.dmSans(fontSize: 11, fontWeight: FontWeight.w700, color: const Color(0xFF0891B2)),
+                ),
+              ),
+              const SizedBox(width: 8),
+            ],
+            Text(
+              company,
+              style: GoogleFonts.dmSans(fontSize: 12, color: DiklyColors.textMuted),
+            ),
+          ],
+        ),
+      ],
+    );
+  }
+}
+
+// ── HOD stat card (centered value, 4px top accent) ────────────────────────────
+
+class _HodStatCard extends StatelessWidget {
+  final String value;
+  final String label;
+  final Color color;
+
+  const _HodStatCard({required this.value, required this.label, required this.color});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(12),
+        border: Border(
+          top:    BorderSide(color: color, width: 4),
+          left:   const BorderSide(color: Color(0xFFE5E7EB)),
+          right:  const BorderSide(color: Color(0xFFE5E7EB)),
+          bottom: const BorderSide(color: Color(0xFFE5E7EB)),
+        ),
+        boxShadow: const [BoxShadow(color: Color(0x06000000), blurRadius: 4, offset: Offset(0, 1))],
+      ),
+      child: Center(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              value,
+              style: GoogleFonts.dmSans(fontSize: 26, fontWeight: FontWeight.w800, color: color, height: 1.1),
+            ),
+            const SizedBox(height: 4),
+            Text(
+              label,
+              textAlign: TextAlign.center,
+              style: GoogleFonts.dmSans(fontSize: 9, fontWeight: FontWeight.w600, color: const Color(0xFF6B7280), letterSpacing: 0.8),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+// ── Department warning ────────────────────────────────────────────────────────
 
 class _DepartmentWarning extends StatelessWidget {
   @override
