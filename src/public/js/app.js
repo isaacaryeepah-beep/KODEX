@@ -2596,7 +2596,7 @@ function navigateTo(view) {
     case 'quizzes': renderQuizzes(); break;
     case 'snap-quiz':
       if (currentUser?.role === 'student') { window.open('/snap-quiz.html', '_blank'); }
-      else { navigateTo('quizzes'); }
+      else { window.open('/snap-quiz-lecturer.html', '_blank'); }
       break;
     case 'quiz-history': renderStudentQuizHistory(); break;
     case 'lecturer-performance': renderLecturerPerformance(); break;
