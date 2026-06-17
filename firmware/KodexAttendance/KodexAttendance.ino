@@ -962,8 +962,8 @@ function showStudent(){
       if(!r.ok)throw new Error(j.error||'Failed');
       app.innerHTML='<div class="ok">✓ Attendance Marked!</div>'
         +'<div class="count">You are student #'+j.count+'</div>'
-        +'<div class="tracking-bar"><span class="pulse"></span>Presence tracking active — stay connected to this WiFi</div>'
-        +'<p style="color:#475569;font-size:11px;text-align:center;margin-top:14px">Keep this page open. Closing it signals you have left.</p>';
+        +'<div class="tracking-bar"><span class="pulse"></span>Presence tracked via Bluetooth — you can disconnect from this WiFi</div>'
+        +'<p style="color:#475569;font-size:11px;text-align:center;margin-top:14px">Keep the Dikly app open in the background. It detects the classroom signal automatically.</p>';
       startHeartbeat(idx);
     }catch(err){m.className='msg err';m.textContent=err.message;b.disabled=false;b.textContent='Mark Attendance';}
   };
