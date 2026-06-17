@@ -4039,6 +4039,7 @@ void setup() {
   // from unfragmented PSRAM. BLE grabs large contiguous chunks; if it runs first
   // createSprite() can fail even though total free PSRAM is sufficient.
   display.init();
+  display.setBrightness(255);  // LovyanGFX PWM resets BL pin after init — force full brightness
   display.setRotation(0);  // 0 = portrait
   display.fillScreen(COL_BG);
 
