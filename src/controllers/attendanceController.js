@@ -1625,9 +1625,42 @@ exports.offlineSync = async (req, res) => {
     const device = await Device.findOne({ token });
     if (!device) return res.status(401).json({ error: "Unknown device" });
 
-    const { course, title, startedAt, records } = req.body;
+    const { course, title, startedAt, records, lecturerId, courseId } = req.body;
     if (!title || !Array.isArray(records) || records.length === 0) {
       return res.status(400).json({ error: "title and records[] required" });
+    }
+
+    // ── Lecturer assignment validation ────────────────────────────────────────
+    // If the offline session was started with a lecturer + course from the bundle,
+    // verify the lecturer is actually assigned to that course before accepting records.
+    if (lecturerId && courseId) {
+      const Course = require('../models/Course');
+      const courseDoc = await Course.findOne({
+        _id: courseId,
+        companyId: device.companyId,
+        isActive: true,
+      }).select('lecturerId').lean();
+
+      let isAssigned = courseDoc?.lecturerId?.toString() === lecturerId;
+
+      if (!isAssigned) {
+        try {
+          const CLA = require('../models/CourseLecturerAssignment');
+          isAssigned = await CLA.exists({
+            course:   courseId,
+            lecturer: lecturerId,
+            isActive: { $ne: false },
+          });
+        } catch (_) {}
+      }
+
+      if (!isAssigned) {
+        console.warn(`[offlineSync] Rejected: lecturer ${lecturerId} not assigned to course ${courseId} on device ${device.deviceId}`);
+        return res.status(403).json({
+          error: 'Offline session rejected: the lecturer is not assigned to this course. Contact your HOD or admin.',
+          code: 'LECTURER_NOT_ASSIGNED',
+        });
+      }
     }
 
     // Create the session
@@ -1635,6 +1668,8 @@ exports.offlineSync = async (req, res) => {
       company:     device.companyId,
       title:       title || "Offline Session",
       courseTitle: course || "",
+      course:      courseId || undefined,
+      lecturer:    lecturerId || undefined,
       device:      device._id,
       status:      "closed",
       startedAt:   startedAt ? new Date(startedAt * 1000) : new Date(),

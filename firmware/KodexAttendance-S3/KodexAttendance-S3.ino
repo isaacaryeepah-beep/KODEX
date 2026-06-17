@@ -313,7 +313,14 @@ int8_t rssiThreshold = -70;  // dBm — students weaker than this are rejected
 
 // Active session (from heartbeat)
 String   sessionId, sessionTitle, sessionSeed, sessionCourse, sessionLecturer;
+String   sessionLecturerId;   // set when session started via bundle (offline)
+String   sessionCourseId;     // set when session started via bundle (offline)
 uint32_t sessionStartedAt = 0;
+
+// Pre-auth bundle (downloaded when online, persisted in NVS key "bundle")
+// Compact JSON: [{"courseId":...,"courseCode":...,"courseName":...,"lecturers":[{"id":...,"name":...,"offlinePinHash":...}]}]
+static String bundleJson = "";
+static bool   bundleLoaded = false;
 uint32_t sessionDuration  = 300;
 uint32_t studentsMarked       = 0;
 uint32_t sessionTotalEnrolled = 0;   // parsed from heartbeat totalEnrolled
@@ -762,6 +769,9 @@ static void loadConfig() {
     sessionDuration     = prefs.getUInt("l_dur",   3600);
     sessionLocallyStarted = true;
   }
+  // Load pre-auth bundle if previously saved
+  bundleJson = prefs.getString("bundle", "");
+  if (bundleJson.length() > 10) bundleLoaded = true;
   prefs.end();
   if (deviceId.isEmpty()) deviceId = "esp32s3-" + macSuffix();
 }
@@ -989,6 +999,40 @@ static void downloadRoster() {
   http.end();
 }
 
+// ─── Bundle download ─────────────────────────────────────────────────────────
+// Downloads the pre-auth bundle (courses + lecturer PIN hashes) from the server.
+// Called after each successful heartbeat (throttled to once every ~10 min).
+// Stored in NVS so the /start page works fully offline.
+static void downloadBundle() {
+  HTTPClient http;
+  String url = String(apiBase) + "/api/class-rep/bundle";
+  http.begin(url);
+  http.addHeader("Authorization", "Bearer " + deviceJWT);
+  http.setTimeout(12000);
+  int code = http.GET();
+  if (code == 200) {
+    String body = http.getString();
+    // Extract just the bundle array to keep NVS usage small
+    JsonDocument doc;
+    if (!deserializeJson(doc, body) && doc["bundle"].is<JsonArray>()) {
+      String compact; serializeJson(doc["bundle"], compact);
+      if (compact.length() < 3800) {  // NVS string limit safety margin
+        bundleJson   = compact;
+        bundleLoaded = true;
+        prefs.begin("kodex", false);
+        prefs.putString("bundle", compact);
+        prefs.end();
+        LOG("Bundle saved (" + String(compact.length()) + " bytes)");
+      } else {
+        LOG("Bundle too large for NVS (" + String(compact.length()) + " bytes) — skipped");
+      }
+    }
+  } else {
+    LOG("Bundle fetch failed: " + String(code));
+  }
+  http.end();
+}
+
 // ─── Pairing ─────────────────────────────────────────────────────────────────
 static String pairErrorMsg = "";  // set on failure, shown on screen
 
@@ -1059,9 +1103,9 @@ static void sendHeartbeat() {
   lastSyncMs = millis();
   // Flush any offline sessions + attendance records now that we have internet.
   syncOfflineAttendance();
-  // Refresh the student roster every ~10 minutes (120 heartbeats × 5 s).
+  // Refresh roster + bundle every ~10 minutes (120 heartbeats × 5 s).
   static uint32_t rosterHbCount = 0;
-  if (++rosterHbCount >= 120) { rosterHbCount = 0; downloadRoster(); }
+  if (++rosterHbCount >= 120) { rosterHbCount = 0; downloadRoster(); downloadBundle(); }
   JsonDocument doc;
   if (deserializeJson(doc, resp)) return;
   if (doc["serverTime"].is<const char*>()) {
@@ -3740,22 +3784,63 @@ static void registerLocalHttp() {
     if (!sessionId.isEmpty()) {
       localHttp.send(409, "application/json", "{\"error\":\"Session already active. Stop it first.\"}"); return;
     }
-    // PIN check — required when starting offline (web portal sends pin field).
-    // Handle both string ("1234") and integer (1234) JSON types.
-    String pin;
-    JsonVariant pinVar = req["pin"];
-    if (pinVar.is<int>()) {
-      char buf[8]; snprintf(buf, sizeof(buf), "%04d", pinVar.as<int>()); pin = buf;
-    } else {
-      pin = pinVar | "";
-    }
-    if (!pin.isEmpty() && pin != String(lecturerPin)) {
-      localHttp.send(403, "application/json", "{\"error\":\"Wrong PIN. Check the device screen.\"}"); return;
-    }
+
+    String pin        = req["pin"]        | "";
+    String lecturerId = req["lecturerId"] | "";
     String courseCode = req["courseCode"] | "";
+    String courseIdV  = req["courseId"]   | "";
     String title      = req["title"]      | "Attendance";
     String lecturer   = req["lecturer"]   | "";
     uint32_t duration = req["duration"]   | 300;
+
+    // ── Bundle-based PIN validation ──────────────────────────────────────────
+    // If bundle is loaded, verify lecturer PIN against the stored HMAC hash.
+    // Format: HMAC-SHA256("dikly_offline_v1", lecturerId + ":" + pin)
+    if (bundleLoaded && !lecturerId.isEmpty()) {
+      if (pin.length() != 4) {
+        localHttp.send(400, "application/json", "{\"error\":\"Enter your 4-digit PIN.\"}"); return;
+      }
+      // Find this lecturer's offlinePinHash in the bundle
+      JsonDocument bDoc;
+      bool pinValid = false;
+      bool lecturerFound = false;
+      if (!deserializeJson(bDoc, bundleJson)) {
+        for (JsonObject course : bDoc.as<JsonArray>()) {
+          for (JsonObject lect : course["lecturers"].as<JsonArray>()) {
+            if (String(lect["id"] | "") == lecturerId) {
+              lecturerFound = true;
+              const char* storedHash = lect["offlinePinHash"] | "";
+              if (storedHash[0]) {
+                // Compute HMAC-SHA256("dikly_offline_v1", lecturerId:pin)
+                const char* pepper = "dikly_offline_v1";
+                String msg = lecturerId + ":" + pin;
+                uint8_t computed[32];
+                hmacSha256((const uint8_t*)pepper, strlen(pepper),
+                           (const uint8_t*)msg.c_str(), msg.length(), computed);
+                char computedHex[65];
+                for (int i = 0; i < 32; i++) sprintf(computedHex + i*2, "%02x", computed[i]);
+                computedHex[64] = '\0';
+                pinValid = (String(computedHex) == String(storedHash));
+              } else {
+                pinValid = true; // no PIN set — allow through
+              }
+              break;
+            }
+          }
+          if (lecturerFound) break;
+        }
+      }
+      if (!lecturerFound) {
+        localHttp.send(403, "application/json", "{\"error\":\"Lecturer not in bundle. Reconnect device to internet.\"}"); return;
+      }
+      if (!pinValid) {
+        localHttp.send(403, "application/json", "{\"error\":\"Incorrect PIN. Try again.\"}"); return;
+      }
+    } else if (!bundleLoaded) {
+      // No bundle — device hasn't been online yet; block session start
+      localHttp.send(503, "application/json",
+        "{\"error\":\"No offline bundle loaded. Connect the device to internet first, then try again.\"}"); return;
+    }
 
     time_t now = time(nullptr);
     if (now < 1700000000UL) now = 1700000000UL + (millis() / 1000);
@@ -3766,16 +3851,18 @@ static void registerLocalHttp() {
     for (int i = 0; i < 32; i++) snprintf(seed + i * 2, 3, "%02x", seedBytes[i]);
     seed[64] = '\0';
 
-    sessionId       = String(sid);
-    sessionSeed     = String(seed);
-    sessionTitle    = title;
-    sessionCourse   = courseCode;
-    sessionLecturer = lecturer;
-    sessionDuration = duration;
-    sessionStartedAt = (uint32_t)now;
-    studentsMarked  = 0;
+    sessionId         = String(sid);
+    sessionSeed       = String(seed);
+    sessionTitle      = title;
+    sessionCourse     = courseCode;
+    sessionLecturer   = lecturer;
+    sessionLecturerId = lecturerId;
+    sessionCourseId   = courseIdV;
+    sessionDuration   = duration;
+    sessionStartedAt  = (uint32_t)now;
+    studentsMarked    = 0;
     dedupClear(sessionId);
-    timeSynced      = true;  // allow code display — time is good enough
+    timeSynced        = true;  // allow code display — time is good enough
 
     if (sdAvailable) {
       File sf = SD_MMC.open("/sessions.jsonl", FILE_APPEND);
@@ -3785,9 +3872,11 @@ static void registerLocalHttp() {
         sDoc["courseCode"] = courseCode;
         sDoc["title"]      = title;
         sDoc["lecturer"]   = lecturer;
+        if (!lecturerId.isEmpty()) sDoc["lecturerId"] = lecturerId;
+        if (!courseIdV.isEmpty())  sDoc["courseId"]   = courseIdV;
         sDoc["startedAt"]  = (uint32_t)now;
         sDoc["duration"]   = duration;
-        sDoc["seed"]       = sessionSeed;   // needed for server-side code verification
+        sDoc["seed"]       = sessionSeed;
         sDoc["synced"]     = false;
         String sl; serializeJson(sDoc, sl); sl += "\n";
         sf.print(sl); sf.close();
@@ -3834,10 +3923,43 @@ static void registerLocalHttp() {
   // /start GET — lecturer session setup portal
   localHttp.on("/start", HTTP_GET, []() {
     if (!sessionId.isEmpty()) {
-      // Session already running — redirect to attendance portal
       localHttp.sendHeader("Location", "/"); localHttp.send(302, "text/plain", ""); return;
     }
-    localHttp.send(200, "text/html", String(
+
+    // Build course options from bundle
+    String courseOpts = "";
+    String bundleEscaped = "";
+    if (bundleLoaded && bundleJson.length() > 2) {
+      JsonDocument bDoc;
+      if (!deserializeJson(bDoc, bundleJson)) {
+        for (JsonObject c : bDoc.as<JsonArray>()) {
+          String cid  = c["courseId"]   | "";
+          String code = c["courseCode"] | "";
+          String name = c["courseName"] | "";
+          courseOpts += "<option value='" + cid + "'>" + code + " — " + name + "</option>";
+        }
+        serializeJson(bDoc, bundleEscaped);
+        // escape for embedding in JS string
+        bundleEscaped.replace("\\", "\\\\");
+        bundleEscaped.replace("'", "\\'");
+      }
+    }
+
+    if (courseOpts.isEmpty()) {
+      localHttp.send(503, "text/html",
+        "<!doctype html><html><head><meta charset='utf-8'>"
+        "<meta name='viewport' content='width=device-width,initial-scale=1'></head>"
+        "<body style='background:#0a0f1e;color:#fff;font-family:sans-serif;"
+        "display:flex;align-items:center;justify-content:center;min-height:100vh;padding:20px'>"
+        "<div style='text-align:center;max-width:300px'>"
+        "<div style='font-size:24px;font-weight:900;margin-bottom:12px'>Di<span style='color:#4f6ef7'>kly</span></div>"
+        "<p style='color:#f87171;font-size:14px;line-height:1.7'>"
+        "No offline bundle loaded.<br>Connect the device to the internet first, wait 10 minutes, then try again.</p>"
+        "</div></body></html>");
+      return;
+    }
+
+    String page = String(
       "<!doctype html><html><head><meta charset='utf-8'>"
       "<meta name='viewport' content='width=device-width,initial-scale=1,maximum-scale=1'>"
       "<title>Start Session</title>"
@@ -3846,16 +3968,16 @@ static void registerLocalHttp() {
       "font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;"
       "display:flex;align-items:center;justify-content:center;padding:20px}"
       ".card{background:#111827;border-radius:20px;padding:28px 20px;"
-      "max-width:360px;width:100%;border:1px solid #1e2d45}"
+      "max-width:380px;width:100%;border:1px solid #1e2d45}"
       ".logo{text-align:center;font-size:22px;font-weight:900;color:#fff;margin-bottom:2px}"
       ".logo span{color:#4f6ef7}"
       ".sub{text-align:center;font-size:12px;color:#64748b;margin-bottom:18px}"
       "label{display:block;font-size:11px;font-weight:600;color:#94a3b8;"
       "text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px}"
-      "input[type=text]{width:100%;padding:13px 14px;background:#0f172a;"
-      "border:1.5px solid #1e2d45;border-radius:10px;color:#fff;font-size:16px;"
-      "outline:none;margin-bottom:16px;-webkit-appearance:none}"
-      "input[type=text]:focus{border-color:#4f6ef7}"
+      "select,input[type=text]{width:100%;padding:13px 14px;background:#0f172a;"
+      "border:1.5px solid #1e2d45;border-radius:10px;color:#fff;font-size:15px;"
+      "outline:none;margin-bottom:16px;-webkit-appearance:none;appearance:none}"
+      "select:focus,input:focus{border-color:#4f6ef7}"
       ".dur{display:flex;gap:7px;flex-wrap:wrap;margin-bottom:22px}"
       ".dur input[type=radio]{display:none}"
       ".dur label{flex:1;min-width:66px;background:#0f172a;border:1.5px solid #1e2d45;"
@@ -3868,8 +3990,6 @@ static void registerLocalHttp() {
       "button:disabled{opacity:.5}"
       ".err{display:none;background:#450a0a;border:1px solid #991b1b;border-radius:10px;"
       "padding:12px 14px;color:#fca5a5;font-size:13px;margin-bottom:14px}"
-      ".pin-hint{background:#0f2a1a;border:1px solid #166534;border-radius:10px;"
-      "padding:10px 14px;color:#86efac;font-size:12px;margin-bottom:16px;line-height:1.6}"
       ".ok{display:none;text-align:center;padding:10px 0}"
       ".ck{font-size:56px;margin-bottom:14px}"
       ".ok h2{color:#22c55e;font-size:18px;margin-bottom:8px}"
@@ -3879,13 +3999,14 @@ static void registerLocalHttp() {
       "<div class='sub'>Lecturer Session Setup</div>"
       "<div class='err' id='err'></div>"
       "<div id='main'>"
-      "<div class='pin-hint'>&#x1F512; Enter the 4-digit PIN shown on the <strong>device screen</strong> to prove you are the lecturer.</div>"
-      "<label>Device PIN</label>"
-      "<input type='text' id='pin' placeholder='4-digit PIN from screen' maxlength='4' inputmode='numeric' autocomplete='off'>"
-      "<label>Course Code</label>"
-      "<input type='text' id='course' placeholder='e.g. CS 301' autocorrect='off' spellcheck='false' autocapitalize='characters'>"
-      "<label>Your Name</label>"
-      "<input type='text' id='name' placeholder='e.g. Dr. Mensah' autocorrect='off'>"
+      "<label>Course</label>"
+      "<select id='csel' onchange='onCourse()'>"
+      "<option value=''>— Select a course —</option>") +
+      courseOpts +
+      String("<label id='llbl' style='display:none'>Lecturer</label>"
+      "<select id='lsel' style='display:none'><option value=''>— Select a lecturer —</option></select>"
+      "<label id='plbl' style='display:none'>Your PIN</label>"
+      "<input type='text' id='pin' placeholder='4-digit PIN' maxlength='4' inputmode='numeric' autocomplete='off' style='display:none'>"
       "<label>Duration</label>"
       "<div class='dur'>"
       "<input type='radio' name='d' id='d30' value='1800'><label for='d30'>30 min</label>"
@@ -3899,33 +4020,56 @@ static void registerLocalHttp() {
       "<div class='ok' id='ok'>"
       "<div class='ck'>&#x1F3AB;</div>"
       "<h2>Session Started!</h2>"
-      "<p>Students can now connect to Dikly WiFi.<br>The attendance code is on the device screen.</p>"
+      "<p>Students can now connect to Dikly WiFi.<br>Attendance portal is now active.</p>"
       "</div>"
       "</div>"
       "<script>"
+      "var bundle=") + bundleEscaped + String(";"
+      "function onCourse(){"
+      "var cid=document.getElementById('csel').value;"
+      "var lsel=document.getElementById('lsel');"
+      "var llbl=document.getElementById('llbl');"
+      "var plbl=document.getElementById('plbl');"
+      "var pin=document.getElementById('pin');"
+      "lsel.innerHTML='<option value=\"\">— Select a lecturer —</option>';"
+      "if(!cid){lsel.style.display='none';llbl.style.display='none';"
+      "plbl.style.display='none';pin.style.display='none';return;}"
+      "var course=bundle.find(function(c){return c.courseId==cid;});"
+      "if(!course||!course.lecturers.length)return;"
+      "course.lecturers.forEach(function(l){"
+      "var o=document.createElement('option');o.value=l.id;o.textContent=l.name;lsel.appendChild(o);"
+      "});"
+      "lsel.style.display='block';llbl.style.display='block';"
+      "plbl.style.display='block';pin.style.display='block';"
+      "}"
       "function go(){"
+      "var cid=document.getElementById('csel').value;"
+      "var lid=document.getElementById('lsel').value;"
       "var pin=document.getElementById('pin').value.trim();"
-      "var course=document.getElementById('course').value.trim();"
-      "var nm=document.getElementById('name').value.trim();"
       "var dur=document.querySelector('input[name=d]:checked');"
       "var err=document.getElementById('err');err.style.display='none';"
-      "if(pin.length!==4){err.textContent='Enter the 4-digit PIN shown on the device screen.';err.style.display='block';return;}"
-      "if(!course){err.textContent='Enter the course code.';err.style.display='block';return;}"
-      "if(!nm){err.textContent='Enter your name.';err.style.display='block';return;}"
-      "var btn=document.getElementById('btn');btn.textContent='Starting…';btn.disabled=true;"
+      "if(!cid){err.textContent='Select a course.';err.style.display='block';return;}"
+      "if(!lid){err.textContent='Select a lecturer.';err.style.display='block';return;}"
+      "if(pin.length!==4){err.textContent='Enter the 4-digit PIN.';err.style.display='block';return;}"
+      "var course=bundle.find(function(c){return c.courseId==cid;});"
+      "var lect=course?course.lecturers.find(function(l){return l.id==lid;}):null;"
+      "var btn=document.getElementById('btn');btn.textContent='Starting\xe2\x80\xa6';btn.disabled=true;"
       "fetch('/session/start',{method:'POST',headers:{'Content-Type':'application/json'},"
-      "body:JSON.stringify({pin:pin,courseCode:course,lecturer:nm,duration:parseInt(dur.value)})})"
+      "body:JSON.stringify({pin:pin,courseId:cid,lecturerId:lid,"
+      "courseCode:course?course.courseCode:'',title:course?course.courseName:'Attendance',"
+      "lecturer:lect?lect.name:'',duration:parseInt(dur.value)})})"
       ".then(function(r){return r.json().then(function(d){return{ok:r.ok,d:d};});})"
       ".then(function(r){"
       "if(r.ok){document.getElementById('main').style.display='none';"
       "document.getElementById('ok').style.display='block';}"
       "else{err.textContent=r.d.error||'Failed.';err.style.display='block';"
-      "btn.textContent='Start Session →';btn.disabled=false;}"
+      "btn.textContent='Start Session \xe2\x86\x92';btn.disabled=false;}"
       "}).catch(function(){"
       "err.textContent='Connection lost. Stay on Dikly WiFi and retry.';"
-      "err.style.display='block';btn.textContent='Start Session →';btn.disabled=false;"
+      "err.style.display='block';btn.textContent='Start Session \xe2\x86\x92';btn.disabled=false;"
       "});}"
-      "</script></body></html>"));
+      "</script></body></html>");
+    localHttp.send(200, "text/html", page);
   });
 
   // Root + 404: student portal when session active; lecturer setup link when idle
