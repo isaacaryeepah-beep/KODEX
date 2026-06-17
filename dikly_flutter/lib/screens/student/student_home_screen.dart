@@ -114,15 +114,6 @@ class StudentHomeScreen extends ConsumerWidget {
     return ListView(
       padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
       children: [
-        // Page sub-header
-        DiklyFadeIn(
-          child: _PageHeader(
-            name: (user?.name ?? 'Student').split(' ').first,
-            subtitle: user?.company ?? user?.institutionCode ?? 'Student Portal',
-          ),
-        ),
-        const SizedBox(height: 14),
-
         // Device lock warning
         if (isLocked && lockUntil != null) ...[
           _DeviceLockBanner(until: lockUntil),

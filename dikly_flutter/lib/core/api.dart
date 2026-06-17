@@ -930,6 +930,13 @@ class ApiService {
     return (list as List).cast<Map<String, dynamic>>();
   }
 
+  Future<List<Map<String, dynamic>>> getMyLeaveBalances() async {
+    final response = await _dio.get('/api/leave-balances/my');
+    final data = response.data;
+    final list = data['balances'] ?? [];
+    return (list as List).cast<Map<String, dynamic>>();
+  }
+
   Future<void> createLeaveRequest(Map<String, dynamic> body) async {
     await _queueablePost('/api/leaves', body);
   }
