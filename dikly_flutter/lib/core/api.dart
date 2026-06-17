@@ -83,6 +83,12 @@ class ApiService {
   }
 
   /// Flush all queued writes when back online.
+  /// Generic authenticated GET — returns parsed response data.
+  Future<dynamic> get(String path) async {
+    final response = await _dio.get(path);
+    return response.data;
+  }
+
   Future<void> flushWriteQueue() async {
     final queue = CacheService.getPendingWrites();
     if (queue.isEmpty) return;

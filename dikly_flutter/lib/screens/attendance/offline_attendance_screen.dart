@@ -6,6 +6,7 @@ import '../../core/auth.dart';
 import '../../core/cache.dart';
 import '../../core/connectivity.dart';
 import '../../core/theme.dart';
+import '../../services/offline_credential_service.dart';
 
 // ── Providers ─────────────────────────────────────────────────────────────────
 
@@ -36,6 +37,7 @@ class _OfflineAttendanceScreenState extends ConsumerState<OfflineAttendanceScree
   String? _lastMessage;
   bool _lastSuccess = false;
   Map<String, dynamic>? _esp32Info;
+  bool _credentialSent = false;
 
   @override
   void dispose() {
@@ -53,9 +55,38 @@ class _OfflineAttendanceScreenState extends ConsumerState<OfflineAttendanceScree
     if (info != null) {
       setState(() => _esp32Info = info);
       ref.read(_esp32StatusProvider.notifier).state = _Esp32Status.found;
+      // Auto-send credential so enrollment is verified before the student types
+      if (!_credentialSent) _autoSendCredential(info);
     } else {
       ref.read(_esp32StatusProvider.notifier).state = _Esp32Status.notFound;
     }
+  }
+
+  /// Automatically send the cached offline credential to the ESP32 device.
+  /// This authorizes the user before they even touch the form.
+  Future<void> _autoSendCredential(Map<String, dynamic> deviceInfo) async {
+    final user = ref.read(authProvider).user;
+    if (user == null) return;
+
+    final role = user.role ?? 'student';
+    // ESP32 AP always assigns itself 192.168.4.1 as the gateway
+    final deviceIp = (deviceInfo['localIp'] as String?)?.isNotEmpty == true
+        ? deviceInfo['localIp'] as String
+        : '192.168.4.1';
+
+    final result = await OfflineCredentialService.sendToDevice(deviceIp, role);
+    if (!mounted) return;
+
+    if (result != null && result['ok'] == true) {
+      setState(() {
+        _credentialSent = true;
+        _lastSuccess = true;
+        _lastMessage = role == 'lecturer'
+            ? 'Verified as lecturer — you can start the session.'
+            : 'Identity verified — you are enrolled in this course.';
+      });
+    }
+    // Failure is silent — student can still mark via the form (roster check on device)
   }
 
   Future<void> _submitCode() async {

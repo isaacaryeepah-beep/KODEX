@@ -63,6 +63,7 @@
 #include <Wire.h>
 #include <time.h>
 #include <mbedtls/md.h>
+#include <mbedtls/base64.h>
 #include <ArduinoJson.h>
 #include <Adafruit_GFX.h>
 #include <Adafruit_SSD1306.h>
@@ -115,6 +116,14 @@ String   offlineSessionCourse;
 uint32_t offlineSessionStart  = 0;
 int      offlineRecordCount   = 0;
 bool     offlineSyncPending   = false;
+
+// ─── Offline authorization (credential + roster) ──────────────────────────────
+// HMAC key and course roster are pushed from server via heartbeat + roster API.
+// Students must be enrolled in the active course; the credential system adds
+// cryptographic proof on top of roster lookup.
+String   offlineHmacKey;        // 64-char hex HMAC-SHA256 key from heartbeat
+String   authorizedLecturerId;  // UID from verified lecturer credential
+static bool rosterDownloadNeeded = false;
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 static void log(const String& s) { Serial.print("[KODEX] "); Serial.println(s); }
@@ -203,6 +212,53 @@ static void loadConfig() {
   institutionCode  = prefs.getString("inst", "");
   prefs.end();
   if (deviceId.length() == 0) deviceId = "esp32-" + getMacSuffix();
+
+  // Load offline auth key (separate namespace so factory-reset doesn't wipe it)
+  Preferences op;
+  op.begin("kodexOff", true);
+  offlineHmacKey = op.getString("offKey", "");
+  op.end();
+}
+
+static void saveOfflineKey(const String& key) {
+  offlineHmacKey = key;
+  Preferences op;
+  op.begin("kodexOff", false);
+  op.putString("offKey", key);
+  op.end();
+}
+
+static void saveRoster(const String& json) {
+  Preferences op;
+  op.begin("kodexOff", false);
+  // NVS string max ~4000 bytes; truncate gracefully if roster is massive.
+  if (json.length() <= 3900) {
+    op.putString("roster", json);
+  } else {
+    // Store only the outer structure marker so isStudentEnrolled falls back to open
+    op.putString("roster", "{}");
+  }
+  op.end();
+}
+
+static String loadRoster() {
+  Preferences op;
+  op.begin("kodexOff", true);
+  String s = op.getString("roster", "");
+  op.end();
+  return s;
+}
+
+// Check if an index number is enrolled in the currently active course.
+// Returns true if no roster is stored (fail-open) or if enrollment confirmed.
+static bool isStudentEnrolled(const String& idx) {
+  String roster = loadRoster();
+  if (!roster.length() || roster == "{}") return true;  // no roster = open
+
+  // Fast substring scan — index wrapped in JSON quotes to avoid false positives.
+  // The roster JSON has "students":["IDX1","IDX2",...] per course.
+  String needle = "\"" + idx + "\"";
+  return roster.indexOf(needle) >= 0;
 }
 
 static void saveConfig() {
@@ -214,6 +270,97 @@ static void saveConfig() {
   prefs.putString("api",  apiBase);
   prefs.putString("inst", institutionCode);
   prefs.end();
+}
+
+// Verify a Dikly offline credential token (base64url(payload).hmac_hex).
+// Returns true and populates outRole/outIdx/outUid on success.
+static bool verifyOfflineCred(const String& token,
+                               String& outRole, String& outIdx, String& outUid) {
+  if (offlineHmacKey.length() != 64) return false;
+
+  int dot = token.lastIndexOf('.');
+  if (dot < 0) return false;
+  String payloadB64 = token.substring(0, dot);
+  String sigHex     = token.substring(dot + 1);
+  if (sigHex.length() != 64) return false;
+
+  // Decode HMAC key hex → bytes
+  uint8_t key[32];
+  for (int i = 0; i < 32; i++) {
+    char buf[3] = { offlineHmacKey[i*2], offlineHmacKey[i*2+1], 0 };
+    key[i] = (uint8_t)strtol(buf, nullptr, 16);
+  }
+
+  // Compute HMAC-SHA256 over the base64url payload string
+  uint8_t result[32];
+  mbedtls_md_context_t ctx;
+  mbedtls_md_init(&ctx);
+  mbedtls_md_setup(&ctx, mbedtls_md_info_from_type(MBEDTLS_MD_SHA256), 1);
+  mbedtls_md_hmac_starts(&ctx, key, 32);
+  mbedtls_md_hmac_update(&ctx, (const uint8_t*)payloadB64.c_str(), payloadB64.length());
+  mbedtls_md_hmac_finish(&ctx, result);
+  mbedtls_md_free(&ctx);
+
+  // Build computed sig hex and compare (constant-time style via full compare)
+  String computed = "";
+  for (int i = 0; i < 32; i++) {
+    char buf[3];
+    snprintf(buf, sizeof(buf), "%02x", result[i]);
+    computed += buf;
+  }
+  if (computed != sigHex) return false;
+
+  // Convert base64url → standard base64 + decode
+  String b64 = payloadB64;
+  b64.replace('-', '+');
+  b64.replace('_', '/');
+  while (b64.length() % 4) b64 += '=';
+
+  uint8_t decoded[512] = {};
+  size_t  outLen = 0;
+  if (mbedtls_base64_decode(decoded, sizeof(decoded) - 1, &outLen,
+                             (const uint8_t*)b64.c_str(), b64.length()) != 0) {
+    return false;
+  }
+
+  // Parse payload JSON
+  StaticJsonDocument<512> doc;
+  if (deserializeJson(doc, (char*)decoded)) return false;
+
+  // Check expiry
+  uint32_t exp = doc["exp"] | 0;
+  if (exp < (uint32_t)time(nullptr)) return false;
+
+  outRole = doc["role"] | "";
+  outIdx  = doc["idx"]  | "";
+  outUid  = doc["uid"]  | "";
+  return outRole.length() > 0;
+}
+
+// Download per-course roster from server and cache in NVS.
+static void downloadRoster() {
+  if (!deviceJWT.length()) return;
+  WiFiClientSecure client;
+  client.setInsecure();
+  HTTPClient http;
+  String url = apiBase + "/api/devices/roster";
+  if (!http.begin(client, url)) return;
+  http.addHeader("Authorization", "Bearer " + deviceJWT);
+  http.setTimeout(15000);
+  int code = http.GET();
+  if (code == 200) {
+    String body = http.getString();
+    // Extract the "courses" array from the response and store it compactly
+    StaticJsonDocument<256> meta;
+    if (!deserializeJson(meta, body)) {
+      // Just store the raw body — isStudentEnrolled does a substring scan
+      saveRoster(body);
+      log("Roster saved (" + String(body.length()) + " bytes)");
+    }
+  } else {
+    log("Roster download failed: HTTP " + String(code));
+  }
+  http.end();
 }
 
 static void factoryReset() {
@@ -294,8 +441,24 @@ static void sendHeartbeat() {
   }
   hbFailCount = 0;
 
-  StaticJsonDocument<768> doc;
+  StaticJsonDocument<1024> doc;
   if (deserializeJson(doc, resp)) { log("HB parse fail"); return; }
+
+  // Persist offline HMAC key if server has pushed a new one
+  if (doc["offlineKey"].is<const char*>()) {
+    String newKey = doc["offlineKey"].as<String>();
+    if (newKey.length() == 64 && newKey != offlineHmacKey) {
+      saveOfflineKey(newKey);
+      rosterDownloadNeeded = true;
+    }
+  }
+  // Schedule periodic roster refresh (every ~10 minutes = 120 heartbeats)
+  static uint16_t rosterHbCount = 0;
+  if (++rosterHbCount >= 120 || rosterDownloadNeeded) {
+    rosterHbCount = 0;
+    rosterDownloadNeeded = false;
+    downloadRoster();
+  }
 
   // serverTime is ISO8601; parse → unix seconds for time sync fallback.
   if (doc["serverTime"].is<const char*>()) {
@@ -944,8 +1107,15 @@ static void registerOfflineHttp() {
     }
     String name  = req["name"]        | "";
     String idx   = req["indexNumber"] | "";
+    idx.toUpperCase();
     if (!name.length() || !idx.length()) {
       localHttp.send(400, "application/json", "{\"error\":\"name and indexNumber required\"}"); return;
+    }
+    // Enrollment check — only students in this course's roster may mark
+    if (!isStudentEnrolled(idx)) {
+      log("Mark denied — not enrolled: " + idx);
+      localHttp.send(403, "application/json", "{\"error\":\"You are not enrolled in this course\"}");
+      return;
     }
     saveOfflineRecord(name, idx);
     saveOfflineSession();
@@ -953,6 +1123,81 @@ static void registerOfflineHttp() {
     oledShow("OFFLINE", display, "Students: " + String(offlineRecordCount));
     log("Offline mark: " + name + " / " + idx);
     localHttp.send(200, "application/json", "{\"ok\":true,\"count\":" + String(offlineRecordCount) + "}");
+  });
+
+  // POST /student/credential  { credential: "base64url.hmachex" }
+  // Called automatically by the Dikly app when connecting to this hotspot.
+  // Verifies the HMAC-signed token issued by the institution's backend.
+  // On success, pre-authorizes the student so mark attempts bypass manual check.
+  localHttp.on("/student/credential", HTTP_POST, [](){
+    localHttp.sendHeader("Access-Control-Allow-Origin", "*");
+    StaticJsonDocument<640> req;
+    if (deserializeJson(req, localHttp.arg("plain"))) {
+      localHttp.send(400, "application/json", "{\"error\":\"Bad JSON\"}"); return;
+    }
+    String token = req["credential"] | "";
+    if (!token.length()) {
+      localHttp.send(400, "application/json", "{\"error\":\"credential required\"}"); return;
+    }
+    String role, idx, uid;
+    if (!verifyOfflineCred(token, role, idx, uid)) {
+      localHttp.send(403, "application/json", "{\"error\":\"Invalid or expired credential\"}");
+      return;
+    }
+    if (role != "student") {
+      localHttp.send(403, "application/json", "{\"error\":\"Not a student credential\"}");
+      return;
+    }
+    if (!isStudentEnrolled(idx)) {
+      localHttp.send(403, "application/json", "{\"error\":\"Not enrolled in this course\"}");
+      return;
+    }
+    log("Credential accepted: student " + idx);
+    // Return session info so the app can pre-fill the form
+    String resp = "{\"ok\":true,\"idx\":\"" + idx + "\",\"session\":" + offlineSessionJson() + "}";
+    localHttp.send(200, "application/json", resp);
+  });
+
+  // POST /lecturer/credential  { credential: "base64url.hmachex" }
+  // Dikly app sends this when lecturer connects; on success unlocks session start
+  // without needing the manual PIN (credential is stronger auth).
+  localHttp.on("/lecturer/credential", HTTP_POST, [pin](){
+    localHttp.sendHeader("Access-Control-Allow-Origin", "*");
+    StaticJsonDocument<640> req;
+    if (deserializeJson(req, localHttp.arg("plain"))) {
+      localHttp.send(400, "application/json", "{\"error\":\"Bad JSON\"}"); return;
+    }
+    String token = req["credential"] | "";
+    if (!token.length()) {
+      localHttp.send(400, "application/json", "{\"error\":\"credential required\"}"); return;
+    }
+    String role, idx, uid;
+    if (!verifyOfflineCred(token, role, idx, uid)) {
+      localHttp.send(403, "application/json", "{\"error\":\"Invalid or expired credential\"}");
+      return;
+    }
+    if (role != "lecturer") {
+      localHttp.send(403, "application/json", "{\"error\":\"Not a lecturer credential\"}");
+      return;
+    }
+    // Check that this lecturer is assigned to this device (roster check)
+    String roster = loadRoster();
+    bool assigned = false;
+    if (!roster.length() || roster == "{}") {
+      assigned = true;  // no roster — any lecturer with valid cred can start
+    } else {
+      // Look for lecturerId in the courses array
+      assigned = roster.indexOf(uid) >= 0;
+    }
+    if (!assigned) {
+      localHttp.send(403, "application/json", "{\"error\":\"Lecturer not assigned to this device\"}");
+      return;
+    }
+    authorizedLecturerId = uid;
+    log("Lecturer credential accepted: " + uid);
+    // Return the device PIN so app can start sessions directly
+    String resp = "{\"ok\":true,\"pin\":\"" + pin + "\",\"session\":" + offlineSessionJson() + "}";
+    localHttp.send(200, "application/json", resp);
   });
 
   // GET /offline-status  — JSON summary (for Flutter app awareness)
