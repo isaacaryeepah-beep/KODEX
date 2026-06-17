@@ -41,130 +41,6 @@
 #include <FS.h>
 using namespace fs;
 
-// Part 1: everything before the dynamic course/lecturer injection
-static const char ATTEND_HTML_1[] =
-"<!doctype html>"
-"<html><head><meta charset='utf-8'>"
-"<meta name='viewport' content='width=device-width,initial-scale=1,maximum-scale=1'>"
-"<title>Mark Attendance</title>"
-"<style>"
-"*{box-sizing:border-box;margin:0;padding:0}"
-"body{min-height:100vh;background:#0a0f1e;color:#fff;"
-"font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;"
-"display:flex;align-items:center;justify-content:center;padding:20px}"
-".card{background:#111827;border-radius:20px;padding:28px 20px;"
-"max-width:360px;width:100%;border:1px solid #1e2d45}"
-".logo{text-align:center;font-size:22px;font-weight:900;color:#fff;margin-bottom:2px}"
-".logo span{color:#4f6ef7}"
-".dot{width:8px;height:8px;background:#22c55e;border-radius:50%;"
-"display:inline-block;margin-right:5px;vertical-align:middle}"
-".live{text-align:center;font-size:11px;color:#22c55e;margin-bottom:4px}"
-".course{text-align:center;font-size:15px;font-weight:700;"
-"color:#e2e8f0;margin:10px 0 2px}"
-".lect{text-align:center;font-size:12px;color:#64748b;margin-bottom:20px}"
-"label{display:block;font-size:11px;font-weight:600;color:#94a3b8;"
-"text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px}"
-"input[type=text]{width:100%;padding:13px 14px;background:#0f172a;"
-"border:1.5px solid #1e2d45;border-radius:10px;color:#fff;font-size:16px;"
-"outline:none;margin-bottom:16px;-webkit-appearance:none}"
-"input[type=text]:focus{border-color:#4f6ef7}"
-".cr{display:flex;gap:7px;margin-bottom:22px}"
-".cb{flex:1;padding:12px 0;background:#0f172a;border:1.5px solid #1e2d45;"
-"border-radius:10px;color:#fff;font-size:22px;font-weight:700;"
-"text-align:center;outline:none;-webkit-appearance:none;caret-color:#4f6ef7}"
-".cb:focus{border-color:#4f6ef7}"
-"button{width:100%;padding:15px;background:#4f6ef7;color:#fff;border:none;"
-"border-radius:12px;font-size:15px;font-weight:700;cursor:pointer;"
-"-webkit-tap-highlight-color:transparent}"
-"button:disabled{opacity:.5}"
-".err{display:none;background:#450a0a;border:1px solid #991b1b;border-radius:10px;"
-"padding:12px 14px;color:#fca5a5;font-size:13px;margin-bottom:14px}"
-".ok{display:none;text-align:center;padding:8px 0}"
-".ck{font-size:60px;margin-bottom:14px}"
-".ok h2{color:#22c55e;font-size:18px;margin-bottom:8px}"
-".ok p{color:#64748b;font-size:13px;line-height:1.6}"
-".tmr{text-align:center;font-size:11px;color:#475569;margin-top:14px}"
-".closed{background:#1c1a10;border:1px solid #713f12;border-radius:10px;"
-"padding:12px 14px;color:#fcd34d;font-size:13px;text-align:center;margin-top:4px}"
-"</style></head>"
-"<body><div class='card'>"
-"<div class='logo'>Di<span>kly</span></div>"
-"<div class='live'><span class='dot'></span>Session Active</div>";
-
-// Part 2: everything after course/lecturer, before the endUnix injection
-static const char ATTEND_HTML_2[] =
-"<div id='err' class='err'></div>"
-"<div id='main'>"
-"<label>Index Number</label>"
-"<input type='text' id='idx' placeholder='e.g. STU/2021/001'"
-" autocomplete='off' autocorrect='off' spellcheck='false' autocapitalize='characters'>"
-"<label>Attendance Code</label>"
-"<div class='cr'>"
-"<input class='cb' id='c0' maxlength='1' inputmode='numeric' pattern='[0-9]'>"
-"<input class='cb' id='c1' maxlength='1' inputmode='numeric' pattern='[0-9]'>"
-"<input class='cb' id='c2' maxlength='1' inputmode='numeric' pattern='[0-9]'>"
-"<input class='cb' id='c3' maxlength='1' inputmode='numeric' pattern='[0-9]'>"
-"<input class='cb' id='c4' maxlength='1' inputmode='numeric' pattern='[0-9]'>"
-"<input class='cb' id='c5' maxlength='1' inputmode='numeric' pattern='[0-9]'>"
-"</div>"
-"<button id='btn' onclick='go()'>Mark Attendance</button>"
-"<div class='tmr' id='tmr'></div>"
-"</div>"
-"<div class='ok' id='ok'>"
-"<div class='ck'>&#x2705;</div>"
-"<h2>Attendance Marked!</h2>"
-"<p>You&#39;re checked in.<br>You can now disconnect from Dikly WiFi and use your normal network.</p>"
-"</div>"
-"</div>"
-"<script>"
-"var boxes=[0,1,2,3,4,5].map(function(i){return document.getElementById('c'+i);});"
-"boxes.forEach(function(b,i){"
-"b.addEventListener('input',function(){if(b.value&&i<5)boxes[i+1].focus();});"
-"b.addEventListener('keydown',function(e){if(e.key==='Backspace'&&!b.value&&i>0){e.preventDefault();boxes[i-1].focus();}});"
-"b.addEventListener('paste',function(e){"
-"e.preventDefault();"
-"var t=(e.clipboardData||window.clipboardData).getData('text').replace(/\\D/g,'').slice(0,6);"
-"t.split('').forEach(function(c,j){if(boxes[i+j])boxes[i+j].value=c;});"
-"var last=Math.min(i+t.length,5);boxes[last].focus();"
-"});"
-"});"
-"function getCode(){return boxes.map(function(b){return b.value;}).join('');}"
-"function go(){"
-"var idx=document.getElementById('idx').value.trim().toUpperCase();"
-"var code=getCode();"
-"var err=document.getElementById('err');"
-"err.style.display='none';"
-"if(!idx){err.textContent='Please enter your index number.';err.style.display='block';return;}"
-"if(code.length!==6){err.textContent='Enter all 6 digits of the attendance code.';err.style.display='block';return;}"
-"var btn=document.getElementById('btn');"
-"btn.textContent='Submitting\xe2\x80\xa6';btn.disabled=true;"
-"fetch('/attend',{method:'POST',headers:{'Content-Type':'application/json'},"
-"body:JSON.stringify({indexNumber:idx,code:code})})"
-".then(function(r){return r.json().then(function(d){return{ok:r.ok,d:d};});})"
-".then(function(r){"
-"if(r.ok){document.getElementById('main').style.display='none';document.getElementById('ok').style.display='block';}"
-"else{err.textContent=r.d.error||'Something went wrong. Try again.';err.style.display='block';btn.textContent='Mark Attendance';btn.disabled=false;}"
-"}).catch(function(){"
-"err.textContent='Connection lost. Move closer to the device and try again.';"
-"err.style.display='block';btn.textContent='Mark Attendance';btn.disabled=false;"
-"});}"
-"var endUnix=";  // endUnix value injected between part2 and part3
-
-// Part 3: after endUnix injection
-static const char ATTEND_HTML_3[] =
-";"
-"function tick(){"
-"var s=Math.max(0,endUnix-Math.floor(Date.now()/1000));"
-"var m=Math.floor(s/60),sc=s%60;"
-"var el=document.getElementById('tmr');"
-"if(s>0){el.textContent='Check-in closes in '+m+':'+(sc<10?'0':'')+sc;setTimeout(tick,1000);}"
-"else{el.innerHTML='<div class=\"closed\">&#x26A0; Check-in window is closed</div>';}"
-"}"
-"tick();"
-"document.getElementById('idx').focus();"
-"</script></body></html>";
-
-
 // ─── Display driver — LovyanGFX ──────────────────────────────────────────────
 #define LGFX_USE_V1
 #include <LovyanGFX.hpp>
@@ -378,51 +254,6 @@ static void regenerateLecturerPin() {
 bool     pairPending     = false;
 String   pairPendingInst = "";
 String   pairPendingCode = "";
-
-// ── Live presence tracking (BPM — BLE Presence Monitoring) ───────────────────
-// Populated by POST /student/heartbeat from the Flutter app.
-// Stale entries (no heartbeat for >2 min) are pruned on each /students request.
-struct PresenceEntry { char userId[64]; uint32_t lastMs; };
-static const int PRESENCE_MAX = 150;
-static PresenceEntry presenceList[PRESENCE_MAX];
-static int    presenceCount   = 0;
-static String presenceSession = "";
-
-static void presenceClear() { presenceCount = 0; presenceSession = ""; }
-
-static void presenceHeartbeat(const String& uid) {
-  if (presenceSession != sessionId) { presenceClear(); presenceSession = sessionId; }
-  uint32_t now = millis();
-  for (int i = 0; i < presenceCount; i++) {
-    if (String(presenceList[i].userId) == uid) { presenceList[i].lastMs = now; return; }
-  }
-  if (presenceCount < PRESENCE_MAX) {
-    strncpy(presenceList[presenceCount].userId, uid.c_str(), 63);
-    presenceList[presenceCount].lastMs = now;
-    presenceCount++;
-  }
-}
-
-static void presenceRemove(const String& uid) {
-  for (int i = 0; i < presenceCount; i++) {
-    if (String(presenceList[i].userId) == uid) {
-      for (int j = i; j < presenceCount - 1; j++) presenceList[j] = presenceList[j + 1];
-      presenceCount--;
-      return;
-    }
-  }
-}
-
-static int presencePruneAndCount() {
-  uint32_t cutoff = millis() - 120000; // 2 min stale threshold
-  for (int i = presenceCount - 1; i >= 0; i--) {
-    if (presenceList[i].lastMs < cutoff) {
-      for (int j = i; j < presenceCount - 1; j++) presenceList[j] = presenceList[j + 1];
-      presenceCount--;
-    }
-  }
-  return presenceCount;
-}
 
 // Screen state machine
 enum Screen { SPLASH, SETUP, WIFI_SCAN, WIFI_RECONFIG, CONNECTING, READY, SESSION_START, SESSION, SUMMARY, SETTINGS, DEVICE_INFO, PAIR_SCREEN, CHECKIN_MONITOR, PRESENCE_MONITOR };
@@ -3202,12 +3033,131 @@ static void serveAttendPortal() {
   htmlEsc(course);
   htmlEsc(lecturer);
 
-  String html = ATTEND_HTML_1;
-  html += "<div class='course'>" + course + "</div>";
-  html += "<div class='lect'>" + lecturer + "</div>";
-  html += ATTEND_HTML_2;
-  html += String(endUnix);
-  html += ATTEND_HTML_3;
+  String html = R"DKLY(<!doctype html>
+<html><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1">
+<title>Mark Attendance</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{min-height:100vh;background:#0a0f1e;color:#fff;
+  font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;
+  display:flex;align-items:center;justify-content:center;padding:20px}
+.card{background:#111827;border-radius:20px;padding:28px 20px;
+  max-width:360px;width:100%;border:1px solid #1e2d45}
+.logo{text-align:center;font-size:22px;font-weight:900;color:#fff;margin-bottom:2px}
+.logo span{color:#4f6ef7}
+.dot{width:8px;height:8px;background:#22c55e;border-radius:50%;
+  display:inline-block;margin-right:5px;vertical-align:middle}
+.live{text-align:center;font-size:11px;color:#22c55e;margin-bottom:4px}
+.course{text-align:center;font-size:15px;font-weight:700;
+  color:#e2e8f0;margin:10px 0 2px}
+.lect{text-align:center;font-size:12px;color:#64748b;margin-bottom:20px}
+label{display:block;font-size:11px;font-weight:600;color:#94a3b8;
+  text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px}
+input[type=text]{width:100%;padding:13px 14px;background:#0f172a;
+  border:1.5px solid #1e2d45;border-radius:10px;color:#fff;font-size:16px;
+  outline:none;margin-bottom:16px;-webkit-appearance:none}
+input[type=text]:focus{border-color:#4f6ef7}
+.cr{display:flex;gap:7px;margin-bottom:22px}
+.cb{flex:1;padding:12px 0;background:#0f172a;border:1.5px solid #1e2d45;
+  border-radius:10px;color:#fff;font-size:22px;font-weight:700;
+  text-align:center;outline:none;-webkit-appearance:none;caret-color:#4f6ef7}
+.cb:focus{border-color:#4f6ef7}
+button{width:100%;padding:15px;background:#4f6ef7;color:#fff;border:none;
+  border-radius:12px;font-size:15px;font-weight:700;cursor:pointer;
+  -webkit-tap-highlight-color:transparent}
+button:disabled{opacity:.5}
+.err{display:none;background:#450a0a;border:1px solid #991b1b;border-radius:10px;
+  padding:12px 14px;color:#fca5a5;font-size:13px;margin-bottom:14px}
+.ok{display:none;text-align:center;padding:8px 0}
+.ck{font-size:60px;margin-bottom:14px}
+.ok h2{color:#22c55e;font-size:18px;margin-bottom:8px}
+.ok p{color:#64748b;font-size:13px;line-height:1.6}
+.tmr{text-align:center;font-size:11px;color:#475569;margin-top:14px}
+.closed{background:#1c1a10;border:1px solid #713f12;border-radius:10px;
+  padding:12px 14px;color:#fcd34d;font-size:13px;text-align:center;margin-top:4px}
+</style></head>
+<body><div class="card">
+<div class="logo">Di<span>kly</span></div>
+<div class="live"><span class="dot"></span>Session Active</div>
+)DKLY");
+
+  html += "<div class=\"course\">" + course + "</div>";
+  html += "<div class=\"lect\">" + lecturer + "</div>";
+
+  html += R"DKLY(
+<div id="err" class="err"></div>
+<div id="main">
+<label>Index Number</label>
+<input type="text" id="idx" placeholder="e.g. STU/2021/001"
+  autocomplete="off" autocorrect="off" spellcheck="false" autocapitalize="characters">
+<label>Attendance Code</label>
+<div class="cr">
+  <input class="cb" id="c0" maxlength="1" inputmode="numeric" pattern="[0-9]">
+  <input class="cb" id="c1" maxlength="1" inputmode="numeric" pattern="[0-9]">
+  <input class="cb" id="c2" maxlength="1" inputmode="numeric" pattern="[0-9]">
+  <input class="cb" id="c3" maxlength="1" inputmode="numeric" pattern="[0-9]">
+  <input class="cb" id="c4" maxlength="1" inputmode="numeric" pattern="[0-9]">
+  <input class="cb" id="c5" maxlength="1" inputmode="numeric" pattern="[0-9]">
+</div>
+<button id="btn" onclick="go()">Mark Attendance</button>
+<div class="tmr" id="tmr"></div>
+</div>
+<div class="ok" id="ok">
+  <div class="ck">&#x2705;</div>
+  <h2>Attendance Marked!</h2>
+  <p>You&#39;re checked in.<br>You can now disconnect from Dikly WiFi and use your normal network.</p>
+</div>
+</div>
+<script>
+var boxes=[0,1,2,3,4,5].map(function(i){return document.getElementById('c'+i);});
+boxes.forEach(function(b,i){
+  b.addEventListener('input',function(){if(b.value&&i<5)boxes[i+1].focus();});
+  b.addEventListener('keydown',function(e){if(e.key==='Backspace'&&!b.value&&i>0){e.preventDefault();boxes[i-1].focus();}});
+  b.addEventListener('paste',function(e){
+    e.preventDefault();
+    var t=(e.clipboardData||window.clipboardData).getData('text').replace(/\D/g,'').slice(0,6);
+    t.split('').forEach(function(c,j){if(boxes[i+j])boxes[i+j].value=c;});
+    var last=Math.min(i+t.length,5);boxes[last].focus();
+  });
+});
+function getCode(){return boxes.map(function(b){return b.value;}).join('');}
+function go(){
+  var idx=document.getElementById('idx').value.trim().toUpperCase();
+  var code=getCode();
+  var err=document.getElementById('err');
+  err.style.display='none';
+  if(!idx){err.textContent='Please enter your index number.';err.style.display='block';return;}
+  if(code.length!==6){err.textContent='Enter all 6 digits of the attendance code.';err.style.display='block';return;}
+  var btn=document.getElementById('btn');
+  btn.textContent='Submitting…';btn.disabled=true;
+  fetch('/attend',{method:'POST',headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({indexNumber:idx,code:code})})
+  .then(function(r){return r.json().then(function(d){return{ok:r.ok,d:d};});})
+  .then(function(r){
+    if(r.ok){document.getElementById('main').style.display='none';document.getElementById('ok').style.display='block';}
+    else{err.textContent=r.d.error||'Something went wrong. Try again.';err.style.display='block';btn.textContent='Mark Attendance';btn.disabled=false;}
+  }).catch(function(){
+    err.textContent='Connection lost. Move closer to the device and try again.';
+    err.style.display='block';btn.textContent='Mark Attendance';btn.disabled=false;
+  });
+}
+)DKLY");
+
+  // Inject check-in countdown end timestamp
+  html += "var endUnix=" + String(endUnix) + ";";
+
+  html += R"DKLY(
+function tick(){
+  var s=Math.max(0,endUnix-Math.floor(Date.now()/1000));
+  var m=Math.floor(s/60),sc=s%60;
+  var el=document.getElementById('tmr');
+  if(s>0){el.textContent='Check-in closes in '+m+':'+(sc<10?'0':'')+sc;setTimeout(tick,1000);}
+  else{el.innerHTML='<div class="closed">&#x26A0; Check-in window is closed</div>';}
+}
+tick();
+document.getElementById('idx').focus();
+</script></body></html>)DKLY");
 
   localHttp.sendHeader("Cache-Control", "no-cache");
   localHttp.send(200, "text/html", html);
@@ -3566,15 +3516,12 @@ static void registerLocalHttp() {
     String submittedCode = req["code"] | "";
     String indexNum      = req["indexNumber"] | "";
     String userId        = req["userId"] | "";
-    String bleSlotStr    = req["bleSlot"] | "";
-    String bleHmacStr    = req["bleHmac"] | "";
     submittedCode.trim();
-    bool usingBle = (!bleSlotStr.isEmpty() && !bleHmacStr.isEmpty());
     if (userId.isEmpty() && indexNum.isEmpty()) {
       localHttp.send(400, "application/json",
         "{\"error\":\"Login to the Dikly app to mark attendance\"}"); return;
     }
-    if (!usingBle && submittedCode.length() != 6) {
+    if (submittedCode.length() != 6) {
       localHttp.send(400, "application/json", "{\"error\":\"Code must be 6 digits\"}"); return;
     }
     // Use NTP time if available; fall back to millis-based offset if clock not synced
@@ -3608,34 +3555,11 @@ static void registerLocalHttp() {
       }
     }
 
-    // Validate via BLE token OR 6-digit code
-    bool valid = false;
-    if (usingBle) {
-      uint32_t bSlot   = (uint32_t)strtoul(bleSlotStr.c_str(), nullptr, 10);
-      uint32_t curSlot = (uint32_t)(now / 30);
-      if (bSlot == curSlot || bSlot == curSlot - 1) {
-        char msg[32];
-        snprintf(msg, sizeof(msg), "ble:%lu", (unsigned long)bSlot);
-        uint8_t expected[32];
-        hmacSha256((const uint8_t*)sessionSeed.c_str(), sessionSeed.length(),
-                   (const uint8_t*)msg, strlen(msg), expected);
-        char expectedHex[17];
-        for (int i = 0; i < 8; i++) sprintf(expectedHex + i * 2, "%02x", expected[i]);
-        expectedHex[16] = '\0';
-        bleHmacStr.toLowerCase();
-        valid = (bleHmacStr == String(expectedHex));
-      }
-      if (!valid) {
-        localHttp.send(403, "application/json",
-          "{\"error\":\"Invalid BLE token. Move closer to the classroom device.\"}"); return;
-      }
-    } else {
-      valid = (submittedCode == deriveCode(sessionSeed, (uint32_t)now)) ||
-              (submittedCode == deriveCode(sessionSeed, (uint32_t)(now - WINDOW_SECONDS)));
-      if (!valid) {
-        localHttp.send(403, "application/json",
-          "{\"error\":\"Incorrect code. Check the screen and try again.\"}"); return;
-      }
+    // Validate against current and previous window (±20s clock tolerance)
+    bool valid = (submittedCode == deriveCode(sessionSeed, (uint32_t)now)) ||
+                 (submittedCode == deriveCode(sessionSeed, (uint32_t)(now - WINDOW_SECONDS)));
+    if (!valid) {
+      localHttp.send(403, "application/json", "{\"error\":\"Incorrect code. Check the screen and try again.\"}"); return;
     }
     // ── Duplicate guard — check both indexNumber AND userId to prevent double-marking ──
     if (dedupSession != sessionId) dedupClear(sessionId);
@@ -3728,47 +3652,6 @@ static void registerLocalHttp() {
     if (gotMac) deauthStation(clientMac);
   });
 
-  // /student/heartbeat — Flutter app calls this every 30 s after marking.
-  // Keeps the live presence list current on the device.
-  localHttp.on("/student/heartbeat", HTTP_POST, []() {
-    localHttp.sendHeader("Access-Control-Allow-Origin", "*");
-    JsonDocument req;
-    if (deserializeJson(req, localHttp.arg("plain"))) {
-      localHttp.send(400, "application/json", "{\"error\":\"Bad JSON\"}"); return;
-    }
-    String uid = req["userId"] | req["indexNumber"] | "";
-    if (uid.isEmpty()) {
-      localHttp.send(400, "application/json", "{\"error\":\"userId required\"}"); return;
-    }
-    presenceHeartbeat(uid);
-    localHttp.send(200, "application/json", "{\"ok\":true}");
-  });
-
-  // /student/left — Flutter app calls this when BLE signal is lost or app closes.
-  localHttp.on("/student/left", HTTP_POST, []() {
-    localHttp.sendHeader("Access-Control-Allow-Origin", "*");
-    JsonDocument req;
-    if (deserializeJson(req, localHttp.arg("plain"))) {
-      localHttp.send(400, "application/json", "{\"error\":\"Bad JSON\"}"); return;
-    }
-    String uid = req["userId"] | req["indexNumber"] | "";
-    if (!uid.isEmpty()) presenceRemove(uid);
-    localHttp.send(200, "application/json", "{\"ok\":true}");
-  });
-
-  // /students — returns live presence list (admin portal, device screen, etc.)
-  localHttp.on("/students", HTTP_GET, []() {
-    localHttp.sendHeader("Access-Control-Allow-Origin", "*");
-    int count = presencePruneAndCount();
-    JsonDocument doc;
-    doc["count"] = count;
-    if (!sessionId.isEmpty()) doc["sessionId"] = sessionId;
-    JsonArray arr = doc["students"].to<JsonArray>();
-    for (int i = 0; i < count; i++) arr.add(presenceList[i].userId);
-    String s; serializeJson(doc, s);
-    localHttp.send(200, "application/json", s);
-  });
-
   // /session/start — lecturer creates a session locally (no internet required)
   localHttp.on("/session/start", HTTP_POST, []() {
     JsonDocument req;
@@ -3849,7 +3732,6 @@ static void registerLocalHttp() {
     sessionTitle = ""; sessionCourse = ""; sessionLecturer = "";
     studentsMarked = 0;
     bleStop();
-    presenceClear();
     localHttp.sendHeader("Access-Control-Allow-Origin", "*");
     localHttp.send(200, "application/json", "{\"ok\":true}");
   });
