@@ -332,6 +332,15 @@ app.use("/api/faq",                 faqRoutes);
 const deviceSessionRoutes = require("./routes/deviceSessionRoutes");
 app.use("/api", deviceSessionRoutes);
 
+const classRepAdminRoutes  = require("./routes/classRepAdmin");
+const classRepRoutes       = require("./routes/classRepRoutes");
+const courseVideoRoutes    = require("./routes/courseVideoRoutes");
+const examRoutes           = require("./routes/examRoutes");
+app.use("/api/class-rep-admin", classRepAdminRoutes);
+app.use("/api/class-rep",       classRepRoutes);
+app.use("/api/course-videos",   courseVideoRoutes);
+app.use("/api/exam",            examRoutes);
+
 if (superadminRoutes) app.use("/api/superadmin", superadminRoutes);
 
 app.get('/.well-known/assetlinks.json', (req, res) => {
