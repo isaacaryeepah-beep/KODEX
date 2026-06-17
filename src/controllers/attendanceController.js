@@ -744,6 +744,22 @@ exports.markAttendance = async (req, res) => {
 
     let skipCodeCheck = false;
 
+    // ── Hard gate: device-backed sessions require physical proximity proof ────
+    // If the session has an ESP32 device (esp32Seed present), a student MUST
+    // supply either a BLE token or a connectionToken (both are only obtainable
+    // by being physically in the classroom). Code alone is not enough — it can
+    // be shared over a chat message from outside the room.
+    if (!proximityExempt && session.esp32Seed) {
+      const hasProximityProof = (bleToken && typeof bleToken === 'object') ||
+                                (connectionToken && typeof connectionToken === 'object');
+      if (!hasProximityProof) {
+        return res.status(403).json({
+          error: 'Connect to the classroom device WiFi hotspot to mark attendance.',
+          hotspotRequired: true,
+        });
+      }
+    }
+
     if (!proximityExempt) if (bleToken && typeof bleToken === 'object') {
       // ── BLE + hotspot path (maximum strictness) ──────────────────────────────
       // Both proofs are required together:
