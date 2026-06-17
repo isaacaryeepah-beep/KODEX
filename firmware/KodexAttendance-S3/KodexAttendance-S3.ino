@@ -68,11 +68,6 @@ static const char ATTEND_HTML_1[] =
 "border:1.5px solid #1e2d45;border-radius:10px;color:#fff;font-size:16px;"
 "outline:none;margin-bottom:16px;-webkit-appearance:none}"
 "input[type=text]:focus{border-color:#4f6ef7}"
-".cr{display:flex;gap:7px;margin-bottom:22px}"
-".cb{flex:1;padding:12px 0;background:#0f172a;border:1.5px solid #1e2d45;"
-"border-radius:10px;color:#fff;font-size:22px;font-weight:700;"
-"text-align:center;outline:none;-webkit-appearance:none;caret-color:#4f6ef7}"
-".cb:focus{border-color:#4f6ef7}"
 "button{width:100%;padding:15px;background:#4f6ef7;color:#fff;border:none;"
 "border-radius:12px;font-size:15px;font-weight:700;cursor:pointer;"
 "-webkit-tap-highlight-color:transparent}"
@@ -98,15 +93,6 @@ static const char ATTEND_HTML_2[] =
 "<label>Index Number</label>"
 "<input type='text' id='idx' placeholder='e.g. STU/2021/001'"
 " autocomplete='off' autocorrect='off' spellcheck='false' autocapitalize='characters'>"
-"<label>Attendance Code</label>"
-"<div class='cr'>"
-"<input class='cb' id='c0' maxlength='1' inputmode='numeric' pattern='[0-9]'>"
-"<input class='cb' id='c1' maxlength='1' inputmode='numeric' pattern='[0-9]'>"
-"<input class='cb' id='c2' maxlength='1' inputmode='numeric' pattern='[0-9]'>"
-"<input class='cb' id='c3' maxlength='1' inputmode='numeric' pattern='[0-9]'>"
-"<input class='cb' id='c4' maxlength='1' inputmode='numeric' pattern='[0-9]'>"
-"<input class='cb' id='c5' maxlength='1' inputmode='numeric' pattern='[0-9]'>"
-"</div>"
 "<button id='btn' onclick='go()'>Mark Attendance</button>"
 "<div class='tmr' id='tmr'></div>"
 "</div>"
@@ -117,29 +103,15 @@ static const char ATTEND_HTML_2[] =
 "</div>"
 "</div>"
 "<script>"
-"var boxes=[0,1,2,3,4,5].map(function(i){return document.getElementById('c'+i);});"
-"boxes.forEach(function(b,i){"
-"b.addEventListener('input',function(){if(b.value&&i<5)boxes[i+1].focus();});"
-"b.addEventListener('keydown',function(e){if(e.key==='Backspace'&&!b.value&&i>0){e.preventDefault();boxes[i-1].focus();}});"
-"b.addEventListener('paste',function(e){"
-"e.preventDefault();"
-"var t=(e.clipboardData||window.clipboardData).getData('text').replace(/\\D/g,'').slice(0,6);"
-"t.split('').forEach(function(c,j){if(boxes[i+j])boxes[i+j].value=c;});"
-"var last=Math.min(i+t.length,5);boxes[last].focus();"
-"});"
-"});"
-"function getCode(){return boxes.map(function(b){return b.value;}).join('');}"
 "function go(){"
 "var idx=document.getElementById('idx').value.trim().toUpperCase();"
-"var code=getCode();"
 "var err=document.getElementById('err');"
 "err.style.display='none';"
 "if(!idx){err.textContent='Please enter your index number.';err.style.display='block';return;}"
-"if(code.length!==6){err.textContent='Enter all 6 digits of the attendance code.';err.style.display='block';return;}"
 "var btn=document.getElementById('btn');"
 "btn.textContent='Submitting\xe2\x80\xa6';btn.disabled=true;"
 "fetch('/attend',{method:'POST',headers:{'Content-Type':'application/json'},"
-"body:JSON.stringify({indexNumber:idx,code:code})})"
+"body:JSON.stringify({indexNumber:idx})})"
 ".then(function(r){return r.json().then(function(d){return{ok:r.ok,d:d};});})"
 ".then(function(r){"
 "if(r.ok){document.getElementById('main').style.display='none';document.getElementById('ok').style.display='block';}"
@@ -3563,19 +3535,14 @@ static void registerLocalHttp() {
     if (deserializeJson(req, localHttp.arg("plain"))) {
       localHttp.send(400, "application/json", "{\"error\":\"Bad JSON\"}"); return;
     }
-    String submittedCode = req["code"] | "";
     String indexNum      = req["indexNumber"] | "";
     String userId        = req["userId"] | "";
     String bleSlotStr    = req["bleSlot"] | "";
     String bleHmacStr    = req["bleHmac"] | "";
-    submittedCode.trim();
     bool usingBle = (!bleSlotStr.isEmpty() && !bleHmacStr.isEmpty());
     if (userId.isEmpty() && indexNum.isEmpty()) {
       localHttp.send(400, "application/json",
         "{\"error\":\"Login to the Dikly app to mark attendance\"}"); return;
-    }
-    if (!usingBle && submittedCode.length() != 6) {
-      localHttp.send(400, "application/json", "{\"error\":\"Code must be 6 digits\"}"); return;
     }
     // Use NTP time if available; fall back to millis-based offset if clock not synced
     time_t now = time(nullptr);
@@ -3608,11 +3575,12 @@ static void registerLocalHttp() {
       }
     }
 
-    // Validate via BLE token OR 6-digit code
-    bool valid = false;
+    // Validate via BLE token (Flutter app) or hotspot connection (captive portal).
+    // Being connected to the device AP is proof of physical presence — no code needed.
     if (usingBle) {
       uint32_t bSlot   = (uint32_t)strtoul(bleSlotStr.c_str(), nullptr, 10);
       uint32_t curSlot = (uint32_t)(now / 30);
+      bool valid = false;
       if (bSlot == curSlot || bSlot == curSlot - 1) {
         char msg[32];
         snprintf(msg, sizeof(msg), "ble:%lu", (unsigned long)bSlot);
@@ -3629,14 +3597,8 @@ static void registerLocalHttp() {
         localHttp.send(403, "application/json",
           "{\"error\":\"Invalid BLE token. Move closer to the classroom device.\"}"); return;
       }
-    } else {
-      valid = (submittedCode == deriveCode(sessionSeed, (uint32_t)now)) ||
-              (submittedCode == deriveCode(sessionSeed, (uint32_t)(now - WINDOW_SECONDS)));
-      if (!valid) {
-        localHttp.send(403, "application/json",
-          "{\"error\":\"Incorrect code. Check the screen and try again.\"}"); return;
-      }
     }
+    // Hotspot-only path (captive portal): no BLE, no code — connection to AP is the proof.
     // ── Duplicate guard — check both indexNumber AND userId to prevent double-marking ──
     if (dedupSession != sessionId) dedupClear(sessionId);
     if ((indexNum.length() && dedupCheck(indexNum.c_str())) ||
