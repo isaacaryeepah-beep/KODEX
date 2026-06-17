@@ -12,6 +12,7 @@ const LeaveRequest = require("../models/LeaveRequest");
 const Goal       = require("../models/Goal");
 const Review     = require("../models/Review");
 const TrainingProgress = require("../models/TrainingProgress");
+const { asyncHandler } = require("../utils/errors");
 
 const mw        = [authenticate, requireMode("corporate"), requireActiveSubscription];
 const adminOnly = requireRole("admin", "superadmin");
@@ -21,150 +22,128 @@ const canManage = requireRole("admin", "manager", "superadmin");
 // BRANCHES
 // ─────────────────────────────────────────────────────────────
 
-router.get("/branches", ...mw, async (req, res) => {
-  try {
-    const branches = await Branch.find({ company: req.user.company, isActive: true })
-      .populate("manager", "name employeeId")
-      .sort({ name: 1 });
+router.get("/branches", ...mw, asyncHandler(async (req, res) => {
+  const branches = await Branch.find({ company: req.user.company, isActive: true })
+    .populate("manager", "name employeeId")
+    .sort({ name: 1 });
 
-    // Attach headcount
-    const withCount = await Promise.all(branches.map(async b => {
-      const count = await User.countDocuments({ company: req.user.company, branch: b._id, isActive: true });
-      return { ...b.toObject(), headcount: count };
-    }));
+  // Attach headcount
+  const withCount = await Promise.all(branches.map(async b => {
+    const count = await User.countDocuments({ company: req.user.company, branch: b._id, isActive: true });
+    return { ...b.toObject(), headcount: count };
+  }));
 
-    res.json({ branches: withCount });
-  } catch (e) { res.status(500).json({ error: "Failed to fetch branches" }); }
-});
+  res.json({ branches: withCount });
+}));
 
-router.post("/branches", ...mw, adminOnly, async (req, res) => {
-  try {
-    const { name, code, address, city, country, phone, managerId } = req.body;
-    if (!name) return res.status(400).json({ error: "Branch name is required" });
+router.post("/branches", ...mw, adminOnly, asyncHandler(async (req, res) => {
+  const { name, code, address, city, country, phone, managerId } = req.body;
+  if (!name) return res.status(400).json({ error: "Branch name is required" });
 
-    const branch = await Branch.create({
-      company: req.user.company,
-      name, code: code || "",
-      address: address || "", city: city || "", country: country || "",
-      phone: phone || "",
-      manager: managerId || null,
-      createdBy: req.user._id,
-    });
-    res.status(201).json({ branch });
-  } catch (e) {
-    if (e.code === 11000) return res.status(400).json({ error: "Branch code already exists" });
-    res.status(500).json({ error: "Failed to create branch" });
-  }
-});
+  const branch = await Branch.create({
+    company: req.user.company,
+    name, code: code || "",
+    address: address || "", city: city || "", country: country || "",
+    phone: phone || "",
+    manager: managerId || null,
+    createdBy: req.user._id,
+  });
+  res.status(201).json({ branch });
+}));
 
-router.patch("/branches/:id", ...mw, adminOnly, async (req, res) => {
-  try {
-    const allowed = ["name","code","address","city","country","phone","manager"];
-    const update = {};
-    allowed.forEach(f => { if (req.body[f] !== undefined) update[f] = req.body[f] || null; });
-    if (req.body.managerId !== undefined) update.manager = req.body.managerId || null;
+router.patch("/branches/:id", ...mw, adminOnly, asyncHandler(async (req, res) => {
+  const allowed = ["name","code","address","city","country","phone","manager"];
+  const update = {};
+  allowed.forEach(f => { if (req.body[f] !== undefined) update[f] = req.body[f] || null; });
+  if (req.body.managerId !== undefined) update.manager = req.body.managerId || null;
 
-    const branch = await Branch.findOneAndUpdate(
-      { _id: req.params.id, company: req.user.company },
-      { $set: update }, { new: true }
-    ).populate("manager", "name");
+  const branch = await Branch.findOneAndUpdate(
+    { _id: req.params.id, company: req.user.company },
+    { $set: update }, { new: true }
+  ).populate("manager", "name");
 
-    if (!branch) return res.status(404).json({ error: "Branch not found" });
-    res.json({ branch });
-  } catch (e) { res.status(500).json({ error: "Failed to update branch" }); }
-});
+  if (!branch) return res.status(404).json({ error: "Branch not found" });
+  res.json({ branch });
+}));
 
-router.delete("/branches/:id", ...mw, adminOnly, async (req, res) => {
-  try {
-    await Branch.findOneAndUpdate({ _id: req.params.id, company: req.user.company }, { isActive: false });
-    // Unset branch from all users in this branch
-    await User.updateMany({ branch: req.params.id }, { $unset: { branch: 1 } });
-    res.json({ message: "Branch removed" });
-  } catch (e) { res.status(500).json({ error: "Failed to delete branch" }); }
-});
+router.delete("/branches/:id", ...mw, adminOnly, asyncHandler(async (req, res) => {
+  await Branch.findOneAndUpdate({ _id: req.params.id, company: req.user.company }, { isActive: false });
+  // Unset branch from all users in this branch
+  await User.updateMany({ branch: req.params.id }, { $unset: { branch: 1 } });
+  res.json({ message: "Branch removed" });
+}));
 
 // Assign employee to branch
-router.patch("/branches/:id/assign-user", ...mw, canManage, async (req, res) => {
-  try {
-    const { userId } = req.body;
-    const user = await User.findOneAndUpdate(
-      { _id: userId, company: req.user.company },
-      { branch: req.params.id },
-      { new: true }
-    ).select("name employeeId department branch");
-    if (!user) return res.status(404).json({ error: "User not found" });
-    res.json({ user });
-  } catch (e) { res.status(500).json({ error: "Failed to assign user to branch" }); }
-});
+router.patch("/branches/:id/assign-user", ...mw, canManage, asyncHandler(async (req, res) => {
+  const { userId } = req.body;
+  const user = await User.findOneAndUpdate(
+    { _id: userId, company: req.user.company },
+    { branch: req.params.id },
+    { new: true }
+  ).select("name employeeId department branch");
+  if (!user) return res.status(404).json({ error: "User not found" });
+  res.json({ user });
+}));
 
 // Remove employee from branch
-router.patch("/branches/:id/remove-user", ...mw, canManage, async (req, res) => {
-  try {
-    const { userId } = req.body;
-    const user = await User.findOneAndUpdate(
-      { _id: userId, company: req.user.company },
-      { $unset: { branch: 1 } },
-      { new: true }
-    ).select("name employeeId department");
-    if (!user) return res.status(404).json({ error: "User not found" });
-    res.json({ user });
-  } catch (e) { res.status(500).json({ error: "Failed to remove user from branch" }); }
-});
+router.patch("/branches/:id/remove-user", ...mw, canManage, asyncHandler(async (req, res) => {
+  const { userId } = req.body;
+  const user = await User.findOneAndUpdate(
+    { _id: userId, company: req.user.company },
+    { $unset: { branch: 1 } },
+    { new: true }
+  ).select("name employeeId department");
+  if (!user) return res.status(404).json({ error: "User not found" });
+  res.json({ user });
+}));
 
 // ─────────────────────────────────────────────────────────────
 // WHITE-LABEL BRANDING
 // ─────────────────────────────────────────────────────────────
 
-router.get("/branding", ...mw, async (req, res) => {
-  try {
-    const company = await Company.findById(req.user.company).select("name branding");
-    res.json({ branding: company?.branding || {}, companyName: company?.name });
-  } catch (e) { res.status(500).json({ error: "Failed to fetch branding" }); }
-});
+router.get("/branding", ...mw, asyncHandler(async (req, res) => {
+  const company = await Company.findById(req.user.company).select("name branding");
+  res.json({ branding: company?.branding || {}, companyName: company?.name });
+}));
 
-router.patch("/branding", ...mw, adminOnly, async (req, res) => {
-  try {
-    const { logoUrl, primaryColor, accentColor, companyTagline, supportEmail, website } = req.body;
-    const update = {};
-    if (logoUrl       !== undefined) update["branding.logoUrl"]        = logoUrl;
-    if (primaryColor  !== undefined) update["branding.primaryColor"]   = primaryColor;
-    if (accentColor   !== undefined) update["branding.accentColor"]    = accentColor;
-    if (companyTagline!== undefined) update["branding.companyTagline"] = companyTagline;
-    if (supportEmail  !== undefined) update["branding.supportEmail"]   = supportEmail;
-    if (website       !== undefined) update["branding.website"]        = website;
+router.patch("/branding", ...mw, adminOnly, asyncHandler(async (req, res) => {
+  const { logoUrl, primaryColor, accentColor, companyTagline, supportEmail, website } = req.body;
+  const update = {};
+  if (logoUrl       !== undefined) update["branding.logoUrl"]        = logoUrl;
+  if (primaryColor  !== undefined) update["branding.primaryColor"]   = primaryColor;
+  if (accentColor   !== undefined) update["branding.accentColor"]    = accentColor;
+  if (companyTagline!== undefined) update["branding.companyTagline"] = companyTagline;
+  if (supportEmail  !== undefined) update["branding.supportEmail"]   = supportEmail;
+  if (website       !== undefined) update["branding.website"]        = website;
 
-    const company = await Company.findByIdAndUpdate(
-      req.user.company, { $set: update }, { new: true }
-    ).select("name branding");
+  const company = await Company.findByIdAndUpdate(
+    req.user.company, { $set: update }, { new: true }
+  ).select("name branding");
 
-    res.json({ branding: company.branding, companyName: company.name });
-  } catch (e) { res.status(500).json({ error: "Failed to update branding" }); }
-});
+  res.json({ branding: company.branding, companyName: company.name });
+}));
 
 // Payroll settings
-router.patch("/payroll-settings", ...mw, adminOnly, async (req, res) => {
-  try {
-    const { currency, payPeriod, overtimeRate, standardHours } = req.body;
-    const update = {};
-    if (currency      !== undefined) update["payroll.currency"]      = currency;
-    if (payPeriod     !== undefined) update["payroll.payPeriod"]     = payPeriod;
-    if (overtimeRate  !== undefined) update["payroll.overtimeRate"]  = overtimeRate;
-    if (standardHours !== undefined) update["payroll.standardHours"] = standardHours;
+router.patch("/payroll-settings", ...mw, adminOnly, asyncHandler(async (req, res) => {
+  const { currency, payPeriod, overtimeRate, standardHours } = req.body;
+  const update = {};
+  if (currency      !== undefined) update["payroll.currency"]      = currency;
+  if (payPeriod     !== undefined) update["payroll.payPeriod"]     = payPeriod;
+  if (overtimeRate  !== undefined) update["payroll.overtimeRate"]  = overtimeRate;
+  if (standardHours !== undefined) update["payroll.standardHours"] = standardHours;
 
-    const company = await Company.findByIdAndUpdate(
-      req.user.company, { $set: update }, { new: true }
-    ).select("payroll");
+  const company = await Company.findByIdAndUpdate(
+    req.user.company, { $set: update }, { new: true }
+  ).select("payroll");
 
-    res.json({ payroll: company.payroll });
-  } catch (e) { res.status(500).json({ error: "Failed to update payroll settings" }); }
-});
+  res.json({ payroll: company.payroll });
+}));
 
 // ─────────────────────────────────────────────────────────────
 // ADVANCED ANALYTICS
 // ─────────────────────────────────────────────────────────────
 
-router.get("/analytics", ...mw, canManage, async (req, res) => {
-  try {
+router.get("/analytics", ...mw, canManage, asyncHandler(async (req, res) => {
     const cId = req.user.company;
 
     // Headcount
@@ -235,7 +214,6 @@ router.get("/analytics", ...mw, canManage, async (req, res) => {
       expenses: { byCategory: expAgg, period },
       timesheets: { totalHours: tsAgg[0]?.totalHours || 0, count: tsAgg[0]?.count || 0, period },
     });
-  } catch (e) { console.error(e); res.status(500).json({ error: "Failed to fetch analytics" }); }
-});
+}));
 
 module.exports = router;

@@ -68,7 +68,11 @@ function gradeAnswers(questions, answers) {
 // Helper: safely delete a file from the filesystem
 function safeDeleteFile(filePath) {
   if (!filePath) return;
-  try { fs.unlinkSync(filePath); } catch (_) {}
+  try { fs.unlinkSync(filePath); } catch (err) {
+    if (err.code !== 'ENOENT') {
+      console.warn('[assignment] Failed to delete file:', filePath, err.message);
+    }
+  }
 }
 
 // ══════════════════════════════════════════════════════════════════════════
@@ -483,7 +487,9 @@ exports.gradeSubmission = async (req, res) => {
     sub.gradedAt  = new Date();
     await sub.save();
 
-    Promise.resolve(notif.notifyAssignmentGraded(sub)).catch(() => {});
+    Promise.resolve(notif.notifyAssignmentGraded(sub)).catch((err) => {
+      console.warn('[assignment:grade] Notification failed:', err.message);
+    });
 
     res.json({ submission: sub });
   } catch (err) {
@@ -734,7 +740,7 @@ exports.studentSubmit = (req, res) => {
 
       Promise.resolve(
         notif.notifyAssignmentSubmitted(submission, [assignment.createdBy.toString()])
-      ).catch(() => {});
+      ).catch((err) => { console.warn('[assignment:submit] Notification failed:', err.message); });
 
       res.json({
         success:             true,
