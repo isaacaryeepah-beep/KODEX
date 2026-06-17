@@ -3567,6 +3567,7 @@ async function renderHodCourses() {
                 <th style="text-align:left;padding:10px 12px;font-size:11px;font-weight:700;color:var(--text-muted);text-transform:uppercase;">Last Session</th>
                 <th style="text-align:center;padding:10px 12px;font-size:11px;font-weight:700;color:var(--text-muted);text-transform:uppercase;">Total Att.</th>
                 <th style="text-align:left;padding:10px 12px;font-size:11px;font-weight:700;color:var(--text-muted);text-transform:uppercase;">Status</th>
+                <th style="text-align:center;padding:10px 12px;font-size:11px;font-weight:700;color:var(--text-muted);text-transform:uppercase;">Assign</th>
               </tr>
             </thead>
             <tbody>
@@ -3582,6 +3583,11 @@ async function renderHodCourses() {
                   <td style="padding:10px 12px;font-size:12px;color:var(--text-muted);">${c.lastSessionAt ? timeAgo(c.lastSessionAt) : '—'}</td>
                   <td style="padding:10px 12px;text-align:center;">${c.totalAttendance}</td>
                   <td style="padding:10px 12px;">${activityBadge(c)}</td>
+                  <td style="padding:10px 12px;text-align:center;">
+                    <button class="btn btn-secondary btn-sm" onclick="showAssignLecturerModal('${c._id}','${esc(c.title)}','${c.lecturer?._id||''}')">
+                      ${c.lecturer ? 'Reassign' : 'Assign'}
+                    </button>
+                  </td>
                 </tr>`).join('')}
             </tbody>
           </table>
@@ -3589,6 +3595,80 @@ async function renderHodCourses() {
   } catch(e) {
     content.innerHTML = `<div class="card"><p style="color:#ef4444;">${e.message}</p></div>`;
   }
+}
+
+// ── HOD — Assign Lecturer Modal ────────────────────────────────────────────
+async function showAssignLecturerModal(courseId, courseTitle, currentLecturerId) {
+  showModal(`
+    <div style="padding:4px 0 8px">
+      <h3 style="font-size:16px;font-weight:700;margin-bottom:4px">Assign Lecturer</h3>
+      <p style="font-size:13px;color:var(--text-muted);margin-bottom:18px">${esc(courseTitle)}</p>
+      <div id="assign-lect-msg" style="display:none;padding:10px 14px;border-radius:8px;font-size:13px;margin-bottom:14px"></div>
+      <div class="form-group">
+        <label>Search Lecturer</label>
+        <input type="text" id="assign-lect-search" placeholder="Type a name…" oninput="hodSearchLecturers(this.value)" autocomplete="off">
+      </div>
+      <div id="assign-lect-results" style="max-height:220px;overflow-y:auto;margin-bottom:16px"></div>
+      <input type="hidden" id="assign-lect-id" value="${currentLecturerId || ''}">
+      <div id="assign-lect-selected" style="display:${currentLecturerId ? 'flex' : 'none'};align-items:center;gap:8px;padding:10px 12px;background:rgba(79,110,247,0.1);border-radius:8px;border:1.5px solid var(--primary);margin-bottom:16px;font-size:13px;font-weight:600;color:var(--text-primary)">
+        <span id="assign-lect-name" style="flex:1"></span>
+        <button onclick="hodClearLecturerSelection()" style="background:none;border:none;color:var(--text-muted);cursor:pointer;font-size:16px;line-height:1">×</button>
+      </div>
+      <div style="display:flex;gap:8px">
+        <button class="btn btn-secondary" style="flex:1" onclick="closeModal()">Cancel</button>
+        <button class="btn btn-primary" style="flex:1" onclick="hodConfirmAssignLecturer('${courseId}')">Assign</button>
+      </div>
+    </div>
+  `);
+  window._hodAssignCourseId = courseId;
+}
+
+async function hodSearchLecturers(q) {
+  const box = document.getElementById('assign-lect-results');
+  if (!box) return;
+  if (q.trim().length < 2) { box.innerHTML = ''; return; }
+  try {
+    const data = await api(`/api/class-rep/search-lecturers?q=${encodeURIComponent(q.trim())}`);
+    const lecturers = data.users || [];
+    if (!lecturers.length) { box.innerHTML = '<div style="font-size:13px;color:var(--text-muted);padding:8px 4px">No lecturers found</div>'; return; }
+    box.innerHTML = lecturers.map(l => `
+      <div onclick="hodSelectLecturer('${l._id}','${esc(l.name)}')"
+        style="padding:10px 12px;border-radius:8px;cursor:pointer;font-size:13px;border:1.5px solid var(--border);margin-bottom:6px;display:flex;align-items:center;gap:10px;background:var(--bg)">
+        <div style="width:32px;height:32px;border-radius:50%;background:linear-gradient(135deg,var(--primary),#6366f1);display:flex;align-items:center;justify-content:center;font-weight:700;color:#fff;font-size:13px;flex-shrink:0">${esc(l.name[0].toUpperCase())}</div>
+        <div><div style="font-weight:600">${esc(l.name)}</div><div style="font-size:11px;color:var(--text-muted)">${esc(l.email||'')}</div></div>
+      </div>`).join('');
+  } catch(e) { box.innerHTML = `<div style="font-size:13px;color:#ef4444">${e.message}</div>`; }
+}
+
+function hodSelectLecturer(id, name) {
+  document.getElementById('assign-lect-id').value = id;
+  document.getElementById('assign-lect-name').textContent = name;
+  document.getElementById('assign-lect-selected').style.display = 'flex';
+  document.getElementById('assign-lect-results').innerHTML = '';
+  document.getElementById('assign-lect-search').value = '';
+}
+
+function hodClearLecturerSelection() {
+  document.getElementById('assign-lect-id').value = '';
+  document.getElementById('assign-lect-name').textContent = '';
+  document.getElementById('assign-lect-selected').style.display = 'none';
+}
+
+async function hodConfirmAssignLecturer(courseId) {
+  const lecturerId = document.getElementById('assign-lect-id')?.value;
+  const msg = document.getElementById('assign-lect-msg');
+  const show = (text, ok) => {
+    msg.textContent = text; msg.style.display = 'block';
+    msg.style.background = ok ? 'rgba(34,197,94,0.1)' : 'rgba(239,68,68,0.1)';
+    msg.style.color = ok ? '#16a34a' : '#ef4444';
+    msg.style.border = `1px solid ${ok ? '#bbf7d0' : '#fecaca'}`;
+  };
+  if (!lecturerId) return show('Please select a lecturer first.', false);
+  try {
+    await api(`/api/courses/${courseId}/assign-lecturer`, { method: 'PUT', body: JSON.stringify({ lecturerId }) });
+    show('Lecturer assigned successfully!', true);
+    setTimeout(() => { closeModal(); renderHodCourses(); }, 1200);
+  } catch(e) { show(e.message || 'Failed to assign lecturer.', false); }
 }
 
 // ── FEATURE 3b: HOD — Course Approval Queue ────────────────────────────────
@@ -11334,6 +11414,22 @@ async function renderProfile() {
       <button class="btn btn-primary" onclick="saveProfile()" style="width:100%">Save Changes</button>
     </div>
 
+    ${u.role === 'lecturer' ? `
+    <div class="card" style="max-width:520px;margin-top:20px">
+      <h3 style="font-size:14px;font-weight:700;margin-bottom:4px;color:var(--text-primary)">Offline Attendance PIN</h3>
+      <p style="font-size:12px;color:var(--text-muted);margin-bottom:16px">Your 4-digit PIN is entered on the classroom device to start an offline attendance session. Set it once; update it anytime.</p>
+      <div id="pin-msg" style="display:none;padding:10px 14px;border-radius:8px;font-size:13px;margin-bottom:14px"></div>
+      <div class="form-group">
+        <label>New PIN</label>
+        <input type="password" id="att-pin" placeholder="4 digits" maxlength="4" inputmode="numeric" autocomplete="off">
+      </div>
+      <div class="form-group">
+        <label>Confirm PIN</label>
+        <input type="password" id="att-pin-confirm" placeholder="Repeat PIN" maxlength="4" inputmode="numeric" autocomplete="off">
+      </div>
+      <button class="btn btn-primary" onclick="saveAttendancePin()" style="width:100%">Set PIN</button>
+    </div>` : ''}
+
     <div class="card" style="max-width:520px;margin-top:20px">
       <h3 style="font-size:14px;font-weight:700;margin-bottom:4px;color:var(--text-primary)">Signed-in Devices</h3>
       <p style="font-size:12px;color:var(--text-muted);margin-bottom:16px">All devices that have logged into your account</p>
@@ -11341,6 +11437,27 @@ async function renderProfile() {
     </div>
   `;
   loadMyDevices();
+}
+
+async function saveAttendancePin() {
+  const pin     = (document.getElementById('att-pin')?.value || '').trim();
+  const confirm = (document.getElementById('att-pin-confirm')?.value || '').trim();
+  const msg     = document.getElementById('pin-msg');
+  const show = (text, ok) => {
+    msg.textContent = text;
+    msg.style.display = 'block';
+    msg.style.background = ok ? 'rgba(34,197,94,0.1)' : 'rgba(239,68,68,0.1)';
+    msg.style.color = ok ? '#16a34a' : '#ef4444';
+    msg.style.border = `1px solid ${ok ? '#bbf7d0' : '#fecaca'}`;
+  };
+  if (!/^\d{4}$/.test(pin)) return show('PIN must be exactly 4 digits.', false);
+  if (pin !== confirm)       return show('PINs do not match.', false);
+  try {
+    await api('/api/class-rep/set-pin', { method: 'POST', body: JSON.stringify({ pin }) });
+    show('PIN set successfully. You can now use it on the classroom device.', true);
+    document.getElementById('att-pin').value = '';
+    document.getElementById('att-pin-confirm').value = '';
+  } catch (e) { show(e.message || 'Failed to set PIN.', false); }
 }
 
 async function loadMyDevices() {
