@@ -2725,7 +2725,7 @@ static void drawPresenceMonitor() {
   // Scroll indicator (right edge)
   if ((int32_t)monCount > visibleRows) {
     int32_t barH = SH - startY - 38;
-    int32_t indicH = max(20, (int32_t)(barH * visibleRows / monCount));
+    int32_t indicH = max((int32_t)20, (int32_t)(barH * visibleRows / monCount));
     int32_t indicY = startY + (int32_t)(barH * monScrollOffset / monCount);
     spr.fillRect(SW-5, startY, 4, barH, COL_CARD);
     spr.fillRect(SW-5, indicY, 4, indicH, COL_MUTED);
@@ -2865,14 +2865,16 @@ static bool getClientMac(const String& clientIp, uint8_t mac[6]) {
 
 // Deauth a station by MAC (kick off AP after check-in)
 static void deauthStation(const uint8_t mac[6]) {
-  wifi_sta_list_t stalist;
-  if (esp_wifi_ap_get_sta_list(&stalist) != ESP_OK) return;
-  for (int i = 0; i < stalist.num; i++) {
-    if (memcmp(stalist.sta[i].mac, mac, 6) == 0) {
-      esp_wifi_deauth_sta(stalist.sta[i].aid);
-      return;
-    }
-  }
+  uint8_t apMac[6];
+  esp_wifi_get_mac(WIFI_IF_AP, apMac);
+  uint8_t frame[26] = {};
+  frame[0] = 0xC0; frame[1] = 0x00;  // deauth frame control
+  frame[2] = 0x3A; frame[3] = 0x01;  // duration
+  memcpy(frame + 4,  mac,   6);       // DA: target station
+  memcpy(frame + 10, apMac, 6);       // SA: this AP
+  memcpy(frame + 16, apMac, 6);       // BSSID
+  frame[24] = 0x03; frame[25] = 0x00; // reason 3: leaving
+  esp_wifi_80211_tx(WIFI_IF_AP, frame, sizeof(frame), false);
 }
 
 // Add a newly checked-in student to the monitor list
@@ -2917,7 +2919,8 @@ static void IRAM_ATTR monPromiscCb(void* buf, wifi_promiscuous_pkt_type_t type) 
 
 static void monStartSniffer() {
   if (monPromisc) return;
-  esp_wifi_set_promiscuous_filter(&(wifi_promiscuous_filter_t){ .filter_mask = WIFI_PROMIS_FILTER_MASK_MGMT });
+  wifi_promiscuous_filter_t pf; pf.filter_mask = WIFI_PROMIS_FILTER_MASK_MGMT;
+  esp_wifi_set_promiscuous_filter(&pf);
   esp_wifi_set_promiscuous_rx_cb(monPromiscCb);
   esp_wifi_set_promiscuous(true);
   monPromisc = true;
@@ -3030,7 +3033,7 @@ static void serveAttendPortal() {
   htmlEsc(course);
   htmlEsc(lecturer);
 
-  String html = R"RAW(<!doctype html>
+  String html = R"DKLY(<!doctype html>
 <html><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1">
 <title>Mark Attendance</title>
@@ -3077,12 +3080,12 @@ button:disabled{opacity:.5}
 <body><div class="card">
 <div class="logo">Di<span>kly</span></div>
 <div class="live"><span class="dot"></span>Session Active</div>
-)RAW");
+)DKLY");
 
   html += "<div class=\"course\">" + course + "</div>";
   html += "<div class=\"lect\">" + lecturer + "</div>";
 
-  html += R"RAW(
+  html += R"DKLY(
 <div id="err" class="err"></div>
 <div id="main">
 <label>Index Number</label>
@@ -3139,12 +3142,12 @@ function go(){
     err.style.display='block';btn.textContent='Mark Attendance';btn.disabled=false;
   });
 }
-)RAW");
+)DKLY");
 
   // Inject check-in countdown end timestamp
   html += "var endUnix=" + String(endUnix) + ";";
 
-  html += R"RAW(
+  html += R"DKLY(
 function tick(){
   var s=Math.max(0,endUnix-Math.floor(Date.now()/1000));
   var m=Math.floor(s/60),sc=s%60;
@@ -3154,7 +3157,7 @@ function tick(){
 }
 tick();
 document.getElementById('idx').focus();
-</script></body></html>)RAW");
+</script></body></html>)DKLY");
 
   localHttp.sendHeader("Cache-Control", "no-cache");
   localHttp.send(200, "text/html", html);
@@ -3637,7 +3640,7 @@ static void registerLocalHttp() {
         // MAC unknown — kick all stations (blunt fallback)
         wifi_sta_list_t sl;
         if (esp_wifi_ap_get_sta_list(&sl) == ESP_OK)
-          for (int i = 0; i < sl.num; i++) esp_wifi_deauth_sta(sl.sta[i].aid);
+          for (int i = 0; i < sl.num; i++) deauthStation(sl.sta[i].mac);
       }
       return;
     }
