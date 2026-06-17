@@ -259,11 +259,14 @@ class _QuickBtn extends StatelessWidget {
     return GestureDetector(
       onTap: onTap,
       child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
         decoration: BoxDecoration(
           color: filled ? color : Colors.white,
-          borderRadius: BorderRadius.circular(8),
+          borderRadius: BorderRadius.circular(20),
           border: Border.all(color: filled ? color : const Color(0xFFD1D5DB)),
+          boxShadow: [
+            BoxShadow(color: color.withValues(alpha: 0.06), blurRadius: 4, offset: const Offset(0, 1)),
+          ],
         ),
         child: Text(
           label,
