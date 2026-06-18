@@ -2466,6 +2466,7 @@ function buildSidebar() {
       links.push({ id: 'hod-students',     label: 'Students',       icon: usersIcon() });
       links.push({ sep: true, label: 'INSIGHTS' });
       links.push({ id: 'hod-performance',  label: 'Performance',    icon: svgIcon('<line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/>') });
+      links.push({ id: 'hod-quiz-monitor', label: 'Quiz Monitor',   icon: svgIcon('<polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/>') });
       links.push({ id: 'hod-alerts',       label: 'Smart Alerts',   icon: svgIcon('<path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/>') });
       links.push({ id: 'hod-reports',      label: 'Reports',        icon: reportsIcon() });
       links.push({ sep: true, label: 'COMMUNICATE' });
@@ -2581,6 +2582,25 @@ function buildSidebar() {
       if (l.sep) return l.label ? `<div class="nav-section-label">${l.label}</div>` : `<div class="nav-sep"></div>`;
       return `<a onclick="navigateTo('${l.id}')" id="nav-${l.id}" data-tooltip="${l.label}">${l.id==='announcements'?'<div class="ann-line"></div>':''} ${l.icon}<span>${l.label}</span>${l.id==='announcements'?'<span id="ann-badge" style="display:none;position:absolute;top:4px;right:4px;background:#ef4444;color:#fff;font-size:9px;font-weight:700;padding:1px 5px;border-radius:20px;min-width:14px;text-align:center;line-height:14px;"></span>':''}</a>`;
     }).join('');
+
+  // Institution code footer at the bottom of the sidebar
+  const instCode = currentUser?.company?.institutionCode || currentUser?.company?.code || currentUser?.institutionCode || null;
+  const existingFooter = sidebar?.querySelector('.sidebar-inst-footer');
+  if (existingFooter) existingFooter.remove();
+  if (instCode && sidebar) {
+    const footer = document.createElement('div');
+    footer.className = 'sidebar-inst-footer';
+    footer.innerHTML = `
+      <div style="font-size:9px;font-weight:700;letter-spacing:.8px;text-transform:uppercase;color:rgba(255,255,255,.45);margin-bottom:4px">Institution Code</div>
+      <div style="display:flex;align-items:center;gap:8px">
+        <span style="font-size:14px;font-weight:800;letter-spacing:3px;color:rgba(255,255,255,.9);font-family:monospace">${instCode}</span>
+        <button onclick="navigator.clipboard.writeText('${instCode}').then(()=>showToastNotif('Code copied!','success'))"
+          style="font-size:10px;font-weight:600;padding:2px 8px;border-radius:6px;border:1px solid rgba(255,255,255,.25);background:rgba(255,255,255,.1);color:rgba(255,255,255,.8);cursor:pointer;line-height:16px">
+          Copy
+        </button>
+      </div>`;
+    sidebar.appendChild(footer);
+  }
 }
 
 function navigateTo(view) {
@@ -2646,6 +2666,7 @@ function navigateTo(view) {
     case 'hod-course-approvals': renderHodCourseApprovals(); break;
     case 'hod-unlock-students':  renderHodUnlockStudents(); break;
     case 'hod-performance':      renderHodPerformance(); break;
+    case 'hod-quiz-monitor':     renderHodQuizMonitor(); break;
     case 'hod-alerts':           renderHodAlerts(); break;
     case 'hod-messaging':        renderHodMessaging(); break;
     case 'announcements': renderAnnouncements(); break;
@@ -3926,6 +3947,79 @@ Current: ${currentDept || 'None'}`, currentDept || '');
   }).catch(e => toastError(e.message || 'Failed to update department'));
 }
 
+
+// ── HOD — Quiz Monitor ────────────────────────────────────────────────────
+async function renderHodQuizMonitor() {
+  const content = document.getElementById('main-content');
+  if (!content) return;
+  content.innerHTML = '<div class="loading">Loading quiz monitor…</div>';
+  try {
+    const data = await api('/api/snap-quiz/sessions/live').catch(() => ({ sessions: [] }));
+    const sessions = data.sessions || data.liveSessions || [];
+    const esc = s => s == null ? '' : String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+
+    const navQuizzesEl = document.getElementById('nav-hod-quiz-monitor');
+    if (navQuizzesEl) {
+      const badge = navQuizzesEl.querySelector('.qm-badge');
+      if (sessions.length > 0) {
+        if (!badge) {
+          const b = document.createElement('span');
+          b.className = 'qm-badge';
+          b.style.cssText = 'position:absolute;top:4px;right:4px;background:#ef4444;color:#fff;font-size:9px;font-weight:700;padding:1px 5px;border-radius:20px;min-width:14px;text-align:center;line-height:14px;';
+          b.textContent = sessions.length;
+          navQuizzesEl.appendChild(b);
+        } else {
+          badge.textContent = sessions.length;
+        }
+      } else if (badge) badge.remove();
+    }
+
+    if (sessions.length === 0) {
+      content.innerHTML = `
+        <div class="page-header"><h2>Quiz Monitor</h2><p>Live student quiz activity for your department</p></div>
+        <div class="card" style="text-align:center;padding:56px 40px;color:var(--text-muted)">
+          <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="margin-bottom:16px;opacity:.4"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
+          <div style="font-size:16px;font-weight:600;margin-bottom:8px">No open quizzes right now</div>
+          <div style="font-size:13px">Open a quiz from the <a onclick="navigateTo('quizzes')" style="color:var(--accent);cursor:pointer;text-decoration:underline">Quizzes</a> page to see live student status here.</div>
+        </div>`;
+      return;
+    }
+
+    content.innerHTML = `
+      <div class="page-header" style="display:flex;align-items:flex-start;justify-content:space-between;flex-wrap:wrap;gap:10px">
+        <div>
+          <h2>Quiz Monitor</h2>
+          <p>${sessions.length} live quiz session${sessions.length !== 1 ? 's' : ''} in progress</p>
+        </div>
+        <button class="btn btn-secondary btn-sm" onclick="renderHodQuizMonitor()">↻ Refresh</button>
+      </div>
+      <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:16px">
+        ${sessions.map(s => `
+        <div class="card" style="padding:16px">
+          <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px">
+            <span style="display:inline-flex;align-items:center;gap:5px;font-size:11px;font-weight:700;padding:3px 8px;border-radius:20px;background:#dcfce7;color:#16a34a">
+              <span style="width:6px;height:6px;border-radius:50%;background:#16a34a"></span>Live
+            </span>
+            <span style="font-size:12px;color:var(--text-muted)">${esc(s.courseName || '')}</span>
+          </div>
+          <div style="font-size:15px;font-weight:700;margin-bottom:6px">${esc(s.quizTitle || s.title || 'Quiz Session')}</div>
+          <div style="font-size:12px;color:var(--text-muted);margin-bottom:12px">Lecturer: ${esc(s.lecturerName || '—')}</div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;font-size:13px">
+            <div style="background:var(--bg);border-radius:8px;padding:10px;text-align:center">
+              <div style="font-size:20px;font-weight:800;color:var(--accent)">${s.participantCount ?? s.joined ?? 0}</div>
+              <div style="font-size:10px;font-weight:600;text-transform:uppercase;color:var(--text-muted)">Joined</div>
+            </div>
+            <div style="background:var(--bg);border-radius:8px;padding:10px;text-align:center">
+              <div style="font-size:20px;font-weight:800">${s.submittedCount ?? s.completed ?? 0}</div>
+              <div style="font-size:10px;font-weight:600;text-transform:uppercase;color:var(--text-muted)">Submitted</div>
+            </div>
+          </div>
+        </div>`).join('')}
+      </div>`;
+  } catch(e) {
+    content.innerHTML = `<div class="card" style="color:#ef4444">Failed to load quiz monitor: ${e.message}</div>`;
+  }
+}
 
 // ── HOD — Department Performance Dashboard ────────────────────────────────
 async function renderHodPerformance() {
@@ -18367,34 +18461,44 @@ async function renderHodDevices() {
       const online  = devices.filter(d => d.online).length;
       const offline = devices.length - online;
       const now     = new Date().toLocaleTimeString([], { hour:'2-digit', minute:'2-digit' });
+      const instCode = currentUser?.company?.institutionCode || currentUser?.company?.code || currentUser?.institutionCode || '—';
 
       content.innerHTML = `
         <div class="page-header" style="display:flex;align-items:flex-start;justify-content:space-between;flex-wrap:wrap;gap:10px">
           <div>
             <h2>Classroom Devices</h2>
-            <p>ESP32 attendance devices paired to your department</p>
+            <p>Manage and provision ESP32 attendance devices</p>
           </div>
-          <div style="display:flex;align-items:center;gap:8px">
-            <span style="font-size:12px;color:var(--text-muted)">Updated ${now}</span>
-            <button class="btn btn-secondary btn-sm" id="hod-dev-refresh" onclick="renderHodDevices()">
-              ↻ Refresh
-            </button>
+          <button class="btn btn-primary btn-sm" onclick="hodGeneratePairingCode()">+ Generate Pairing Code</button>
+        </div>
+
+        <!-- Institution code + security info cards -->
+        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px;margin-bottom:20px">
+          <div class="card" style="padding:18px 20px">
+            <div style="font-size:10px;font-weight:700;letter-spacing:.8px;text-transform:uppercase;color:var(--text-muted);margin-bottom:8px">Institution Code</div>
+            <div style="font-size:28px;font-weight:900;letter-spacing:6px;font-family:monospace;margin-bottom:10px">${esc(instCode)}</div>
+            <div style="font-size:12px;color:var(--text-muted);margin-bottom:10px">Class Rep needs this + a pairing code to set up a device. Keep it confidential.</div>
+            <button class="btn btn-secondary btn-sm" onclick="navigator.clipboard.writeText('${esc(instCode)}').then(()=>showToastNotif('Code copied!','success'))">Copy</button>
+          </div>
+          <div class="card" style="padding:18px 20px;display:flex;align-items:flex-start;gap:14px">
+            <div style="width:40px;height:40px;border-radius:10px;background:#ede9fe;display:flex;align-items:center;justify-content:center;flex-shrink:0">
+              <svg viewBox="0 0 24 24" fill="none" stroke="#7c3aed" stroke-width="2" width="20" height="20"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+            </div>
+            <div>
+              <div style="font-weight:700;font-size:14px;margin-bottom:4px">Device pairing is secure</div>
+              <div style="font-size:12px;color:var(--text-muted)">JWT-authenticated · Company-isolated</div>
+            </div>
           </div>
         </div>
 
-        <!-- Stats row -->
-        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:12px;margin-bottom:20px">
-          <div class="card" style="padding:14px 16px">
-            <div style="font-size:11px;color:var(--text-muted);text-transform:uppercase;font-weight:600;margin-bottom:4px">Paired Devices</div>
-            <div style="font-size:26px;font-weight:800">${devices.length}</div>
+        <!-- Paired devices header -->
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
+          <div style="font-size:13px;font-weight:600">
+            Paired Devices <span style="color:var(--text-muted);font-weight:400">${devices.length}</span>
           </div>
-          <div class="card" style="padding:14px 16px">
-            <div style="font-size:11px;color:var(--text-muted);text-transform:uppercase;font-weight:600;margin-bottom:4px">Online Now</div>
-            <div style="font-size:26px;font-weight:800;color:#16a34a">${online}</div>
-          </div>
-          <div class="card" style="padding:14px 16px">
-            <div style="font-size:11px;color:var(--text-muted);text-transform:uppercase;font-weight:600;margin-bottom:4px">Offline</div>
-            <div style="font-size:26px;font-weight:800;color:var(--text-muted)">${offline}</div>
+          <div style="display:flex;align-items:center;gap:8px">
+            <span style="font-size:12px;color:var(--text-muted)">Updated ${now}</span>
+            <button class="btn btn-secondary btn-sm" onclick="renderHodDevices()">↻ Refresh</button>
           </div>
         </div>
 
@@ -18492,6 +18596,27 @@ async function renderHodDevices() {
 
   await render();
 }
+
+window.hodGeneratePairingCode = async () => {
+  try {
+    const data = await api('/api/devices/pairing-code', { method: 'POST' });
+    const code = data.pairingCode || data.code || '—';
+    openModal(`
+      <div style="text-align:center;padding:8px 0">
+        <div style="width:48px;height:48px;border-radius:12px;background:#ede9fe;display:flex;align-items:center;justify-content:center;margin:0 auto 16px">
+          <svg viewBox="0 0 24 24" fill="none" stroke="#7c3aed" stroke-width="2" width="24" height="24"><rect x="5" y="2" width="14" height="20" rx="2" ry="2"/><line x1="12" y1="18" x2="12.01" y2="18"/></svg>
+        </div>
+        <h3 style="font-size:17px;font-weight:700;margin-bottom:6px">Pairing Code</h3>
+        <p style="font-size:13px;color:var(--text-muted);margin-bottom:20px">Share this code with the Class Rep to set up a device. It expires in a few minutes.</p>
+        <div style="font-size:44px;font-weight:900;letter-spacing:10px;color:#4f46e5;font-family:monospace;margin-bottom:20px">${code}</div>
+        <p style="font-size:12px;color:var(--text-muted)">The Class Rep connects to the <strong>DIKLY-XXXXXX</strong> hotspot and enters this code + the institution code.</p>
+        <button class="btn btn-primary" style="margin-top:16px" onclick="navigator.clipboard.writeText('${code}').then(()=>showToastNotif('Code copied!','success'))">Copy Code</button>
+      </div>
+    `);
+  } catch (e) {
+    showToastNotif('❌ Failed to generate pairing code: ' + e.message, 'error');
+  }
+};
 
 window.hodRenameDevice = async (deviceId, currentName) => {
   const newName = prompt(`Rename device:\n(current: ${currentName})`, currentName);
