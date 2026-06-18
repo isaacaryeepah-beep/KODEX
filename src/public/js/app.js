@@ -18405,43 +18405,125 @@ async function removeClassRep(userId, name) {
   } catch(e) { toastError(e.message || 'Failed to remove'); }
 }
 
-async function showAssignRepModal() {
+function _buildAssignRepModal({ title, subtitle, onSearch, isHod }) {
+  const hodDept = isHod ? (currentUser?.department || '') : '';
+  const selStyle = 'width:100%;padding:8px 10px;border:1.5px solid var(--border);border-radius:8px;background:var(--bg);color:var(--text-primary);font-size:12px;margin-top:3px';
+  const labelStyle = 'font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--text-muted)';
   openModal(`
-    <div style="padding:4px 0">
-      <h3 style="font-size:16px;font-weight:700;margin-bottom:4px">Assign Class Representative</h3>
-      <p style="font-size:12px;color:var(--text-muted);margin-bottom:16px">Search for a student by name or index number</p>
-      <div class="form-group">
-        <label>Search Student</label>
-        <input type="text" id="rep-search-input" placeholder="Name or index number…" oninput="searchRepStudents(this.value)"
-          style="width:100%;padding:8px 12px;border:1.5px solid var(--border);border-radius:8px;background:var(--bg);color:var(--text-primary);font-size:13px">
+    <div>
+      <div style="display:flex;align-items:center;gap:9px;margin-bottom:14px">
+        <div style="width:34px;height:34px;border-radius:9px;background:rgba(124,58,237,.1);display:flex;align-items:center;justify-content:center;flex-shrink:0">
+          <svg viewBox="0 0 24 24" fill="none" stroke="#7c3aed" stroke-width="2" width="16" height="16"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+        </div>
+        <div>
+          <h3 style="font-size:15px;font-weight:700;margin:0">${title}</h3>
+          ${subtitle ? `<p style="font-size:11px;color:var(--text-muted);margin:2px 0 0">${subtitle}</p>` : ''}
+        </div>
       </div>
-      <div id="rep-search-results" style="max-height:260px;overflow-y:auto;margin-top:8px"></div>
+      <div style="background:var(--bg);border-radius:10px;padding:12px;border:1px solid var(--border);margin-bottom:12px">
+        <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.6px;color:var(--text-muted);margin-bottom:10px">Filter Students</div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px">
+          ${!isHod ? `
+          <div style="grid-column:1/-1">
+            <label style="${labelStyle}">Department</label>
+            <input type="text" id="rep-modal-dept" placeholder="e.g. Computer Science" oninput="${onSearch}" style="${selStyle}">
+          </div>` : `
+          <div style="grid-column:1/-1;padding:7px 10px;background:rgba(79,110,247,.06);border-radius:7px;border-left:3px solid #4f6ef7;font-size:11px;color:var(--text-muted)">
+            Showing students in your department: <strong style="color:var(--text-primary)">${hodDept}</strong>
+          </div>`}
+          <div>
+            <label style="${labelStyle}">Level / Year</label>
+            <select id="rep-modal-level" onchange="${onSearch}" style="${selStyle}">
+              <option value="">Any level</option>
+              <option value="100">Year 1 (100)</option>
+              <option value="200">Year 2 (200)</option>
+              <option value="300">Year 3 (300)</option>
+              <option value="400">Year 4 (400)</option>
+              <option value="500">Year 5 (500)</option>
+            </select>
+          </div>
+          <div>
+            <label style="${labelStyle}">Group</label>
+            <select id="rep-modal-group" onchange="${onSearch}" style="${selStyle}">
+              <option value="">Any group</option>
+              <option value="A">Group A</option>
+              <option value="B">Group B</option>
+              <option value="C">Group C</option>
+              <option value="D">Group D</option>
+            </select>
+          </div>
+        </div>
+        <div>
+          <label style="${labelStyle}">Name or Index Number</label>
+          <input type="text" id="rep-modal-search" placeholder="Search by name or index number…" oninput="${onSearch}" style="${selStyle}">
+        </div>
+      </div>
+      <div style="font-size:11px;color:var(--text-muted);margin-bottom:8px">Use filters to narrow the list, then click <strong>Assign</strong> on the correct student.</div>
+      <div id="rep-modal-results" style="max-height:280px;overflow-y:auto"></div>
     </div>
-  `);
+  `, { maxWidth: '560px' });
+}
+
+function _renderRepStudentResults(students, assignFn) {
+  const e2 = s => s == null ? '' : String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  const box = document.getElementById('rep-modal-results');
+  if (!box) return;
+  if (!students.length) { box.innerHTML = '<div style="color:var(--text-muted);font-size:13px;padding:10px 0;text-align:center">No students found matching these filters.</div>'; return; }
+  box.innerHTML = students.slice(0, 15).map(s => {
+    const initials = (s.name || '?')[0].toUpperCase();
+    const alreadyRep = s.isClassRep;
+    return `
+    <div style="display:flex;align-items:center;gap:10px;padding:10px 12px;border-radius:10px;border:1.5px solid ${alreadyRep ? 'rgba(22,163,74,.2)' : 'var(--border)'};margin-bottom:7px;background:${alreadyRep ? 'rgba(22,163,74,.04)' : 'var(--bg)'}">
+      <div style="width:36px;height:36px;border-radius:50%;background:rgba(124,58,237,.1);display:flex;align-items:center;justify-content:center;flex-shrink:0;font-size:13px;font-weight:800;color:#7c3aed">${initials}</div>
+      <div style="flex:1;min-width:0">
+        <div style="font-size:13px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${e2(s.name)}</div>
+        <div style="display:flex;flex-wrap:wrap;gap:4px;margin-top:3px">
+          ${s.IndexNumber ? `<span style="font-size:10px;font-weight:600;padding:1px 6px;border-radius:5px;background:rgba(79,110,247,.08);color:#4f6ef7">${e2(s.IndexNumber)}</span>` : ''}
+          ${s.studentLevel ? `<span style="font-size:10px;padding:1px 6px;border-radius:5px;background:var(--border);color:var(--text-muted)">Level ${e2(s.studentLevel)}</span>` : ''}
+          ${s.studentGroup ? `<span style="font-size:10px;padding:1px 6px;border-radius:5px;background:var(--border);color:var(--text-muted)">Group ${e2(s.studentGroup)}</span>` : ''}
+          ${s.department   ? `<span style="font-size:10px;padding:1px 6px;border-radius:5px;background:var(--border);color:var(--text-muted)">${e2(s.department)}</span>` : ''}
+          ${s.programme    ? `<span style="font-size:10px;padding:1px 6px;border-radius:5px;background:var(--border);color:var(--text-muted)">${e2(s.programme)}</span>` : ''}
+        </div>
+      </div>
+      <div style="flex-shrink:0">
+        ${alreadyRep
+          ? `<span style="display:inline-flex;align-items:center;gap:4px;font-size:11px;font-weight:600;padding:4px 9px;border-radius:20px;background:rgba(22,163,74,.1);color:#15803d"><svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="20 6 9 17 4 12"/></svg>Rep</span>`
+          : `<button class="btn btn-primary btn-sm" style="font-size:11px;padding:5px 12px" onclick="${assignFn}('${s._id}','${e2(s.name).replace(/'/g,"\\'")}')">Assign</button>`}
+      </div>
+    </div>`;
+  }).join('');
+}
+
+async function showAssignRepModal() {
+  const isHod = currentUser?.role === 'hod';
+  _buildAssignRepModal({ title: 'Assign Class Representative', isHod, onSearch: 'searchRepStudents()' });
+  if (isHod) searchRepStudents();
 }
 
 let _repSearchTimer;
-async function searchRepStudents(q) {
+async function searchRepStudents() {
   clearTimeout(_repSearchTimer);
   _repSearchTimer = setTimeout(async () => {
-    const box = document.getElementById('rep-search-results');
+    const box = document.getElementById('rep-modal-results');
     if (!box) return;
-    if (!q.trim()) { box.innerHTML = ''; return; }
+    const q     = (document.getElementById('rep-modal-search')?.value || '').trim();
+    const level = document.getElementById('rep-modal-level')?.value || '';
+    const group = document.getElementById('rep-modal-group')?.value || '';
+    const dept  = document.getElementById('rep-modal-dept')?.value?.trim() || '';
+    const isHod = currentUser?.role === 'hod';
+    if (!q && !level && !group && !dept && !isHod) {
+      box.innerHTML = '<div style="color:var(--text-muted);font-size:13px;padding:10px 0;text-align:center">Enter a name, index number, or select a filter to search.</div>';
+      return;
+    }
     box.innerHTML = '<div style="color:var(--text-muted);font-size:13px;padding:8px 0">Searching…</div>';
     try {
-      const { students } = await api(`/api/class-rep-admin/students?indexNumber=${encodeURIComponent(q)}`);
-      if (!students.length) { box.innerHTML = '<div style="color:var(--text-muted);font-size:13px;padding:8px 0">No students found.</div>'; return; }
-      const esc = s => s == null ? '' : String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
-      box.innerHTML = students.slice(0,10).map(s => `
-        <div style="display:flex;align-items:center;justify-content:space-between;padding:9px 12px;border-radius:8px;border:1.5px solid var(--border);margin-bottom:6px;background:var(--bg)">
-          <div>
-            <div style="font-size:13px;font-weight:600">${esc(s.name)}</div>
-            <div style="font-size:11px;color:var(--text-muted)">${esc(s.IndexNumber||'')} · L${esc(s.studentLevel||'?')} Gr${esc(s.studentGroup||'?')} · ${esc(s.programme||'')}</div>
-          </div>
-          ${s.isClassRep
-            ? `<span style="font-size:11px;color:#16a34a;font-weight:600">Already a rep</span>`
-            : `<button class="btn btn-primary btn-sm" onclick="doAssignRep('${s._id}','${esc(s.name)}')">Assign</button>`}
-        </div>`).join('');
+      const params = new URLSearchParams();
+      if (q)     params.set('indexNumber', q);
+      if (level) params.set('level', level);
+      if (group) params.set('group', group);
+      if (dept)  params.set('department', dept);
+      const { students } = await api(`/api/class-rep-admin/students?${params.toString()}`);
+      _renderRepStudentResults(students, 'doAssignRep');
     } catch(e) { box.innerHTML = `<div style="color:#ef4444;font-size:13px">${e.message}</div>`; }
   }, 300);
 }
@@ -18641,49 +18723,43 @@ window.hodGeneratePairingCode = async () => {
 };
 
 window.hodAssignClassRep = async (deviceId, deviceName) => {
-  const esc = s => s == null ? '' : String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
-  openModal(`
-    <div style="padding:4px 0">
-      <h3 style="font-size:16px;font-weight:700;margin-bottom:4px">Assign Class Rep</h3>
-      <p style="font-size:12px;color:var(--text-muted);margin-bottom:16px">Device: <strong>${esc(deviceName)}</strong> — search for a student to assign as the Class Rep for this device.</p>
-      <div class="form-group" style="margin-bottom:10px">
-        <label style="font-size:11px;font-weight:700;text-transform:uppercase;color:var(--text-muted)">Search Student</label>
-        <input type="text" id="hod-rep-search" placeholder="Name or index number…"
-          oninput="hodSearchRepStudents(this.value, '${deviceId}')"
-          style="width:100%;padding:8px 12px;border:1.5px solid var(--border);border-radius:8px;background:var(--bg);color:var(--text-primary);font-size:13px;margin-top:4px">
-      </div>
-      <div id="hod-rep-results" style="max-height:260px;overflow-y:auto"></div>
-    </div>
-  `);
+  const e2 = s => s == null ? '' : String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  window._hodRepDeviceId = deviceId;
+  _buildAssignRepModal({
+    title: 'Assign Class Rep',
+    subtitle: `Device: <strong>${e2(deviceName)}</strong>`,
+    isHod: true,
+    onSearch: 'hodSearchRepStudents()',
+  });
+  hodSearchRepStudents();
 };
 
 let _hodRepSearchTimer;
-window.hodSearchRepStudents = (q, deviceId) => {
-  const esc = s => s == null ? '' : String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+window.hodSearchRepStudents = () => {
   clearTimeout(_hodRepSearchTimer);
   _hodRepSearchTimer = setTimeout(async () => {
-    const box = document.getElementById('hod-rep-results');
+    const box = document.getElementById('rep-modal-results');
     if (!box) return;
-    if (!q.trim()) { box.innerHTML = ''; return; }
+    const q     = (document.getElementById('rep-modal-search')?.value || '').trim();
+    const level = document.getElementById('rep-modal-level')?.value || '';
+    const group = document.getElementById('rep-modal-group')?.value || '';
     box.innerHTML = '<div style="color:var(--text-muted);font-size:13px;padding:8px 0">Searching…</div>';
     try {
-      const { students } = await api(`/api/class-rep-admin/students?indexNumber=${encodeURIComponent(q)}`);
-      if (!students.length) { box.innerHTML = '<div style="color:var(--text-muted);font-size:13px;padding:8px 0">No students found.</div>'; return; }
-      box.innerHTML = students.slice(0, 10).map(s => `
-        <div style="display:flex;align-items:center;justify-content:space-between;padding:9px 12px;border-radius:8px;border:1.5px solid var(--border);margin-bottom:6px;background:var(--bg)">
-          <div>
-            <div style="font-size:13px;font-weight:600">${esc(s.name)}</div>
-            <div style="font-size:11px;color:var(--text-muted)">${esc(s.IndexNumber||'')}${s.studentLevel ? ` · L${esc(s.studentLevel)}` : ''}${s.studentGroup ? ` Gr${esc(s.studentGroup)}` : ''}${s.programme ? ` · ${esc(s.programme)}` : ''}</div>
-          </div>
-          <button class="btn btn-primary btn-sm" onclick="hodDoAssignRep('${deviceId}', '${s._id}', '${esc(s.name).replace(/'/g,"\\'")}')">Assign</button>
-        </div>`).join('');
+      const params = new URLSearchParams();
+      if (q)     params.set('indexNumber', q);
+      if (level) params.set('level', level);
+      if (group) params.set('group', group);
+      const { students } = await api(`/api/class-rep-admin/students?${params.toString()}`);
+      _renderRepStudentResults(students, 'hodDoAssignRep');
     } catch(e) {
       box.innerHTML = `<div style="color:#ef4444;font-size:13px">${e.message}</div>`;
     }
   }, 300);
 };
 
-window.hodDoAssignRep = async (deviceId, studentId, studentName) => {
+window.hodDoAssignRep = async (studentId, studentName) => {
+  const deviceId = window._hodRepDeviceId;
+  if (!deviceId) { showToastNotif('❌ Device reference lost — please close and try again.', 'error'); return; }
   try {
     await api(`/api/devices/${encodeURIComponent(deviceId)}/assign-class-rep`, {
       method: 'PATCH',
