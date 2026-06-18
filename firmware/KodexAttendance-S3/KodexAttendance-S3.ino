@@ -3802,7 +3802,7 @@ static void registerLocalHttp() {
       OfflineRec& rec = offlineBuf[offlineCount++];
       strncpy(rec.indexNumber, indexNum.c_str(),       sizeof(rec.indexNumber) - 1);
       strncpy(rec.userId,      userId.c_str(),         sizeof(rec.userId) - 1);
-      strncpy(rec.code,        submittedCode.c_str(),  sizeof(rec.code) - 1);
+      rec.code[0] = '\0';
       strncpy(rec.sessionId,   sessionId.c_str(),      sizeof(rec.sessionId) - 1);
       strncpy(rec.courseId,    sessionCourse.c_str(),  sizeof(rec.courseId) - 1);
       rec.ts = (uint32_t)now;
