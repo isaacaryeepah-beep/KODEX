@@ -124,9 +124,9 @@ class _AdminUsersScreenState extends ConsumerState<AdminUsersScreen> {
           contentPadding: const EdgeInsets.symmetric(horizontal: 0, vertical: 4),
           leading: CircleAvatar(
             radius: 18,
-            backgroundImage: u.profilePhoto?.isNotEmpty == true ? NetworkImage(u.profilePhoto!) : null,
+            backgroundImage: u.avatar?.isNotEmpty == true ? NetworkImage(u.avatar!) : null,
             backgroundColor: DiklyColors.primary.withOpacity(0.12),
-            child: u.profilePhoto?.isNotEmpty == true ? null : Text(initials, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: DiklyColors.primary)),
+            child: u.avatar?.isNotEmpty == true ? null : Text(initials, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: DiklyColors.primary)),
           ),
           title: Text(u.name, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
           subtitle: Text(u.indexNumber ?? u.email, style: const TextStyle(fontSize: 11, color: DiklyColors.textSecondary)),
