@@ -88,7 +88,7 @@ class AdminHomeScreen extends ConsumerWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      '${_greeting()}, $firstName',
+                      '${_greeting()}, $firstName \u{1F44B}',
                       style: GoogleFonts.dmSans(
                         fontSize: 22,
                         fontWeight: FontWeight.w800,
@@ -98,7 +98,7 @@ class AdminHomeScreen extends ConsumerWidget {
                     ),
                     const SizedBox(height: 3),
                     Text(
-                      user?.company ?? user?.institutionCode ?? 'Admin Portal',
+                      "Here's what's happening at ${user?.company ?? 'your institution'} today.",
                       style: GoogleFonts.dmSans(fontSize: 13, color: DiklyColors.textMuted),
                     ),
                   ],
@@ -302,32 +302,36 @@ class _CodeCard extends StatelessWidget {
         );
       },
       child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
         decoration: BoxDecoration(
-          color: Colors.white,
+          color: const Color(0xFFF9FAFB),
           borderRadius: BorderRadius.circular(10),
           border: Border.all(color: const Color(0xFFE5E7EB)),
-          boxShadow: const [BoxShadow(color: Color(0x08000000), blurRadius: 4, offset: Offset(0, 1))],
         ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
+        child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
             Text(
-              'INST. CODE',
-              style: GoogleFonts.dmSans(fontSize: 9, fontWeight: FontWeight.w700, color: const Color(0xFF9CA3AF), letterSpacing: 0.8),
+              'Institution code',
+              style: GoogleFonts.dmSans(fontSize: 11, color: const Color(0xFF6B7280)),
             ),
-            const SizedBox(height: 2),
-            Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Text(
-                  code,
-                  style: GoogleFonts.dmSans(fontSize: 14, fontWeight: FontWeight.w800, color: DiklyColors.text, letterSpacing: 0.5),
-                ),
-                const SizedBox(width: 6),
-                const Icon(Icons.copy_rounded, size: 13, color: Color(0xFF9CA3AF)),
-              ],
+            const SizedBox(width: 8),
+            Text(
+              code,
+              style: GoogleFonts.dmSans(fontSize: 15, fontWeight: FontWeight.w800, color: DiklyColors.text, letterSpacing: 0.5),
+            ),
+            const SizedBox(width: 10),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(6),
+                border: Border.all(color: const Color(0xFFE5E7EB)),
+              ),
+              child: Text(
+                'Copy',
+                style: GoogleFonts.dmSans(fontSize: 11, fontWeight: FontWeight.w600, color: const Color(0xFF6B7280)),
+              ),
             ),
           ],
         ),
