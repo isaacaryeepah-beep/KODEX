@@ -136,6 +136,46 @@ static const char ATTEND_HTML_3[] =
 "document.getElementById('idx').focus();"
 "</script></body></html>";
 
+// Part 2 (re-mark variant): replaces ATTEND_HTML_2 when re-mark window is open
+static const char ATTEND_REMARK_HTML_2[] =
+"<div style='background:#1c1a10;border:1px solid #713f12;border-radius:10px;"
+"padding:10px 14px;color:#fcd34d;font-size:12px;text-align:center;margin-bottom:14px'>"
+"&#x1F4CB; End of Class &#x2014; Confirm you are still present</div>"
+"<div id='err' class='err'></div>"
+"<div id='main'>"
+"<label>Index Number</label>"
+"<input type='text' id='idx' placeholder='e.g. STU/2021/001'"
+" autocomplete='off' autocorrect='off' spellcheck='false' autocapitalize='characters'>"
+"<button id='btn' onclick='go()'>Confirm I&#39;m Still Here</button>"
+"<div class='tmr' id='tmr'></div>"
+"</div>"
+"<div class='ok' id='ok'>"
+"<div class='ck'>&#x2705;</div>"
+"<h2>Presence Confirmed!</h2>"
+"<p>Checked out successfully.<br>You can now disconnect from Dikly WiFi.</p>"
+"</div>"
+"</div>"
+"<script>"
+"function go(){"
+"var idx=document.getElementById('idx').value.trim().toUpperCase();"
+"var err=document.getElementById('err');"
+"err.style.display='none';"
+"if(!idx){err.textContent='Please enter your index number.';err.style.display='block';return;}"
+"var btn=document.getElementById('btn');"
+"btn.textContent='Confirming\xe2\x80\xa6';btn.disabled=true;"
+"fetch('/attend',{method:'POST',headers:{'Content-Type':'application/json'},"
+"body:JSON.stringify({indexNumber:idx,remark:true})})"
+".then(function(r){return r.json().then(function(d){return{ok:r.ok,d:d};});})"
+".then(function(r){"
+"if(r.ok){document.getElementById('main').style.display='none';document.getElementById('ok').style.display='block';}"
+"else{err.textContent=r.d.error||'Something went wrong. Try again.';err.style.display='block';"
+"btn.textContent='Confirm I\\'m Still Here';btn.disabled=false;}"
+"}).catch(function(){"
+"err.textContent='Connection lost. Move closer to the device and try again.';"
+"err.style.display='block';btn.textContent='Confirm I\\'m Still Here';btn.disabled=false;"
+"});}"
+"var endUnix=";
+
 
 // ─── Display driver — LovyanGFX ──────────────────────────────────────────────
 #define LGFX_USE_V1
@@ -338,6 +378,10 @@ uint8_t  hbFails     = 0;
 bool     timeSynced  = false;
 bool     forceReconn = false;
 bool     sessionLocallyStarted = false;  // true when session was started on-device (no internet)
+
+static bool     reMarkActive    = false;
+static uint32_t reMarkOpenedAt  = 0;
+static const uint32_t REMARK_WINDOW_SECS = 300; // 5-minute re-mark window
 
 // BLE beacon state
 static BLEAdvertising *bleAdv  = nullptr;
@@ -945,6 +989,26 @@ static void syncOfflineAttendance() {
     }
   }
 
+  // ── Confirmed re-marks (/remark.jsonl) ─────────────────────────────────
+  if (sdAvailable && SD_MMC.exists("/remark.jsonl")) {
+    JsonArray cArr = doc["confirmedRecords"].to<JsonArray>();
+    File rf = SD_MMC.open("/remark.jsonl", FILE_READ);
+    if (rf) {
+      while (rf.available()) {
+        String line = rf.readStringUntil('\n'); line.trim();
+        if (line.isEmpty()) continue;
+        JsonDocument crec;
+        if (!deserializeJson(crec, line)) {
+          JsonObject o = cArr.add<JsonObject>();
+          if (crec["indexNumber"].is<const char*>()) o["indexNumber"] = crec["indexNumber"];
+          if (crec["userId"].is<const char*>())      o["userId"]      = crec["userId"];
+          o["confirmedAt"] = crec["confirmedAt"] | (uint32_t)0;
+        }
+      }
+      rf.close();
+    }
+  }
+
   String body; serializeJson(doc, body);
   String resp; int code = postJson("/api/devices/sync", body, resp);
 
@@ -953,6 +1017,7 @@ static void syncOfflineAttendance() {
     // Clear synced files
     if (hasSessions)                    SD_MMC.remove("/sessions.jsonl");
     if (sdAvailable && SD_MMC.exists(SD_ATT_FILE)) { SD_MMC.remove(SD_ATT_FILE); sdRecordCount = 0; }
+    if (sdAvailable && SD_MMC.exists("/remark.jsonl")) SD_MMC.remove("/remark.jsonl");
     offlineCount = 0;
   } else {
     LOG("Sync failed " + String(code) + ": " + resp);
@@ -1119,7 +1184,7 @@ static void sendHeartbeat() {
     if (!sessionId.isEmpty()) {
       LOG("Session ended"); sessionId = ""; sessionSeed = ""; regenerateLecturerPin();
       sessionTitle = ""; sessionCourse = ""; sessionLecturer = "";
-      studentsMarked = 0; sessionTotalEnrolled = 0;
+      studentsMarked = 0; sessionTotalEnrolled = 0; reMarkActive = false;
       dedupClear("");
     }
   } else {
@@ -3197,31 +3262,36 @@ static void monStart(const String& course, const String& sid) {
 // ─── Student check-in portal — served by the device AP ──────────────────────
 // Called when any browser opens on the Dikly hotspot during an active session.
 static void serveAttendPortal() {
-  // Countdown seconds until check-in window closes
-  long secsLeft = (long)((monCheckinEndMs - millis()) / 1000);
-  if (secsLeft < 0) secsLeft = 0;
-  uint32_t endUnix = (uint32_t)(time(nullptr) + secsLeft);
+  uint32_t endUnix;
+  if (reMarkActive) {
+    endUnix = reMarkOpenedAt + REMARK_WINDOW_SECS;
+  } else {
+    long secsLeft = (long)((monCheckinEndMs - millis()) / 1000);
+    if (secsLeft < 0) secsLeft = 0;
+    endUnix = (uint32_t)(time(nullptr) + secsLeft);
+  }
 
-  String course   = sessionCourse.isEmpty()   ? sessionTitle   : sessionCourse;
-  String lecturer = sessionLecturer.isEmpty() ? "Dikly Device" : sessionLecturer;
-  if (course.isEmpty()) course = "Attendance";
-
-  // HTML-encode course/lecturer before inserting into HTML element content.
-  // These strings come from the server but may contain user-entered data.
   auto htmlEsc = [](String& s) {
     s.replace("&", "&amp;");
     s.replace("<", "&lt;");
     s.replace(">", "&gt;");
-    s.replace("\"", "&quot;");
     s.replace("'", "&#39;");
   };
+  String course   = sessionTitle.length() ? sessionTitle : sessionCourse;
+  String lecturer = sessionLecturer;
   htmlEsc(course);
   htmlEsc(lecturer);
 
   String html = ATTEND_HTML_1;
+  if (reMarkActive) {
+    html.replace(
+      "<span class='dot'></span>Session Active",
+      "<span class='dot' style='background:#f59e0b'></span>End of Class"
+    );
+  }
   html += "<div class='course'>" + course + "</div>";
   html += "<div class='lect'>" + lecturer + "</div>";
-  html += ATTEND_HTML_2;
+  html += reMarkActive ? ATTEND_REMARK_HTML_2 : ATTEND_HTML_2;
   html += String(endUnix);
   html += ATTEND_HTML_3;
 
@@ -3643,6 +3713,42 @@ static void registerLocalHttp() {
       }
     }
     // Hotspot-only path (captive portal): no BLE, no code — connection to AP is the proof.
+    // ── Re-mark path — end-of-class presence confirmation ────────────────────
+    bool isRemark = req["remark"] | false;
+    if (isRemark || reMarkActive) {
+      time_t nowR = time(nullptr);
+      if (nowR < 1700000000UL) nowR = 1700000000UL + (millis() / 1000);
+      if (!reMarkActive) {
+        localHttp.send(403, "application/json", "{\"error\":\"Re-mark window is not open. Wait for your lecturer.\"}"); return;
+      }
+      if ((uint32_t)nowR > reMarkOpenedAt + REMARK_WINDOW_SECS) {
+        reMarkActive = false;
+        localHttp.send(403, "application/json", "{\"error\":\"Re-mark window has closed.\"}"); return;
+      }
+      if (dedupSession != sessionId) dedupClear(sessionId);
+      bool wasPresent = (indexNum.length() && dedupCheck(indexNum.c_str())) ||
+                        (userId.length()   && dedupCheck(userId.c_str()));
+      if (!wasPresent) {
+        localHttp.send(403, "application/json",
+          "{\"error\":\"You were not marked at the start of class.\"}"); return;
+      }
+      // Persist confirm to SD
+      if (sdAvailable) {
+        File rf = SD_MMC.open("/remark.jsonl", FILE_APPEND);
+        if (rf) {
+          JsonDocument entry;
+          if (indexNum.length()) entry["indexNumber"] = indexNum;
+          if (userId.length())   entry["userId"]      = userId;
+          entry["confirmedAt"] = (uint32_t)nowR;
+          String line; serializeJson(entry, line); line += "\n";
+          rf.print(line); rf.close();
+        }
+      }
+      localHttp.send(200, "application/json",
+        "{\"ok\":true,\"confirmed\":true,\"message\":\"Presence confirmed! You can now disconnect.\"}");
+      return;
+    }
+    // Hotspot-only path (captive portal): no BLE, no code — connection to AP is the proof.
     // ── Duplicate guard — check both indexNumber AND userId to prevent double-marking ──
     if (dedupSession != sessionId) dedupClear(sessionId);
     if ((indexNum.length() && dedupCheck(indexNum.c_str())) ||
@@ -3775,6 +3881,106 @@ static void registerLocalHttp() {
     localHttp.send(200, "application/json", s);
   });
 
+  // /session/remark — open end-of-class re-mark window
+  localHttp.on("/session/remark", HTTP_POST, []() {
+    if (sessionId.isEmpty()) {
+      localHttp.send(503, "application/json", "{\"error\":\"No active session\"}"); return;
+    }
+    reMarkActive   = true;
+    reMarkOpenedAt = (uint32_t)time(nullptr);
+    if (reMarkOpenedAt < 1700000000UL) reMarkOpenedAt = 1700000000UL + millis()/1000;
+    if (sdAvailable && SD_MMC.exists("/remark.jsonl")) SD_MMC.remove("/remark.jsonl");
+    String resp = "{\"ok\":true,\"marked\":" + String(studentsMarked) +
+                  ",\"expiresAt\":" + String(reMarkOpenedAt + REMARK_WINDOW_SECS) + "}";
+    localHttp.send(200, "application/json", resp);
+  });
+
+  // /session/remark/close — close re-mark window
+  localHttp.on("/session/remark/close", HTTP_POST, []() {
+    reMarkActive = false;
+    localHttp.send(200, "application/json", "{\"ok\":true}");
+  });
+
+  // /control — lecturer session control panel
+  localHttp.on("/control", HTTP_GET, []() {
+    if (sessionId.isEmpty()) {
+      localHttp.sendHeader("Location", "/start"); localHttp.send(302, "text/plain", ""); return;
+    }
+    time_t nowC = time(nullptr);
+    if (nowC < 1700000000UL) nowC = 1700000000UL + millis()/1000;
+    bool rmkExpired = reMarkActive && ((uint32_t)nowC > reMarkOpenedAt + REMARK_WINDOW_SECS);
+    if (rmkExpired) reMarkActive = false;
+
+    String course   = sessionCourse.isEmpty() ? sessionTitle : sessionCourse;
+    String lecturer = sessionLecturer;
+    course.replace("'", "&#39;"); lecturer.replace("'", "&#39;");
+    course.replace("<", "&lt;");  lecturer.replace("<", "&lt;");
+
+    String rmkSection;
+    if (reMarkActive) {
+      uint32_t expAt = reMarkOpenedAt + REMARK_WINDOW_SECS;
+      rmkSection = String(
+        "<div class='alert'>&#x1F4CB; Re-mark window is open<br>"
+        "<span id='rt'></span></div>"
+        "<button class='btn-close' onclick='closeRmk()'>Close Re-mark Window</button>"
+        "<script>var ex=") + String(expAt) +
+        ";function rTick(){var s=Math.max(0,ex-Math.floor(Date.now()/1000));"
+        "var m=Math.floor(s/60),sc=s%60;"
+        "document.getElementById('rt').textContent='Closes in '+m+':'+(sc<10?'0':'')+sc;"
+        "if(s>0)setTimeout(rTick,1000);else{document.querySelector('.alert').textContent='Re-mark window closed.';document.querySelector('.btn-close').style.display='none';}}"
+        "rTick();"
+        "function closeRmk(){fetch('/session/remark/close',{method:'POST'}).then(function(){location.reload();});}"
+        "</script>";
+    } else {
+      rmkSection = "<button class='btn-warn' onclick='openRmk()'>&#x1F4CB; Open Re-mark Window</button>"
+                   "<script>function openRmk(){fetch('/session/remark',{method:'POST'}).then(function(){location.reload();});}</script>";
+    }
+
+    String page = String(
+      "<!doctype html><html><head><meta charset='utf-8'>"
+      "<meta name='viewport' content='width=device-width,initial-scale=1,maximum-scale=1'>"
+      "<title>Session Control</title>"
+      "<style>*{box-sizing:border-box;margin:0;padding:0}"
+      "body{min-height:100vh;background:#0a0f1e;color:#fff;"
+      "font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;"
+      "display:flex;align-items:center;justify-content:center;padding:20px}"
+      ".card{background:#111827;border-radius:20px;padding:28px 20px;"
+      "max-width:380px;width:100%;border:1px solid #1e2d45}"
+      ".logo{text-align:center;font-size:22px;font-weight:900;color:#fff;margin-bottom:2px}"
+      ".logo span{color:#4f6ef7}"
+      ".sub{text-align:center;font-size:12px;color:#64748b;margin-bottom:18px}"
+      ".stat{background:#0f172a;border-radius:10px;padding:12px 14px;"
+      "border:1.5px solid #1e2d45;margin-bottom:10px}"
+      ".stat-label{font-size:11px;font-weight:600;color:#64748b;text-transform:uppercase;letter-spacing:.5px}"
+      ".stat-value{font-size:24px;font-weight:700;color:#22c55e;margin-top:2px}"
+      ".stat-text{font-size:14px;font-weight:600;margin-top:2px}"
+      ".alert{background:#1c1a10;border:1px solid #713f12;border-radius:10px;"
+      "padding:12px 14px;color:#fcd34d;font-size:13px;text-align:center;margin-bottom:12px}"
+      "button{width:100%;padding:15px;color:#fff;border:none;"
+      "border-radius:12px;font-size:15px;font-weight:700;cursor:pointer;"
+      "-webkit-tap-highlight-color:transparent;margin-bottom:10px}"
+      ".btn-warn{background:#d97706}"
+      ".btn-close{background:transparent;border:1.5px solid #4f6ef7;color:#4f6ef7}"
+      ".btn-end{background:#7f1d1d}"
+      "</style></head><body><div class='card'>"
+      "<div class='logo'>Di<span>kly</span></div>"
+      "<div class='sub'>Session Control</div>"
+      "<div class='stat'><div class='stat-label'>Course</div>"
+      "<div class='stat-text'>") + course + String("</div></div>"
+      "<div class='stat'><div class='stat-label'>Lecturer</div>"
+      "<div class='stat-text'>") + lecturer + String("</div></div>"
+      "<div class='stat'><div class='stat-label'>Students Marked</div>"
+      "<div class='stat-value'>") + String(studentsMarked) + String("</div></div>") +
+      rmkSection +
+      String("<button class='btn-end' onclick=\"if(confirm('End the session now?')){"
+      "fetch('/session/stop',{method:'POST'}).then(function(){window.location='/start';});}\">"
+      "End Session</button>"
+      "</div></body></html>");
+
+    localHttp.sendHeader("Cache-Control", "no-cache");
+    localHttp.send(200, "text/html", page);
+  });
+
   // /session/start — lecturer creates a session locally (no internet required)
   localHttp.on("/session/start", HTTP_POST, []() {
     JsonDocument req;
@@ -3898,7 +4104,7 @@ static void registerLocalHttp() {
     LOG("Session stopped: " + sessionId);
     sessionId = ""; sessionSeed = ""; regenerateLecturerPin();
     sessionTitle = ""; sessionCourse = ""; sessionLecturer = "";
-    studentsMarked = 0;
+    studentsMarked = 0; reMarkActive = false;
     bleStop();
     presenceClear();
     localHttp.sendHeader("Access-Control-Allow-Origin", "*");
@@ -4149,7 +4355,7 @@ static void handlePairedTap(uint16_t tx, uint16_t ty) {
       summaryCourse  = sessionCourse.isEmpty() ? sessionTitle : sessionCourse;
       sessionId = ""; sessionSeed = ""; regenerateLecturerPin();
       sessionTitle = ""; sessionCourse = ""; sessionLecturer = "";
-      studentsMarked = 0; sessionTotalEnrolled = 0;
+      studentsMarked = 0; sessionTotalEnrolled = 0; reMarkActive = false;
       sessionLocallyStarted = false; clearLocalSession();
       bleStop();
       if (monPhase == MON_CHECKIN_OPEN || monPhase == MON_MONITORING) {
@@ -4592,7 +4798,7 @@ void loop() {
         summaryCourse  = sessionCourse.isEmpty() ? sessionTitle : sessionCourse;
         sessionId = ""; sessionSeed = ""; regenerateLecturerPin();
         sessionTitle = ""; sessionCourse = ""; sessionLecturer = "";
-        studentsMarked = 0; sessionTotalEnrolled = 0;
+        studentsMarked = 0; sessionTotalEnrolled = 0; reMarkActive = false;
         sessionLocallyStarted = false; clearLocalSession();
         bleStop(); curScreen = SUMMARY; drawSummary(); return;
       }

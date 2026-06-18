@@ -1700,6 +1700,33 @@ exports.offlineSync = async (req, res) => {
       created.push(rec.indexNumber);
     }
 
+    // Apply end-of-class confirmations
+    const confirmedRecords = req.body.confirmedRecords || [];
+    if (confirmedRecords.length > 0) {
+      const AttendanceRecord = require('../models/AttendanceRecord');
+      for (const cr of confirmedRecords) {
+        const confirmedAt = cr.confirmedAt ? new Date(cr.confirmedAt * 1000) : new Date();
+        if (cr.indexNumber) {
+          // More reliable: find the user by indexNumber first
+          const confirmedUser = await User.findOne({
+            company: device.companyId,
+            IndexNumber: { $regex: new RegExp(`^${cr.indexNumber}$`, 'i') },
+          }).select('_id').lean();
+          if (confirmedUser) {
+            await AttendanceRecord.findOneAndUpdate(
+              { session: session._id, user: confirmedUser._id },
+              { $set: { confirmedAt } }
+            ).catch(() => {});
+          }
+        } else if (cr.userId) {
+          await AttendanceRecord.findOneAndUpdate(
+            { session: session._id, user: cr.userId },
+            { $set: { confirmedAt } }
+          ).catch(() => {});
+        }
+      }
+    }
+
     res.json({ ok: true, sessionId: session._id, synced: created.length });
   } catch (e) {
     console.error("offlineSync error:", e);

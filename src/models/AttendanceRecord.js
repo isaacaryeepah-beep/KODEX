@@ -71,6 +71,7 @@ const attendanceRecordSchema = new mongoose.Schema(
     newDeviceFlag: { type: Boolean, default: false },
     flagged:       { type: Boolean, default: false },
     flagNote:      { type: String,  default: null },
+    confirmedAt: { type: Date, default: null },
   },
   {
     timestamps: true,
