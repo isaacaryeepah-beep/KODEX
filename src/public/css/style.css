@@ -1319,10 +1319,11 @@ table tbody tr:last-child td { border-bottom: none; }
 }
 
 .modal {
-  background: white;
+  background: var(--card, #fff);
+  color: var(--text-primary, #111827);
   border-radius: var(--radius-lg);
   padding: 26px;
-  width: 90%;
+  width: 100%;
   max-width: 520px;
   max-height: 88vh;
   overflow-y: auto;

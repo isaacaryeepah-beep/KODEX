@@ -11442,6 +11442,20 @@ function _renderAttendeesHTML(el, data, isOffline) {
   `;
 }
 
+function openModal(html, opts = {}) {
+  const container = document.getElementById('modal-container');
+  if (!container) return;
+  const maxW = opts.maxWidth || '520px';
+  container.innerHTML = `
+    <div class="modal-overlay" onclick="closeModal(event)" style="padding:16px">
+      <div class="modal" style="max-width:${maxW};width:100%;position:relative">
+        <button onclick="closeModal()" style="position:absolute;top:12px;right:12px;background:none;border:none;cursor:pointer;color:var(--text-muted);font-size:18px;line-height:1;padding:4px 6px;border-radius:6px" title="Close">✕</button>
+        ${html}
+      </div>
+    </div>`;
+  container.classList.remove('hidden');
+}
+
 function closeModal(event) {
   if (event && event.target !== event.currentTarget) return;
   _stopQrTimers(); // always clean up QR rotation if active
