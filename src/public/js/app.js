@@ -3333,7 +3333,7 @@ async function renderHodReports() {
         if (!window.Chart) {
           await new Promise((res, rej) => {
             const s = document.createElement('script');
-            s.src = 'https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js';
+            s.src = 'https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js';
             s.onload = res; s.onerror = rej; document.head.appendChild(s);
           });
         }
@@ -5473,7 +5473,7 @@ async function _renderAdminCharts(sessionsData, usersData) {
     if (!window.Chart) {
       await new Promise((res, rej) => {
         const s = document.createElement('script');
-        s.src = 'https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js';
+        s.src = 'https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js';
         s.onload = res; s.onerror = rej;
         document.head.appendChild(s);
       });
@@ -16996,7 +16996,7 @@ async function renderMyPerformance() {
       if (!window.Chart) {
         await new Promise((res, rej) => {
           const s = document.createElement('script');
-          s.src = 'https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js';
+          s.src = 'https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js';
           s.onload = res; s.onerror = rej;
           document.head.appendChild(s);
         });

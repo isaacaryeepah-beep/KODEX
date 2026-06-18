@@ -73,7 +73,7 @@ app.use(helmet({
     useDefaults: true,
     directives: {
       "default-src":     ["'self'"],
-      "script-src":      ["'self'", "'unsafe-inline'", "https://cdn.jsdelivr.net", "https://meet.dikly.live"],
+      "script-src":      ["'self'", "'unsafe-inline'", "https://cdn.jsdelivr.net", "https://cdnjs.cloudflare.com", "https://meet.dikly.live"],
       "script-src-attr": ["'unsafe-inline'"],
       "style-src":       ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com", "https://cdn.jsdelivr.net"],
       "font-src":        ["'self'", "https://fonts.gstatic.com", "https://cdn.jsdelivr.net", "data:"],
