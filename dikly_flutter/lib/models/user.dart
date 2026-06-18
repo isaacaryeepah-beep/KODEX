@@ -16,6 +16,7 @@ class User {
   final bool deviceLocked;
   final DateTime? deviceLockedUntil;
   final String? level;
+  final bool twoFactorEnabled;
 
   const User({
     required this.id,
@@ -35,6 +36,7 @@ class User {
     this.deviceLocked = false,
     this.deviceLockedUntil,
     this.level,
+    this.twoFactorEnabled = false,
   });
 
   factory User.fromJson(Map<String, dynamic> json) {
@@ -61,6 +63,7 @@ class User {
           ? DateTime.tryParse(json['accountDeviceLock']['lockedUntil'].toString())
           : null,
       level: json['level']?.toString(),
+      twoFactorEnabled: json['twoFactorEnabled'] == true,
     );
   }
 

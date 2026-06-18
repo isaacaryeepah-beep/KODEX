@@ -2466,6 +2466,7 @@ function buildSidebar() {
       links.push({ id: 'hod-students',     label: 'Students',       icon: usersIcon() });
       links.push({ sep: true, label: 'INSIGHTS' });
       links.push({ id: 'hod-performance',  label: 'Performance',    icon: svgIcon('<line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/>') });
+      links.push({ id: 'hod-quiz-monitor', label: 'Quiz Monitor',   icon: svgIcon('<polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/>') });
       links.push({ id: 'hod-alerts',       label: 'Smart Alerts',   icon: svgIcon('<path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/>') });
       links.push({ id: 'hod-reports',      label: 'Reports',        icon: reportsIcon() });
       links.push({ sep: true, label: 'COMMUNICATE' });
@@ -2581,6 +2582,25 @@ function buildSidebar() {
       if (l.sep) return l.label ? `<div class="nav-section-label">${l.label}</div>` : `<div class="nav-sep"></div>`;
       return `<a onclick="navigateTo('${l.id}')" id="nav-${l.id}" data-tooltip="${l.label}">${l.id==='announcements'?'<div class="ann-line"></div>':''} ${l.icon}<span>${l.label}</span>${l.id==='announcements'?'<span id="ann-badge" style="display:none;position:absolute;top:4px;right:4px;background:#ef4444;color:#fff;font-size:9px;font-weight:700;padding:1px 5px;border-radius:20px;min-width:14px;text-align:center;line-height:14px;"></span>':''}</a>`;
     }).join('');
+
+  // Institution code footer at the bottom of the sidebar
+  const instCode = currentUser?.company?.institutionCode || currentUser?.company?.code || currentUser?.institutionCode || null;
+  const existingFooter = sidebar?.querySelector('.sidebar-inst-footer');
+  if (existingFooter) existingFooter.remove();
+  if (instCode && sidebar) {
+    const footer = document.createElement('div');
+    footer.className = 'sidebar-inst-footer';
+    footer.innerHTML = `
+      <div style="font-size:9px;font-weight:700;letter-spacing:.8px;text-transform:uppercase;color:rgba(255,255,255,.45);margin-bottom:4px">Institution Code</div>
+      <div style="display:flex;align-items:center;gap:8px">
+        <span style="font-size:14px;font-weight:800;letter-spacing:3px;color:rgba(255,255,255,.9);font-family:monospace">${instCode}</span>
+        <button onclick="navigator.clipboard.writeText('${instCode}').then(()=>showToastNotif('Code copied!','success'))"
+          style="font-size:10px;font-weight:600;padding:2px 8px;border-radius:6px;border:1px solid rgba(255,255,255,.25);background:rgba(255,255,255,.1);color:rgba(255,255,255,.8);cursor:pointer;line-height:16px">
+          Copy
+        </button>
+      </div>`;
+    sidebar.appendChild(footer);
+  }
 }
 
 function navigateTo(view) {
@@ -2646,6 +2666,7 @@ function navigateTo(view) {
     case 'hod-course-approvals': renderHodCourseApprovals(); break;
     case 'hod-unlock-students':  renderHodUnlockStudents(); break;
     case 'hod-performance':      renderHodPerformance(); break;
+    case 'hod-quiz-monitor':     renderHodQuizMonitor(); break;
     case 'hod-alerts':           renderHodAlerts(); break;
     case 'hod-messaging':        renderHodMessaging(); break;
     case 'announcements': renderAnnouncements(); break;
@@ -2689,7 +2710,10 @@ function navigateTo(view) {
       break;
     case 'branches':        _safeRender(content, renderBranches,       'Branches');        break;
     case 'class-reps':      _safeRender(content, renderClassReps,      'Class Reps');      break;
-    case 'admin-devices':   _safeRender(content, renderAdminDevices,   'Devices');         break;
+    case 'admin-devices':
+      if (currentUser?.role === 'hod') renderHodDevices();
+      else _safeRender(content, renderAdminDevices, 'Devices');
+      break;
     case 'my-profile':      renderProfile(); break;
     default: renderDashboard();
   }
@@ -3923,6 +3947,79 @@ Current: ${currentDept || 'None'}`, currentDept || '');
   }).catch(e => toastError(e.message || 'Failed to update department'));
 }
 
+
+// ── HOD — Quiz Monitor ────────────────────────────────────────────────────
+async function renderHodQuizMonitor() {
+  const content = document.getElementById('main-content');
+  if (!content) return;
+  content.innerHTML = '<div class="loading">Loading quiz monitor…</div>';
+  try {
+    const data = await api('/api/snap-quiz/sessions/live').catch(() => ({ sessions: [] }));
+    const sessions = data.sessions || data.liveSessions || [];
+    const esc = s => s == null ? '' : String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+
+    const navQuizzesEl = document.getElementById('nav-hod-quiz-monitor');
+    if (navQuizzesEl) {
+      const badge = navQuizzesEl.querySelector('.qm-badge');
+      if (sessions.length > 0) {
+        if (!badge) {
+          const b = document.createElement('span');
+          b.className = 'qm-badge';
+          b.style.cssText = 'position:absolute;top:4px;right:4px;background:#ef4444;color:#fff;font-size:9px;font-weight:700;padding:1px 5px;border-radius:20px;min-width:14px;text-align:center;line-height:14px;';
+          b.textContent = sessions.length;
+          navQuizzesEl.appendChild(b);
+        } else {
+          badge.textContent = sessions.length;
+        }
+      } else if (badge) badge.remove();
+    }
+
+    if (sessions.length === 0) {
+      content.innerHTML = `
+        <div class="page-header"><h2>Quiz Monitor</h2><p>Live student quiz activity for your department</p></div>
+        <div class="card" style="text-align:center;padding:56px 40px;color:var(--text-muted)">
+          <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="margin-bottom:16px;opacity:.4"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
+          <div style="font-size:16px;font-weight:600;margin-bottom:8px">No open quizzes right now</div>
+          <div style="font-size:13px">Open a quiz from the <a onclick="navigateTo('quizzes')" style="color:var(--accent);cursor:pointer;text-decoration:underline">Quizzes</a> page to see live student status here.</div>
+        </div>`;
+      return;
+    }
+
+    content.innerHTML = `
+      <div class="page-header" style="display:flex;align-items:flex-start;justify-content:space-between;flex-wrap:wrap;gap:10px">
+        <div>
+          <h2>Quiz Monitor</h2>
+          <p>${sessions.length} live quiz session${sessions.length !== 1 ? 's' : ''} in progress</p>
+        </div>
+        <button class="btn btn-secondary btn-sm" onclick="renderHodQuizMonitor()">↻ Refresh</button>
+      </div>
+      <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:16px">
+        ${sessions.map(s => `
+        <div class="card" style="padding:16px">
+          <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px">
+            <span style="display:inline-flex;align-items:center;gap:5px;font-size:11px;font-weight:700;padding:3px 8px;border-radius:20px;background:#dcfce7;color:#16a34a">
+              <span style="width:6px;height:6px;border-radius:50%;background:#16a34a"></span>Live
+            </span>
+            <span style="font-size:12px;color:var(--text-muted)">${esc(s.courseName || '')}</span>
+          </div>
+          <div style="font-size:15px;font-weight:700;margin-bottom:6px">${esc(s.quizTitle || s.title || 'Quiz Session')}</div>
+          <div style="font-size:12px;color:var(--text-muted);margin-bottom:12px">Lecturer: ${esc(s.lecturerName || '—')}</div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;font-size:13px">
+            <div style="background:var(--bg);border-radius:8px;padding:10px;text-align:center">
+              <div style="font-size:20px;font-weight:800;color:var(--accent)">${s.participantCount ?? s.joined ?? 0}</div>
+              <div style="font-size:10px;font-weight:600;text-transform:uppercase;color:var(--text-muted)">Joined</div>
+            </div>
+            <div style="background:var(--bg);border-radius:8px;padding:10px;text-align:center">
+              <div style="font-size:20px;font-weight:800">${s.submittedCount ?? s.completed ?? 0}</div>
+              <div style="font-size:10px;font-weight:600;text-transform:uppercase;color:var(--text-muted)">Submitted</div>
+            </div>
+          </div>
+        </div>`).join('')}
+      </div>`;
+  } catch(e) {
+    content.innerHTML = `<div class="card" style="color:#ef4444">Failed to load quiz monitor: ${e.message}</div>`;
+  }
+}
 
 // ── HOD — Department Performance Dashboard ────────────────────────────────
 async function renderHodPerformance() {
@@ -11561,10 +11658,10 @@ async function removeDevice(deviceId) {
   if (!confirm('Remove this device from your trusted list?')) return;
   try {
     await api(`/api/auth/my-devices/${encodeURIComponent(deviceId)}`, { method: 'DELETE' });
-    showToast('Device removed', 'success');
+    showToastNotif('✅ Device removed', 'success');
     loadMyDevices();
   } catch (e) {
-    showToast('Failed to remove device', 'error');
+    showToastNotif('❌ Failed to remove device', 'error');
   }
 }
 
@@ -18340,6 +18437,283 @@ async function doAssignRep(studentId, name) {
 // ══════════════════════════════════════════════════════════════
 // ADMIN DEVICES
 // ══════════════════════════════════════════════════════════════
+// ══════════════════════════════════════════════════════════════
+// HOD DEVICES — rich card management view
+// ══════════════════════════════════════════════════════════════
+async function renderHodDevices() {
+  const content = document.getElementById('main-content');
+  if (!content) return;
+  content.innerHTML = '<div class="loading">Loading devices…</div>';
+
+  const esc = s => s == null ? '' : String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  const timeAgo = d => {
+    if (!d) return 'Never';
+    const m = Math.floor((Date.now() - new Date(d)) / 60000);
+    if (m < 1) return 'Just now';
+    if (m < 60) return `${m}m ago`;
+    if (m < 1440) return `${Math.floor(m/60)}h ${Math.floor(m%60)}m ago`;
+    return `${Math.floor(m/1440)}d ago`;
+  };
+
+  const render = async () => {
+    try {
+      const { devices } = await api('/api/devices/all');
+      const online  = devices.filter(d => d.online).length;
+      const offline = devices.length - online;
+      const now     = new Date().toLocaleTimeString([], { hour:'2-digit', minute:'2-digit' });
+      const instCode = currentUser?.company?.institutionCode || currentUser?.company?.code || currentUser?.institutionCode || '—';
+
+      content.innerHTML = `
+        <div class="page-header" style="display:flex;align-items:flex-start;justify-content:space-between;flex-wrap:wrap;gap:10px">
+          <div>
+            <h2>Classroom Devices</h2>
+            <p>Manage and provision ESP32 attendance devices</p>
+          </div>
+          <button class="btn btn-primary btn-sm" onclick="hodGeneratePairingCode()">+ Generate Pairing Code</button>
+        </div>
+
+        <!-- Institution code + security info cards -->
+        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px;margin-bottom:20px">
+          <div class="card" style="padding:18px 20px">
+            <div style="font-size:10px;font-weight:700;letter-spacing:.8px;text-transform:uppercase;color:var(--text-muted);margin-bottom:8px">Institution Code</div>
+            <div style="font-size:28px;font-weight:900;letter-spacing:6px;font-family:monospace;margin-bottom:10px">${esc(instCode)}</div>
+            <div style="font-size:12px;color:var(--text-muted);margin-bottom:10px">Class Rep needs this + a pairing code to set up a device. Keep it confidential.</div>
+            <button class="btn btn-secondary btn-sm" onclick="navigator.clipboard.writeText('${esc(instCode)}').then(()=>showToastNotif('Code copied!','success'))">Copy</button>
+          </div>
+          <div class="card" style="padding:18px 20px;display:flex;align-items:flex-start;gap:14px">
+            <div style="width:40px;height:40px;border-radius:10px;background:#ede9fe;display:flex;align-items:center;justify-content:center;flex-shrink:0">
+              <svg viewBox="0 0 24 24" fill="none" stroke="#7c3aed" stroke-width="2" width="20" height="20"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+            </div>
+            <div>
+              <div style="font-weight:700;font-size:14px;margin-bottom:4px">Device pairing is secure</div>
+              <div style="font-size:12px;color:var(--text-muted)">JWT-authenticated · Company-isolated</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Paired devices header -->
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
+          <div style="font-size:13px;font-weight:600">
+            Paired Devices <span style="color:var(--text-muted);font-weight:400">${devices.length}</span>
+          </div>
+          <div style="display:flex;align-items:center;gap:8px">
+            <span style="font-size:12px;color:var(--text-muted)">Updated ${now}</span>
+            <button class="btn btn-secondary btn-sm" onclick="renderHodDevices()">↻ Refresh</button>
+          </div>
+        </div>
+
+        ${devices.length === 0 ? `
+          <div class="card" style="text-align:center;padding:48px;color:var(--text-muted)">
+            <div style="font-size:36px;margin-bottom:12px">📡</div>
+            <div style="font-size:16px;font-weight:600;margin-bottom:6px">No Devices Paired</div>
+            <div style="font-size:13px">Lecturers can pair an ESP32 device from their Attendance Device page.</div>
+          </div>
+        ` : `
+          <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(320px,1fr));gap:16px">
+            ${devices.map(d => {
+              const devId   = esc(d.deviceId);
+              const devName = esc(d.deviceName || d.deviceId);
+              const isOnline = d.online;
+              const lecturer = d.pairedBy?.name || d.lecturerName || null;
+              const dept     = d.pairedBy?.department || null;
+              const group    = d.assignedGroup ? `Gr ${esc(d.assignedGroup)} · L${esc(d.assignedLevel||'?')}` : null;
+              const classRep = d.classRepId?.name || null;
+              const ip       = d.localIp || null;
+              const fw       = d.firmwareVersion || null;
+              const chipId   = d.chipId || d.deviceId;
+
+              return `
+              <div class="card" style="padding:0;overflow:hidden" id="hod-dev-card-${devId}">
+                <!-- Card header -->
+                <div style="padding:14px 16px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;gap:8px">
+                  <div style="display:flex;align-items:center;gap:10px;min-width:0">
+                    <div style="width:38px;height:38px;border-radius:10px;background:${isOnline ? '#dcfce7' : 'var(--bg)'};display:flex;align-items:center;justify-content:center;flex-shrink:0">
+                      <svg viewBox="0 0 24 24" fill="none" stroke="${isOnline ? '#16a34a' : '#9ca3af'}" stroke-width="2" width="18" height="18"><rect x="5" y="2" width="14" height="20" rx="2" ry="2"/><line x1="12" y1="18" x2="12.01" y2="18"/></svg>
+                    </div>
+                    <div style="min-width:0">
+                      <div style="font-weight:700;font-size:14px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="${devName}">${devName}</div>
+                      <div style="font-size:11px;color:var(--text-muted);font-family:monospace">${esc(chipId)}</div>
+                    </div>
+                  </div>
+                  <span style="flex-shrink:0;display:inline-flex;align-items:center;gap:5px;font-size:11px;font-weight:700;padding:3px 8px;border-radius:20px;background:${isOnline ? '#dcfce7' : 'var(--bg)'};color:${isOnline ? '#16a34a' : '#9ca3af'}">
+                    <span style="width:6px;height:6px;border-radius:50%;background:${isOnline ? '#16a34a' : '#9ca3af'}"></span>
+                    ${isOnline ? 'Online' : 'Offline'}
+                  </span>
+                </div>
+
+                <!-- Details -->
+                <div style="padding:12px 16px;display:grid;gap:8px;font-size:13px">
+                  ${lecturer ? `
+                  <div style="display:flex;justify-content:space-between;align-items:center">
+                    <span style="color:var(--text-muted)">Paired By</span>
+                    <span style="font-weight:500;text-align:right">
+                      ${esc(lecturer)}
+                      ${dept ? `<span style="margin-left:4px;font-size:11px;padding:2px 6px;border-radius:10px;background:#ede9fe;color:#7c3aed;font-weight:600">${esc(dept)}</span>` : ''}
+                    </span>
+                  </div>` : ''}
+                  ${group ? `
+                  <div style="display:flex;justify-content:space-between;align-items:center">
+                    <span style="color:var(--text-muted)">Class / Level</span>
+                    <span style="font-weight:500">${group}</span>
+                  </div>` : ''}
+                  ${classRep ? `
+                  <div style="display:flex;justify-content:space-between;align-items:center">
+                    <span style="color:var(--text-muted)">Class Rep</span>
+                    <span style="font-weight:500">${esc(classRep)}</span>
+                  </div>` : ''}
+                  ${ip ? `
+                  <div style="display:flex;justify-content:space-between;align-items:center">
+                    <span style="color:var(--text-muted)">IP Address</span>
+                    <span style="font-family:monospace;font-size:12px">${esc(ip)}</span>
+                  </div>` : ''}
+                  ${fw ? `
+                  <div style="display:flex;justify-content:space-between;align-items:center">
+                    <span style="color:var(--text-muted)">Firmware</span>
+                    <span style="font-size:12px;color:var(--text-muted)">${esc(fw)}</span>
+                  </div>` : ''}
+                  <div style="display:flex;justify-content:space-between;align-items:center">
+                    <span style="color:var(--text-muted)">Last Seen</span>
+                    <span style="color:var(--text-muted)">${timeAgo(d.lastHeartbeat)}</span>
+                  </div>
+                </div>
+
+                <!-- Action buttons -->
+                <div style="padding:10px 16px 14px;display:flex;gap:8px;flex-wrap:wrap;border-top:1px solid var(--border)">
+                  <button class="btn btn-primary btn-sm" onclick="hodAssignClassRep('${devId}', '${devName.replace(/'/g,'\\&#39;')}')">👤 Assign Class Rep</button>
+                  <button class="btn btn-secondary btn-sm" onclick="hodRenameDevice('${devId}', '${devName.replace(/'/g,'\\&#39;')}')">✏ Rename</button>
+                  <button class="btn btn-secondary btn-sm" onclick="hodSetupDevice('${devId}')">⚙ Setup</button>
+                  <button class="btn btn-sm" style="background:#fff7ed;color:#c2410c;border:1px solid #fed7aa" onclick="hodFactoryReset('${devId}', '${devName.replace(/'/g,'\\&#39;')}')">↺ Factory Reset</button>
+                  <button class="btn btn-danger btn-sm" onclick="hodRemoveDevice('${devId}', '${devName.replace(/'/g,'\\&#39;')}')">✕ Remove</button>
+                </div>
+              </div>`;
+            }).join('')}
+          </div>
+        `}
+      `;
+    } catch (e) {
+      content.innerHTML = `<div class="card" style="color:#ef4444;padding:20px">Failed to load devices: ${esc(e.message)}</div>`;
+    }
+  };
+
+  await render();
+}
+
+window.hodGeneratePairingCode = async () => {
+  try {
+    const data = await api('/api/devices/pairing-code', { method: 'POST' });
+    const code = data.pairingCode || data.code || '—';
+    openModal(`
+      <div style="text-align:center;padding:8px 0">
+        <div style="width:48px;height:48px;border-radius:12px;background:#ede9fe;display:flex;align-items:center;justify-content:center;margin:0 auto 16px">
+          <svg viewBox="0 0 24 24" fill="none" stroke="#7c3aed" stroke-width="2" width="24" height="24"><rect x="5" y="2" width="14" height="20" rx="2" ry="2"/><line x1="12" y1="18" x2="12.01" y2="18"/></svg>
+        </div>
+        <h3 style="font-size:17px;font-weight:700;margin-bottom:6px">Pairing Code</h3>
+        <p style="font-size:13px;color:var(--text-muted);margin-bottom:20px">Share this code with the Class Rep to set up a device. It expires in a few minutes.</p>
+        <div style="font-size:44px;font-weight:900;letter-spacing:10px;color:#4f46e5;font-family:monospace;margin-bottom:20px">${code}</div>
+        <p style="font-size:12px;color:var(--text-muted)">The Class Rep connects to the <strong>DIKLY-XXXXXX</strong> hotspot and enters this code + the institution code.</p>
+        <button class="btn btn-primary" style="margin-top:16px" onclick="navigator.clipboard.writeText('${code}').then(()=>showToastNotif('Code copied!','success'))">Copy Code</button>
+      </div>
+    `);
+  } catch (e) {
+    showToastNotif('❌ Failed to generate pairing code: ' + e.message, 'error');
+  }
+};
+
+window.hodAssignClassRep = async (deviceId, deviceName) => {
+  const esc = s => s == null ? '' : String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  openModal(`
+    <div style="padding:4px 0">
+      <h3 style="font-size:16px;font-weight:700;margin-bottom:4px">Assign Class Rep</h3>
+      <p style="font-size:12px;color:var(--text-muted);margin-bottom:16px">Device: <strong>${esc(deviceName)}</strong> — search for a student to assign as the Class Rep for this device.</p>
+      <div class="form-group" style="margin-bottom:10px">
+        <label style="font-size:11px;font-weight:700;text-transform:uppercase;color:var(--text-muted)">Search Student</label>
+        <input type="text" id="hod-rep-search" placeholder="Name or index number…"
+          oninput="hodSearchRepStudents(this.value, '${deviceId}')"
+          style="width:100%;padding:8px 12px;border:1.5px solid var(--border);border-radius:8px;background:var(--bg);color:var(--text-primary);font-size:13px;margin-top:4px">
+      </div>
+      <div id="hod-rep-results" style="max-height:260px;overflow-y:auto"></div>
+    </div>
+  `);
+};
+
+let _hodRepSearchTimer;
+window.hodSearchRepStudents = (q, deviceId) => {
+  const esc = s => s == null ? '' : String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  clearTimeout(_hodRepSearchTimer);
+  _hodRepSearchTimer = setTimeout(async () => {
+    const box = document.getElementById('hod-rep-results');
+    if (!box) return;
+    if (!q.trim()) { box.innerHTML = ''; return; }
+    box.innerHTML = '<div style="color:var(--text-muted);font-size:13px;padding:8px 0">Searching…</div>';
+    try {
+      const { students } = await api(`/api/class-rep-admin/students?indexNumber=${encodeURIComponent(q)}`);
+      if (!students.length) { box.innerHTML = '<div style="color:var(--text-muted);font-size:13px;padding:8px 0">No students found.</div>'; return; }
+      box.innerHTML = students.slice(0, 10).map(s => `
+        <div style="display:flex;align-items:center;justify-content:space-between;padding:9px 12px;border-radius:8px;border:1.5px solid var(--border);margin-bottom:6px;background:var(--bg)">
+          <div>
+            <div style="font-size:13px;font-weight:600">${esc(s.name)}</div>
+            <div style="font-size:11px;color:var(--text-muted)">${esc(s.IndexNumber||'')}${s.studentLevel ? ` · L${esc(s.studentLevel)}` : ''}${s.studentGroup ? ` Gr${esc(s.studentGroup)}` : ''}${s.programme ? ` · ${esc(s.programme)}` : ''}</div>
+          </div>
+          <button class="btn btn-primary btn-sm" onclick="hodDoAssignRep('${deviceId}', '${s._id}', '${esc(s.name).replace(/'/g,"\\'")}')">Assign</button>
+        </div>`).join('');
+    } catch(e) {
+      box.innerHTML = `<div style="color:#ef4444;font-size:13px">${e.message}</div>`;
+    }
+  }, 300);
+};
+
+window.hodDoAssignRep = async (deviceId, studentId, studentName) => {
+  try {
+    await api(`/api/devices/${encodeURIComponent(deviceId)}/assign-class-rep`, {
+      method: 'PATCH',
+      body: JSON.stringify({ classRepId: studentId }),
+    });
+    closeModal();
+    showToastNotif(`✅ ${studentName} assigned as Class Rep for this device.`, 'success');
+    renderHodDevices();
+  } catch(e) {
+    showToastNotif('❌ Failed to assign: ' + e.message, 'error');
+  }
+};
+
+window.hodRenameDevice = async (deviceId, currentName) => {
+  const newName = prompt(`Rename device:\n(current: ${currentName})`, currentName);
+  if (!newName || newName.trim() === currentName) return;
+  try {
+    await api('/api/devices/my/rename', { method: 'PATCH', body: JSON.stringify({ deviceName: newName.trim(), deviceId }) });
+    showToastNotif('✅ Device renamed successfully.', 'success');
+    renderHodDevices();
+  } catch (e) {
+    showToastNotif('❌ Failed to rename: ' + e.message, 'error');
+  }
+};
+
+window.hodSetupDevice = async (deviceId) => {
+  showToastNotif('Setup is done via the device\'s WiFi portal — power on the device and connect to the DIKLY-XXXXXX hotspot.', 'warn');
+};
+
+window.hodFactoryReset = async (deviceId, deviceName) => {
+  if (!confirm(`Factory reset "${deviceName}"?\n\nThis will clear all WiFi credentials and pairing data from the device firmware. It will need to be re-paired by a lecturer.`)) return;
+  try {
+    await api(`/api/devices/${encodeURIComponent(deviceId)}/factory-reset`, { method: 'POST' });
+    showToastNotif('✅ Factory reset command sent. Device will restart.', 'success');
+    setTimeout(renderHodDevices, 2000);
+  } catch (e) {
+    showToastNotif('❌ Failed to factory reset: ' + e.message, 'error');
+  }
+};
+
+window.hodRemoveDevice = async (deviceId, deviceName) => {
+  if (!confirm(`Remove "${deviceName}"?\n\nThis permanently unpairs the device from your institution. The physical device will need to be re-paired.`)) return;
+  try {
+    await api(`/api/devices/${encodeURIComponent(deviceId)}/remove`, { method: 'DELETE' });
+    showToastNotif('✅ Device removed.', 'success');
+    renderHodDevices();
+  } catch (e) {
+    showToastNotif('❌ Failed to remove device: ' + e.message, 'error');
+  }
+};
+
 async function renderAdminDevices() {
   const content = document.getElementById('main-content');
   content.innerHTML = '<div class="loading">Loading…</div>';

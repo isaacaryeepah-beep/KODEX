@@ -6452,3 +6452,15 @@ table tr:hover td { background: #f8fafc !important; }
   .fap-topbar-btn { width: 26px !important; height: 26px !important; }
   .fap-topbar-btn svg { width: 12px !important; height: 12px !important; }
 }
+
+/* ── Sidebar institution-code footer ─────────────────────────────────── */
+.sidebar-inst-footer {
+  margin-top: auto;
+  padding: 10px 14px 6px;
+  border-top: 1px solid rgba(255,255,255,.12);
+  width: 100%;
+  box-sizing: border-box;
+}
+.sidebar-inst-footer button:hover {
+  background: rgba(255,255,255,.2) !important;
+}

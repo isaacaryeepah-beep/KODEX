@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../core/api.dart';
@@ -18,11 +19,37 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
   final _currentPwCtrl = TextEditingController();
   final _newPwCtrl = TextEditingController();
   final _confirmPwCtrl = TextEditingController();
+  final _pinCtrl = TextEditingController();
+  final _pinConfirmCtrl = TextEditingController();
   bool _saving = false;
   bool _changingPassword = false;
   bool _showCurrentPw = false;
   bool _showNewPw = false;
   bool _showConfirmPw = false;
+  bool _savingPin = false;
+  bool? _twoFactorEnabled;
+  List<Map<String, dynamic>> _devices = [];
+  bool _devicesLoading = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadDevices();
+  }
+
+  Future<void> _loadDevices() async {
+    try {
+      final data = await apiService.getMyDevices();
+      if (mounted) {
+        setState(() {
+          _devices = ((data['devices'] as List?) ?? []).cast<Map<String, dynamic>>();
+          _devicesLoading = false;
+        });
+      }
+    } catch (_) {
+      if (mounted) setState(() => _devicesLoading = false);
+    }
+  }
 
   @override
   void dispose() {
@@ -30,6 +57,8 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
     _currentPwCtrl.dispose();
     _newPwCtrl.dispose();
     _confirmPwCtrl.dispose();
+    _pinCtrl.dispose();
+    _pinConfirmCtrl.dispose();
     super.dispose();
   }
 
@@ -138,6 +167,78 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
         behavior: SnackBarBehavior.floating,
       ),
     );
+  }
+
+  Future<void> _toggle2FA(bool enable) async {
+    setState(() => _twoFactorEnabled = enable);
+    try {
+      await apiService.toggle2FA(enable);
+      _showSnack(enable ? '2FA enabled — you will receive a code by email on each login' : '2FA disabled');
+    } catch (e) {
+      setState(() => _twoFactorEnabled = !enable);
+      _showSnack('Failed to update 2FA', isError: true);
+    }
+  }
+
+  Future<void> _savePin() async {
+    final pin = _pinCtrl.text.trim();
+    final confirm = _pinConfirmCtrl.text.trim();
+    if (!RegExp(r'^\d{4}$').hasMatch(pin)) {
+      _showSnack('PIN must be exactly 4 digits', isError: true);
+      return;
+    }
+    if (pin != confirm) {
+      _showSnack('PINs do not match', isError: true);
+      return;
+    }
+    setState(() => _savingPin = true);
+    try {
+      await apiService.setClassRepPin(pin);
+      _pinCtrl.clear();
+      _pinConfirmCtrl.clear();
+      _showSnack('PIN saved — class rep can now use it on the device');
+    } catch (e) {
+      _showSnack('Failed to save PIN', isError: true);
+    } finally {
+      if (mounted) setState(() => _savingPin = false);
+    }
+  }
+
+  Future<void> _removeDevice(String deviceId) async {
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (_) => AlertDialog(
+        title: const Text('Remove Device'),
+        content: const Text('Remove this device from your trusted list?'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Cancel')),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(backgroundColor: DiklyColors.error, foregroundColor: Colors.white),
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Remove'),
+          ),
+        ],
+      ),
+    );
+    if (ok != true) return;
+    try {
+      await apiService.removeMyDevice(deviceId);
+      _showSnack('Device removed');
+      await _loadDevices();
+    } catch (e) {
+      _showSnack('Failed to remove device', isError: true);
+    }
+  }
+
+  String _timeAgo(String? dateStr) {
+    if (dateStr == null) return 'Unknown';
+    final dt = DateTime.tryParse(dateStr);
+    if (dt == null) return 'Unknown';
+    final diff = DateTime.now().difference(dt);
+    if (diff.inMinutes < 1) return 'Just now';
+    if (diff.inMinutes < 60) return '${diff.inMinutes}m ago';
+    if (diff.inHours < 24) return '${diff.inHours}h ago';
+    return '${diff.inDays}d ago';
   }
 
   InputDecoration _inputDeco({String? hint, bool readOnly = false, Widget? suffixIcon}) {
@@ -471,6 +572,215 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                                   style: TextStyle(fontWeight: FontWeight.w700, fontSize: 15),
                                 ),
                         ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 12),
+
+                // ── Two-Factor Authentication ────────────────────────────
+                DiklyCard(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text(
+                        'Two-Factor Authentication',
+                        style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700, color: DiklyColors.textPrimary),
+                      ),
+                      const SizedBox(height: 12),
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                        decoration: BoxDecoration(
+                          color: DiklyColors.background,
+                          borderRadius: BorderRadius.circular(10),
+                          border: Border.all(color: DiklyColors.border),
+                        ),
+                        child: Row(
+                          children: [
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: const [
+                                  Text('Email 2FA', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 14)),
+                                  SizedBox(height: 2),
+                                  Text('Send a code to your email every time you sign in', style: TextStyle(fontSize: 12, color: DiklyColors.textSecondary)),
+                                ],
+                              ),
+                            ),
+                            Switch(
+                              value: _twoFactorEnabled ?? (user.twoFactorEnabled),
+                              onChanged: _toggle2FA,
+                              activeColor: DiklyColors.primary,
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 12),
+
+                // ── Class Rep PIN (lecturers only) ───────────────────────
+                if (user.isLecturer)
+                  DiklyCard(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text(
+                          'Class Rep PIN',
+                          style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700, color: DiklyColors.textPrimary),
+                        ),
+                        const SizedBox(height: 4),
+                        const Text(
+                          'Set a 4-digit PIN that your class rep must enter to connect the attendance device to your session. Leave blank to allow connection without a PIN.',
+                          style: TextStyle(fontSize: 12, color: DiklyColors.textSecondary, height: 1.5),
+                        ),
+                        const SizedBox(height: 14),
+                        const DiklySectionLabel('NEW PIN'),
+                        const SizedBox(height: 6),
+                        TextFormField(
+                          controller: _pinCtrl,
+                          obscureText: true,
+                          keyboardType: TextInputType.number,
+                          maxLength: 4,
+                          inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                          decoration: _inputDeco(hint: '4 digits').copyWith(counterText: ''),
+                        ),
+                        const SizedBox(height: 10),
+                        const DiklySectionLabel('CONFIRM PIN'),
+                        const SizedBox(height: 6),
+                        TextFormField(
+                          controller: _pinConfirmCtrl,
+                          obscureText: true,
+                          keyboardType: TextInputType.number,
+                          maxLength: 4,
+                          inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                          decoration: _inputDeco(hint: 'Repeat PIN').copyWith(counterText: ''),
+                        ),
+                        const SizedBox(height: 16),
+                        DiklyPrimaryButton(
+                          label: 'Save PIN',
+                          loading: _savingPin,
+                          onPressed: _savePin,
+                        ),
+                      ],
+                    ),
+                  ),
+                if (user.isLecturer) const SizedBox(height: 12),
+
+                // ── Signed-in Devices ────────────────────────────────────
+                DiklyCard(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text(
+                        'Signed-in Devices',
+                        style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700, color: DiklyColors.textPrimary),
+                      ),
+                      const SizedBox(height: 4),
+                      const Text(
+                        'All devices that have logged into your account',
+                        style: TextStyle(fontSize: 12, color: DiklyColors.textSecondary),
+                      ),
+                      const SizedBox(height: 14),
+                      if (_devicesLoading)
+                        const Center(child: Padding(
+                          padding: EdgeInsets.symmetric(vertical: 12),
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        ))
+                      else if (_devices.isEmpty)
+                        const Text('No devices found', style: TextStyle(fontSize: 13, color: DiklyColors.textMuted))
+                      else
+                        ..._devices.map((d) {
+                          final isCurrent = d['isCurrent'] == true;
+                          final platform = d['platform']?.toString() ?? 'unknown';
+                          final platformLabel = platform.isNotEmpty ? '${platform[0].toUpperCase()}${platform.substring(1)}' : 'Unknown';
+                          final ip = d['ipAddress']?.toString() ?? '';
+                          final lastSeen = _timeAgo(d['lastSeenAt']?.toString());
+                          final userAgent = d['userAgent']?.toString() ?? '';
+                          final deviceId = d['deviceId']?.toString() ?? '';
+                          final icon = platform == 'mobile' ? Icons.smartphone_outlined
+                              : platform == 'desktop' ? Icons.laptop_outlined
+                              : Icons.devices_outlined;
+                          return Container(
+                            margin: const EdgeInsets.only(bottom: 10),
+                            padding: const EdgeInsets.all(12),
+                            decoration: BoxDecoration(
+                              color: isCurrent ? DiklyColors.primary.withOpacity(0.04) : DiklyColors.background,
+                              borderRadius: BorderRadius.circular(10),
+                              border: Border.all(color: isCurrent ? DiklyColors.primary : DiklyColors.border, width: isCurrent ? 1.5 : 1),
+                            ),
+                            child: Row(
+                              children: [
+                                Icon(icon, size: 28, color: isCurrent ? DiklyColors.primary : DiklyColors.textSecondary),
+                                const SizedBox(width: 12),
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      Row(
+                                        children: [
+                                          Text(platformLabel, style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13)),
+                                          if (isCurrent) ...[
+                                            const SizedBox(width: 8),
+                                            Container(
+                                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                                              decoration: BoxDecoration(color: DiklyColors.primary, borderRadius: BorderRadius.circular(20)),
+                                              child: const Text('Current', style: TextStyle(fontSize: 10, color: Colors.white, fontWeight: FontWeight.w700)),
+                                            ),
+                                          ],
+                                        ],
+                                      ),
+                                      if (ip.isNotEmpty) Text('$ip · $lastSeen', style: const TextStyle(fontSize: 11, color: DiklyColors.textSecondary)),
+                                      if (userAgent.isNotEmpty)
+                                        Text(userAgent, style: const TextStyle(fontSize: 10, color: DiklyColors.textMuted), maxLines: 1, overflow: TextOverflow.ellipsis),
+                                    ],
+                                  ),
+                                ),
+                                if (!isCurrent && deviceId.isNotEmpty)
+                                  TextButton(
+                                    onPressed: () => _removeDevice(deviceId),
+                                    style: TextButton.styleFrom(
+                                      foregroundColor: DiklyColors.error,
+                                      side: const BorderSide(color: DiklyColors.error),
+                                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                                    ),
+                                    child: const Text('Remove', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600)),
+                                  ),
+                              ],
+                            ),
+                          );
+                        }),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 12),
+
+                // ── Danger Zone ──────────────────────────────────────────
+                Container(
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    color: DiklyColors.surface,
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: DiklyColors.error.withOpacity(0.3)),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text('Danger Zone', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700, color: DiklyColors.error)),
+                      const SizedBox(height: 4),
+                      const Text('Permanently delete your account and all associated data.', style: TextStyle(fontSize: 12, color: DiklyColors.textSecondary)),
+                      const SizedBox(height: 12),
+                      OutlinedButton(
+                        onPressed: () => _showSnack('Contact your administrator to delete your account.', isError: false),
+                        style: OutlinedButton.styleFrom(
+                          foregroundColor: DiklyColors.error,
+                          side: const BorderSide(color: DiklyColors.error),
+                          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                        ),
+                        child: const Text('Delete Account', style: TextStyle(fontWeight: FontWeight.w600)),
                       ),
                     ],
                   ),
