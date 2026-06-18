@@ -2427,6 +2427,7 @@ function buildSidebar() {
       links.push({ id: 'subscription', label: 'Subscription', icon: subscriptionIcon() });
       break;
     case 'manager':
+      links.push({ id: 'dashboard', label: 'Dashboard', icon: dashboardIcon() });
       links.push({ sep: true, label: 'MANAGE' });
       links.push({ id: 'approvals', label: 'Approvals', icon: approvalsIcon() });
       links.push({ id: 'users', label: 'Users', icon: usersIcon() });
