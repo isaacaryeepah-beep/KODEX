@@ -98,16 +98,27 @@ List<NavItem> _drawerItems(String role) {
       ];
     case 'admin':
       return const [
-        NavItem(label: 'Home',          icon: Icons.home_outlined,         selectedIcon: Icons.home,         route: '/dashboard/admin'),
-        NavItem(label: 'Users',         icon: Icons.people_outlined,       selectedIcon: Icons.people,       route: '/admin/users',      section: 'MANAGEMENT'),
-        NavItem(label: 'Branches',      icon: Icons.account_tree_outlined, selectedIcon: Icons.account_tree, route: '/admin/branches'),
-        NavItem(label: 'Audit Logs',    icon: Icons.history_rounded,       selectedIcon: Icons.history,      route: '/admin/audit-logs'),
-        NavItem(label: 'Sessions',      icon: Icons.video_call_outlined,   selectedIcon: Icons.video_call,   route: '/sessions',         section: 'ACADEMIC'),
-        NavItem(label: 'Courses',       icon: Icons.school_outlined,       selectedIcon: Icons.school,       route: '/courses'),
-        NavItem(label: 'Reports',       icon: Icons.bar_chart_outlined,    selectedIcon: Icons.bar_chart,    route: '/reports'),
-        NavItem(label: 'Messages',      icon: Icons.message_outlined,      selectedIcon: Icons.message,      route: '/messages',         section: 'COMMUNICATE'),
-        NavItem(label: 'Announcements', icon: Icons.campaign_outlined,     selectedIcon: Icons.campaign,     route: '/announcements'),
-        NavItem(label: 'Meetings',      icon: Icons.groups_outlined,       selectedIcon: Icons.groups,       route: '/meetings'),
+        NavItem(label: 'Dashboard',        icon: Icons.dashboard_outlined,       selectedIcon: Icons.dashboard,       route: '/dashboard/admin'),
+        NavItem(label: 'Approvals',        icon: Icons.pending_actions_outlined, selectedIcon: Icons.pending_actions, route: '/admin/users',            section: 'MANAGE'),
+        NavItem(label: 'Search',           icon: Icons.search_outlined,          selectedIcon: Icons.search,          route: '/admin/users'),
+        NavItem(label: 'Users',            icon: Icons.people_outlined,          selectedIcon: Icons.people,          route: '/admin/users'),
+        NavItem(label: 'Sessions',         icon: Icons.video_call_outlined,      selectedIcon: Icons.video_call,      route: '/sessions'),
+        NavItem(label: 'Attendance',       icon: Icons.fact_check_outlined,      selectedIcon: Icons.fact_check,      route: '/attendance',             section: 'ACADEMIC'),
+        NavItem(label: 'Schedule',         icon: Icons.calendar_today_outlined,  selectedIcon: Icons.calendar_today,  route: '/timetable'),
+        NavItem(label: 'Courses',          icon: Icons.school_outlined,          selectedIcon: Icons.school,          route: '/courses'),
+        NavItem(label: 'Course Approvals', icon: Icons.check_circle_outline,     selectedIcon: Icons.check_circle,    route: '/courses'),
+        NavItem(label: 'Quizzes',          icon: Icons.quiz_outlined,            selectedIcon: Icons.quiz,            route: '/quizzes'),
+        NavItem(label: 'Assignments',      icon: Icons.assignment_outlined,      selectedIcon: Icons.assignment,      route: '/assignments'),
+        NavItem(label: 'Grade Book',       icon: Icons.grade_outlined,           selectedIcon: Icons.grade,           route: '/gradebook'),
+        NavItem(label: 'Announcements',    icon: Icons.campaign_outlined,        selectedIcon: Icons.campaign,        route: '/announcements'),
+        NavItem(label: 'Programmes',       icon: Icons.account_tree_outlined,    selectedIcon: Icons.account_tree,    route: '/admin/branches'),
+        NavItem(label: 'Class Reps',       icon: Icons.groups_outlined,          selectedIcon: Icons.groups,          route: '/admin/users'),
+        NavItem(label: 'Devices',          icon: Icons.devices_outlined,         selectedIcon: Icons.devices,         route: '/admin/users'),
+        NavItem(label: 'Messages',         icon: Icons.message_outlined,         selectedIcon: Icons.message,         route: '/messages',               section: 'COMMUNICATE'),
+        NavItem(label: 'Meetings',         icon: Icons.groups_outlined,          selectedIcon: Icons.groups,          route: '/meetings'),
+        NavItem(label: 'Reports',          icon: Icons.bar_chart_outlined,       selectedIcon: Icons.bar_chart,       route: '/reports',                section: 'INSIGHTS'),
+        NavItem(label: 'FAQ Center',       icon: Icons.help_outline,             selectedIcon: Icons.help,            route: '/reports',                section: 'SUPPORT'),
+        NavItem(label: 'Subscription',     icon: Icons.card_membership_outlined, selectedIcon: Icons.card_membership, route: '/subscription'),
       ];
     case 'manager':
       return const [
@@ -168,12 +179,19 @@ List<NavItem> _bottomItems(String role) {
         NavItem(label: 'Messages',icon: Icons.message_outlined,    selectedIcon: Icons.message,    route: '/messages'),
       ];
     case 'admin':
+      return const [
+        NavItem(label: 'Home',      icon: Icons.dashboard_outlined,    selectedIcon: Icons.dashboard,    route: '/dashboard/admin'),
+        NavItem(label: 'Users',     icon: Icons.people_outlined,       selectedIcon: Icons.people,       route: '/admin/users'),
+        NavItem(label: 'Sessions',  icon: Icons.video_call_outlined,   selectedIcon: Icons.video_call,   route: '/sessions'),
+        NavItem(label: 'Courses',   icon: Icons.school_outlined,       selectedIcon: Icons.school,       route: '/courses'),
+        NavItem(label: 'Messages',  icon: Icons.message_outlined,      selectedIcon: Icons.message,      route: '/messages'),
+      ];
     case 'hod':
       return const [
-        NavItem(label: 'Home',    icon: Icons.home_outlined,       selectedIcon: Icons.home,       route: '/dashboard/admin'),
-        NavItem(label: 'Users',   icon: Icons.people_outlined,     selectedIcon: Icons.people,     route: '/admin/users'),
+        NavItem(label: 'Home',    icon: Icons.dashboard_outlined,  selectedIcon: Icons.dashboard,  route: '/dashboard/hod'),
+        NavItem(label: 'Sessions',icon: Icons.video_call_outlined, selectedIcon: Icons.video_call, route: '/sessions'),
         NavItem(label: 'Courses', icon: Icons.school_outlined,     selectedIcon: Icons.school,     route: '/courses'),
-        NavItem(label: 'Meetings',icon: Icons.video_call_outlined, selectedIcon: Icons.video_call, route: '/meetings'),
+        NavItem(label: 'Approvals',icon: Icons.pending_actions_outlined, selectedIcon: Icons.pending_actions, route: '/hod/approvals'),
         NavItem(label: 'Messages',icon: Icons.message_outlined,    selectedIcon: Icons.message,    route: '/messages'),
       ];
     case 'employee':
@@ -226,13 +244,18 @@ class AppShell extends ConsumerWidget {
     int selectedIndex = navItems.indexWhere((item) => currentRoute.startsWith(item.route));
     if (selectedIndex < 0) selectedIndex = 0;
 
+    final companyName = user?.company ?? '';
+    final workspaceType = (user?.role == 'manager' || user?.role == 'employee')
+        ? 'Corporate'
+        : 'Academic';
+
     return Scaffold(
       appBar: AppBar(
         backgroundColor: appBarColor ?? Colors.white,
         foregroundColor: appBarForeground,
         iconTheme: IconThemeData(color: appBarForeground ?? DiklyColors.text),
         elevation: 0,
-        scrolledUnderElevation: 0,
+        scrolledUnderElevation: 0.5,
         surfaceTintColor: Colors.transparent,
         title: Row(
           mainAxisSize: MainAxisSize.min,
@@ -248,21 +271,32 @@ class AppShell extends ConsumerWidget {
                 overflow: TextOverflow.ellipsis,
               ),
             ),
+            if (companyName.isNotEmpty) ...[
+              const SizedBox(width: 6),
+              Text(
+                '— $companyName',
+                style: GoogleFonts.dmSans(
+                  fontSize: 12,
+                  color: const Color(0xFF9CA3AF),
+                ),
+                overflow: TextOverflow.ellipsis,
+              ),
+            ],
             const SizedBox(width: 8),
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
               decoration: BoxDecoration(
-                color: roleColor.withOpacity(0.10),
+                color: const Color(0xFF2563EB).withValues(alpha: 0.08),
                 borderRadius: BorderRadius.circular(20),
-                border: Border.all(color: roleColor.withOpacity(0.25)),
+                border: Border.all(color: const Color(0xFF2563EB).withValues(alpha: 0.20)),
               ),
               child: Text(
-                role.toUpperCase(),
+                workspaceType,
                 style: GoogleFonts.dmSans(
                   fontSize: 10,
-                  fontWeight: FontWeight.w700,
-                  color: roleColor,
-                  letterSpacing: 0.5,
+                  fontWeight: FontWeight.w600,
+                  color: const Color(0xFF2563EB),
+                  letterSpacing: 0.3,
                 ),
               ),
             ),
@@ -279,11 +313,11 @@ class AppShell extends ConsumerWidget {
         actions: [
           if (actions != null) ...actions!,
           IconButton(
-            icon: const Icon(Icons.notifications_none_rounded),
+            icon: const Icon(Icons.notifications_none_rounded, size: 22),
             onPressed: () {},
           ),
           IconButton(
-            icon: const Icon(Icons.person_outline_rounded),
+            icon: const Icon(Icons.person_outline_rounded, size: 22),
             onPressed: () => context.push('/profile'),
           ),
         ],
@@ -386,7 +420,7 @@ class _DiklyDrawer extends StatelessWidget {
                     children: [
                       CircleAvatar(
                         radius: 20,
-                        backgroundColor: roleColor.withOpacity(0.12),
+                        backgroundColor: roleColor.withValues(alpha: 0.12),
                         child: Text(
                           user?.initials ?? 'U',
                           style: GoogleFonts.dmSans(
@@ -434,16 +468,16 @@ class _DiklyDrawer extends StatelessWidget {
                 children: [
                   for (final item in items) ...[
                     if (item.section != null) ...[
-                      const SizedBox(height: 10),
+                      const SizedBox(height: 14),
                       Padding(
-                        padding: const EdgeInsets.fromLTRB(8, 0, 8, 6),
+                        padding: const EdgeInsets.fromLTRB(12, 0, 8, 6),
                         child: Text(
                           item.section!,
                           style: GoogleFonts.dmSans(
-                            fontSize: 9,
+                            fontSize: 10,
                             fontWeight: FontWeight.w700,
-                            color: const Color(0xFF9CA3AF),
-                            letterSpacing: 1.2,
+                            color: const Color(0xFF94A3B8),
+                            letterSpacing: 1.0,
                           ),
                         ),
                       ),
@@ -554,15 +588,15 @@ class _DrawerTile extends StatelessWidget {
       margin: const EdgeInsets.only(bottom: 2),
       decoration: isActive
           ? BoxDecoration(
-              color: const Color(0xA8FFF0B9),
+              color: const Color(0xFF2563EB).withValues(alpha: 0.08),
               borderRadius: BorderRadius.circular(10),
-              border: Border.all(color: const Color(0xFFF59E0B).withOpacity(0.4)),
+              border: Border.all(color: const Color(0xFF2563EB).withValues(alpha: 0.18)),
             )
           : null,
       child: ListTile(
         leading: Icon(
           isActive ? item.selectedIcon : item.icon,
-          color: isActive ? const Color(0xFFB45309) : const Color(0xFF6B7280),
+          color: isActive ? const Color(0xFF2563EB) : const Color(0xFF6B7280),
           size: 20,
         ),
         title: Text(
@@ -570,7 +604,7 @@ class _DrawerTile extends StatelessWidget {
           style: GoogleFonts.dmSans(
             fontSize: 14,
             fontWeight: isActive ? FontWeight.w700 : FontWeight.w500,
-            color: isActive ? const Color(0xFF92400E) : DiklyColors.textSecondary,
+            color: isActive ? const Color(0xFF2563EB) : DiklyColors.textSecondary,
           ),
         ),
         contentPadding: const EdgeInsets.symmetric(horizontal: 12),
@@ -647,7 +681,7 @@ class _BottomItem extends StatelessWidget {
         curve: Curves.easeInOut,
         padding: EdgeInsets.symmetric(horizontal: isSelected ? 16 : 12, vertical: 8),
         decoration: BoxDecoration(
-          color: isSelected ? DiklyColors.primary.withOpacity(0.10) : Colors.transparent,
+          color: isSelected ? DiklyColors.primary.withValues(alpha: 0.10) : Colors.transparent,
           borderRadius: BorderRadius.circular(40),
         ),
         child: Row(
