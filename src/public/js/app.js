@@ -11390,6 +11390,26 @@ async function renderProfile() {
         </div>` : ''}
       </div>
 
+      ${['employee','manager'].includes(u.role) ? `
+      <div style="margin-bottom:20px;padding-top:20px;border-top:1px solid var(--border)">
+        <h3 style="font-size:14px;font-weight:700;margin-bottom:12px;color:var(--text-primary)">Work Information</h3>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+          ${[
+            ['Designation',      u.designation   || '—'],
+            ['Department',       u.department    || '—'],
+            ['Employment Type',  u.employmentType ? u.employmentType.replace('_',' ').replace(/\b\w/g,c=>c.toUpperCase()) : '—'],
+            ['Work Location',    u.workLocation  ? u.workLocation.charAt(0).toUpperCase()+u.workLocation.slice(1) : '—'],
+            ['Date Hired',       u.dateHired     ? new Date(u.dateHired).toLocaleDateString('en-GB',{day:'2-digit',month:'short',year:'numeric'}) : '—'],
+            ['Reporting Manager',u.reportingManager ? (u.reportingManager.name||u.reportingManager) : '—'],
+          ].map(([label,val])=>`
+          <div style="background:var(--bg);border-radius:8px;padding:10px 12px;border:1px solid var(--border)">
+            <div style="font-size:11px;color:var(--text-muted);margin-bottom:2px">${label}</div>
+            <div style="font-size:13px;font-weight:600">${val}</div>
+          </div>`).join('')}
+        </div>
+        <p style="font-size:11px;color:var(--text-muted);margin-top:10px">To update these details, contact your administrator.</p>
+      </div>` : ''}
+
       <div style="margin-bottom:20px;padding-top:20px;border-top:1px solid var(--border)">
         <h3 style="font-size:14px;font-weight:700;margin-bottom:12px;color:var(--text-primary)">Change Password</h3>
         <div class="form-group">

@@ -1099,7 +1099,9 @@ exports.refresh = async (req, res) => {
 
 exports.getMe = async (req, res) => {
   try {
-    const user = await User.findById(req.user._id).populate("company", "name mode institutionCode");
+    const user = await User.findById(req.user._id)
+      .populate("company", "name mode institutionCode")
+      .populate("reportingManager", "name email designation");
     const company = await Company.findById(user.company);
 
     const isAdmin       = ['admin', 'superadmin', 'manager'].includes(user.role);
