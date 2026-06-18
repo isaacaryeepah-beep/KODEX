@@ -3748,6 +3748,7 @@ static void registerLocalHttp() {
         "{\"ok\":true,\"confirmed\":true,\"message\":\"Presence confirmed! You can now disconnect.\"}");
       return;
     }
+    // Hotspot-only path (captive portal): no BLE, no code — connection to AP is the proof.
     // ── Duplicate guard — check both indexNumber AND userId to prevent double-marking ──
     if (dedupSession != sessionId) dedupClear(sessionId);
     if ((indexNum.length() && dedupCheck(indexNum.c_str())) ||

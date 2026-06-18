@@ -60,7 +60,8 @@ jobs:
 
       - name: Publish Windows to Dikly_releases
         run: |
-          gh release delete windows-latest --yes --cleanup-tag --repo isaacaryeepah-beep/Dikly_releases 2>$null; $true
+          gh release delete windows-latest --yes --repo isaacaryeepah-beep/Dikly_releases 2>$null; $true
+          gh api -X DELETE /repos/isaacaryeepah-beep/Dikly_releases/git/refs/tags/windows-latest 2>$null; $true
           gh release create windows-latest dikly-windows-setup.exe `
             --repo isaacaryeepah-beep/Dikly_releases `
             --title "DIKLY Desktop — Windows (Latest)" `
@@ -139,7 +140,8 @@ jobs:
 
       - name: Publish Mac to Dikly_releases
         run: |
-          gh release delete mac-latest --yes --cleanup-tag --repo isaacaryeepah-beep/Dikly_releases 2>/dev/null || true
+          gh release delete mac-latest --yes --repo isaacaryeepah-beep/Dikly_releases 2>/dev/null || true
+          gh api -X DELETE /repos/isaacaryeepah-beep/Dikly_releases/git/refs/tags/mac-latest 2>/dev/null || true
           gh release create mac-latest dikly-mac.dmg \
             --repo isaacaryeepah-beep/Dikly_releases \
             --title "DIKLY Desktop — macOS (Latest)" \
