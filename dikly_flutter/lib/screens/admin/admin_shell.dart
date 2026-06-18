@@ -48,7 +48,7 @@ class _AdminShellState extends ConsumerState<AdminShell> {
     if (isAcademic) ...[
       const DrawerSection(header: 'ACADEMIC', items: [
         DrawerItem(Icons.sensors_outlined, 'Attendance', '/admin/sessions'),
-        DrawerItem(Icons.calendar_month_outlined, 'Schedule', '/timetable'),
+        DrawerItem(Icons.calendar_month_outlined, 'Timetable', '/timetable'),
         DrawerItem(Icons.menu_book_outlined, 'Courses', '/admin/courses'),
         DrawerItem(Icons.check_circle_outline, 'Course Approvals', '/admin/course-approvals'),
         DrawerItem(Icons.quiz_outlined, 'Quizzes', '/admin/quizzes'),
