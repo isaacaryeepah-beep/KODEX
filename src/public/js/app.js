@@ -18808,6 +18808,43 @@ async function renderAdminDevices() {
         </div>
       </div>
 
+      <!-- Connection guide -->
+      <details style="margin-bottom:16px" id="dev-guide-details">
+        <summary style="display:flex;align-items:center;gap:8px;cursor:pointer;list-style:none;padding:12px 16px;background:var(--card);border-radius:12px;border:1px solid var(--border);font-size:13px;font-weight:600;user-select:none">
+          <svg viewBox="0 0 24 24" fill="none" stroke="#4f6ef7" stroke-width="2" width="15" height="15"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+          <span style="flex:1">How to connect &amp; assign a device</span>
+          <svg class="dev-guide-arrow" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="13" height="13" style="color:var(--text-muted);transition:transform .2s"><polyline points="6 9 12 15 18 9"/></svg>
+        </summary>
+        <div style="padding:16px;background:var(--card);border:1px solid var(--border);border-top:none;border-radius:0 0 12px 12px">
+          <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:12px;margin-bottom:14px">
+            <div style="background:var(--bg);border-radius:10px;padding:13px 14px;border:1px solid var(--border)">
+              <div style="display:flex;align-items:center;gap:8px;margin-bottom:7px">
+                <div style="width:24px;height:24px;border-radius:7px;background:rgba(79,110,247,.1);display:flex;align-items:center;justify-content:center;flex-shrink:0;font-size:11px;font-weight:800;color:#4f6ef7">1</div>
+                <div style="font-size:12px;font-weight:700">Generate a Code</div>
+              </div>
+              <div style="font-size:11px;color:var(--text-muted);line-height:1.5">Click <strong>Generate Pairing Code</strong> above. You'll get a 6-digit one-time code (valid for 10 minutes) and your Institution Code.</div>
+            </div>
+            <div style="background:var(--bg);border-radius:10px;padding:13px 14px;border:1px solid var(--border)">
+              <div style="display:flex;align-items:center;gap:8px;margin-bottom:7px">
+                <div style="width:24px;height:24px;border-radius:7px;background:rgba(79,110,247,.1);display:flex;align-items:center;justify-content:center;flex-shrink:0;font-size:11px;font-weight:800;color:#4f6ef7">2</div>
+                <div style="font-size:12px;font-weight:700">Share with Class Rep</div>
+              </div>
+              <div style="font-size:11px;color:var(--text-muted);line-height:1.5">Give the Class Rep both codes. They power on the ESP32 device, connect it to WiFi via the hotspot, then enter the codes on the device.</div>
+            </div>
+            <div style="background:var(--bg);border-radius:10px;padding:13px 14px;border:1px solid var(--border)">
+              <div style="display:flex;align-items:center;gap:8px;margin-bottom:7px">
+                <div style="width:24px;height:24px;border-radius:7px;background:rgba(79,110,247,.1);display:flex;align-items:center;justify-content:center;flex-shrink:0;font-size:11px;font-weight:800;color:#4f6ef7">3</div>
+                <div style="font-size:12px;font-weight:700">Assign &amp; Configure</div>
+              </div>
+              <div style="font-size:11px;color:var(--text-muted);line-height:1.5">Once paired, the device appears here. Assign the <strong>Class Rep</strong> (so attendance is linked to their group) and add <strong>Lecturers + Courses</strong> the device will handle.</div>
+            </div>
+          </div>
+          <div style="background:rgba(79,110,247,.06);border-radius:8px;padding:10px 13px;border-left:3px solid #4f6ef7">
+            <div style="font-size:11px;color:var(--text-muted);line-height:1.5"><strong style="color:var(--text-primary)">Tip:</strong> Each device can have up to 2 class reps and multiple lecturers. The device uses BLE + WiFi proximity — students must be within range when the attendance session is live.</div>
+          </div>
+        </div>
+      </details>
+
       <!-- Section header -->
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
         <div style="font-size:14px;font-weight:700;display:flex;align-items:center;gap:8px">
@@ -18983,23 +19020,41 @@ window.adminGeneratePairingCode = async () => {
 };
 
 window.adminAssignLecturer = async (deviceId, deviceName) => {
+  const isHod = currentUser?.role === 'hod';
+  const hodDept = isHod ? (currentUser?.department || '') : '';
+  const selStyle = 'width:100%;padding:9px 12px;border:1.5px solid var(--border);border-radius:8px;background:var(--bg);color:var(--text-primary);font-size:13px;margin-top:4px';
+  const labelStyle = 'font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--text-muted)';
+
   openModal(`
     <div>
-      <h3 style="font-size:16px;font-weight:700;margin-bottom:4px">Assign Lecturer</h3>
-      <p style="font-size:12px;color:var(--text-muted);margin-bottom:16px">Device: <strong>${deviceName}</strong> — select a lecturer and their course.</p>
+      <div style="display:flex;align-items:center;gap:9px;margin-bottom:4px">
+        <div style="width:34px;height:34px;border-radius:9px;background:rgba(79,110,247,.1);display:flex;align-items:center;justify-content:center;flex-shrink:0">
+          <svg viewBox="0 0 24 24" fill="none" stroke="#4f6ef7" stroke-width="2" width="16" height="16"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+        </div>
+        <div>
+          <h3 style="font-size:15px;font-weight:700;margin:0">Assign Lecturer</h3>
+          <p style="font-size:11px;color:var(--text-muted);margin:2px 0 0">Device: <strong>${deviceName}</strong></p>
+        </div>
+      </div>
+      ${isHod ? `<div style="margin:10px 0 14px;padding:8px 12px;background:rgba(79,110,247,.06);border-radius:8px;border-left:3px solid #4f6ef7;font-size:11px;color:var(--text-muted)">Showing lecturers in your department: <strong style="color:var(--text-primary)">${hodDept}</strong></div>` : ''}
       <div id="admin-lec-loading" style="text-align:center;padding:24px;color:var(--text-muted);font-size:13px">Loading lecturers…</div>
       <div id="admin-lec-body" style="display:none">
+        ${!isHod ? `
         <div class="form-group" style="margin-bottom:12px">
-          <label style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--text-muted)">Lecturer</label>
-          <select id="admin-lec-select" onchange="adminLecturerChanged(this.value)"
-            style="width:100%;padding:9px 12px;border:1.5px solid var(--border);border-radius:8px;background:var(--bg);color:var(--text-primary);font-size:13px;margin-top:4px">
+          <label style="${labelStyle}">Department</label>
+          <select id="admin-dept-select" onchange="adminDeptChanged(this.value)" style="${selStyle}">
+            <option value="">— All Departments —</option>
+          </select>
+        </div>` : ''}
+        <div class="form-group" style="margin-bottom:12px">
+          <label style="${labelStyle}">Lecturer</label>
+          <select id="admin-lec-select" onchange="adminLecturerChanged(this.value)" style="${selStyle}">
             <option value="">— Select lecturer —</option>
           </select>
         </div>
         <div class="form-group" style="margin-bottom:16px">
-          <label style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--text-muted)">Course</label>
-          <select id="admin-course-select"
-            style="width:100%;padding:9px 12px;border:1.5px solid var(--border);border-radius:8px;background:var(--bg);color:var(--text-primary);font-size:13px;margin-top:4px">
+          <label style="${labelStyle}">Course</label>
+          <select id="admin-course-select" style="${selStyle}">
             <option value="">— Select lecturer first —</option>
           </select>
         </div>
@@ -19010,20 +19065,50 @@ window.adminAssignLecturer = async (deviceId, deviceName) => {
   try {
     const { lecturers } = await api('/api/devices/lecturers-for-assignment');
     window._adminLecturers = lecturers;
-    const sel = document.getElementById('admin-lec-select');
-    if (!sel) return;
-    lecturers.forEach(l => {
-      const opt = document.createElement('option');
-      opt.value = l._id;
-      opt.textContent = l.name + (l.department ? ` · ${l.department}` : '');
-      sel.appendChild(opt);
-    });
+
+    // Populate department dropdown (admin only — HOD is pre-filtered by backend)
+    if (!isHod) {
+      const depts = [...new Set(lecturers.map(l => l.department).filter(Boolean))].sort();
+      const deptSel = document.getElementById('admin-dept-select');
+      if (deptSel) {
+        depts.forEach(d => {
+          const opt = document.createElement('option');
+          opt.value = d;
+          opt.textContent = d;
+          deptSel.appendChild(opt);
+        });
+      }
+    }
+
+    // Populate lecturer dropdown (all by default, or filtered if dept already chosen)
+    window._adminFillLecturers(null);
+
     document.getElementById('admin-lec-loading').style.display = 'none';
     document.getElementById('admin-lec-body').style.display = 'block';
   } catch(e) {
     const el = document.getElementById('admin-lec-loading');
     if (el) el.innerHTML = `<span style="color:#ef4444">${e.message}</span>`;
   }
+};
+
+window._adminFillLecturers = (deptFilter) => {
+  const sel = document.getElementById('admin-lec-select');
+  if (!sel) return;
+  const list = (window._adminLecturers || []).filter(l => !deptFilter || l.department === deptFilter);
+  sel.innerHTML = `<option value="">— Select lecturer${deptFilter ? ' in ' + deptFilter : ''} —</option>`;
+  list.forEach(l => {
+    const opt = document.createElement('option');
+    opt.value = l._id;
+    opt.textContent = l.name + (l.department && !deptFilter ? ` · ${l.department}` : '');
+    sel.appendChild(opt);
+  });
+  // Reset course dropdown when lecturer list resets
+  const cSel = document.getElementById('admin-course-select');
+  if (cSel) cSel.innerHTML = '<option value="">— Select lecturer first —</option>';
+};
+
+window.adminDeptChanged = (dept) => {
+  window._adminFillLecturers(dept || null);
 };
 
 window.adminLecturerChanged = (lecturerId) => {
@@ -19071,43 +19156,133 @@ window.adminRemoveLecturer = async (deviceId, lecturerId, courseId, lecturerName
 };
 
 window.adminAssignClassRep = async (deviceId, deviceName) => {
+  const isHod = currentUser?.role === 'hod';
+  const hodDept = isHod ? (currentUser?.department || '') : '';
+  const selStyle = 'width:100%;padding:8px 10px;border:1.5px solid var(--border);border-radius:8px;background:var(--bg);color:var(--text-primary);font-size:12px;margin-top:3px';
+  const labelStyle = 'font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--text-muted)';
+
   openModal(`
     <div>
-      <h3 style="font-size:16px;font-weight:700;margin-bottom:4px">Assign Class Rep</h3>
-      <p style="font-size:12px;color:var(--text-muted);margin-bottom:16px">Device: <strong>${deviceName}</strong></p>
-      <div class="form-group">
-        <label style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--text-muted)">Search Student</label>
-        <input type="text" id="admin-rep-search" placeholder="Name or index number…"
-          oninput="adminSearchRepStudents(this.value,'${deviceId}')"
-          style="width:100%;padding:9px 12px;border:1.5px solid var(--border);border-radius:8px;background:var(--bg);color:var(--text-primary);font-size:13px;margin-top:4px">
+      <div style="display:flex;align-items:center;gap:9px;margin-bottom:14px">
+        <div style="width:34px;height:34px;border-radius:9px;background:rgba(124,58,237,.1);display:flex;align-items:center;justify-content:center;flex-shrink:0">
+          <svg viewBox="0 0 24 24" fill="none" stroke="#7c3aed" stroke-width="2" width="16" height="16"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+        </div>
+        <div>
+          <h3 style="font-size:15px;font-weight:700;margin:0">Assign Class Rep</h3>
+          <p style="font-size:11px;color:var(--text-muted);margin:2px 0 0">Device: <strong>${deviceName}</strong></p>
+        </div>
       </div>
-      <div id="admin-rep-results" style="max-height:260px;overflow-y:auto;margin-top:10px"></div>
+
+      <!-- Filter strip -->
+      <div style="background:var(--bg);border-radius:10px;padding:12px;border:1px solid var(--border);margin-bottom:12px">
+        <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.6px;color:var(--text-muted);margin-bottom:10px">Filter Students</div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px">
+          ${!isHod ? `
+          <div style="grid-column:1/-1">
+            <label style="${labelStyle}">Department</label>
+            <input type="text" id="admin-rep-dept" placeholder="e.g. Computer Science"
+              oninput="adminSearchRepStudents('${deviceId}')"
+              style="${selStyle}">
+          </div>` : `
+          <div style="grid-column:1/-1;padding:7px 10px;background:rgba(79,110,247,.06);border-radius:7px;border-left:3px solid #4f6ef7;font-size:11px;color:var(--text-muted)">
+            Showing students in your department: <strong style="color:var(--text-primary)">${hodDept}</strong>
+          </div>`}
+          <div>
+            <label style="${labelStyle}">Level / Year</label>
+            <select id="admin-rep-level" onchange="adminSearchRepStudents('${deviceId}')" style="${selStyle}">
+              <option value="">Any level</option>
+              <option value="100">Year 1 (100)</option>
+              <option value="200">Year 2 (200)</option>
+              <option value="300">Year 3 (300)</option>
+              <option value="400">Year 4 (400)</option>
+              <option value="500">Year 5 (500)</option>
+            </select>
+          </div>
+          <div>
+            <label style="${labelStyle}">Group</label>
+            <select id="admin-rep-group" onchange="adminSearchRepStudents('${deviceId}')" style="${selStyle}">
+              <option value="">Any group</option>
+              <option value="A">Group A</option>
+              <option value="B">Group B</option>
+              <option value="C">Group C</option>
+              <option value="D">Group D</option>
+            </select>
+          </div>
+        </div>
+        <div>
+          <label style="${labelStyle}">Name or Index Number</label>
+          <input type="text" id="admin-rep-search" placeholder="Search by name or index number…"
+            oninput="adminSearchRepStudents('${deviceId}')"
+            style="${selStyle}">
+        </div>
+      </div>
+
+      <div style="font-size:11px;color:var(--text-muted);margin-bottom:8px">Use the filters above to narrow down the list, then click <strong>Assign</strong> on the correct student.</div>
+      <div id="admin-rep-results" style="max-height:280px;overflow-y:auto"></div>
     </div>
-  `);
+  `, { maxWidth: '560px' });
+
+  // Auto-load for HOD (already dept-filtered) or show prompt
+  if (isHod) adminSearchRepStudents(deviceId);
 };
 
 let _adminRepTimer;
-window.adminSearchRepStudents = (q, deviceId) => {
+window.adminSearchRepStudents = (deviceId) => {
   clearTimeout(_adminRepTimer);
   _adminRepTimer = setTimeout(async () => {
     const box = document.getElementById('admin-rep-results');
     if (!box) return;
-    if (!q.trim()) { box.innerHTML = ''; return; }
+    const q     = (document.getElementById('admin-rep-search')?.value || '').trim();
+    const level = document.getElementById('admin-rep-level')?.value || '';
+    const group = document.getElementById('admin-rep-group')?.value || '';
+    const dept  = document.getElementById('admin-rep-dept')?.value?.trim() || '';
+
+    // Need at least one filter
+    if (!q && !level && !group && !dept) {
+      box.innerHTML = '<div style="color:var(--text-muted);font-size:12px;padding:10px 0;text-align:center">Enter a name, index number, or select a filter to search.</div>';
+      return;
+    }
+
     box.innerHTML = '<div style="color:var(--text-muted);font-size:13px;padding:8px 0">Searching…</div>';
-    const esc = s => s == null ? '' : String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+    const esc2 = s => s == null ? '' : String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
     try {
-      const { students } = await api(`/api/class-rep-admin/students?indexNumber=${encodeURIComponent(q)}`);
-      if (!students.length) { box.innerHTML = '<div style="color:var(--text-muted);font-size:13px;padding:8px 0">No students found.</div>'; return; }
-      box.innerHTML = students.slice(0,10).map(s => `
-        <div style="display:flex;align-items:center;justify-content:space-between;padding:9px 12px;border-radius:8px;border:1.5px solid var(--border);margin-bottom:6px;background:var(--bg)">
-          <div>
-            <div style="font-size:13px;font-weight:600">${esc(s.name)}</div>
-            <div style="font-size:11px;color:var(--text-muted)">${esc(s.IndexNumber||'')} · L${esc(s.studentLevel||'?')} Gr${esc(s.studentGroup||'?')} · ${esc(s.programme||'')}</div>
+      const params = new URLSearchParams();
+      if (q)     params.set('indexNumber', q);
+      if (level) params.set('level', level);
+      if (group) params.set('group', group);
+      if (dept)  params.set('department', dept);
+      const { students } = await api(`/api/class-rep-admin/students?${params.toString()}`);
+
+      if (!students.length) {
+        box.innerHTML = '<div style="color:var(--text-muted);font-size:13px;padding:10px 0;text-align:center">No students found matching these filters.</div>';
+        return;
+      }
+      box.innerHTML = students.slice(0, 15).map(s => {
+        const initials = (s.name || '?')[0].toUpperCase();
+        const alreadyRep = s.isClassRep;
+        return `
+        <div style="display:flex;align-items:center;gap:10px;padding:10px 12px;border-radius:10px;border:1.5px solid ${alreadyRep ? 'rgba(22,163,74,.2)' : 'var(--border)'};margin-bottom:7px;background:${alreadyRep ? 'rgba(22,163,74,.04)' : 'var(--bg)'};transition:border-color .15s">
+          <div style="width:36px;height:36px;border-radius:50%;background:rgba(124,58,237,.1);display:flex;align-items:center;justify-content:center;flex-shrink:0;font-size:13px;font-weight:800;color:#7c3aed">${initials}</div>
+          <div style="flex:1;min-width:0">
+            <div style="font-size:13px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc2(s.name)}</div>
+            <div style="display:flex;flex-wrap:wrap;gap:4px;margin-top:3px">
+              ${s.IndexNumber ? `<span style="font-size:10px;font-weight:600;padding:1px 6px;border-radius:5px;background:rgba(79,110,247,.08);color:#4f6ef7">${esc2(s.IndexNumber)}</span>` : ''}
+              ${s.studentLevel ? `<span style="font-size:10px;padding:1px 6px;border-radius:5px;background:var(--border);color:var(--text-muted)">Level ${esc2(s.studentLevel)}</span>` : ''}
+              ${s.studentGroup ? `<span style="font-size:10px;padding:1px 6px;border-radius:5px;background:var(--border);color:var(--text-muted)">Group ${esc2(s.studentGroup)}</span>` : ''}
+              ${s.department   ? `<span style="font-size:10px;padding:1px 6px;border-radius:5px;background:var(--border);color:var(--text-muted)">${esc2(s.department)}</span>` : ''}
+              ${s.programme    ? `<span style="font-size:10px;padding:1px 6px;border-radius:5px;background:var(--border);color:var(--text-muted)">${esc2(s.programme)}</span>` : ''}
+            </div>
           </div>
-          ${s.isClassRep
-            ? `<span style="font-size:11px;color:#16a34a;font-weight:600">Already a rep</span>`
-            : `<button class="btn btn-primary btn-sm" onclick="adminDoAssignRep('${deviceId}','${s._id}','${esc(s.name)}')">Assign</button>`}
-        </div>`).join('');
+          <div style="flex-shrink:0">
+            ${alreadyRep
+              ? `<span style="display:inline-flex;align-items:center;gap:4px;font-size:11px;font-weight:600;padding:4px 9px;border-radius:20px;background:rgba(22,163,74,.1);color:#15803d">
+                  <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="20 6 9 17 4 12"/></svg>
+                  Rep
+                </span>`
+              : `<button class="btn btn-primary btn-sm" style="font-size:11px;padding:5px 12px" onclick="adminDoAssignRep('${deviceId}','${s._id}','${esc2(s.name)}')">Assign</button>`}
+          </div>
+        </div>`;
+      }).join('');
     } catch(e) { box.innerHTML = `<div style="color:#ef4444;font-size:13px">${e.message}</div>`; }
   }, 300);
 };
