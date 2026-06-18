@@ -47,30 +47,30 @@ class _HodReportsScreenState extends ConsumerState<HodReportsScreen> {
       if (type == 'students') {
         final d = await apiService.get('/api/users?role=student&limit=500$deptParam');
         headers = ['Name', 'Index Number', 'Email', 'Department', 'Status'];
-        rows = ((d['users'] as List?) ?? []).map((u) => [
-          u['name'] ?? '',
-          u['indexNumber'] ?? '',
-          u['email'] ?? '',
-          u['department'] ?? '',
+        rows = ((d['users'] as List?) ?? []).map<List<String>>((u) => [
+          u['name']?.toString() ?? '',
+          u['indexNumber']?.toString() ?? '',
+          u['email']?.toString() ?? '',
+          u['department']?.toString() ?? '',
           (u['isApproved'] == true) ? 'Active' : 'Pending',
         ]).toList();
         filename = 'DIKLY_Students_${dept.isNotEmpty ? dept : 'All'}.csv';
       } else if (type == 'lecturers') {
         final d = await apiService.get('/api/users?role=lecturer&limit=200$deptParam');
         headers = ['Name', 'Email', 'Department', 'Status'];
-        rows = ((d['users'] as List?) ?? []).map((u) => [
-          u['name'] ?? '',
-          u['email'] ?? '',
-          u['department'] ?? '',
+        rows = ((d['users'] as List?) ?? []).map<List<String>>((u) => [
+          u['name']?.toString() ?? '',
+          u['email']?.toString() ?? '',
+          u['department']?.toString() ?? '',
           (u['isApproved'] == true) ? 'Active' : 'Pending',
         ]).toList();
         filename = 'DIKLY_Lecturers_${dept.isNotEmpty ? dept : 'All'}.csv';
       } else if (type == 'attendance') {
         final d = await apiService.get('/api/attendance-sessions?limit=200$deptParam');
         headers = ['Session', 'Lecturer', 'Date', 'Attendance', 'Status'];
-        rows = ((d['sessions'] as List?) ?? []).map((s) => [
-          s['title'] ?? s['courseName'] ?? 'Session',
-          (s['createdBy'] as Map?)?['name'] ?? '',
+        rows = ((d['sessions'] as List?) ?? []).map<List<String>>((s) => [
+          s['title']?.toString() ?? s['courseName']?.toString() ?? 'Session',
+          (s['createdBy'] as Map?)?['name']?.toString() ?? '',
           s['createdAt']?.toString().substring(0, 10) ?? '',
           '${s['attendanceCount'] ?? (s['records'] as List?)?.length ?? 0}',
           (s['active'] == true) ? 'Live' : 'Ended',
@@ -79,10 +79,10 @@ class _HodReportsScreenState extends ConsumerState<HodReportsScreen> {
       } else {
         final d = await apiService.get('/api/hod/course-overview');
         headers = ['Course', 'Code', 'Lecturer', 'Enrolled', 'Sessions (30d)', 'Total Attendance'];
-        rows = ((d['courses'] as List?) ?? []).map((c) => [
-          c['title'] ?? '',
-          c['code'] ?? '',
-          (c['lecturer'] as Map?)?['name'] ?? 'Unassigned',
+        rows = ((d['courses'] as List?) ?? []).map<List<String>>((c) => [
+          c['title']?.toString() ?? '',
+          c['code']?.toString() ?? '',
+          (c['lecturer'] as Map?)?['name']?.toString() ?? 'Unassigned',
           '${c['enrolled'] ?? 0}',
           '${c['sessions30'] ?? 0}',
           '${c['totalAttendance'] ?? 0}',
