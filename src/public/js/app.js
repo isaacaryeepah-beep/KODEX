@@ -18579,6 +18579,7 @@ async function renderHodDevices() {
 
                 <!-- Action buttons -->
                 <div style="padding:10px 16px 14px;display:flex;gap:8px;flex-wrap:wrap;border-top:1px solid var(--border)">
+                  <button class="btn btn-primary btn-sm" onclick="hodAssignClassRep('${devId}', '${devName.replace(/'/g,'\\&#39;')}')">👤 Assign Class Rep</button>
                   <button class="btn btn-secondary btn-sm" onclick="hodRenameDevice('${devId}', '${devName.replace(/'/g,'\\&#39;')}')">✏ Rename</button>
                   <button class="btn btn-secondary btn-sm" onclick="hodSetupDevice('${devId}')">⚙ Setup</button>
                   <button class="btn btn-sm" style="background:#fff7ed;color:#c2410c;border:1px solid #fed7aa" onclick="hodFactoryReset('${devId}', '${devName.replace(/'/g,'\\&#39;')}')">↺ Factory Reset</button>
@@ -18615,6 +18616,63 @@ window.hodGeneratePairingCode = async () => {
     `);
   } catch (e) {
     showToastNotif('❌ Failed to generate pairing code: ' + e.message, 'error');
+  }
+};
+
+window.hodAssignClassRep = async (deviceId, deviceName) => {
+  const esc = s => s == null ? '' : String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  openModal(`
+    <div style="padding:4px 0">
+      <h3 style="font-size:16px;font-weight:700;margin-bottom:4px">Assign Class Rep</h3>
+      <p style="font-size:12px;color:var(--text-muted);margin-bottom:16px">Device: <strong>${esc(deviceName)}</strong> — search for a student to assign as the Class Rep for this device.</p>
+      <div class="form-group" style="margin-bottom:10px">
+        <label style="font-size:11px;font-weight:700;text-transform:uppercase;color:var(--text-muted)">Search Student</label>
+        <input type="text" id="hod-rep-search" placeholder="Name or index number…"
+          oninput="hodSearchRepStudents(this.value, '${deviceId}')"
+          style="width:100%;padding:8px 12px;border:1.5px solid var(--border);border-radius:8px;background:var(--bg);color:var(--text-primary);font-size:13px;margin-top:4px">
+      </div>
+      <div id="hod-rep-results" style="max-height:260px;overflow-y:auto"></div>
+    </div>
+  `);
+};
+
+let _hodRepSearchTimer;
+window.hodSearchRepStudents = (q, deviceId) => {
+  const esc = s => s == null ? '' : String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  clearTimeout(_hodRepSearchTimer);
+  _hodRepSearchTimer = setTimeout(async () => {
+    const box = document.getElementById('hod-rep-results');
+    if (!box) return;
+    if (!q.trim()) { box.innerHTML = ''; return; }
+    box.innerHTML = '<div style="color:var(--text-muted);font-size:13px;padding:8px 0">Searching…</div>';
+    try {
+      const { students } = await api(`/api/class-rep-admin/students?indexNumber=${encodeURIComponent(q)}`);
+      if (!students.length) { box.innerHTML = '<div style="color:var(--text-muted);font-size:13px;padding:8px 0">No students found.</div>'; return; }
+      box.innerHTML = students.slice(0, 10).map(s => `
+        <div style="display:flex;align-items:center;justify-content:space-between;padding:9px 12px;border-radius:8px;border:1.5px solid var(--border);margin-bottom:6px;background:var(--bg)">
+          <div>
+            <div style="font-size:13px;font-weight:600">${esc(s.name)}</div>
+            <div style="font-size:11px;color:var(--text-muted)">${esc(s.IndexNumber||'')}${s.studentLevel ? ` · L${esc(s.studentLevel)}` : ''}${s.studentGroup ? ` Gr${esc(s.studentGroup)}` : ''}${s.programme ? ` · ${esc(s.programme)}` : ''}</div>
+          </div>
+          <button class="btn btn-primary btn-sm" onclick="hodDoAssignRep('${deviceId}', '${s._id}', '${esc(s.name).replace(/'/g,"\\'")}')">Assign</button>
+        </div>`).join('');
+    } catch(e) {
+      box.innerHTML = `<div style="color:#ef4444;font-size:13px">${e.message}</div>`;
+    }
+  }, 300);
+};
+
+window.hodDoAssignRep = async (deviceId, studentId, studentName) => {
+  try {
+    await api(`/api/devices/${encodeURIComponent(deviceId)}/assign-class-rep`, {
+      method: 'PATCH',
+      body: JSON.stringify({ classRepId: studentId }),
+    });
+    closeModal();
+    showToastNotif(`✅ ${studentName} assigned as Class Rep for this device.`, 'success');
+    renderHodDevices();
+  } catch(e) {
+    showToastNotif('❌ Failed to assign: ' + e.message, 'error');
   }
 };
 
