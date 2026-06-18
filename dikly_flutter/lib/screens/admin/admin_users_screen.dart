@@ -17,20 +17,127 @@ class AdminUsersScreen extends ConsumerStatefulWidget {
 }
 
 class _AdminUsersScreenState extends ConsumerState<AdminUsersScreen> {
-  static const _accent = Color(0xFFDC2626);
+  static const _accent = Color(0xFF4F6EF7);
   String _search = '';
 
   static const _deptColors = [
-    Color(0xFF2563EB),
-    Color(0xFFDC2626),
+    Color(0xFF4F6EF7),
     Color(0xFF7C3AED),
     Color(0xFF0891B2),
     Color(0xFF059669),
     Color(0xFFD97706),
+    Color(0xFFDC2626),
   ];
 
   Color _colorForDept(String name, int index) {
     return _deptColors[index % _deptColors.length];
+  }
+
+  void _showDeptUsers(BuildContext context, String deptName, List<User> users, Color color, {String initialTab = 'students'}) {
+    final students  = users.where((u) => u.isStudent).toList();
+    final lecturers = users.where((u) => u.isLecturer || u.role == 'hod').toList();
+    final startIdx  = initialTab == 'lecturers' ? 1 : 0;
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: DiklyColors.surface,
+      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
+      builder: (ctx) => DefaultTabController(
+        length: 2,
+        initialIndex: startIdx,
+        child: DraggableScrollableSheet(
+          expand: false,
+          initialChildSize: 0.75,
+          maxChildSize: 0.95,
+          minChildSize: 0.4,
+          builder: (ctx, scrollCtrl) => Column(
+            children: [
+              Container(
+                padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
+                child: Row(
+                  children: [
+                    CircleAvatar(
+                      radius: 18,
+                      backgroundColor: color.withOpacity(0.12),
+                      child: Text(
+                        deptName.isNotEmpty ? deptName[0].toUpperCase() : '?',
+                        style: TextStyle(color: color, fontWeight: FontWeight.w800, fontSize: 15),
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(deptName, style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w700)),
+                          Text('${students.length} students · ${lecturers.length} lecturers',
+                              style: const TextStyle(fontSize: 12, color: DiklyColors.textSecondary)),
+                        ],
+                      ),
+                    ),
+                    IconButton(icon: const Icon(Icons.close, size: 20), onPressed: () => Navigator.pop(ctx)),
+                  ],
+                ),
+              ),
+              TabBar(
+                labelColor: color,
+                unselectedLabelColor: DiklyColors.textSecondary,
+                indicatorColor: color,
+                labelStyle: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700),
+                tabs: [
+                  Tab(text: 'Students (${students.length})'),
+                  Tab(text: 'Lecturers (${lecturers.length})'),
+                ],
+              ),
+              Expanded(
+                child: TabBarView(
+                  children: [
+                    _buildUserList(scrollCtrl, students, 'No students in this department'),
+                    _buildUserList(scrollCtrl, lecturers, 'No lecturers in this department'),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildUserList(ScrollController ctrl, List<User> users, String emptyMsg) {
+    if (users.isEmpty) {
+      return Center(child: Padding(
+        padding: const EdgeInsets.all(32),
+        child: Text(emptyMsg, style: const TextStyle(fontSize: 13, color: DiklyColors.textSecondary)),
+      ));
+    }
+    return ListView.separated(
+      controller: ctrl,
+      padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
+      itemCount: users.length,
+      separatorBuilder: (_, __) => const Divider(height: 1),
+      itemBuilder: (_, i) {
+        final u = users[i];
+        final initials = u.name.trim().split(' ').where((p) => p.isNotEmpty).take(2).map((p) => p[0].toUpperCase()).join();
+        return ListTile(
+          contentPadding: const EdgeInsets.symmetric(horizontal: 0, vertical: 4),
+          leading: CircleAvatar(
+            radius: 18,
+            backgroundImage: u.profilePhoto?.isNotEmpty == true ? NetworkImage(u.profilePhoto!) : null,
+            backgroundColor: DiklyColors.primary.withOpacity(0.12),
+            child: u.profilePhoto?.isNotEmpty == true ? null : Text(initials, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: DiklyColors.primary)),
+          ),
+          title: Text(u.name, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
+          subtitle: Text(u.indexNumber ?? u.email, style: const TextStyle(fontSize: 11, color: DiklyColors.textSecondary)),
+          trailing: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+            decoration: BoxDecoration(color: DiklyColors.primary.withOpacity(0.1), borderRadius: BorderRadius.circular(6)),
+            child: Text(u.role, style: const TextStyle(fontSize: 10, fontWeight: FontWeight.w700, color: DiklyColors.primary)),
+          ),
+        );
+      },
+    );
   }
 
   void _showCreateDialog() {
@@ -207,6 +314,8 @@ class _AdminUsersScreenState extends ConsumerState<AdminUsersScreen> {
                       deptName: deptName,
                       users: deptUsers,
                       color: color,
+                      onTapStudents:  () => _showDeptUsers(context, deptName, deptUsers, color, initialTab: 'students'),
+                      onTapLecturers: () => _showDeptUsers(context, deptName, deptUsers, color, initialTab: 'lecturers'),
                     );
                   },
                 ),
@@ -223,8 +332,16 @@ class _DeptCard extends StatelessWidget {
   final String deptName;
   final List<User> users;
   final Color color;
+  final VoidCallback onTapStudents;
+  final VoidCallback onTapLecturers;
 
-  const _DeptCard({required this.deptName, required this.users, required this.color});
+  const _DeptCard({
+    required this.deptName,
+    required this.users,
+    required this.color,
+    required this.onTapStudents,
+    required this.onTapLecturers,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -291,13 +408,45 @@ class _DeptCard extends StatelessWidget {
                     overflow: TextOverflow.ellipsis,
                   ),
                   const SizedBox(height: 10),
-                  // Stats row
+                  // Stats row — Students and Lecturers are tappable
                   Row(
                     children: [
-                      _Stat(value: '${students.length}', label: 'STUDENTS', color: const Color(0xFF2563EB)),
-                      const SizedBox(width: 8),
-                      _Stat(value: '${lecturers.length}', label: 'LECTURERS', color: const Color(0xFF7C3AED)),
-                      const SizedBox(width: 8),
+                      Expanded(
+                        child: GestureDetector(
+                          onTap: onTapStudents,
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 6),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFF4F6EF7).withOpacity(0.08),
+                              borderRadius: BorderRadius.circular(6),
+                              border: Border.all(color: const Color(0xFF4F6EF7).withOpacity(0.2)),
+                            ),
+                            child: Column(children: [
+                              Text('${students.length}', style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w800, color: Color(0xFF4F6EF7), height: 1.1)),
+                              const Text('STUDENTS', style: TextStyle(fontSize: 7, fontWeight: FontWeight.w700, color: Color(0xFF4F6EF7), letterSpacing: 0.2)),
+                            ]),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 6),
+                      Expanded(
+                        child: GestureDetector(
+                          onTap: onTapLecturers,
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 6),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFF7C3AED).withOpacity(0.08),
+                              borderRadius: BorderRadius.circular(6),
+                              border: Border.all(color: const Color(0xFF7C3AED).withOpacity(0.2)),
+                            ),
+                            child: Column(children: [
+                              Text('${lecturers.length}', style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w800, color: Color(0xFF7C3AED), height: 1.1)),
+                              const Text('LECTURERS', style: TextStyle(fontSize: 7, fontWeight: FontWeight.w700, color: Color(0xFF7C3AED), letterSpacing: 0.2)),
+                            ]),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 6),
                       _Stat(value: '${levels.length}', label: 'LEVELS', color: const Color(0xFF059669)),
                     ],
                   ),
@@ -324,8 +473,8 @@ class _DeptCard extends StatelessWidget {
                         style: const TextStyle(fontSize: 10, color: Color(0xFF9CA3AF)),
                       ),
                       Text(
-                        'Open →',
-                        style: TextStyle(fontSize: 11, color: color, fontWeight: FontWeight.w600),
+                        'Tap stats →',
+                        style: TextStyle(fontSize: 10, color: color, fontWeight: FontWeight.w600),
                       ),
                     ],
                   ),
