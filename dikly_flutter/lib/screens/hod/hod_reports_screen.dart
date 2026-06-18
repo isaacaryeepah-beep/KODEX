@@ -1,6 +1,10 @@
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:open_file/open_file.dart';
+import 'package:path_provider/path_provider.dart';
 import '../../core/api.dart';
+import '../../core/auth.dart';
 import '../../core/theme.dart';
 import '../../widgets/ds/dikly_ds.dart';
 
@@ -19,11 +23,145 @@ final _hodDeptStatsProvider = FutureProvider.autoDispose<Map<String, dynamic>>(
   },
 );
 
-class HodReportsScreen extends ConsumerWidget {
+class HodReportsScreen extends ConsumerStatefulWidget {
   const HodReportsScreen({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<HodReportsScreen> createState() => _HodReportsScreenState();
+}
+
+class _HodReportsScreenState extends ConsumerState<HodReportsScreen> {
+  bool _exporting = false;
+
+  Future<void> _exportCsv(String type) async {
+    setState(() => _exporting = true);
+    try {
+      final user = ref.read(authProvider).user;
+      final dept = user?.department ?? '';
+      final deptParam = dept.isNotEmpty ? '&department=${Uri.encodeComponent(dept)}' : '';
+
+      List<List<String>> rows = [];
+      List<String> headers = [];
+      String filename = '';
+
+      if (type == 'students') {
+        final d = await apiService.get('/api/users?role=student&limit=500$deptParam');
+        headers = ['Name', 'Index Number', 'Email', 'Department', 'Status'];
+        rows = ((d['users'] as List?) ?? []).map((u) => [
+          u['name'] ?? '',
+          u['indexNumber'] ?? '',
+          u['email'] ?? '',
+          u['department'] ?? '',
+          (u['isApproved'] == true) ? 'Active' : 'Pending',
+        ]).toList();
+        filename = 'DIKLY_Students_${dept.isNotEmpty ? dept : 'All'}.csv';
+      } else if (type == 'lecturers') {
+        final d = await apiService.get('/api/users?role=lecturer&limit=200$deptParam');
+        headers = ['Name', 'Email', 'Department', 'Status'];
+        rows = ((d['users'] as List?) ?? []).map((u) => [
+          u['name'] ?? '',
+          u['email'] ?? '',
+          u['department'] ?? '',
+          (u['isApproved'] == true) ? 'Active' : 'Pending',
+        ]).toList();
+        filename = 'DIKLY_Lecturers_${dept.isNotEmpty ? dept : 'All'}.csv';
+      } else if (type == 'attendance') {
+        final d = await apiService.get('/api/attendance-sessions?limit=200$deptParam');
+        headers = ['Session', 'Lecturer', 'Date', 'Attendance', 'Status'];
+        rows = ((d['sessions'] as List?) ?? []).map((s) => [
+          s['title'] ?? s['courseName'] ?? 'Session',
+          (s['createdBy'] as Map?)?['name'] ?? '',
+          s['createdAt']?.toString().substring(0, 10) ?? '',
+          '${s['attendanceCount'] ?? (s['records'] as List?)?.length ?? 0}',
+          (s['active'] == true) ? 'Live' : 'Ended',
+        ]).toList();
+        filename = 'DIKLY_Attendance_${dept.isNotEmpty ? dept : 'All'}.csv';
+      } else {
+        final d = await apiService.get('/api/hod/course-overview');
+        headers = ['Course', 'Code', 'Lecturer', 'Enrolled', 'Sessions (30d)', 'Total Attendance'];
+        rows = ((d['courses'] as List?) ?? []).map((c) => [
+          c['title'] ?? '',
+          c['code'] ?? '',
+          (c['lecturer'] as Map?)?['name'] ?? 'Unassigned',
+          '${c['enrolled'] ?? 0}',
+          '${c['sessions30'] ?? 0}',
+          '${c['totalAttendance'] ?? 0}',
+        ]).toList();
+        filename = 'DIKLY_Courses_${dept.isNotEmpty ? dept : 'All'}.csv';
+      }
+
+      final csv = [headers, ...rows]
+          .map((r) => r.map((v) => '"${v.replaceAll('"', '""')}"').join(','))
+          .join('\n');
+
+      final dir = await getTemporaryDirectory();
+      final file = File('${dir.path}/$filename');
+      await file.writeAsString(csv);
+      await OpenFile.open(file.path);
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Export failed: $e'), backgroundColor: DiklyColors.error),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _exporting = false);
+    }
+  }
+
+  void _showExportSheet() {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: DiklyColors.surface,
+      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(16))),
+      builder: (_) => Padding(
+        padding: const EdgeInsets.all(20),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Center(
+              child: Container(
+                width: 36, height: 4,
+                decoration: BoxDecoration(color: DiklyColors.border, borderRadius: BorderRadius.circular(2)),
+              ),
+            ),
+            const SizedBox(height: 14),
+            const Text('Export Report', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: DiklyColors.textPrimary)),
+            const SizedBox(height: 4),
+            const Text('Download department data as CSV', style: TextStyle(fontSize: 12, color: DiklyColors.textSecondary)),
+            const SizedBox(height: 16),
+            ...[
+              ('students', Icons.school_outlined, 'Students CSV'),
+              ('lecturers', Icons.person_outlined, 'Lecturers CSV'),
+              ('attendance', Icons.sensors_outlined, 'Attendance CSV'),
+              ('courses', Icons.menu_book_outlined, 'Courses CSV'),
+            ].map((item) => ListTile(
+              contentPadding: const EdgeInsets.symmetric(horizontal: 4),
+              leading: Container(
+                width: 36, height: 36,
+                decoration: BoxDecoration(
+                  color: DiklyColors.primary.withOpacity(0.08),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Icon(item.$2, size: 18, color: DiklyColors.primary),
+              ),
+              title: Text(item.$3, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w500)),
+              trailing: const Icon(Icons.download_outlined, size: 18, color: DiklyColors.textSecondary),
+              onTap: () {
+                Navigator.pop(context);
+                _exportCsv(item.$1);
+              },
+            )),
+            const SizedBox(height: 8),
+          ],
+        ),
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
     final asyncData = ref.watch(_hodDeptStatsProvider);
 
     return asyncData.when(
@@ -58,6 +196,19 @@ class HodReportsScreen extends ConsumerWidget {
               DiklyScreenHeader(
                 title: 'Department Reports',
                 subtitle: 'Attendance and activity overview',
+                action: _exporting
+                    ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2))
+                    : OutlinedButton.icon(
+                        onPressed: _showExportSheet,
+                        style: OutlinedButton.styleFrom(
+                          foregroundColor: DiklyColors.primary,
+                          side: const BorderSide(color: DiklyColors.primary),
+                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                        ),
+                        icon: const Icon(Icons.download_outlined, size: 16),
+                        label: const Text('Export', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
+                      ),
               ),
 
               // 4 stat cards in a row

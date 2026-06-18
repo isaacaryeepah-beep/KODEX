@@ -36,39 +36,49 @@ class _AdminShellState extends ConsumerState<AdminShell> {
     Icons.bar_chart_outlined,
   ];
 
-  static const _sections = [
-    DrawerSection(header: 'MANAGE', items: [
+  List<DrawerSection> _buildSections(bool isAcademic) => [
+    const DrawerSection(header: 'MANAGE', items: [
       DrawerItem(Icons.check_circle_outline, 'Approvals', '/admin/approvals'),
       DrawerItem(Icons.search_outlined, 'Search', '/admin/search'),
       DrawerItem(Icons.people_outlined, 'Users', '/admin/users'),
       DrawerItem(Icons.play_circle_outline, 'Sessions', '/sessions'),
-    ]),
-    DrawerSection(header: 'WORKFORCE', items: [
-      DrawerItem(Icons.login_outlined, 'Sign In / Out', '/sign-in-out'),
-      DrawerItem(Icons.groups_outlined, 'Team Attendance', '/corporate-attendance'),
-      DrawerItem(Icons.schedule_outlined, 'Shifts', '/shifts'),
-      DrawerItem(Icons.beach_access_outlined, 'Leave Requests', '/manager/leave-requests'),
-      DrawerItem(Icons.school_outlined, 'Training & Assessments', '/quizzes'),
-      DrawerItem(Icons.trending_up_outlined, 'Performance', '/performance'),
-      DrawerItem(Icons.access_time_outlined, 'Timesheets', '/manager/timesheets'),
-      DrawerItem(Icons.receipt_long_outlined, 'Expenses', '/expenses'),
-      DrawerItem(Icons.inventory_2_outlined, 'Assets', '/admin/assets'),
-      DrawerItem(Icons.palette_outlined, 'Branding', '/admin/branding'),
       DrawerItem(Icons.account_tree_outlined, 'Branches', '/admin/branches'),
-    ]),
-    DrawerSection(header: 'ADMIN', items: [
-      DrawerItem(Icons.analytics_outlined, 'Analytics', '/reports'),
-      DrawerItem(Icons.campaign_outlined, 'Announcements', '/announcements'),
       DrawerItem(Icons.history_outlined, 'Audit Logs', '/admin/audit-logs'),
     ]),
-    DrawerSection(header: 'COMMUNICATE', items: [
+    if (isAcademic) ...[
+      const DrawerSection(header: 'ACADEMIC', items: [
+        DrawerItem(Icons.sensors_outlined, 'Attendance', '/admin/sessions'),
+        DrawerItem(Icons.calendar_month_outlined, 'Timetable', '/timetable'),
+        DrawerItem(Icons.menu_book_outlined, 'Courses', '/admin/courses'),
+        DrawerItem(Icons.check_circle_outline, 'Course Approvals', '/admin/course-approvals'),
+        DrawerItem(Icons.quiz_outlined, 'Quizzes', '/admin/quizzes'),
+        DrawerItem(Icons.assignment_outlined, 'Assignments', '/assignments'),
+        DrawerItem(Icons.grade_outlined, 'Grade Book', '/gradebook'),
+        DrawerItem(Icons.campaign_outlined, 'Announcements', '/announcements'),
+        DrawerItem(Icons.library_books_outlined, 'Programmes', '/admin/programmes'),
+        DrawerItem(Icons.star_outlined, 'Class Reps', '/admin/class-reps'),
+        DrawerItem(Icons.phonelink_outlined, 'Devices', '/admin/devices'),
+      ]),
+    ] else ...[
+      const DrawerSection(header: 'WORKFORCE', items: [
+        DrawerItem(Icons.groups_outlined, 'Attendance', '/corporate-attendance'),
+        DrawerItem(Icons.schedule_outlined, 'Shifts', '/shifts'),
+        DrawerItem(Icons.beach_access_outlined, 'Leave Requests', '/manager/leave-requests'),
+        DrawerItem(Icons.access_time_outlined, 'Timesheets', '/manager/timesheets'),
+        DrawerItem(Icons.receipt_long_outlined, 'Expenses', '/expenses'),
+        DrawerItem(Icons.inventory_2_outlined, 'Assets', '/admin/assets'),
+        DrawerItem(Icons.campaign_outlined, 'Announcements', '/announcements'),
+        DrawerItem(Icons.palette_outlined, 'Branding', '/admin/branding'),
+      ]),
+    ],
+    const DrawerSection(header: 'COMMUNICATE', items: [
       DrawerItem(Icons.message_outlined, 'Messages', '/messages'),
       DrawerItem(Icons.video_call_outlined, 'Meetings', '/meetings'),
     ]),
-    DrawerSection(header: 'INSIGHTS', items: [
+    const DrawerSection(header: 'INSIGHTS', items: [
       DrawerItem(Icons.assessment_outlined, 'Reports', '/reports'),
     ]),
-    DrawerSection(header: 'SUPPORT', items: [
+    const DrawerSection(header: 'SUPPORT', items: [
       DrawerItem(Icons.help_outline, 'FAQ Center', '/faq'),
       DrawerItem(Icons.card_membership_outlined, 'Subscription', '/subscription'),
       DrawerItem(Icons.person_outlined, 'My Profile', '/profile'),
@@ -219,7 +229,7 @@ class _AdminShellState extends ConsumerState<AdminShell> {
         userEmail: user?.email ?? '',
         userRole: 'Administrator',
         institutionCode: user?.institutionCode ?? '',
-        sections: _sections,
+        sections: _buildSections(user?.isAcademic ?? true),
         onSignOut: () async {
           Navigator.pop(context);
           await ref.read(authProvider.notifier).logout();
