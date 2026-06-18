@@ -2689,7 +2689,10 @@ function navigateTo(view) {
       break;
     case 'branches':        _safeRender(content, renderBranches,       'Branches');        break;
     case 'class-reps':      _safeRender(content, renderClassReps,      'Class Reps');      break;
-    case 'admin-devices':   _safeRender(content, renderAdminDevices,   'Devices');         break;
+    case 'admin-devices':
+      if (currentUser?.role === 'hod') renderHodDevices();
+      else _safeRender(content, renderAdminDevices, 'Devices');
+      break;
     case 'my-profile':      renderProfile(); break;
     default: renderDashboard();
   }
@@ -11561,10 +11564,10 @@ async function removeDevice(deviceId) {
   if (!confirm('Remove this device from your trusted list?')) return;
   try {
     await api(`/api/auth/my-devices/${encodeURIComponent(deviceId)}`, { method: 'DELETE' });
-    showToast('Device removed', 'success');
+    showToastNotif('✅ Device removed', 'success');
     loadMyDevices();
   } catch (e) {
-    showToast('Failed to remove device', 'error');
+    showToastNotif('❌ Failed to remove device', 'error');
   }
 }
 
@@ -18340,6 +18343,194 @@ async function doAssignRep(studentId, name) {
 // ══════════════════════════════════════════════════════════════
 // ADMIN DEVICES
 // ══════════════════════════════════════════════════════════════
+// ══════════════════════════════════════════════════════════════
+// HOD DEVICES — rich card management view
+// ══════════════════════════════════════════════════════════════
+async function renderHodDevices() {
+  const content = document.getElementById('main-content');
+  if (!content) return;
+  content.innerHTML = '<div class="loading">Loading devices…</div>';
+
+  const esc = s => s == null ? '' : String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  const timeAgo = d => {
+    if (!d) return 'Never';
+    const m = Math.floor((Date.now() - new Date(d)) / 60000);
+    if (m < 1) return 'Just now';
+    if (m < 60) return `${m}m ago`;
+    if (m < 1440) return `${Math.floor(m/60)}h ${Math.floor(m%60)}m ago`;
+    return `${Math.floor(m/1440)}d ago`;
+  };
+
+  const render = async () => {
+    try {
+      const { devices } = await api('/api/devices/all');
+      const online  = devices.filter(d => d.online).length;
+      const offline = devices.length - online;
+      const now     = new Date().toLocaleTimeString([], { hour:'2-digit', minute:'2-digit' });
+
+      content.innerHTML = `
+        <div class="page-header" style="display:flex;align-items:flex-start;justify-content:space-between;flex-wrap:wrap;gap:10px">
+          <div>
+            <h2>Classroom Devices</h2>
+            <p>ESP32 attendance devices paired to your department</p>
+          </div>
+          <div style="display:flex;align-items:center;gap:8px">
+            <span style="font-size:12px;color:var(--text-muted)">Updated ${now}</span>
+            <button class="btn btn-secondary btn-sm" id="hod-dev-refresh" onclick="renderHodDevices()">
+              ↻ Refresh
+            </button>
+          </div>
+        </div>
+
+        <!-- Stats row -->
+        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:12px;margin-bottom:20px">
+          <div class="card" style="padding:14px 16px">
+            <div style="font-size:11px;color:var(--text-muted);text-transform:uppercase;font-weight:600;margin-bottom:4px">Paired Devices</div>
+            <div style="font-size:26px;font-weight:800">${devices.length}</div>
+          </div>
+          <div class="card" style="padding:14px 16px">
+            <div style="font-size:11px;color:var(--text-muted);text-transform:uppercase;font-weight:600;margin-bottom:4px">Online Now</div>
+            <div style="font-size:26px;font-weight:800;color:#16a34a">${online}</div>
+          </div>
+          <div class="card" style="padding:14px 16px">
+            <div style="font-size:11px;color:var(--text-muted);text-transform:uppercase;font-weight:600;margin-bottom:4px">Offline</div>
+            <div style="font-size:26px;font-weight:800;color:var(--text-muted)">${offline}</div>
+          </div>
+        </div>
+
+        ${devices.length === 0 ? `
+          <div class="card" style="text-align:center;padding:48px;color:var(--text-muted)">
+            <div style="font-size:36px;margin-bottom:12px">📡</div>
+            <div style="font-size:16px;font-weight:600;margin-bottom:6px">No Devices Paired</div>
+            <div style="font-size:13px">Lecturers can pair an ESP32 device from their Attendance Device page.</div>
+          </div>
+        ` : `
+          <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(320px,1fr));gap:16px">
+            ${devices.map(d => {
+              const devId   = esc(d.deviceId);
+              const devName = esc(d.deviceName || d.deviceId);
+              const isOnline = d.online;
+              const lecturer = d.pairedBy?.name || d.lecturerName || null;
+              const dept     = d.pairedBy?.department || null;
+              const group    = d.assignedGroup ? `Gr ${esc(d.assignedGroup)} · L${esc(d.assignedLevel||'?')}` : null;
+              const classRep = d.classRepId?.name || null;
+              const ip       = d.localIp || null;
+              const fw       = d.firmwareVersion || null;
+              const chipId   = d.chipId || d.deviceId;
+
+              return `
+              <div class="card" style="padding:0;overflow:hidden" id="hod-dev-card-${devId}">
+                <!-- Card header -->
+                <div style="padding:14px 16px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;gap:8px">
+                  <div style="display:flex;align-items:center;gap:10px;min-width:0">
+                    <div style="width:38px;height:38px;border-radius:10px;background:${isOnline ? '#dcfce7' : 'var(--bg)'};display:flex;align-items:center;justify-content:center;flex-shrink:0">
+                      <svg viewBox="0 0 24 24" fill="none" stroke="${isOnline ? '#16a34a' : '#9ca3af'}" stroke-width="2" width="18" height="18"><rect x="5" y="2" width="14" height="20" rx="2" ry="2"/><line x1="12" y1="18" x2="12.01" y2="18"/></svg>
+                    </div>
+                    <div style="min-width:0">
+                      <div style="font-weight:700;font-size:14px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="${devName}">${devName}</div>
+                      <div style="font-size:11px;color:var(--text-muted);font-family:monospace">${esc(chipId)}</div>
+                    </div>
+                  </div>
+                  <span style="flex-shrink:0;display:inline-flex;align-items:center;gap:5px;font-size:11px;font-weight:700;padding:3px 8px;border-radius:20px;background:${isOnline ? '#dcfce7' : 'var(--bg)'};color:${isOnline ? '#16a34a' : '#9ca3af'}">
+                    <span style="width:6px;height:6px;border-radius:50%;background:${isOnline ? '#16a34a' : '#9ca3af'}"></span>
+                    ${isOnline ? 'Online' : 'Offline'}
+                  </span>
+                </div>
+
+                <!-- Details -->
+                <div style="padding:12px 16px;display:grid;gap:8px;font-size:13px">
+                  ${lecturer ? `
+                  <div style="display:flex;justify-content:space-between;align-items:center">
+                    <span style="color:var(--text-muted)">Paired By</span>
+                    <span style="font-weight:500;text-align:right">
+                      ${esc(lecturer)}
+                      ${dept ? `<span style="margin-left:4px;font-size:11px;padding:2px 6px;border-radius:10px;background:#ede9fe;color:#7c3aed;font-weight:600">${esc(dept)}</span>` : ''}
+                    </span>
+                  </div>` : ''}
+                  ${group ? `
+                  <div style="display:flex;justify-content:space-between;align-items:center">
+                    <span style="color:var(--text-muted)">Class / Level</span>
+                    <span style="font-weight:500">${group}</span>
+                  </div>` : ''}
+                  ${classRep ? `
+                  <div style="display:flex;justify-content:space-between;align-items:center">
+                    <span style="color:var(--text-muted)">Class Rep</span>
+                    <span style="font-weight:500">${esc(classRep)}</span>
+                  </div>` : ''}
+                  ${ip ? `
+                  <div style="display:flex;justify-content:space-between;align-items:center">
+                    <span style="color:var(--text-muted)">IP Address</span>
+                    <span style="font-family:monospace;font-size:12px">${esc(ip)}</span>
+                  </div>` : ''}
+                  ${fw ? `
+                  <div style="display:flex;justify-content:space-between;align-items:center">
+                    <span style="color:var(--text-muted)">Firmware</span>
+                    <span style="font-size:12px;color:var(--text-muted)">${esc(fw)}</span>
+                  </div>` : ''}
+                  <div style="display:flex;justify-content:space-between;align-items:center">
+                    <span style="color:var(--text-muted)">Last Seen</span>
+                    <span style="color:var(--text-muted)">${timeAgo(d.lastHeartbeat)}</span>
+                  </div>
+                </div>
+
+                <!-- Action buttons -->
+                <div style="padding:10px 16px 14px;display:flex;gap:8px;flex-wrap:wrap;border-top:1px solid var(--border)">
+                  <button class="btn btn-secondary btn-sm" onclick="hodRenameDevice('${devId}', '${devName.replace(/'/g,'\\&#39;')}')">✏ Rename</button>
+                  <button class="btn btn-secondary btn-sm" onclick="hodSetupDevice('${devId}')">⚙ Setup</button>
+                  <button class="btn btn-sm" style="background:#fff7ed;color:#c2410c;border:1px solid #fed7aa" onclick="hodFactoryReset('${devId}', '${devName.replace(/'/g,'\\&#39;')}')">↺ Factory Reset</button>
+                  <button class="btn btn-danger btn-sm" onclick="hodRemoveDevice('${devId}', '${devName.replace(/'/g,'\\&#39;')}')">✕ Remove</button>
+                </div>
+              </div>`;
+            }).join('')}
+          </div>
+        `}
+      `;
+    } catch (e) {
+      content.innerHTML = `<div class="card" style="color:#ef4444;padding:20px">Failed to load devices: ${esc(e.message)}</div>`;
+    }
+  };
+
+  await render();
+}
+
+window.hodRenameDevice = async (deviceId, currentName) => {
+  const newName = prompt(`Rename device:\n(current: ${currentName})`, currentName);
+  if (!newName || newName.trim() === currentName) return;
+  try {
+    await api('/api/devices/my/rename', { method: 'PATCH', body: JSON.stringify({ deviceName: newName.trim(), deviceId }) });
+    showToastNotif('✅ Device renamed successfully.', 'success');
+    renderHodDevices();
+  } catch (e) {
+    showToastNotif('❌ Failed to rename: ' + e.message, 'error');
+  }
+};
+
+window.hodSetupDevice = async (deviceId) => {
+  showToastNotif('Setup is done via the device\'s WiFi portal — power on the device and connect to the DIKLY-XXXXXX hotspot.', 'warn');
+};
+
+window.hodFactoryReset = async (deviceId, deviceName) => {
+  if (!confirm(`Factory reset "${deviceName}"?\n\nThis will clear all WiFi credentials and pairing data from the device firmware. It will need to be re-paired by a lecturer.`)) return;
+  try {
+    await api(`/api/devices/${encodeURIComponent(deviceId)}/factory-reset`, { method: 'POST' });
+    showToastNotif('✅ Factory reset command sent. Device will restart.', 'success');
+    setTimeout(renderHodDevices, 2000);
+  } catch (e) {
+    showToastNotif('❌ Failed to factory reset: ' + e.message, 'error');
+  }
+};
+
+window.hodRemoveDevice = async (deviceId, deviceName) => {
+  if (!confirm(`Remove "${deviceName}"?\n\nThis permanently unpairs the device from your institution. The physical device will need to be re-paired.`)) return;
+  try {
+    await api(`/api/devices/${encodeURIComponent(deviceId)}/remove`, { method: 'DELETE' });
+    showToastNotif('✅ Device removed.', 'success');
+    renderHodDevices();
+  } catch (e) {
+    showToastNotif('❌ Failed to remove device: ' + e.message, 'error');
+  }
+};
+
 async function renderAdminDevices() {
   const content = document.getElementById('main-content');
   content.innerHTML = '<div class="loading">Loading…</div>';
