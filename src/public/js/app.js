@@ -18759,64 +18759,103 @@ async function renderAdminDevices() {
     const instCode = currentUser?.company?.institutionCode || currentUser?.company?.code || currentUser?.institutionCode || '—';
 
     content.innerHTML = `
-      <!-- Header -->
-      <div class="page-header" style="display:flex;align-items:flex-start;justify-content:space-between;flex-wrap:wrap;gap:10px;margin-bottom:20px">
+      <!-- Page header -->
+      <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;margin-bottom:18px">
         <div>
-          <h2 style="margin-bottom:4px">Attendance Devices</h2>
-          <p style="color:var(--text-muted);font-size:13px">Manage all ESP32 devices paired to your institution</p>
+          <h2 style="font-size:20px;font-weight:800;margin:0 0 3px">Attendance Devices</h2>
+          <p style="font-size:13px;color:var(--text-muted);margin:0">Manage all ESP32 devices paired to your institution</p>
         </div>
-        <button class="btn btn-primary" onclick="adminGeneratePairingCode()" style="display:flex;align-items:center;gap:6px;padding:9px 16px">
+        <button class="btn btn-primary" onclick="adminGeneratePairingCode()" style="display:flex;align-items:center;gap:7px;font-size:13px;padding:9px 18px;border-radius:10px;font-weight:600">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
           Generate Pairing Code
         </button>
       </div>
 
-      <!-- Stats + Institution Code banner -->
-      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:12px;margin-bottom:20px">
-        <div class="card" style="padding:16px 18px;display:flex;align-items:center;gap:14px">
-          <div style="width:40px;height:40px;border-radius:10px;background:rgba(79,110,247,.12);display:flex;align-items:center;justify-content:center;flex-shrink:0">
-            <svg viewBox="0 0 24 24" fill="none" stroke="#4f6ef7" stroke-width="2" width="18" height="18"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/></svg>
+      <!-- Compact summary bar -->
+      <div class="card" style="padding:14px 18px;margin-bottom:18px;display:flex;align-items:center;flex-wrap:wrap;gap:0">
+        <div style="display:flex;align-items:center;gap:10px;padding-right:20px;margin-right:20px;border-right:1px solid var(--border)">
+          <div style="width:34px;height:34px;border-radius:9px;background:rgba(79,110,247,.1);display:flex;align-items:center;justify-content:center;flex-shrink:0">
+            <svg viewBox="0 0 24 24" fill="none" stroke="#4f6ef7" stroke-width="2" width="15" height="15"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/></svg>
           </div>
           <div>
-            <div style="font-size:11px;color:var(--text-muted);font-weight:600;text-transform:uppercase;letter-spacing:.5px">Total</div>
-            <div style="font-size:24px;font-weight:800;line-height:1.1">${devices.length}</div>
+            <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.7px;color:var(--text-muted)">Total</div>
+            <div style="font-size:20px;font-weight:800;line-height:1">${devices.length}</div>
           </div>
         </div>
-        <div class="card" style="padding:16px 18px;display:flex;align-items:center;gap:14px">
-          <div style="width:40px;height:40px;border-radius:10px;background:rgba(22,163,74,.1);display:flex;align-items:center;justify-content:center;flex-shrink:0">
-            <span style="width:10px;height:10px;border-radius:50%;background:#16a34a;display:block;box-shadow:0 0 0 3px rgba(22,163,74,.2)"></span>
-          </div>
+        <div style="display:flex;align-items:center;gap:10px;padding-right:20px;margin-right:20px;border-right:1px solid var(--border)">
+          <span style="width:10px;height:10px;border-radius:50%;background:#16a34a;flex-shrink:0;box-shadow:0 0 0 3px rgba(22,163,74,.18)"></span>
           <div>
-            <div style="font-size:11px;color:var(--text-muted);font-weight:600;text-transform:uppercase;letter-spacing:.5px">Online</div>
-            <div style="font-size:24px;font-weight:800;color:#16a34a;line-height:1.1">${online}</div>
+            <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.7px;color:var(--text-muted)">Online</div>
+            <div style="font-size:20px;font-weight:800;color:#16a34a;line-height:1">${online}</div>
           </div>
         </div>
-        <div class="card" style="padding:16px 18px;display:flex;align-items:center;gap:14px">
-          <div style="width:40px;height:40px;border-radius:10px;background:rgba(156,163,175,.1);display:flex;align-items:center;justify-content:center;flex-shrink:0">
-            <span style="width:10px;height:10px;border-radius:50%;background:#9ca3af;display:block"></span>
-          </div>
+        <div style="display:flex;align-items:center;gap:10px;padding-right:20px;margin-right:20px;border-right:1px solid var(--border)">
+          <span style="width:10px;height:10px;border-radius:50%;background:#9ca3af;flex-shrink:0"></span>
           <div>
-            <div style="font-size:11px;color:var(--text-muted);font-weight:600;text-transform:uppercase;letter-spacing:.5px">Offline</div>
-            <div style="font-size:24px;font-weight:800;color:var(--text-muted);line-height:1.1">${offline}</div>
+            <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.7px;color:var(--text-muted)">Offline</div>
+            <div style="font-size:20px;font-weight:800;color:var(--text-muted);line-height:1">${offline}</div>
           </div>
         </div>
-        <div class="card" style="padding:16px 18px;display:flex;align-items:center;justify-content:space-between;gap:10px;grid-column:span 1">
-          <div style="min-width:0">
-            <div style="font-size:10px;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:var(--text-muted);margin-bottom:4px">Institution Code</div>
-            <div style="font-size:20px;font-weight:900;letter-spacing:4px;font-family:monospace">${esc(instCode)}</div>
-            <div style="font-size:11px;color:var(--text-muted);margin-top:2px">Share with Class Rep + pairing code</div>
+        <div style="flex:1;display:flex;align-items:center;justify-content:space-between;gap:10px;min-width:160px;margin-top:0">
+          <div>
+            <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.7px;color:var(--text-muted)">Institution Code</div>
+            <div style="font-size:18px;font-weight:900;letter-spacing:4px;font-family:monospace;line-height:1.2">${esc(instCode)}</div>
           </div>
-          <button class="btn btn-secondary btn-sm" style="flex-shrink:0" onclick="navigator.clipboard.writeText('${esc(instCode)}').then(()=>showToastNotif('Code copied!','success'))">Copy</button>
+          <button onclick="navigator.clipboard.writeText('${esc(instCode)}').then(()=>showToastNotif('Copied!','success'))"
+            style="font-size:12px;font-weight:600;padding:5px 12px;border-radius:8px;border:1.5px solid var(--border);background:var(--bg);color:var(--text-muted);cursor:pointer;white-space:nowrap;flex-shrink:0">
+            Copy
+          </button>
         </div>
       </div>
 
-      <!-- Devices list header -->
-      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px">
-        <div style="font-size:14px;font-weight:700">Paired Devices <span style="font-weight:400;color:var(--text-muted)">${devices.length}</span></div>
-        <div style="display:flex;align-items:center;gap:10px">
-          <span style="font-size:12px;color:var(--text-muted)">Updated ${now}</span>
-          <button class="btn btn-secondary btn-sm" onclick="renderAdminDevices()" style="display:flex;align-items:center;gap:5px">
-            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>
+      <!-- Connection guide -->
+      <details style="margin-bottom:16px" id="dev-guide-details">
+        <summary style="display:flex;align-items:center;gap:8px;cursor:pointer;list-style:none;padding:12px 16px;background:var(--card);border-radius:12px;border:1px solid var(--border);font-size:13px;font-weight:600;user-select:none">
+          <svg viewBox="0 0 24 24" fill="none" stroke="#4f6ef7" stroke-width="2" width="15" height="15"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+          <span style="flex:1">How to connect &amp; assign a device</span>
+          <svg class="dev-guide-arrow" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="13" height="13" style="color:var(--text-muted);transition:transform .2s"><polyline points="6 9 12 15 18 9"/></svg>
+        </summary>
+        <div style="padding:16px;background:var(--card);border:1px solid var(--border);border-top:none;border-radius:0 0 12px 12px">
+          <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:12px;margin-bottom:14px">
+            <div style="background:var(--bg);border-radius:10px;padding:13px 14px;border:1px solid var(--border)">
+              <div style="display:flex;align-items:center;gap:8px;margin-bottom:7px">
+                <div style="width:24px;height:24px;border-radius:7px;background:rgba(79,110,247,.1);display:flex;align-items:center;justify-content:center;flex-shrink:0;font-size:11px;font-weight:800;color:#4f6ef7">1</div>
+                <div style="font-size:12px;font-weight:700">Generate a Code</div>
+              </div>
+              <div style="font-size:11px;color:var(--text-muted);line-height:1.5">Click <strong>Generate Pairing Code</strong> above. You'll get a 6-digit one-time code (valid for 10 minutes) and your Institution Code.</div>
+            </div>
+            <div style="background:var(--bg);border-radius:10px;padding:13px 14px;border:1px solid var(--border)">
+              <div style="display:flex;align-items:center;gap:8px;margin-bottom:7px">
+                <div style="width:24px;height:24px;border-radius:7px;background:rgba(79,110,247,.1);display:flex;align-items:center;justify-content:center;flex-shrink:0;font-size:11px;font-weight:800;color:#4f6ef7">2</div>
+                <div style="font-size:12px;font-weight:700">Share with Class Rep</div>
+              </div>
+              <div style="font-size:11px;color:var(--text-muted);line-height:1.5">Give the Class Rep both codes. They power on the ESP32 device, connect it to WiFi via the hotspot, then enter the codes on the device.</div>
+            </div>
+            <div style="background:var(--bg);border-radius:10px;padding:13px 14px;border:1px solid var(--border)">
+              <div style="display:flex;align-items:center;gap:8px;margin-bottom:7px">
+                <div style="width:24px;height:24px;border-radius:7px;background:rgba(79,110,247,.1);display:flex;align-items:center;justify-content:center;flex-shrink:0;font-size:11px;font-weight:800;color:#4f6ef7">3</div>
+                <div style="font-size:12px;font-weight:700">Assign &amp; Configure</div>
+              </div>
+              <div style="font-size:11px;color:var(--text-muted);line-height:1.5">Once paired, the device appears here. Assign the <strong>Class Rep</strong> (so attendance is linked to their group) and add <strong>Lecturers + Courses</strong> the device will handle.</div>
+            </div>
+          </div>
+          <div style="background:rgba(79,110,247,.06);border-radius:8px;padding:10px 13px;border-left:3px solid #4f6ef7">
+            <div style="font-size:11px;color:var(--text-muted);line-height:1.5"><strong style="color:var(--text-primary)">Tip:</strong> Each device can have up to 2 class reps and multiple lecturers. The device uses BLE + WiFi proximity — students must be within range when the attendance session is live.</div>
+          </div>
+        </div>
+      </details>
+
+      <!-- Section header -->
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
+        <div style="font-size:14px;font-weight:700;display:flex;align-items:center;gap:8px">
+          Paired Devices
+          <span style="font-size:12px;font-weight:600;padding:2px 9px;border-radius:20px;background:rgba(79,110,247,.1);color:#4f6ef7">${devices.length}</span>
+        </div>
+        <div style="display:flex;align-items:center;gap:8px">
+          <span style="font-size:11px;color:var(--text-muted)">Updated ${now}</span>
+          <button onclick="renderAdminDevices()"
+            style="display:flex;align-items:center;gap:5px;font-size:12px;font-weight:600;padding:5px 11px;border-radius:8px;border:1.5px solid var(--border);background:var(--bg);color:var(--text-muted);cursor:pointer">
+            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>
             Refresh
           </button>
         </div>
@@ -18824,15 +18863,15 @@ async function renderAdminDevices() {
 
       ${devices.length === 0 ? `
         <div class="card" style="text-align:center;padding:56px 24px">
-          <div style="width:56px;height:56px;border-radius:16px;background:rgba(79,110,247,.08);display:flex;align-items:center;justify-content:center;margin:0 auto 16px">
-            <svg viewBox="0 0 24 24" fill="none" stroke="#4f6ef7" stroke-width="1.5" width="26" height="26"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/></svg>
+          <div style="width:52px;height:52px;border-radius:14px;background:rgba(79,110,247,.08);display:flex;align-items:center;justify-content:center;margin:0 auto 14px">
+            <svg viewBox="0 0 24 24" fill="none" stroke="#4f6ef7" stroke-width="1.5" width="24" height="24"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/></svg>
           </div>
           <div style="font-size:16px;font-weight:700;margin-bottom:6px">No Devices Paired Yet</div>
-          <div style="font-size:13px;color:var(--text-muted);max-width:320px;margin:0 auto 20px">Generate a pairing code and share it with a Class Rep to set up an ESP32 device.</div>
-          <button class="btn btn-primary btn-sm" onclick="adminGeneratePairingCode()">+ Generate Pairing Code</button>
+          <div style="font-size:13px;color:var(--text-muted);max-width:300px;margin:0 auto 20px;line-height:1.5">Generate a pairing code and share it with a Class Rep to set up a device.</div>
+          <button class="btn btn-primary" onclick="adminGeneratePairingCode()">+ Generate Pairing Code</button>
         </div>
       ` : `
-        <div style="display:flex;flex-direction:column;gap:14px">
+        <div style="display:flex;flex-direction:column;gap:12px">
           ${devices.map(d => {
             const did      = esc(d._id || d.deviceId);
             const dname    = esc(d.deviceName || d.deviceId || 'Unknown');
@@ -18841,64 +18880,72 @@ async function renderAdminDevices() {
             const classRep = d.classRepId ? esc(d.classRepId.name) : null;
             const repIndex = d.classRepId?.IndexNumber ? esc(d.classRepId.IndexNumber) : null;
             const grp      = d.assignedGroup ? `L${esc(d.assignedLevel||'?')} · Gr ${esc(d.assignedGroup)}` : null;
-            const dept     = esc(d.assignedDepartment || d.pairedBy?.department || '');
+            const dept     = esc(d.assignedDepartment || '');
             const ip       = esc(d.localIp || '');
             const fw       = esc(d.firmwareVersion || '');
             const lastSeen = timeAgo(d.lastHeartbeat);
             const lecturers = (d.assignedLecturers || []).filter(a => a.lecturerId);
 
             return `
-            <div class="card" style="padding:0;overflow:hidden;border-radius:12px">
+            <div class="card" style="padding:0;overflow:hidden;border-radius:14px">
 
-              <!-- Card header -->
-              <div style="padding:14px 18px;display:flex;align-items:center;gap:12px;border-bottom:1px solid var(--border)">
-                <div style="width:40px;height:40px;border-radius:10px;background:${isOnline ? 'rgba(22,163,74,.1)' : 'rgba(156,163,175,.1)'};display:flex;align-items:center;justify-content:center;flex-shrink:0">
-                  <svg viewBox="0 0 24 24" fill="none" stroke="${isOnline ? '#16a34a' : '#9ca3af'}" stroke-width="2" width="18" height="18"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/></svg>
+              <!-- Device header strip -->
+              <div style="padding:13px 16px;display:flex;align-items:center;gap:11px">
+                <div style="width:38px;height:38px;border-radius:10px;background:${isOnline ? 'rgba(22,163,74,.1)' : 'rgba(107,114,128,.08)'};display:flex;align-items:center;justify-content:center;flex-shrink:0">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="${isOnline ? '#16a34a' : '#9ca3af'}" stroke-width="2" width="17" height="17"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/></svg>
                 </div>
                 <div style="flex:1;min-width:0">
-                  <div style="font-size:15px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${dname}</div>
-                  ${chipId ? `<div style="font-size:11px;color:var(--text-muted);font-family:monospace;margin-top:1px">${chipId}</div>` : ''}
+                  <div style="font-size:14px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${dname}</div>
+                  ${chipId ? `<div style="font-size:10px;color:var(--text-muted);font-family:monospace;margin-top:1px">${chipId}</div>` : ''}
                 </div>
-                <div style="display:flex;align-items:center;gap:6px;flex-shrink:0">
-                  <span style="display:inline-flex;align-items:center;gap:5px;font-size:12px;font-weight:600;padding:4px 10px;border-radius:20px;background:${isOnline ? 'rgba(22,163,74,.1)' : 'rgba(156,163,175,.1)'};color:${isOnline ? '#16a34a' : '#6b7280'}">
-                    <span style="width:6px;height:6px;border-radius:50%;background:${isOnline ? '#16a34a' : '#9ca3af'};${isOnline ? 'box-shadow:0 0 0 2px rgba(22,163,74,.25)' : ''}"></span>
-                    ${isOnline ? 'Online' : 'Offline'}
-                  </span>
+                <span style="display:inline-flex;align-items:center;gap:4px;font-size:11px;font-weight:700;padding:3px 9px;border-radius:20px;background:${isOnline ? 'rgba(22,163,74,.1)' : 'rgba(107,114,128,.1)'};color:${isOnline ? '#15803d' : '#6b7280'};flex-shrink:0">
+                  <span style="width:5px;height:5px;border-radius:50%;background:${isOnline ? '#16a34a' : '#9ca3af'}"></span>
+                  ${isOnline ? 'Online' : 'Offline'}
+                </span>
+              </div>
+
+              <!-- Info rows -->
+              <div style="padding:0 16px 4px;border-top:1px solid var(--border)">
+                <div style="display:grid;grid-template-columns:1fr 1fr;gap:1px;background:var(--border)">
+                  <div style="background:var(--card);padding:10px 0 10px 2px">
+                    <div style="font-size:9px;font-weight:800;text-transform:uppercase;letter-spacing:.8px;color:var(--text-muted);margin-bottom:4px">Class Rep</div>
+                    <div style="font-size:13px;font-weight:600;color:${classRep ? 'var(--text-primary)' : 'var(--text-muted)'}">
+                      ${classRep || 'Not assigned'}
+                    </div>
+                    ${repIndex ? `<div style="font-size:10px;color:var(--text-muted);margin-top:1px">${repIndex}</div>` : ''}
+                  </div>
+                  <div style="background:var(--card);padding:10px 0 10px 12px">
+                    <div style="font-size:9px;font-weight:800;text-transform:uppercase;letter-spacing:.8px;color:var(--text-muted);margin-bottom:4px">Class / Group</div>
+                    <div style="font-size:13px;font-weight:600;color:${grp ? 'var(--text-primary)' : 'var(--text-muted)'}">${grp || '—'}</div>
+                  </div>
+                  ${dept ? `
+                  <div style="background:var(--card);padding:10px 0 10px 2px">
+                    <div style="font-size:9px;font-weight:800;text-transform:uppercase;letter-spacing:.8px;color:var(--text-muted);margin-bottom:4px">Department</div>
+                    <div style="font-size:13px;font-weight:600">${dept}</div>
+                  </div>` : ''}
+                  <div style="background:var(--card);padding:10px 0 10px ${dept ? '12px' : '2px'}">
+                    <div style="font-size:9px;font-weight:800;text-transform:uppercase;letter-spacing:.8px;color:var(--text-muted);margin-bottom:4px">Last Seen</div>
+                    <div style="font-size:13px;color:var(--text-muted)">${lastSeen}</div>
+                  </div>
+                  ${ip ? `
+                  <div style="background:var(--card);padding:10px 0 10px 2px;grid-column:1/-1">
+                    <div style="font-size:9px;font-weight:800;text-transform:uppercase;letter-spacing:.8px;color:var(--text-muted);margin-bottom:4px">Network</div>
+                    <div style="font-size:11px;font-family:monospace;color:var(--text-muted)">IP ${ip}${fw ? ` · fw ${fw}` : ''}</div>
+                  </div>` : ''}
                 </div>
               </div>
 
-              <!-- Info grid -->
-              <div style="padding:14px 18px;display:grid;grid-template-columns:1fr 1fr;gap:10px 20px">
-                <div>
-                  <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.6px;color:var(--text-muted);margin-bottom:3px">Class Rep</div>
-                  <div style="font-size:13px;font-weight:600">${classRep || '<span style="color:var(--text-muted);font-weight:400">Not assigned</span>'}</div>
-                  ${repIndex ? `<div style="font-size:11px;color:var(--text-muted)">${repIndex}</div>` : ''}
+              <!-- Lecturers section -->
+              <div style="padding:10px 16px 12px;border-top:1px solid var(--border)">
+                <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
+                  <div style="font-size:9px;font-weight:800;text-transform:uppercase;letter-spacing:.8px;color:var(--text-muted)">Assigned Lecturers</div>
+                  <button onclick="adminAssignLecturer('${did}','${dname}')"
+                    style="font-size:11px;font-weight:700;padding:3px 10px;border-radius:7px;border:1.5px solid var(--accent,#4f6ef7);background:transparent;color:var(--accent,#4f6ef7);cursor:pointer">
+                    + Assign
+                  </button>
                 </div>
-                <div>
-                  <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.6px;color:var(--text-muted);margin-bottom:3px">Class / Group</div>
-                  <div style="font-size:13px;font-weight:600">${grp || '<span style="color:var(--text-muted);font-weight:400">—</span>'}</div>
-                </div>
-                ${dept ? `
-                <div>
-                  <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.6px;color:var(--text-muted);margin-bottom:3px">Department</div>
-                  <div style="font-size:13px;font-weight:600">${dept}</div>
-                </div>` : ''}
-                <div>
-                  <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.6px;color:var(--text-muted);margin-bottom:3px">Last Seen</div>
-                  <div style="font-size:13px">${lastSeen}</div>
-                </div>
-                ${ip ? `
-                <div style="grid-column:1/-1">
-                  <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.6px;color:var(--text-muted);margin-bottom:3px">Network</div>
-                  <div style="font-size:12px;font-family:monospace;color:var(--text-muted)">IP ${ip}${fw ? ` · fw ${fw}` : ''}</div>
-                </div>` : ''}
-              </div>
-
-              <!-- Assigned lecturers -->
-              <div style="padding:0 18px 14px">
-                <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.6px;color:var(--text-muted);margin-bottom:8px">Assigned Lecturers</div>
                 ${lecturers.length === 0
-                  ? `<div style="font-size:12px;color:var(--text-muted)">No lecturers assigned yet</div>`
+                  ? `<div style="font-size:12px;color:var(--text-muted);padding:6px 0">No lecturers assigned yet</div>`
                   : lecturers.map(a => {
                       const lname = esc(a.lecturerId?.name || 'Unknown');
                       const cname = esc(a.courseId?.title || '');
@@ -18906,13 +18953,18 @@ async function renderAdminDevices() {
                       const lid   = esc(a.lecturerId?._id || a.lecturerId);
                       const cid   = esc(a.courseId?._id  || a.courseId);
                       return `
-                      <div style="display:flex;align-items:center;justify-content:space-between;padding:6px 10px;background:var(--bg);border-radius:8px;margin-bottom:5px;gap:8px">
-                        <div style="min-width:0">
-                          <div style="font-size:13px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${lname}</div>
-                          ${cname ? `<div style="font-size:11px;color:var(--text-muted)">${ccode ? ccode+' · ' : ''}${cname}</div>` : ''}
+                      <div style="display:flex;align-items:center;justify-content:space-between;padding:7px 10px;background:var(--bg);border-radius:8px;margin-bottom:5px;gap:8px;border:1px solid var(--border)">
+                        <div style="min-width:0;display:flex;align-items:center;gap:8px">
+                          <div style="width:28px;height:28px;border-radius:50%;background:rgba(79,110,247,.1);display:flex;align-items:center;justify-content:center;flex-shrink:0;font-size:11px;font-weight:700;color:#4f6ef7">
+                            ${lname[0]?.toUpperCase() || '?'}
+                          </div>
+                          <div style="min-width:0">
+                            <div style="font-size:12px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${lname}</div>
+                            ${cname ? `<div style="font-size:10px;color:var(--text-muted)">${ccode ? ccode+' · ' : ''}${cname}</div>` : ''}
+                          </div>
                         </div>
                         <button onclick="adminRemoveLecturer('${did}','${lid}','${cid}','${lname}')"
-                          style="font-size:11px;font-weight:600;padding:3px 8px;border-radius:6px;border:1px solid rgba(239,68,68,.25);background:rgba(239,68,68,.06);color:#ef4444;cursor:pointer;white-space:nowrap;flex-shrink:0">
+                          style="font-size:10px;font-weight:700;padding:3px 8px;border-radius:6px;border:1px solid rgba(239,68,68,.2);background:rgba(239,68,68,.05);color:#ef4444;cursor:pointer;white-space:nowrap;flex-shrink:0">
                           Remove
                         </button>
                       </div>`;
@@ -18920,19 +18972,24 @@ async function renderAdminDevices() {
                 }
               </div>
 
-              <!-- Actions -->
-              <div style="padding:12px 18px;border-top:1px solid var(--border);display:flex;flex-wrap:wrap;gap:8px;background:rgba(0,0,0,.015)">
-                <button class="btn btn-primary btn-sm" onclick="adminAssignLecturer('${did}','${dname}')" style="display:flex;align-items:center;gap:5px">
-                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><line x1="19" y1="8" x2="19" y2="14"/><line x1="22" y1="11" x2="16" y2="11"/></svg>
-                  Assign Lecturer
-                </button>
-                <button class="btn btn-secondary btn-sm" onclick="adminAssignClassRep('${did}','${dname}')" style="display:flex;align-items:center;gap:5px">
-                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+              <!-- Action bar -->
+              <div style="padding:10px 16px;border-top:1px solid var(--border);display:flex;flex-wrap:wrap;gap:7px;background:var(--bg)">
+                <button class="btn btn-secondary btn-sm" onclick="adminAssignClassRep('${did}','${dname}')" style="font-size:11px;display:flex;align-items:center;gap:4px">
+                  <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
                   Assign Rep
                 </button>
-                <button class="btn btn-secondary btn-sm" onclick="adminRenameDevice('${did}','${dname}')">✏ Rename</button>
-                <button class="btn btn-secondary btn-sm" onclick="adminFactoryReset('${did}','${dname}',${isOnline})">↺ Factory Reset</button>
-                <button class="btn btn-sm" style="background:rgba(239,68,68,.08);color:#ef4444;border:1px solid rgba(239,68,68,.2)" onclick="adminRemoveDevice('${did}','${dname}')">✕ Remove</button>
+                <button class="btn btn-secondary btn-sm" onclick="adminRenameDevice('${did}','${dname}')" style="font-size:11px;display:flex;align-items:center;gap:4px">
+                  <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+                  Rename
+                </button>
+                <button class="btn btn-secondary btn-sm" onclick="adminFactoryReset('${did}','${dname}',${isOnline})" style="font-size:11px;display:flex;align-items:center;gap:4px">
+                  <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>
+                  Factory Reset
+                </button>
+                <button onclick="adminRemoveDevice('${did}','${dname}')" style="font-size:11px;font-weight:600;padding:5px 12px;border-radius:8px;border:1px solid rgba(239,68,68,.25);background:rgba(239,68,68,.06);color:#ef4444;cursor:pointer;display:flex;align-items:center;gap:4px">
+                  <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg>
+                  Remove
+                </button>
               </div>
             </div>`;
           }).join('')}
@@ -18963,23 +19020,41 @@ window.adminGeneratePairingCode = async () => {
 };
 
 window.adminAssignLecturer = async (deviceId, deviceName) => {
+  const isHod = currentUser?.role === 'hod';
+  const hodDept = isHod ? (currentUser?.department || '') : '';
+  const selStyle = 'width:100%;padding:9px 12px;border:1.5px solid var(--border);border-radius:8px;background:var(--bg);color:var(--text-primary);font-size:13px;margin-top:4px';
+  const labelStyle = 'font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--text-muted)';
+
   openModal(`
     <div>
-      <h3 style="font-size:16px;font-weight:700;margin-bottom:4px">Assign Lecturer</h3>
-      <p style="font-size:12px;color:var(--text-muted);margin-bottom:16px">Device: <strong>${deviceName}</strong> — select a lecturer and their course.</p>
+      <div style="display:flex;align-items:center;gap:9px;margin-bottom:4px">
+        <div style="width:34px;height:34px;border-radius:9px;background:rgba(79,110,247,.1);display:flex;align-items:center;justify-content:center;flex-shrink:0">
+          <svg viewBox="0 0 24 24" fill="none" stroke="#4f6ef7" stroke-width="2" width="16" height="16"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+        </div>
+        <div>
+          <h3 style="font-size:15px;font-weight:700;margin:0">Assign Lecturer</h3>
+          <p style="font-size:11px;color:var(--text-muted);margin:2px 0 0">Device: <strong>${deviceName}</strong></p>
+        </div>
+      </div>
+      ${isHod ? `<div style="margin:10px 0 14px;padding:8px 12px;background:rgba(79,110,247,.06);border-radius:8px;border-left:3px solid #4f6ef7;font-size:11px;color:var(--text-muted)">Showing lecturers in your department: <strong style="color:var(--text-primary)">${hodDept}</strong></div>` : ''}
       <div id="admin-lec-loading" style="text-align:center;padding:24px;color:var(--text-muted);font-size:13px">Loading lecturers…</div>
       <div id="admin-lec-body" style="display:none">
+        ${!isHod ? `
         <div class="form-group" style="margin-bottom:12px">
-          <label style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--text-muted)">Lecturer</label>
-          <select id="admin-lec-select" onchange="adminLecturerChanged(this.value)"
-            style="width:100%;padding:9px 12px;border:1.5px solid var(--border);border-radius:8px;background:var(--bg);color:var(--text-primary);font-size:13px;margin-top:4px">
+          <label style="${labelStyle}">Department</label>
+          <select id="admin-dept-select" onchange="adminDeptChanged(this.value)" style="${selStyle}">
+            <option value="">— All Departments —</option>
+          </select>
+        </div>` : ''}
+        <div class="form-group" style="margin-bottom:12px">
+          <label style="${labelStyle}">Lecturer</label>
+          <select id="admin-lec-select" onchange="adminLecturerChanged(this.value)" style="${selStyle}">
             <option value="">— Select lecturer —</option>
           </select>
         </div>
         <div class="form-group" style="margin-bottom:16px">
-          <label style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--text-muted)">Course</label>
-          <select id="admin-course-select"
-            style="width:100%;padding:9px 12px;border:1.5px solid var(--border);border-radius:8px;background:var(--bg);color:var(--text-primary);font-size:13px;margin-top:4px">
+          <label style="${labelStyle}">Course</label>
+          <select id="admin-course-select" style="${selStyle}">
             <option value="">— Select lecturer first —</option>
           </select>
         </div>
@@ -18990,20 +19065,50 @@ window.adminAssignLecturer = async (deviceId, deviceName) => {
   try {
     const { lecturers } = await api('/api/devices/lecturers-for-assignment');
     window._adminLecturers = lecturers;
-    const sel = document.getElementById('admin-lec-select');
-    if (!sel) return;
-    lecturers.forEach(l => {
-      const opt = document.createElement('option');
-      opt.value = l._id;
-      opt.textContent = l.name + (l.department ? ` · ${l.department}` : '');
-      sel.appendChild(opt);
-    });
+
+    // Populate department dropdown (admin only — HOD is pre-filtered by backend)
+    if (!isHod) {
+      const depts = [...new Set(lecturers.map(l => l.department).filter(Boolean))].sort();
+      const deptSel = document.getElementById('admin-dept-select');
+      if (deptSel) {
+        depts.forEach(d => {
+          const opt = document.createElement('option');
+          opt.value = d;
+          opt.textContent = d;
+          deptSel.appendChild(opt);
+        });
+      }
+    }
+
+    // Populate lecturer dropdown (all by default, or filtered if dept already chosen)
+    window._adminFillLecturers(null);
+
     document.getElementById('admin-lec-loading').style.display = 'none';
     document.getElementById('admin-lec-body').style.display = 'block';
   } catch(e) {
     const el = document.getElementById('admin-lec-loading');
     if (el) el.innerHTML = `<span style="color:#ef4444">${e.message}</span>`;
   }
+};
+
+window._adminFillLecturers = (deptFilter) => {
+  const sel = document.getElementById('admin-lec-select');
+  if (!sel) return;
+  const list = (window._adminLecturers || []).filter(l => !deptFilter || l.department === deptFilter);
+  sel.innerHTML = `<option value="">— Select lecturer${deptFilter ? ' in ' + deptFilter : ''} —</option>`;
+  list.forEach(l => {
+    const opt = document.createElement('option');
+    opt.value = l._id;
+    opt.textContent = l.name + (l.department && !deptFilter ? ` · ${l.department}` : '');
+    sel.appendChild(opt);
+  });
+  // Reset course dropdown when lecturer list resets
+  const cSel = document.getElementById('admin-course-select');
+  if (cSel) cSel.innerHTML = '<option value="">— Select lecturer first —</option>';
+};
+
+window.adminDeptChanged = (dept) => {
+  window._adminFillLecturers(dept || null);
 };
 
 window.adminLecturerChanged = (lecturerId) => {
@@ -19051,43 +19156,133 @@ window.adminRemoveLecturer = async (deviceId, lecturerId, courseId, lecturerName
 };
 
 window.adminAssignClassRep = async (deviceId, deviceName) => {
+  const isHod = currentUser?.role === 'hod';
+  const hodDept = isHod ? (currentUser?.department || '') : '';
+  const selStyle = 'width:100%;padding:8px 10px;border:1.5px solid var(--border);border-radius:8px;background:var(--bg);color:var(--text-primary);font-size:12px;margin-top:3px';
+  const labelStyle = 'font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--text-muted)';
+
   openModal(`
     <div>
-      <h3 style="font-size:16px;font-weight:700;margin-bottom:4px">Assign Class Rep</h3>
-      <p style="font-size:12px;color:var(--text-muted);margin-bottom:16px">Device: <strong>${deviceName}</strong></p>
-      <div class="form-group">
-        <label style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--text-muted)">Search Student</label>
-        <input type="text" id="admin-rep-search" placeholder="Name or index number…"
-          oninput="adminSearchRepStudents(this.value,'${deviceId}')"
-          style="width:100%;padding:9px 12px;border:1.5px solid var(--border);border-radius:8px;background:var(--bg);color:var(--text-primary);font-size:13px;margin-top:4px">
+      <div style="display:flex;align-items:center;gap:9px;margin-bottom:14px">
+        <div style="width:34px;height:34px;border-radius:9px;background:rgba(124,58,237,.1);display:flex;align-items:center;justify-content:center;flex-shrink:0">
+          <svg viewBox="0 0 24 24" fill="none" stroke="#7c3aed" stroke-width="2" width="16" height="16"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+        </div>
+        <div>
+          <h3 style="font-size:15px;font-weight:700;margin:0">Assign Class Rep</h3>
+          <p style="font-size:11px;color:var(--text-muted);margin:2px 0 0">Device: <strong>${deviceName}</strong></p>
+        </div>
       </div>
-      <div id="admin-rep-results" style="max-height:260px;overflow-y:auto;margin-top:10px"></div>
+
+      <!-- Filter strip -->
+      <div style="background:var(--bg);border-radius:10px;padding:12px;border:1px solid var(--border);margin-bottom:12px">
+        <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.6px;color:var(--text-muted);margin-bottom:10px">Filter Students</div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px">
+          ${!isHod ? `
+          <div style="grid-column:1/-1">
+            <label style="${labelStyle}">Department</label>
+            <input type="text" id="admin-rep-dept" placeholder="e.g. Computer Science"
+              oninput="adminSearchRepStudents('${deviceId}')"
+              style="${selStyle}">
+          </div>` : `
+          <div style="grid-column:1/-1;padding:7px 10px;background:rgba(79,110,247,.06);border-radius:7px;border-left:3px solid #4f6ef7;font-size:11px;color:var(--text-muted)">
+            Showing students in your department: <strong style="color:var(--text-primary)">${hodDept}</strong>
+          </div>`}
+          <div>
+            <label style="${labelStyle}">Level / Year</label>
+            <select id="admin-rep-level" onchange="adminSearchRepStudents('${deviceId}')" style="${selStyle}">
+              <option value="">Any level</option>
+              <option value="100">Year 1 (100)</option>
+              <option value="200">Year 2 (200)</option>
+              <option value="300">Year 3 (300)</option>
+              <option value="400">Year 4 (400)</option>
+              <option value="500">Year 5 (500)</option>
+            </select>
+          </div>
+          <div>
+            <label style="${labelStyle}">Group</label>
+            <select id="admin-rep-group" onchange="adminSearchRepStudents('${deviceId}')" style="${selStyle}">
+              <option value="">Any group</option>
+              <option value="A">Group A</option>
+              <option value="B">Group B</option>
+              <option value="C">Group C</option>
+              <option value="D">Group D</option>
+            </select>
+          </div>
+        </div>
+        <div>
+          <label style="${labelStyle}">Name or Index Number</label>
+          <input type="text" id="admin-rep-search" placeholder="Search by name or index number…"
+            oninput="adminSearchRepStudents('${deviceId}')"
+            style="${selStyle}">
+        </div>
+      </div>
+
+      <div style="font-size:11px;color:var(--text-muted);margin-bottom:8px">Use the filters above to narrow down the list, then click <strong>Assign</strong> on the correct student.</div>
+      <div id="admin-rep-results" style="max-height:280px;overflow-y:auto"></div>
     </div>
-  `);
+  `, { maxWidth: '560px' });
+
+  // Auto-load for HOD (already dept-filtered) or show prompt
+  if (isHod) adminSearchRepStudents(deviceId);
 };
 
 let _adminRepTimer;
-window.adminSearchRepStudents = (q, deviceId) => {
+window.adminSearchRepStudents = (deviceId) => {
   clearTimeout(_adminRepTimer);
   _adminRepTimer = setTimeout(async () => {
     const box = document.getElementById('admin-rep-results');
     if (!box) return;
-    if (!q.trim()) { box.innerHTML = ''; return; }
+    const q     = (document.getElementById('admin-rep-search')?.value || '').trim();
+    const level = document.getElementById('admin-rep-level')?.value || '';
+    const group = document.getElementById('admin-rep-group')?.value || '';
+    const dept  = document.getElementById('admin-rep-dept')?.value?.trim() || '';
+
+    // Need at least one filter
+    if (!q && !level && !group && !dept) {
+      box.innerHTML = '<div style="color:var(--text-muted);font-size:12px;padding:10px 0;text-align:center">Enter a name, index number, or select a filter to search.</div>';
+      return;
+    }
+
     box.innerHTML = '<div style="color:var(--text-muted);font-size:13px;padding:8px 0">Searching…</div>';
-    const esc = s => s == null ? '' : String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+    const esc2 = s => s == null ? '' : String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
     try {
-      const { students } = await api(`/api/class-rep-admin/students?indexNumber=${encodeURIComponent(q)}`);
-      if (!students.length) { box.innerHTML = '<div style="color:var(--text-muted);font-size:13px;padding:8px 0">No students found.</div>'; return; }
-      box.innerHTML = students.slice(0,10).map(s => `
-        <div style="display:flex;align-items:center;justify-content:space-between;padding:9px 12px;border-radius:8px;border:1.5px solid var(--border);margin-bottom:6px;background:var(--bg)">
-          <div>
-            <div style="font-size:13px;font-weight:600">${esc(s.name)}</div>
-            <div style="font-size:11px;color:var(--text-muted)">${esc(s.IndexNumber||'')} · L${esc(s.studentLevel||'?')} Gr${esc(s.studentGroup||'?')} · ${esc(s.programme||'')}</div>
+      const params = new URLSearchParams();
+      if (q)     params.set('indexNumber', q);
+      if (level) params.set('level', level);
+      if (group) params.set('group', group);
+      if (dept)  params.set('department', dept);
+      const { students } = await api(`/api/class-rep-admin/students?${params.toString()}`);
+
+      if (!students.length) {
+        box.innerHTML = '<div style="color:var(--text-muted);font-size:13px;padding:10px 0;text-align:center">No students found matching these filters.</div>';
+        return;
+      }
+      box.innerHTML = students.slice(0, 15).map(s => {
+        const initials = (s.name || '?')[0].toUpperCase();
+        const alreadyRep = s.isClassRep;
+        return `
+        <div style="display:flex;align-items:center;gap:10px;padding:10px 12px;border-radius:10px;border:1.5px solid ${alreadyRep ? 'rgba(22,163,74,.2)' : 'var(--border)'};margin-bottom:7px;background:${alreadyRep ? 'rgba(22,163,74,.04)' : 'var(--bg)'};transition:border-color .15s">
+          <div style="width:36px;height:36px;border-radius:50%;background:rgba(124,58,237,.1);display:flex;align-items:center;justify-content:center;flex-shrink:0;font-size:13px;font-weight:800;color:#7c3aed">${initials}</div>
+          <div style="flex:1;min-width:0">
+            <div style="font-size:13px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc2(s.name)}</div>
+            <div style="display:flex;flex-wrap:wrap;gap:4px;margin-top:3px">
+              ${s.IndexNumber ? `<span style="font-size:10px;font-weight:600;padding:1px 6px;border-radius:5px;background:rgba(79,110,247,.08);color:#4f6ef7">${esc2(s.IndexNumber)}</span>` : ''}
+              ${s.studentLevel ? `<span style="font-size:10px;padding:1px 6px;border-radius:5px;background:var(--border);color:var(--text-muted)">Level ${esc2(s.studentLevel)}</span>` : ''}
+              ${s.studentGroup ? `<span style="font-size:10px;padding:1px 6px;border-radius:5px;background:var(--border);color:var(--text-muted)">Group ${esc2(s.studentGroup)}</span>` : ''}
+              ${s.department   ? `<span style="font-size:10px;padding:1px 6px;border-radius:5px;background:var(--border);color:var(--text-muted)">${esc2(s.department)}</span>` : ''}
+              ${s.programme    ? `<span style="font-size:10px;padding:1px 6px;border-radius:5px;background:var(--border);color:var(--text-muted)">${esc2(s.programme)}</span>` : ''}
+            </div>
           </div>
-          ${s.isClassRep
-            ? `<span style="font-size:11px;color:#16a34a;font-weight:600">Already a rep</span>`
-            : `<button class="btn btn-primary btn-sm" onclick="adminDoAssignRep('${deviceId}','${s._id}','${esc(s.name)}')">Assign</button>`}
-        </div>`).join('');
+          <div style="flex-shrink:0">
+            ${alreadyRep
+              ? `<span style="display:inline-flex;align-items:center;gap:4px;font-size:11px;font-weight:600;padding:4px 9px;border-radius:20px;background:rgba(22,163,74,.1);color:#15803d">
+                  <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="20 6 9 17 4 12"/></svg>
+                  Rep
+                </span>`
+              : `<button class="btn btn-primary btn-sm" style="font-size:11px;padding:5px 12px" onclick="adminDoAssignRep('${deviceId}','${s._id}','${esc2(s.name)}')">Assign</button>`}
+          </div>
+        </div>`;
+      }).join('');
     } catch(e) { box.innerHTML = `<div style="color:#ef4444;font-size:13px">${e.message}</div>`; }
   }, 300);
 };
