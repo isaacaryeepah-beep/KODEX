@@ -280,8 +280,9 @@ jobs:
       # Requires RELEASES_PAT secret: a fine-grained PAT with Contents write on dikly-releases.
       - name: Publish to Dikly_releases (public repo)
         run: |
-          gh release delete apk-latest --yes --cleanup-tag \
+          gh release delete apk-latest --yes \
             --repo isaacaryeepah-beep/Dikly_releases 2>/dev/null || true
+          gh api -X DELETE /repos/isaacaryeepah-beep/Dikly_releases/git/refs/tags/apk-latest 2>/dev/null || true
           gh release create apk-latest dikly.apk \
             --repo isaacaryeepah-beep/Dikly_releases \
             --title "DIKLY App — Latest Build" \
