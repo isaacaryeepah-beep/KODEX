@@ -1,18 +1,20 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 import '../../core/api.dart';
+import '../../core/auth.dart';
 import '../../core/theme.dart';
 import '../../models/announcement.dart';
 import '../../widgets/ds/dikly_ds.dart';
 
-class AnnouncementsScreen extends StatefulWidget {
+class AnnouncementsScreen extends ConsumerStatefulWidget {
   const AnnouncementsScreen({super.key});
 
   @override
-  State<AnnouncementsScreen> createState() => _AnnouncementsScreenState();
+  ConsumerState<AnnouncementsScreen> createState() => _AnnouncementsScreenState();
 }
 
-class _AnnouncementsScreenState extends State<AnnouncementsScreen> {
+class _AnnouncementsScreenState extends ConsumerState<AnnouncementsScreen> {
   List<Announcement> _announcements = [];
   bool _loading = true;
   String? _error;
@@ -46,6 +48,7 @@ class _AnnouncementsScreenState extends State<AnnouncementsScreen> {
           Navigator.of(context).pop();
           _loadData();
         },
+        isAcademic: ref.read(authProvider).user?.isAcademic ?? false,
       ),
     );
   }
@@ -141,7 +144,8 @@ class _AnnouncementsScreenState extends State<AnnouncementsScreen> {
 
 class _PostAnnouncementSheet extends StatefulWidget {
   final VoidCallback onPosted;
-  const _PostAnnouncementSheet({required this.onPosted});
+  final bool isAcademic;
+  const _PostAnnouncementSheet({required this.onPosted, required this.isAcademic});
 
   @override
   State<_PostAnnouncementSheet> createState() => _PostAnnouncementSheetState();
@@ -151,12 +155,21 @@ class _PostAnnouncementSheetState extends State<_PostAnnouncementSheet> {
   final _titleCtrl = TextEditingController();
   final _messageCtrl = TextEditingController();
   String _type = 'Info';
-  String _audience = 'All';
+  late String _audience;
   DateTime? _expiresAt;
   bool _posting = false;
 
   final List<String> _types = ['Info', 'Warning', 'Urgent'];
-  final List<String> _audiences = ['All', 'Employees', 'Managers'];
+
+  List<String> get _audiences => widget.isAcademic
+      ? ['Everyone', 'Students only', 'Lecturers only', 'HODs']
+      : ['All', 'Employees', 'Managers'];
+
+  @override
+  void initState() {
+    super.initState();
+    _audience = widget.isAcademic ? 'Everyone' : 'All';
+  }
 
   @override
   void dispose() {
