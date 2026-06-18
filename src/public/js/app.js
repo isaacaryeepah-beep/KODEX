@@ -18949,7 +18949,7 @@ async function renderAdminDevices() {
       ` : `
         <div style="display:flex;flex-direction:column;gap:12px">
           ${devices.map(d => {
-            const did      = esc(d._id || d.deviceId);
+            const did      = esc(d.deviceId || d._id);
             const dname    = esc(d.deviceName || d.deviceId || 'Unknown');
             const isOnline = d.online;
             const chipId   = esc(d.chipId || d.deviceId || '');
