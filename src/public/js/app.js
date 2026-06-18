@@ -18759,116 +18759,180 @@ async function renderAdminDevices() {
     const instCode = currentUser?.company?.institutionCode || currentUser?.company?.code || currentUser?.institutionCode || '—';
 
     content.innerHTML = `
-      <div class="page-header" style="display:flex;align-items:flex-start;justify-content:space-between;flex-wrap:wrap;gap:10px">
+      <!-- Header -->
+      <div class="page-header" style="display:flex;align-items:flex-start;justify-content:space-between;flex-wrap:wrap;gap:10px;margin-bottom:20px">
         <div>
-          <h2>Attendance Devices</h2>
-          <p>All ESP32 devices paired to your institution</p>
+          <h2 style="margin-bottom:4px">Attendance Devices</h2>
+          <p style="color:var(--text-muted);font-size:13px">Manage all ESP32 devices paired to your institution</p>
         </div>
-        <button class="btn btn-primary btn-sm" onclick="adminGeneratePairingCode()">+ Generate Pairing Code</button>
+        <button class="btn btn-primary" onclick="adminGeneratePairingCode()" style="display:flex;align-items:center;gap:6px;padding:9px 16px">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+          Generate Pairing Code
+        </button>
       </div>
 
-      <!-- Stats row -->
-      <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:16px">
-        <div class="card" style="padding:14px 16px">
-          <div style="font-size:11px;color:var(--text-muted);margin-bottom:4px">Total Devices</div>
-          <div style="font-size:22px;font-weight:700">${devices.length}</div>
-        </div>
-        <div class="card" style="padding:14px 16px">
-          <div style="font-size:11px;color:var(--text-muted);margin-bottom:4px">Online Now</div>
-          <div style="font-size:22px;font-weight:700;color:#16a34a">${online}</div>
-        </div>
-        <div class="card" style="padding:14px 16px">
-          <div style="font-size:11px;color:var(--text-muted);margin-bottom:4px">Offline</div>
-          <div style="font-size:22px;font-weight:700;color:var(--text-muted)">${offline}</div>
-        </div>
-      </div>
-
-      <!-- Institution code + security cards -->
-      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px;margin-bottom:20px">
-        <div class="card" style="padding:18px 20px">
-          <div style="font-size:10px;font-weight:700;letter-spacing:.8px;text-transform:uppercase;color:var(--text-muted);margin-bottom:8px">Institution Code</div>
-          <div style="font-size:28px;font-weight:900;letter-spacing:6px;font-family:monospace;margin-bottom:10px">${esc(instCode)}</div>
-          <div style="font-size:12px;color:var(--text-muted);margin-bottom:10px">Class Rep needs this + a pairing code to set up a device. Keep it confidential.</div>
-          <button class="btn btn-secondary btn-sm" onclick="navigator.clipboard.writeText('${esc(instCode)}').then(()=>showToastNotif('Code copied!','success'))">Copy</button>
-        </div>
-        <div class="card" style="padding:18px 20px;display:flex;align-items:flex-start;gap:14px">
-          <div style="width:40px;height:40px;border-radius:10px;background:#ede9fe;display:flex;align-items:center;justify-content:center;flex-shrink:0">
-            <svg viewBox="0 0 24 24" fill="none" stroke="#7c3aed" stroke-width="2" width="20" height="20"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+      <!-- Stats + Institution Code banner -->
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:12px;margin-bottom:20px">
+        <div class="card" style="padding:16px 18px;display:flex;align-items:center;gap:14px">
+          <div style="width:40px;height:40px;border-radius:10px;background:rgba(79,110,247,.12);display:flex;align-items:center;justify-content:center;flex-shrink:0">
+            <svg viewBox="0 0 24 24" fill="none" stroke="#4f6ef7" stroke-width="2" width="18" height="18"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/></svg>
           </div>
           <div>
-            <div style="font-weight:700;font-size:14px;margin-bottom:4px">Device pairing is secure</div>
-            <div style="font-size:12px;color:var(--text-muted)">JWT-authenticated · Company-isolated</div>
+            <div style="font-size:11px;color:var(--text-muted);font-weight:600;text-transform:uppercase;letter-spacing:.5px">Total</div>
+            <div style="font-size:24px;font-weight:800;line-height:1.1">${devices.length}</div>
           </div>
+        </div>
+        <div class="card" style="padding:16px 18px;display:flex;align-items:center;gap:14px">
+          <div style="width:40px;height:40px;border-radius:10px;background:rgba(22,163,74,.1);display:flex;align-items:center;justify-content:center;flex-shrink:0">
+            <span style="width:10px;height:10px;border-radius:50%;background:#16a34a;display:block;box-shadow:0 0 0 3px rgba(22,163,74,.2)"></span>
+          </div>
+          <div>
+            <div style="font-size:11px;color:var(--text-muted);font-weight:600;text-transform:uppercase;letter-spacing:.5px">Online</div>
+            <div style="font-size:24px;font-weight:800;color:#16a34a;line-height:1.1">${online}</div>
+          </div>
+        </div>
+        <div class="card" style="padding:16px 18px;display:flex;align-items:center;gap:14px">
+          <div style="width:40px;height:40px;border-radius:10px;background:rgba(156,163,175,.1);display:flex;align-items:center;justify-content:center;flex-shrink:0">
+            <span style="width:10px;height:10px;border-radius:50%;background:#9ca3af;display:block"></span>
+          </div>
+          <div>
+            <div style="font-size:11px;color:var(--text-muted);font-weight:600;text-transform:uppercase;letter-spacing:.5px">Offline</div>
+            <div style="font-size:24px;font-weight:800;color:var(--text-muted);line-height:1.1">${offline}</div>
+          </div>
+        </div>
+        <div class="card" style="padding:16px 18px;display:flex;align-items:center;justify-content:space-between;gap:10px;grid-column:span 1">
+          <div style="min-width:0">
+            <div style="font-size:10px;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:var(--text-muted);margin-bottom:4px">Institution Code</div>
+            <div style="font-size:20px;font-weight:900;letter-spacing:4px;font-family:monospace">${esc(instCode)}</div>
+            <div style="font-size:11px;color:var(--text-muted);margin-top:2px">Share with Class Rep + pairing code</div>
+          </div>
+          <button class="btn btn-secondary btn-sm" style="flex-shrink:0" onclick="navigator.clipboard.writeText('${esc(instCode)}').then(()=>showToastNotif('Code copied!','success'))">Copy</button>
         </div>
       </div>
 
-      <!-- Paired devices header -->
-      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
-        <div style="font-size:13px;font-weight:600">
-          Paired Devices <span style="color:var(--text-muted);font-weight:400">${devices.length}</span>
-        </div>
-        <div style="display:flex;align-items:center;gap:8px">
+      <!-- Devices list header -->
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px">
+        <div style="font-size:14px;font-weight:700">Paired Devices <span style="font-weight:400;color:var(--text-muted)">${devices.length}</span></div>
+        <div style="display:flex;align-items:center;gap:10px">
           <span style="font-size:12px;color:var(--text-muted)">Updated ${now}</span>
-          <button class="btn btn-secondary btn-sm" onclick="renderAdminDevices()">↻ Refresh</button>
+          <button class="btn btn-secondary btn-sm" onclick="renderAdminDevices()" style="display:flex;align-items:center;gap:5px">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>
+            Refresh
+          </button>
         </div>
       </div>
 
       ${devices.length === 0 ? `
-        <div class="card" style="text-align:center;padding:48px;color:var(--text-muted)">
-          <div style="font-size:36px;margin-bottom:12px">📡</div>
-          <div style="font-size:16px;font-weight:600;margin-bottom:6px">No Devices Paired</div>
-          <div style="font-size:13px">Lecturers can pair an ESP32 device from their Attendance Device page.</div>
+        <div class="card" style="text-align:center;padding:56px 24px">
+          <div style="width:56px;height:56px;border-radius:16px;background:rgba(79,110,247,.08);display:flex;align-items:center;justify-content:center;margin:0 auto 16px">
+            <svg viewBox="0 0 24 24" fill="none" stroke="#4f6ef7" stroke-width="1.5" width="26" height="26"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/></svg>
+          </div>
+          <div style="font-size:16px;font-weight:700;margin-bottom:6px">No Devices Paired Yet</div>
+          <div style="font-size:13px;color:var(--text-muted);max-width:320px;margin:0 auto 20px">Generate a pairing code and share it with a Class Rep to set up an ESP32 device.</div>
+          <button class="btn btn-primary btn-sm" onclick="adminGeneratePairingCode()">+ Generate Pairing Code</button>
         </div>
       ` : `
-        <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(320px,1fr));gap:16px">
+        <div style="display:flex;flex-direction:column;gap:14px">
           ${devices.map(d => {
-            const did     = esc(d._id || d.deviceId);
-            const dname   = esc(d.deviceName || d.deviceId || 'Unknown');
-            const status  = d.online ? 'Online' : 'Offline';
-            const sColor  = d.online ? '#16a34a' : '#9ca3af';
-            const sBg     = d.online ? '#dcfce7' : '#f3f4f6';
-            const chipId  = esc(d.chipId || d.deviceId || '');
-            const pairedBy = esc(d.pairedBy?.name || '—');
-            const dept    = esc(d.pairedBy?.department || '');
-            const classRep = d.classRepId ? esc(d.classRepId.name || d.classRepId) : '';
-            const grp     = d.assignedGroup ? `Gr ${esc(d.assignedGroup)} · L${esc(d.assignedLevel||'?')}` : '';
-            const ip      = esc(d.localIp || '');
-            const fw      = esc(d.firmwareVersion || '');
+            const did      = esc(d._id || d.deviceId);
+            const dname    = esc(d.deviceName || d.deviceId || 'Unknown');
+            const isOnline = d.online;
+            const chipId   = esc(d.chipId || d.deviceId || '');
+            const classRep = d.classRepId ? esc(d.classRepId.name) : null;
+            const repIndex = d.classRepId?.IndexNumber ? esc(d.classRepId.IndexNumber) : null;
+            const grp      = d.assignedGroup ? `L${esc(d.assignedLevel||'?')} · Gr ${esc(d.assignedGroup)}` : null;
+            const dept     = esc(d.assignedDepartment || d.pairedBy?.department || '');
+            const ip       = esc(d.localIp || '');
+            const fw       = esc(d.firmwareVersion || '');
             const lastSeen = timeAgo(d.lastHeartbeat);
+            const lecturers = (d.assignedLecturers || []).filter(a => a.lecturerId);
+
             return `
-            <div class="card" style="padding:0;overflow:hidden">
-              <div style="padding:14px 16px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between">
-                <div style="display:flex;align-items:center;gap:10px">
-                  <div style="width:36px;height:36px;border-radius:9px;background:var(--bg);display:flex;align-items:center;justify-content:center;flex-shrink:0">
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18" style="color:var(--text-muted)"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/></svg>
-                  </div>
-                  <div>
-                    <div style="font-size:14px;font-weight:700">${dname}</div>
-                    ${chipId ? `<div style="font-size:11px;color:var(--text-muted);font-family:monospace">${chipId}</div>` : ''}
-                  </div>
+            <div class="card" style="padding:0;overflow:hidden;border-radius:12px">
+
+              <!-- Card header -->
+              <div style="padding:14px 18px;display:flex;align-items:center;gap:12px;border-bottom:1px solid var(--border)">
+                <div style="width:40px;height:40px;border-radius:10px;background:${isOnline ? 'rgba(22,163,74,.1)' : 'rgba(156,163,175,.1)'};display:flex;align-items:center;justify-content:center;flex-shrink:0">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="${isOnline ? '#16a34a' : '#9ca3af'}" stroke-width="2" width="18" height="18"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/></svg>
                 </div>
-                <span style="font-size:11px;font-weight:600;padding:3px 10px;border-radius:20px;background:${sBg};color:${sColor}">${status}</span>
-              </div>
-              <div style="padding:14px 16px;display:grid;gap:8px">
-                <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
-                  <span style="font-size:12px;color:var(--text-muted)">Paired by:</span>
-                  <span style="font-size:12px;font-weight:600">${pairedBy}</span>
-                  ${dept ? `<span style="font-size:10px;font-weight:600;padding:2px 7px;border-radius:10px;background:#ede9fe;color:#7c3aed">${dept}</span>` : ''}
+                <div style="flex:1;min-width:0">
+                  <div style="font-size:15px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${dname}</div>
+                  ${chipId ? `<div style="font-size:11px;color:var(--text-muted);font-family:monospace;margin-top:1px">${chipId}</div>` : ''}
                 </div>
-                ${grp ? `<div style="font-size:12px;color:var(--text-muted)">Class: <span style="color:var(--text-primary);font-weight:600">${grp}</span></div>` : ''}
-                <div style="font-size:12px;color:var(--text-muted)">Class Rep:
-                  <span style="color:${classRep ? 'var(--text-primary)' : 'var(--text-muted)'};font-weight:${classRep ? '600' : '400'}">
-                    ${classRep || 'Not assigned'}
+                <div style="display:flex;align-items:center;gap:6px;flex-shrink:0">
+                  <span style="display:inline-flex;align-items:center;gap:5px;font-size:12px;font-weight:600;padding:4px 10px;border-radius:20px;background:${isOnline ? 'rgba(22,163,74,.1)' : 'rgba(156,163,175,.1)'};color:${isOnline ? '#16a34a' : '#6b7280'}">
+                    <span style="width:6px;height:6px;border-radius:50%;background:${isOnline ? '#16a34a' : '#9ca3af'};${isOnline ? 'box-shadow:0 0 0 2px rgba(22,163,74,.25)' : ''}"></span>
+                    ${isOnline ? 'Online' : 'Offline'}
                   </span>
                 </div>
-                ${ip ? `<div style="font-size:11px;color:var(--text-muted);font-family:monospace">IP: ${ip}${fw ? ` · fw ${fw}` : ''}</div>` : ''}
-                <div style="font-size:11px;color:var(--text-muted)">Last seen: ${lastSeen}</div>
               </div>
-              <div style="padding:10px 16px;border-top:1px solid var(--border);display:flex;flex-wrap:wrap;gap:6px">
-                <button class="btn btn-secondary btn-sm" onclick="adminAssignClassRep('${did}','${dname}')">👤 Assign Class Rep</button>
+
+              <!-- Info grid -->
+              <div style="padding:14px 18px;display:grid;grid-template-columns:1fr 1fr;gap:10px 20px">
+                <div>
+                  <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.6px;color:var(--text-muted);margin-bottom:3px">Class Rep</div>
+                  <div style="font-size:13px;font-weight:600">${classRep || '<span style="color:var(--text-muted);font-weight:400">Not assigned</span>'}</div>
+                  ${repIndex ? `<div style="font-size:11px;color:var(--text-muted)">${repIndex}</div>` : ''}
+                </div>
+                <div>
+                  <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.6px;color:var(--text-muted);margin-bottom:3px">Class / Group</div>
+                  <div style="font-size:13px;font-weight:600">${grp || '<span style="color:var(--text-muted);font-weight:400">—</span>'}</div>
+                </div>
+                ${dept ? `
+                <div>
+                  <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.6px;color:var(--text-muted);margin-bottom:3px">Department</div>
+                  <div style="font-size:13px;font-weight:600">${dept}</div>
+                </div>` : ''}
+                <div>
+                  <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.6px;color:var(--text-muted);margin-bottom:3px">Last Seen</div>
+                  <div style="font-size:13px">${lastSeen}</div>
+                </div>
+                ${ip ? `
+                <div style="grid-column:1/-1">
+                  <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.6px;color:var(--text-muted);margin-bottom:3px">Network</div>
+                  <div style="font-size:12px;font-family:monospace;color:var(--text-muted)">IP ${ip}${fw ? ` · fw ${fw}` : ''}</div>
+                </div>` : ''}
+              </div>
+
+              <!-- Assigned lecturers -->
+              <div style="padding:0 18px 14px">
+                <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.6px;color:var(--text-muted);margin-bottom:8px">Assigned Lecturers</div>
+                ${lecturers.length === 0
+                  ? `<div style="font-size:12px;color:var(--text-muted)">No lecturers assigned yet</div>`
+                  : lecturers.map(a => {
+                      const lname = esc(a.lecturerId?.name || 'Unknown');
+                      const cname = esc(a.courseId?.title || '');
+                      const ccode = esc(a.courseId?.code || '');
+                      const lid   = esc(a.lecturerId?._id || a.lecturerId);
+                      const cid   = esc(a.courseId?._id  || a.courseId);
+                      return `
+                      <div style="display:flex;align-items:center;justify-content:space-between;padding:6px 10px;background:var(--bg);border-radius:8px;margin-bottom:5px;gap:8px">
+                        <div style="min-width:0">
+                          <div style="font-size:13px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${lname}</div>
+                          ${cname ? `<div style="font-size:11px;color:var(--text-muted)">${ccode ? ccode+' · ' : ''}${cname}</div>` : ''}
+                        </div>
+                        <button onclick="adminRemoveLecturer('${did}','${lid}','${cid}','${lname}')"
+                          style="font-size:11px;font-weight:600;padding:3px 8px;border-radius:6px;border:1px solid rgba(239,68,68,.25);background:rgba(239,68,68,.06);color:#ef4444;cursor:pointer;white-space:nowrap;flex-shrink:0">
+                          Remove
+                        </button>
+                      </div>`;
+                    }).join('')
+                }
+              </div>
+
+              <!-- Actions -->
+              <div style="padding:12px 18px;border-top:1px solid var(--border);display:flex;flex-wrap:wrap;gap:8px;background:rgba(0,0,0,.015)">
+                <button class="btn btn-primary btn-sm" onclick="adminAssignLecturer('${did}','${dname}')" style="display:flex;align-items:center;gap:5px">
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><line x1="19" y1="8" x2="19" y2="14"/><line x1="22" y1="11" x2="16" y2="11"/></svg>
+                  Assign Lecturer
+                </button>
+                <button class="btn btn-secondary btn-sm" onclick="adminAssignClassRep('${did}','${dname}')" style="display:flex;align-items:center;gap:5px">
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+                  Assign Rep
+                </button>
                 <button class="btn btn-secondary btn-sm" onclick="adminRenameDevice('${did}','${dname}')">✏ Rename</button>
-                <button class="btn btn-secondary btn-sm" onclick="adminFactoryReset('${did}','${dname}')">↺ Factory Reset</button>
-                <button class="btn btn-sm" style="background:rgba(239,68,68,.1);color:#ef4444;border:1px solid rgba(239,68,68,.2)" onclick="adminRemoveDevice('${did}','${dname}')">✕ Remove</button>
+                <button class="btn btn-secondary btn-sm" onclick="adminFactoryReset('${did}','${dname}',${isOnline})">↺ Factory Reset</button>
+                <button class="btn btn-sm" style="background:rgba(239,68,68,.08);color:#ef4444;border:1px solid rgba(239,68,68,.2)" onclick="adminRemoveDevice('${did}','${dname}')">✕ Remove</button>
               </div>
             </div>`;
           }).join('')}
@@ -18876,7 +18940,7 @@ async function renderAdminDevices() {
       `}
     `;
   } catch(e) {
-    content.innerHTML = `<div class="card" style="color:#ef4444">Failed to load devices: ${e.message}</div>`;
+    content.innerHTML = `<div class="card" style="color:#ef4444;padding:20px">Failed to load devices: ${esc(e.message)}</div>`;
   }
 }
 
@@ -18885,28 +18949,119 @@ window.adminGeneratePairingCode = async () => {
     const data = await api('/api/devices/pairing-code', { method: 'POST' });
     const code = data.pairingCode || data.code || '—';
     openModal(`
-      <div style="text-align:center;padding:8px 0">
-        <div style="font-size:13px;font-weight:600;color:var(--text-muted);letter-spacing:.5px;margin-bottom:12px">NEW PAIRING CODE</div>
-        <div style="font-size:48px;font-weight:900;letter-spacing:10px;font-family:monospace;color:var(--accent);margin-bottom:16px">${code}</div>
-        <p style="font-size:13px;color:var(--text-muted);margin-bottom:18px">Share this one-time code with the Class Rep. It expires in 10 minutes.</p>
-        <button class="btn btn-primary" onclick="navigator.clipboard.writeText('${code}').then(()=>showToastNotif('Code copied!','success'))">Copy Code</button>
+      <div style="text-align:center;padding:12px 0 4px">
+        <div style="width:52px;height:52px;border-radius:14px;background:#ede9fe;display:flex;align-items:center;justify-content:center;margin:0 auto 16px">
+          <svg viewBox="0 0 24 24" fill="none" stroke="#7c3aed" stroke-width="2" width="24" height="24"><rect x="5" y="2" width="14" height="20" rx="2" ry="2"/><line x1="12" y1="18" x2="12.01" y2="18"/></svg>
+        </div>
+        <div style="font-size:12px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;color:var(--text-muted);margin-bottom:10px">New Pairing Code</div>
+        <div style="font-size:52px;font-weight:900;letter-spacing:12px;font-family:monospace;color:#7c3aed;margin-bottom:14px;padding:0 8px">${code}</div>
+        <p style="font-size:13px;color:var(--text-muted);margin-bottom:20px;line-height:1.5">Share this one-time code with the Class Rep along with the institution code. Expires in <strong>10 minutes</strong>.</p>
+        <button class="btn btn-primary" style="width:100%" onclick="navigator.clipboard.writeText('${code}').then(()=>showToastNotif('Code copied!','success'))">Copy Code</button>
       </div>
     `);
   } catch(e) { showToastNotif('❌ ' + (e.message || 'Failed to generate code'), 'error'); }
 };
 
+window.adminAssignLecturer = async (deviceId, deviceName) => {
+  openModal(`
+    <div>
+      <h3 style="font-size:16px;font-weight:700;margin-bottom:4px">Assign Lecturer</h3>
+      <p style="font-size:12px;color:var(--text-muted);margin-bottom:16px">Device: <strong>${deviceName}</strong> — select a lecturer and their course.</p>
+      <div id="admin-lec-loading" style="text-align:center;padding:24px;color:var(--text-muted);font-size:13px">Loading lecturers…</div>
+      <div id="admin-lec-body" style="display:none">
+        <div class="form-group" style="margin-bottom:12px">
+          <label style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--text-muted)">Lecturer</label>
+          <select id="admin-lec-select" onchange="adminLecturerChanged(this.value)"
+            style="width:100%;padding:9px 12px;border:1.5px solid var(--border);border-radius:8px;background:var(--bg);color:var(--text-primary);font-size:13px;margin-top:4px">
+            <option value="">— Select lecturer —</option>
+          </select>
+        </div>
+        <div class="form-group" style="margin-bottom:16px">
+          <label style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--text-muted)">Course</label>
+          <select id="admin-course-select"
+            style="width:100%;padding:9px 12px;border:1.5px solid var(--border);border-radius:8px;background:var(--bg);color:var(--text-primary);font-size:13px;margin-top:4px">
+            <option value="">— Select lecturer first —</option>
+          </select>
+        </div>
+        <button class="btn btn-primary" style="width:100%" onclick="adminDoAssignLecturer('${deviceId}')">Assign to Device</button>
+      </div>
+    </div>
+  `);
+  try {
+    const { lecturers } = await api('/api/devices/lecturers-for-assignment');
+    window._adminLecturers = lecturers;
+    const sel = document.getElementById('admin-lec-select');
+    if (!sel) return;
+    lecturers.forEach(l => {
+      const opt = document.createElement('option');
+      opt.value = l._id;
+      opt.textContent = l.name + (l.department ? ` · ${l.department}` : '');
+      sel.appendChild(opt);
+    });
+    document.getElementById('admin-lec-loading').style.display = 'none';
+    document.getElementById('admin-lec-body').style.display = 'block';
+  } catch(e) {
+    const el = document.getElementById('admin-lec-loading');
+    if (el) el.innerHTML = `<span style="color:#ef4444">${e.message}</span>`;
+  }
+};
+
+window.adminLecturerChanged = (lecturerId) => {
+  const courseSel = document.getElementById('admin-course-select');
+  if (!courseSel) return;
+  courseSel.innerHTML = '<option value="">— Select course —</option>';
+  const lec = (window._adminLecturers || []).find(l => l._id === lecturerId);
+  if (!lec || !lec.courses?.length) {
+    courseSel.innerHTML = '<option value="">No courses assigned to this lecturer</option>';
+    return;
+  }
+  lec.courses.forEach(c => {
+    const opt = document.createElement('option');
+    opt.value = c._id;
+    opt.textContent = (c.courseCode ? c.courseCode + ' · ' : '') + c.name;
+    courseSel.appendChild(opt);
+  });
+};
+
+window.adminDoAssignLecturer = async (deviceId) => {
+  const lecturerId = document.getElementById('admin-lec-select')?.value;
+  const courseId   = document.getElementById('admin-course-select')?.value;
+  if (!lecturerId || !courseId) { showToastNotif('Select a lecturer and course first.', 'error'); return; }
+  try {
+    await api(`/api/devices/${encodeURIComponent(deviceId)}/assign-lecturer`, {
+      method: 'POST',
+      body: JSON.stringify({ lecturerId, courseId }),
+    });
+    closeModal();
+    showToastNotif('✅ Lecturer assigned to device.', 'success');
+    renderAdminDevices();
+  } catch(e) { showToastNotif('❌ ' + (e.message || 'Failed to assign'), 'error'); }
+};
+
+window.adminRemoveLecturer = async (deviceId, lecturerId, courseId, lecturerName) => {
+  if (!confirm(`Remove ${lecturerName} from this device?`)) return;
+  try {
+    await api(`/api/devices/${encodeURIComponent(deviceId)}/remove-lecturer`, {
+      method: 'DELETE',
+      body: JSON.stringify({ lecturerId, courseId }),
+    });
+    showToastNotif('✅ Lecturer removed from device.', 'success');
+    renderAdminDevices();
+  } catch(e) { showToastNotif('❌ ' + (e.message || 'Failed to remove'), 'error'); }
+};
+
 window.adminAssignClassRep = async (deviceId, deviceName) => {
   openModal(`
-    <div style="padding:4px 0">
+    <div>
       <h3 style="font-size:16px;font-weight:700;margin-bottom:4px">Assign Class Rep</h3>
       <p style="font-size:12px;color:var(--text-muted);margin-bottom:16px">Device: <strong>${deviceName}</strong></p>
       <div class="form-group">
-        <label>Search Student</label>
+        <label style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--text-muted)">Search Student</label>
         <input type="text" id="admin-rep-search" placeholder="Name or index number…"
           oninput="adminSearchRepStudents(this.value,'${deviceId}')"
-          style="width:100%;padding:8px 12px;border:1.5px solid var(--border);border-radius:8px;background:var(--bg);color:var(--text-primary);font-size:13px">
+          style="width:100%;padding:9px 12px;border:1.5px solid var(--border);border-radius:8px;background:var(--bg);color:var(--text-primary);font-size:13px;margin-top:4px">
       </div>
-      <div id="admin-rep-results" style="max-height:260px;overflow-y:auto;margin-top:8px"></div>
+      <div id="admin-rep-results" style="max-height:260px;overflow-y:auto;margin-top:10px"></div>
     </div>
   `);
 };
@@ -18944,7 +19099,7 @@ window.adminDoAssignRep = async (deviceId, studentId, studentName) => {
       body: JSON.stringify({ classRepId: studentId }),
     });
     closeModal();
-    showToastNotif(`✅ ${studentName} assigned as Class Rep for this device.`, 'success');
+    showToastNotif(`✅ ${studentName} assigned as Class Rep.`, 'success');
     renderAdminDevices();
   } catch(e) { showToastNotif('❌ ' + (e.message || 'Failed to assign'), 'error'); }
 };
@@ -18954,23 +19109,27 @@ window.adminRenameDevice = async (deviceId, currentName) => {
   if (!newName || !newName.trim() || newName.trim() === currentName) return;
   try {
     await api('/api/devices/my/rename', { method: 'PATCH', body: JSON.stringify({ deviceName: newName.trim(), deviceId }) });
-    showToastNotif('✅ Device renamed successfully.', 'success');
+    showToastNotif('✅ Device renamed.', 'success');
     renderAdminDevices();
   } catch(e) { showToastNotif('❌ ' + (e.message || 'Failed to rename'), 'error'); }
 };
 
-window.adminFactoryReset = async (deviceId, deviceName) => {
-  if (!confirm(`Factory reset "${deviceName}"?\n\nThis will wipe the device config. The device will need to be re-paired.`)) return;
+window.adminFactoryReset = async (deviceId, deviceName, isOnline) => {
+  if (!isOnline) {
+    showToastNotif('⚠️ Device is offline — it must be online to receive a factory reset command.', 'error');
+    return;
+  }
+  if (!confirm(`Factory reset "${deviceName}"?\n\nThis will wipe all WiFi credentials and pairing data. The device will need to be re-paired.`)) return;
   try {
-    showToastNotif('Sending factory reset command…', 'info');
+    showToastNotif('Sending factory reset…', 'info');
     await api(`/api/devices/${encodeURIComponent(deviceId)}/factory-reset`, { method: 'POST' });
-    showToastNotif('✅ Factory reset command sent.', 'success');
-    setTimeout(renderAdminDevices, 2000);
+    showToastNotif('✅ Factory reset command sent. Device will restart.', 'success');
+    setTimeout(renderAdminDevices, 3000);
   } catch(e) { showToastNotif('❌ ' + (e.message || 'Failed to reset'), 'error'); }
 };
 
 window.adminRemoveDevice = async (deviceId, deviceName) => {
-  if (!confirm(`Remove "${deviceName}"?\n\nThis will unpair the device from your institution.`)) return;
+  if (!confirm(`Remove "${deviceName}"?\n\nThis permanently unpairs the device from your institution.`)) return;
   try {
     await api(`/api/devices/${encodeURIComponent(deviceId)}/remove`, { method: 'DELETE' });
     showToastNotif('✅ Device removed.', 'success');
@@ -18978,7 +19137,6 @@ window.adminRemoveDevice = async (deviceId, deviceName) => {
   } catch(e) { showToastNotif('❌ ' + (e.message || 'Failed to remove'), 'error'); }
 };
 
-// ══════════════════════════════════════════════════════════════
 // WHITE-LABEL BRANDING
 // ══════════════════════════════════════════════════════════════
 async function renderBranding() {
