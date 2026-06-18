@@ -3954,8 +3954,10 @@ async function renderHodQuizMonitor() {
   if (!content) return;
   content.innerHTML = '<div class="loading">Loading quiz monitor…</div>';
   try {
-    const data = await api('/api/snap-quiz/sessions/live').catch(() => ({ sessions: [] }));
-    const sessions = data.sessions || data.liveSessions || [];
+    // Fetch all quizzes visible to HOD (department-overview) and filter to open/active ones
+    const data = await api('/api/lecturer/snap-quizzes/department-overview').catch(() => api('/api/lecturer/snap-quizzes').catch(() => ({ quizzes: [] })));
+    const allQuizzes = data.quizzes || data.data || [];
+    const sessions = allQuizzes.filter(q => q.status === 'open' || q.status === 'active');
     const esc = s => s == null ? '' : String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
 
     const navQuizzesEl = document.getElementById('nav-hod-quiz-monitor');
@@ -3989,7 +3991,7 @@ async function renderHodQuizMonitor() {
       <div class="page-header" style="display:flex;align-items:flex-start;justify-content:space-between;flex-wrap:wrap;gap:10px">
         <div>
           <h2>Quiz Monitor</h2>
-          <p>${sessions.length} live quiz session${sessions.length !== 1 ? 's' : ''} in progress</p>
+          <p>${sessions.length} open quiz${sessions.length !== 1 ? 'zes' : ''} in progress</p>
         </div>
         <button class="btn btn-secondary btn-sm" onclick="renderHodQuizMonitor()">↻ Refresh</button>
       </div>
@@ -3998,20 +4000,20 @@ async function renderHodQuizMonitor() {
         <div class="card" style="padding:16px">
           <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px">
             <span style="display:inline-flex;align-items:center;gap:5px;font-size:11px;font-weight:700;padding:3px 8px;border-radius:20px;background:#dcfce7;color:#16a34a">
-              <span style="width:6px;height:6px;border-radius:50%;background:#16a34a"></span>Live
+              <span style="width:6px;height:6px;border-radius:50%;background:#16a34a"></span>Open
             </span>
-            <span style="font-size:12px;color:var(--text-muted)">${esc(s.courseName || '')}</span>
+            <span style="font-size:12px;color:var(--text-muted)">${esc(s.course?.title || s.course?.code || s.courseName || '')}</span>
           </div>
-          <div style="font-size:15px;font-weight:700;margin-bottom:6px">${esc(s.quizTitle || s.title || 'Quiz Session')}</div>
-          <div style="font-size:12px;color:var(--text-muted);margin-bottom:12px">Lecturer: ${esc(s.lecturerName || '—')}</div>
+          <div style="font-size:15px;font-weight:700;margin-bottom:6px">${esc(s.title || 'Quiz')}</div>
+          <div style="font-size:12px;color:var(--text-muted);margin-bottom:12px">Lecturer: ${esc(s.lecturer?.name || s.lecturerName || '—')}</div>
           <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;font-size:13px">
             <div style="background:var(--bg);border-radius:8px;padding:10px;text-align:center">
-              <div style="font-size:20px;font-weight:800;color:var(--accent)">${s.participantCount ?? s.joined ?? 0}</div>
-              <div style="font-size:10px;font-weight:600;text-transform:uppercase;color:var(--text-muted)">Joined</div>
+              <div style="font-size:20px;font-weight:800;color:var(--accent)">${s.attemptCount ?? s.participantCount ?? 0}</div>
+              <div style="font-size:10px;font-weight:600;text-transform:uppercase;color:var(--text-muted)">Attempts</div>
             </div>
             <div style="background:var(--bg);border-radius:8px;padding:10px;text-align:center">
-              <div style="font-size:20px;font-weight:800">${s.submittedCount ?? s.completed ?? 0}</div>
-              <div style="font-size:10px;font-weight:600;text-transform:uppercase;color:var(--text-muted)">Submitted</div>
+              <div style="font-size:20px;font-weight:800">${s.questionCount ?? (s.questions?.length ?? 0)}</div>
+              <div style="font-size:10px;font-weight:600;text-transform:uppercase;color:var(--text-muted)">Questions</div>
             </div>
           </div>
         </div>`).join('')}
@@ -18719,279 +18721,6 @@ window.hodRemoveDevice = async (deviceId, deviceName) => {
   }
 };
 
-async function renderAdminDevices() {
-  const content = document.getElementById('main-content');
-  if (!content) return;
-  content.innerHTML = '<div class="loading">Loading devices…</div>';
-
-  const esc = s => s == null ? '' : String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
-  const timeAgo = d => {
-    if (!d) return 'Never';
-    const m = Math.floor((Date.now() - new Date(d)) / 60000);
-    if (m < 1) return 'Just now';
-    if (m < 60) return `${m}m ago`;
-    if (m < 1440) return `${Math.floor(m/60)}h ${Math.floor(m%60)}m ago`;
-    return `${Math.floor(m/1440)}d ago`;
-  };
-
-  const render = async () => {
-    try {
-      const { devices } = await api('/api/devices/all');
-      const online  = devices.filter(d => d.online).length;
-      const offline = devices.length - online;
-      const now     = new Date().toLocaleTimeString([], { hour:'2-digit', minute:'2-digit' });
-      const instCode = currentUser?.company?.institutionCode || currentUser?.company?.code || currentUser?.institutionCode || '—';
-
-      content.innerHTML = `
-        <div class="page-header" style="display:flex;align-items:flex-start;justify-content:space-between;flex-wrap:wrap;gap:10px">
-          <div>
-            <h2>Classroom Devices</h2>
-            <p>Manage and provision ESP32 attendance devices</p>
-          </div>
-          <button class="btn btn-primary btn-sm" onclick="hodGeneratePairingCode()">+ Generate Pairing Code</button>
-        </div>
-
-        <!-- Institution code + security info cards -->
-        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px;margin-bottom:20px">
-          <div class="card" style="padding:18px 20px">
-            <div style="font-size:10px;font-weight:700;letter-spacing:.8px;text-transform:uppercase;color:var(--text-muted);margin-bottom:8px">Institution Code</div>
-            <div style="font-size:28px;font-weight:900;letter-spacing:6px;font-family:monospace;margin-bottom:10px">${esc(instCode)}</div>
-            <div style="font-size:12px;color:var(--text-muted);margin-bottom:10px">Class Rep needs this + a pairing code to set up a device. Keep it confidential.</div>
-            <button class="btn btn-secondary btn-sm" onclick="navigator.clipboard.writeText('${esc(instCode)}').then(()=>showToastNotif('Code copied!','success'))">Copy</button>
-          </div>
-          <div class="card" style="padding:18px 20px;display:flex;align-items:flex-start;gap:14px">
-            <div style="width:40px;height:40px;border-radius:10px;background:#ede9fe;display:flex;align-items:center;justify-content:center;flex-shrink:0">
-              <svg viewBox="0 0 24 24" fill="none" stroke="#7c3aed" stroke-width="2" width="20" height="20"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
-            </div>
-            <div>
-              <div style="font-weight:700;font-size:14px;margin-bottom:4px">Device pairing is secure</div>
-              <div style="font-size:12px;color:var(--text-muted)">JWT-authenticated · Company-isolated</div>
-            </div>
-          </div>
-        </div>
-
-        <!-- Paired devices header -->
-        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
-          <div style="font-size:13px;font-weight:600">
-            Paired Devices <span style="color:var(--text-muted);font-weight:400">${devices.length}</span>
-          </div>
-          <div style="display:flex;align-items:center;gap:8px">
-            <span style="font-size:12px;color:var(--text-muted)">Updated ${now}</span>
-            <button class="btn btn-secondary btn-sm" onclick="renderHodDevices()">↻ Refresh</button>
-          </div>
-        </div>
-
-        ${devices.length === 0 ? `
-          <div class="card" style="text-align:center;padding:48px;color:var(--text-muted)">
-            <div style="font-size:36px;margin-bottom:12px">📡</div>
-            <div style="font-size:16px;font-weight:600;margin-bottom:6px">No Devices Paired</div>
-            <div style="font-size:13px">Lecturers can pair an ESP32 device from their Attendance Device page.</div>
-          </div>
-        ` : `
-          <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(320px,1fr));gap:16px">
-            ${devices.map(d => {
-              const devId   = esc(d.deviceId);
-              const devName = esc(d.deviceName || d.deviceId);
-              const isOnline = d.online;
-              const lecturer = d.pairedBy?.name || d.lecturerName || null;
-              const dept     = d.pairedBy?.department || null;
-              const group    = d.assignedGroup ? `Gr ${esc(d.assignedGroup)} · L${esc(d.assignedLevel||'?')}` : null;
-              const classRep = d.classRepId?.name || null;
-              const ip       = d.localIp || null;
-              const fw       = d.firmwareVersion || null;
-              const chipId   = d.chipId || d.deviceId;
-
-              return `
-              <div class="card" style="padding:0;overflow:hidden" id="hod-dev-card-${devId}">
-                <!-- Card header -->
-                <div style="padding:14px 16px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;gap:8px">
-                  <div style="display:flex;align-items:center;gap:10px;min-width:0">
-                    <div style="width:38px;height:38px;border-radius:10px;background:${isOnline ? '#dcfce7' : 'var(--bg)'};display:flex;align-items:center;justify-content:center;flex-shrink:0">
-                      <svg viewBox="0 0 24 24" fill="none" stroke="${isOnline ? '#16a34a' : '#9ca3af'}" stroke-width="2" width="18" height="18"><rect x="5" y="2" width="14" height="20" rx="2" ry="2"/><line x1="12" y1="18" x2="12.01" y2="18"/></svg>
-                    </div>
-                    <div style="min-width:0">
-                      <div style="font-weight:700;font-size:14px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="${devName}">${devName}</div>
-                      <div style="font-size:11px;color:var(--text-muted);font-family:monospace">${esc(chipId)}</div>
-                    </div>
-                  </div>
-                  <span style="flex-shrink:0;display:inline-flex;align-items:center;gap:5px;font-size:11px;font-weight:700;padding:3px 8px;border-radius:20px;background:${isOnline ? '#dcfce7' : 'var(--bg)'};color:${isOnline ? '#16a34a' : '#9ca3af'}">
-                    <span style="width:6px;height:6px;border-radius:50%;background:${isOnline ? '#16a34a' : '#9ca3af'}"></span>
-                    ${isOnline ? 'Online' : 'Offline'}
-                  </span>
-                </div>
-
-                <!-- Details -->
-                <div style="padding:12px 16px;display:grid;gap:8px;font-size:13px">
-                  ${lecturer ? `
-                  <div style="display:flex;justify-content:space-between;align-items:center">
-                    <span style="color:var(--text-muted)">Paired By</span>
-                    <span style="font-weight:500;text-align:right">
-                      ${esc(lecturer)}
-                      ${dept ? `<span style="margin-left:4px;font-size:11px;padding:2px 6px;border-radius:10px;background:#ede9fe;color:#7c3aed;font-weight:600">${esc(dept)}</span>` : ''}
-                    </span>
-                  </div>` : ''}
-                  ${group ? `
-                  <div style="display:flex;justify-content:space-between;align-items:center">
-                    <span style="color:var(--text-muted)">Class / Level</span>
-                    <span style="font-weight:500">${group}</span>
-                  </div>` : ''}
-                  ${classRep ? `
-                  <div style="display:flex;justify-content:space-between;align-items:center">
-                    <span style="color:var(--text-muted)">Class Rep</span>
-                    <span style="font-weight:500">${esc(classRep)}</span>
-                  </div>` : ''}
-                  ${ip ? `
-                  <div style="display:flex;justify-content:space-between;align-items:center">
-                    <span style="color:var(--text-muted)">IP Address</span>
-                    <span style="font-family:monospace;font-size:12px">${esc(ip)}</span>
-                  </div>` : ''}
-                  ${fw ? `
-                  <div style="display:flex;justify-content:space-between;align-items:center">
-                    <span style="color:var(--text-muted)">Firmware</span>
-                    <span style="font-size:12px;color:var(--text-muted)">${esc(fw)}</span>
-                  </div>` : ''}
-                  <div style="display:flex;justify-content:space-between;align-items:center">
-                    <span style="color:var(--text-muted)">Last Seen</span>
-                    <span style="color:var(--text-muted)">${timeAgo(d.lastHeartbeat)}</span>
-                  </div>
-                </div>
-
-                <!-- Action buttons -->
-                <div style="padding:10px 16px 14px;display:flex;gap:8px;flex-wrap:wrap;border-top:1px solid var(--border)">
-                  <button class="btn btn-primary btn-sm" onclick="hodAssignClassRep('${devId}', '${devName.replace(/'/g,'\\&#39;')}')">👤 Assign Class Rep</button>
-                  <button class="btn btn-secondary btn-sm" onclick="hodRenameDevice('${devId}', '${devName.replace(/'/g,'\\&#39;')}')">✏ Rename</button>
-                  <button class="btn btn-secondary btn-sm" onclick="hodSetupDevice('${devId}')">⚙ Setup</button>
-                  <button class="btn btn-sm" style="background:#fff7ed;color:#c2410c;border:1px solid #fed7aa" onclick="hodFactoryReset('${devId}', '${devName.replace(/'/g,'\\&#39;')}')">↺ Factory Reset</button>
-                  <button class="btn btn-danger btn-sm" onclick="hodRemoveDevice('${devId}', '${devName.replace(/'/g,'\\&#39;')}')">✕ Remove</button>
-                </div>
-              </div>`;
-            }).join('')}
-          </div>
-        `}
-      `;
-    } catch (e) {
-      content.innerHTML = `<div class="card" style="color:#ef4444;padding:20px">Failed to load devices: ${esc(e.message)}</div>`;
-    }
-  };
-
-  await render();
-}
-
-window.hodGeneratePairingCode = async () => {
-  try {
-    const data = await api('/api/devices/pairing-code', { method: 'POST' });
-    const code = data.pairingCode || data.code || '—';
-    openModal(`
-      <div style="text-align:center;padding:8px 0">
-        <div style="width:48px;height:48px;border-radius:12px;background:#ede9fe;display:flex;align-items:center;justify-content:center;margin:0 auto 16px">
-          <svg viewBox="0 0 24 24" fill="none" stroke="#7c3aed" stroke-width="2" width="24" height="24"><rect x="5" y="2" width="14" height="20" rx="2" ry="2"/><line x1="12" y1="18" x2="12.01" y2="18"/></svg>
-        </div>
-        <h3 style="font-size:17px;font-weight:700;margin-bottom:6px">Pairing Code</h3>
-        <p style="font-size:13px;color:var(--text-muted);margin-bottom:20px">Share this code with the Class Rep to set up a device. It expires in a few minutes.</p>
-        <div style="font-size:44px;font-weight:900;letter-spacing:10px;color:#4f46e5;font-family:monospace;margin-bottom:20px">${code}</div>
-        <p style="font-size:12px;color:var(--text-muted)">The Class Rep connects to the <strong>DIKLY-XXXXXX</strong> hotspot and enters this code + the institution code.</p>
-        <button class="btn btn-primary" style="margin-top:16px" onclick="navigator.clipboard.writeText('${code}').then(()=>showToastNotif('Code copied!','success'))">Copy Code</button>
-      </div>
-    `);
-  } catch (e) {
-    showToastNotif('❌ Failed to generate pairing code: ' + e.message, 'error');
-  }
-};
-
-window.hodAssignClassRep = async (deviceId, deviceName) => {
-  const esc = s => s == null ? '' : String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
-  openModal(`
-    <div style="padding:4px 0">
-      <h3 style="font-size:16px;font-weight:700;margin-bottom:4px">Assign Class Rep</h3>
-      <p style="font-size:12px;color:var(--text-muted);margin-bottom:16px">Device: <strong>${esc(deviceName)}</strong> — search for a student to assign as the Class Rep for this device.</p>
-      <div class="form-group" style="margin-bottom:10px">
-        <label style="font-size:11px;font-weight:700;text-transform:uppercase;color:var(--text-muted)">Search Student</label>
-        <input type="text" id="hod-rep-search" placeholder="Name or index number…"
-          oninput="hodSearchRepStudents(this.value, '${deviceId}')"
-          style="width:100%;padding:8px 12px;border:1.5px solid var(--border);border-radius:8px;background:var(--bg);color:var(--text-primary);font-size:13px;margin-top:4px">
-      </div>
-      <div id="hod-rep-results" style="max-height:260px;overflow-y:auto"></div>
-    </div>
-  `);
-};
-
-let _hodRepSearchTimer;
-window.hodSearchRepStudents = (q, deviceId) => {
-  const esc = s => s == null ? '' : String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
-  clearTimeout(_hodRepSearchTimer);
-  _hodRepSearchTimer = setTimeout(async () => {
-    const box = document.getElementById('hod-rep-results');
-    if (!box) return;
-    if (!q.trim()) { box.innerHTML = ''; return; }
-    box.innerHTML = '<div style="color:var(--text-muted);font-size:13px;padding:8px 0">Searching…</div>';
-    try {
-      const { students } = await api(`/api/class-rep-admin/students?indexNumber=${encodeURIComponent(q)}`);
-      if (!students.length) { box.innerHTML = '<div style="color:var(--text-muted);font-size:13px;padding:8px 0">No students found.</div>'; return; }
-      box.innerHTML = students.slice(0, 10).map(s => `
-        <div style="display:flex;align-items:center;justify-content:space-between;padding:9px 12px;border-radius:8px;border:1.5px solid var(--border);margin-bottom:6px;background:var(--bg)">
-          <div>
-            <div style="font-size:13px;font-weight:600">${esc(s.name)}</div>
-            <div style="font-size:11px;color:var(--text-muted)">${esc(s.IndexNumber||'')}${s.studentLevel ? ` · L${esc(s.studentLevel)}` : ''}${s.studentGroup ? ` Gr${esc(s.studentGroup)}` : ''}${s.programme ? ` · ${esc(s.programme)}` : ''}</div>
-          </div>
-          <button class="btn btn-primary btn-sm" onclick="hodDoAssignRep('${deviceId}', '${s._id}', '${esc(s.name).replace(/'/g,"\\'")}')">Assign</button>
-        </div>`).join('');
-    } catch(e) {
-      box.innerHTML = `<div style="color:#ef4444;font-size:13px">${e.message}</div>`;
-    }
-  }, 300);
-};
-
-window.hodDoAssignRep = async (deviceId, studentId, studentName) => {
-  try {
-    await api(`/api/devices/${encodeURIComponent(deviceId)}/assign-class-rep`, {
-      method: 'PATCH',
-      body: JSON.stringify({ classRepId: studentId }),
-    });
-    closeModal();
-    showToastNotif(`✅ ${studentName} assigned as Class Rep for this device.`, 'success');
-    renderHodDevices();
-  } catch(e) {
-    showToastNotif('❌ Failed to assign: ' + e.message, 'error');
-  }
-};
-
-window.hodRenameDevice = async (deviceId, currentName) => {
-  const newName = prompt(`Rename device:\n(current: ${currentName})`, currentName);
-  if (!newName || newName.trim() === currentName) return;
-  try {
-    await api('/api/devices/my/rename', { method: 'PATCH', body: JSON.stringify({ deviceName: newName.trim(), deviceId }) });
-    showToastNotif('✅ Device renamed successfully.', 'success');
-    renderHodDevices();
-  } catch (e) {
-    showToastNotif('❌ Failed to rename: ' + e.message, 'error');
-  }
-};
-
-window.hodSetupDevice = async (deviceId) => {
-  showToastNotif('Setup is done via the device\'s WiFi portal — power on the device and connect to the DIKLY-XXXXXX hotspot.', 'warn');
-};
-
-window.hodFactoryReset = async (deviceId, deviceName) => {
-  if (!confirm(`Factory reset "${deviceName}"?\n\nThis will clear all WiFi credentials and pairing data from the device firmware. It will need to be re-paired by a lecturer.`)) return;
-  try {
-    await api(`/api/devices/${encodeURIComponent(deviceId)}/factory-reset`, { method: 'POST' });
-    showToastNotif('✅ Factory reset command sent. Device will restart.', 'success');
-    setTimeout(renderHodDevices, 2000);
-  } catch (e) {
-    showToastNotif('❌ Failed to factory reset: ' + e.message, 'error');
-  }
-};
-
-window.hodRemoveDevice = async (deviceId, deviceName) => {
-  if (!confirm(`Remove "${deviceName}"?\n\nThis permanently unpairs the device from your institution. The physical device will need to be re-paired.`)) return;
-  try {
-    await api(`/api/devices/${encodeURIComponent(deviceId)}/remove`, { method: 'DELETE' });
-    showToastNotif('✅ Device removed.', 'success');
-    renderHodDevices();
-  } catch (e) {
-    showToastNotif('❌ Failed to remove device: ' + e.message, 'error');
-  }
-};
 
 async function renderAdminDevices() {
   const content = document.getElementById('main-content');
@@ -20177,6 +19906,946 @@ async function submitHodRequest() {
     toastError(e.message || 'Failed to submit request');
   }
 }
+
+// ══════════════════════════════════════════════════════════════
+// LIVE ATTENDANCE  (admin / manager view of active sessions)
+// ══════════════════════════════════════════════════════════════
+async function renderLiveAttendance() {
+  const content = document.getElementById('main-content');
+  if (!content) return;
+  content.innerHTML = '<div class="loading">Loading attendance sessions…</div>';
+  const esc = s => s == null ? '' : String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  const fmt = d => d ? new Date(d).toLocaleString('en-GB',{day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'}) : '—';
+
+  const load = async () => {
+    try {
+      const data = await api('/api/attendance-sessions');
+      const all = data.sessions || data || [];
+      const sessions = all.filter(s => s.status === 'active');
+
+      const statusBadge = s => {
+        if (s.status === 'active') return `<span style="display:inline-flex;align-items:center;gap:4px;background:#dcfce7;color:#166534;padding:2px 9px;border-radius:20px;font-size:11px;font-weight:700"><span style="width:6px;height:6px;border-radius:50%;background:#16a34a;animation:pulse 1.8s infinite"></span>Live</span>`;
+        return `<span style="background:#f1f5f9;color:#475569;padding:2px 9px;border-radius:20px;font-size:11px;font-weight:700">Ended</span>`;
+      };
+
+      content.innerHTML = `
+        <div class="page-header" style="display:flex;align-items:flex-start;justify-content:space-between;flex-wrap:wrap;gap:10px">
+          <div>
+            <h2>Live Attendance</h2>
+            <p>${sessions.length} active session${sessions.length !== 1 ? 's' : ''} right now</p>
+          </div>
+          <button class="btn btn-secondary btn-sm" onclick="renderLiveAttendance()">↻ Refresh</button>
+        </div>
+        ${sessions.length === 0 ? `
+          <div class="card" style="text-align:center;padding:56px 40px;color:var(--text-muted)">
+            <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="margin-bottom:16px;opacity:.4"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/></svg>
+            <div style="font-size:16px;font-weight:600;margin-bottom:8px">No active sessions</div>
+            <div style="font-size:13px">No attendance sessions are currently running.</div>
+          </div>` :
+          `<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:16px">
+            ${sessions.map(s => `
+            <div class="card" style="padding:16px">
+              <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px">
+                ${statusBadge(s)}
+                <span style="font-size:12px;color:var(--text-muted)">${esc(s.course?.code || s.courseCode || '')}</span>
+              </div>
+              <div style="font-size:15px;font-weight:700;margin-bottom:4px">${esc(s.course?.title || s.courseTitle || 'Unnamed Session')}</div>
+              <div style="font-size:12px;color:var(--text-muted);margin-bottom:12px">Lecturer: ${esc(s.lecturer?.name || s.lecturerName || '—')} · Started ${fmt(s.startTime)}</div>
+              <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+                <div style="background:var(--bg);border-radius:8px;padding:10px;text-align:center">
+                  <div style="font-size:22px;font-weight:800;color:var(--accent)">${s.presentCount ?? s.attendance?.length ?? 0}</div>
+                  <div style="font-size:10px;font-weight:600;text-transform:uppercase;color:var(--text-muted)">Present</div>
+                </div>
+                <div style="background:var(--bg);border-radius:8px;padding:10px;text-align:center">
+                  <div style="font-size:22px;font-weight:800">${s.code || '—'}</div>
+                  <div style="font-size:10px;font-weight:600;text-transform:uppercase;color:var(--text-muted)">Code</div>
+                </div>
+              </div>
+            </div>`).join('')}
+          </div>`}
+      `;
+    } catch(e) {
+      content.innerHTML = `<div class="card"><p style="color:#ef4444">Error: ${e.message}</p></div>`;
+    }
+  };
+  await load();
+}
+
+// ══════════════════════════════════════════════════════════════
+// CALENDAR EVENTS
+// ══════════════════════════════════════════════════════════════
+async function renderCalendarEvents() {
+  const content = document.getElementById('main-content');
+  if (!content) return;
+  content.innerHTML = '<div class="loading">Loading calendar…</div>';
+  const esc = s => s == null ? '' : String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  const fmt = d => d ? new Date(d).toLocaleString('en-GB',{weekday:'short',day:'numeric',month:'short',year:'numeric',hour:'2-digit',minute:'2-digit'}) : '—';
+  const canCreate = ['lecturer','hod','admin','superadmin','manager'].includes(currentUser?.role);
+
+  const TYPE_COLORS = {
+    exam:'#ef4444', assignment:'#f59e0b', holiday:'#10b981', lecture:'#6366f1',
+    meeting:'#8b5cf6', deadline:'#f97316', announcement:'#3b82f6', other:'#6b7280',
+  };
+
+  const typeBadge = t => {
+    const c = TYPE_COLORS[t] || '#6b7280';
+    return `<span style="background:${c}22;color:${c};padding:2px 8px;border-radius:20px;font-size:11px;font-weight:700;text-transform:capitalize">${esc(t||'other')}</span>`;
+  };
+
+  try {
+    const data = await api('/api/calendar/upcoming');
+    const events = data.events || [];
+
+    content.innerHTML = `
+      <div class="page-header" style="display:flex;align-items:flex-start;justify-content:space-between;flex-wrap:wrap;gap:10px">
+        <div>
+          <h2>Calendar &amp; Events</h2>
+          <p>${events.length} upcoming event${events.length !== 1 ? 's' : ''} in the next 30 days</p>
+        </div>
+        ${canCreate ? `<button class="btn btn-primary" onclick="openCalendarEventModal()">+ Add Event</button>` : ''}
+      </div>
+      ${events.length === 0 ? `
+        <div class="card" style="text-align:center;padding:56px 40px;color:var(--text-muted)">
+          <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" style="margin-bottom:16px;opacity:.4"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+          <div style="font-size:16px;font-weight:600;margin-bottom:8px">No upcoming events</div>
+          <div style="font-size:13px">Nothing scheduled in the next 30 days.</div>
+        </div>` :
+        `<div style="display:flex;flex-direction:column;gap:12px">
+          ${events.map(ev => `
+          <div class="card" style="padding:16px;border-left:4px solid ${TYPE_COLORS[ev.type] || '#6b7280'}">
+            <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:12px;flex-wrap:wrap">
+              <div style="flex:1;min-width:0">
+                <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:6px">
+                  <span style="font-size:15px;font-weight:700">${esc(ev.title)}</span>
+                  ${typeBadge(ev.type)}
+                </div>
+                ${ev.description ? `<div style="font-size:13px;color:var(--text-muted);margin-bottom:8px">${esc(ev.description)}</div>` : ''}
+                <div style="font-size:12px;color:var(--text-muted);display:flex;gap:12px;flex-wrap:wrap">
+                  <span>📅 ${fmt(ev.startDate)}</span>
+                  ${ev.location ? `<span>📍 ${esc(ev.location)}</span>` : ''}
+                  ${ev.course ? `<span>📚 ${esc(ev.course.title || ev.course.code || '')}</span>` : ''}
+                  <span>by ${esc(ev.createdBy?.name || '—')}</span>
+                </div>
+              </div>
+            </div>
+          </div>`).join('')}
+        </div>`}
+    `;
+  } catch(e) {
+    content.innerHTML = `<div class="card"><p style="color:#ef4444">Error: ${e.message}</p></div>`;
+  }
+}
+
+window.openCalendarEventModal = function() {
+  const esc = s => s == null ? '' : String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  const now = new Date();
+  const pad = n => String(n).padStart(2,'0');
+  const defaultStart = `${now.getFullYear()}-${pad(now.getMonth()+1)}-${pad(now.getDate())}T${pad(now.getHours()+1)}:00`;
+
+  openModal(`
+    <h3 style="margin-bottom:18px;font-size:17px;font-weight:700">Add Calendar Event</h3>
+    <div style="display:flex;flex-direction:column;gap:12px">
+      <div>
+        <label style="font-size:12px;font-weight:600;color:var(--text-muted);display:block;margin-bottom:4px">TITLE *</label>
+        <input id="cal-title" class="form-control" placeholder="Event title" />
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+        <div>
+          <label style="font-size:12px;font-weight:600;color:var(--text-muted);display:block;margin-bottom:4px">START DATE &amp; TIME *</label>
+          <input id="cal-start" type="datetime-local" class="form-control" value="${defaultStart}" />
+        </div>
+        <div>
+          <label style="font-size:12px;font-weight:600;color:var(--text-muted);display:block;margin-bottom:4px">END DATE &amp; TIME *</label>
+          <input id="cal-end" type="datetime-local" class="form-control" value="${defaultStart}" />
+        </div>
+      </div>
+      <div>
+        <label style="font-size:12px;font-weight:600;color:var(--text-muted);display:block;margin-bottom:4px">TYPE</label>
+        <select id="cal-type" class="form-control">
+          ${['exam','assignment','holiday','lecture','meeting','deadline','announcement','other'].map(t=>`<option value="${t}">${t}</option>`).join('')}
+        </select>
+      </div>
+      <div>
+        <label style="font-size:12px;font-weight:600;color:var(--text-muted);display:block;margin-bottom:4px">LOCATION</label>
+        <input id="cal-location" class="form-control" placeholder="Optional location" />
+      </div>
+      <div>
+        <label style="font-size:12px;font-weight:600;color:var(--text-muted);display:block;margin-bottom:4px">DESCRIPTION</label>
+        <textarea id="cal-desc" class="form-control" rows="3" placeholder="Optional description"></textarea>
+      </div>
+      <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:4px">
+        <button class="btn btn-secondary" onclick="closeModal()">Cancel</button>
+        <button class="btn btn-primary" onclick="submitCalendarEvent()">Create Event</button>
+      </div>
+    </div>
+  `);
+};
+
+window.submitCalendarEvent = async function() {
+  const title = document.getElementById('cal-title')?.value?.trim();
+  const startDate = document.getElementById('cal-start')?.value;
+  const endDate = document.getElementById('cal-end')?.value;
+  const type = document.getElementById('cal-type')?.value;
+  const location = document.getElementById('cal-location')?.value?.trim();
+  const description = document.getElementById('cal-desc')?.value?.trim();
+
+  if (!title) return showToastNotif('Title is required', 'error');
+  if (!startDate || !endDate) return showToastNotif('Start and end date are required', 'error');
+
+  try {
+    await api('/api/calendar/', {
+      method: 'POST',
+      body: JSON.stringify({ title, startDate, endDate, type, location, description }),
+    });
+    closeModal();
+    toastSuccess('Event created');
+    renderCalendarEvents();
+  } catch(e) {
+    showToastNotif(e.message || 'Failed to create event', 'error');
+  }
+};
+
+// ══════════════════════════════════════════════════════════════
+// FORUMS
+// ══════════════════════════════════════════════════════════════
+async function renderForums() {
+  const content = document.getElementById('main-content');
+  if (!content) return;
+  content.innerHTML = '<div class="loading">Loading forums…</div>';
+  const esc = s => s == null ? '' : String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+
+  let courses = [];
+  try {
+    const isStudent = currentUser?.role === 'student';
+    const endpoint = isStudent ? '/api/courses/my' : '/api/courses';
+    const d = await api(endpoint).catch(() => api('/api/courses'));
+    courses = d.courses || d || [];
+  } catch(e) { courses = []; }
+
+  if (courses.length === 0) {
+    content.innerHTML = `
+      <div class="page-header"><h2>Discussion Forums</h2><p>Course discussion threads</p></div>
+      <div class="card" style="text-align:center;padding:56px 40px;color:var(--text-muted)">
+        <div style="font-size:16px;font-weight:600;margin-bottom:8px">No courses found</div>
+        <div style="font-size:13px">You need to be enrolled in a course to access its forum.</div>
+      </div>`;
+    return;
+  }
+
+  content.innerHTML = `
+    <div class="page-header"><h2>Discussion Forums</h2><p>Select a course to view its threads</p></div>
+    <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:14px">
+      ${courses.map(c => `
+      <div class="card" style="padding:16px;cursor:pointer" onclick="renderForumThreads('${c._id}','${esc(c.title||c.code||'Course')}')">
+        <div style="font-size:14px;font-weight:700;margin-bottom:4px">${esc(c.title||c.code||'')}</div>
+        <div style="font-size:12px;color:var(--text-muted)">${esc(c.code||'')}${c.level ? ' · L'+c.level : ''}${c.group ? ' · Grp '+c.group : ''}</div>
+        <div style="margin-top:10px;font-size:12px;color:var(--accent);font-weight:600">View threads →</div>
+      </div>`).join('')}
+    </div>
+  `;
+}
+
+window.renderForumThreads = async function(courseId, courseTitle) {
+  const content = document.getElementById('main-content');
+  if (!content) return;
+  content.innerHTML = '<div class="loading">Loading threads…</div>';
+  const esc = s => s == null ? '' : String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  const fmt = d => d ? new Date(d).toLocaleDateString('en-GB',{day:'numeric',month:'short',year:'numeric'}) : '';
+
+  try {
+    const data = await api(`/api/forums/courses/${courseId}/threads`);
+    const threads = data.threads || [];
+
+    content.innerHTML = `
+      <div class="page-header" style="display:flex;align-items:flex-start;justify-content:space-between;flex-wrap:wrap;gap:10px">
+        <div>
+          <button class="btn btn-secondary btn-sm" onclick="renderForums()" style="margin-bottom:8px">← Back to Courses</button>
+          <h2>${esc(courseTitle)}</h2>
+          <p>${threads.length} thread${threads.length !== 1 ? 's' : ''}</p>
+        </div>
+        <button class="btn btn-primary" onclick="openNewThreadModal('${courseId}','${esc(courseTitle)}')">+ New Thread</button>
+      </div>
+      ${threads.length === 0 ? `
+        <div class="card" style="text-align:center;padding:56px 40px;color:var(--text-muted)">
+          <div style="font-size:16px;font-weight:600;margin-bottom:8px">No threads yet</div>
+          <div style="font-size:13px">Be the first to start a discussion.</div>
+        </div>` :
+        threads.map(t => {
+          const badges = [
+            t.isPinned ? `<span style="background:#fef3c7;color:#92400e;padding:1px 7px;border-radius:20px;font-size:10px;font-weight:700">📌 Pinned</span>` : '',
+            t.isLocked ? `<span style="background:#fee2e2;color:#991b1b;padding:1px 7px;border-radius:20px;font-size:10px;font-weight:700">🔒 Locked</span>` : '',
+            t.isSolved ? `<span style="background:#d1fae5;color:#065f46;padding:1px 7px;border-radius:20px;font-size:10px;font-weight:700">✓ Solved</span>` : '',
+          ].filter(Boolean).join('');
+          return `
+          <div class="card" style="padding:14px 16px;margin-bottom:10px;cursor:pointer" onclick="renderForumThreadDetail('${courseId}','${t._id}','${esc(courseTitle)}')">
+            <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:10px;flex-wrap:wrap">
+              <div style="flex:1;min-width:0">
+                <div style="font-size:14px;font-weight:700;margin-bottom:4px">${esc(t.title)}</div>
+                <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-bottom:6px">${badges}</div>
+                <div style="font-size:12px;color:var(--text-muted)">by ${esc(t.author?.name||'—')} · ${fmt(t.createdAt)}</div>
+              </div>
+              <div style="text-align:right;flex-shrink:0">
+                <div style="font-size:18px;font-weight:800;color:var(--accent)">${t.replyCount||0}</div>
+                <div style="font-size:10px;color:var(--text-muted)">replies</div>
+              </div>
+            </div>
+          </div>`;
+        }).join('')}
+    `;
+  } catch(e) {
+    content.innerHTML = `<div class="card"><p style="color:#ef4444">Error: ${e.message}</p></div>`;
+  }
+};
+
+window.openNewThreadModal = function(courseId, courseTitle) {
+  const esc = s => s == null ? '' : String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  openModal(`
+    <h3 style="margin-bottom:18px;font-size:17px;font-weight:700">New Thread — ${esc(courseTitle)}</h3>
+    <div style="display:flex;flex-direction:column;gap:12px">
+      <div>
+        <label style="font-size:12px;font-weight:600;color:var(--text-muted);display:block;margin-bottom:4px">TITLE *</label>
+        <input id="thread-title" class="form-control" placeholder="Thread title" />
+      </div>
+      <div>
+        <label style="font-size:12px;font-weight:600;color:var(--text-muted);display:block;margin-bottom:4px">BODY</label>
+        <textarea id="thread-body" class="form-control" rows="4" placeholder="What's on your mind?"></textarea>
+      </div>
+      <div>
+        <label style="font-size:12px;font-weight:600;color:var(--text-muted);display:block;margin-bottom:4px">TYPE</label>
+        <select id="thread-type" class="form-control">
+          <option value="discussion">Discussion</option>
+          <option value="question">Question</option>
+          ${['lecturer','hod','admin','superadmin'].includes(currentUser?.role) ? '<option value="announcement">Announcement</option>' : ''}
+        </select>
+      </div>
+      <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:4px">
+        <button class="btn btn-secondary" onclick="closeModal()">Cancel</button>
+        <button class="btn btn-primary" onclick="submitNewThread('${courseId}')">Post Thread</button>
+      </div>
+    </div>
+  `);
+};
+
+window.submitNewThread = async function(courseId) {
+  const title = document.getElementById('thread-title')?.value?.trim();
+  const body = document.getElementById('thread-body')?.value?.trim();
+  const type = document.getElementById('thread-type')?.value;
+  if (!title) return showToastNotif('Title is required', 'error');
+  try {
+    await api(`/api/forums/courses/${courseId}/threads`, {
+      method: 'POST',
+      body: JSON.stringify({ title, body, type }),
+    });
+    closeModal();
+    toastSuccess('Thread posted');
+    renderForumThreads(courseId, '');
+  } catch(e) {
+    showToastNotif(e.message || 'Failed to post thread', 'error');
+  }
+};
+
+window.renderForumThreadDetail = async function(courseId, threadId, courseTitle) {
+  const content = document.getElementById('main-content');
+  if (!content) return;
+  content.innerHTML = '<div class="loading">Loading thread…</div>';
+  const esc = s => s == null ? '' : String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  const fmt = d => d ? new Date(d).toLocaleString('en-GB',{day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'}) : '';
+
+  try {
+    const data = await api(`/api/forums/courses/${courseId}/threads/${threadId}`);
+    const thread = data.thread;
+    const posts = data.posts || [];
+
+    content.innerHTML = `
+      <div style="margin-bottom:16px">
+        <button class="btn btn-secondary btn-sm" onclick="renderForumThreads('${courseId}','${esc(courseTitle)}')">← Back to Threads</button>
+      </div>
+      <div class="card" style="padding:20px;margin-bottom:16px">
+        <div style="font-size:18px;font-weight:800;margin-bottom:8px">${esc(thread.title)}</div>
+        ${thread.body ? `<div style="font-size:14px;color:var(--text-secondary);margin-bottom:12px;line-height:1.6">${esc(thread.body)}</div>` : ''}
+        <div style="font-size:12px;color:var(--text-muted)">by ${esc(thread.author?.name||'—')} · ${fmt(thread.createdAt)} · ${thread.replyCount||0} replies</div>
+      </div>
+      <div id="forum-posts">
+        ${posts.map(p => `
+        <div class="card" style="padding:14px 16px;margin-bottom:10px;${p.isAnswer?'border-left:3px solid #10b981':''}" id="post-${p._id}">
+          <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:10px">
+            <div style="flex:1;min-width:0">
+              ${p.isAnswer ? `<span style="font-size:11px;font-weight:700;color:#065f46;background:#d1fae5;padding:1px 8px;border-radius:20px;margin-bottom:6px;display:inline-block">✓ Accepted Answer</span><br>` : ''}
+              <div style="font-size:13px;line-height:1.6;margin-bottom:8px">${esc(p.body)}</div>
+              <div style="font-size:11px;color:var(--text-muted)">by ${esc(p.author?.name||'—')} · ${fmt(p.createdAt)}</div>
+            </div>
+            <button onclick="upvoteForumPost('${courseId}','${threadId}','${p._id}',this)" style="background:none;border:1px solid var(--border);border-radius:8px;padding:4px 10px;cursor:pointer;color:${p.hasUpvoted?'var(--accent)':'var(--text-muted)'};display:flex;flex-direction:column;align-items:center;gap:2px;min-width:40px">
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="${p.hasUpvoted?'currentColor':'none'}" stroke="currentColor" stroke-width="2"><polyline points="18 15 12 9 6 15"/></svg>
+              <span style="font-size:12px;font-weight:700" id="upvote-count-${p._id}">${p.upvoteCount||0}</span>
+            </button>
+          </div>
+        </div>`).join('')}
+      </div>
+      ${!thread.isLocked ? `
+      <div class="card" style="padding:16px;margin-top:8px">
+        <div style="font-size:13px;font-weight:600;margin-bottom:8px">Post a Reply</div>
+        <textarea id="reply-body-${threadId}" class="form-control" rows="3" placeholder="Write your reply…"></textarea>
+        <button class="btn btn-primary btn-sm" style="margin-top:8px" onclick="submitForumReply('${courseId}','${threadId}')">Post Reply</button>
+      </div>` : `<div class="card" style="padding:12px;text-align:center;color:var(--text-muted);font-size:13px">🔒 This thread is locked</div>`}
+    `;
+  } catch(e) {
+    content.innerHTML = `<div class="card"><p style="color:#ef4444">Error: ${e.message}</p></div>`;
+  }
+};
+
+window.upvoteForumPost = async function(courseId, threadId, postId, btn) {
+  try {
+    const data = await api(`/api/forums/courses/${courseId}/threads/${threadId}/posts/${postId}/upvote`, { method: 'PATCH' });
+    const countEl = document.getElementById(`upvote-count-${postId}`);
+    if (countEl) countEl.textContent = data.upvoteCount;
+    if (btn) {
+      const svg = btn.querySelector('svg');
+      if (svg) svg.setAttribute('fill', data.hasUpvoted ? 'currentColor' : 'none');
+      btn.style.color = data.hasUpvoted ? 'var(--accent)' : 'var(--text-muted)';
+    }
+  } catch(e) { showToastNotif(e.message || 'Failed to upvote', 'error'); }
+};
+
+window.submitForumReply = async function(courseId, threadId) {
+  const body = document.getElementById(`reply-body-${threadId}`)?.value?.trim();
+  if (!body) return showToastNotif('Reply cannot be empty', 'error');
+  try {
+    await api(`/api/forums/courses/${courseId}/threads/${threadId}/posts`, {
+      method: 'POST',
+      body: JSON.stringify({ body }),
+    });
+    toastSuccess('Reply posted');
+    renderForumThreadDetail(courseId, threadId, '');
+  } catch(e) {
+    showToastNotif(e.message || 'Failed to post reply', 'error');
+  }
+};
+
+// ══════════════════════════════════════════════════════════════
+// BADGES & ACHIEVEMENTS
+// ══════════════════════════════════════════════════════════════
+async function renderBadges() {
+  const content = document.getElementById('main-content');
+  if (!content) return;
+  content.innerHTML = '<div class="loading">Loading badges…</div>';
+  const esc = s => s == null ? '' : String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  const fmt = d => d ? new Date(d).toLocaleDateString('en-GB',{day:'numeric',month:'short',year:'numeric'}) : '';
+  const isStudent = currentUser?.role === 'student';
+  const isStaff = ['lecturer','hod','admin','superadmin','manager'].includes(currentUser?.role);
+
+  try {
+    const requests = [api('/api/badges/catalog'), api('/api/badges/leaderboard')];
+    if (isStudent) requests.push(api('/api/badges/my'));
+    const [catalogData, lbData, myData] = await Promise.all(requests);
+
+    const catalog = catalogData.badges || [];
+    const leaderboard = lbData.leaderboard || [];
+    const myAwards = myData?.awards || [];
+    const myBadgeIds = new Set(myAwards.map(a => a.badge?._id?.toString()));
+
+    content.innerHTML = `
+      <div class="page-header" style="display:flex;align-items:flex-start;justify-content:space-between;flex-wrap:wrap;gap:10px">
+        <div>
+          <h2>Badges &amp; Achievements</h2>
+          <p>${isStudent ? `${myAwards.length} badge${myAwards.length !== 1 ? 's' : ''} earned` : 'Badge catalog and leaderboard'}</p>
+        </div>
+        ${isStaff ? `<button class="btn btn-primary" onclick="openAwardBadgeModal()">+ Award Badge</button>` : ''}
+      </div>
+
+      ${isStudent && myAwards.length > 0 ? `
+      <div style="margin-bottom:20px">
+        <div style="font-size:14px;font-weight:700;margin-bottom:12px">Your Badges</div>
+        <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:12px">
+          ${myAwards.map(a => `
+          <div class="card" style="padding:16px;text-align:center;border-top:3px solid ${a.badge?.color||'#6366f1'}">
+            <div style="font-size:36px;margin-bottom:8px">${esc(a.badge?.icon||'🏅')}</div>
+            <div style="font-size:14px;font-weight:700;margin-bottom:4px">${esc(a.badge?.name||'Badge')}</div>
+            <div style="font-size:12px;color:var(--text-muted);margin-bottom:6px">${esc(a.badge?.description||'')}</div>
+            <div style="font-size:11px;color:var(--text-muted)">Earned ${fmt(a.awardedAt)}</div>
+          </div>`).join('')}
+        </div>
+      </div>` : isStudent ? `
+      <div class="card" style="padding:20px;margin-bottom:20px;text-align:center;color:var(--text-muted)">
+        <div style="font-size:32px;margin-bottom:8px">🏅</div>
+        <div style="font-size:14px;font-weight:600">No badges yet</div>
+        <div style="font-size:12px;margin-top:4px">Complete courses and activities to earn badges.</div>
+      </div>` : ''}
+
+      ${leaderboard.length > 0 ? `
+      <div style="margin-bottom:20px">
+        <div style="font-size:14px;font-weight:700;margin-bottom:12px">🏆 Leaderboard</div>
+        <div class="card" style="padding:0;overflow:hidden">
+          ${leaderboard.map((r,i) => `
+          <div style="display:flex;align-items:center;gap:12px;padding:12px 16px;border-bottom:1px solid var(--border);${i===0?'background:linear-gradient(135deg,#fffbeb,var(--card))':''}">
+            <div style="width:28px;height:28px;border-radius:50%;background:${i===0?'#f59e0b':i===1?'#9ca3af':i===2?'#b45309':'var(--bg)'};display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:800;color:${i<3?'#fff':'var(--text-muted)'}">${i+1}</div>
+            <div style="flex:1">
+              <div style="font-size:13px;font-weight:600">${esc(r.name||'User')}</div>
+              <div style="font-size:11px;color:var(--text-muted)">${esc(r.role||'')}</div>
+            </div>
+            <div style="font-size:15px;font-weight:800;color:var(--accent)">${r.badgeCount}</div>
+            <div style="font-size:11px;color:var(--text-muted)">badge${r.badgeCount!==1?'s':''}</div>
+          </div>`).join('')}
+        </div>
+      </div>` : ''}
+
+      <div>
+        <div style="font-size:14px;font-weight:700;margin-bottom:12px">Badge Catalog</div>
+        ${catalog.length === 0 ? `<div class="card" style="padding:20px;text-align:center;color:var(--text-muted)">No badges defined yet.</div>` :
+          `<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:12px">
+            ${catalog.map(b => `
+            <div class="card" style="padding:16px;text-align:center;border-top:3px solid ${b.color||'#6366f1'}">
+              <div style="font-size:36px;margin-bottom:8px">${esc(b.icon||'🏅')}</div>
+              <div style="font-size:14px;font-weight:700;margin-bottom:4px">${esc(b.name)}</div>
+              <div style="font-size:12px;color:var(--text-muted)">${esc(b.description||'')}</div>
+              ${isStudent && myBadgeIds.has(b._id?.toString()) ? `<div style="margin-top:8px;font-size:11px;color:#16a34a;font-weight:700">✓ Earned</div>` : ''}
+            </div>`).join('')}
+          </div>`}
+      </div>
+    `;
+  } catch(e) {
+    content.innerHTML = `<div class="card"><p style="color:#ef4444">Error: ${e.message}</p></div>`;
+  }
+}
+
+window.openAwardBadgeModal = async function() {
+  const esc = s => s == null ? '' : String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  let catalog = [];
+  try { const d = await api('/api/badges/catalog'); catalog = d.badges || []; } catch(e) { catalog = []; }
+
+  openModal(`
+    <h3 style="margin-bottom:18px;font-size:17px;font-weight:700">Award Badge</h3>
+    <div style="display:flex;flex-direction:column;gap:12px">
+      <div>
+        <label style="font-size:12px;font-weight:600;color:var(--text-muted);display:block;margin-bottom:4px">STUDENT ID *</label>
+        <input id="award-userId" class="form-control" placeholder="Student user ID" />
+      </div>
+      <div>
+        <label style="font-size:12px;font-weight:600;color:var(--text-muted);display:block;margin-bottom:4px">BADGE *</label>
+        <select id="award-badgeId" class="form-control">
+          <option value="">— Select badge —</option>
+          ${catalog.map(b => `<option value="${b._id}">${esc(b.icon||'🏅')} ${esc(b.name)}</option>`).join('')}
+        </select>
+      </div>
+      <div>
+        <label style="font-size:12px;font-weight:600;color:var(--text-muted);display:block;margin-bottom:4px">NOTE</label>
+        <input id="award-note" class="form-control" placeholder="Optional note" />
+      </div>
+      <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:4px">
+        <button class="btn btn-secondary" onclick="closeModal()">Cancel</button>
+        <button class="btn btn-primary" onclick="submitAwardBadge()">Award</button>
+      </div>
+    </div>
+  `);
+};
+
+window.submitAwardBadge = async function() {
+  const userId = document.getElementById('award-userId')?.value?.trim();
+  const badgeId = document.getElementById('award-badgeId')?.value;
+  const note = document.getElementById('award-note')?.value?.trim();
+  if (!userId) return showToastNotif('Student ID is required', 'error');
+  if (!badgeId) return showToastNotif('Please select a badge', 'error');
+  try {
+    await api('/api/badges/award', { method: 'POST', body: JSON.stringify({ userId, badgeId, note }) });
+    closeModal();
+    toastSuccess('Badge awarded');
+  } catch(e) {
+    showToastNotif(e.message || 'Failed to award badge', 'error');
+  }
+};
+
+// ══════════════════════════════════════════════════════════════
+// TRANSCRIPTS
+// ══════════════════════════════════════════════════════════════
+async function renderTranscripts() {
+  const content = document.getElementById('main-content');
+  if (!content) return;
+  content.innerHTML = '<div class="loading">Loading transcript…</div>';
+  const esc = s => s == null ? '' : String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  const fmt = d => d ? new Date(d).toLocaleDateString('en-GB',{day:'numeric',month:'short',year:'numeric'}) : '—';
+  const isStudent = currentUser?.role === 'student';
+  const isStaff = ['lecturer','hod','admin','superadmin'].includes(currentUser?.role);
+
+  if (!isStudent && !isStaff) {
+    content.innerHTML = `<div class="card" style="padding:20px;text-align:center;color:var(--text-muted)">Transcripts are not available for your role.</div>`;
+    return;
+  }
+
+  const renderTranscriptData = (transcript, certs) => {
+    const s = transcript.student;
+    const summary = transcript.summary;
+    const courses = transcript.courses || [];
+
+    const gradeColor = g => g >= 70 ? '#16a34a' : g >= 50 ? '#f59e0b' : '#ef4444';
+    const statusBadge = status => {
+      const map = { active:'#3b82f6', completed:'#16a34a', dropped:'#6b7280', suspended:'#ef4444' };
+      const c = map[status] || '#6b7280';
+      return `<span style="background:${c}22;color:${c};padding:1px 7px;border-radius:20px;font-size:11px;font-weight:700">${status}</span>`;
+    };
+
+    content.innerHTML = `
+      <div class="page-header" style="display:flex;align-items:flex-start;justify-content:space-between;flex-wrap:wrap;gap:10px">
+        <div>
+          <h2>Academic Transcript</h2>
+          <p>${esc(s?.name||'')}${s?.indexNumber ? ' · '+s.indexNumber : ''}</p>
+        </div>
+        ${isStaff ? `<button class="btn btn-secondary btn-sm" onclick="renderTranscripts()">← Back to Search</button>` : ''}
+      </div>
+
+      <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:12px;margin-bottom:20px">
+        <div class="card" style="padding:16px;text-align:center">
+          <div style="font-size:28px;font-weight:800;color:var(--accent)">${summary?.gpa ?? '—'}</div>
+          <div style="font-size:11px;font-weight:700;color:var(--text-muted);text-transform:uppercase">GPA (4.3 scale)</div>
+        </div>
+        <div class="card" style="padding:16px;text-align:center">
+          <div style="font-size:28px;font-weight:800">${summary?.totalCourses ?? 0}</div>
+          <div style="font-size:11px;font-weight:700;color:var(--text-muted);text-transform:uppercase">Total Courses</div>
+        </div>
+        <div class="card" style="padding:16px;text-align:center">
+          <div style="font-size:28px;font-weight:800;color:#16a34a">${summary?.completedCourses ?? 0}</div>
+          <div style="font-size:11px;font-weight:700;color:var(--text-muted);text-transform:uppercase">Completed</div>
+        </div>
+        <div class="card" style="padding:16px;text-align:center">
+          <div style="font-size:28px;font-weight:800;color:#f59e0b">${summary?.averageScore ?? '—'}${summary?.averageScore != null ? '%' : ''}</div>
+          <div style="font-size:11px;font-weight:700;color:var(--text-muted);text-transform:uppercase">Avg Score</div>
+        </div>
+      </div>
+
+      ${courses.length > 0 ? `
+      <div class="card" style="padding:0;overflow:hidden;margin-bottom:20px">
+        <div style="padding:14px 16px;border-bottom:1px solid var(--border);font-size:14px;font-weight:700">Course Records</div>
+        <div style="overflow-x:auto">
+          <table style="width:100%;border-collapse:collapse;font-size:13px">
+            <thead>
+              <tr style="background:var(--bg)">
+                <th style="padding:10px 14px;text-align:left;font-size:11px;font-weight:700;color:var(--text-muted);text-transform:uppercase">Course</th>
+                <th style="padding:10px 14px;text-align:left;font-size:11px;font-weight:700;color:var(--text-muted);text-transform:uppercase">Semester</th>
+                <th style="padding:10px 14px;text-align:center;font-size:11px;font-weight:700;color:var(--text-muted);text-transform:uppercase">Score</th>
+                <th style="padding:10px 14px;text-align:center;font-size:11px;font-weight:700;color:var(--text-muted);text-transform:uppercase">Grade</th>
+                <th style="padding:10px 14px;text-align:center;font-size:11px;font-weight:700;color:var(--text-muted);text-transform:uppercase">Attendance</th>
+                <th style="padding:10px 14px;text-align:center;font-size:11px;font-weight:700;color:var(--text-muted);text-transform:uppercase">Status</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${courses.map((r,i) => `
+              <tr style="${i%2===0?'':'background:var(--bg)'}">
+                <td style="padding:10px 14px">
+                  <div style="font-weight:600">${esc(r.course?.title||'—')}</div>
+                  <div style="font-size:11px;color:var(--text-muted)">${esc(r.course?.code||'')}${r.course?.level?' · L'+r.course.level:''}</div>
+                </td>
+                <td style="padding:10px 14px;color:var(--text-muted)">${esc(r.course?.semester||'—')}</td>
+                <td style="padding:10px 14px;text-align:center;font-weight:700;color:${r.finalGrade?.score!=null?gradeColor(r.finalGrade.score):'var(--text-muted)'}">${r.finalGrade?.score!=null?r.finalGrade.score+'%':'—'}</td>
+                <td style="padding:10px 14px;text-align:center;font-weight:700">${esc(r.finalGrade?.grade||'—')}</td>
+                <td style="padding:10px 14px;text-align:center;color:var(--text-muted)">${r.attendance?.pct!=null?r.attendance.pct+'%':'—'}</td>
+                <td style="padding:10px 14px;text-align:center">${statusBadge(r.enrollment?.status||'active')}</td>
+              </tr>`).join('')}
+            </tbody>
+          </table>
+        </div>
+      </div>` : ''}
+
+      ${certs && certs.length > 0 ? `
+      <div>
+        <div style="font-size:14px;font-weight:700;margin-bottom:12px">Certificates</div>
+        <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:12px">
+          ${certs.map(c => `
+          <div class="card" style="padding:16px;border-left:4px solid #10b981">
+            <div style="font-size:14px;font-weight:700;margin-bottom:4px">${esc(c.courseName||'Certificate')}</div>
+            <div style="font-size:12px;color:var(--text-muted);margin-bottom:10px">Issued ${fmt(c.issuedAt)}</div>
+            <div style="display:flex;gap:8px">
+              <a href="/api/transcripts/verify/${esc(c.verificationCode)}" target="_blank" class="btn btn-secondary btn-sm">🔍 Verify</a>
+              <span style="font-size:11px;font-family:monospace;color:var(--text-muted);align-self:center">${esc(c.verificationCode||'')}</span>
+            </div>
+          </div>`).join('')}
+        </div>
+      </div>` : ''}
+    `;
+  };
+
+  if (isStudent) {
+    try {
+      const [transcriptData, certData] = await Promise.all([
+        api('/api/transcripts/me'),
+        api('/api/transcripts/certificates/me').catch(() => ({ certificates: [] })),
+      ]);
+      renderTranscriptData(transcriptData.transcript, certData.certificates || []);
+    } catch(e) {
+      content.innerHTML = `<div class="card"><p style="color:#ef4444">Error: ${e.message}</p></div>`;
+    }
+    return;
+  }
+
+  // Staff view: search by student ID
+  content.innerHTML = `
+    <div class="page-header"><h2>Academic Transcript</h2><p>Look up any student's transcript</p></div>
+    <div class="card" style="padding:20px;max-width:480px">
+      <label style="font-size:12px;font-weight:600;color:var(--text-muted);display:block;margin-bottom:6px">STUDENT ID</label>
+      <div style="display:flex;gap:8px">
+        <input id="transcript-studentId" class="form-control" placeholder="Paste student ID…" style="flex:1" />
+        <button class="btn btn-primary" onclick="loadStudentTranscript()">Load</button>
+      </div>
+    </div>
+    <div id="transcript-result"></div>
+  `;
+
+  window.loadStudentTranscript = async function() {
+    const studentId = document.getElementById('transcript-studentId')?.value?.trim();
+    if (!studentId) return showToastNotif('Enter a student ID', 'error');
+    const resultDiv = document.getElementById('transcript-result');
+    if (resultDiv) resultDiv.innerHTML = '<div class="loading" style="margin-top:16px">Loading…</div>';
+    try {
+      const [transcriptData, certData] = await Promise.all([
+        api(`/api/transcripts/${studentId}`),
+        api(`/api/transcripts/certificates/${studentId}`).catch(() => ({ certificates: [] })),
+      ]);
+      renderTranscriptData(transcriptData.transcript, certData.certificates || []);
+    } catch(e) {
+      if (resultDiv) resultDiv.innerHTML = `<div class="card" style="margin-top:16px"><p style="color:#ef4444">Error: ${e.message}</p></div>`;
+    }
+  };
+}
+
+// ══════════════════════════════════════════════════════════════
+// EVALUATIONS
+// ══════════════════════════════════════════════════════════════
+async function renderEvaluations() {
+  const content = document.getElementById('main-content');
+  if (!content) return;
+  content.innerHTML = '<div class="loading">Loading evaluations…</div>';
+  const esc = s => s == null ? '' : String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  const isStudent = currentUser?.role === 'student';
+  const isStaff = ['lecturer','hod','admin','superadmin'].includes(currentUser?.role);
+
+  let courses = [];
+  try {
+    const endpoint = isStudent ? '/api/courses/my' : '/api/courses';
+    const d = await api(endpoint).catch(() => api('/api/courses'));
+    courses = d.courses || d || [];
+  } catch(e) { courses = []; }
+
+  if (isStudent) {
+    // For each course, check submission status
+    let statusMap = {};
+    if (courses.length > 0) {
+      await Promise.all(courses.map(async c => {
+        try {
+          const d = await api(`/api/evaluations/my/${c._id}`);
+          statusMap[c._id] = d;
+        } catch(e) { statusMap[c._id] = null; }
+      }));
+    }
+
+    content.innerHTML = `
+      <div class="page-header"><h2>Course Evaluations</h2><p>Rate your courses anonymously</p></div>
+      ${courses.length === 0 ? `<div class="card" style="padding:20px;text-align:center;color:var(--text-muted)">You are not enrolled in any courses.</div>` :
+        `<div style="display:flex;flex-direction:column;gap:12px">
+          ${courses.map(c => {
+            const st = statusMap[c._id];
+            const submitted = st?.submitted;
+            const hasDraft = st?.hasDraft;
+            const windowIsOpen = st?.windowOpen;
+            return `
+            <div class="card" style="padding:16px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px">
+              <div>
+                <div style="font-size:14px;font-weight:700">${esc(c.title||c.code||'Course')}</div>
+                <div style="font-size:12px;color:var(--text-muted)">${esc(c.code||'')}${c.level?' · L'+c.level:''}</div>
+                ${st?.overallRating ? `<div style="font-size:12px;color:var(--text-muted);margin-top:2px">Your rating: ${'★'.repeat(st.overallRating)}${'☆'.repeat(5-st.overallRating)}</div>` : ''}
+              </div>
+              <div>
+                ${submitted ? `<span style="background:#d1fae5;color:#065f46;padding:4px 12px;border-radius:20px;font-size:12px;font-weight:700">✓ Submitted</span>` :
+                  windowIsOpen ? `<button class="btn btn-primary btn-sm" onclick="openEvaluationModal('${c._id}','${esc(c.title||c.code||'Course')}')">Fill Evaluation</button>` :
+                  hasDraft ? `<button class="btn btn-secondary btn-sm" onclick="openEvaluationModal('${c._id}','${esc(c.title||c.code||'Course')}')">Continue Draft</button>` :
+                  `<span style="background:#f1f5f9;color:#475569;padding:4px 12px;border-radius:20px;font-size:12px;font-weight:600">Evaluation Closed</span>`}
+              </div>
+            </div>`;
+          }).join('')}
+        </div>`}
+    `;
+    return;
+  }
+
+  // Staff view: course selector → aggregate results
+  const renderStaffView = async (courseId, courseTitle) => {
+    try {
+      const data = await api(`/api/evaluations/results/${courseId}`);
+      const starBar = avg => {
+        const filled = Math.round(avg||0);
+        return '★'.repeat(filled) + '☆'.repeat(5-filled) + ` <span style="font-size:12px;color:var(--text-muted)">(${avg?.toFixed?.(1)||'—'})</span>`;
+      };
+
+      content.innerHTML = `
+        <div class="page-header" style="display:flex;align-items:flex-start;justify-content:space-between;flex-wrap:wrap;gap:10px">
+          <div>
+            <button class="btn btn-secondary btn-sm" onclick="renderEvaluations()" style="margin-bottom:8px">← Back to Courses</button>
+            <h2>Evaluation Results</h2>
+            <p>${esc(data.courseName||courseTitle)} · ${data.totalResponses} response${data.totalResponses!==1?'s':''}</p>
+          </div>
+        </div>
+        <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:12px;margin-bottom:20px">
+          <div class="card" style="padding:16px;text-align:center">
+            <div style="font-size:28px;font-weight:800;color:var(--accent)">${data.overall?.avg?.toFixed(1)||'—'}</div>
+            <div style="font-size:11px;font-weight:700;color:var(--text-muted);text-transform:uppercase">Overall Avg</div>
+          </div>
+          <div class="card" style="padding:16px;text-align:center">
+            <div style="font-size:28px;font-weight:800">${data.totalResponses}</div>
+            <div style="font-size:11px;font-weight:700;color:var(--text-muted);text-transform:uppercase">Responses</div>
+          </div>
+          <div class="card" style="padding:16px;text-align:center">
+            <div style="font-size:28px;font-weight:800;color:#16a34a">${data.responseRate??'—'}${data.responseRate!=null?'%':''}</div>
+            <div style="font-size:11px;font-weight:700;color:var(--text-muted);text-transform:uppercase">Response Rate</div>
+          </div>
+          <div class="card" style="padding:16px;text-align:center">
+            <div style="font-size:28px;font-weight:800">${data.totalEnrolled}</div>
+            <div style="font-size:11px;font-weight:700;color:var(--text-muted);text-transform:uppercase">Enrolled</div>
+          </div>
+        </div>
+        <div style="display:flex;flex-direction:column;gap:12px">
+          ${(data.criteria||[]).map(c => `
+          <div class="card" style="padding:16px">
+            <div style="font-size:13px;font-weight:700;margin-bottom:10px">${esc(c.label)}</div>
+            ${c.type==='rating' ? `
+              <div style="display:flex;align-items:center;gap:10px">
+                <span style="font-size:20px;color:#f59e0b">${starBar(c.avg)}</span>
+                <span style="font-size:12px;color:var(--text-muted)">${c.count} responses</span>
+              </div>` :
+            c.type==='yesno' ? `
+              <div style="font-size:13px">Yes: <strong>${c.yesCount}</strong> (${c.yesPct??'—'}%) · No: <strong>${c.noCount}</strong></div>` :
+            `<div style="font-size:13px;color:var(--text-muted)">${c.count} text responses</div>
+              ${c.comments?.slice(0,5).map(t=>`<div style="padding:8px 12px;background:var(--bg);border-radius:6px;font-size:12px;margin-top:4px">${esc(t)}</div>`).join('')||''}`}
+          </div>`).join('')}
+        </div>
+      `;
+    } catch(e) {
+      content.innerHTML = `<div class="card"><p style="color:#ef4444">Error: ${e.message}</p></div>`;
+    }
+  };
+
+  content.innerHTML = `
+    <div class="page-header"><h2>Course Evaluations</h2><p>View aggregated student feedback</p></div>
+    ${courses.length === 0 ? `<div class="card" style="padding:20px;text-align:center;color:var(--text-muted)">No courses found.</div>` :
+      `<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:14px">
+        ${courses.map(c => `
+        <div class="card" style="padding:16px;cursor:pointer" onclick="renderEvaluationResults('${c._id}','${esc(c.title||c.code||'Course')}')">
+          <div style="font-size:14px;font-weight:700;margin-bottom:4px">${esc(c.title||c.code||'')}</div>
+          <div style="font-size:12px;color:var(--text-muted)">${esc(c.code||'')}${c.level?' · L'+c.level:''}</div>
+          <div style="margin-top:10px;font-size:12px;color:var(--accent);font-weight:600">View results →</div>
+        </div>`).join('')}
+      </div>`}
+  `;
+
+  window.renderEvaluationResults = renderStaffView;
+}
+
+window.openEvaluationModal = async function(courseId, courseTitle) {
+  const esc = s => s == null ? '' : String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  let criteria = [];
+  try {
+    const d = await api(`/api/evaluations/forms/${courseId}`).catch(() => null);
+    criteria = d?.criteria || [];
+  } catch(e) { criteria = []; }
+
+  const defaultCriteria = criteria.length > 0 ? criteria : [
+    { key:'teaching_quality', label:'Teaching Quality', type:'rating' },
+    { key:'course_content', label:'Course Content', type:'rating' },
+    { key:'communication', label:'Communication', type:'rating' },
+    { key:'feedback', label:'Feedback & Support', type:'rating' },
+    { key:'comments', label:'Additional Comments', type:'text' },
+  ];
+
+  const criteriaHTML = defaultCriteria.map(c => {
+    if (c.type === 'rating') {
+      return `<div>
+        <label style="font-size:12px;font-weight:600;color:var(--text-muted);display:block;margin-bottom:4px">${esc(c.label).toUpperCase()}</label>
+        <div style="display:flex;gap:6px">
+          ${[1,2,3,4,5].map(n=>`<span style="font-size:22px;cursor:pointer" id="star-${c.key}-${n}" onclick="evalHighlightStars('${c.key}',${n})">☆</span>`).join('')}
+        </div>
+        <input type="hidden" name="rating-${c.key}" id="rating-val-${c.key}" value="" />
+      </div>`;
+    }
+    if (c.type === 'yesno') {
+      return `<div>
+        <label style="font-size:12px;font-weight:600;color:var(--text-muted);display:block;margin-bottom:4px">${esc(c.label).toUpperCase()}</label>
+        <div style="display:flex;gap:8px">
+          <label><input type="radio" name="yesno-${c.key}" value="yes"> Yes</label>
+          <label><input type="radio" name="yesno-${c.key}" value="no"> No</label>
+        </div>
+      </div>`;
+    }
+    return `<div>
+      <label style="font-size:12px;font-weight:600;color:var(--text-muted);display:block;margin-bottom:4px">${esc(c.label).toUpperCase()}</label>
+      <textarea name="text-${c.key}" class="form-control" rows="2" placeholder="Your thoughts…"></textarea>
+    </div>`;
+  }).join('');
+
+  openModal(`
+    <h3 style="margin-bottom:4px;font-size:17px;font-weight:700">Course Evaluation</h3>
+    <p style="font-size:12px;color:var(--text-muted);margin-bottom:18px">Responses are anonymous · ${esc(courseTitle)}</p>
+    <div style="display:flex;flex-direction:column;gap:14px">
+      <div>
+        <label style="font-size:12px;font-weight:600;color:var(--text-muted);display:block;margin-bottom:4px">OVERALL RATING *</label>
+        <div style="display:flex;gap:6px">
+          ${[1,2,3,4,5].map(n=>`<span style="font-size:28px;cursor:pointer" id="overall-star-${n}" onclick="evalHighlightStars('overall',${n})">☆</span>`).join('')}
+        </div>
+        <input type="hidden" id="rating-val-overall" value="" />
+      </div>
+      <div id="eval-criteria-section" style="display:flex;flex-direction:column;gap:12px">${criteriaHTML}</div>
+      <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:4px">
+        <button class="btn btn-secondary" onclick="closeModal()">Cancel</button>
+        <button class="btn btn-primary" id="eval-submit-btn" onclick="submitEvaluation('${courseId}')">Submit Evaluation</button>
+      </div>
+    </div>
+  `);
+
+  // Store criteria for submission
+  window._evalCourseId = courseId;
+  window._evalCriteria = defaultCriteria;
+};
+
+window.evalHighlightStars = function(key, n) {
+  const prefix = key === 'overall' ? 'overall-star-' : `star-${key}-`;
+  for (let i = 1; i <= 5; i++) {
+    const el = document.getElementById(`${prefix}${i}`);
+    if (el) el.textContent = i <= n ? '★' : '☆';
+  }
+  const valInput = document.getElementById(key === 'overall' ? 'rating-val-overall' : `rating-val-${key}`);
+  if (valInput) valInput.value = n;
+};
+
+window.submitEvaluation = async function(courseId) {
+  const criteria = window._evalCriteria || [];
+  const overallInput = document.getElementById('rating-val-overall');
+  const overallRating = overallInput ? parseInt(overallInput.value) : 0;
+  if (!overallRating) return showToastNotif('Please select an overall rating', 'error');
+
+  const responses = criteria.map(c => {
+    if (c.type === 'rating') {
+      const valInput = document.getElementById(`rating-val-${c.key}`);
+      const rating = valInput ? parseInt(valInput.value) : null;
+      return rating ? { key: c.key, rating } : null;
+    }
+    if (c.type === 'yesno') {
+      const checked = document.querySelector(`input[name="yesno-${c.key}"]:checked`);
+      return checked ? { key: c.key, yesno: checked.value === 'yes' } : null;
+    }
+    const ta = document.querySelector(`textarea[name="text-${c.key}"]`);
+    return ta?.value?.trim() ? { key: c.key, text: ta.value.trim() } : null;
+  }).filter(Boolean);
+
+  const btn = document.getElementById('eval-submit-btn');
+  if (btn) { btn.disabled = true; btn.textContent = 'Submitting…'; }
+
+  try {
+    await api(`/api/evaluations/submit/${courseId}`, {
+      method: 'POST',
+      body: JSON.stringify({ overallRating, responses, submit: true }),
+    });
+    closeModal();
+    toastSuccess('Evaluation submitted. Thank you!');
+    renderEvaluations();
+  } catch(e) {
+    if (btn) { btn.disabled = false; btn.textContent = 'Submit Evaluation'; }
+    showToastNotif(e.message || 'Failed to submit evaluation', 'error');
+  }
+};
 
 window._realSelectMode   = selectMode;
 window._realSelectPortal = selectPortal;
