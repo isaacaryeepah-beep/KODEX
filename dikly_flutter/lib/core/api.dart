@@ -1102,6 +1102,26 @@ class ApiService {
     return (data['stats'] ?? data['data'] ?? data) as Map<String, dynamic>;
   }
 
+  // 2FA
+  Future<void> toggle2FA(bool enable) async {
+    await _dio.post('/api/auth/2fa/toggle', data: {'enable': enable});
+  }
+
+  // Signed-in devices
+  Future<Map<String, dynamic>> getMyDevices() async {
+    final res = await _dio.get('/api/auth/my-devices');
+    return res.data as Map<String, dynamic>;
+  }
+
+  Future<void> removeMyDevice(String deviceId) async {
+    await _dio.delete('/api/auth/my-devices/${Uri.encodeComponent(deviceId)}');
+  }
+
+  // Class Rep PIN (lecturer)
+  Future<void> setClassRepPin(String pin) async {
+    await _dio.post('/api/class-rep/set-pin', data: {'pin': pin});
+  }
+
   Future<void> saveToken(String token) async {
     await _storage.write(key: 'auth_token', value: token);
   }
