@@ -2390,26 +2390,23 @@ function buildSidebar() {
   switch (role) {
     case 'admin':
       links.push({ sep: true, label: 'MANAGE' });
-      links.push({ id: 'approvals',   label: 'Approvals',  icon: approvalsIcon() });
-      links.push({ id: 'search',      label: 'Search',     icon: svgIcon('<circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>') });
-      links.push({ id: 'users',       label: 'Users',      icon: usersIcon() });
-      links.push({ id: 'sessions',    label: 'Sessions',   icon: sessionsIcon() });
-      links.push({ id: 'branches',    label: 'Branches',   icon: svgIcon('<path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/>') });
-      links.push({ id: 'audit-logs',  label: 'Audit Logs', icon: svgIcon('<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><line x1="10" y1="9" x2="10" y2="9"/>') });
+      links.push({ id: 'approvals', label: 'Approvals', icon: approvalsIcon() });
+      links.push({ id: 'search', label: 'Search', icon: svgIcon('<circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>') });
+      links.push({ id: 'users', label: 'Users', icon: usersIcon() });
+      links.push({ id: 'sessions', label: 'Sessions', icon: sessionsIcon() });
       if (currentUser.company?.mode === 'academic') {
         links.push({ sep: true, label: 'ACADEMIC' });
-        links.push({ id: 'live-attendance', label: 'Attendance',      icon: attendanceIcon() });
-        links.push({ id: 'timetable',       label: 'Schedule',        icon: svgIcon('<rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/>') });
-        links.push({ id: 'courses',         label: 'Courses',         icon: coursesIcon() });
+        links.push({ id: 'live-attendance', label: 'Attendance', icon: attendanceIcon() });
+        links.push({ id: 'timetable', label: 'Schedule', icon: svgIcon('<rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/>') });
+        links.push({ id: 'courses', label: 'Courses', icon: coursesIcon() });
         links.push({ id: 'hod-course-approvals', label: 'Course Approvals', icon: svgIcon('<path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/>') });
-        links.push({ id: 'quizzes',         label: 'Quizzes',         icon: quizzesIcon() });
-        links.push({ id: 'assignments',     label: 'Assignments',     icon: assignmentsIcon() });
-        links.push({ id: 'gradebook',       label: 'Grade Book',      icon: svgIcon('<path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/>') });
-        links.push({ id: 'programmes',      label: 'Programmes',      icon: svgIcon('<path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/>') });
-        links.push({ sep: true, label: 'HR' });
-        links.push({ id: 'leave-requests',  label: 'Leave Requests',  icon: svgIcon('<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/>') });
-        links.push({ id: 'payroll',         label: 'Payroll',         icon: svgIcon('<line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/>') });
-        links.push({ id: 'announcements',   label: 'Announcements',   icon: svgIcon('<path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/>') });
+        links.push({ id: 'quizzes', label: 'Quizzes', icon: quizzesIcon() });
+        links.push({ id: 'assignments', label: 'Assignments', icon: assignmentsIcon() });
+        links.push({ id: 'gradebook', label: 'Grade Book', icon: svgIcon('<path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/>') });
+        links.push({ id: 'announcements', label: 'Announcements', icon: svgIcon('<path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/>') });
+        links.push({ id: 'programmes', label: 'Programmes', icon: svgIcon('<path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/>') });
+        links.push({ id: 'class-reps', label: 'Class Reps', icon: svgIcon('<path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><polyline points="23 21 23 19 19 19"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/>') });
+        links.push({ id: 'admin-devices', label: 'Devices', icon: svgIcon('<rect x="5" y="2" width="14" height="20" rx="2" ry="2"/><line x1="12" y1="18" x2="12.01" y2="18"/>') });
       }
       if (currentUser.company?.mode === 'corporate') {
         links.push({ sep: true, label: 'WORKFORCE' });
@@ -2689,6 +2686,8 @@ function navigateTo(view) {
       }
       break;
     case 'branches':        _safeRender(content, renderBranches,       'Branches');        break;
+    case 'class-reps':      _safeRender(content, renderClassReps,      'Class Reps');      break;
+    case 'admin-devices':   _safeRender(content, renderAdminDevices,   'Devices');         break;
     case 'my-profile':      renderProfile(); break;
     default: renderDashboard();
   }
@@ -18210,6 +18209,209 @@ async function deleteBranch(id) {
     toast('Branch removed', 'ok');
     renderBranches();
   } catch(e) { toast(e.message, 'err'); }
+}
+
+// ══════════════════════════════════════════════════════════════
+// CLASS REPS (Admin)
+// ══════════════════════════════════════════════════════════════
+async function renderClassReps() {
+  const content = document.getElementById('main-content');
+  content.innerHTML = '<div class="loading">Loading…</div>';
+  const esc = s => s == null ? '' : String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+
+  async function load() {
+    const { reps } = await api('/api/class-rep-admin/list');
+    content.innerHTML = `
+      <div class="page-header">
+        <h2>Class Representatives</h2>
+        <p>Assign or remove class rep roles for students</p>
+      </div>
+      <div class="card" style="margin-bottom:16px">
+        <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px">
+          <div style="font-size:14px;font-weight:600">${reps.length} Class Representative${reps.length !== 1 ? 's' : ''}</div>
+          <button class="btn btn-primary btn-sm" onclick="showAssignRepModal()">+ Assign Rep</button>
+        </div>
+      </div>
+      ${reps.length === 0 ? `
+        <div class="card" style="text-align:center;padding:40px;color:var(--text-muted)">
+          No class representatives assigned yet.
+        </div>` : `
+      <div class="card" style="padding:0;overflow:hidden">
+        <table style="width:100%;border-collapse:collapse">
+          <thead>
+            <tr style="background:var(--bg);font-size:12px;color:var(--text-muted)">
+              <th style="padding:10px 14px;text-align:left;font-weight:600">Name</th>
+              <th style="padding:10px 14px;text-align:left;font-weight:600">Index No.</th>
+              <th style="padding:10px 14px;text-align:left;font-weight:600">Level</th>
+              <th style="padding:10px 14px;text-align:left;font-weight:600">Group</th>
+              <th style="padding:10px 14px;text-align:left;font-weight:600">Session</th>
+              <th style="padding:10px 14px;text-align:left;font-weight:600">Programme</th>
+              <th style="padding:10px 14px;text-align:left;font-weight:600">Dept.</th>
+              <th style="padding:10px 14px;text-align:right;font-weight:600">Action</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${reps.map(r => `
+            <tr style="border-top:1px solid var(--border);font-size:13px">
+              <td style="padding:10px 14px;font-weight:600">${esc(r.name)}</td>
+              <td style="padding:10px 14px;color:var(--text-muted)">${esc(r.IndexNumber||'—')}</td>
+              <td style="padding:10px 14px">${esc(r.studentLevel||'—')}</td>
+              <td style="padding:10px 14px">${esc(r.studentGroup||'—')}</td>
+              <td style="padding:10px 14px">${esc(r.sessionType||'—')}</td>
+              <td style="padding:10px 14px">${esc(r.programme||'—')}</td>
+              <td style="padding:10px 14px">${esc(r.department||'—')}</td>
+              <td style="padding:10px 14px;text-align:right">
+                <button class="btn btn-sm" style="background:rgba(239,68,68,0.1);color:#ef4444;border:1px solid rgba(239,68,68,0.2)"
+                  onclick="removeClassRep('${r._id}','${esc(r.name)}')">Remove</button>
+              </td>
+            </tr>`).join('')}
+          </tbody>
+        </table>
+      </div>`}
+    `;
+  }
+
+  try { await load(); } catch(e) {
+    content.innerHTML = `<div class="card" style="color:#ef4444">Failed to load class reps: ${e.message}</div>`;
+  }
+}
+
+async function removeClassRep(userId, name) {
+  if (!confirm(`Remove ${name} as class representative?`)) return;
+  try {
+    await api(`/api/class-rep-admin/remove/${userId}`, { method: 'DELETE' });
+    toastSuccess(`${name} removed as class rep`);
+    renderClassReps();
+  } catch(e) { toastError(e.message || 'Failed to remove'); }
+}
+
+async function showAssignRepModal() {
+  openModal(`
+    <div style="padding:4px 0">
+      <h3 style="font-size:16px;font-weight:700;margin-bottom:4px">Assign Class Representative</h3>
+      <p style="font-size:12px;color:var(--text-muted);margin-bottom:16px">Search for a student by name or index number</p>
+      <div class="form-group">
+        <label>Search Student</label>
+        <input type="text" id="rep-search-input" placeholder="Name or index number…" oninput="searchRepStudents(this.value)"
+          style="width:100%;padding:8px 12px;border:1.5px solid var(--border);border-radius:8px;background:var(--bg);color:var(--text-primary);font-size:13px">
+      </div>
+      <div id="rep-search-results" style="max-height:260px;overflow-y:auto;margin-top:8px"></div>
+    </div>
+  `);
+}
+
+let _repSearchTimer;
+async function searchRepStudents(q) {
+  clearTimeout(_repSearchTimer);
+  _repSearchTimer = setTimeout(async () => {
+    const box = document.getElementById('rep-search-results');
+    if (!box) return;
+    if (!q.trim()) { box.innerHTML = ''; return; }
+    box.innerHTML = '<div style="color:var(--text-muted);font-size:13px;padding:8px 0">Searching…</div>';
+    try {
+      const { students } = await api(`/api/class-rep-admin/students?indexNumber=${encodeURIComponent(q)}`);
+      if (!students.length) { box.innerHTML = '<div style="color:var(--text-muted);font-size:13px;padding:8px 0">No students found.</div>'; return; }
+      const esc = s => s == null ? '' : String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+      box.innerHTML = students.slice(0,10).map(s => `
+        <div style="display:flex;align-items:center;justify-content:space-between;padding:9px 12px;border-radius:8px;border:1.5px solid var(--border);margin-bottom:6px;background:var(--bg)">
+          <div>
+            <div style="font-size:13px;font-weight:600">${esc(s.name)}</div>
+            <div style="font-size:11px;color:var(--text-muted)">${esc(s.IndexNumber||'')} · L${esc(s.studentLevel||'?')} Gr${esc(s.studentGroup||'?')} · ${esc(s.programme||'')}</div>
+          </div>
+          ${s.isClassRep
+            ? `<span style="font-size:11px;color:#16a34a;font-weight:600">Already a rep</span>`
+            : `<button class="btn btn-primary btn-sm" onclick="doAssignRep('${s._id}','${esc(s.name)}')">Assign</button>`}
+        </div>`).join('');
+    } catch(e) { box.innerHTML = `<div style="color:#ef4444;font-size:13px">${e.message}</div>`; }
+  }, 300);
+}
+
+async function doAssignRep(studentId, name) {
+  try {
+    await api('/api/class-rep-admin/assign', { method: 'POST', body: JSON.stringify({ studentId }) });
+    closeModal();
+    toastSuccess(`${name} assigned as class representative`);
+    renderClassReps();
+  } catch(e) { toastError(e.message || 'Failed to assign'); }
+}
+
+// ══════════════════════════════════════════════════════════════
+// ADMIN DEVICES
+// ══════════════════════════════════════════════════════════════
+async function renderAdminDevices() {
+  const content = document.getElementById('main-content');
+  content.innerHTML = '<div class="loading">Loading…</div>';
+  const esc = s => s == null ? '' : String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  const timeAgoShort = d => {
+    if (!d) return 'Never';
+    const m = Math.floor((Date.now() - new Date(d)) / 60000);
+    if (m < 1) return 'Just now';
+    if (m < 60) return `${m}m ago`;
+    if (m < 1440) return `${Math.floor(m/60)}h ago`;
+    return `${Math.floor(m/1440)}d ago`;
+  };
+  try {
+    const { devices } = await api('/api/devices/all');
+    const online  = devices.filter(d => d.online).length;
+    const offline = devices.length - online;
+    content.innerHTML = `
+      <div class="page-header"><h2>Attendance Devices</h2><p>All ESP32 devices paired to your institution</p></div>
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:12px;margin-bottom:16px">
+        <div class="card" style="padding:14px 16px">
+          <div style="font-size:11px;color:var(--text-muted);margin-bottom:4px">Total Devices</div>
+          <div style="font-size:22px;font-weight:700">${devices.length}</div>
+        </div>
+        <div class="card" style="padding:14px 16px">
+          <div style="font-size:11px;color:var(--text-muted);margin-bottom:4px">Online Now</div>
+          <div style="font-size:22px;font-weight:700;color:#16a34a">${online}</div>
+        </div>
+        <div class="card" style="padding:14px 16px">
+          <div style="font-size:11px;color:var(--text-muted);margin-bottom:4px">Offline</div>
+          <div style="font-size:22px;font-weight:700;color:var(--text-muted)">${offline}</div>
+        </div>
+      </div>
+      ${devices.length === 0 ? `
+        <div class="card" style="text-align:center;padding:40px;color:var(--text-muted)">
+          No devices paired yet. Lecturers can pair a device from their Attendance Device page.
+        </div>` : `
+      <div class="card" style="padding:0;overflow:hidden">
+        <table style="width:100%;border-collapse:collapse">
+          <thead>
+            <tr style="background:var(--bg);font-size:12px;color:var(--text-muted)">
+              <th style="padding:10px 14px;text-align:left;font-weight:600">Status</th>
+              <th style="padding:10px 14px;text-align:left;font-weight:600">Device Name</th>
+              <th style="padding:10px 14px;text-align:left;font-weight:600">Paired By</th>
+              <th style="padding:10px 14px;text-align:left;font-weight:600">Class Rep</th>
+              <th style="padding:10px 14px;text-align:left;font-weight:600">Group / Level</th>
+              <th style="padding:10px 14px;text-align:left;font-weight:600">IP</th>
+              <th style="padding:10px 14px;text-align:left;font-weight:600">Last Seen</th>
+              <th style="padding:10px 14px;text-align:left;font-weight:600">Firmware</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${devices.map(d => `
+            <tr style="border-top:1px solid var(--border);font-size:13px">
+              <td style="padding:10px 14px">
+                <span style="display:inline-flex;align-items:center;gap:5px;font-size:12px;font-weight:600;color:${d.online ? '#16a34a' : '#9ca3af'}">
+                  <span style="width:7px;height:7px;border-radius:50%;background:${d.online ? '#16a34a' : '#9ca3af'}"></span>
+                  ${d.online ? 'Online' : 'Offline'}
+                </span>
+              </td>
+              <td style="padding:10px 14px;font-weight:600">${esc(d.deviceName || d.deviceId)}</td>
+              <td style="padding:10px 14px">${esc(d.pairedBy?.name || '—')}</td>
+              <td style="padding:10px 14px">${d.classRepId ? esc(d.classRepId.name) : '<span style="color:var(--text-muted)">Not assigned</span>'}</td>
+              <td style="padding:10px 14px">${d.assignedGroup ? `Gr ${esc(d.assignedGroup)} · L${esc(d.assignedLevel||'?')}` : '<span style="color:var(--text-muted)">—</span>'}</td>
+              <td style="padding:10px 14px;font-family:monospace;font-size:12px">${esc(d.localIp||'—')}</td>
+              <td style="padding:10px 14px;color:var(--text-muted)">${timeAgoShort(d.lastHeartbeat)}</td>
+              <td style="padding:10px 14px;color:var(--text-muted)">${esc(d.firmwareVersion||'—')}</td>
+            </tr>`).join('')}
+          </tbody>
+        </table>
+      </div>`}
+    `;
+  } catch(e) {
+    content.innerHTML = `<div class="card" style="color:#ef4444">Failed to load devices: ${e.message}</div>`;
+  }
 }
 
 // ══════════════════════════════════════════════════════════════
