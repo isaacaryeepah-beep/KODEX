@@ -828,7 +828,7 @@ exports.login = async (req, res) => {
     }
 
     const PORTAL_ALLOWED_ROLES = {
-      admin:    ["admin"],
+      admin:    ["admin", "manager"],
       manager:  ["manager"],
       lecturer: ["lecturer"],
       hod:      ["hod"],
