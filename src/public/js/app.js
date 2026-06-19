@@ -6589,31 +6589,33 @@ function _userRowCard(u, canManage) {
     u.studentLevel ? `<span style="background:#dbeafe;color:#1d4ed8;padding:2px 7px;border-radius:20px;font-size:10px;font-weight:700">L${esc(u.studentLevel)}</span>` : '',
     u.studentGroup ? `<span style="background:#ecfdf5;color:#059669;padding:2px 7px;border-radius:20px;font-size:10px;font-weight:700">Grp ${esc(u.studentGroup)}</span>` : '',
     u.sessionType  ? `<span style="background:#fff7ed;color:#c2410c;padding:2px 7px;border-radius:20px;font-size:10px;font-weight:600">${esc(u.sessionType)}</span>` : '',
-  ].filter(Boolean).join(' ') : '';
+  ].filter(Boolean).join('') : '';
   return `
-  <div id="user-row-${u._id}" style="display:flex;align-items:center;gap:14px;padding:14px 16px;border-bottom:1px solid var(--border);transition:background .15s" onmouseover="this.style.background='var(--card-hover)'" onmouseout="this.style.background=''">
-    ${canManage ? `<input type="checkbox" class="user-checkbox" value="${u._id}" onchange="updateBulkActions()" style="flex-shrink:0;width:16px;height:16px;accent-color:var(--primary);cursor:pointer">` : ''}
-    <div style="width:42px;height:42px;border-radius:50%;background:${avatarBg};display:flex;align-items:center;justify-content:center;flex-shrink:0;font-weight:700;font-size:14px;color:#fff">${initials}</div>
-    <div style="flex:1;min-width:0">
-      <div style="display:flex;align-items:center;gap:7px;flex-wrap:wrap">
-        <span style="font-weight:700;font-size:14px;color:var(--text)">${esc(u.name)}</span>
-        <span class="role-badge role-${u.role}" style="flex-shrink:0">${u.role}</span>
-        ${u.isClassRep ? `<span style="background:#7c3aed;color:#fff;font-size:9px;font-weight:700;padding:2px 6px;border-radius:20px;flex-shrink:0;letter-spacing:.4px">CLASS REP</span>` : ''}
-        ${u.isActive
-          ? `<span style="background:#dcfce7;color:#15803d;font-size:10px;font-weight:700;padding:2px 7px;border-radius:20px;flex-shrink:0">Active</span>`
-          : `<span style="background:#fee2e2;color:#dc2626;font-size:10px;font-weight:700;padding:2px 7px;border-radius:20px;flex-shrink:0">Inactive</span>`}
+  <div id="user-row-${u._id}" style="padding:14px 16px;border-bottom:1px solid var(--border);transition:background .15s" onmouseover="this.style.background='var(--card-hover)'" onmouseout="this.style.background=''">
+    <div style="display:flex;align-items:center;gap:12px">
+      ${canManage ? `<input type="checkbox" class="user-checkbox" value="${u._id}" onchange="updateBulkActions()" style="flex-shrink:0;width:16px;height:16px;accent-color:var(--primary);cursor:pointer">` : ''}
+      <div style="width:40px;height:40px;border-radius:50%;background:${avatarBg};display:flex;align-items:center;justify-content:center;flex-shrink:0;font-weight:700;font-size:14px;color:#fff">${initials}</div>
+      <div style="flex:1;min-width:0">
+        <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">
+          <span style="font-weight:700;font-size:14px;color:var(--text)">${esc(u.name)}</span>
+          <span class="role-badge role-${u.role}" style="flex-shrink:0">${u.role}</span>
+          ${u.isClassRep ? `<span style="background:#7c3aed;color:#fff;font-size:9px;font-weight:700;padding:2px 6px;border-radius:20px;flex-shrink:0;letter-spacing:.4px">CLASS REP</span>` : ''}
+          ${u.isActive
+            ? `<span style="background:#dcfce7;color:#15803d;font-size:10px;font-weight:700;padding:2px 7px;border-radius:20px;flex-shrink:0">Active</span>`
+            : `<span style="background:#fee2e2;color:#dc2626;font-size:10px;font-weight:700;padding:2px 7px;border-radius:20px;flex-shrink:0">Inactive</span>`}
+        </div>
+        <div style="font-size:12px;color:var(--text-light);margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(emailOrId)}${identifier && u.email ? ` · ${esc(identifier)}` : ''}</div>
       </div>
-      <div style="font-size:12px;color:var(--text-light);margin-top:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(emailOrId)}${identifier && u.email ? ` · ${esc(identifier)}` : ''}</div>
-      ${tags ? `<div style="display:flex;gap:4px;flex-wrap:wrap;margin-top:5px">${tags}</div>` : ''}
     </div>
+    ${tags ? `<div style="display:flex;gap:4px;flex-wrap:wrap;margin-top:8px;padding-left:${canManage ? '68px' : '52px'}">${tags}</div>` : ''}
     ${canManage ? `
-    <div style="display:flex;gap:6px;flex-wrap:wrap;flex-shrink:0">
+    <div style="display:flex;gap:6px;margin-top:10px;padding-left:28px">
       ${u.isActive
-        ? `<button class="btn btn-sm" style="background:#f59e0b;color:#fff;font-size:11px;padding:5px 10px" onclick="deactivateUser('${u._id}')">Deactivate</button>`
-        : `<button class="btn btn-sm" style="background:#22c55e;color:#fff;font-size:11px;padding:5px 10px" onclick="activateUser('${u._id}')">Activate</button>`}
-      <button class="btn btn-sm" style="background:#6366f1;color:#fff;font-size:11px;padding:5px 10px" onclick="adminResetStudentPassword('${u._id}', this)">🔑 Reset</button>
-      ${u.role === 'student' && u.deviceId ? `<button class="btn btn-sm" style="background:#f97316;color:#fff;font-size:11px;padding:5px 10px" onclick="clearStudentDeviceLock('${u._id}', this)">🔓 Unlock</button>` : ''}
-      <button class="btn btn-danger btn-sm" style="font-size:11px;padding:5px 10px" onclick="deleteUserPermanently('${u._id}', this)">Delete</button>
+        ? `<button class="btn btn-sm" style="flex:1;background:#f59e0b;color:#fff;font-size:11px;padding:6px 4px" onclick="deactivateUser('${u._id}')">Deactivate</button>`
+        : `<button class="btn btn-sm" style="flex:1;background:#22c55e;color:#fff;font-size:11px;padding:6px 4px" onclick="activateUser('${u._id}')">Activate</button>`}
+      <button class="btn btn-sm" style="flex:1;background:#6366f1;color:#fff;font-size:11px;padding:6px 4px" onclick="adminResetStudentPassword('${u._id}', this)">🔑 Reset</button>
+      ${u.role === 'student' && u.deviceId ? `<button class="btn btn-sm" style="flex:1;background:#f97316;color:#fff;font-size:11px;padding:6px 4px" onclick="clearStudentDeviceLock('${u._id}', this)">🔓 Unlock</button>` : ''}
+      <button class="btn btn-danger btn-sm" style="flex:1;font-size:11px;padding:6px 4px" onclick="deleteUserPermanently('${u._id}', this)">Delete</button>
     </div>` : ''}
   </div>`;
 }
