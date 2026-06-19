@@ -387,7 +387,7 @@ static const uint32_t REMARK_WINDOW_SECS = 300; // 5-minute re-mark window
 static BLEAdvertising *bleAdv  = nullptr;
 static uint32_t        bleSlot = UINT32_MAX;   // slot currently on-air
 
-// Lecturer PIN — 4-digit code shown on device screen; required to start an offline session
+// Session Code — 4-digit code shown on device screen; required to start an offline session.
 // Regenerated each time the device boots or a session ends. Prevents students accidentally
 // starting sessions by opening the portal before the lecturer does.
 static char  lecturerPin[5] = "0000";
@@ -2133,11 +2133,11 @@ static void drawReady() {
 
   // ── PIN card — shown when no session is active ───────────────────────────────
   // Lecturer connects their phone to Dikly WiFi, opens 192.168.4.1/start,
-  // and enters this PIN to prove they are the lecturer before starting a session.
+  // and enters this code to prove they are the lecturer before starting a session.
   spr.fillRoundRect(10, 96, SW - 20, 54, 8, COL_DIM_CARD);
   spr.drawRoundRect(10, 96, SW - 20, 54, 8, COL_BORDER);
   spr.setFont(F_TINY); spr.setTextColor(COL_MUTED, COL_DIM_CARD);
-  spr.setCursor(18, 102); spr.print("Lecturer PIN");
+  spr.setCursor(18, 102); spr.print("Session Code");
   spr.setFont(F_LARGE); spr.setTextColor(COL_WARNING, COL_DIM_CARD);
   tw = spr.textWidth(lecturerPin);
   spr.setCursor((SW - tw) / 2, 110); spr.print(lecturerPin);

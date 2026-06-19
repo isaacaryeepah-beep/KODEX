@@ -1064,8 +1064,8 @@ let _activeTab='records';
 
 function showPin(){
   app.innerHTML=`<form id="pf">
-    <label>Lecturer PIN <span style="color:#334155;font-weight:400">(shown on device screen)</span></label>
-    <input id="pin" type="password" maxlength="6" placeholder="Enter PIN" required>
+    <label>Session Code <span style="color:#334155;font-weight:400">(shown on device screen)</span></label>
+    <input id="pin" type="password" maxlength="6" placeholder="Enter code" required>
     <button class="btn btn-green" type="submit">Unlock</button>
   </form><div id="perr" class="err"></div>
   <a href="/" style="display:block;text-align:center;color:#334155;font-size:11px;margin-top:14px">← Student page</a>`;
@@ -1073,7 +1073,7 @@ function showPin(){
     e.preventDefault();
     const v=document.getElementById('pin').value;
     if(v===PIN){sessionStorage.setItem('lpin',PIN);authed=true;showMain();}
-    else document.getElementById('perr').textContent='Wrong PIN — check device screen.';
+    else document.getElementById('perr').textContent='Wrong code — check device screen.';
   };
 }
 
@@ -1566,10 +1566,10 @@ static void startOfflineMode() {
 
   IPAddress ip = WiFi.softAPIP();
   log("Offline AP: " + apName + " @ " + ip.toString());
-  log("Lecturer PIN: " + offlinePIN());
+  log("Session Code: " + offlinePIN());
 
-  // Show PIN on OLED so only the physical lecturer sees it
-  oledShow("OFFLINE MODE", "AP: " + apName.substring(6), "PIN: " + offlinePIN());
+  // Show session code on OLED so only the physical lecturer sees it
+  oledShow("OFFLINE MODE", "AP: " + apName.substring(6), "Code: " + offlinePIN());
 
   dns.start(53, "*", ip);   // captive portal DNS
   registerOfflineHttp();
