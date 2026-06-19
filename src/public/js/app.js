@@ -2224,6 +2224,20 @@ function showDashboard(data) {
     const roleEl = document.getElementById('user-role');
     roleEl.textContent = currentUser.role || '';
     roleEl.className = `role-badge role-${currentUser.role || 'user'}`;
+    // Class rep badge
+    const repBadgeId = 'sidebar-class-rep-badge';
+    let repBadge = document.getElementById(repBadgeId);
+    if (currentUser.isClassRep) {
+      if (!repBadge) {
+        repBadge = document.createElement('span');
+        repBadge.id = repBadgeId;
+        repBadge.style.cssText = 'display:inline-block;background:#7c3aed;color:#fff;font-size:9px;font-weight:700;padding:2px 6px;border-radius:20px;letter-spacing:.4px;text-transform:uppercase;margin-left:4px;vertical-align:middle';
+        repBadge.textContent = 'Class Rep';
+        roleEl.parentNode.insertBefore(repBadge, roleEl.nextSibling);
+      }
+    } else if (repBadge) {
+      repBadge.remove();
+    }
     // Mark role on body so CSS can scope role-specific overrides (e.g. hide banners for student)
     document.body.setAttribute('data-role', currentUser.role || '');
 
@@ -2357,6 +2371,8 @@ function showDashboard(data) {
     buildSidebar();
     loadAnnBadge();
     startNotifPolling();
+    if (currentUser?.role === 'lecturer') _startLecturerQuizBadge();
+    if (currentUser?.role === 'hod') _startHodQuizBadge();
     _notifSound.updateBtn();
     applyBranding(); // async — applies colors/logo in background
     // Show offline banner immediately when logged in via cached credentials
@@ -2492,6 +2508,7 @@ function buildSidebar() {
       links.push({ sep: true, label: 'CONTENT' });
       links.push({ id: 'search', label: 'Search', icon: svgIcon('<circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>') });
       links.push({ id: 'courses', label: 'Courses', icon: coursesIcon() });
+      links.push({ id: 'lec-course-videos', label: 'Course Videos', icon: svgIcon('<polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2" ry="2"/>') });
       links.push({ id: 'quizzes', label: 'Quizzes', icon: quizzesIcon() });
       links.push({ id: 'snap-quiz', label: 'Quiz Monitor', icon: svgIcon('<polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/>') });
       links.push({ id: 'timetable', label: 'Schedule', icon: svgIcon('<rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/>') });
@@ -2501,6 +2518,7 @@ function buildSidebar() {
       links.push({ sep: true, label: 'COMMUNICATE' });
       links.push({ id: 'messages', label: 'Messages', icon: svgIcon('<path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>') });
       links.push({ id: 'meetings', label: 'Meetings', icon: meetingsIcon() });
+      links.push({ id: 'lec-notifications', label: 'Notifications', icon: svgIcon('<path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/>') });
       links.push({ sep: true, label: 'INSIGHTS' });
       links.push({ id: 'lecturer-performance', label: 'Performance', icon: svgIcon('<line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/>') });
       links.push({ id: 'reports', label: 'Reports', icon: reportsIcon() });
@@ -2529,6 +2547,7 @@ function buildSidebar() {
       links.push({ id: 'reports',       label: 'Reports',         icon: reportsIcon() });
       links.push({ sep: true, label: 'SUPPORT' });
       links.push({ id: 'emp-assistant', label: 'Assistant', icon: svgIcon('<path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/><circle cx="12" cy="10" r="1"/><circle cx="8" cy="10" r="1"/><circle cx="16" cy="10" r="1"/>') });
+      links.push({ id: 'subscription',  label: 'Subscription',    icon: subscriptionIcon() });
       links.push({ id: 'support',       label: 'Support',         icon: svgIcon('<circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/>') });
       links.push({ id: 'faq-center',    label: 'FAQ Center',      icon: svgIcon('<path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/><line x1="9" y1="10" x2="15" y2="10"/><line x1="12" y1="7" x2="12" y2="13"/>') });
       links.push({ id: 'contact',       label: 'Contact Us',      icon: svgIcon('<path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07A19.5 19.5 0 0 1 4.69 12a19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 3.6 1.28h3a2 2 0 0 1 2 1.72c.127.96.361 1.903.7 2.81a2 2 0 0 1-.45 2.11L7.91 8.7a16 16 0 0 0 6.29 6.29l1.41-1.41a2 2 0 0 1 2.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0 1 22 16.92z"/>') });
@@ -2536,21 +2555,26 @@ function buildSidebar() {
       break;
     case 'student':
       links.push({ sep: true, label: 'ATTENDANCE' });
-      links.push({ id: 'mark-attendance', label: 'Mark Attendance', icon: attendanceIcon() });
       links.push({ id: 'my-attendance', label: 'My Attendance', icon: sessionsIcon() });
       links.push({ sep: true, label: 'ACADEMIC' });
       links.push({ id: 'courses', label: 'My Courses', icon: coursesIcon() });
+      links.push({ id: 'course-videos', label: 'Course Videos', icon: svgIcon('<polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2" ry="2"/>') });
       links.push({ id: 'timetable', label: 'Schedule', icon: svgIcon('<rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/>') });
       links.push({ id: 'quizzes', label: 'Quizzes', icon: quizzesIcon() });
-      links.push({ id: 'snap-quiz', label: 'Quiz Monitor', icon: svgIcon('<polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/>') });
-      links.push({ id: 'assignments', label: 'Assignments / Quiz', icon: assignmentsIcon() });
+      links.push({ id: 'snap-quiz', label: 'Exam Portal', icon: svgIcon('<path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>') });
+      links.push({ id: 'assignments', label: 'Assignments', icon: assignmentsIcon() });
       links.push({ id: 'gradebook', label: 'My Grades', icon: svgIcon('<path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/>') });
       links.push({ id: 'quiz-history', label: 'My Results', icon: svgIcon('<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/>') });
+      if (currentUser.isClassRep) {
+        links.push({ sep: true, label: 'CLASS REP' });
+        links.push({ id: 'rep-device', label: 'My Device', icon: svgIcon('<rect x="5" y="2" width="14" height="20" rx="2" ry="2"/><line x1="12" y1="18" x2="12.01" y2="18"/>') });
+      }
       links.push({ sep: true, label: 'COMMUNICATE' });
       links.push({ id: 'messages', label: 'Messages', icon: svgIcon('<path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>') });
       links.push({ id: 'meetings', label: 'Meetings', icon: meetingsIcon() });
       links.push({ id: 'announcements', label: 'Announcements', icon: svgIcon('<path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/>') });
       links.push({ sep: true, label: 'SUPPORT' });
+      links.push({ id: 'subscription', label: 'Subscription', icon: subscriptionIcon() });
       links.push({ id: 'support', label: 'Support', icon: svgIcon('<circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/>') });
       links.push({ id: 'faq-center', label: 'FAQ Center', icon: svgIcon('<path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/><line x1="9" y1="10" x2="15" y2="10"/><line x1="12" y1="7" x2="12" y2="13"/>') });
       links.push({ id: 'contact',   label: 'Contact Us', icon: svgIcon('<path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07A19.5 19.5 0 0 1 4.69 12a19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 3.6 1.28h3a2 2 0 0 1 2 1.72c.127.96.361 1.903.7 2.81a2 2 0 0 1-.45 2.11L7.91 8.7a16 16 0 0 0 6.29 6.29l1.41-1.41a2 2 0 0 1 2.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0 1 22 16.92z"/>') });
@@ -2644,6 +2668,10 @@ function navigateTo(view) {
     case 'sign-in-out': renderSignInOut(); break;
     case 'corp-attendance': renderCorporateAttendance(); break;
     case 'subscription': renderSubscription(); break;
+    case 'course-videos':     renderCourseVideos(); break;
+    case 'lec-course-videos': renderLecturerCourseVideos(); break;
+    case 'lec-notifications': renderLecturerNotifications(); break;
+    case 'rep-device':        renderRepDevice(); break;
     case 'reports': renderReports(); break;
     case 'shifts': renderShifts(); break;
     case 'leave-requests': renderLeaveRequests(); break;
@@ -2797,11 +2825,20 @@ async function renderApprovals() {
   if (!content) return;
   content.innerHTML = '<div class="loading">Loading approvals…</div>';
   try {
-    const data = await api('/api/approvals/pending');
-    const pending = data.pending || [];
-    const role    = currentUser.role;
+    const role      = currentUser.role;
     const isHod     = role === 'hod';
     const isManager = role === 'manager';
+    const isAdmin   = role === 'admin' || role === 'superadmin';
+
+    const [approvalData, selfRegData] = await Promise.all([
+      api('/api/approvals/pending'),
+      isAdmin ? api('/api/approvals/self-registration').catch(() => null) : Promise.resolve(null),
+    ]);
+
+    const pending = approvalData.pending || [];
+    const selfRegEnabled = selfRegData?.enabled ?? false;
+    const institutionCode = selfRegData?.institutionCode || '';
+    const selfRegUrl = `${window.location.origin}/register.html?code=${encodeURIComponent(institutionCode)}`;
 
     const subtitle = isHod
       ? `Lecturer &amp; student requests for <strong>${currentUser.department || 'your department'}</strong>`
@@ -2809,8 +2846,33 @@ async function renderApprovals() {
         ? 'Employee registration requests pending your approval'
         : 'Review and approve registration requests';
 
-    // HODs don't need a department column (all in same dept); managers don't need one either
     const showDeptCol = !isHod && !isManager;
+
+    const selfRegPanel = isAdmin ? `
+      <div class="card" style="margin-bottom:20px;padding:20px 24px">
+        <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px">
+          <div>
+            <div style="font-size:15px;font-weight:600;color:var(--text);margin-bottom:4px">Self-Registration</div>
+            <div style="font-size:13px;color:var(--text-muted)">Allow students &amp; employees to register themselves — you review and approve each request.</div>
+          </div>
+          <div style="display:flex;align-items:center;gap:12px">
+            <label style="display:flex;align-items:center;gap:8px;cursor:pointer;user-select:none">
+              <div id="self-reg-toggle" data-on="${selfRegEnabled ? '1' : '0'}" onclick="toggleSelfReg()" style="width:44px;height:24px;border-radius:12px;background:${selfRegEnabled ? 'var(--primary)' : 'var(--border)'};position:relative;cursor:pointer;transition:background .2s">
+                <div style="width:18px;height:18px;border-radius:50%;background:#fff;position:absolute;top:3px;left:${selfRegEnabled ? '23px' : '3px'};transition:left .2s"></div>
+              </div>
+              <span id="self-reg-label" style="font-size:13px;font-weight:600;color:${selfRegEnabled ? 'var(--primary)' : 'var(--text-muted)'}">${selfRegEnabled ? 'Open' : 'Closed'}</span>
+            </label>
+          </div>
+        </div>
+        ${selfRegEnabled ? `
+        <div style="margin-top:16px;padding:12px 14px;background:var(--bg);border-radius:8px;border:1px solid var(--border)">
+          <div style="font-size:12px;color:var(--text-muted);margin-bottom:6px;font-weight:600;letter-spacing:.5px">REGISTRATION LINK — share this with your students / employees</div>
+          <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+            <code style="font-size:12px;color:var(--text);word-break:break-all;flex:1">${selfRegUrl}</code>
+            <button class="btn btn-sm" onclick="navigator.clipboard.writeText('${selfRegUrl}').then(()=>showToastNotif('Link copied!','success'))">Copy</button>
+          </div>
+        </div>` : ''}
+      </div>` : '';
 
     content.innerHTML = `
       <div class="page-header">
@@ -2819,6 +2881,7 @@ async function renderApprovals() {
           <p>${subtitle}</p>
         </div>
       </div>
+      ${selfRegPanel}
       <div class="card">
         ${pending.length ? `
           <table>
@@ -2832,14 +2895,14 @@ async function renderApprovals() {
             </tr></thead>
             <tbody>${pending.map(u => `
               <tr>
-                <td style="font-weight:500">${u.name}</td>
-                <td style="font-size:13px;color:var(--text-light)">${u.email || u.IndexNumber || u.indexNumber || 'N/A'}</td>
-                <td><span class="status-badge status-active">${u.role}</span></td>
-                ${showDeptCol ? `<td>${u.department ? `<span style="font-size:11px;padding:2px 7px;border-radius:20px;background:#ecfeff;color:#0891b2;font-weight:600;">${u.department}</span>` : '—'}</td>` : ''}
+                <td style="font-weight:500">${esc(u.name)}${u.selfRegistered ? ' <span style="font-size:10px;padding:1px 5px;border-radius:10px;background:#ede9fe;color:#7c3aed;font-weight:600;vertical-align:middle">SELF-REG</span>' : ''}</td>
+                <td style="font-size:13px;color:var(--text-light)">${esc(u.email || u.IndexNumber || u.indexNumber || 'N/A')}</td>
+                <td><span class="status-badge status-active">${esc(u.role)}</span></td>
+                ${showDeptCol ? `<td>${u.department ? `<span style="font-size:11px;padding:2px 7px;border-radius:20px;background:#ecfeff;color:#0891b2;font-weight:600;">${esc(u.department)}</span>` : '—'}</td>` : ''}
                 <td style="font-size:13px;color:var(--text-light)">${new Date(u.createdAt).toLocaleDateString()}</td>
                 <td style="white-space:nowrap">
                   <button class="btn btn-sm" style="background:#22c55e;color:#fff;margin-right:6px" onclick="approveUser('${u._id}')">✓ Approve</button>
-                  <button class="btn btn-danger btn-sm" onclick="rejectUser('${u._id}')">✕ Reject</button>
+                  <button class="btn btn-danger btn-sm" onclick="rejectUser('${u._id}','${esc(u.name)}')">✕ Reject</button>
                 </td>
               </tr>
             `).join('')}</tbody>
@@ -2849,6 +2912,18 @@ async function renderApprovals() {
     `;
   } catch (e) {
     content.innerHTML = `<div class="card"><p style="color:#ef4444">Failed to load approvals: ${e.message}</p></div>`;
+  }
+}
+
+async function toggleSelfReg() {
+  const toggle = document.getElementById('self-reg-toggle');
+  if (!toggle) return;
+  const newVal = toggle.dataset.on !== '1';
+  try {
+    await api('/api/approvals/self-registration', { method: 'PATCH', body: JSON.stringify({ enabled: newVal }) });
+    renderApprovals();
+  } catch (e) {
+    toastError(e.message);
   }
 }
 
@@ -2862,10 +2937,31 @@ async function approveUser(userId) {
   }
 }
 
-async function rejectUser(userId) {
-  if (!confirm('Reject and remove this user? This cannot be undone.')) return;
+function rejectUser(userId, userName) {
+  openModal(`
+    <div style="max-width:400px">
+      <h3 style="margin-bottom:8px;font-size:16px">Reject Registration</h3>
+      <p style="font-size:13px;color:var(--text-muted);margin-bottom:16px">
+        Rejecting <strong>${esc(userName || 'this user')}</strong> will delete their account and notify them by email.
+      </p>
+      <label style="font-size:12px;font-weight:600;text-transform:uppercase;letter-spacing:.5px;color:var(--text-muted)">
+        Reason (optional — included in rejection email)
+      </label>
+      <textarea id="reject-reason" rows="3" placeholder="e.g. Could not verify your identity. Please contact the office." maxlength="300"
+        style="width:100%;margin-top:6px;padding:9px 12px;border:1.5px solid var(--border);border-radius:8px;font-size:13px;background:var(--bg);color:var(--text);resize:vertical"></textarea>
+      <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:16px">
+        <button class="btn btn-secondary" onclick="closeModal()">Cancel</button>
+        <button class="btn btn-danger" onclick="_confirmReject('${esc(userId)}')">Reject &amp; Notify</button>
+      </div>
+    </div>
+  `);
+}
+
+async function _confirmReject(userId) {
+  const reason = (document.getElementById('reject-reason')?.value || '').trim();
+  closeModal();
   try {
-    await api(`/api/approvals/${userId}/reject`, { method: 'DELETE' });
+    await api(`/api/approvals/${userId}/reject`, { method: 'DELETE', body: JSON.stringify({ reason }) });
     renderApprovals();
   } catch (e) {
     toastError(e.message);
@@ -3948,6 +4044,53 @@ Current: ${currentDept || 'None'}`, currentDept || '');
 }
 
 
+// ── Quiz Monitor badge polling (Lecturer + HOD) ──────────────────────────────
+function _applyQuizBadge(navId, count) {
+  const el = document.getElementById(navId);
+  if (!el) return;
+  el.style.position = 'relative';
+  let badge = el.querySelector('.qm-badge');
+  if (count > 0) {
+    if (!badge) {
+      badge = document.createElement('span');
+      badge.className = 'qm-badge';
+      badge.style.cssText = 'position:absolute;top:4px;right:4px;background:#ef4444;color:#fff;font-size:9px;font-weight:700;padding:1px 5px;border-radius:20px;min-width:14px;text-align:center;line-height:14px;pointer-events:none';
+      el.appendChild(badge);
+    }
+    badge.textContent = count;
+  } else if (badge) {
+    badge.remove();
+  }
+}
+
+async function _updateLecturerQuizBadge() {
+  try {
+    const data = await api('/api/lecturer/snap-quizzes').catch(() => ({ quizzes: [] }));
+    const active = (data.quizzes || []).filter(q => q.status === 'open' || q.status === 'active');
+    _applyQuizBadge('nav-snap-quiz', active.length);
+  } catch { /* silent */ }
+}
+
+async function _updateHodQuizBadge() {
+  try {
+    const data = await api('/api/lecturer/snap-quizzes/department-overview').catch(() => api('/api/lecturer/snap-quizzes').catch(() => ({ quizzes: [] })));
+    const active = (data.quizzes || []).filter(q => q.status === 'open' || q.status === 'active');
+    _applyQuizBadge('nav-hod-quiz-monitor', active.length);
+  } catch { /* silent */ }
+}
+
+let _lecturerQuizBadgeTimer, _hodQuizBadgeTimer;
+function _startLecturerQuizBadge() {
+  _updateLecturerQuizBadge();
+  clearInterval(_lecturerQuizBadgeTimer);
+  _lecturerQuizBadgeTimer = setInterval(_updateLecturerQuizBadge, 60000);
+}
+function _startHodQuizBadge() {
+  _updateHodQuizBadge();
+  clearInterval(_hodQuizBadgeTimer);
+  _hodQuizBadgeTimer = setInterval(_updateHodQuizBadge, 60000);
+}
+
 // ── HOD — Quiz Monitor ────────────────────────────────────────────────────
 async function renderHodQuizMonitor() {
   const content = document.getElementById('main-content');
@@ -3960,21 +4103,7 @@ async function renderHodQuizMonitor() {
     const sessions = allQuizzes.filter(q => q.status === 'open' || q.status === 'active');
     const esc = s => s == null ? '' : String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
 
-    const navQuizzesEl = document.getElementById('nav-hod-quiz-monitor');
-    if (navQuizzesEl) {
-      const badge = navQuizzesEl.querySelector('.qm-badge');
-      if (sessions.length > 0) {
-        if (!badge) {
-          const b = document.createElement('span');
-          b.className = 'qm-badge';
-          b.style.cssText = 'position:absolute;top:4px;right:4px;background:#ef4444;color:#fff;font-size:9px;font-weight:700;padding:1px 5px;border-radius:20px;min-width:14px;text-align:center;line-height:14px;';
-          b.textContent = sessions.length;
-          navQuizzesEl.appendChild(b);
-        } else {
-          badge.textContent = sessions.length;
-        }
-      } else if (badge) badge.remove();
-    }
+    _applyQuizBadge('nav-hod-quiz-monitor', sessions.length);
 
     if (sessions.length === 0) {
       content.innerHTML = `
@@ -5354,7 +5483,6 @@ async function renderStudentDashboard(content) {
     </div>
     
     <div class="quick-actions">
-      <button class="btn btn-primary btn-sm" onclick="navigateTo('mark-attendance')">Mark Attendance</button>
       <button class="btn btn-secondary btn-sm" onclick="navigateTo('my-attendance')">View History</button>
       <button class="btn btn-secondary btn-sm" onclick="navigateTo('courses')">My Courses</button>
       <button class="btn btn-secondary btn-sm" onclick="navigateTo('quizzes')">Quizzes</button>
@@ -6455,6 +6583,7 @@ function _userRowCard(u, canManage) {
       <div style="display:flex;align-items:center;gap:7px;flex-wrap:wrap">
         <span style="font-weight:700;font-size:14px;color:var(--text)">${esc(u.name)}</span>
         <span class="role-badge role-${u.role}" style="flex-shrink:0">${u.role}</span>
+        ${u.isClassRep ? `<span style="background:#7c3aed;color:#fff;font-size:9px;font-weight:700;padding:2px 6px;border-radius:20px;flex-shrink:0;letter-spacing:.4px">CLASS REP</span>` : ''}
         ${u.isActive
           ? `<span style="background:#dcfce7;color:#15803d;font-size:10px;font-weight:700;padding:2px 7px;border-radius:20px;flex-shrink:0">Active</span>`
           : `<span style="background:#fee2e2;color:#dc2626;font-size:10px;font-weight:700;padding:2px 7px;border-radius:20px;flex-shrink:0">Inactive</span>`}
@@ -6475,13 +6604,16 @@ function _userRowCard(u, canManage) {
 }
 
 // ── Department drill-down view ─────────────────────────────────────────────────
-function renderDepartmentUsers(deptName, allUsers) {
+function renderDepartmentUsers(deptName, allUsers, filterRole = '') {
   const content = document.getElementById('main-content');
   if (!content) return;
   const canManage = ['admin','superadmin'].includes(currentUser.role);
-  const deptUsers = deptName === '__none__'
+
+  let deptUsers = deptName === '__none__'
     ? allUsers.filter(u => !u.department)
     : allUsers.filter(u => u.department === deptName);
+
+  if (filterRole) deptUsers = deptUsers.filter(u => u.role === filterRole);
 
   const roleOrder = ['admin','hod','lecturer','student','employee','manager'];
   const roleLabel = { admin:'Admins', hod:'Head of Department', lecturer:'Lecturers', student:'Students', employee:'Employees', manager:'Managers' };
@@ -6507,21 +6639,25 @@ function renderDepartmentUsers(deptName, allUsers) {
   `).join('');
 
   const displayName = deptName === '__none__' ? 'Unassigned Users' : esc(deptName);
+  const roleTitle = filterRole ? ` — ${roleLabel[filterRole] || filterRole}` : '';
+  const safeDepId = JSON.stringify(deptName);
+
   content.innerHTML = `
     <div style="display:flex;align-items:center;gap:12px;margin-bottom:20px;flex-wrap:wrap">
       <button onclick="renderUsers()" style="display:flex;align-items:center;gap:6px;background:none;border:1.5px solid var(--border);border-radius:10px;padding:8px 14px;font-size:13px;font-weight:600;color:var(--text);cursor:pointer">
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M19 12H5M12 5l-7 7 7 7"/></svg>
         Departments
       </button>
+      ${filterRole ? `<button onclick="renderDepartmentUsers(${safeDepId},_cachedAllUsers)" style="display:flex;align-items:center;gap:6px;background:none;border:1.5px solid var(--border);border-radius:10px;padding:8px 14px;font-size:13px;font-weight:600;color:var(--text);cursor:pointer">All Members</button>` : ''}
       <div>
-        <h2 style="margin:0;font-size:20px">${displayName}</h2>
+        <h2 style="margin:0;font-size:20px">${displayName}${roleTitle}</h2>
         <p style="color:var(--text-light);font-size:13px;margin-top:2px">${deptUsers.length} member${deptUsers.length!==1?'s':''}</p>
       </div>
       ${canManage ? `<button class="btn btn-primary btn-sm" style="margin-left:auto" onclick="showCreateUserModal()">+ Add User</button>` : ''}
     </div>
     ${sections || `<div class="card" style="padding:48px;text-align:center">
       <div style="font-size:36px;margin-bottom:10px">👥</div>
-      <div style="font-weight:600;color:var(--text)">No members in this department</div>
+      <div style="font-weight:600;color:var(--text)">No ${filterRole ? (roleLabel[filterRole]||filterRole).toLowerCase() : 'members'} in this department</div>
     </div>`}
   `;
 }
@@ -6636,11 +6772,15 @@ async function renderUsers(filterRole='', filterDept='', filterSearch='') {
             <div style="font-size:13px;font-weight:600;color:var(--text)">${hodName}</div></div>
           </div>` : ''}
           <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:4px">
-            <div style="background:#fef9c3;border-radius:10px;padding:10px 12px;text-align:center">
+            <div style="background:#fef9c3;border-radius:10px;padding:10px 12px;text-align:center;cursor:pointer;transition:opacity .15s"
+              onmouseover="this.style.opacity='.8'" onmouseout="this.style.opacity='1'"
+              onclick="event.stopPropagation();renderDepartmentUsers(${safeId},_cachedAllUsers,'lecturer')">
               <div style="font-size:22px;font-weight:800;color:#a16207">${d.lecturer.length}</div>
               <div style="font-size:10px;font-weight:700;color:#92400e;text-transform:uppercase;letter-spacing:.4px">Lecturers</div>
             </div>
-            <div style="background:#ede9fe;border-radius:10px;padding:10px 12px;text-align:center">
+            <div style="background:#ede9fe;border-radius:10px;padding:10px 12px;text-align:center;cursor:pointer;transition:opacity .15s"
+              onmouseover="this.style.opacity='.8'" onmouseout="this.style.opacity='1'"
+              onclick="event.stopPropagation();renderDepartmentUsers(${safeId},_cachedAllUsers,'student')">
               <div style="font-size:22px;font-weight:800;color:#7c3aed">${d.student.length}</div>
               <div style="font-size:10px;font-weight:700;color:#6d28d9;text-transform:uppercase;letter-spacing:.4px">Students</div>
             </div>
@@ -9290,9 +9430,6 @@ async function renderMyAttendance() {
     offlineCache('my_attendance', data);
     content.innerHTML = `
       <div class="page-header"><h2>My Attendance</h2><p>Your attendance history</p></div>
-      <div class="actions-bar">
-        <button class="btn btn-primary btn-sm" onclick="showMarkAttendanceModal()">Mark Attendance</button>
-      </div>
       <div class="card">
         ${data.records.length ? `
           <table>
@@ -11088,6 +11225,225 @@ async function renderSubscription() {
   }
 }
 
+// ─── Course Videos ────────────────────────────────────────────────────────────
+
+window.openVideoPlayer = function(title, embedUrl, platform) {
+  let mediaHtml;
+  const safePlatforms = ['youtube', 'vimeo', 'googledrive', 'loom'];
+  if (embedUrl && safePlatforms.includes((platform || '').toLowerCase())) {
+    mediaHtml = `<iframe src="${esc(embedUrl)}" style="width:100%;height:400px;border:none;border-radius:10px"
+      allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+      allowfullscreen></iframe>`;
+  } else if (embedUrl) {
+    mediaHtml = `<video src="${esc(embedUrl)}" controls style="width:100%;border-radius:10px;max-height:400px">
+      Your browser does not support video playback.
+    </video>`;
+  } else {
+    mediaHtml = `<div style="padding:40px;text-align:center;color:var(--text-muted)">No playable source available for this video.</div>`;
+  }
+  openModal(`
+    <div style="min-width:min(680px,90vw)">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
+        <h3 style="margin:0;font-size:16px;color:var(--text)">${esc(title)}</h3>
+        <button onclick="closeModal()" style="background:none;border:none;color:var(--text-muted);cursor:pointer;font-size:20px;line-height:1">&times;</button>
+      </div>
+      ${mediaHtml}
+    </div>
+  `);
+};
+
+async function renderCourseVideos() {
+  const content = document.getElementById('main-content');
+  if (!content) return;
+
+  content.innerHTML = `
+    <div class="page-header">
+      <h2>Course Videos</h2>
+      <p>Video lectures from your enrolled courses</p>
+    </div>
+    <div id="cv-body"><div class="loading-spinner" style="margin:60px auto"></div></div>`;
+
+  const body = document.getElementById('cv-body');
+  try {
+    const data = await api('/api/course-videos/my-courses');
+    const courses = data.courses || [];
+
+    if (!courses.length) {
+      body.innerHTML = `<div class="card" style="text-align:center;padding:48px 24px">
+        <div style="font-size:40px;margin-bottom:12px">🎬</div>
+        <h3 style="margin-bottom:8px">No Videos Yet</h3>
+        <p style="color:var(--text-muted)">Your lecturers haven't uploaded any course videos yet. Check back later.</p>
+      </div>`;
+      return;
+    }
+
+    const platformIcon = p => ({
+      youtube:     '▶️',
+      vimeo:       '🎥',
+      googledrive: '📁',
+      loom:        '🔴',
+    }[p] || '🎬');
+
+    body.innerHTML = courses.map(({ course, videos }) => {
+      const vids = videos || [];
+      const vidCards = vids.length ? vids.map(v => `
+        <div class="card" style="padding:0;overflow:hidden;cursor:pointer;transition:transform .15s,box-shadow .15s"
+          onmouseenter="this.style.transform='translateY(-2px)';this.style.boxShadow='0 6px 20px rgba(0,0,0,.25)'"
+          onmouseleave="this.style.transform='';this.style.boxShadow=''"
+          onclick="openVideoPlayer('${esc(v.title)}','${esc(v.embedUrl || v.url || '')}','${esc(v.platform || '')}')">
+          ${v.thumbnail
+            ? `<img src="${esc(v.thumbnail)}" alt="${esc(v.title)}" style="width:100%;height:140px;object-fit:cover">`
+            : `<div style="width:100%;height:140px;background:var(--bg);display:flex;align-items:center;justify-content:center;font-size:36px">${platformIcon(v.platform)}</div>`}
+          <div style="padding:12px">
+            <div style="font-size:13px;font-weight:600;color:var(--text);margin-bottom:4px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(v.title)}</div>
+            ${v.description ? `<div style="font-size:12px;color:var(--text-muted);display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden">${esc(v.description)}</div>` : ''}
+            <div style="font-size:11px;color:var(--text-muted);margin-top:6px;text-transform:uppercase;letter-spacing:.5px">${platformIcon(v.platform)} ${esc(v.platform || 'video')}</div>
+          </div>
+        </div>`).join('')
+        : `<p style="color:var(--text-muted);font-size:13px;padding:8px 0">No videos uploaded for this course yet.</p>`;
+
+      return `
+        <div style="margin-bottom:32px">
+          <div style="display:flex;align-items:center;gap:10px;margin-bottom:14px">
+            <div style="width:4px;height:22px;background:var(--primary);border-radius:2px"></div>
+            <h3 style="margin:0;font-size:16px;color:var(--text)">${esc(course.title)}</h3>
+            <span style="font-size:12px;color:var(--text-muted);padding:2px 8px;border:1px solid var(--border);border-radius:12px">${esc(course.code)}</span>
+            <span style="font-size:12px;color:var(--text-muted);margin-left:auto">${vids.length} video${vids.length !== 1 ? 's' : ''}</span>
+          </div>
+          <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:16px">
+            ${vidCards}
+          </div>
+        </div>`;
+    }).join('');
+
+  } catch (e) {
+    body.innerHTML = `<div class="card"><p style="color:var(--danger)">Error loading videos: ${e.message}</p></div>`;
+  }
+}
+
+// ─── Class Rep — Device Management ───────────────────────────────────────────
+
+async function renderRepDevice() {
+  const content = document.getElementById('main-content');
+  if (!content) return;
+  content.innerHTML = `
+    <div class="page-header">
+      <h2>My Device</h2>
+      <p>Connect the attendance device to a lecturer to start a session</p>
+    </div>
+    <div id="rep-device-body"><div class="loading-spinner" style="margin:60px auto"></div></div>`;
+  await _repDeviceRefresh();
+}
+
+async function _repDeviceRefresh() {
+  const body = document.getElementById('rep-device-body');
+  if (!body) return;
+  try {
+    const [devData, lecData] = await Promise.all([
+      api('/api/class-rep/device'),
+      api('/api/class-rep/lecturers'),
+    ]);
+    const device   = devData.device;
+    const lecturers = lecData.lecturers || [];
+
+    if (!device) {
+      body.innerHTML = `
+        <div class="card" style="text-align:center;padding:48px 24px">
+          <div style="font-size:40px;margin-bottom:12px">📡</div>
+          <h3 style="margin-bottom:8px">No Device Assigned</h3>
+          <p style="color:var(--text-muted)">No attendance device has been assigned to your class yet. Contact your admin or HOD.</p>
+        </div>`;
+      return;
+    }
+
+    const isOnlineDevice = device.lastHeartbeat && (Date.now() - new Date(device.lastHeartbeat).getTime()) < 45000;
+    const isConnected    = !!device.activeLecturerId;
+
+    const lecOptions = lecturers.length
+      ? lecturers.map(l => `<option value="${esc(l.lecturerId)}" data-course="${esc(l.courseId||'')}">${esc(l.lecturerName)} — ${esc(l.courseTitle)} (${esc(l.courseCode)})</option>`).join('')
+      : '<option value="">No lecturers found for your class</option>';
+
+    body.innerHTML = `
+      <div class="card" style="max-width:540px;margin-bottom:20px">
+        <div style="display:flex;align-items:center;gap:12px;margin-bottom:18px">
+          <div style="width:48px;height:48px;border-radius:12px;background:${isOnlineDevice ? '#dcfce7' : '#fee2e2'};display:flex;align-items:center;justify-content:center;font-size:22px">
+            ${isOnlineDevice ? '🟢' : '🔴'}
+          </div>
+          <div>
+            <div style="font-size:16px;font-weight:700;color:var(--text)">${esc(device.name || device.deviceId)}</div>
+            <div style="font-size:12px;color:var(--text-muted);margin-top:2px">${isOnlineDevice ? 'Online' : 'Offline'} · ID: ${esc(device.deviceId)}</div>
+          </div>
+        </div>
+
+        ${isConnected ? `
+          <div style="padding:14px 16px;background:#ede9fe;border-radius:10px;margin-bottom:16px">
+            <div style="font-size:12px;font-weight:700;color:#6d28d9;text-transform:uppercase;letter-spacing:.4px;margin-bottom:4px">Active Session</div>
+            <div style="font-size:14px;font-weight:600;color:var(--text)">${esc(device.activeLecturerId?.name || 'Lecturer')}</div>
+            ${device.connectedAt ? `<div style="font-size:12px;color:var(--text-muted);margin-top:2px">Started ${new Date(device.connectedAt).toLocaleTimeString()}</div>` : ''}
+          </div>
+          <button class="btn btn-danger" style="width:100%" onclick="_repDisconnect()">End Session &amp; Release Device</button>
+        ` : `
+          ${!isOnlineDevice ? `<div style="padding:12px 14px;background:#fef2f2;border:1px solid #fca5a5;border-radius:8px;margin-bottom:14px;font-size:13px;color:#dc2626">
+            Device is offline. Power it on and wait for the green indicator before connecting.
+          </div>` : ''}
+          <div class="form-group" style="margin-bottom:12px">
+            <label style="font-size:12px;font-weight:600;text-transform:uppercase;letter-spacing:.5px;color:var(--text-muted);display:block;margin-bottom:6px">Select Lecturer &amp; Course</label>
+            <select id="rep-lec-select" style="width:100%;padding:10px 12px;border:1.5px solid var(--border);border-radius:8px;font-size:13px;background:var(--bg);color:var(--text)">
+              <option value="">— Choose a lecturer —</option>
+              ${lecOptions}
+            </select>
+          </div>
+          <div class="form-group" id="rep-pin-wrap" style="margin-bottom:14px;display:none">
+            <label style="font-size:12px;font-weight:600;text-transform:uppercase;letter-spacing:.5px;color:var(--text-muted);display:block;margin-bottom:6px">Lecturer PIN</label>
+            <input type="password" id="rep-pin-input" maxlength="4" inputmode="numeric" placeholder="4-digit PIN"
+              style="width:100%;padding:10px 12px;border:1.5px solid var(--border);border-radius:8px;font-size:13px;background:var(--bg);color:var(--text)"
+              onkeydown="if(event.key==='Enter')_repConnect()">
+          </div>
+          <div id="rep-connect-err" style="display:none;color:var(--danger);font-size:13px;margin-bottom:10px"></div>
+          <button class="btn btn-primary" style="width:100%" onclick="_repConnect()" ${!isOnlineDevice ? 'disabled' : ''}>Connect Device to Lecturer</button>
+        `}
+      </div>
+      <div style="font-size:12px;color:var(--text-muted);max-width:540px">
+        💡 Tip: Connect the device before the lecturer arrives. The session starts as soon as students begin scanning.
+        When class is over, tap <strong>End Session</strong> to release the device.
+      </div>`;
+
+    document.getElementById('rep-lec-select')?.addEventListener('change', function() {
+      const pinWrap = document.getElementById('rep-pin-wrap');
+      if (pinWrap) pinWrap.style.display = this.value ? 'block' : 'none';
+    });
+  } catch (e) {
+    body.innerHTML = `<div class="card"><p style="color:var(--danger)">Error: ${esc(e.message)}</p></div>`;
+  }
+}
+
+async function _repConnect() {
+  const sel    = document.getElementById('rep-lec-select');
+  const errEl  = document.getElementById('rep-connect-err');
+  const lecturerId  = sel?.value;
+  const courseId    = sel?.selectedOptions[0]?.dataset?.course || '';
+  const lecturerPin = document.getElementById('rep-pin-input')?.value?.trim();
+  if (!lecturerId) { if (errEl) { errEl.textContent = 'Please select a lecturer.'; errEl.style.display = 'block'; } return; }
+  try {
+    if (errEl) errEl.style.display = 'none';
+    await api('/api/class-rep/connect', { method: 'POST', body: JSON.stringify({ lecturerId, courseId: courseId || undefined, lecturerPin: lecturerPin || undefined }) });
+    showToastNotif('Device connected successfully!', 'success');
+    _repDeviceRefresh();
+  } catch (e) {
+    if (errEl) { errEl.textContent = e.message; errEl.style.display = 'block'; }
+  }
+}
+
+async function _repDisconnect() {
+  if (!confirm('End the active session and release the device?')) return;
+  try {
+    await api('/api/class-rep/disconnect', { method: 'POST', body: JSON.stringify({}) });
+    showToastNotif('Session ended.', 'success');
+    _repDeviceRefresh();
+  } catch (e) {
+    toastError(e.message);
+  }
+}
 
 async function renderSearch() {
   const content = document.getElementById('main-content');
@@ -11370,6 +11726,222 @@ async function downloadReport(type, apiBase = 'reports', e) {
       btn.style.opacity = '';
     }
     if (card) card.style.pointerEvents = '';
+  }
+}
+
+// ── Lecturer — Course Videos Manager ─────────────────────────────────────────
+
+async function renderLecturerCourseVideos() {
+  const content = document.getElementById('main-content');
+  if (!content) return;
+  content.innerHTML = `
+    <div class="page-header">
+      <h2>Course Videos</h2>
+      <p>Manage video lectures for your courses</p>
+    </div>
+    <div id="lcv-body"><div class="loading-spinner" style="margin:60px auto"></div></div>`;
+
+  const body = document.getElementById('lcv-body');
+  try {
+    const [coursesData, videosData] = await Promise.all([
+      api('/api/courses'),
+      api('/api/course-videos/my-courses'),
+    ]);
+
+    const allCourses = (coursesData.courses || []).filter(c => {
+      const lid = c.lecturerId?._id || c.lecturerId;
+      return lid && lid.toString() === currentUser._id.toString();
+    });
+
+    if (!allCourses.length) {
+      body.innerHTML = `<div class="card" style="text-align:center;padding:48px 24px">
+        <div style="font-size:40px;margin-bottom:12px">🎬</div>
+        <h3>No Courses Assigned</h3>
+        <p style="color:var(--text-muted)">You have no courses assigned yet. Contact your admin.</p>
+      </div>`;
+      return;
+    }
+
+    const videosByCourse = {};
+    for (const v of (videosData.courses || [])) {
+      videosByCourse[v.course._id.toString()] = v.videos || [];
+    }
+
+    const platformIcon = p => ({ youtube:'▶️', vimeo:'🎥', googledrive:'📁', loom:'🔴' }[p] || '🎬');
+
+    body.innerHTML = allCourses.map(c => {
+      const cid = c._id.toString();
+      const vids = videosByCourse[cid] || [];
+      return `
+        <div class="card" style="margin-bottom:24px;padding:20px" id="lcv-section-${cid}">
+          <div style="display:flex;align-items:center;gap:10px;margin-bottom:16px">
+            <div style="width:4px;height:22px;background:var(--primary);border-radius:2px"></div>
+            <h3 style="margin:0;font-size:15px;flex:1">${esc(c.title)} <span style="font-size:12px;color:var(--text-muted);font-weight:400">${esc(c.code || '')}</span></h3>
+            <span style="font-size:12px;color:var(--text-muted)">${vids.length} video${vids.length !== 1 ? 's' : ''}</span>
+            <button onclick="_lcvOpenAdd('${cid}')" style="background:var(--primary);color:#fff;border:none;border-radius:8px;padding:6px 14px;font-size:12px;font-weight:600;cursor:pointer">+ Add Video</button>
+          </div>
+          <div id="lcv-list-${cid}">
+            ${vids.length ? vids.map(v => _lcvVideoRow(v)).join('') : `<p style="color:var(--text-muted);font-size:13px">No videos yet. Add your first video above.</p>`}
+          </div>
+        </div>`;
+    }).join('');
+
+  } catch (e) {
+    body.innerHTML = `<div class="card"><p style="color:var(--danger)">Error: ${e.message}</p></div>`;
+  }
+}
+
+function _lcvVideoRow(v) {
+  const platformIcon = p => ({ youtube:'▶️', vimeo:'🎥', googledrive:'📁', loom:'🔴' }[p] || '🎬');
+  return `
+    <div style="display:flex;align-items:center;gap:12px;padding:10px 0;border-bottom:1px solid var(--border)" id="lcv-row-${v._id}">
+      ${v.thumbnail
+        ? `<img src="${esc(v.thumbnail)}" style="width:72px;height:48px;object-fit:cover;border-radius:6px;flex-shrink:0">`
+        : `<div style="width:72px;height:48px;background:var(--bg);border-radius:6px;display:flex;align-items:center;justify-content:center;font-size:22px;flex-shrink:0">${platformIcon(v.platform)}</div>`}
+      <div style="flex:1;min-width:0">
+        <div style="font-size:13px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(v.title)}</div>
+        ${v.description ? `<div style="font-size:12px;color:var(--text-muted);margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(v.description)}</div>` : ''}
+        <div style="font-size:11px;color:var(--text-muted);margin-top:2px;text-transform:uppercase;letter-spacing:.5px">${platformIcon(v.platform)} ${esc(v.platform || 'video')}</div>
+      </div>
+      <button onclick="openVideoPlayer('${esc(v.title)}','${esc(v.embedUrl || v.url || '')}','${esc(v.platform || '')}')" style="background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:6px 12px;font-size:12px;cursor:pointer;color:var(--text)">▶ Play</button>
+      <button onclick="_lcvDelete('${v._id}','${esc(v.courseId?._id || v.courseId || '')}')" style="background:transparent;border:1px solid var(--danger);border-radius:8px;padding:6px 12px;font-size:12px;cursor:pointer;color:var(--danger)">Delete</button>
+    </div>`;
+}
+
+function _lcvOpenAdd(courseId) {
+  openModal(`
+    <h3 style="margin:0 0 16px">Add Video</h3>
+    <div style="display:flex;flex-direction:column;gap:12px">
+      <div>
+        <label style="font-size:12px;color:var(--text-muted);display:block;margin-bottom:4px">Video URL (YouTube, Vimeo, Drive, Loom)</label>
+        <input id="lcv-url" type="url" placeholder="https://youtu.be/..." style="width:100%;padding:10px;border:1px solid var(--border);border-radius:8px;background:var(--surface);color:var(--text);font-size:14px;box-sizing:border-box">
+      </div>
+      <div>
+        <label style="font-size:12px;color:var(--text-muted);display:block;margin-bottom:4px">Title</label>
+        <input id="lcv-title" type="text" placeholder="Lecture 1 – Introduction" style="width:100%;padding:10px;border:1px solid var(--border);border-radius:8px;background:var(--surface);color:var(--text);font-size:14px;box-sizing:border-box">
+      </div>
+      <div>
+        <label style="font-size:12px;color:var(--text-muted);display:block;margin-bottom:4px">Description (optional)</label>
+        <textarea id="lcv-desc" rows="2" placeholder="Brief description…" style="width:100%;padding:10px;border:1px solid var(--border);border-radius:8px;background:var(--surface);color:var(--text);font-size:14px;box-sizing:border-box;resize:vertical"></textarea>
+      </div>
+      <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:4px">
+        <button onclick="closeModal()" style="padding:8px 18px;border:1px solid var(--border);border-radius:8px;background:transparent;color:var(--text);cursor:pointer">Cancel</button>
+        <button onclick="_lcvSubmitAdd('${courseId}')" style="padding:8px 18px;background:var(--primary);color:#fff;border:none;border-radius:8px;font-weight:600;cursor:pointer">Add Video</button>
+      </div>
+    </div>`);
+}
+
+async function _lcvSubmitAdd(courseId) {
+  const url   = document.getElementById('lcv-url')?.value.trim();
+  const title = document.getElementById('lcv-title')?.value.trim();
+  const desc  = document.getElementById('lcv-desc')?.value.trim();
+  if (!url || !title) return showToastNotif('URL and title are required', 'error');
+  try {
+    const data = await api('/api/course-videos', { method: 'POST', body: JSON.stringify({ courseId, url, title, description: desc }) });
+    closeModal();
+    showToastNotif('Video added', 'success');
+    const list = document.getElementById(`lcv-list-${courseId}`);
+    if (list) {
+      const placeholder = list.querySelector('p');
+      if (placeholder) placeholder.remove();
+      list.insertAdjacentHTML('beforeend', _lcvVideoRow(data.video));
+      const section = document.getElementById(`lcv-section-${courseId}`);
+      const countEl = section?.querySelector('span[style*="text-muted"]');
+      if (countEl) {
+        const cur = parseInt(countEl.textContent) || 0;
+        const nxt = cur + 1;
+        countEl.textContent = `${nxt} video${nxt !== 1 ? 's' : ''}`;
+      }
+    }
+  } catch (e) {
+    showToastNotif(e.message || 'Failed to add video', 'error');
+  }
+}
+
+async function _lcvDelete(videoId, courseId) {
+  if (!confirm('Delete this video?')) return;
+  try {
+    await api(`/api/course-videos/${videoId}`, { method: 'DELETE' });
+    document.getElementById(`lcv-row-${videoId}`)?.remove();
+    showToastNotif('Video deleted', 'success');
+  } catch (e) {
+    showToastNotif(e.message || 'Failed to delete', 'error');
+  }
+}
+
+// ── Lecturer — Notifications ──────────────────────────────────────────────────
+
+async function renderLecturerNotifications() {
+  const content = document.getElementById('main-content');
+  if (!content) return;
+  content.innerHTML = `
+    <div class="page-header">
+      <h2>Notifications</h2>
+      <p>Alerts, submissions, and attendance flags</p>
+    </div>
+    <div id="lec-notif-body"><div class="loading-spinner" style="margin:60px auto"></div></div>`;
+
+  const body = document.getElementById('lec-notif-body');
+  try {
+    const [assignData, flagData, sessData] = await Promise.all([
+      api('/api/assignments/lecturer').catch(() => ({ assignments: [] })),
+      api('/api/attendance-sessions/flagged/new-devices').catch(() => ({ records: [] })),
+      api('/api/attendance-sessions?limit=10').catch(() => ({ sessions: [] })),
+    ]);
+
+    const assignments = assignData.assignments || [];
+    const flags       = flagData.records || [];
+    const sessions    = sessData.sessions || [];
+
+    const notifs = [];
+
+    // Ungraded submissions
+    const ungraded = assignments.filter(a => (a.submissionCount || 0) > (a.gradedCount || 0));
+    if (ungraded.length) {
+      ungraded.forEach(a => {
+        const pending = (a.submissionCount || 0) - (a.gradedCount || 0);
+        notifs.push({ icon: '📝', type: 'warn', title: `${pending} ungraded submission${pending > 1 ? 's' : ''}`, body: `Assignment: ${a.title}`, action: { label: 'Grade Now', fn: "navigateTo('assignments')" } });
+      });
+    }
+
+    // Flagged devices
+    if (flags.length) {
+      notifs.push({ icon: '🚨', type: 'warn', title: `${flags.length} flagged new device${flags.length > 1 ? 's' : ''}`, body: 'Students with unrecognised devices in recent attendance sessions', action: { label: 'Review', fn: "navigateTo('live-attendance')" } });
+    }
+
+    // Active sessions
+    const active = sessions.filter(s => s.status === 'active');
+    if (active.length) {
+      active.forEach(s => {
+        notifs.push({ icon: '●', type: 'ok', title: 'Active session', body: `${s.courseName || s.courseId} — started ${new Date(s.createdAt).toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'})}`, action: { label: 'View', fn: "navigateTo('live-attendance')" } });
+      });
+    }
+
+    // No notifications
+    if (!notifs.length) {
+      body.innerHTML = `<div class="card" style="text-align:center;padding:48px 24px">
+        <div style="font-size:36px;margin-bottom:12px">✅</div>
+        <h3>All clear</h3>
+        <p style="color:var(--text-muted)">No pending submissions, flags, or alerts.</p>
+      </div>`;
+      return;
+    }
+
+    const typeStyle = { ok: '#16a34a', warn: '#d97706', info: '#2563eb' };
+    const typeBg    = { ok: 'rgba(22,163,74,.08)', warn: 'rgba(217,119,6,.08)', info: 'rgba(37,99,235,.08)' };
+
+    body.innerHTML = notifs.map(n => `
+      <div class="card" style="display:flex;gap:14px;align-items:flex-start;padding:16px;margin-bottom:10px;border-left:3px solid ${typeStyle[n.type] || '#888'}">
+        <div style="font-size:22px;line-height:1;flex-shrink:0">${n.icon}</div>
+        <div style="flex:1;min-width:0">
+          <div style="font-size:14px;font-weight:600;color:var(--text);margin-bottom:2px">${esc(n.title)}</div>
+          <div style="font-size:12px;color:var(--text-muted)">${esc(n.body)}</div>
+        </div>
+        ${n.action ? `<button onclick="${n.action.fn}" style="flex-shrink:0;padding:6px 14px;background:var(--primary);color:#fff;border:none;border-radius:8px;font-size:12px;font-weight:600;cursor:pointer">${esc(n.action.label)}</button>` : ''}
+      </div>`).join('');
+
+  } catch (e) {
+    body.innerHTML = `<div class="card"><p style="color:var(--danger)">Error: ${e.message}</p></div>`;
   }
 }
 
@@ -14870,16 +15442,23 @@ async function _caLoadSettings() {
           <div style="font-size:11px;color:var(--text-light);margin-top:4px">Comma-separated list. Your current IP: <strong id="cas-myip">detecting…</strong></div>
         </div>
 
-        <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:14px">
-          <div class="form-group">
-            <label style="font-size:11px;font-weight:700;text-transform:uppercase;color:var(--text-light)">Office Latitude</label>
-            <input type="number" id="cas-lat" value="${s.officeLatitude ?? ''}" step="0.000001" placeholder="e.g. 5.603717"
-              style="width:100%;padding:9px 12px;border:1.5px solid var(--border);border-radius:8px;font-size:13px;margin-top:4px">
+        <div style="margin-top:14px">
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">
+            <label style="font-size:11px;font-weight:700;text-transform:uppercase;color:var(--text-light)">Office Location (Latitude / Longitude)</label>
+            <button class="btn btn-secondary btn-sm" id="cas-gps-btn" onclick="_caDetectLocation()" style="font-size:11px;padding:4px 10px">📍 Detect My Location</button>
           </div>
-          <div class="form-group">
-            <label style="font-size:11px;font-weight:700;text-transform:uppercase;color:var(--text-light)">Office Longitude</label>
-            <input type="number" id="cas-lng" value="${s.officeLongitude ?? ''}" step="0.000001" placeholder="e.g. -0.186964"
-              style="width:100%;padding:9px 12px;border:1.5px solid var(--border);border-radius:8px;font-size:13px;margin-top:4px">
+          <div id="cas-gps-status" style="font-size:11px;color:var(--text-muted);margin-bottom:8px;display:none"></div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+            <div class="form-group">
+              <label style="font-size:11px;font-weight:600;color:var(--text-light)">Latitude</label>
+              <input type="number" id="cas-lat" value="${s.officeLatitude ?? ''}" step="0.000001" placeholder="e.g. 5.603717"
+                style="width:100%;padding:9px 12px;border:1.5px solid var(--border);border-radius:8px;font-size:13px;margin-top:4px">
+            </div>
+            <div class="form-group">
+              <label style="font-size:11px;font-weight:600;color:var(--text-light)">Longitude</label>
+              <input type="number" id="cas-lng" value="${s.officeLongitude ?? ''}" step="0.000001" placeholder="e.g. -0.186964"
+                style="width:100%;padding:9px 12px;border:1.5px solid var(--border);border-radius:8px;font-size:13px;margin-top:4px">
+            </div>
           </div>
         </div>
 
@@ -14890,7 +15469,7 @@ async function _caLoadSettings() {
         </div>
 
         <button class="btn btn-primary" style="margin-top:20px" onclick="_caSaveSettings()">Save Settings</button>
-        <button class="btn btn-secondary btn-sm" style="margin-top:20px;margin-left:8px" onclick="_caDetectMyIP()">📡 Detect My IP</button>
+        <button class="btn btn-secondary btn-sm" id="cas-ip-btn" style="margin-top:20px;margin-left:8px" onclick="_caDetectMyIP()">📡 Detect My IP</button>
       </div>
 
       <div class="card" style="max-width:560px">
@@ -14961,13 +15540,60 @@ async function _caClearClockWindow() {
 }
 
 async function _caDetectMyIP() {
-  const el = document.getElementById('cas-myip');
+  const el  = document.getElementById('cas-myip');
+  const btn = document.getElementById('cas-ip-btn');
   if (!el) return;
+  el.textContent = 'detecting…';
+  if (btn) { btn.disabled = true; btn.textContent = '⏳ Detecting…'; }
   try {
-    const r = await fetch('https://api.ipify.org?format=json');
-    const d = await r.json();
+    const d = await api('/api/corporate-attendance/my-ip');
     el.textContent = d.ip || 'unknown';
-  } catch { el.textContent = 'unavailable'; }
+  } catch {
+    el.textContent = 'unavailable — ensure you are logged in and on the network';
+  } finally {
+    if (btn) { btn.disabled = false; btn.textContent = '📡 Detect My IP'; }
+  }
+}
+
+function _caDetectLocation() {
+  const btn    = document.getElementById('cas-gps-btn');
+  const status = document.getElementById('cas-gps-status');
+  const latEl  = document.getElementById('cas-lat');
+  const lngEl  = document.getElementById('cas-lng');
+  if (!latEl || !lngEl) return;
+
+  if (!navigator.geolocation) {
+    if (status) { status.textContent = 'Geolocation is not supported by this browser.'; status.style.color = 'var(--danger)'; status.style.display = 'block'; }
+    return;
+  }
+
+  if (btn) { btn.disabled = true; btn.textContent = '⏳ Getting GPS…'; }
+  if (status) { status.textContent = 'Requesting precise location from device GPS…'; status.style.color = 'var(--text-muted)'; status.style.display = 'block'; }
+
+  navigator.geolocation.getCurrentPosition(
+    (pos) => {
+      const lat = pos.coords.latitude.toFixed(6);
+      const lng = pos.coords.longitude.toFixed(6);
+      const acc = Math.round(pos.coords.accuracy);
+      latEl.value = lat;
+      lngEl.value = lng;
+      if (status) {
+        status.textContent = `✓ Location set — accuracy ±${acc} m. Click Save Settings to apply.`;
+        status.style.color = 'var(--success,#22c55e)';
+      }
+      if (btn) { btn.disabled = false; btn.textContent = '📍 Detect My Location'; }
+    },
+    (err) => {
+      const msgs = {
+        1: 'Location permission denied. Please allow location access in your browser settings.',
+        2: 'Location unavailable. Make sure GPS is enabled on your device.',
+        3: 'Location request timed out. Try again.',
+      };
+      if (status) { status.textContent = msgs[err.code] || 'Could not get location.'; status.style.color = 'var(--danger)'; }
+      if (btn) { btn.disabled = false; btn.textContent = '📍 Detect My Location'; }
+    },
+    { enableHighAccuracy: true, timeout: 15000, maximumAge: 0 }
+  );
 }
 
 async function _caSaveSettings() {
@@ -18405,43 +19031,125 @@ async function removeClassRep(userId, name) {
   } catch(e) { toastError(e.message || 'Failed to remove'); }
 }
 
-async function showAssignRepModal() {
+function _buildAssignRepModal({ title, subtitle, onSearch, isHod }) {
+  const hodDept = isHod ? (currentUser?.department || '') : '';
+  const selStyle = 'width:100%;padding:8px 10px;border:1.5px solid var(--border);border-radius:8px;background:var(--bg);color:var(--text-primary);font-size:12px;margin-top:3px';
+  const labelStyle = 'font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--text-muted)';
   openModal(`
-    <div style="padding:4px 0">
-      <h3 style="font-size:16px;font-weight:700;margin-bottom:4px">Assign Class Representative</h3>
-      <p style="font-size:12px;color:var(--text-muted);margin-bottom:16px">Search for a student by name or index number</p>
-      <div class="form-group">
-        <label>Search Student</label>
-        <input type="text" id="rep-search-input" placeholder="Name or index number…" oninput="searchRepStudents(this.value)"
-          style="width:100%;padding:8px 12px;border:1.5px solid var(--border);border-radius:8px;background:var(--bg);color:var(--text-primary);font-size:13px">
+    <div>
+      <div style="display:flex;align-items:center;gap:9px;margin-bottom:14px">
+        <div style="width:34px;height:34px;border-radius:9px;background:rgba(124,58,237,.1);display:flex;align-items:center;justify-content:center;flex-shrink:0">
+          <svg viewBox="0 0 24 24" fill="none" stroke="#7c3aed" stroke-width="2" width="16" height="16"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+        </div>
+        <div>
+          <h3 style="font-size:15px;font-weight:700;margin:0">${title}</h3>
+          ${subtitle ? `<p style="font-size:11px;color:var(--text-muted);margin:2px 0 0">${subtitle}</p>` : ''}
+        </div>
       </div>
-      <div id="rep-search-results" style="max-height:260px;overflow-y:auto;margin-top:8px"></div>
+      <div style="background:var(--bg);border-radius:10px;padding:12px;border:1px solid var(--border);margin-bottom:12px">
+        <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.6px;color:var(--text-muted);margin-bottom:10px">Filter Students</div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px">
+          ${!isHod ? `
+          <div style="grid-column:1/-1">
+            <label style="${labelStyle}">Department</label>
+            <input type="text" id="rep-modal-dept" placeholder="e.g. Computer Science" oninput="${onSearch}" style="${selStyle}">
+          </div>` : `
+          <div style="grid-column:1/-1;padding:7px 10px;background:rgba(79,110,247,.06);border-radius:7px;border-left:3px solid #4f6ef7;font-size:11px;color:var(--text-muted)">
+            Showing students in your department: <strong style="color:var(--text-primary)">${hodDept}</strong>
+          </div>`}
+          <div>
+            <label style="${labelStyle}">Level / Year</label>
+            <select id="rep-modal-level" onchange="${onSearch}" style="${selStyle}">
+              <option value="">Any level</option>
+              <option value="100">Year 1 (100)</option>
+              <option value="200">Year 2 (200)</option>
+              <option value="300">Year 3 (300)</option>
+              <option value="400">Year 4 (400)</option>
+              <option value="500">Year 5 (500)</option>
+            </select>
+          </div>
+          <div>
+            <label style="${labelStyle}">Group</label>
+            <select id="rep-modal-group" onchange="${onSearch}" style="${selStyle}">
+              <option value="">Any group</option>
+              <option value="A">Group A</option>
+              <option value="B">Group B</option>
+              <option value="C">Group C</option>
+              <option value="D">Group D</option>
+            </select>
+          </div>
+        </div>
+        <div>
+          <label style="${labelStyle}">Name or Index Number</label>
+          <input type="text" id="rep-modal-search" placeholder="Search by name or index number…" oninput="${onSearch}" style="${selStyle}">
+        </div>
+      </div>
+      <div style="font-size:11px;color:var(--text-muted);margin-bottom:8px">Use filters to narrow the list, then click <strong>Assign</strong> on the correct student.</div>
+      <div id="rep-modal-results" style="max-height:280px;overflow-y:auto"></div>
     </div>
-  `);
+  `, { maxWidth: '560px' });
+}
+
+function _renderRepStudentResults(students, assignFn) {
+  const e2 = s => s == null ? '' : String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  const box = document.getElementById('rep-modal-results');
+  if (!box) return;
+  if (!students.length) { box.innerHTML = '<div style="color:var(--text-muted);font-size:13px;padding:10px 0;text-align:center">No students found matching these filters.</div>'; return; }
+  box.innerHTML = students.slice(0, 15).map(s => {
+    const initials = (s.name || '?')[0].toUpperCase();
+    const alreadyRep = s.isClassRep;
+    return `
+    <div style="display:flex;align-items:center;gap:10px;padding:10px 12px;border-radius:10px;border:1.5px solid ${alreadyRep ? 'rgba(22,163,74,.2)' : 'var(--border)'};margin-bottom:7px;background:${alreadyRep ? 'rgba(22,163,74,.04)' : 'var(--bg)'}">
+      <div style="width:36px;height:36px;border-radius:50%;background:rgba(124,58,237,.1);display:flex;align-items:center;justify-content:center;flex-shrink:0;font-size:13px;font-weight:800;color:#7c3aed">${initials}</div>
+      <div style="flex:1;min-width:0">
+        <div style="font-size:13px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${e2(s.name)}</div>
+        <div style="display:flex;flex-wrap:wrap;gap:4px;margin-top:3px">
+          ${s.IndexNumber ? `<span style="font-size:10px;font-weight:600;padding:1px 6px;border-radius:5px;background:rgba(79,110,247,.08);color:#4f6ef7">${e2(s.IndexNumber)}</span>` : ''}
+          ${s.studentLevel ? `<span style="font-size:10px;padding:1px 6px;border-radius:5px;background:var(--border);color:var(--text-muted)">Level ${e2(s.studentLevel)}</span>` : ''}
+          ${s.studentGroup ? `<span style="font-size:10px;padding:1px 6px;border-radius:5px;background:var(--border);color:var(--text-muted)">Group ${e2(s.studentGroup)}</span>` : ''}
+          ${s.department   ? `<span style="font-size:10px;padding:1px 6px;border-radius:5px;background:var(--border);color:var(--text-muted)">${e2(s.department)}</span>` : ''}
+          ${s.programme    ? `<span style="font-size:10px;padding:1px 6px;border-radius:5px;background:var(--border);color:var(--text-muted)">${e2(s.programme)}</span>` : ''}
+        </div>
+      </div>
+      <div style="flex-shrink:0">
+        ${alreadyRep
+          ? `<span style="display:inline-flex;align-items:center;gap:4px;font-size:11px;font-weight:600;padding:4px 9px;border-radius:20px;background:rgba(22,163,74,.1);color:#15803d"><svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="20 6 9 17 4 12"/></svg>Rep</span>`
+          : `<button class="btn btn-primary btn-sm" style="font-size:11px;padding:5px 12px" onclick="${assignFn}('${s._id}','${e2(s.name).replace(/'/g,"\\'")}')">Assign</button>`}
+      </div>
+    </div>`;
+  }).join('');
+}
+
+async function showAssignRepModal() {
+  const isHod = currentUser?.role === 'hod';
+  _buildAssignRepModal({ title: 'Assign Class Representative', isHod, onSearch: 'searchRepStudents()' });
+  if (isHod) searchRepStudents();
 }
 
 let _repSearchTimer;
-async function searchRepStudents(q) {
+async function searchRepStudents() {
   clearTimeout(_repSearchTimer);
   _repSearchTimer = setTimeout(async () => {
-    const box = document.getElementById('rep-search-results');
+    const box = document.getElementById('rep-modal-results');
     if (!box) return;
-    if (!q.trim()) { box.innerHTML = ''; return; }
+    const q     = (document.getElementById('rep-modal-search')?.value || '').trim();
+    const level = document.getElementById('rep-modal-level')?.value || '';
+    const group = document.getElementById('rep-modal-group')?.value || '';
+    const dept  = document.getElementById('rep-modal-dept')?.value?.trim() || '';
+    const isHod = currentUser?.role === 'hod';
+    if (!q && !level && !group && !dept && !isHod) {
+      box.innerHTML = '<div style="color:var(--text-muted);font-size:13px;padding:10px 0;text-align:center">Enter a name, index number, or select a filter to search.</div>';
+      return;
+    }
     box.innerHTML = '<div style="color:var(--text-muted);font-size:13px;padding:8px 0">Searching…</div>';
     try {
-      const { students } = await api(`/api/class-rep-admin/students?indexNumber=${encodeURIComponent(q)}`);
-      if (!students.length) { box.innerHTML = '<div style="color:var(--text-muted);font-size:13px;padding:8px 0">No students found.</div>'; return; }
-      const esc = s => s == null ? '' : String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
-      box.innerHTML = students.slice(0,10).map(s => `
-        <div style="display:flex;align-items:center;justify-content:space-between;padding:9px 12px;border-radius:8px;border:1.5px solid var(--border);margin-bottom:6px;background:var(--bg)">
-          <div>
-            <div style="font-size:13px;font-weight:600">${esc(s.name)}</div>
-            <div style="font-size:11px;color:var(--text-muted)">${esc(s.IndexNumber||'')} · L${esc(s.studentLevel||'?')} Gr${esc(s.studentGroup||'?')} · ${esc(s.programme||'')}</div>
-          </div>
-          ${s.isClassRep
-            ? `<span style="font-size:11px;color:#16a34a;font-weight:600">Already a rep</span>`
-            : `<button class="btn btn-primary btn-sm" onclick="doAssignRep('${s._id}','${esc(s.name)}')">Assign</button>`}
-        </div>`).join('');
+      const params = new URLSearchParams();
+      if (q)     params.set('indexNumber', q);
+      if (level) params.set('level', level);
+      if (group) params.set('group', group);
+      if (dept)  params.set('department', dept);
+      const { students } = await api(`/api/class-rep-admin/students?${params.toString()}`);
+      _renderRepStudentResults(students, 'doAssignRep');
     } catch(e) { box.innerHTML = `<div style="color:#ef4444;font-size:13px">${e.message}</div>`; }
   }, 300);
 }
@@ -18641,49 +19349,43 @@ window.hodGeneratePairingCode = async () => {
 };
 
 window.hodAssignClassRep = async (deviceId, deviceName) => {
-  const esc = s => s == null ? '' : String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
-  openModal(`
-    <div style="padding:4px 0">
-      <h3 style="font-size:16px;font-weight:700;margin-bottom:4px">Assign Class Rep</h3>
-      <p style="font-size:12px;color:var(--text-muted);margin-bottom:16px">Device: <strong>${esc(deviceName)}</strong> — search for a student to assign as the Class Rep for this device.</p>
-      <div class="form-group" style="margin-bottom:10px">
-        <label style="font-size:11px;font-weight:700;text-transform:uppercase;color:var(--text-muted)">Search Student</label>
-        <input type="text" id="hod-rep-search" placeholder="Name or index number…"
-          oninput="hodSearchRepStudents(this.value, '${deviceId}')"
-          style="width:100%;padding:8px 12px;border:1.5px solid var(--border);border-radius:8px;background:var(--bg);color:var(--text-primary);font-size:13px;margin-top:4px">
-      </div>
-      <div id="hod-rep-results" style="max-height:260px;overflow-y:auto"></div>
-    </div>
-  `);
+  const e2 = s => s == null ? '' : String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  window._hodRepDeviceId = deviceId;
+  _buildAssignRepModal({
+    title: 'Assign Class Rep',
+    subtitle: `Device: <strong>${e2(deviceName)}</strong>`,
+    isHod: true,
+    onSearch: 'hodSearchRepStudents()',
+  });
+  hodSearchRepStudents();
 };
 
 let _hodRepSearchTimer;
-window.hodSearchRepStudents = (q, deviceId) => {
-  const esc = s => s == null ? '' : String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+window.hodSearchRepStudents = () => {
   clearTimeout(_hodRepSearchTimer);
   _hodRepSearchTimer = setTimeout(async () => {
-    const box = document.getElementById('hod-rep-results');
+    const box = document.getElementById('rep-modal-results');
     if (!box) return;
-    if (!q.trim()) { box.innerHTML = ''; return; }
+    const q     = (document.getElementById('rep-modal-search')?.value || '').trim();
+    const level = document.getElementById('rep-modal-level')?.value || '';
+    const group = document.getElementById('rep-modal-group')?.value || '';
     box.innerHTML = '<div style="color:var(--text-muted);font-size:13px;padding:8px 0">Searching…</div>';
     try {
-      const { students } = await api(`/api/class-rep-admin/students?indexNumber=${encodeURIComponent(q)}`);
-      if (!students.length) { box.innerHTML = '<div style="color:var(--text-muted);font-size:13px;padding:8px 0">No students found.</div>'; return; }
-      box.innerHTML = students.slice(0, 10).map(s => `
-        <div style="display:flex;align-items:center;justify-content:space-between;padding:9px 12px;border-radius:8px;border:1.5px solid var(--border);margin-bottom:6px;background:var(--bg)">
-          <div>
-            <div style="font-size:13px;font-weight:600">${esc(s.name)}</div>
-            <div style="font-size:11px;color:var(--text-muted)">${esc(s.IndexNumber||'')}${s.studentLevel ? ` · L${esc(s.studentLevel)}` : ''}${s.studentGroup ? ` Gr${esc(s.studentGroup)}` : ''}${s.programme ? ` · ${esc(s.programme)}` : ''}</div>
-          </div>
-          <button class="btn btn-primary btn-sm" onclick="hodDoAssignRep('${deviceId}', '${s._id}', '${esc(s.name).replace(/'/g,"\\'")}')">Assign</button>
-        </div>`).join('');
+      const params = new URLSearchParams();
+      if (q)     params.set('indexNumber', q);
+      if (level) params.set('level', level);
+      if (group) params.set('group', group);
+      const { students } = await api(`/api/class-rep-admin/students?${params.toString()}`);
+      _renderRepStudentResults(students, 'hodDoAssignRep');
     } catch(e) {
       box.innerHTML = `<div style="color:#ef4444;font-size:13px">${e.message}</div>`;
     }
   }, 300);
 };
 
-window.hodDoAssignRep = async (deviceId, studentId, studentName) => {
+window.hodDoAssignRep = async (studentId, studentName) => {
+  const deviceId = window._hodRepDeviceId;
+  if (!deviceId) { showToastNotif('❌ Device reference lost — please close and try again.', 'error'); return; }
   try {
     await api(`/api/devices/${encodeURIComponent(deviceId)}/assign-class-rep`, {
       method: 'PATCH',
@@ -18697,16 +19399,53 @@ window.hodDoAssignRep = async (deviceId, studentId, studentName) => {
   }
 };
 
-window.hodRenameDevice = async (deviceId, currentName) => {
-  const newName = prompt(`Rename device:\n(current: ${currentName})`, currentName);
-  if (!newName || newName.trim() === currentName) return;
+function _openRenameModal(deviceId, currentName, onSuccess) {
+  openModal(`
+    <div style="padding:4px 0">
+      <h3 style="margin:0 0 6px;font-size:17px;font-weight:700">Rename Device</h3>
+      <p style="color:var(--muted);font-size:13px;margin:0 0 20px">
+        Current: <strong style="color:var(--text)">${esc(currentName)}</strong>
+      </p>
+      <label style="display:block;font-size:11px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px">New Name</label>
+      <input id="dev-rename-inp" type="text" value="${esc(currentName)}" maxlength="48"
+        placeholder="e.g. Lecture Hall A"
+        style="width:100%;padding:13px 14px;background:var(--surface,#1a2038);border:1.5px solid var(--border,#2d3a5c);border-radius:10px;color:var(--text,#fff);font-size:15px;outline:none;box-sizing:border-box;margin-bottom:20px"
+        onkeydown="if(event.key==='Enter')window._doDeviceRename('${esc(deviceId)}')">
+      <div style="display:flex;gap:10px">
+        <button onclick="closeModal()"
+          style="flex:1;padding:13px;background:transparent;border:1.5px solid var(--border,#2d3a5c);border-radius:10px;color:var(--muted,#94a3b8);font-size:14px;font-weight:600;cursor:pointer">
+          Cancel
+        </button>
+        <button id="dev-rename-save" onclick="window._doDeviceRename('${esc(deviceId)}')"
+          style="flex:1;padding:13px;background:var(--accent,#4f6ef7);border:none;border-radius:10px;color:#fff;font-size:14px;font-weight:700;cursor:pointer">
+          Save
+        </button>
+      </div>
+    </div>
+  `);
+  window._onRenameSuccess = onSuccess;
+  setTimeout(() => { const i = document.getElementById('dev-rename-inp'); if (i) { i.focus(); i.select(); } }, 60);
+}
+
+window._doDeviceRename = async (deviceId) => {
+  const inp = document.getElementById('dev-rename-inp');
+  const newName = (inp?.value || '').trim();
+  if (!newName) { inp?.focus(); return; }
+  const btn = document.getElementById('dev-rename-save');
+  if (btn) { btn.disabled = true; btn.textContent = 'Saving…'; }
   try {
-    await api('/api/devices/my/rename', { method: 'PATCH', body: JSON.stringify({ deviceName: newName.trim(), deviceId }) });
-    showToastNotif('✅ Device renamed successfully.', 'success');
-    renderHodDevices();
+    await api('/api/devices/my/rename', { method: 'PATCH', body: JSON.stringify({ deviceName: newName, deviceId }) });
+    closeModal();
+    showToastNotif('Device renamed successfully.', 'success');
+    if (typeof window._onRenameSuccess === 'function') window._onRenameSuccess();
   } catch (e) {
-    showToastNotif('❌ Failed to rename: ' + e.message, 'error');
+    if (btn) { btn.disabled = false; btn.textContent = 'Save'; }
+    showToastNotif('Failed to rename: ' + (e.message || 'Server error'), 'error');
   }
+};
+
+window.hodRenameDevice = (deviceId, currentName) => {
+  _openRenameModal(deviceId, currentName, renderHodDevices);
 };
 
 window.hodSetupDevice = async (deviceId) => {
@@ -18873,7 +19612,7 @@ async function renderAdminDevices() {
       ` : `
         <div style="display:flex;flex-direction:column;gap:12px">
           ${devices.map(d => {
-            const did      = esc(d._id || d.deviceId);
+            const did      = esc(d.deviceId || d._id);
             const dname    = esc(d.deviceName || d.deviceId || 'Unknown');
             const isOnline = d.online;
             const chipId   = esc(d.chipId || d.deviceId || '');
@@ -19299,14 +20038,8 @@ window.adminDoAssignRep = async (deviceId, studentId, studentName) => {
   } catch(e) { showToastNotif('❌ ' + (e.message || 'Failed to assign'), 'error'); }
 };
 
-window.adminRenameDevice = async (deviceId, currentName) => {
-  const newName = prompt(`Rename device:\n(current: ${currentName})`, currentName);
-  if (!newName || !newName.trim() || newName.trim() === currentName) return;
-  try {
-    await api('/api/devices/my/rename', { method: 'PATCH', body: JSON.stringify({ deviceName: newName.trim(), deviceId }) });
-    showToastNotif('✅ Device renamed.', 'success');
-    renderAdminDevices();
-  } catch(e) { showToastNotif('❌ ' + (e.message || 'Failed to rename'), 'error'); }
+window.adminRenameDevice = (deviceId, currentName) => {
+  _openRenameModal(deviceId, currentName, renderAdminDevices);
 };
 
 window.adminFactoryReset = async (deviceId, deviceName, isOnline) => {
