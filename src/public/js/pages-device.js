@@ -63,7 +63,6 @@ function _devPageHTML(device) {
     ${hasDevice ? `
     <div class="dev-header-actions">
       <button class="dev-btn dev-btn-ghost" onclick="_devRefresh()">↻ Refresh</button>
-      <button class="dev-btn dev-btn-danger" onclick="_devUnlink()">Unlink Device</button>
     </div>` : ''}
   </div>
 
@@ -76,93 +75,35 @@ function _devPageHTML(device) {
 <style>${_devCSS()}</style>`;
 }
 
-// ── no device — one-tap connect flow ─────────────────────────────────────────
+// ── no device — read-only info (lecturers cannot pair; admin/HOD must assign) ─
 function _devNoPairedHTML() {
   return `
 <div class="dev-connect-wrapper">
-
-  <!-- main connect card -->
-  <div class="dev-connect-card" id="dev-connect-card">
-    <div class="dev-connect-top">
-      <div class="dev-connect-icon">📡</div>
-      <h2 class="dev-connect-title">Connect Your Classroom Device</h2>
-      <p class="dev-connect-desc">Tap <strong>Connect Device</strong> and we'll walk you through the setup automatically.</p>
-    </div>
-
-    <div id="dev-setup-error" class="dev-setup-err-box" style="display:none"></div>
-
-    <!-- inline progress stepper (hidden until button tap) -->
-    <div id="dev-inline-stepper" class="dev-inline-stepper" style="display:none">
-
-      <!-- Step 1: Generate code (automatic) -->
-      <div class="dev-istep" id="dev-istep-1">
-        <div class="dev-istep-icon-wrap" id="dev-istep-1-icon">
-          <span class="dev-istep-spinner"></span>
+  <div class="dev-connect-card" style="text-align:center;padding:40px 28px">
+    <div class="dev-connect-icon" style="font-size:44px;margin-bottom:16px">📡</div>
+    <h2 class="dev-connect-title" style="margin-bottom:8px">No Device Assigned</h2>
+    <p class="dev-connect-desc" style="color:var(--text-secondary,#6b7280);font-size:13px;line-height:1.6;max-width:340px;margin:0 auto 24px">
+      No ESP32 attendance device has been assigned to your classroom yet.<br>
+      Contact your <strong>HOD</strong> or <strong>Administrator</strong> to have one paired and assigned to you.
+    </p>
+    <div style="background:var(--bg-subtle,#f8fafc);border:1px solid var(--border,#e5e7eb);border-radius:10px;padding:16px 20px;text-align:left;max-width:360px;margin:0 auto">
+      <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.6px;color:var(--text-muted,#9ca3af);margin-bottom:10px">How it works</div>
+      <div style="display:flex;flex-direction:column;gap:8px">
+        <div style="display:flex;align-items:flex-start;gap:10px;font-size:12px;color:var(--text-secondary,#6b7280)">
+          <span style="width:20px;height:20px;border-radius:50%;background:rgba(79,110,247,.1);color:#4f6ef7;font-size:10px;font-weight:800;display:flex;align-items:center;justify-content:center;flex-shrink:0;margin-top:1px">1</span>
+          Admin generates a pairing code and shares it with the Class Rep
         </div>
-        <div class="dev-istep-body">
-          <div class="dev-istep-label">Generating your setup code</div>
-          <div class="dev-istep-sub" id="dev-istep-1-sub">Connecting to server…</div>
+        <div style="display:flex;align-items:flex-start;gap:10px;font-size:12px;color:var(--text-secondary,#6b7280)">
+          <span style="width:20px;height:20px;border-radius:50%;background:rgba(79,110,247,.1);color:#4f6ef7;font-size:10px;font-weight:800;display:flex;align-items:center;justify-content:center;flex-shrink:0;margin-top:1px">2</span>
+          Class Rep enters the code on the ESP32 device to pair it
         </div>
-      </div>
-
-      <!-- code display (shown after step 1 succeeds) -->
-      <div id="dev-inline-code-area" class="dev-inline-code-area" style="display:none">
-        <div class="dev-inline-code-label">Your setup code</div>
-        <div id="dev-inline-code" class="dev-inline-code">——————</div>
-        <div id="dev-inline-expires" class="dev-inline-expires"></div>
-        <div class="dev-inline-code-hint">Auto-filled in the setup portal — no need to type it</div>
-      </div>
-
-      <!-- Step 2: Connect to device WiFi (manual) -->
-      <div class="dev-istep dev-istep-inactive" id="dev-istep-2">
-        <div class="dev-istep-icon-wrap dev-istep-num" id="dev-istep-2-icon">2</div>
-        <div class="dev-istep-body">
-          <div class="dev-istep-label">Connect to the device WiFi</div>
-          <div class="dev-istep-sub">Power on the ESP32, then join its hotspot</div>
-          <div id="dev-istep-2-actions" style="display:none">
-            <div class="dev-hotspot-chip">
-              <span class="dev-hotspot-chip-icon">📶</span>
-              <div>
-                <div class="dev-hotspot-chip-ssid">DIKLY-XXXXXX</div>
-                <div class="dev-hotspot-chip-note">No password needed · look in WiFi settings</div>
-              </div>
-            </div>
-            <button class="dev-btn dev-btn-primary dev-btn-portal" onclick="_devOpenSetupPage()">
-              Open Setup Portal →
-            </button>
-            <p class="dev-istep-portal-note">Once connected to the DIKLY WiFi, tap above. The portal auto-fills your code — just enter your classroom WiFi password and tap <strong>Pair Device</strong>.</p>
-          </div>
+        <div style="display:flex;align-items:flex-start;gap:10px;font-size:12px;color:var(--text-secondary,#6b7280)">
+          <span style="width:20px;height:20px;border-radius:50%;background:rgba(79,110,247,.1);color:#4f6ef7;font-size:10px;font-weight:800;display:flex;align-items:center;justify-content:center;flex-shrink:0;margin-top:1px">3</span>
+          Admin/HOD assigns the device to your class — it will appear here
         </div>
       </div>
-
-      <!-- Step 3: Waiting for pairing (automatic polling) -->
-      <div class="dev-istep dev-istep-inactive" id="dev-istep-3">
-        <div class="dev-istep-icon-wrap dev-istep-num" id="dev-istep-3-icon">3</div>
-        <div class="dev-istep-body">
-          <div class="dev-istep-label">Completing setup</div>
-          <div class="dev-istep-sub" id="dev-istep-3-sub">Waiting for device to pair…</div>
-        </div>
-      </div>
-
-    </div><!-- /stepper -->
-
-    <!-- main action button -->
-    <button id="dev-connect-btn" class="dev-btn dev-btn-primary dev-btn-connect-main" onclick="_devStartSetup()">
-      + Connect Device
-    </button>
-
-    <div id="dev-cancel-row" style="display:none;text-align:center;margin-top:12px">
-      <button class="dev-btn dev-btn-ghost dev-btn-sm" onclick="_devCancelSetup()">Cancel</button>
     </div>
   </div>
-
-  <!-- success card (swaps in after pairing) -->
-  <div id="dev-setup-success" class="dev-setup-success" style="display:none">
-    <div class="dev-success-icon">✓</div>
-    <div class="dev-success-title">Device Connected!</div>
-    <div class="dev-success-sub">Your ESP32 is now linked to your account. Loading device details…</div>
-  </div>
-
 </div>`; // /dev-connect-wrapper
 }
 
@@ -193,7 +134,6 @@ function _devPairedHTML(d) {
   <div class="dev-card dev-card-main">
     <div class="dev-card-header">
       <span class="dev-card-title">Device Details</span>
-      <button class="dev-btn dev-btn-ghost dev-btn-sm" onclick="_devRename()">Rename</button>
     </div>
     <div class="dev-detail-grid">
       <div class="dev-detail-item">
@@ -323,6 +263,7 @@ function _devWifiHTML(d) {
 // ── management modals (unlink + rename) ──────────────────────────────────────
 function _devModalsHTML() {
   return `
+<!-- (device management reserved for Admin / HOD)
 <!-- Unlink confirm modal -->
 <div id="dev-unlink-modal" class="dev-modal-overlay" style="display:none">
   <div class="dev-modal">
