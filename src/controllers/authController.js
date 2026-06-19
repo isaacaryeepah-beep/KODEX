@@ -382,8 +382,11 @@ exports.registerStudent = async (req, res) => {
     const phone = req.body.phone ? req.body.phone.trim() : "";
     const IndexNumber = req.body.IndexNumber || req.body.indexNumber;
 
-    if (!name || !IndexNumber || !password || !institutionCode) {
-      return res.status(400).json({ error: "Name, student ID, password, and institution code are required" });
+    if (!name || !IndexNumber || !email || !password || !institutionCode) {
+      return res.status(400).json({ error: "Name, student ID, email, password, and institution code are required" });
+    }
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      return res.status(400).json({ error: "Please enter a valid email address" });
     }
     if (password.length < 8) {
       return res.status(400).json({ error: "Password must be at least 8 characters" });
@@ -424,6 +427,11 @@ exports.registerStudent = async (req, res) => {
       });
     }
 
+    const emailTaken = await User.findOne({ email, company: company._id });
+    if (emailTaken) {
+      return res.status(400).json({ error: "This email is already registered at this institution" });
+    }
+
     const existingStudent = await User.findOne({ IndexNumber: IndexNumber.trim().toUpperCase(), company: company._id });
     if (existingStudent) {
       return res.status(400).json({ error: "A student with this ID already exists at this institution" });
@@ -434,6 +442,7 @@ exports.registerStudent = async (req, res) => {
 
     const user = await User.create({
       name,
+      email,
       IndexNumber: IndexNumber.trim().toUpperCase(),
       password,
       company: company._id,
