@@ -5459,6 +5459,19 @@ async function renderStudentDashboard(content) {
     </div>
     ${devLockBanner}
 
+    ${currentUser.isClassRep ? `
+      <div style="background:rgba(124,58,237,0.06);border:1.5px solid rgba(124,58,237,0.25);border-radius:14px;padding:14px 18px;margin-bottom:18px;display:flex;align-items:center;gap:14px">
+        <div style="width:40px;height:40px;border-radius:12px;background:linear-gradient(135deg,#7c3aed,#6d28d9);display:flex;align-items:center;justify-content:center;flex-shrink:0">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
+        </div>
+        <div style="flex:1;min-width:0">
+          <div style="font-size:11px;font-weight:800;color:#7c3aed;text-transform:uppercase;letter-spacing:.7px;margin-bottom:2px">Class Representative</div>
+          <div style="font-size:13px;color:var(--text)">You represent your class. Manage attendance sessions from <strong style="color:#7c3aed;cursor:pointer" onclick="navigateTo('rep-device')">My Device</strong>.</div>
+        </div>
+        <span style="background:#7c3aed;color:#fff;font-size:10px;font-weight:700;padding:4px 10px;border-radius:20px;letter-spacing:.4px;flex-shrink:0">REP</span>
+      </div>
+    ` : ''}
+
     ${activeSession ? `
       <div class="card" style="border-left:4px solid var(--success);background:linear-gradient(135deg,#f0fdf4,#ecfdf5);cursor:pointer" onclick="navigateTo('mark-attendance')">
         <div style="display:flex;align-items:center;gap:16px;flex-wrap:wrap">
