@@ -2224,6 +2224,20 @@ function showDashboard(data) {
     const roleEl = document.getElementById('user-role');
     roleEl.textContent = currentUser.role || '';
     roleEl.className = `role-badge role-${currentUser.role || 'user'}`;
+    // Class rep badge
+    const repBadgeId = 'sidebar-class-rep-badge';
+    let repBadge = document.getElementById(repBadgeId);
+    if (currentUser.isClassRep) {
+      if (!repBadge) {
+        repBadge = document.createElement('span');
+        repBadge.id = repBadgeId;
+        repBadge.style.cssText = 'display:inline-block;background:#7c3aed;color:#fff;font-size:9px;font-weight:700;padding:2px 6px;border-radius:20px;letter-spacing:.4px;text-transform:uppercase;margin-left:4px;vertical-align:middle';
+        repBadge.textContent = 'Class Rep';
+        roleEl.parentNode.insertBefore(repBadge, roleEl.nextSibling);
+      }
+    } else if (repBadge) {
+      repBadge.remove();
+    }
     // Mark role on body so CSS can scope role-specific overrides (e.g. hide banners for student)
     document.body.setAttribute('data-role', currentUser.role || '');
 
@@ -2549,6 +2563,10 @@ function buildSidebar() {
       links.push({ id: 'assignments', label: 'Assignments', icon: assignmentsIcon() });
       links.push({ id: 'gradebook', label: 'My Grades', icon: svgIcon('<path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/>') });
       links.push({ id: 'quiz-history', label: 'My Results', icon: svgIcon('<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/>') });
+      if (currentUser.isClassRep) {
+        links.push({ sep: true, label: 'CLASS REP' });
+        links.push({ id: 'rep-device', label: 'My Device', icon: svgIcon('<rect x="5" y="2" width="14" height="20" rx="2" ry="2"/><line x1="12" y1="18" x2="12.01" y2="18"/>') });
+      }
       links.push({ sep: true, label: 'COMMUNICATE' });
       links.push({ id: 'messages', label: 'Messages', icon: svgIcon('<path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>') });
       links.push({ id: 'meetings', label: 'Meetings', icon: meetingsIcon() });
@@ -2649,6 +2667,7 @@ function navigateTo(view) {
     case 'corp-attendance': renderCorporateAttendance(); break;
     case 'subscription': renderSubscription(); break;
     case 'course-videos': renderCourseVideos(); break;
+    case 'rep-device':   renderRepDevice(); break;
     case 'reports': renderReports(); break;
     case 'shifts': renderShifts(); break;
     case 'leave-requests': renderLeaveRequests(); break;
@@ -6560,6 +6579,7 @@ function _userRowCard(u, canManage) {
       <div style="display:flex;align-items:center;gap:7px;flex-wrap:wrap">
         <span style="font-weight:700;font-size:14px;color:var(--text)">${esc(u.name)}</span>
         <span class="role-badge role-${u.role}" style="flex-shrink:0">${u.role}</span>
+        ${u.isClassRep ? `<span style="background:#7c3aed;color:#fff;font-size:9px;font-weight:700;padding:2px 6px;border-radius:20px;flex-shrink:0;letter-spacing:.4px">CLASS REP</span>` : ''}
         ${u.isActive
           ? `<span style="background:#dcfce7;color:#15803d;font-size:10px;font-weight:700;padding:2px 7px;border-radius:20px;flex-shrink:0">Active</span>`
           : `<span style="background:#fee2e2;color:#dc2626;font-size:10px;font-weight:700;padding:2px 7px;border-radius:20px;flex-shrink:0">Inactive</span>`}
@@ -11294,6 +11314,130 @@ async function renderCourseVideos() {
 
   } catch (e) {
     body.innerHTML = `<div class="card"><p style="color:var(--danger)">Error loading videos: ${e.message}</p></div>`;
+  }
+}
+
+// ─── Class Rep — Device Management ───────────────────────────────────────────
+
+async function renderRepDevice() {
+  const content = document.getElementById('main-content');
+  if (!content) return;
+  content.innerHTML = `
+    <div class="page-header">
+      <h2>My Device</h2>
+      <p>Connect the attendance device to a lecturer to start a session</p>
+    </div>
+    <div id="rep-device-body"><div class="loading-spinner" style="margin:60px auto"></div></div>`;
+  await _repDeviceRefresh();
+}
+
+async function _repDeviceRefresh() {
+  const body = document.getElementById('rep-device-body');
+  if (!body) return;
+  try {
+    const [devData, lecData] = await Promise.all([
+      api('/api/class-rep/device'),
+      api('/api/class-rep/lecturers'),
+    ]);
+    const device   = devData.device;
+    const lecturers = lecData.lecturers || [];
+
+    if (!device) {
+      body.innerHTML = `
+        <div class="card" style="text-align:center;padding:48px 24px">
+          <div style="font-size:40px;margin-bottom:12px">📡</div>
+          <h3 style="margin-bottom:8px">No Device Assigned</h3>
+          <p style="color:var(--text-muted)">No attendance device has been assigned to your class yet. Contact your admin or HOD.</p>
+        </div>`;
+      return;
+    }
+
+    const isOnlineDevice = device.lastHeartbeat && (Date.now() - new Date(device.lastHeartbeat).getTime()) < 45000;
+    const isConnected    = !!device.activeLecturerId;
+
+    const lecOptions = lecturers.length
+      ? lecturers.map(l => `<option value="${esc(l.lecturerId)}" data-course="${esc(l.courseId||'')}">${esc(l.lecturerName)} — ${esc(l.courseTitle)} (${esc(l.courseCode)})</option>`).join('')
+      : '<option value="">No lecturers found for your class</option>';
+
+    body.innerHTML = `
+      <div class="card" style="max-width:540px;margin-bottom:20px">
+        <div style="display:flex;align-items:center;gap:12px;margin-bottom:18px">
+          <div style="width:48px;height:48px;border-radius:12px;background:${isOnlineDevice ? '#dcfce7' : '#fee2e2'};display:flex;align-items:center;justify-content:center;font-size:22px">
+            ${isOnlineDevice ? '🟢' : '🔴'}
+          </div>
+          <div>
+            <div style="font-size:16px;font-weight:700;color:var(--text)">${esc(device.name || device.deviceId)}</div>
+            <div style="font-size:12px;color:var(--text-muted);margin-top:2px">${isOnlineDevice ? 'Online' : 'Offline'} · ID: ${esc(device.deviceId)}</div>
+          </div>
+        </div>
+
+        ${isConnected ? `
+          <div style="padding:14px 16px;background:#ede9fe;border-radius:10px;margin-bottom:16px">
+            <div style="font-size:12px;font-weight:700;color:#6d28d9;text-transform:uppercase;letter-spacing:.4px;margin-bottom:4px">Active Session</div>
+            <div style="font-size:14px;font-weight:600;color:var(--text)">${esc(device.activeLecturerId?.name || 'Lecturer')}</div>
+            ${device.connectedAt ? `<div style="font-size:12px;color:var(--text-muted);margin-top:2px">Started ${new Date(device.connectedAt).toLocaleTimeString()}</div>` : ''}
+          </div>
+          <button class="btn btn-danger" style="width:100%" onclick="_repDisconnect()">End Session &amp; Release Device</button>
+        ` : `
+          ${!isOnlineDevice ? `<div style="padding:12px 14px;background:#fef2f2;border:1px solid #fca5a5;border-radius:8px;margin-bottom:14px;font-size:13px;color:#dc2626">
+            Device is offline. Power it on and wait for the green indicator before connecting.
+          </div>` : ''}
+          <div class="form-group" style="margin-bottom:12px">
+            <label style="font-size:12px;font-weight:600;text-transform:uppercase;letter-spacing:.5px;color:var(--text-muted);display:block;margin-bottom:6px">Select Lecturer &amp; Course</label>
+            <select id="rep-lec-select" style="width:100%;padding:10px 12px;border:1.5px solid var(--border);border-radius:8px;font-size:13px;background:var(--bg);color:var(--text)">
+              <option value="">— Choose a lecturer —</option>
+              ${lecOptions}
+            </select>
+          </div>
+          <div class="form-group" id="rep-pin-wrap" style="margin-bottom:14px;display:none">
+            <label style="font-size:12px;font-weight:600;text-transform:uppercase;letter-spacing:.5px;color:var(--text-muted);display:block;margin-bottom:6px">Lecturer PIN</label>
+            <input type="password" id="rep-pin-input" maxlength="4" inputmode="numeric" placeholder="4-digit PIN"
+              style="width:100%;padding:10px 12px;border:1.5px solid var(--border);border-radius:8px;font-size:13px;background:var(--bg);color:var(--text)"
+              onkeydown="if(event.key==='Enter')_repConnect()">
+          </div>
+          <div id="rep-connect-err" style="display:none;color:var(--danger);font-size:13px;margin-bottom:10px"></div>
+          <button class="btn btn-primary" style="width:100%" onclick="_repConnect()" ${!isOnlineDevice ? 'disabled' : ''}>Connect Device to Lecturer</button>
+        `}
+      </div>
+      <div style="font-size:12px;color:var(--text-muted);max-width:540px">
+        💡 Tip: Connect the device before the lecturer arrives. The session starts as soon as students begin scanning.
+        When class is over, tap <strong>End Session</strong> to release the device.
+      </div>`;
+
+    document.getElementById('rep-lec-select')?.addEventListener('change', function() {
+      const pinWrap = document.getElementById('rep-pin-wrap');
+      if (pinWrap) pinWrap.style.display = this.value ? 'block' : 'none';
+    });
+  } catch (e) {
+    body.innerHTML = `<div class="card"><p style="color:var(--danger)">Error: ${esc(e.message)}</p></div>`;
+  }
+}
+
+async function _repConnect() {
+  const sel    = document.getElementById('rep-lec-select');
+  const errEl  = document.getElementById('rep-connect-err');
+  const lecturerId  = sel?.value;
+  const courseId    = sel?.selectedOptions[0]?.dataset?.course || '';
+  const lecturerPin = document.getElementById('rep-pin-input')?.value?.trim();
+  if (!lecturerId) { if (errEl) { errEl.textContent = 'Please select a lecturer.'; errEl.style.display = 'block'; } return; }
+  try {
+    if (errEl) errEl.style.display = 'none';
+    await api('/api/class-rep/connect', { method: 'POST', body: JSON.stringify({ lecturerId, courseId: courseId || undefined, lecturerPin: lecturerPin || undefined }) });
+    showToastNotif('Device connected successfully!', 'success');
+    _repDeviceRefresh();
+  } catch (e) {
+    if (errEl) { errEl.textContent = e.message; errEl.style.display = 'block'; }
+  }
+}
+
+async function _repDisconnect() {
+  if (!confirm('End the active session and release the device?')) return;
+  try {
+    await api('/api/class-rep/disconnect', { method: 'POST', body: JSON.stringify({}) });
+    showToastNotif('Session ended.', 'success');
+    _repDeviceRefresh();
+  } catch (e) {
+    toastError(e.message);
   }
 }
 

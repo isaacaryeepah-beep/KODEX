@@ -157,6 +157,244 @@ function selectPortal(t){if(window._appLoaded)window._realSelectPortal(t);else w
 <div id="native-splash" style="display:none;position:fixed;inset:0;z-index:99999;
   background:#061528 url('/splash-screen.png') center/cover no-repeat;"></div>
 
+<!-- ── Web 3D splash screen ──────────────────────────────────────── -->
+<div id="web-splash">
+  <style>
+    #web-splash {
+      position: fixed; inset: 0; z-index: 99990;
+      background: #080b12;
+      display: flex; flex-direction: column;
+      align-items: center; justify-content: center;
+      overflow: hidden;
+      animation: splashExit 0.5s ease-in 2.4s forwards;
+    }
+    #web-splash.gone { display: none; }
+
+    /* ── Exit: zoom forward + fade ── */
+    @keyframes splashExit {
+      0%   { opacity: 1; transform: scale(1); }
+      100% { opacity: 0; transform: scale(1.12); pointer-events: none; }
+    }
+
+    /* ── Background radial pulse ── */
+    .sp-bg-glow {
+      position: absolute; inset: 0; pointer-events: none;
+      background: radial-gradient(ellipse 55% 55% at 50% 50%,
+        rgba(79,110,247,.18) 0%, rgba(124,58,237,.10) 40%, transparent 70%);
+      animation: bgPulse 1.8s ease-in-out infinite alternate;
+    }
+    @keyframes bgPulse {
+      from { opacity: .6; transform: scale(.95); }
+      to   { opacity: 1;  transform: scale(1.05); }
+    }
+
+    /* ── Particle dots ── */
+    .sp-particles { position: absolute; inset: 0; pointer-events: none; }
+    .sp-dot {
+      position: absolute; border-radius: 50%;
+      background: rgba(79,110,247,.55);
+      animation: dotFloat linear infinite;
+    }
+
+    /* ── 3D stage ── */
+    .sp-stage {
+      perspective: 900px;
+      perspective-origin: 50% 45%;
+      position: relative; z-index: 2;
+    }
+
+    /* ── Ring container (3D tilt) ── */
+    .sp-rings {
+      position: relative; width: 240px; height: 240px;
+      transform-style: preserve-3d;
+      animation: stageTilt 3s ease-in-out infinite alternate;
+    }
+    @keyframes stageTilt {
+      from { transform: rotateX(18deg) rotateY(-8deg); }
+      to   { transform: rotateX(12deg) rotateY(8deg); }
+    }
+
+    /* ── Orbital rings ── */
+    .sp-ring {
+      position: absolute; border-radius: 50%;
+      border: 1.5px solid transparent; top: 0; left: 0;
+      width: 100%; height: 100%;
+    }
+    .sp-ring-1 {
+      border-color: rgba(79,110,247,.7) rgba(79,110,247,.1) rgba(79,110,247,.1) rgba(79,110,247,.7);
+      animation: ringOrbit1 2.4s linear infinite;
+      box-shadow: 0 0 18px rgba(79,110,247,.35);
+    }
+    .sp-ring-2 {
+      width: 78%; height: 78%; top: 11%; left: 11%;
+      border-color: rgba(124,58,237,.8) rgba(124,58,237,.1) rgba(124,58,237,.1) rgba(124,58,237,.8);
+      animation: ringOrbit2 1.7s linear infinite reverse;
+      box-shadow: 0 0 14px rgba(124,58,237,.3);
+    }
+    .sp-ring-3 {
+      width: 56%; height: 56%; top: 22%; left: 22%;
+      border-color: rgba(139,92,246,.6) rgba(139,92,246,.1) rgba(139,92,246,.1) rgba(139,92,246,.6);
+      animation: ringOrbit1 3s linear infinite;
+    }
+    @keyframes ringOrbit1 { to { transform: rotate(360deg); } }
+    @keyframes ringOrbit2 { to { transform: rotate(360deg); } }
+
+    /* ── Center glow disc ── */
+    .sp-core {
+      position: absolute; top: 50%; left: 50%;
+      transform: translate(-50%, -50%);
+      width: 80px; height: 80px; border-radius: 50%;
+      background: radial-gradient(circle, rgba(99,102,241,.45) 0%, rgba(124,58,237,.25) 50%, transparent 70%);
+      animation: corePulse 1.5s ease-in-out infinite alternate;
+    }
+    @keyframes corePulse {
+      from { transform: translate(-50%,-50%) scale(.85); opacity: .7; }
+      to   { transform: translate(-50%,-50%) scale(1.15); opacity: 1; }
+    }
+
+    /* ── Logo letters ── */
+    .sp-logo-wrap {
+      position: absolute; top: 50%; left: 50%;
+      transform: translate(-50%, -50%);
+      display: flex; gap: 0; align-items: center;
+      transform-style: preserve-3d;
+    }
+    .sp-letter {
+      font-size: 42px; font-weight: 900; letter-spacing: -1px;
+      font-family: 'Segoe UI', system-ui, sans-serif;
+      background: linear-gradient(135deg, #6366f1, #a855f7, #6366f1);
+      -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+      background-clip: text;
+      opacity: 0;
+      display: inline-block;
+      animation: letterFlipIn 0.5s cubic-bezier(.22,1,.36,1) forwards;
+      text-shadow: none;
+      filter: drop-shadow(0 0 8px rgba(99,102,241,.8));
+    }
+    .sp-letter:nth-child(1) { animation-delay: .15s; }
+    .sp-letter:nth-child(2) { animation-delay: .28s; }
+    .sp-letter:nth-child(3) { animation-delay: .41s; }
+    .sp-letter:nth-child(4) { animation-delay: .54s; }
+    .sp-letter:nth-child(5) { animation-delay: .67s; }
+
+    @keyframes letterFlipIn {
+      0%   { opacity: 0; transform: rotateY(-90deg) scale(.5); }
+      60%  { opacity: 1; transform: rotateY(12deg) scale(1.08); }
+      100% { opacity: 1; transform: rotateY(0deg) scale(1); }
+    }
+
+    /* ── Tagline ── */
+    .sp-tagline {
+      position: relative; z-index: 2;
+      margin-top: 32px;
+      font-size: 12px; font-weight: 500; letter-spacing: 2.5px;
+      text-transform: uppercase;
+      color: rgba(148,163,184,.75);
+      font-family: 'Segoe UI', system-ui, sans-serif;
+      opacity: 0;
+      animation: taglineUp .6s ease forwards 1.05s;
+    }
+    @keyframes taglineUp {
+      from { opacity: 0; transform: translateY(12px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+
+    /* ── Progress bar ── */
+    .sp-progress-track {
+      position: absolute; bottom: 52px; left: 50%;
+      transform: translateX(-50%);
+      width: 120px; height: 2px;
+      background: rgba(255,255,255,.08);
+      border-radius: 2px; overflow: hidden;
+      z-index: 2;
+    }
+    .sp-progress-fill {
+      height: 100%; width: 0%; border-radius: 2px;
+      background: linear-gradient(90deg, #4f6ef7, #7c3aed);
+      animation: progressFill 2.0s cubic-bezier(.4,0,.2,1) .2s forwards;
+      box-shadow: 0 0 8px rgba(79,110,247,.6);
+    }
+    @keyframes progressFill {
+      0%   { width: 0%; }
+      70%  { width: 85%; }
+      100% { width: 100%; }
+    }
+
+    /* ── Corner grid lines for depth ── */
+    .sp-grid {
+      position: absolute; inset: 0; pointer-events: none; z-index: 0;
+      background-image:
+        linear-gradient(rgba(79,110,247,.04) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(79,110,247,.04) 1px, transparent 1px);
+      background-size: 48px 48px;
+      mask-image: radial-gradient(ellipse 80% 80% at 50% 50%, black 20%, transparent 75%);
+      -webkit-mask-image: radial-gradient(ellipse 80% 80% at 50% 50%, black 20%, transparent 75%);
+    }
+
+    @keyframes dotFloat {
+      0%   { transform: translateY(0) translateX(0) scale(1); opacity: .7; }
+      50%  { opacity: .2; }
+      100% { transform: translateY(-100vh) translateX(var(--dx)) scale(.4); opacity: 0; }
+    }
+  </style>
+
+  <div class="sp-bg-glow"></div>
+  <div class="sp-grid"></div>
+
+  <!-- Floating particles (generated by script below) -->
+  <div class="sp-particles" id="sp-particles"></div>
+
+  <div class="sp-stage">
+    <div class="sp-rings">
+      <div class="sp-ring sp-ring-1"></div>
+      <div class="sp-ring sp-ring-2"></div>
+      <div class="sp-ring sp-ring-3"></div>
+      <div class="sp-core"></div>
+      <div class="sp-logo-wrap">
+        <span class="sp-letter">D</span>
+        <span class="sp-letter">I</span>
+        <span class="sp-letter">K</span>
+        <span class="sp-letter">L</span>
+        <span class="sp-letter">Y</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="sp-tagline">Smart Attendance &amp; Education</div>
+  <div class="sp-progress-track"><div class="sp-progress-fill"></div></div>
+</div>
+
+<script>
+(function() {
+  // Don't show on native app — it has its own splash
+  var isNative = navigator.userAgent.includes('DiklyApp/') ||
+    (typeof window.Capacitor !== 'undefined' && window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform());
+  if (isNative) { document.getElementById('web-splash').remove(); return; }
+
+  // Spawn floating particles
+  var container = document.getElementById('sp-particles');
+  for (var i = 0; i < 18; i++) {
+    var d = document.createElement('div');
+    d.className = 'sp-dot';
+    var size = (Math.random() * 3 + 1.5).toFixed(1);
+    d.style.cssText = [
+      'width:' + size + 'px', 'height:' + size + 'px',
+      'left:' + (Math.random() * 100).toFixed(1) + '%',
+      'top:' + (Math.random() * 100 + 20).toFixed(1) + '%',
+      '--dx:' + ((Math.random() - .5) * 60).toFixed(0) + 'px',
+      'animation-duration:' + (Math.random() * 4 + 3).toFixed(1) + 's',
+      'animation-delay:' + (Math.random() * 1.5).toFixed(2) + 's',
+      'opacity:0',
+    ].join(';');
+    container.appendChild(d);
+  }
+
+  // Remove splash after animation completes (2.4s anim + 0.5s exit = 2.9s)
+  var splash = document.getElementById('web-splash');
+  setTimeout(function() { if (splash) splash.remove(); }, 2950);
+})();
+</script>
+
 <style>
 @keyframes splashFade{0%{opacity:1;pointer-events:auto}80%{opacity:1}100%{opacity:0;pointer-events:none}}
 </style>
@@ -1364,7 +1602,7 @@ function selectPortal(t){if(window._appLoaded)window._realSelectPortal(t);else w
   </script>
 
   <script src="/js/offline-idb.js?v=20260618" defer></script>
-<script src="/js/app.js?v=20260623" defer></script>
+<script src="/js/app.js?v=20260624" defer></script>
   <script src="/js/pages-device.js?v=20260618" defer></script>
   <script src="/js/pages-academic.js?v=20260618" defer></script>
   <script src="/js/pages-faq.js?v=20260618" defer></script>
