@@ -2538,14 +2538,13 @@ function buildSidebar() {
       break;
     case 'student':
       links.push({ sep: true, label: 'ATTENDANCE' });
-      links.push({ id: 'mark-attendance', label: 'Mark Attendance', icon: attendanceIcon() });
       links.push({ id: 'my-attendance', label: 'My Attendance', icon: sessionsIcon() });
       links.push({ sep: true, label: 'ACADEMIC' });
       links.push({ id: 'courses', label: 'My Courses', icon: coursesIcon() });
       links.push({ id: 'timetable', label: 'Schedule', icon: svgIcon('<rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/>') });
       links.push({ id: 'quizzes', label: 'Quizzes', icon: quizzesIcon() });
-      links.push({ id: 'snap-quiz', label: 'Quiz Monitor', icon: svgIcon('<polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/>') });
-      links.push({ id: 'assignments', label: 'Assignments / Quiz', icon: assignmentsIcon() });
+      links.push({ id: 'snap-quiz', label: 'Exam Portal', icon: svgIcon('<path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>') });
+      links.push({ id: 'assignments', label: 'Assignments', icon: assignmentsIcon() });
       links.push({ id: 'gradebook', label: 'My Grades', icon: svgIcon('<path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/>') });
       links.push({ id: 'quiz-history', label: 'My Results', icon: svgIcon('<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/>') });
       links.push({ sep: true, label: 'COMMUNICATE' });
@@ -5389,7 +5388,6 @@ async function renderStudentDashboard(content) {
     </div>
     
     <div class="quick-actions">
-      <button class="btn btn-primary btn-sm" onclick="navigateTo('mark-attendance')">Mark Attendance</button>
       <button class="btn btn-secondary btn-sm" onclick="navigateTo('my-attendance')">View History</button>
       <button class="btn btn-secondary btn-sm" onclick="navigateTo('courses')">My Courses</button>
       <button class="btn btn-secondary btn-sm" onclick="navigateTo('quizzes')">Quizzes</button>
@@ -9325,9 +9323,6 @@ async function renderMyAttendance() {
     offlineCache('my_attendance', data);
     content.innerHTML = `
       <div class="page-header"><h2>My Attendance</h2><p>Your attendance history</p></div>
-      <div class="actions-bar">
-        <button class="btn btn-primary btn-sm" onclick="showMarkAttendanceModal()">Mark Attendance</button>
-      </div>
       <div class="card">
         ${data.records.length ? `
           <table>

@@ -759,7 +759,7 @@ window.addEventListener('load', () => loadMLLibs().catch(() => {}));
           <label>Index Number</label>
           <div class="login-input-wrap">
             <svg class="login-field-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
-            <input type="text" id="login-index" placeholder="e.g. 0621NICO" autocomplete="off" autocorrect="off" autocapitalize="characters" spellcheck="false" oninput="clearAuthErr()" style="text-transform:uppercase"/>
+            <input type="text" id="login-index" placeholder="e.g. 0621NICO" autocomplete="off" autocorrect="off" autocapitalize="characters" spellcheck="false" oninput="clearAuthErr()" onkeydown="if(event.key==='Enter')document.getElementById('login-btn').click()" style="text-transform:uppercase"/>
           </div>
         </div>
         <button class="btn btn-primary" id="login-btn" type="button">
@@ -1226,10 +1226,14 @@ document.getElementById('login-btn').addEventListener('click', async () => {
   try {
     if (!state.user) throw new Error('No active session. Please return to the portal and sign in.');
 
-    // Verify the entered index number matches the logged-in student
+    // Client-side quick check first (instant feedback)
     const expected = (state.user.IndexNumber || state.user.indexNumber || '').toUpperCase();
     if (!expected) throw new Error('Your account has no index number on file. Contact your administrator.');
-    if (entered !== expected) throw new Error('Index number does not match your account. Please check and try again.');
+    if (entered !== expected) throw new Error('Please enter your own index number.');
+
+    // Backend verification — server confirms the index number matches the token
+    const verifyResp = await api('POST', '/api/student/snap-quizzes/verify-identity', { indexNumber: entered });
+    if (!verifyResp.ok) throw new Error(verifyResp.error || 'Identity verification failed.');
 
     // All good
     state.deviceFingerprint = buildFingerprint();
