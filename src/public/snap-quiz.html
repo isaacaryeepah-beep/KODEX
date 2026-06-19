@@ -1232,9 +1232,9 @@ document.getElementById('login-btn').addEventListener('click', async () => {
 
     // Success — load quiz list then switch screen
     state.deviceFingerprint = buildFingerprint();
-    await loadQuizList();
+    const listOk = await loadQuizList();
     show('quiz-list-screen');
-    toast('Welcome back!', 'success');
+    if (listOk) toast('Welcome back!', 'success');
 
     if (state.user?.accountDeviceLock?.isLocked) {
       const mins = state.user.accountDeviceLock.remainingMins;
@@ -1324,7 +1324,7 @@ async function loadQuizList() {
 
     if (quizzes.length === 0) {
       container.innerHTML = '<p style="text-align:center;padding:24px;color:var(--slate)">No quizzes found. Make sure you are enrolled in a course with your lecturer.</p>';
-      return;
+      return true;
     }
 
     container.innerHTML = quizzes.map(q => {
@@ -1369,8 +1369,11 @@ async function loadQuizList() {
       });
     });
 
+    return true;
+
   } catch (e) {
-    container.innerHTML = `<p style="color:var(--red)">Error: ${e.message}</p>`;
+    container.innerHTML = `<p style="color:var(--red)">Error loading quizzes: ${e.message}</p>`;
+    return false;
   }
 }
 
