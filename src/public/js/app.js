@@ -11164,19 +11164,6 @@ async function renderSubscription() {
   const content = document.getElementById('main-content');
   if (!content) return;
 
-  // Employees and students do not pay — show informational message and stop
-  const freeRoles = ['employee', 'student'];
-  if (currentUser && freeRoles.includes(currentUser.role)) {
-    content.innerHTML = `
-      <div class="page-header"><h2>Subscription</h2><p>Your access plan</p></div>
-      <div class="card" style="max-width:480px;padding:32px;text-align:center">
-        <div style="font-size:40px;margin-bottom:12px">✅</div>
-        <h3 style="margin-bottom:8px">No Payment Required</h3>
-        <p style="color:var(--text-muted)">Your access is managed by your company admin. You do not need a personal subscription.</p>
-      </div>`;
-    return;
-  }
-
   try {
     const [meData, plansData] = await Promise.all([
       api('/api/auth/me'),
@@ -12925,7 +12912,7 @@ async function loadAnnBadge() {
 
 const ANN_COLORS = { info:'#6366f1', warning:'#f59e0b', success:'#22c55e', urgent:'#ef4444' };
 const ANN_ICONS  = { info:'ℹ️', warning:'⚠️', success:'✅', urgent:'🚨' };
-const ANN_CAN_POST = ['admin','superadmin','lecturer','manager','hod'];
+const ANN_CAN_POST = ['admin','superadmin','lecturer','manager','hod','student'];
 
 async function renderAnnouncements() {
   const content = document.getElementById('main-content');
@@ -12945,7 +12932,7 @@ async function renderAnnouncements() {
     const data = await api('/api/announcements');
     offlineCache('announcements', data);
     const anns = data.announcements || [];
-    const canPost = ANN_CAN_POST.includes(currentUser.role);
+    const canPost = ANN_CAN_POST.includes(currentUser.role) && (currentUser.role !== 'student' || currentUser.isClassRep);
     const isAdmin = ['admin','superadmin'].includes(currentUser.role);
 
     content.innerHTML = `
@@ -12954,7 +12941,7 @@ async function renderAnnouncements() {
           <h2>Announcements</h2>
           <p>Institution-wide notices and updates</p>
         </div>
-        ${canPost ? `<button class="btn btn-primary" onclick="openPostAnnouncementModal()">＋ Post Announcement</button>` : ''}
+        ${canPost ? `<button class="btn btn-primary" onclick="${currentUser.isClassRep ? 'openClassRepAnnouncementModal()' : 'openPostAnnouncementModal()'}">＋ Post Announcement</button>` : ''}
       </div>
       <div id="ann-list">
         ${anns.length === 0
@@ -13110,6 +13097,62 @@ async function openPostAnnouncementModal() {
       <div style="padding:12px 20px;border-top:1px solid var(--border);display:flex;gap:8px;justify-content:flex-end;position:sticky;bottom:0;background:var(--card);border-radius:0 0 14px 14px;">
         <button class="btn btn-secondary" onclick="document.getElementById('ann-post-overlay').remove()">Cancel</button>
         <button class="btn btn-primary" onclick="submitAnnouncement()">📢 Post</button>
+      </div>
+    </div>`;
+  document.body.appendChild(ol);
+}
+
+function openClassRepAnnouncementModal() {
+  const existing = document.getElementById('ann-post-overlay');
+  if (existing) existing.remove();
+  const level = currentUser.studentLevel ? `Level ${currentUser.studentLevel}` : '';
+  const group = currentUser.studentGroup ? `Group ${currentUser.studentGroup}` : '';
+  const dept  = currentUser.department   || '';
+  const scopeLabel = [level, group, dept].filter(Boolean).join(' · ') || 'Your Class';
+
+  const ol = document.createElement('div');
+  ol.id = 'ann-post-overlay';
+  ol.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:400;display:flex;align-items:center;justify-content:center;padding:16px;backdrop-filter:blur(3px)';
+  ol.innerHTML = `
+    <div style="background:var(--card);border-radius:14px;width:100%;max-width:480px;max-height:92vh;overflow-y:auto;box-shadow:0 20px 60px rgba(0,0,0,.2);">
+      <div style="padding:16px 20px;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center;position:sticky;top:0;background:var(--card);z-index:1;border-radius:14px 14px 0 0;">
+        <h3 style="font-size:15px;font-weight:700;margin:0">📢 Class Announcement</h3>
+        <button onclick="document.getElementById('ann-post-overlay').remove()" style="width:26px;height:26px;border-radius:6px;border:1px solid var(--border);background:var(--bg);cursor:pointer;font-size:13px;">✕</button>
+      </div>
+      <div style="padding:18px 20px;display:flex;flex-direction:column;gap:13px;">
+        <div style="padding:8px 12px;background:rgba(79,110,247,.07);border-radius:8px;border-left:3px solid #4f6ef7;font-size:12px;color:var(--text-muted)">
+          📌 This announcement will be visible only to <strong style="color:var(--text)">${esc(scopeLabel)}</strong>
+        </div>
+        <div>
+          <label style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;color:var(--text-light);margin-bottom:5px;display:block;">Title *</label>
+          <input id="ann-title" placeholder="e.g. Study group at 4pm" style="width:100%;padding:9px 12px;border:1.5px solid var(--border);border-radius:8px;font-size:14px;font-family:inherit;outline:none;">
+        </div>
+        <div>
+          <label style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;color:var(--text-light);margin-bottom:5px;display:block;">Message *</label>
+          <textarea id="ann-body" rows="4" placeholder="What do you want to tell your class?" style="width:100%;padding:9px 12px;border:1.5px solid var(--border);border-radius:8px;font-size:13px;font-family:inherit;resize:vertical;outline:none;"></textarea>
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
+          <div>
+            <label style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;color:var(--text-light);margin-bottom:5px;display:block;">Type</label>
+            <select id="ann-type" style="width:100%;padding:8px 10px;border:1.5px solid var(--border);border-radius:8px;font-size:13px;font-family:inherit;outline:none;">
+              <option value="info">ℹ️ Info</option>
+              <option value="warning">⚠️ Warning</option>
+              <option value="success">✅ Good News</option>
+              <option value="urgent">🚨 Urgent</option>
+            </select>
+          </div>
+          <div>
+            <label style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;color:var(--text-light);margin-bottom:5px;display:block;">Expires At <span style="font-weight:400">(opt)</span></label>
+            <input id="ann-expires" type="datetime-local" style="width:100%;padding:8px 10px;border:1.5px solid var(--border);border-radius:8px;font-size:13px;font-family:inherit;outline:none;">
+          </div>
+        </div>
+        <input type="hidden" id="ann-audience" value="class_group">
+        <input type="hidden" id="ann-course" value="">
+        <div id="ann-post-err" style="display:none;padding:8px 12px;background:#fef2f2;border:1px solid #fecaca;border-radius:7px;color:#dc2626;font-size:12px;font-weight:500;"></div>
+      </div>
+      <div style="padding:12px 20px;border-top:1px solid var(--border);display:flex;gap:8px;justify-content:flex-end;position:sticky;bottom:0;background:var(--card);border-radius:0 0 14px 14px;">
+        <button class="btn btn-secondary" onclick="document.getElementById('ann-post-overlay').remove()">Cancel</button>
+        <button class="btn btn-primary" onclick="submitAnnouncement()">📢 Post to Class</button>
       </div>
     </div>`;
   document.body.appendChild(ol);
@@ -19108,8 +19151,10 @@ async function renderClassReps() {
                 ${r.sessionType ? `<div style="font-size:12px"><span style="color:var(--text-muted)">Session:</span> <strong>${esc(r.sessionType)}</strong></div>` : ''}
                 ${r.department ? `<div style="font-size:12px"><span style="color:var(--text-muted)">Dept:</span> <strong>${esc(r.department)}</strong></div>` : ''}
               </div>
-              <div style="padding:10px 16px;border-top:1px solid var(--border)">
-                <button class="btn btn-sm" style="background:rgba(239,68,68,.1);color:#ef4444;border:1px solid rgba(239,68,68,.2);width:100%"
+              <div style="padding:10px 16px;border-top:1px solid var(--border);display:flex;gap:8px">
+                <button class="btn btn-sm" style="flex:1;background:rgba(79,110,247,.1);color:#4f6ef7;border:1px solid rgba(79,110,247,.2)"
+                  onclick="showAssignRepToDeviceModal('${r._id}','${esc(r.name)}')">Assign to Device</button>
+                <button class="btn btn-sm" style="flex:1;background:rgba(239,68,68,.1);color:#ef4444;border:1px solid rgba(239,68,68,.2)"
                   onclick="removeClassRep('${r._id}','${esc(r.name)}')">Remove as Class Rep</button>
               </div>
             </div>`;
@@ -19131,6 +19176,66 @@ async function removeClassRep(userId, name) {
     toastSuccess(`${name} removed as class rep`);
     renderClassReps();
   } catch(e) { toastError(e.message || 'Failed to remove'); }
+}
+
+async function showAssignRepToDeviceModal(repId, repName) {
+  openModal(`<div style="text-align:center;padding:16px 0"><div class="loading" style="margin:0 auto"></div><p style="color:var(--text-muted);font-size:13px;margin-top:10px">Loading devices…</p></div>`);
+  let devices = [];
+  try {
+    const data = await api('/api/devices/all');
+    devices = data.devices || [];
+  } catch(e) {
+    openModal(`<div style="padding:8px 0"><p style="color:#ef4444">Failed to load devices: ${e.message}</p><button class="btn btn-sm" onclick="closeModal()" style="margin-top:12px;width:100%">Close</button></div>`);
+    return;
+  }
+
+  const esc = s => s == null ? '' : String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  const dotColor = d => d.online ? '#16a34a' : '#9ca3af';
+
+  const deviceRows = devices.length === 0
+    ? `<p style="color:var(--text-muted);font-size:13px;text-align:center;padding:18px 0">No devices registered yet.</p>`
+    : devices.map(d => `
+      <div style="display:flex;align-items:center;gap:10px;padding:10px 12px;border-radius:9px;border:1.5px solid var(--border);margin-bottom:8px;cursor:pointer;transition:border-color .15s"
+        onmouseover="this.style.borderColor='#4f6ef7'" onmouseout="this.style.borderColor='var(--border)'"
+        onclick="_doAssignRepToDevice('${esc(d._id || d.deviceId)}','${esc(repId)}','${esc(repName)}','${esc(d.deviceName || d.name || 'Device')}')">
+        <span style="width:9px;height:9px;border-radius:50%;background:${dotColor(d)};flex-shrink:0;box-shadow:0 0 0 3px ${d.online ? 'rgba(22,163,74,.18)' : 'transparent'}"></span>
+        <div style="flex:1;min-width:0">
+          <div style="font-size:13px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(d.deviceName || d.name || 'Unnamed Device')}</div>
+          <div style="font-size:11px;color:var(--text-muted)">${esc(d.deviceId || d._id)} · ${d.online ? 'Online' : 'Offline'}</div>
+          ${d.classRep ? `<div style="font-size:10px;color:#f59e0b;margin-top:1px">Currently: ${esc(d.classRep?.name || 'another rep')}</div>` : ''}
+        </div>
+        <svg viewBox="0 0 24 24" fill="none" stroke="#4f6ef7" stroke-width="2" width="14" height="14"><polyline points="9 18 15 12 9 6"/></svg>
+      </div>`).join('');
+
+  openModal(`
+    <div>
+      <div style="display:flex;align-items:center;gap:9px;margin-bottom:14px">
+        <div style="width:34px;height:34px;border-radius:9px;background:rgba(79,110,247,.1);display:flex;align-items:center;justify-content:center;flex-shrink:0">
+          <svg viewBox="0 0 24 24" fill="none" stroke="#4f6ef7" stroke-width="2" width="16" height="16"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/></svg>
+        </div>
+        <div>
+          <h3 style="font-size:15px;font-weight:700;margin:0">Assign to Device</h3>
+          <p style="font-size:11px;color:var(--text-muted);margin:2px 0 0">Pick a device for <strong>${esc(repName)}</strong></p>
+        </div>
+      </div>
+      <div style="max-height:340px;overflow-y:auto">${deviceRows}</div>
+      <button onclick="closeModal()" style="margin-top:10px;width:100%;padding:10px;border-radius:9px;border:1.5px solid var(--border);background:transparent;color:var(--text-muted);font-size:13px;font-weight:600;cursor:pointer">Cancel</button>
+    </div>
+  `);
+}
+
+async function _doAssignRepToDevice(deviceId, repId, repName, deviceName) {
+  try {
+    await api(`/api/devices/${encodeURIComponent(deviceId)}/assign-class-rep`, {
+      method: 'PATCH',
+      body: JSON.stringify({ classRepId: repId }),
+    });
+    closeModal();
+    toastSuccess(`${repName} assigned to ${deviceName}`);
+    renderClassReps();
+  } catch(e) {
+    toastError(e.message || 'Failed to assign rep to device');
+  }
 }
 
 function _buildAssignRepModal({ title, subtitle, onSearch, isHod }) {
