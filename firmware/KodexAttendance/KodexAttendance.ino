@@ -596,7 +596,7 @@ static int postJson(const String& path, const String& body, String& outResponse,
   if (authed && deviceJWT.length()) {
     http.addHeader("Authorization", "Bearer " + deviceJWT);
   }
-  http.setTimeout(20000);
+  http.setTimeout(8000);  // 8s keeps loop responsive; 30s was blocking student AP serving
   int code = http.POST(body);
   outResponse = http.getString();
   http.end();
@@ -644,8 +644,8 @@ static void sendHeartbeat() {
   if (code == 401) { log("HB 401 — token revoked. Wiping config."); factoryReset(); return; }
   if (code != 200) {
     log("HB fail " + String(code));
-    if (++hbFailCount >= 5) {
-      log("HB fail x5 — forcing WiFi reconnect");
+    if (++hbFailCount >= 2) {  // reconnect after 2 consecutive fails (~16s)
+      log("HB fail x2 — forcing WiFi reconnect");
       hbFailCount = 0;
       wifiReconnectNeeded = true;
     }
@@ -1792,6 +1792,8 @@ void setup() {
   oledShow("KODEX", "WiFi:", wifiSSID);
   WiFi.mode(WIFI_STA);
   WiFi.setSleep(false); // disable modem sleep — prevents multi-second TLS round-trip delays
+  WiFi.setAutoReconnect(true);   // let the stack reconnect on its own after drops
+  WiFi.setTxPower(WIFI_POWER_19_5dBm);  // max TX power — school WiFi is often far
   WiFi.begin(wifiSSID.c_str(), wifiPass.c_str());
   uint32_t t0 = millis();
   while (WiFi.status() != WL_CONNECTED && millis() - t0 < WIFI_RETRY_TIMEOUT_MS) {
@@ -1877,7 +1879,8 @@ void loop() {
     wifiReconnectNeeded = false;
     log("Forcing WiFi reconnect after repeated HB failures");
     WiFi.disconnect(false);
-    delay(200);
+    delay(300);
+    WiFi.setAutoReconnect(true);
     WiFi.begin(wifiSSID.c_str(), wifiPass.c_str());
     return;
   }

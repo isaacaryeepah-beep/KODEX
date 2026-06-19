@@ -9,7 +9,7 @@ const crypto            = require('crypto');
 const jwt               = require('jsonwebtoken');
 
 // Device is considered offline if no heartbeat within this window.
-const HEARTBEAT_OFFLINE_MS = 20_000;
+const HEARTBEAT_OFFLINE_MS = 45_000;  // 45s = 3 missed heartbeats before going offline
 
 // Fire-and-forget device audit helper (never throws).
 function _auditDevice(actor, action, device, meta = {}, req = null) {
@@ -978,7 +978,7 @@ exports.listAllDevices = async (req, res) => {
       localIp:            d.localIp,
       firmwareVersion:    d.firmwareVersion,
       online: d.lastHeartbeat
-        ? (now - new Date(d.lastHeartbeat).getTime()) < 20000
+        ? (now - new Date(d.lastHeartbeat).getTime()) < 45000
         : false,
       lastHeartbeat: d.lastHeartbeat,
       pairedBy:         d.lecturerId ? { name: d.lecturerId.name, role: d.lecturerId.role } : null,
@@ -1083,7 +1083,7 @@ exports.getAvailableDevices = async (req, res) => {
       assignedDepartment: d.assignedDepartment,
       assignedRoom:       d.assignedRoom,
       online: d.lastHeartbeat
-        ? (now - new Date(d.lastHeartbeat).getTime()) < 20000
+        ? (now - new Date(d.lastHeartbeat).getTime()) < 45000
         : false,
       lastHeartbeat: d.lastHeartbeat,
     }));

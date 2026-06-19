@@ -853,7 +853,7 @@ static void factoryReset() {
 static int postJson(const String& path, const String& body,
                     String& out, bool authed = true) {
   WiFiClientSecure client; client.setInsecure();
-  client.setTimeout(30);  // 30s SSL handshake timeout
+  client.setTimeout(8);   // 8s SSL handshake timeout — keeps loop responsive
   HTTPClient http;
   String url = apiBase + path;
   if (!http.begin(client, url)) return -1;
@@ -861,7 +861,7 @@ static int postJson(const String& path, const String& body,
   http.addHeader("Connection", "close");
   if (authed && !deviceJWT.isEmpty())
     http.addHeader("Authorization", "Bearer " + deviceJWT);
-  http.setTimeout(30000);
+  http.setTimeout(8000);  // 8s total request timeout
   int code = http.POST(body); out = http.getString(); http.end();
   return code;
 }
@@ -1161,7 +1161,7 @@ static void sendHeartbeat() {
   if (code == 401) { LOG("JWT revoked — factory reset"); factoryReset(); return; }
   if (code != 200) {
     LOG("HB fail " + String(code));
-    if (++hbFails >= 5) { hbFails = 0; forceReconn = true; }
+    if (++hbFails >= 2) { hbFails = 0; forceReconn = true; }  // reconnect after 2 consecutive fails (~16s)
     return;
   }
   hbFails    = 0;
@@ -4583,6 +4583,8 @@ void setup() {
   if (!wifiSSID.isEmpty()) {
     WiFi.mode(WIFI_AP_STA);
     WiFi.setSleep(false);
+    WiFi.setAutoReconnect(true);   // let the stack reconnect on its own after drops
+    WiFi.setTxPower(WIFI_POWER_19_5dBm);  // max TX power — school WiFi is often far
     WiFi.begin(wifiSSID.c_str(), wifiPass.c_str());
     LOG("STA: connecting to " + wifiSSID + " for sync");
   }
@@ -4704,8 +4706,10 @@ void loop() {
     }
     if (forceReconn) {
       forceReconn = false;
-      WiFi.disconnect(false); delay(200);
+      WiFi.disconnect(false); delay(300);
+      WiFi.setAutoReconnect(true);
       WiFi.begin(wifiSSID.c_str(), wifiPass.c_str());
+      LOG("forceReconn → reconnecting to " + wifiSSID);
     }
     if (staConnected && !timeSynced) {
       // NTP just came up — re-trigger time sync
