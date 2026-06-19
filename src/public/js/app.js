@@ -6580,13 +6580,16 @@ function _userRowCard(u, canManage) {
 }
 
 // ── Department drill-down view ─────────────────────────────────────────────────
-function renderDepartmentUsers(deptName, allUsers) {
+function renderDepartmentUsers(deptName, allUsers, filterRole = '') {
   const content = document.getElementById('main-content');
   if (!content) return;
   const canManage = ['admin','superadmin'].includes(currentUser.role);
-  const deptUsers = deptName === '__none__'
+
+  let deptUsers = deptName === '__none__'
     ? allUsers.filter(u => !u.department)
     : allUsers.filter(u => u.department === deptName);
+
+  if (filterRole) deptUsers = deptUsers.filter(u => u.role === filterRole);
 
   const roleOrder = ['admin','hod','lecturer','student','employee','manager'];
   const roleLabel = { admin:'Admins', hod:'Head of Department', lecturer:'Lecturers', student:'Students', employee:'Employees', manager:'Managers' };
@@ -6612,21 +6615,25 @@ function renderDepartmentUsers(deptName, allUsers) {
   `).join('');
 
   const displayName = deptName === '__none__' ? 'Unassigned Users' : esc(deptName);
+  const roleTitle = filterRole ? ` — ${roleLabel[filterRole] || filterRole}` : '';
+  const safeDepId = JSON.stringify(deptName);
+
   content.innerHTML = `
     <div style="display:flex;align-items:center;gap:12px;margin-bottom:20px;flex-wrap:wrap">
       <button onclick="renderUsers()" style="display:flex;align-items:center;gap:6px;background:none;border:1.5px solid var(--border);border-radius:10px;padding:8px 14px;font-size:13px;font-weight:600;color:var(--text);cursor:pointer">
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M19 12H5M12 5l-7 7 7 7"/></svg>
         Departments
       </button>
+      ${filterRole ? `<button onclick="renderDepartmentUsers(${safeDepId},_cachedAllUsers)" style="display:flex;align-items:center;gap:6px;background:none;border:1.5px solid var(--border);border-radius:10px;padding:8px 14px;font-size:13px;font-weight:600;color:var(--text);cursor:pointer">All Members</button>` : ''}
       <div>
-        <h2 style="margin:0;font-size:20px">${displayName}</h2>
+        <h2 style="margin:0;font-size:20px">${displayName}${roleTitle}</h2>
         <p style="color:var(--text-light);font-size:13px;margin-top:2px">${deptUsers.length} member${deptUsers.length!==1?'s':''}</p>
       </div>
       ${canManage ? `<button class="btn btn-primary btn-sm" style="margin-left:auto" onclick="showCreateUserModal()">+ Add User</button>` : ''}
     </div>
     ${sections || `<div class="card" style="padding:48px;text-align:center">
       <div style="font-size:36px;margin-bottom:10px">👥</div>
-      <div style="font-weight:600;color:var(--text)">No members in this department</div>
+      <div style="font-weight:600;color:var(--text)">No ${filterRole ? (roleLabel[filterRole]||filterRole).toLowerCase() : 'members'} in this department</div>
     </div>`}
   `;
 }
@@ -6741,11 +6748,15 @@ async function renderUsers(filterRole='', filterDept='', filterSearch='') {
             <div style="font-size:13px;font-weight:600;color:var(--text)">${hodName}</div></div>
           </div>` : ''}
           <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:4px">
-            <div style="background:#fef9c3;border-radius:10px;padding:10px 12px;text-align:center">
+            <div style="background:#fef9c3;border-radius:10px;padding:10px 12px;text-align:center;cursor:pointer;transition:opacity .15s"
+              onmouseover="this.style.opacity='.8'" onmouseout="this.style.opacity='1'"
+              onclick="event.stopPropagation();renderDepartmentUsers(${safeId},_cachedAllUsers,'lecturer')">
               <div style="font-size:22px;font-weight:800;color:#a16207">${d.lecturer.length}</div>
               <div style="font-size:10px;font-weight:700;color:#92400e;text-transform:uppercase;letter-spacing:.4px">Lecturers</div>
             </div>
-            <div style="background:#ede9fe;border-radius:10px;padding:10px 12px;text-align:center">
+            <div style="background:#ede9fe;border-radius:10px;padding:10px 12px;text-align:center;cursor:pointer;transition:opacity .15s"
+              onmouseover="this.style.opacity='.8'" onmouseout="this.style.opacity='1'"
+              onclick="event.stopPropagation();renderDepartmentUsers(${safeId},_cachedAllUsers,'student')">
               <div style="font-size:22px;font-weight:800;color:#7c3aed">${d.student.length}</div>
               <div style="font-size:10px;font-weight:700;color:#6d28d9;text-transform:uppercase;letter-spacing:.4px">Students</div>
             </div>
