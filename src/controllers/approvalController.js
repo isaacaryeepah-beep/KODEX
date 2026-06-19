@@ -1,7 +1,7 @@
 const User    = require("../models/User");
 const Company = require("../models/Company");
 const { syncStudentToRoster } = require("../utils/rosterSync");
-const { sendStudentWelcome, sendEmployeeWelcome } = require("../services/emailService");
+const { sendStudentWelcome, sendEmployeeWelcome, sendRegistrationRejected } = require("../services/emailService");
 
 // Build the base query filter for the requesting user's role.
 // Uses req.companyFilter (set by companyIsolation middleware) so superadmin
@@ -81,7 +81,20 @@ exports.rejectUser = async (req, res) => {
     if (!user) {
       return res.status(404).json({ error: "User not found or already approved" });
     }
+    const reason = (req.body?.reason || '').trim() || null;
     await User.findByIdAndDelete(user._id);
+
+    if (user.email) {
+      Company.findById(user.company).select("name displayName").lean()
+        .then(company => sendRegistrationRejected({
+          email: user.email,
+          name: user.name,
+          orgName: company?.displayName || company?.name || '',
+          reason,
+        }))
+        .catch(err => console.error("[rejectUser] rejection email failed:", err.message));
+    }
+
     res.json({ message: `${user.name} has been rejected and removed` });
   } catch (error) {
     console.error("Reject user error:", error);

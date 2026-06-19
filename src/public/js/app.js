@@ -2834,7 +2834,7 @@ async function renderApprovals() {
           </div>
           <div style="display:flex;align-items:center;gap:12px">
             <label style="display:flex;align-items:center;gap:8px;cursor:pointer;user-select:none">
-              <div id="self-reg-toggle" onclick="toggleSelfReg()" style="width:44px;height:24px;border-radius:12px;background:${selfRegEnabled ? 'var(--primary)' : 'var(--border)'};position:relative;cursor:pointer;transition:background .2s">
+              <div id="self-reg-toggle" data-on="${selfRegEnabled ? '1' : '0'}" onclick="toggleSelfReg()" style="width:44px;height:24px;border-radius:12px;background:${selfRegEnabled ? 'var(--primary)' : 'var(--border)'};position:relative;cursor:pointer;transition:background .2s">
                 <div style="width:18px;height:18px;border-radius:50%;background:#fff;position:absolute;top:3px;left:${selfRegEnabled ? '23px' : '3px'};transition:left .2s"></div>
               </div>
               <span id="self-reg-label" style="font-size:13px;font-weight:600;color:${selfRegEnabled ? 'var(--primary)' : 'var(--text-muted)'}">${selfRegEnabled ? 'Open' : 'Closed'}</span>
@@ -2879,7 +2879,7 @@ async function renderApprovals() {
                 <td style="font-size:13px;color:var(--text-light)">${new Date(u.createdAt).toLocaleDateString()}</td>
                 <td style="white-space:nowrap">
                   <button class="btn btn-sm" style="background:#22c55e;color:#fff;margin-right:6px" onclick="approveUser('${u._id}')">✓ Approve</button>
-                  <button class="btn btn-danger btn-sm" onclick="rejectUser('${u._id}')">✕ Reject</button>
+                  <button class="btn btn-danger btn-sm" onclick="rejectUser('${u._id}','${esc(u.name)}')">✕ Reject</button>
                 </td>
               </tr>
             `).join('')}</tbody>
@@ -2895,10 +2895,9 @@ async function renderApprovals() {
 async function toggleSelfReg() {
   const toggle = document.getElementById('self-reg-toggle');
   if (!toggle) return;
-  const currentlyOn = toggle.style.background.includes('primary') || toggle.querySelector('div').style.left === '23px';
-  const newVal = !currentlyOn;
+  const newVal = toggle.dataset.on !== '1';
   try {
-    await api('/api/approvals/self-registration', { method: 'PATCH', body: { enabled: newVal } });
+    await api('/api/approvals/self-registration', { method: 'PATCH', body: JSON.stringify({ enabled: newVal }) });
     renderApprovals();
   } catch (e) {
     toastError(e.message);
@@ -2915,10 +2914,31 @@ async function approveUser(userId) {
   }
 }
 
-async function rejectUser(userId) {
-  if (!confirm('Reject and remove this user? This cannot be undone.')) return;
+function rejectUser(userId, userName) {
+  openModal(`
+    <div style="max-width:400px">
+      <h3 style="margin-bottom:8px;font-size:16px">Reject Registration</h3>
+      <p style="font-size:13px;color:var(--text-muted);margin-bottom:16px">
+        Rejecting <strong>${esc(userName || 'this user')}</strong> will delete their account and notify them by email.
+      </p>
+      <label style="font-size:12px;font-weight:600;text-transform:uppercase;letter-spacing:.5px;color:var(--text-muted)">
+        Reason (optional — included in rejection email)
+      </label>
+      <textarea id="reject-reason" rows="3" placeholder="e.g. Could not verify your identity. Please contact the office." maxlength="300"
+        style="width:100%;margin-top:6px;padding:9px 12px;border:1.5px solid var(--border);border-radius:8px;font-size:13px;background:var(--bg);color:var(--text);resize:vertical"></textarea>
+      <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:16px">
+        <button class="btn btn-secondary" onclick="closeModal()">Cancel</button>
+        <button class="btn btn-danger" onclick="_confirmReject('${esc(userId)}')">Reject &amp; Notify</button>
+      </div>
+    </div>
+  `);
+}
+
+async function _confirmReject(userId) {
+  const reason = (document.getElementById('reject-reason')?.value || '').trim();
+  closeModal();
   try {
-    await api(`/api/approvals/${userId}/reject`, { method: 'DELETE' });
+    await api(`/api/approvals/${userId}/reject`, { method: 'DELETE', body: JSON.stringify({ reason }) });
     renderApprovals();
   } catch (e) {
     toastError(e.message);
