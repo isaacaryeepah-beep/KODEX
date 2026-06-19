@@ -767,9 +767,25 @@ exports.login = async (req, res) => {
       }
       user = await User.findOne({ email, company: company._id, role: "employee" }).select("+password");
     } else if (email && loginRole === "lecturer") {
-      user = await User.findOne({ email, role: "lecturer" }).select("+password");
+      if (institutionCode) {
+        const company = await Company.findOne({ institutionCode: institutionCode.toUpperCase() });
+        if (company) {
+          user = await User.findOne({ email, company: company._id, role: "lecturer" }).select("+password");
+        }
+      }
+      if (!user) {
+        user = await User.findOne({ email, role: "lecturer" }).select("+password");
+      }
     } else if (email && loginRole === "hod") {
-      user = await User.findOne({ email, role: "hod" }).select("+password");
+      if (institutionCode) {
+        const company = await Company.findOne({ institutionCode: institutionCode.toUpperCase() });
+        if (company) {
+          user = await User.findOne({ email, company: company._id, role: "hod" }).select("+password");
+        }
+      }
+      if (!user) {
+        user = await User.findOne({ email, role: "hod" }).select("+password");
+      }
     } else {
       user = await User.findOne({ email }).select("+password");
     }

@@ -1412,11 +1412,12 @@ async function handleLecturerLogin() {
   const btn = document.querySelector('#lecturer-login-form button[type="submit"]');
   try {
     const email = document.getElementById('lecturer-login-email').value.trim();
+    const institutionCode = (document.getElementById('lecturer-login-code')?.value || '').trim().toUpperCase();
     const password = document.getElementById('lecturer-login-password').value;
     if (!email) return showLecturerError('Please enter your email');
     if (!password) return showLecturerError('Please enter your password');
     if (btn) { btn.textContent = 'Signing in…'; btn.disabled = true; }
-    const credentials = { email, password, loginRole: 'lecturer', portalMode: 'academic', deviceId: getDeviceFingerprint() };
+    const credentials = { email, password, loginRole: 'lecturer', portalMode: 'academic', deviceId: getDeviceFingerprint(), ...(institutionCode ? { institutionCode } : {}) };
 
     let data;
     if (!(await isOnlineAsync())) {
@@ -1659,12 +1660,13 @@ async function handleHodLogin() {
   const btn = document.querySelector('#hod-login-form button[type="submit"]');
   try {
     const email    = document.getElementById('hod-login-email').value.trim();
+    const institutionCode = (document.getElementById('hod-login-code')?.value || '').trim().toUpperCase();
     const password = document.getElementById('hod-login-password').value;
     if (!email)    return showHodError('Please enter your email.');
     if (!password) return showHodError('Please enter your password.');
     if (btn) { btn.textContent = 'Signing in…'; btn.disabled = true; }
 
-    const credentials = { email, password, loginRole: 'hod', portalMode: 'academic', deviceId: getDeviceFingerprint() };
+    const credentials = { email, password, loginRole: 'hod', portalMode: 'academic', deviceId: getDeviceFingerprint(), ...(institutionCode ? { institutionCode } : {}) };
     let data;
     if (!(await isOnlineAsync())) {
       showOfflineLoginNotice('hod-login-form');
@@ -2556,19 +2558,19 @@ function buildSidebar() {
     case 'student':
       links.push({ sep: true, label: 'ATTENDANCE' });
       links.push({ id: 'my-attendance', label: 'My Attendance', icon: sessionsIcon() });
+      if (currentUser.isClassRep) {
+        links.push({ sep: true, label: 'CLASS REP' });
+        links.push({ id: 'rep-device', label: 'My Device', icon: svgIcon('<rect x="5" y="2" width="14" height="20" rx="2" ry="2"/><line x1="12" y1="18" x2="12.01" y2="18"/>') });
+      }
       links.push({ sep: true, label: 'ACADEMIC' });
       links.push({ id: 'courses', label: 'My Courses', icon: coursesIcon() });
       links.push({ id: 'course-videos', label: 'Course Videos', icon: svgIcon('<polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2" ry="2"/>') });
-      links.push({ id: 'timetable', label: 'Schedule', icon: svgIcon('<rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/>') });
+      links.push({ id: 'timetable', label: 'Timetable', icon: svgIcon('<rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/>') });
       links.push({ id: 'quizzes', label: 'Quizzes', icon: quizzesIcon() });
       links.push({ id: 'snap-quiz', label: 'Exam Portal', icon: svgIcon('<path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>') });
       links.push({ id: 'assignments', label: 'Assignments', icon: assignmentsIcon() });
       links.push({ id: 'gradebook', label: 'My Grades', icon: svgIcon('<path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/>') });
       links.push({ id: 'quiz-history', label: 'My Results', icon: svgIcon('<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/>') });
-      if (currentUser.isClassRep) {
-        links.push({ sep: true, label: 'CLASS REP' });
-        links.push({ id: 'rep-device', label: 'My Device', icon: svgIcon('<rect x="5" y="2" width="14" height="20" rx="2" ry="2"/><line x1="12" y1="18" x2="12.01" y2="18"/>') });
-      }
       links.push({ sep: true, label: 'COMMUNICATE' });
       links.push({ id: 'messages', label: 'Messages', icon: svgIcon('<path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>') });
       links.push({ id: 'meetings', label: 'Meetings', icon: meetingsIcon() });
@@ -6767,9 +6769,9 @@ async function renderUsers(filterRole='', filterDept='', filterSearch='') {
       const total = d.hod.length + d.lecturer.length + d.student.length + d.other.length;
       const grad = deptGradients[i % deptGradients.length];
       const hodName = d.hod[0] ? esc(d.hod[0].name.split(' ').slice(0,2).join(' ')) : '—';
-      const safeId = JSON.stringify(dept);
+      const safeDept = dept.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
       return `
-      <div onclick="renderDepartmentUsers(${safeId}, _cachedAllUsers)"
+      <div onclick="renderDepartmentUsers('${safeDept}', _cachedAllUsers)"
         style="background:var(--card);border:1px solid var(--border);border-radius:16px;overflow:hidden;cursor:pointer;transition:transform .18s,box-shadow .18s;box-shadow:var(--shadow-md)"
         onmouseover="this.style.transform='translateY(-3px)';this.style.boxShadow='var(--shadow-lg)'"
         onmouseout="this.style.transform='';this.style.boxShadow='var(--shadow-md)'">
@@ -6787,13 +6789,13 @@ async function renderUsers(filterRole='', filterDept='', filterSearch='') {
           <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:4px">
             <div style="background:#fef9c3;border-radius:10px;padding:10px 12px;text-align:center;cursor:pointer;transition:opacity .15s"
               onmouseover="this.style.opacity='.8'" onmouseout="this.style.opacity='1'"
-              onclick="event.stopPropagation();renderDepartmentUsers(${safeId},_cachedAllUsers,'lecturer')">
+              onclick="event.stopPropagation();renderDepartmentUsers('${safeDept}',_cachedAllUsers,'lecturer')">
               <div style="font-size:22px;font-weight:800;color:#a16207">${d.lecturer.length}</div>
               <div style="font-size:10px;font-weight:700;color:#92400e;text-transform:uppercase;letter-spacing:.4px">Lecturers</div>
             </div>
             <div style="background:#ede9fe;border-radius:10px;padding:10px 12px;text-align:center;cursor:pointer;transition:opacity .15s"
               onmouseover="this.style.opacity='.8'" onmouseout="this.style.opacity='1'"
-              onclick="event.stopPropagation();renderDepartmentUsers(${safeId},_cachedAllUsers,'student')">
+              onclick="event.stopPropagation();renderDepartmentUsers('${safeDept}',_cachedAllUsers,'student')">
               <div style="font-size:22px;font-weight:800;color:#7c3aed">${d.student.length}</div>
               <div style="font-size:10px;font-weight:700;color:#6d28d9;text-transform:uppercase;letter-spacing:.4px">Students</div>
             </div>
@@ -13558,6 +13560,7 @@ function _timetableGrid(slots, canEdit) {
 
 let _timetableSlots = [];
 let _timetableCourses = [];
+let _timetableContext = 'lecturer';
 
 async function renderLecturerTimetable() {
   const content = document.getElementById('main-content');
@@ -13604,14 +13607,34 @@ async function renderLecturerTimetable() {
 async function renderStudentTimetable() {
   const content = document.getElementById('main-content');
   if (!content) return;
+  _timetableContext = 'student';
   content.innerHTML = '<div class="loading">Loading timetable…</div>';
   try {
-    const slotData = await api('/api/timetable');
+    const isRep = !!(currentUser && currentUser.isClassRep && currentUser.classRepCourse);
+    const requests = [api('/api/timetable')];
+    if (isRep) requests.push(api(`/api/courses/${currentUser.classRepCourse}`).catch(() => null));
+    const [slotData, courseData] = await Promise.all(requests);
     const slots = slotData.slots || [];
+    if (isRep && courseData) {
+      const course = courseData.course || courseData;
+      _timetableCourses = course && course._id ? [course] : [];
+    }
+    _timetableSlots = slots;
+
+    const addBtn = isRep
+      ? `<button class="btn btn-primary btn-sm" onclick="openAddSlotModal(1)" style="display:flex;align-items:center;gap:6px">
+           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+           Add Class
+         </button>`
+      : '';
+
     content.innerHTML = `
-      <div class="page-header" style="margin-bottom:20px">
-        <h2 style="font-size:22px;font-weight:800;letter-spacing:-.5px;color:#0f172a;margin-bottom:2px">My Schedule</h2>
-        <p style="color:#64748b;font-size:13px">Your weekly class timetable based on enrolled courses</p>
+      <div class="page-header" style="margin-bottom:20px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px">
+        <div>
+          <h2 style="font-size:22px;font-weight:800;letter-spacing:-.5px;color:#0f172a;margin-bottom:2px">Timetable</h2>
+          <p style="color:#64748b;font-size:13px">${isRep ? 'Manage your class timetable' : 'Your weekly class timetable based on enrolled courses'}</p>
+        </div>
+        ${addBtn}
       </div>
       ${slots.length === 0
         ? `<div style="background:#fff;border:1px solid #e8eaed;border-radius:16px;padding:60px 20px;text-align:center;box-shadow:0 1px 4px rgba(0,0,0,.05)">
@@ -13619,9 +13642,9 @@ async function renderStudentTimetable() {
               <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#2563eb" stroke-width="1.8"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
             </div>
             <h3 style="font-size:16px;font-weight:700;color:#0f172a;margin-bottom:6px">No classes scheduled yet</h3>
-            <p style="color:#64748b;font-size:13px">Your lecturers haven't added timetable slots yet. Check back soon.</p>
+            <p style="color:#64748b;font-size:13px">${isRep ? 'Add your first class slot using the button above.' : "Your lecturers haven't added timetable slots yet. Check back soon."}</p>
           </div>`
-        : `<div style="background:#fff;border:1px solid #e8eaed;border-radius:14px;overflow-x:auto;box-shadow:0 1px 4px rgba(0,0,0,.05)">${_timetableGrid(slots, false)}</div>`
+        : `<div style="background:#fff;border:1px solid #e8eaed;border-radius:14px;overflow-x:auto;box-shadow:0 1px 4px rgba(0,0,0,.05)">${_timetableGrid(slots, isRep)}</div>`
       }`;
   } catch(e) {
     content.innerHTML = `<div class="card"><p style="color:var(--danger)">Error: ${e.message}</p></div>`;
@@ -13721,7 +13744,7 @@ async function saveSlot(slotId) {
       showToastNotif('Class added to timetable', 'success');
     }
     closeModal();
-    renderLecturerTimetable();
+    _timetableContext === 'student' ? renderStudentTimetable() : renderLecturerTimetable();
   } catch(e) {
     toastError(e.message);
   }
@@ -13733,7 +13756,7 @@ async function deleteSlot(slotId) {
     await api(`/api/timetable/${slotId}`, { method: 'DELETE' });
     showToastNotif('Class removed', 'success');
     closeModal();
-    renderLecturerTimetable();
+    _timetableContext === 'student' ? renderStudentTimetable() : renderLecturerTimetable();
   } catch(e) {
     toastError(e.message);
   }
