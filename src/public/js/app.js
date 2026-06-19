@@ -11164,19 +11164,6 @@ async function renderSubscription() {
   const content = document.getElementById('main-content');
   if (!content) return;
 
-  // Employees and students do not pay — show informational message and stop
-  const freeRoles = ['employee', 'student'];
-  if (currentUser && freeRoles.includes(currentUser.role)) {
-    content.innerHTML = `
-      <div class="page-header"><h2>Subscription</h2><p>Your access plan</p></div>
-      <div class="card" style="max-width:480px;padding:32px;text-align:center">
-        <div style="font-size:40px;margin-bottom:12px">✅</div>
-        <h3 style="margin-bottom:8px">No Payment Required</h3>
-        <p style="color:var(--text-muted)">Your access is managed by your company admin. You do not need a personal subscription.</p>
-      </div>`;
-    return;
-  }
-
   try {
     const [meData, plansData] = await Promise.all([
       api('/api/auth/me'),
@@ -12925,7 +12912,7 @@ async function loadAnnBadge() {
 
 const ANN_COLORS = { info:'#6366f1', warning:'#f59e0b', success:'#22c55e', urgent:'#ef4444' };
 const ANN_ICONS  = { info:'ℹ️', warning:'⚠️', success:'✅', urgent:'🚨' };
-const ANN_CAN_POST = ['admin','superadmin','lecturer','manager','hod'];
+const ANN_CAN_POST = ['admin','superadmin','lecturer','manager','hod','student'];
 
 async function renderAnnouncements() {
   const content = document.getElementById('main-content');
@@ -12945,7 +12932,7 @@ async function renderAnnouncements() {
     const data = await api('/api/announcements');
     offlineCache('announcements', data);
     const anns = data.announcements || [];
-    const canPost = ANN_CAN_POST.includes(currentUser.role);
+    const canPost = ANN_CAN_POST.includes(currentUser.role) && (currentUser.role !== 'student' || currentUser.isClassRep);
     const isAdmin = ['admin','superadmin'].includes(currentUser.role);
 
     content.innerHTML = `
@@ -12954,7 +12941,7 @@ async function renderAnnouncements() {
           <h2>Announcements</h2>
           <p>Institution-wide notices and updates</p>
         </div>
-        ${canPost ? `<button class="btn btn-primary" onclick="openPostAnnouncementModal()">＋ Post Announcement</button>` : ''}
+        ${canPost ? `<button class="btn btn-primary" onclick="${currentUser.isClassRep ? 'openClassRepAnnouncementModal()' : 'openPostAnnouncementModal()'}">＋ Post Announcement</button>` : ''}
       </div>
       <div id="ann-list">
         ${anns.length === 0
@@ -13110,6 +13097,62 @@ async function openPostAnnouncementModal() {
       <div style="padding:12px 20px;border-top:1px solid var(--border);display:flex;gap:8px;justify-content:flex-end;position:sticky;bottom:0;background:var(--card);border-radius:0 0 14px 14px;">
         <button class="btn btn-secondary" onclick="document.getElementById('ann-post-overlay').remove()">Cancel</button>
         <button class="btn btn-primary" onclick="submitAnnouncement()">📢 Post</button>
+      </div>
+    </div>`;
+  document.body.appendChild(ol);
+}
+
+function openClassRepAnnouncementModal() {
+  const existing = document.getElementById('ann-post-overlay');
+  if (existing) existing.remove();
+  const level = currentUser.studentLevel ? `Level ${currentUser.studentLevel}` : '';
+  const group = currentUser.studentGroup ? `Group ${currentUser.studentGroup}` : '';
+  const dept  = currentUser.department   || '';
+  const scopeLabel = [level, group, dept].filter(Boolean).join(' · ') || 'Your Class';
+
+  const ol = document.createElement('div');
+  ol.id = 'ann-post-overlay';
+  ol.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:400;display:flex;align-items:center;justify-content:center;padding:16px;backdrop-filter:blur(3px)';
+  ol.innerHTML = `
+    <div style="background:var(--card);border-radius:14px;width:100%;max-width:480px;max-height:92vh;overflow-y:auto;box-shadow:0 20px 60px rgba(0,0,0,.2);">
+      <div style="padding:16px 20px;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center;position:sticky;top:0;background:var(--card);z-index:1;border-radius:14px 14px 0 0;">
+        <h3 style="font-size:15px;font-weight:700;margin:0">📢 Class Announcement</h3>
+        <button onclick="document.getElementById('ann-post-overlay').remove()" style="width:26px;height:26px;border-radius:6px;border:1px solid var(--border);background:var(--bg);cursor:pointer;font-size:13px;">✕</button>
+      </div>
+      <div style="padding:18px 20px;display:flex;flex-direction:column;gap:13px;">
+        <div style="padding:8px 12px;background:rgba(79,110,247,.07);border-radius:8px;border-left:3px solid #4f6ef7;font-size:12px;color:var(--text-muted)">
+          📌 This announcement will be visible only to <strong style="color:var(--text)">${esc(scopeLabel)}</strong>
+        </div>
+        <div>
+          <label style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;color:var(--text-light);margin-bottom:5px;display:block;">Title *</label>
+          <input id="ann-title" placeholder="e.g. Study group at 4pm" style="width:100%;padding:9px 12px;border:1.5px solid var(--border);border-radius:8px;font-size:14px;font-family:inherit;outline:none;">
+        </div>
+        <div>
+          <label style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;color:var(--text-light);margin-bottom:5px;display:block;">Message *</label>
+          <textarea id="ann-body" rows="4" placeholder="What do you want to tell your class?" style="width:100%;padding:9px 12px;border:1.5px solid var(--border);border-radius:8px;font-size:13px;font-family:inherit;resize:vertical;outline:none;"></textarea>
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
+          <div>
+            <label style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;color:var(--text-light);margin-bottom:5px;display:block;">Type</label>
+            <select id="ann-type" style="width:100%;padding:8px 10px;border:1.5px solid var(--border);border-radius:8px;font-size:13px;font-family:inherit;outline:none;">
+              <option value="info">ℹ️ Info</option>
+              <option value="warning">⚠️ Warning</option>
+              <option value="success">✅ Good News</option>
+              <option value="urgent">🚨 Urgent</option>
+            </select>
+          </div>
+          <div>
+            <label style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;color:var(--text-light);margin-bottom:5px;display:block;">Expires At <span style="font-weight:400">(opt)</span></label>
+            <input id="ann-expires" type="datetime-local" style="width:100%;padding:8px 10px;border:1.5px solid var(--border);border-radius:8px;font-size:13px;font-family:inherit;outline:none;">
+          </div>
+        </div>
+        <input type="hidden" id="ann-audience" value="class_group">
+        <input type="hidden" id="ann-course" value="">
+        <div id="ann-post-err" style="display:none;padding:8px 12px;background:#fef2f2;border:1px solid #fecaca;border-radius:7px;color:#dc2626;font-size:12px;font-weight:500;"></div>
+      </div>
+      <div style="padding:12px 20px;border-top:1px solid var(--border);display:flex;gap:8px;justify-content:flex-end;position:sticky;bottom:0;background:var(--card);border-radius:0 0 14px 14px;">
+        <button class="btn btn-secondary" onclick="document.getElementById('ann-post-overlay').remove()">Cancel</button>
+        <button class="btn btn-primary" onclick="submitAnnouncement()">📢 Post to Class</button>
       </div>
     </div>`;
   document.body.appendChild(ol);
