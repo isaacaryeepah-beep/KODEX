@@ -9,6 +9,7 @@ const AttendanceSession = require("../models/AttendanceSession");
 const AttendanceRecord  = require("../models/AttendanceRecord");
 const Conversation      = require("../models/Conversation");
 const Message           = require("../models/Message");
+const notificationService = require("../services/notificationService");
 
 const isValidObjectId = (id) => mongoose.Types.ObjectId.isValid(id);
 
@@ -183,6 +184,8 @@ exports.approveCourse = async (req, res) => {
       resourceLabel: `${course.code} – ${course.title}`,
       req,
     }).catch(() => {});
+
+    notificationService.notifyCourseApproved(course, req.user).catch(() => {});
 
     res.json({ message: `Course "${course.title}" approved and published.`, course });
   } catch (err) {

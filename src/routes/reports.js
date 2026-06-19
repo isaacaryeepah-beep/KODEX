@@ -29,6 +29,13 @@ router.get(
 );
 
 router.get(
+  "/attendance/csv",
+  requireRole("manager", "lecturer", "admin", "superadmin", "employee", "student"),
+  companyIsolation,
+  reportController.attendanceCsv
+);
+
+router.get(
   "/sessions",
   requireRole("manager", "lecturer", "admin", "superadmin"),
   companyIsolation,
