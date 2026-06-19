@@ -2531,6 +2531,7 @@ function buildSidebar() {
       links.push({ id: 'reports',       label: 'Reports',         icon: reportsIcon() });
       links.push({ sep: true, label: 'SUPPORT' });
       links.push({ id: 'emp-assistant', label: 'Assistant', icon: svgIcon('<path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/><circle cx="12" cy="10" r="1"/><circle cx="8" cy="10" r="1"/><circle cx="16" cy="10" r="1"/>') });
+      links.push({ id: 'subscription',  label: 'Subscription',    icon: subscriptionIcon() });
       links.push({ id: 'support',       label: 'Support',         icon: svgIcon('<circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/>') });
       links.push({ id: 'faq-center',    label: 'FAQ Center',      icon: svgIcon('<path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/><line x1="9" y1="10" x2="15" y2="10"/><line x1="12" y1="7" x2="12" y2="13"/>') });
       links.push({ id: 'contact',       label: 'Contact Us',      icon: svgIcon('<path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07A19.5 19.5 0 0 1 4.69 12a19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 3.6 1.28h3a2 2 0 0 1 2 1.72c.127.96.361 1.903.7 2.81a2 2 0 0 1-.45 2.11L7.91 8.7a16 16 0 0 0 6.29 6.29l1.41-1.41a2 2 0 0 1 2.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0 1 22 16.92z"/>') });
@@ -2541,6 +2542,7 @@ function buildSidebar() {
       links.push({ id: 'my-attendance', label: 'My Attendance', icon: sessionsIcon() });
       links.push({ sep: true, label: 'ACADEMIC' });
       links.push({ id: 'courses', label: 'My Courses', icon: coursesIcon() });
+      links.push({ id: 'course-videos', label: 'Course Videos', icon: svgIcon('<polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2" ry="2"/>') });
       links.push({ id: 'timetable', label: 'Schedule', icon: svgIcon('<rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/>') });
       links.push({ id: 'quizzes', label: 'Quizzes', icon: quizzesIcon() });
       links.push({ id: 'snap-quiz', label: 'Exam Portal', icon: svgIcon('<path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>') });
@@ -2552,6 +2554,7 @@ function buildSidebar() {
       links.push({ id: 'meetings', label: 'Meetings', icon: meetingsIcon() });
       links.push({ id: 'announcements', label: 'Announcements', icon: svgIcon('<path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/>') });
       links.push({ sep: true, label: 'SUPPORT' });
+      links.push({ id: 'subscription', label: 'Subscription', icon: subscriptionIcon() });
       links.push({ id: 'support', label: 'Support', icon: svgIcon('<circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/>') });
       links.push({ id: 'faq-center', label: 'FAQ Center', icon: svgIcon('<path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/><line x1="9" y1="10" x2="15" y2="10"/><line x1="12" y1="7" x2="12" y2="13"/>') });
       links.push({ id: 'contact',   label: 'Contact Us', icon: svgIcon('<path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07A19.5 19.5 0 0 1 4.69 12a19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 3.6 1.28h3a2 2 0 0 1 2 1.72c.127.96.361 1.903.7 2.81a2 2 0 0 1-.45 2.11L7.91 8.7a16 16 0 0 0 6.29 6.29l1.41-1.41a2 2 0 0 1 2.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0 1 22 16.92z"/>') });
@@ -2645,6 +2648,7 @@ function navigateTo(view) {
     case 'sign-in-out': renderSignInOut(); break;
     case 'corp-attendance': renderCorporateAttendance(); break;
     case 'subscription': renderSubscription(); break;
+    case 'course-videos': renderCourseVideos(); break;
     case 'reports': renderReports(); break;
     case 'shifts': renderShifts(); break;
     case 'leave-requests': renderLeaveRequests(); break;
@@ -11118,6 +11122,101 @@ async function renderSubscription() {
   }
 }
 
+// ─── Course Videos ────────────────────────────────────────────────────────────
+
+window.openVideoPlayer = function(title, embedUrl, platform) {
+  let mediaHtml;
+  const safePlatforms = ['youtube', 'vimeo', 'googledrive', 'loom'];
+  if (embedUrl && safePlatforms.includes((platform || '').toLowerCase())) {
+    mediaHtml = `<iframe src="${esc(embedUrl)}" style="width:100%;height:400px;border:none;border-radius:10px"
+      allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+      allowfullscreen></iframe>`;
+  } else if (embedUrl) {
+    mediaHtml = `<video src="${esc(embedUrl)}" controls style="width:100%;border-radius:10px;max-height:400px">
+      Your browser does not support video playback.
+    </video>`;
+  } else {
+    mediaHtml = `<div style="padding:40px;text-align:center;color:var(--text-muted)">No playable source available for this video.</div>`;
+  }
+  openModal(`
+    <div style="min-width:min(680px,90vw)">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
+        <h3 style="margin:0;font-size:16px;color:var(--text)">${esc(title)}</h3>
+        <button onclick="closeModal()" style="background:none;border:none;color:var(--text-muted);cursor:pointer;font-size:20px;line-height:1">&times;</button>
+      </div>
+      ${mediaHtml}
+    </div>
+  `);
+};
+
+async function renderCourseVideos() {
+  const content = document.getElementById('main-content');
+  if (!content) return;
+
+  content.innerHTML = `
+    <div class="page-header">
+      <h2>Course Videos</h2>
+      <p>Video lectures from your enrolled courses</p>
+    </div>
+    <div id="cv-body"><div class="loading-spinner" style="margin:60px auto"></div></div>`;
+
+  const body = document.getElementById('cv-body');
+  try {
+    const data = await api('/api/course-videos/my-courses');
+    const courses = data.courses || [];
+
+    if (!courses.length) {
+      body.innerHTML = `<div class="card" style="text-align:center;padding:48px 24px">
+        <div style="font-size:40px;margin-bottom:12px">🎬</div>
+        <h3 style="margin-bottom:8px">No Videos Yet</h3>
+        <p style="color:var(--text-muted)">Your lecturers haven't uploaded any course videos yet. Check back later.</p>
+      </div>`;
+      return;
+    }
+
+    const platformIcon = p => ({
+      youtube:     '▶️',
+      vimeo:       '🎥',
+      googledrive: '📁',
+      loom:        '🔴',
+    }[p] || '🎬');
+
+    body.innerHTML = courses.map(({ course, videos }) => {
+      const vids = videos || [];
+      const vidCards = vids.length ? vids.map(v => `
+        <div class="card" style="padding:0;overflow:hidden;cursor:pointer;transition:transform .15s,box-shadow .15s"
+          onmouseenter="this.style.transform='translateY(-2px)';this.style.boxShadow='0 6px 20px rgba(0,0,0,.25)'"
+          onmouseleave="this.style.transform='';this.style.boxShadow=''"
+          onclick="openVideoPlayer('${esc(v.title)}','${esc(v.embedUrl || v.url || '')}','${esc(v.platform || '')}')">
+          ${v.thumbnail
+            ? `<img src="${esc(v.thumbnail)}" alt="${esc(v.title)}" style="width:100%;height:140px;object-fit:cover">`
+            : `<div style="width:100%;height:140px;background:var(--bg);display:flex;align-items:center;justify-content:center;font-size:36px">${platformIcon(v.platform)}</div>`}
+          <div style="padding:12px">
+            <div style="font-size:13px;font-weight:600;color:var(--text);margin-bottom:4px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(v.title)}</div>
+            ${v.description ? `<div style="font-size:12px;color:var(--text-muted);display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden">${esc(v.description)}</div>` : ''}
+            <div style="font-size:11px;color:var(--text-muted);margin-top:6px;text-transform:uppercase;letter-spacing:.5px">${platformIcon(v.platform)} ${esc(v.platform || 'video')}</div>
+          </div>
+        </div>`).join('')
+        : `<p style="color:var(--text-muted);font-size:13px;padding:8px 0">No videos uploaded for this course yet.</p>`;
+
+      return `
+        <div style="margin-bottom:32px">
+          <div style="display:flex;align-items:center;gap:10px;margin-bottom:14px">
+            <div style="width:4px;height:22px;background:var(--primary);border-radius:2px"></div>
+            <h3 style="margin:0;font-size:16px;color:var(--text)">${esc(course.title)}</h3>
+            <span style="font-size:12px;color:var(--text-muted);padding:2px 8px;border:1px solid var(--border);border-radius:12px">${esc(course.code)}</span>
+            <span style="font-size:12px;color:var(--text-muted);margin-left:auto">${vids.length} video${vids.length !== 1 ? 's' : ''}</span>
+          </div>
+          <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:16px">
+            ${vidCards}
+          </div>
+        </div>`;
+    }).join('');
+
+  } catch (e) {
+    body.innerHTML = `<div class="card"><p style="color:var(--danger)">Error loading videos: ${e.message}</p></div>`;
+  }
+}
 
 async function renderSearch() {
   const content = document.getElementById('main-content');
