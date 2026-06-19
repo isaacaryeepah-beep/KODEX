@@ -18808,16 +18808,53 @@ window.hodDoAssignRep = async (studentId, studentName) => {
   }
 };
 
-window.hodRenameDevice = async (deviceId, currentName) => {
-  const newName = prompt(`Rename device:\n(current: ${currentName})`, currentName);
-  if (!newName || newName.trim() === currentName) return;
+function _openRenameModal(deviceId, currentName, onSuccess) {
+  openModal(`
+    <div style="padding:4px 0">
+      <h3 style="margin:0 0 6px;font-size:17px;font-weight:700">Rename Device</h3>
+      <p style="color:var(--muted);font-size:13px;margin:0 0 20px">
+        Current: <strong style="color:var(--text)">${esc(currentName)}</strong>
+      </p>
+      <label style="display:block;font-size:11px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px">New Name</label>
+      <input id="dev-rename-inp" type="text" value="${esc(currentName)}" maxlength="48"
+        placeholder="e.g. Lecture Hall A"
+        style="width:100%;padding:13px 14px;background:var(--surface,#1a2038);border:1.5px solid var(--border,#2d3a5c);border-radius:10px;color:var(--text,#fff);font-size:15px;outline:none;box-sizing:border-box;margin-bottom:20px"
+        onkeydown="if(event.key==='Enter')window._doDeviceRename('${esc(deviceId)}')">
+      <div style="display:flex;gap:10px">
+        <button onclick="closeModal()"
+          style="flex:1;padding:13px;background:transparent;border:1.5px solid var(--border,#2d3a5c);border-radius:10px;color:var(--muted,#94a3b8);font-size:14px;font-weight:600;cursor:pointer">
+          Cancel
+        </button>
+        <button id="dev-rename-save" onclick="window._doDeviceRename('${esc(deviceId)}')"
+          style="flex:1;padding:13px;background:var(--accent,#4f6ef7);border:none;border-radius:10px;color:#fff;font-size:14px;font-weight:700;cursor:pointer">
+          Save
+        </button>
+      </div>
+    </div>
+  `);
+  window._onRenameSuccess = onSuccess;
+  setTimeout(() => { const i = document.getElementById('dev-rename-inp'); if (i) { i.focus(); i.select(); } }, 60);
+}
+
+window._doDeviceRename = async (deviceId) => {
+  const inp = document.getElementById('dev-rename-inp');
+  const newName = (inp?.value || '').trim();
+  if (!newName) { inp?.focus(); return; }
+  const btn = document.getElementById('dev-rename-save');
+  if (btn) { btn.disabled = true; btn.textContent = 'Saving…'; }
   try {
-    await api('/api/devices/my/rename', { method: 'PATCH', body: JSON.stringify({ deviceName: newName.trim(), deviceId }) });
-    showToastNotif('✅ Device renamed successfully.', 'success');
-    renderHodDevices();
+    await api('/api/devices/my/rename', { method: 'PATCH', body: JSON.stringify({ deviceName: newName, deviceId }) });
+    closeModal();
+    showToastNotif('Device renamed successfully.', 'success');
+    if (typeof window._onRenameSuccess === 'function') window._onRenameSuccess();
   } catch (e) {
-    showToastNotif('❌ Failed to rename: ' + e.message, 'error');
+    if (btn) { btn.disabled = false; btn.textContent = 'Save'; }
+    showToastNotif('Failed to rename: ' + (e.message || 'Server error'), 'error');
   }
+};
+
+window.hodRenameDevice = (deviceId, currentName) => {
+  _openRenameModal(deviceId, currentName, renderHodDevices);
 };
 
 window.hodSetupDevice = async (deviceId) => {
@@ -19410,14 +19447,8 @@ window.adminDoAssignRep = async (deviceId, studentId, studentName) => {
   } catch(e) { showToastNotif('❌ ' + (e.message || 'Failed to assign'), 'error'); }
 };
 
-window.adminRenameDevice = async (deviceId, currentName) => {
-  const newName = prompt(`Rename device:\n(current: ${currentName})`, currentName);
-  if (!newName || !newName.trim() || newName.trim() === currentName) return;
-  try {
-    await api('/api/devices/my/rename', { method: 'PATCH', body: JSON.stringify({ deviceName: newName.trim(), deviceId }) });
-    showToastNotif('✅ Device renamed.', 'success');
-    renderAdminDevices();
-  } catch(e) { showToastNotif('❌ ' + (e.message || 'Failed to rename'), 'error'); }
+window.adminRenameDevice = (deviceId, currentName) => {
+  _openRenameModal(deviceId, currentName, renderAdminDevices);
 };
 
 window.adminFactoryReset = async (deviceId, deviceName, isOnline) => {
