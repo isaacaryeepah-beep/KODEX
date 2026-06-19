@@ -7,7 +7,7 @@ const StudentRoster = require("../models/StudentRoster");
 const MeetingIdentity = require("../models/MeetingIdentity");
 const { generateToken, generateRefreshToken, verifyRefreshToken, hashToken } = require("../utils/jwt");
 const RefreshToken = require("../models/RefreshToken");
-const { sendWelcome, sendAdminPasswordResetNotice, sendPasswordReset, sendNewInstitutionAlert, sendLecturerWelcome, sendEmployeeWelcome, sendHodWelcome } = require("../services/emailService");
+const { sendWelcome, sendAdminPasswordResetNotice, sendPasswordReset, sendNewInstitutionAlert, sendLecturerWelcome, sendEmployeeWelcome, sendHodWelcome, sendSelfRegPending, sendAdminNewSelfReg } = require("../services/emailService");
 const { sendOtp, normalisePhone } = require("../services/smsService");
 const { syncStudentToRoster } = require("../utils/rosterSync");
 
@@ -1828,5 +1828,133 @@ exports.getOfflineCredential = async (req, res) => {
   } catch (e) {
     console.error('getOfflineCredential error:', e);
     res.status(500).json({ error: 'Failed to issue offline credential' });
+  }
+};
+
+// ─── Institution lookup (public — used by self-registration page) ─────────────
+exports.lookupInstitution = async (req, res) => {
+  try {
+    const code = (req.query.code || '').toUpperCase().trim();
+    if (!code) return res.status(400).json({ error: 'code is required' });
+    const company = await Company.findOne({ institutionCode: code, isActive: true })
+      .select('name displayName selfRegistrationEnabled institutionCode').lean();
+    if (!company) return res.status(404).json({ error: 'Institution not found. Check the code and try again.' });
+    res.json({
+      name: company.displayName || company.name,
+      selfRegistrationEnabled: !!company.selfRegistrationEnabled,
+      institutionCode: company.institutionCode,
+    });
+  } catch (err) {
+    console.error('lookupInstitution error:', err);
+    res.status(500).json({ error: 'Lookup failed' });
+  }
+};
+
+// ─── Self-Registration (public endpoint — no auth) ────────────────────────────
+exports.registerSelfService = async (req, res) => {
+  try {
+    const { institutionCode, role, password } = req.body;
+    const name       = (req.body.name       || '').trim();
+    const email      = (req.body.email      || '').trim().toLowerCase();
+    const department = (req.body.department || '').trim();
+    const programme  = (req.body.programme  || '').trim();
+    const IndexNumber = (req.body.IndexNumber || req.body.indexNumber || '').trim().toUpperCase();
+    const phone      = req.body.phone ? req.body.phone.trim() : '';
+
+    if (!institutionCode || !role || !name || !email || !password) {
+      return res.status(400).json({ error: 'Institution code, role, name, email, and password are required.' });
+    }
+    if (!['student', 'employee'].includes(role)) {
+      return res.status(400).json({ error: 'Role must be student or employee.' });
+    }
+    if (password.length < 8) {
+      return res.status(400).json({ error: 'Password must be at least 8 characters.' });
+    }
+    if (role === 'student' && !IndexNumber) {
+      return res.status(400).json({ error: 'Index / Student ID is required for student registration.' });
+    }
+
+    const company = await Company.findOne({
+      institutionCode: institutionCode.toUpperCase().trim(),
+      isActive: true,
+    });
+    if (!company) {
+      return res.status(404).json({ error: 'Institution not found. Please check your institution code.' });
+    }
+    if (!company.selfRegistrationEnabled) {
+      return res.status(403).json({ error: 'Self-registration is not currently open for this institution.' });
+    }
+
+    // Duplicate check
+    if (role === 'student') {
+      const dup = await User.findOne({ IndexNumber, company: company._id });
+      if (dup) return res.status(400).json({ error: 'A student with this ID already exists at this institution.' });
+    } else {
+      const dup = await User.findOne({ email, company: company._id });
+      if (dup) return res.status(400).json({ error: 'An account with this email already exists at this institution.' });
+    }
+
+    let userData = {
+      name,
+      email: email || undefined,
+      password,
+      company: company._id,
+      role,
+      isApproved: false,
+      selfRegistered: true,
+    };
+
+    if (role === 'student') {
+      userData.IndexNumber = IndexNumber;
+      if (department) userData.department = department;
+      if (programme)  userData.programme  = programme;
+    } else {
+      // Generate employee ID
+      const updatedCompany = await Company.findByIdAndUpdate(
+        company._id,
+        { $inc: { nextEmployeeSeq: 1 } },
+        { new: true }
+      );
+      const prefix = (company.name || 'CO').substring(0, 3).toUpperCase().replace(/[^A-Z]/g, 'X');
+      userData.employeeId = `${prefix}-EMP-${String(updatedCompany.nextEmployeeSeq).padStart(4, '0')}`;
+      if (department) userData.department = department;
+      if (phone) {
+        userData.phone = normalisePhone(phone);
+        const phoneExists = await User.findOne({ phone: userData.phone, company: company._id });
+        if (phoneExists) return res.status(400).json({ error: 'Phone number is already in use.' });
+      }
+    }
+
+    const user = await User.create(userData);
+
+    // Email: confirmation to applicant
+    sendSelfRegPending({ email: user.email, name: user.name, orgName: company.displayName || company.name, role }).catch(() => {});
+
+    // Email: notify the first active admin of this institution
+    User.findOne({ company: company._id, role: 'admin', isApproved: true, isActive: true }).lean()
+      .then(admin => {
+        if (admin?.email) {
+          sendAdminNewSelfReg({
+            adminEmail: admin.email,
+            applicantName: user.name,
+            role,
+            orgName: company.displayName || company.name,
+          }).catch(() => {});
+        }
+      }).catch(() => {});
+
+    return res.status(201).json({
+      message: 'Registration submitted! Your account is pending approval. You will receive an email once approved.',
+    });
+  } catch (err) {
+    if (err.name === 'ValidationError') {
+      const messages = Object.values(err.errors).map(e => e.message);
+      return res.status(400).json({ error: messages.join(', ') });
+    }
+    if (err.code === 11000) {
+      return res.status(400).json({ error: 'An account with these details already exists.' });
+    }
+    console.error('registerSelfService error:', err);
+    res.status(500).json({ error: 'Registration failed. Please try again.' });
   }
 };

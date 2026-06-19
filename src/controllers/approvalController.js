@@ -88,3 +88,33 @@ exports.rejectUser = async (req, res) => {
     res.status(500).json({ error: "Failed to reject user" });
   }
 };
+
+exports.getSelfRegistrationStatus = async (req, res) => {
+  try {
+    const company = await Company.findById(req.user.company).select("selfRegistrationEnabled institutionCode").lean();
+    if (!company) return res.status(404).json({ error: "Company not found" });
+    res.json({ enabled: !!company.selfRegistrationEnabled, institutionCode: company.institutionCode });
+  } catch (error) {
+    console.error("getSelfRegistrationStatus error:", error);
+    res.status(500).json({ error: "Failed to get status" });
+  }
+};
+
+exports.toggleSelfRegistration = async (req, res) => {
+  try {
+    const { enabled } = req.body;
+    if (typeof enabled !== "boolean") {
+      return res.status(400).json({ error: "enabled must be a boolean" });
+    }
+    const company = await Company.findByIdAndUpdate(
+      req.user.company,
+      { selfRegistrationEnabled: enabled },
+      { new: true }
+    ).select("selfRegistrationEnabled institutionCode");
+    if (!company) return res.status(404).json({ error: "Company not found" });
+    res.json({ enabled: company.selfRegistrationEnabled, institutionCode: company.institutionCode });
+  } catch (error) {
+    console.error("toggleSelfRegistration error:", error);
+    res.status(500).json({ error: "Failed to update setting" });
+  }
+};

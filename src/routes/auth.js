@@ -13,6 +13,8 @@ router.post("/register-student",       registerLimiter,       authController.reg
 router.post("/register-employee",      registerLimiter,       authController.registerEmployee);
 router.post("/register-manager",       registerLimiter,       authController.registerManager);
 router.post("/register-hod",           registerLimiter,       authController.registerHod);
+router.post("/self-register",          registerLimiter,       authController.registerSelfService);
+router.get("/lookup-institution",                             authController.lookupInstitution);
 router.post("/login",                  loginLimiter,          authController.login);
 router.post("/refresh",                loginLimiter,          authController.refresh);
 router.post("/logout",                 authenticate,          authController.logout);

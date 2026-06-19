@@ -200,6 +200,10 @@ const companySchema = new mongoose.Schema(
     esp32Devices:        { type: [mongoose.Schema.Types.Mixed], default: undefined, select: false },
     esp32PendingCommand: { type: mongoose.Schema.Types.Mixed,   default: undefined, select: false },
     esp32Required:       { type: Boolean, default: false },
+    selfRegistrationEnabled: {
+      type: Boolean,
+      default: false,
+    },
     superadminNotes: {
       type: String,
       default: "",

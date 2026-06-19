@@ -2802,11 +2802,20 @@ async function renderApprovals() {
   if (!content) return;
   content.innerHTML = '<div class="loading">Loading approvals…</div>';
   try {
-    const data = await api('/api/approvals/pending');
-    const pending = data.pending || [];
-    const role    = currentUser.role;
+    const role      = currentUser.role;
     const isHod     = role === 'hod';
     const isManager = role === 'manager';
+    const isAdmin   = role === 'admin' || role === 'superadmin';
+
+    const [approvalData, selfRegData] = await Promise.all([
+      api('/api/approvals/pending'),
+      isAdmin ? api('/api/approvals/self-registration').catch(() => null) : Promise.resolve(null),
+    ]);
+
+    const pending = approvalData.pending || [];
+    const selfRegEnabled = selfRegData?.enabled ?? false;
+    const institutionCode = selfRegData?.institutionCode || '';
+    const selfRegUrl = `${window.location.origin}/register.html?code=${encodeURIComponent(institutionCode)}`;
 
     const subtitle = isHod
       ? `Lecturer &amp; student requests for <strong>${currentUser.department || 'your department'}</strong>`
@@ -2814,8 +2823,33 @@ async function renderApprovals() {
         ? 'Employee registration requests pending your approval'
         : 'Review and approve registration requests';
 
-    // HODs don't need a department column (all in same dept); managers don't need one either
     const showDeptCol = !isHod && !isManager;
+
+    const selfRegPanel = isAdmin ? `
+      <div class="card" style="margin-bottom:20px;padding:20px 24px">
+        <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px">
+          <div>
+            <div style="font-size:15px;font-weight:600;color:var(--text);margin-bottom:4px">Self-Registration</div>
+            <div style="font-size:13px;color:var(--text-muted)">Allow students &amp; employees to register themselves — you review and approve each request.</div>
+          </div>
+          <div style="display:flex;align-items:center;gap:12px">
+            <label style="display:flex;align-items:center;gap:8px;cursor:pointer;user-select:none">
+              <div id="self-reg-toggle" onclick="toggleSelfReg()" style="width:44px;height:24px;border-radius:12px;background:${selfRegEnabled ? 'var(--primary)' : 'var(--border)'};position:relative;cursor:pointer;transition:background .2s">
+                <div style="width:18px;height:18px;border-radius:50%;background:#fff;position:absolute;top:3px;left:${selfRegEnabled ? '23px' : '3px'};transition:left .2s"></div>
+              </div>
+              <span id="self-reg-label" style="font-size:13px;font-weight:600;color:${selfRegEnabled ? 'var(--primary)' : 'var(--text-muted)'}">${selfRegEnabled ? 'Open' : 'Closed'}</span>
+            </label>
+          </div>
+        </div>
+        ${selfRegEnabled ? `
+        <div style="margin-top:16px;padding:12px 14px;background:var(--bg);border-radius:8px;border:1px solid var(--border)">
+          <div style="font-size:12px;color:var(--text-muted);margin-bottom:6px;font-weight:600;letter-spacing:.5px">REGISTRATION LINK — share this with your students / employees</div>
+          <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+            <code style="font-size:12px;color:var(--text);word-break:break-all;flex:1">${selfRegUrl}</code>
+            <button class="btn btn-sm" onclick="navigator.clipboard.writeText('${selfRegUrl}').then(()=>showToastNotif('Link copied!','success'))">Copy</button>
+          </div>
+        </div>` : ''}
+      </div>` : '';
 
     content.innerHTML = `
       <div class="page-header">
@@ -2824,6 +2858,7 @@ async function renderApprovals() {
           <p>${subtitle}</p>
         </div>
       </div>
+      ${selfRegPanel}
       <div class="card">
         ${pending.length ? `
           <table>
@@ -2837,10 +2872,10 @@ async function renderApprovals() {
             </tr></thead>
             <tbody>${pending.map(u => `
               <tr>
-                <td style="font-weight:500">${u.name}</td>
-                <td style="font-size:13px;color:var(--text-light)">${u.email || u.IndexNumber || u.indexNumber || 'N/A'}</td>
-                <td><span class="status-badge status-active">${u.role}</span></td>
-                ${showDeptCol ? `<td>${u.department ? `<span style="font-size:11px;padding:2px 7px;border-radius:20px;background:#ecfeff;color:#0891b2;font-weight:600;">${u.department}</span>` : '—'}</td>` : ''}
+                <td style="font-weight:500">${esc(u.name)}${u.selfRegistered ? ' <span style="font-size:10px;padding:1px 5px;border-radius:10px;background:#ede9fe;color:#7c3aed;font-weight:600;vertical-align:middle">SELF-REG</span>' : ''}</td>
+                <td style="font-size:13px;color:var(--text-light)">${esc(u.email || u.IndexNumber || u.indexNumber || 'N/A')}</td>
+                <td><span class="status-badge status-active">${esc(u.role)}</span></td>
+                ${showDeptCol ? `<td>${u.department ? `<span style="font-size:11px;padding:2px 7px;border-radius:20px;background:#ecfeff;color:#0891b2;font-weight:600;">${esc(u.department)}</span>` : '—'}</td>` : ''}
                 <td style="font-size:13px;color:var(--text-light)">${new Date(u.createdAt).toLocaleDateString()}</td>
                 <td style="white-space:nowrap">
                   <button class="btn btn-sm" style="background:#22c55e;color:#fff;margin-right:6px" onclick="approveUser('${u._id}')">✓ Approve</button>
@@ -2854,6 +2889,19 @@ async function renderApprovals() {
     `;
   } catch (e) {
     content.innerHTML = `<div class="card"><p style="color:#ef4444">Failed to load approvals: ${e.message}</p></div>`;
+  }
+}
+
+async function toggleSelfReg() {
+  const toggle = document.getElementById('self-reg-toggle');
+  if (!toggle) return;
+  const currentlyOn = toggle.style.background.includes('primary') || toggle.querySelector('div').style.left === '23px';
+  const newVal = !currentlyOn;
+  try {
+    await api('/api/approvals/self-registration', { method: 'PATCH', body: { enabled: newVal } });
+    renderApprovals();
+  } catch (e) {
+    toastError(e.message);
   }
 }
 
