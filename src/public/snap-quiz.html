@@ -1118,7 +1118,7 @@ function toast(msg, type = 'info') {
   el.textContent = msg;
   el.className = `show ${type}`;
   clearTimeout(toastTimer);
-  toastTimer = setTimeout(() => el.classList.remove('show'), 3500);
+  toastTimer = setTimeout(() => el.classList.remove('show'), 5000);
 }
 
 // ══════════════════════════════════════════════════════════════════
@@ -1210,30 +1210,18 @@ function showAuthError(elId, msg) {
 
 document.getElementById('login-btn').addEventListener('click', async () => {
   const entered = (document.getElementById('login-index')?.value || '').trim().toUpperCase();
-  if (!entered) { toast('Please enter your index number', 'error'); return; }
+  if (!entered) { showLoginError('Please enter your index number.'); return; }
 
   const btn     = document.getElementById('login-btn');
   const btnText = document.getElementById('login-btn-text');
-  const errEl   = document.getElementById('login-error-msg');
   btn.disabled = true;
   if (btnText) btnText.textContent = 'Verifying…';
-
-  const showErr = msg => {
-    if (errEl) { errEl.textContent = msg; errEl.style.display = 'block'; }
-    toast(msg, 'error');
-  };
 
   try {
     if (!state.user) throw new Error('No active session. Please return to the portal and sign in.');
 
-    // Client-side quick check first (instant feedback)
-    const expected = (state.user.IndexNumber || state.user.indexNumber || '').toUpperCase();
-    if (!expected) throw new Error('Your account has no index number on file. Contact your administrator.');
-    if (entered !== expected) throw new Error('Please enter your own index number.');
-
     // Backend verification — server confirms the index number matches the token
-    const verifyResp = await api('POST', '/api/student/snap-quizzes/verify-identity', { indexNumber: entered });
-    if (!verifyResp.ok) throw new Error(verifyResp.error || 'Identity verification failed.');
+    await api('POST', '/api/student/snap-quizzes/verify-identity', { indexNumber: entered });
 
     // All good
     state.deviceFingerprint = buildFingerprint();
@@ -1246,12 +1234,24 @@ document.getElementById('login-btn').addEventListener('click', async () => {
       toast(`Account locked (${mins != null ? mins + ' min remaining' : 'contact admin'}). Quiz/meeting access blocked.`, 'error');
     }
   } catch (e) {
-    showErr(e.message || 'Verification failed. Please try again.');
+    showLoginError(e.message || 'Verification failed. Please try again.');
   } finally {
     btn.disabled = false;
     if (btnText) btnText.textContent = 'Continue';
   }
 });
+
+function showLoginError(msg) {
+  // Show inline error div and scroll it into view
+  const errEl = document.getElementById('login-error-msg');
+  if (errEl) {
+    errEl.textContent = msg;
+    errEl.style.display = 'block';
+    errEl.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  }
+  // Also show toast (truncate long messages for the fixed-position toast)
+  toast(msg.length > 60 ? msg.slice(0, 57) + '…' : msg, 'error');
+}
 
 
 
