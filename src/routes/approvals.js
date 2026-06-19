@@ -12,4 +12,7 @@ router.get("/pending", requireRole("admin", "superadmin", "hod", "manager"), com
 router.patch("/:id/approve", requireRole("admin", "superadmin", "hod", "manager"), companyIsolation, approvalController.approveUser);
 router.delete("/:id/reject", requireRole("admin", "superadmin", "hod", "manager"), companyIsolation, approvalController.rejectUser);
 
+router.get("/self-registration",    requireRole("admin", "superadmin"), approvalController.getSelfRegistrationStatus);
+router.patch("/self-registration",  requireRole("admin", "superadmin"), approvalController.toggleSelfRegistration);
+
 module.exports = router;

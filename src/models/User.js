@@ -59,6 +59,10 @@ const userSchema = new mongoose.Schema(
       type: Boolean,
       default: true,
     },
+    selfRegistered: {
+      type: Boolean,
+      default: false,
+    },
     profilePhoto: {
       type: String,
       default: null,

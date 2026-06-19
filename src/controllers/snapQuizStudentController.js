@@ -1118,3 +1118,26 @@ function _detectPlatform(ua) {
   if (/windows|macintosh|linux/.test(ua))    return "desktop";
   return "unknown";
 }
+
+// POST /api/student/snap-quizzes/verify-identity
+// Verifies that the submitted index number matches the authenticated student.
+// Called by snap-quiz.html before loading quizzes — ensures a student can't
+// bypass the client-side check by editing the DOM or calling the API directly.
+exports.verifyIdentity = async (req, res) => {
+  try {
+    const { indexNumber } = req.body;
+    if (!indexNumber) return res.status(400).json({ error: 'Index number is required.' });
+
+    const studentIdx = (req.user.IndexNumber || req.user.indexNumber || '').toUpperCase().trim();
+    if (!studentIdx) return res.status(400).json({ error: 'Your account has no index number on file. Contact your administrator.' });
+
+    if (indexNumber.toUpperCase().trim() !== studentIdx) {
+      return res.status(403).json({ error: 'Please enter your own index number.' });
+    }
+
+    return res.json({ ok: true });
+  } catch (err) {
+    console.error('[snapQuiz verifyIdentity]', err);
+    return res.status(500).json({ error: 'Verification failed. Please try again.' });
+  }
+};

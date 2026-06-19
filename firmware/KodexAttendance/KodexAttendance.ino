@@ -596,7 +596,7 @@ static int postJson(const String& path, const String& body, String& outResponse,
   if (authed && deviceJWT.length()) {
     http.addHeader("Authorization", "Bearer " + deviceJWT);
   }
-  http.setTimeout(20000);
+  http.setTimeout(8000);  // 8s keeps loop responsive; 30s was blocking student AP serving
   int code = http.POST(body);
   outResponse = http.getString();
   http.end();
@@ -644,8 +644,8 @@ static void sendHeartbeat() {
   if (code == 401) { log("HB 401 — token revoked. Wiping config."); factoryReset(); return; }
   if (code != 200) {
     log("HB fail " + String(code));
-    if (++hbFailCount >= 5) {
-      log("HB fail x5 — forcing WiFi reconnect");
+    if (++hbFailCount >= 2) {  // reconnect after 2 consecutive fails (~16s)
+      log("HB fail x2 — forcing WiFi reconnect");
       hbFailCount = 0;
       wifiReconnectNeeded = true;
     }
@@ -1064,8 +1064,8 @@ let _activeTab='records';
 
 function showPin(){
   app.innerHTML=`<form id="pf">
-    <label>Lecturer PIN <span style="color:#334155;font-weight:400">(shown on device screen)</span></label>
-    <input id="pin" type="password" maxlength="6" placeholder="Enter PIN" required>
+    <label>Session Code <span style="color:#334155;font-weight:400">(shown on device screen)</span></label>
+    <input id="pin" type="password" maxlength="6" placeholder="Enter code" required>
     <button class="btn btn-green" type="submit">Unlock</button>
   </form><div id="perr" class="err"></div>
   <a href="/" style="display:block;text-align:center;color:#334155;font-size:11px;margin-top:14px">← Student page</a>`;
@@ -1073,7 +1073,7 @@ function showPin(){
     e.preventDefault();
     const v=document.getElementById('pin').value;
     if(v===PIN){sessionStorage.setItem('lpin',PIN);authed=true;showMain();}
-    else document.getElementById('perr').textContent='Wrong PIN — check device screen.';
+    else document.getElementById('perr').textContent='Wrong code — check device screen.';
   };
 }
 
@@ -1566,10 +1566,10 @@ static void startOfflineMode() {
 
   IPAddress ip = WiFi.softAPIP();
   log("Offline AP: " + apName + " @ " + ip.toString());
-  log("Lecturer PIN: " + offlinePIN());
+  log("Session Code: " + offlinePIN());
 
-  // Show PIN on OLED so only the physical lecturer sees it
-  oledShow("OFFLINE MODE", "AP: " + apName.substring(6), "PIN: " + offlinePIN());
+  // Show session code on OLED so only the physical lecturer sees it
+  oledShow("OFFLINE MODE", "AP: " + apName.substring(6), "Code: " + offlinePIN());
 
   dns.start(53, "*", ip);   // captive portal DNS
   registerOfflineHttp();
@@ -1792,6 +1792,8 @@ void setup() {
   oledShow("KODEX", "WiFi:", wifiSSID);
   WiFi.mode(WIFI_STA);
   WiFi.setSleep(false); // disable modem sleep — prevents multi-second TLS round-trip delays
+  WiFi.setAutoReconnect(true);   // let the stack reconnect on its own after drops
+  WiFi.setTxPower(WIFI_POWER_19_5dBm);  // max TX power — school WiFi is often far
   WiFi.begin(wifiSSID.c_str(), wifiPass.c_str());
   uint32_t t0 = millis();
   while (WiFi.status() != WL_CONNECTED && millis() - t0 < WIFI_RETRY_TIMEOUT_MS) {
@@ -1877,7 +1879,8 @@ void loop() {
     wifiReconnectNeeded = false;
     log("Forcing WiFi reconnect after repeated HB failures");
     WiFi.disconnect(false);
-    delay(200);
+    delay(300);
+    WiFi.setAutoReconnect(true);
     WiFi.begin(wifiSSID.c_str(), wifiPass.c_str());
     return;
   }

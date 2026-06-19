@@ -1,0 +1,229 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Register — DIKLY</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    :root {
+      --bg:      #080b12;
+      --card:    #111827;
+      --border:  #1f2937;
+      --primary: #4f6ef7;
+      --accent:  #7c3aed;
+      --text:    #f1f5f9;
+      --muted:   #94a3b8;
+      --danger:  #ef4444;
+      --success: #22c55e;
+      --input-bg:#0d1117;
+    }
+    body { background:var(--bg); color:var(--text); font-family:'Segoe UI',system-ui,sans-serif; min-height:100vh; display:flex; flex-direction:column; align-items:center; justify-content:center; padding:24px 16px; }
+    .logo { font-size:28px; font-weight:800; letter-spacing:-1px; margin-bottom:8px; background:linear-gradient(135deg,var(--primary),var(--accent)); -webkit-background-clip:text; -webkit-text-fill-color:transparent; }
+    .tagline { font-size:13px; color:var(--muted); margin-bottom:32px; }
+    .card { background:var(--card); border:1px solid var(--border); border-radius:16px; padding:32px 28px; width:100%; max-width:460px; }
+    .card h2 { font-size:20px; font-weight:700; margin-bottom:4px; }
+    .card .sub { font-size:13px; color:var(--muted); margin-bottom:24px; }
+    .form-group { margin-bottom:16px; }
+    label { display:block; font-size:12px; font-weight:600; color:var(--muted); text-transform:uppercase; letter-spacing:.5px; margin-bottom:6px; }
+    input, select { width:100%; padding:11px 14px; background:var(--input-bg); border:1.5px solid var(--border); border-radius:10px; color:var(--text); font-size:14px; outline:none; transition:border-color .2s; }
+    input::placeholder { color:#4b5563; }
+    input:focus, select:focus { border-color:var(--primary); }
+    select option { background:var(--card); }
+    .row { display:grid; grid-template-columns:1fr 1fr; gap:12px; }
+    .btn { display:block; width:100%; padding:13px; border:none; border-radius:10px; font-size:15px; font-weight:700; cursor:pointer; background:linear-gradient(135deg,var(--primary),var(--accent)); color:#fff; margin-top:8px; transition:opacity .15s; }
+    .btn:disabled { opacity:.55; cursor:not-allowed; }
+    .msg { font-size:13px; margin-top:14px; padding:11px 14px; border-radius:8px; display:none; }
+    .msg.success { background:#052e16; border:1px solid #166534; color:#86efac; display:block; }
+    .msg.error   { background:#1c0a0a; border:1px solid #7f1d1d; color:#fca5a5; display:block; }
+    .already { margin-top:20px; text-align:center; font-size:13px; color:var(--muted); }
+    .already a { color:var(--primary); text-decoration:none; }
+    .role-tabs { display:flex; gap:8px; margin-bottom:20px; }
+    .role-tab { flex:1; padding:9px; border:1.5px solid var(--border); border-radius:8px; background:none; color:var(--muted); font-size:13px; font-weight:600; cursor:pointer; transition:all .15s; }
+    .role-tab.active { border-color:var(--primary); color:var(--primary); background:#1e2a5a22; }
+    .field-student, .field-employee { display:none; }
+    .field-student.show, .field-employee.show { display:block; }
+    #code-info { font-size:12px; color:var(--muted); margin-top:6px; }
+    #code-info.found { color:var(--success); }
+    #code-info.error { color:var(--danger); }
+  </style>
+</head>
+<body>
+  <div class="logo">DIKLY</div>
+  <div class="tagline">Academic &amp; Corporate Management Platform</div>
+
+  <div class="card">
+    <h2>Create your account</h2>
+    <p class="sub">Enter your institution code to get started. An admin will review and approve your request.</p>
+
+    <div class="form-group">
+      <label>Institution / Company Code</label>
+      <input id="code" type="text" placeholder="e.g. ABCD12" maxlength="10" style="text-transform:uppercase"
+        oninput="this.value=this.value.toUpperCase();clearCodeInfo()" onblur="lookupCode()"/>
+      <div id="code-info"></div>
+    </div>
+
+    <div class="form-group">
+      <label>I am a…</label>
+      <div class="role-tabs">
+        <button class="role-tab active" id="tab-student" onclick="setRole('student')">Student</button>
+        <button class="role-tab" id="tab-employee" onclick="setRole('employee')">Employee</button>
+      </div>
+    </div>
+
+    <div class="row">
+      <div class="form-group"><label>Full Name</label><input id="name" type="text" placeholder="Your full name"/></div>
+      <div class="form-group"><label>Email Address</label><input id="email" type="email" placeholder="you@example.com"/></div>
+    </div>
+
+    <!-- Student-only -->
+    <div class="field-student show">
+      <div class="row">
+        <div class="form-group"><label>Student / Index ID</label><input id="indexNumber" type="text" placeholder="e.g. CS/2024/001"/></div>
+        <div class="form-group"><label>Department</label><input id="dept-student" type="text" placeholder="e.g. Computer Science"/></div>
+      </div>
+      <div class="row">
+        <div class="form-group"><label>Programme</label><input id="programme" type="text" placeholder="e.g. BSc Computer Science"/></div>
+        <div class="form-group"><label>Level / Year</label><input id="level" type="text" placeholder="e.g. 200"/></div>
+      </div>
+    </div>
+
+    <!-- Employee-only -->
+    <div class="field-employee">
+      <div class="row">
+        <div class="form-group"><label>Department</label><input id="dept-emp" type="text" placeholder="e.g. Engineering"/></div>
+        <div class="form-group"><label>Phone (optional)</label><input id="phone" type="tel" placeholder="e.g. 0244000000"/></div>
+      </div>
+    </div>
+
+    <div class="row">
+      <div class="form-group"><label>Password</label><input id="password" type="password" placeholder="Min. 8 characters"/></div>
+      <div class="form-group"><label>Confirm Password</label><input id="confirm" type="password" placeholder="Repeat password"/></div>
+    </div>
+
+    <button class="btn" id="submit-btn" onclick="submitRegistration()">Submit Registration</button>
+
+    <div id="msg" class="msg"></div>
+
+    <div class="already">Already have an account? <a href="/">Sign in</a></div>
+  </div>
+
+  <script>
+    let currentRole = 'student';
+    let orgName = '';
+
+    // Pre-fill institution code from URL param
+    const urlCode = new URLSearchParams(location.search).get('code') || '';
+    if (urlCode) {
+      document.getElementById('code').value = urlCode.toUpperCase();
+      lookupCode();
+    }
+
+    function setRole(role) {
+      currentRole = role;
+      document.getElementById('tab-student').classList.toggle('active', role === 'student');
+      document.getElementById('tab-employee').classList.toggle('active', role === 'employee');
+      document.querySelectorAll('.field-student').forEach(el => el.classList.toggle('show', role === 'student'));
+      document.querySelectorAll('.field-employee').forEach(el => el.classList.toggle('show', role === 'employee'));
+    }
+
+    function clearCodeInfo() {
+      const el = document.getElementById('code-info');
+      el.textContent = '';
+      el.className = '';
+      orgName = '';
+    }
+
+    async function lookupCode() {
+      const code = document.getElementById('code').value.trim();
+      if (code.length < 4) return;
+      const el = document.getElementById('code-info');
+      el.textContent = 'Looking up…';
+      el.className = '';
+      try {
+        const res = await fetch(`/api/auth/lookup-institution?code=${encodeURIComponent(code)}`);
+        const data = await res.json();
+        if (!res.ok || !data.name) {
+          el.textContent = data.error || 'Institution not found.';
+          el.className = 'error';
+          orgName = '';
+        } else if (!data.selfRegistrationEnabled) {
+          el.textContent = `${data.name} — self-registration is not currently open.`;
+          el.className = 'error';
+          orgName = '';
+        } else {
+          el.textContent = `✓ ${data.name}`;
+          el.className = 'found';
+          orgName = data.name;
+        }
+      } catch {
+        el.textContent = 'Could not reach server.';
+        el.className = 'error';
+      }
+    }
+
+    function showMsg(text, type) {
+      const el = document.getElementById('msg');
+      el.textContent = text;
+      el.className = `msg ${type}`;
+    }
+
+    async function submitRegistration() {
+      const code    = document.getElementById('code').value.trim();
+      const name    = document.getElementById('name').value.trim();
+      const email   = document.getElementById('email').value.trim();
+      const pass    = document.getElementById('password').value;
+      const confirm = document.getElementById('confirm').value;
+
+      if (!code || !name || !email || !pass) { showMsg('Please fill in all required fields.', 'error'); return; }
+      if (pass !== confirm) { showMsg('Passwords do not match.', 'error'); return; }
+      if (pass.length < 8) { showMsg('Password must be at least 8 characters.', 'error'); return; }
+      if (currentRole === 'student' && !document.getElementById('indexNumber').value.trim()) {
+        showMsg('Student / Index ID is required.', 'error'); return;
+      }
+
+      const btn = document.getElementById('submit-btn');
+      btn.disabled = true;
+      btn.textContent = 'Submitting…';
+
+      const body = {
+        institutionCode: code,
+        role: currentRole,
+        name,
+        email,
+        password: pass,
+      };
+      if (currentRole === 'student') {
+        body.IndexNumber = document.getElementById('indexNumber').value.trim();
+        body.department  = document.getElementById('dept-student').value.trim();
+        body.programme   = document.getElementById('programme').value.trim();
+        body.studentLevel = document.getElementById('level').value.trim();
+      } else {
+        body.department = document.getElementById('dept-emp').value.trim();
+        body.phone      = document.getElementById('phone').value.trim();
+      }
+
+      try {
+        const res  = await fetch('/api/auth/self-register', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(body),
+        });
+        const data = await res.json();
+        if (!res.ok) {
+          showMsg(data.error || 'Registration failed.', 'error');
+          btn.disabled = false;
+          btn.textContent = 'Submit Registration';
+        } else {
+          showMsg('Registration submitted! Check your email — an admin will review your request and notify you when approved.', 'success');
+          btn.textContent = 'Submitted ✓';
+        }
+      } catch {
+        showMsg('Network error. Please try again.', 'error');
+        btn.disabled = false;
+        btn.textContent = 'Submit Registration';
+      }
+    }
+  </script>
+</body>
+</html>

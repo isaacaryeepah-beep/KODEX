@@ -387,7 +387,7 @@ static const uint32_t REMARK_WINDOW_SECS = 300; // 5-minute re-mark window
 static BLEAdvertising *bleAdv  = nullptr;
 static uint32_t        bleSlot = UINT32_MAX;   // slot currently on-air
 
-// Lecturer PIN — 4-digit code shown on device screen; required to start an offline session
+// Session Code — 4-digit code shown on device screen; required to start an offline session.
 // Regenerated each time the device boots or a session ends. Prevents students accidentally
 // starting sessions by opening the portal before the lecturer does.
 static char  lecturerPin[5] = "0000";
@@ -853,7 +853,7 @@ static void factoryReset() {
 static int postJson(const String& path, const String& body,
                     String& out, bool authed = true) {
   WiFiClientSecure client; client.setInsecure();
-  client.setTimeout(30);  // 30s SSL handshake timeout
+  client.setTimeout(8);   // 8s SSL handshake timeout — keeps loop responsive
   HTTPClient http;
   String url = apiBase + path;
   if (!http.begin(client, url)) return -1;
@@ -861,7 +861,7 @@ static int postJson(const String& path, const String& body,
   http.addHeader("Connection", "close");
   if (authed && !deviceJWT.isEmpty())
     http.addHeader("Authorization", "Bearer " + deviceJWT);
-  http.setTimeout(30000);
+  http.setTimeout(8000);  // 8s total request timeout
   int code = http.POST(body); out = http.getString(); http.end();
   return code;
 }
@@ -1161,7 +1161,7 @@ static void sendHeartbeat() {
   if (code == 401) { LOG("JWT revoked — factory reset"); factoryReset(); return; }
   if (code != 200) {
     LOG("HB fail " + String(code));
-    if (++hbFails >= 5) { hbFails = 0; forceReconn = true; }
+    if (++hbFails >= 2) { hbFails = 0; forceReconn = true; }  // reconnect after 2 consecutive fails (~16s)
     return;
   }
   hbFails    = 0;
@@ -2086,106 +2086,102 @@ static void drawConnecting(const String& ssid) {
 static void drawReady() {
   spr.fillSprite(COL_BG);
 
-  bool syncOnline = (WiFi.status() == WL_CONNECTED);
+  bool online = (WiFi.status() == WL_CONNECTED);
 
-  // ── Header ───────────────────────────────────────────────────────────────────
-  drawHeader(spr, syncOnline);
-  // Success accent line below header
-  spr.fillRect(0, 44, SW, 2, COL_SUCCESS);
+  // ── Header + accent line ──────────────────────────────────────────────────────
+  drawHeader(spr, online);
+  spr.fillRect(0, 44, SW, 2, online ? COL_SUCCESS : COL_BORDER);
+  drawTabBar(spr, 0);
 
-  drawTabBar(spr, 0);  // Home tab active
-
-  // Content area y=56..278
-  // ── READY status label ───────────────────────────────────────────────────────
-  spr.setFont(F_MED); spr.setTextColor(COL_SUCCESS, COL_BG);
+  // ── READY label + subtitle ────────────────────────────────────────────────────
+  spr.setFont(F_MED);
+  spr.setTextColor(online ? COL_SUCCESS : COL_MUTED, COL_BG);
   const char* rdyLbl = "READY";
   int32_t tw = spr.textWidth(rdyLbl);
-  spr.setCursor((SW - tw) / 2, 56); spr.print(rdyLbl);
+  spr.setCursor((SW - tw) / 2, 50); spr.print(rdyLbl);
 
   spr.setFont(F_TINY); spr.setTextColor(COL_MUTED, COL_BG);
-  const char* subLbl = "Waiting for session";
+  const char* subLbl = online ? "Online \xC2\xB7 Awaiting session" : "Waiting for session";
   tw = spr.textWidth(subLbl);
-  spr.setCursor((SW - tw) / 2, 82); spr.print(subLbl);
+  spr.setCursor((SW - tw) / 2, 72); spr.print(subLbl);
 
-  // ── Pulse ring animation ──────────────────────────────────────────────────────
-  // Center at y=225 so outer ring (r=65) starts at y=160, clearing the PIN card
-  // which ends at y=150. Bottom info card (drawn after) covers rings in that area.
+  // ── Pulse animation — centre at (SW/2, 162) ───────────────────────────────────
+  // Outer ring r=70 → top at y=92, bottom at y=232 (clear of tab bar)
   uint32_t ms  = millis();
   uint8_t  p   = (uint8_t)((ms / 600) % 4);
-  int32_t  pcx = SW / 2, pcy = 225;
+  int32_t  pcx = SW / 2, pcy = 162;
+  uint16_t ringCol = online ? COL_PRIMARY : COL_BORDER;
 
-  // Four concentric rings pulsing outward
-  uint16_t rc4 = (p == 3) ? COL_PRIMARY : COL_BORDER;
-  uint16_t rc3 = (p >= 2) ? COL_PRIMARY : COL_BORDER;
-  uint16_t rc2 = (p >= 1) ? COL_PRIMARY : COL_BORDER;
+  uint16_t rc4 = (p == 3) ? ringCol : COL_BORDER;
+  uint16_t rc3 = (p >= 2) ? ringCol : COL_BORDER;
+  uint16_t rc2 = (p >= 1) ? ringCol : COL_BORDER;
   for (int8_t d = -1; d <= 1; d++) {
-    spr.drawCircle(pcx, pcy, 65 + d, rc4);
-    spr.drawCircle(pcx, pcy, 50 + d, rc3);
-    spr.drawCircle(pcx, pcy, 35 + d, rc2);
-    spr.drawCircle(pcx, pcy, 20 + d, COL_PRIMARY);
+    spr.drawCircle(pcx, pcy, 70 + d, rc4);
+    spr.drawCircle(pcx, pcy, 52 + d, rc3);
+    spr.drawCircle(pcx, pcy, 34 + d, rc2);
+    spr.drawCircle(pcx, pcy, 18 + d, online ? COL_PRIMARY : COL_MUTED);
   }
-  // Center filled circle with "D"
-  spr.fillCircle(pcx, pcy, 14, COL_PRIMARY);
-  spr.drawCircle(pcx, pcy, 16, COL_SUCCESS);
-  spr.setFont(F_TINY); spr.setTextColor(COL_BG, COL_PRIMARY);
-  tw = spr.textWidth("D");
-  spr.setCursor(pcx - tw / 2, pcy - 4); spr.print("D");
-
-  // ── PIN card — shown when no session is active ───────────────────────────────
-  // Lecturer connects their phone to Dikly WiFi, opens 192.168.4.1/start,
-  // and enters this PIN to prove they are the lecturer before starting a session.
-  spr.fillRoundRect(10, 96, SW - 20, 54, 8, COL_DIM_CARD);
-  spr.drawRoundRect(10, 96, SW - 20, 54, 8, COL_BORDER);
-  spr.setFont(F_TINY); spr.setTextColor(COL_MUTED, COL_DIM_CARD);
-  spr.setCursor(18, 102); spr.print("Lecturer PIN");
-  spr.setFont(F_LARGE); spr.setTextColor(COL_WARNING, COL_DIM_CARD);
-  tw = spr.textWidth(lecturerPin);
-  spr.setCursor((SW - tw) / 2, 110); spr.print(lecturerPin);
-  spr.setFont(F_TINY); spr.setTextColor(0x4210, COL_DIM_CARD);
-  const char* pinHint = "Connect to Dikly WiFi  \xE2\x80\xA2  Open 192.168.4.1/start";
-  tw = spr.textWidth("Connect to Dikly WiFi  .  Open 192.168.4.1/start");
-  spr.setCursor((SW - tw) / 2 + 2, 144); spr.print("Connect phone to Dikly \xE2\x86\x92 open /start");
-
-  // ── Bottom info card (y=212..250) ─────────────────────────────────────────────
-  spr.fillRoundRect(10, 212, SW - 20, 40, 6, COL_CARD);
-  spr.drawRoundRect(10, 212, SW - 20, 40, 6, COL_BORDER);
-
-  if (!sessionLecturer.isEmpty() || !sessionCourse.isEmpty()) {
-    // Show pending session info
-    String lbl1 = sessionLecturer.isEmpty() ? sessionCourse : sessionLecturer;
-    if (spr.textWidth(lbl1) > SW - 40) lbl1 = lbl1.substring(0, 18) + "..";
-    spr.setFont(F_SMALL); spr.setTextColor(COL_TEXT, COL_CARD);
-    tw = spr.textWidth(lbl1);
-    spr.setCursor((SW - tw) / 2, 220); spr.print(lbl1);
-    if (!sessionCourse.isEmpty() && !sessionLecturer.isEmpty()) {
-      spr.setFont(F_TINY); spr.setTextColor(COL_MUTED, COL_CARD);
-      String c = sessionCourse;
-      if (spr.textWidth(c) > SW - 40) c = c.substring(0, 24) + "..";
-      tw = spr.textWidth(c);
-      spr.setCursor((SW - tw) / 2, 264); spr.print(c);
-    }
+  // Centre filled circle — WiFi icon (online) or "?" (offline)
+  uint16_t cFill = online ? COL_PRIMARY : COL_DIM_CARD;
+  uint16_t cBd   = online ? COL_SUCCESS  : COL_MUTED;
+  spr.fillCircle(pcx, pcy, 15, cFill);
+  spr.drawCircle(pcx, pcy, 17, cBd);
+  if (online) {
+    _wifiBars(spr, pcx + 4, pcy - 5, COL_BG);
   } else {
-    // Default info: WiFi + SD status
-    spr.setFont(F_TINY); spr.setTextColor(COL_MUTED, COL_CARD);
-    // Left: WiFi status
-    uint16_t wfC = syncOnline ? COL_SUCCESS : COL_MUTED;
-    spr.fillCircle(22, 252, 4, wfC);
-    spr.setTextColor(wfC, COL_CARD);
-    String wfStr = syncOnline ? ("WiFi: " + wifiSSID) : "WiFi: Offline";
-    if (spr.textWidth(wfStr) > 100) wfStr = wfStr.substring(0, 14) + "..";
-    spr.setCursor(30, 248); spr.print(wfStr);
-    // Right: SD status
-    uint16_t sdC = sdAvailable ? COL_SUCCESS : COL_WARNING;
-    spr.fillCircle(22, 268, 4, sdC);
-    spr.setTextColor(sdC, COL_CARD);
-    spr.setCursor(30, 264); spr.print(sdAvailable ? "SD Ready" : "No SD Card");
-    // Enrolled count if available
-    if (sessionTotalEnrolled > 0) {
-      spr.setFont(F_TINY); spr.setTextColor(COL_MUTED, COL_CARD);
-      String enr = String(sessionTotalEnrolled) + " enrolled";
-      spr.setCursor(140, 264); spr.print(enr);
-    }
+    spr.setFont(F_TINY); spr.setTextColor(COL_MUTED, cFill);
+    tw = spr.textWidth("?");
+    spr.setCursor(pcx - tw / 2, pcy - 4); spr.print("?");
   }
+
+  // ── Status pill row (y=234..270) ─────────────────────────────────────────────
+  const int32_t pW = 107, pH = 36, pGap = 6, px2 = 10 + pW + pGap;
+
+  // WiFi pill
+  uint16_t wBg = online ? COL_SURFACE : COL_CARD;
+  uint16_t wBd = online ? COL_SUCCESS : COL_BORDER;
+  spr.fillRoundRect(10, 234, pW, pH, 8, wBg);
+  spr.drawRoundRect(10, 234, pW, pH, 8, wBd);
+  spr.fillCircle(21, 245, 4, online ? COL_SUCCESS : COL_MUTED);
+  spr.setFont(F_TINY);
+  spr.setTextColor(online ? COL_SUCCESS : COL_MUTED, wBg);
+  spr.setCursor(30, 239); spr.print("WiFi");
+  spr.setTextColor(COL_TEXT, wBg);
+  String wfStr = online ? wifiSSID : "Offline";
+  if (spr.textWidth(wfStr) > pW - 22) wfStr = wfStr.substring(0, 9) + "..";
+  spr.setCursor(30, 253); spr.print(wfStr);
+
+  // SD pill
+  uint16_t sBg = sdAvailable ? COL_SURFACE : COL_CARD;
+  uint16_t sBd = sdAvailable ? COL_SUCCESS : COL_WARNING;
+  spr.fillRoundRect(px2, 234, pW, pH, 8, sBg);
+  spr.drawRoundRect(px2, 234, pW, pH, 8, sBd);
+  spr.fillCircle(px2 + 11, 245, 4, sdAvailable ? COL_SUCCESS : COL_WARNING);
+  spr.setTextColor(sdAvailable ? COL_SUCCESS : COL_WARNING, sBg);
+  spr.setCursor(px2 + 20, 239); spr.print("Storage");
+  spr.setTextColor(COL_TEXT, sBg);
+  spr.setCursor(px2 + 20, 253); spr.print(sdAvailable ? "Ready" : "No Card");
+
+  // ── Instructor / course hint when a session is incoming ──────────────────────
+  if (!sessionLecturer.isEmpty() || !sessionCourse.isEmpty()) {
+    spr.fillRoundRect(10, 234, SW - 20, 36, 8, COL_SURFACE);
+    spr.drawRoundRect(10, 234, SW - 20, 36, 8, COL_PRIMARY);
+    spr.setFont(F_TINY); spr.setTextColor(COL_PRIMARY, COL_SURFACE);
+    spr.setCursor(18, 238); spr.print("Incoming");
+    String lbl = sessionLecturer.isEmpty() ? sessionCourse : sessionLecturer;
+    if (spr.textWidth(lbl) > SW - 40) lbl = lbl.substring(0, 22) + "..";
+    spr.setFont(F_SMALL); spr.setTextColor(COL_TEXT, COL_SURFACE);
+    tw = spr.textWidth(lbl);
+    spr.setCursor((SW - tw) / 2, 248); spr.print(lbl);
+  }
+
+  // ── Bottom hint ───────────────────────────────────────────────────────────────
+  spr.setFont(F_TINY); spr.setTextColor(0x4210, COL_BG);
+  const char* hint = online
+    ? "Sessions start from dikly.sbs"
+    : "Connect phone to Dikly \xE2\x86\x92 open /start";
+  tw = spr.textWidth(hint);
+  spr.setCursor((SW - tw) / 2, 274); spr.print(hint);
 
   spr.pushSprite(0, 0);
 }
@@ -4028,7 +4024,10 @@ static void registerLocalHttp() {
                 computedHex[64] = '\0';
                 pinValid = (String(computedHex) == String(storedHash));
               } else {
-                pinValid = true; // no PIN set — allow through
+                // PIN not configured — block until admin sets it in the portal
+                localHttp.send(403, "application/json",
+                  "{\"error\":\"PIN not set. Ask your admin to assign you an offline PIN in the portal.\"}");
+                return;
               }
               break;
             }
@@ -4583,6 +4582,8 @@ void setup() {
   if (!wifiSSID.isEmpty()) {
     WiFi.mode(WIFI_AP_STA);
     WiFi.setSleep(false);
+    WiFi.setAutoReconnect(true);   // let the stack reconnect on its own after drops
+    WiFi.setTxPower(WIFI_POWER_19_5dBm);  // max TX power — school WiFi is often far
     WiFi.begin(wifiSSID.c_str(), wifiPass.c_str());
     LOG("STA: connecting to " + wifiSSID + " for sync");
   }
@@ -4704,8 +4705,10 @@ void loop() {
     }
     if (forceReconn) {
       forceReconn = false;
-      WiFi.disconnect(false); delay(200);
+      WiFi.disconnect(false); delay(300);
+      WiFi.setAutoReconnect(true);
       WiFi.begin(wifiSSID.c_str(), wifiPass.c_str());
+      LOG("forceReconn → reconnecting to " + wifiSSID);
     }
     if (staConnected && !timeSynced) {
       // NTP just came up — re-trigger time sync

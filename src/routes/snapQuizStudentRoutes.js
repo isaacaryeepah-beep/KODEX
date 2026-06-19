@@ -58,6 +58,10 @@ const enrolledInCourse = requireStudentCourseEnrollment({
   getCourseId: (req) => req.params.courseId,
 });
 
+// ─── Identity verification (called by snap-quiz.html before loading quizzes) ──
+
+router.post("/verify-identity", ctrl.verifyIdentity);
+
 // ─── Quiz discovery ───────────────────────────────────────────────────────────
 
 router.get("/quizzes",                   ctrl.listAllQuizzes);

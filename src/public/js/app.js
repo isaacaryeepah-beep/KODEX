@@ -2531,6 +2531,7 @@ function buildSidebar() {
       links.push({ id: 'reports',       label: 'Reports',         icon: reportsIcon() });
       links.push({ sep: true, label: 'SUPPORT' });
       links.push({ id: 'emp-assistant', label: 'Assistant', icon: svgIcon('<path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/><circle cx="12" cy="10" r="1"/><circle cx="8" cy="10" r="1"/><circle cx="16" cy="10" r="1"/>') });
+      links.push({ id: 'subscription',  label: 'Subscription',    icon: subscriptionIcon() });
       links.push({ id: 'support',       label: 'Support',         icon: svgIcon('<circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/>') });
       links.push({ id: 'faq-center',    label: 'FAQ Center',      icon: svgIcon('<path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/><line x1="9" y1="10" x2="15" y2="10"/><line x1="12" y1="7" x2="12" y2="13"/>') });
       links.push({ id: 'contact',       label: 'Contact Us',      icon: svgIcon('<path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07A19.5 19.5 0 0 1 4.69 12a19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 3.6 1.28h3a2 2 0 0 1 2 1.72c.127.96.361 1.903.7 2.81a2 2 0 0 1-.45 2.11L7.91 8.7a16 16 0 0 0 6.29 6.29l1.41-1.41a2 2 0 0 1 2.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0 1 22 16.92z"/>') });
@@ -2538,14 +2539,14 @@ function buildSidebar() {
       break;
     case 'student':
       links.push({ sep: true, label: 'ATTENDANCE' });
-      links.push({ id: 'mark-attendance', label: 'Mark Attendance', icon: attendanceIcon() });
       links.push({ id: 'my-attendance', label: 'My Attendance', icon: sessionsIcon() });
       links.push({ sep: true, label: 'ACADEMIC' });
       links.push({ id: 'courses', label: 'My Courses', icon: coursesIcon() });
+      links.push({ id: 'course-videos', label: 'Course Videos', icon: svgIcon('<polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2" ry="2"/>') });
       links.push({ id: 'timetable', label: 'Schedule', icon: svgIcon('<rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/>') });
       links.push({ id: 'quizzes', label: 'Quizzes', icon: quizzesIcon() });
-      links.push({ id: 'snap-quiz', label: 'Quiz Monitor', icon: svgIcon('<polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/>') });
-      links.push({ id: 'assignments', label: 'Assignments / Quiz', icon: assignmentsIcon() });
+      links.push({ id: 'snap-quiz', label: 'Exam Portal', icon: svgIcon('<path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>') });
+      links.push({ id: 'assignments', label: 'Assignments', icon: assignmentsIcon() });
       links.push({ id: 'gradebook', label: 'My Grades', icon: svgIcon('<path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/>') });
       links.push({ id: 'quiz-history', label: 'My Results', icon: svgIcon('<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/>') });
       links.push({ sep: true, label: 'COMMUNICATE' });
@@ -2553,6 +2554,7 @@ function buildSidebar() {
       links.push({ id: 'meetings', label: 'Meetings', icon: meetingsIcon() });
       links.push({ id: 'announcements', label: 'Announcements', icon: svgIcon('<path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/>') });
       links.push({ sep: true, label: 'SUPPORT' });
+      links.push({ id: 'subscription', label: 'Subscription', icon: subscriptionIcon() });
       links.push({ id: 'support', label: 'Support', icon: svgIcon('<circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/>') });
       links.push({ id: 'faq-center', label: 'FAQ Center', icon: svgIcon('<path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/><line x1="9" y1="10" x2="15" y2="10"/><line x1="12" y1="7" x2="12" y2="13"/>') });
       links.push({ id: 'contact',   label: 'Contact Us', icon: svgIcon('<path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07A19.5 19.5 0 0 1 4.69 12a19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 3.6 1.28h3a2 2 0 0 1 2 1.72c.127.96.361 1.903.7 2.81a2 2 0 0 1-.45 2.11L7.91 8.7a16 16 0 0 0 6.29 6.29l1.41-1.41a2 2 0 0 1 2.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0 1 22 16.92z"/>') });
@@ -2646,6 +2648,7 @@ function navigateTo(view) {
     case 'sign-in-out': renderSignInOut(); break;
     case 'corp-attendance': renderCorporateAttendance(); break;
     case 'subscription': renderSubscription(); break;
+    case 'course-videos': renderCourseVideos(); break;
     case 'reports': renderReports(); break;
     case 'shifts': renderShifts(); break;
     case 'leave-requests': renderLeaveRequests(); break;
@@ -2799,11 +2802,20 @@ async function renderApprovals() {
   if (!content) return;
   content.innerHTML = '<div class="loading">Loading approvals…</div>';
   try {
-    const data = await api('/api/approvals/pending');
-    const pending = data.pending || [];
-    const role    = currentUser.role;
+    const role      = currentUser.role;
     const isHod     = role === 'hod';
     const isManager = role === 'manager';
+    const isAdmin   = role === 'admin' || role === 'superadmin';
+
+    const [approvalData, selfRegData] = await Promise.all([
+      api('/api/approvals/pending'),
+      isAdmin ? api('/api/approvals/self-registration').catch(() => null) : Promise.resolve(null),
+    ]);
+
+    const pending = approvalData.pending || [];
+    const selfRegEnabled = selfRegData?.enabled ?? false;
+    const institutionCode = selfRegData?.institutionCode || '';
+    const selfRegUrl = `${window.location.origin}/register.html?code=${encodeURIComponent(institutionCode)}`;
 
     const subtitle = isHod
       ? `Lecturer &amp; student requests for <strong>${currentUser.department || 'your department'}</strong>`
@@ -2811,8 +2823,33 @@ async function renderApprovals() {
         ? 'Employee registration requests pending your approval'
         : 'Review and approve registration requests';
 
-    // HODs don't need a department column (all in same dept); managers don't need one either
     const showDeptCol = !isHod && !isManager;
+
+    const selfRegPanel = isAdmin ? `
+      <div class="card" style="margin-bottom:20px;padding:20px 24px">
+        <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px">
+          <div>
+            <div style="font-size:15px;font-weight:600;color:var(--text);margin-bottom:4px">Self-Registration</div>
+            <div style="font-size:13px;color:var(--text-muted)">Allow students &amp; employees to register themselves — you review and approve each request.</div>
+          </div>
+          <div style="display:flex;align-items:center;gap:12px">
+            <label style="display:flex;align-items:center;gap:8px;cursor:pointer;user-select:none">
+              <div id="self-reg-toggle" data-on="${selfRegEnabled ? '1' : '0'}" onclick="toggleSelfReg()" style="width:44px;height:24px;border-radius:12px;background:${selfRegEnabled ? 'var(--primary)' : 'var(--border)'};position:relative;cursor:pointer;transition:background .2s">
+                <div style="width:18px;height:18px;border-radius:50%;background:#fff;position:absolute;top:3px;left:${selfRegEnabled ? '23px' : '3px'};transition:left .2s"></div>
+              </div>
+              <span id="self-reg-label" style="font-size:13px;font-weight:600;color:${selfRegEnabled ? 'var(--primary)' : 'var(--text-muted)'}">${selfRegEnabled ? 'Open' : 'Closed'}</span>
+            </label>
+          </div>
+        </div>
+        ${selfRegEnabled ? `
+        <div style="margin-top:16px;padding:12px 14px;background:var(--bg);border-radius:8px;border:1px solid var(--border)">
+          <div style="font-size:12px;color:var(--text-muted);margin-bottom:6px;font-weight:600;letter-spacing:.5px">REGISTRATION LINK — share this with your students / employees</div>
+          <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+            <code style="font-size:12px;color:var(--text);word-break:break-all;flex:1">${selfRegUrl}</code>
+            <button class="btn btn-sm" onclick="navigator.clipboard.writeText('${selfRegUrl}').then(()=>showToastNotif('Link copied!','success'))">Copy</button>
+          </div>
+        </div>` : ''}
+      </div>` : '';
 
     content.innerHTML = `
       <div class="page-header">
@@ -2821,6 +2858,7 @@ async function renderApprovals() {
           <p>${subtitle}</p>
         </div>
       </div>
+      ${selfRegPanel}
       <div class="card">
         ${pending.length ? `
           <table>
@@ -2834,14 +2872,14 @@ async function renderApprovals() {
             </tr></thead>
             <tbody>${pending.map(u => `
               <tr>
-                <td style="font-weight:500">${u.name}</td>
-                <td style="font-size:13px;color:var(--text-light)">${u.email || u.IndexNumber || u.indexNumber || 'N/A'}</td>
-                <td><span class="status-badge status-active">${u.role}</span></td>
-                ${showDeptCol ? `<td>${u.department ? `<span style="font-size:11px;padding:2px 7px;border-radius:20px;background:#ecfeff;color:#0891b2;font-weight:600;">${u.department}</span>` : '—'}</td>` : ''}
+                <td style="font-weight:500">${esc(u.name)}${u.selfRegistered ? ' <span style="font-size:10px;padding:1px 5px;border-radius:10px;background:#ede9fe;color:#7c3aed;font-weight:600;vertical-align:middle">SELF-REG</span>' : ''}</td>
+                <td style="font-size:13px;color:var(--text-light)">${esc(u.email || u.IndexNumber || u.indexNumber || 'N/A')}</td>
+                <td><span class="status-badge status-active">${esc(u.role)}</span></td>
+                ${showDeptCol ? `<td>${u.department ? `<span style="font-size:11px;padding:2px 7px;border-radius:20px;background:#ecfeff;color:#0891b2;font-weight:600;">${esc(u.department)}</span>` : '—'}</td>` : ''}
                 <td style="font-size:13px;color:var(--text-light)">${new Date(u.createdAt).toLocaleDateString()}</td>
                 <td style="white-space:nowrap">
                   <button class="btn btn-sm" style="background:#22c55e;color:#fff;margin-right:6px" onclick="approveUser('${u._id}')">✓ Approve</button>
-                  <button class="btn btn-danger btn-sm" onclick="rejectUser('${u._id}')">✕ Reject</button>
+                  <button class="btn btn-danger btn-sm" onclick="rejectUser('${u._id}','${esc(u.name)}')">✕ Reject</button>
                 </td>
               </tr>
             `).join('')}</tbody>
@@ -2851,6 +2889,18 @@ async function renderApprovals() {
     `;
   } catch (e) {
     content.innerHTML = `<div class="card"><p style="color:#ef4444">Failed to load approvals: ${e.message}</p></div>`;
+  }
+}
+
+async function toggleSelfReg() {
+  const toggle = document.getElementById('self-reg-toggle');
+  if (!toggle) return;
+  const newVal = toggle.dataset.on !== '1';
+  try {
+    await api('/api/approvals/self-registration', { method: 'PATCH', body: JSON.stringify({ enabled: newVal }) });
+    renderApprovals();
+  } catch (e) {
+    toastError(e.message);
   }
 }
 
@@ -2864,10 +2914,31 @@ async function approveUser(userId) {
   }
 }
 
-async function rejectUser(userId) {
-  if (!confirm('Reject and remove this user? This cannot be undone.')) return;
+function rejectUser(userId, userName) {
+  openModal(`
+    <div style="max-width:400px">
+      <h3 style="margin-bottom:8px;font-size:16px">Reject Registration</h3>
+      <p style="font-size:13px;color:var(--text-muted);margin-bottom:16px">
+        Rejecting <strong>${esc(userName || 'this user')}</strong> will delete their account and notify them by email.
+      </p>
+      <label style="font-size:12px;font-weight:600;text-transform:uppercase;letter-spacing:.5px;color:var(--text-muted)">
+        Reason (optional — included in rejection email)
+      </label>
+      <textarea id="reject-reason" rows="3" placeholder="e.g. Could not verify your identity. Please contact the office." maxlength="300"
+        style="width:100%;margin-top:6px;padding:9px 12px;border:1.5px solid var(--border);border-radius:8px;font-size:13px;background:var(--bg);color:var(--text);resize:vertical"></textarea>
+      <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:16px">
+        <button class="btn btn-secondary" onclick="closeModal()">Cancel</button>
+        <button class="btn btn-danger" onclick="_confirmReject('${esc(userId)}')">Reject &amp; Notify</button>
+      </div>
+    </div>
+  `);
+}
+
+async function _confirmReject(userId) {
+  const reason = (document.getElementById('reject-reason')?.value || '').trim();
+  closeModal();
   try {
-    await api(`/api/approvals/${userId}/reject`, { method: 'DELETE' });
+    await api(`/api/approvals/${userId}/reject`, { method: 'DELETE', body: JSON.stringify({ reason }) });
     renderApprovals();
   } catch (e) {
     toastError(e.message);
@@ -5389,7 +5460,6 @@ async function renderStudentDashboard(content) {
     </div>
     
     <div class="quick-actions">
-      <button class="btn btn-primary btn-sm" onclick="navigateTo('mark-attendance')">Mark Attendance</button>
       <button class="btn btn-secondary btn-sm" onclick="navigateTo('my-attendance')">View History</button>
       <button class="btn btn-secondary btn-sm" onclick="navigateTo('courses')">My Courses</button>
       <button class="btn btn-secondary btn-sm" onclick="navigateTo('quizzes')">Quizzes</button>
@@ -6510,13 +6580,16 @@ function _userRowCard(u, canManage) {
 }
 
 // ── Department drill-down view ─────────────────────────────────────────────────
-function renderDepartmentUsers(deptName, allUsers) {
+function renderDepartmentUsers(deptName, allUsers, filterRole = '') {
   const content = document.getElementById('main-content');
   if (!content) return;
   const canManage = ['admin','superadmin'].includes(currentUser.role);
-  const deptUsers = deptName === '__none__'
+
+  let deptUsers = deptName === '__none__'
     ? allUsers.filter(u => !u.department)
     : allUsers.filter(u => u.department === deptName);
+
+  if (filterRole) deptUsers = deptUsers.filter(u => u.role === filterRole);
 
   const roleOrder = ['admin','hod','lecturer','student','employee','manager'];
   const roleLabel = { admin:'Admins', hod:'Head of Department', lecturer:'Lecturers', student:'Students', employee:'Employees', manager:'Managers' };
@@ -6542,21 +6615,25 @@ function renderDepartmentUsers(deptName, allUsers) {
   `).join('');
 
   const displayName = deptName === '__none__' ? 'Unassigned Users' : esc(deptName);
+  const roleTitle = filterRole ? ` — ${roleLabel[filterRole] || filterRole}` : '';
+  const safeDepId = JSON.stringify(deptName);
+
   content.innerHTML = `
     <div style="display:flex;align-items:center;gap:12px;margin-bottom:20px;flex-wrap:wrap">
       <button onclick="renderUsers()" style="display:flex;align-items:center;gap:6px;background:none;border:1.5px solid var(--border);border-radius:10px;padding:8px 14px;font-size:13px;font-weight:600;color:var(--text);cursor:pointer">
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M19 12H5M12 5l-7 7 7 7"/></svg>
         Departments
       </button>
+      ${filterRole ? `<button onclick="renderDepartmentUsers(${safeDepId},_cachedAllUsers)" style="display:flex;align-items:center;gap:6px;background:none;border:1.5px solid var(--border);border-radius:10px;padding:8px 14px;font-size:13px;font-weight:600;color:var(--text);cursor:pointer">All Members</button>` : ''}
       <div>
-        <h2 style="margin:0;font-size:20px">${displayName}</h2>
+        <h2 style="margin:0;font-size:20px">${displayName}${roleTitle}</h2>
         <p style="color:var(--text-light);font-size:13px;margin-top:2px">${deptUsers.length} member${deptUsers.length!==1?'s':''}</p>
       </div>
       ${canManage ? `<button class="btn btn-primary btn-sm" style="margin-left:auto" onclick="showCreateUserModal()">+ Add User</button>` : ''}
     </div>
     ${sections || `<div class="card" style="padding:48px;text-align:center">
       <div style="font-size:36px;margin-bottom:10px">👥</div>
-      <div style="font-weight:600;color:var(--text)">No members in this department</div>
+      <div style="font-weight:600;color:var(--text)">No ${filterRole ? (roleLabel[filterRole]||filterRole).toLowerCase() : 'members'} in this department</div>
     </div>`}
   `;
 }
@@ -6671,11 +6748,15 @@ async function renderUsers(filterRole='', filterDept='', filterSearch='') {
             <div style="font-size:13px;font-weight:600;color:var(--text)">${hodName}</div></div>
           </div>` : ''}
           <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:4px">
-            <div style="background:#fef9c3;border-radius:10px;padding:10px 12px;text-align:center">
+            <div style="background:#fef9c3;border-radius:10px;padding:10px 12px;text-align:center;cursor:pointer;transition:opacity .15s"
+              onmouseover="this.style.opacity='.8'" onmouseout="this.style.opacity='1'"
+              onclick="event.stopPropagation();renderDepartmentUsers(${safeId},_cachedAllUsers,'lecturer')">
               <div style="font-size:22px;font-weight:800;color:#a16207">${d.lecturer.length}</div>
               <div style="font-size:10px;font-weight:700;color:#92400e;text-transform:uppercase;letter-spacing:.4px">Lecturers</div>
             </div>
-            <div style="background:#ede9fe;border-radius:10px;padding:10px 12px;text-align:center">
+            <div style="background:#ede9fe;border-radius:10px;padding:10px 12px;text-align:center;cursor:pointer;transition:opacity .15s"
+              onmouseover="this.style.opacity='.8'" onmouseout="this.style.opacity='1'"
+              onclick="event.stopPropagation();renderDepartmentUsers(${safeId},_cachedAllUsers,'student')">
               <div style="font-size:22px;font-weight:800;color:#7c3aed">${d.student.length}</div>
               <div style="font-size:10px;font-weight:700;color:#6d28d9;text-transform:uppercase;letter-spacing:.4px">Students</div>
             </div>
@@ -9325,9 +9406,6 @@ async function renderMyAttendance() {
     offlineCache('my_attendance', data);
     content.innerHTML = `
       <div class="page-header"><h2>My Attendance</h2><p>Your attendance history</p></div>
-      <div class="actions-bar">
-        <button class="btn btn-primary btn-sm" onclick="showMarkAttendanceModal()">Mark Attendance</button>
-      </div>
       <div class="card">
         ${data.records.length ? `
           <table>
@@ -11123,6 +11201,101 @@ async function renderSubscription() {
   }
 }
 
+// ─── Course Videos ────────────────────────────────────────────────────────────
+
+window.openVideoPlayer = function(title, embedUrl, platform) {
+  let mediaHtml;
+  const safePlatforms = ['youtube', 'vimeo', 'googledrive', 'loom'];
+  if (embedUrl && safePlatforms.includes((platform || '').toLowerCase())) {
+    mediaHtml = `<iframe src="${esc(embedUrl)}" style="width:100%;height:400px;border:none;border-radius:10px"
+      allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+      allowfullscreen></iframe>`;
+  } else if (embedUrl) {
+    mediaHtml = `<video src="${esc(embedUrl)}" controls style="width:100%;border-radius:10px;max-height:400px">
+      Your browser does not support video playback.
+    </video>`;
+  } else {
+    mediaHtml = `<div style="padding:40px;text-align:center;color:var(--text-muted)">No playable source available for this video.</div>`;
+  }
+  openModal(`
+    <div style="min-width:min(680px,90vw)">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
+        <h3 style="margin:0;font-size:16px;color:var(--text)">${esc(title)}</h3>
+        <button onclick="closeModal()" style="background:none;border:none;color:var(--text-muted);cursor:pointer;font-size:20px;line-height:1">&times;</button>
+      </div>
+      ${mediaHtml}
+    </div>
+  `);
+};
+
+async function renderCourseVideos() {
+  const content = document.getElementById('main-content');
+  if (!content) return;
+
+  content.innerHTML = `
+    <div class="page-header">
+      <h2>Course Videos</h2>
+      <p>Video lectures from your enrolled courses</p>
+    </div>
+    <div id="cv-body"><div class="loading-spinner" style="margin:60px auto"></div></div>`;
+
+  const body = document.getElementById('cv-body');
+  try {
+    const data = await api('/api/course-videos/my-courses');
+    const courses = data.courses || [];
+
+    if (!courses.length) {
+      body.innerHTML = `<div class="card" style="text-align:center;padding:48px 24px">
+        <div style="font-size:40px;margin-bottom:12px">🎬</div>
+        <h3 style="margin-bottom:8px">No Videos Yet</h3>
+        <p style="color:var(--text-muted)">Your lecturers haven't uploaded any course videos yet. Check back later.</p>
+      </div>`;
+      return;
+    }
+
+    const platformIcon = p => ({
+      youtube:     '▶️',
+      vimeo:       '🎥',
+      googledrive: '📁',
+      loom:        '🔴',
+    }[p] || '🎬');
+
+    body.innerHTML = courses.map(({ course, videos }) => {
+      const vids = videos || [];
+      const vidCards = vids.length ? vids.map(v => `
+        <div class="card" style="padding:0;overflow:hidden;cursor:pointer;transition:transform .15s,box-shadow .15s"
+          onmouseenter="this.style.transform='translateY(-2px)';this.style.boxShadow='0 6px 20px rgba(0,0,0,.25)'"
+          onmouseleave="this.style.transform='';this.style.boxShadow=''"
+          onclick="openVideoPlayer('${esc(v.title)}','${esc(v.embedUrl || v.url || '')}','${esc(v.platform || '')}')">
+          ${v.thumbnail
+            ? `<img src="${esc(v.thumbnail)}" alt="${esc(v.title)}" style="width:100%;height:140px;object-fit:cover">`
+            : `<div style="width:100%;height:140px;background:var(--bg);display:flex;align-items:center;justify-content:center;font-size:36px">${platformIcon(v.platform)}</div>`}
+          <div style="padding:12px">
+            <div style="font-size:13px;font-weight:600;color:var(--text);margin-bottom:4px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(v.title)}</div>
+            ${v.description ? `<div style="font-size:12px;color:var(--text-muted);display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden">${esc(v.description)}</div>` : ''}
+            <div style="font-size:11px;color:var(--text-muted);margin-top:6px;text-transform:uppercase;letter-spacing:.5px">${platformIcon(v.platform)} ${esc(v.platform || 'video')}</div>
+          </div>
+        </div>`).join('')
+        : `<p style="color:var(--text-muted);font-size:13px;padding:8px 0">No videos uploaded for this course yet.</p>`;
+
+      return `
+        <div style="margin-bottom:32px">
+          <div style="display:flex;align-items:center;gap:10px;margin-bottom:14px">
+            <div style="width:4px;height:22px;background:var(--primary);border-radius:2px"></div>
+            <h3 style="margin:0;font-size:16px;color:var(--text)">${esc(course.title)}</h3>
+            <span style="font-size:12px;color:var(--text-muted);padding:2px 8px;border:1px solid var(--border);border-radius:12px">${esc(course.code)}</span>
+            <span style="font-size:12px;color:var(--text-muted);margin-left:auto">${vids.length} video${vids.length !== 1 ? 's' : ''}</span>
+          </div>
+          <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:16px">
+            ${vidCards}
+          </div>
+        </div>`;
+    }).join('');
+
+  } catch (e) {
+    body.innerHTML = `<div class="card"><p style="color:var(--danger)">Error loading videos: ${e.message}</p></div>`;
+  }
+}
 
 async function renderSearch() {
   const content = document.getElementById('main-content');
@@ -14905,16 +15078,23 @@ async function _caLoadSettings() {
           <div style="font-size:11px;color:var(--text-light);margin-top:4px">Comma-separated list. Your current IP: <strong id="cas-myip">detecting…</strong></div>
         </div>
 
-        <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:14px">
-          <div class="form-group">
-            <label style="font-size:11px;font-weight:700;text-transform:uppercase;color:var(--text-light)">Office Latitude</label>
-            <input type="number" id="cas-lat" value="${s.officeLatitude ?? ''}" step="0.000001" placeholder="e.g. 5.603717"
-              style="width:100%;padding:9px 12px;border:1.5px solid var(--border);border-radius:8px;font-size:13px;margin-top:4px">
+        <div style="margin-top:14px">
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">
+            <label style="font-size:11px;font-weight:700;text-transform:uppercase;color:var(--text-light)">Office Location (Latitude / Longitude)</label>
+            <button class="btn btn-secondary btn-sm" id="cas-gps-btn" onclick="_caDetectLocation()" style="font-size:11px;padding:4px 10px">📍 Detect My Location</button>
           </div>
-          <div class="form-group">
-            <label style="font-size:11px;font-weight:700;text-transform:uppercase;color:var(--text-light)">Office Longitude</label>
-            <input type="number" id="cas-lng" value="${s.officeLongitude ?? ''}" step="0.000001" placeholder="e.g. -0.186964"
-              style="width:100%;padding:9px 12px;border:1.5px solid var(--border);border-radius:8px;font-size:13px;margin-top:4px">
+          <div id="cas-gps-status" style="font-size:11px;color:var(--text-muted);margin-bottom:8px;display:none"></div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+            <div class="form-group">
+              <label style="font-size:11px;font-weight:600;color:var(--text-light)">Latitude</label>
+              <input type="number" id="cas-lat" value="${s.officeLatitude ?? ''}" step="0.000001" placeholder="e.g. 5.603717"
+                style="width:100%;padding:9px 12px;border:1.5px solid var(--border);border-radius:8px;font-size:13px;margin-top:4px">
+            </div>
+            <div class="form-group">
+              <label style="font-size:11px;font-weight:600;color:var(--text-light)">Longitude</label>
+              <input type="number" id="cas-lng" value="${s.officeLongitude ?? ''}" step="0.000001" placeholder="e.g. -0.186964"
+                style="width:100%;padding:9px 12px;border:1.5px solid var(--border);border-radius:8px;font-size:13px;margin-top:4px">
+            </div>
           </div>
         </div>
 
@@ -14925,7 +15105,7 @@ async function _caLoadSettings() {
         </div>
 
         <button class="btn btn-primary" style="margin-top:20px" onclick="_caSaveSettings()">Save Settings</button>
-        <button class="btn btn-secondary btn-sm" style="margin-top:20px;margin-left:8px" onclick="_caDetectMyIP()">📡 Detect My IP</button>
+        <button class="btn btn-secondary btn-sm" id="cas-ip-btn" style="margin-top:20px;margin-left:8px" onclick="_caDetectMyIP()">📡 Detect My IP</button>
       </div>
 
       <div class="card" style="max-width:560px">
@@ -14996,13 +15176,60 @@ async function _caClearClockWindow() {
 }
 
 async function _caDetectMyIP() {
-  const el = document.getElementById('cas-myip');
+  const el  = document.getElementById('cas-myip');
+  const btn = document.getElementById('cas-ip-btn');
   if (!el) return;
+  el.textContent = 'detecting…';
+  if (btn) { btn.disabled = true; btn.textContent = '⏳ Detecting…'; }
   try {
-    const r = await fetch('https://api.ipify.org?format=json');
-    const d = await r.json();
+    const d = await api('/api/corporate-attendance/my-ip');
     el.textContent = d.ip || 'unknown';
-  } catch { el.textContent = 'unavailable'; }
+  } catch {
+    el.textContent = 'unavailable — ensure you are logged in and on the network';
+  } finally {
+    if (btn) { btn.disabled = false; btn.textContent = '📡 Detect My IP'; }
+  }
+}
+
+function _caDetectLocation() {
+  const btn    = document.getElementById('cas-gps-btn');
+  const status = document.getElementById('cas-gps-status');
+  const latEl  = document.getElementById('cas-lat');
+  const lngEl  = document.getElementById('cas-lng');
+  if (!latEl || !lngEl) return;
+
+  if (!navigator.geolocation) {
+    if (status) { status.textContent = 'Geolocation is not supported by this browser.'; status.style.color = 'var(--danger)'; status.style.display = 'block'; }
+    return;
+  }
+
+  if (btn) { btn.disabled = true; btn.textContent = '⏳ Getting GPS…'; }
+  if (status) { status.textContent = 'Requesting precise location from device GPS…'; status.style.color = 'var(--text-muted)'; status.style.display = 'block'; }
+
+  navigator.geolocation.getCurrentPosition(
+    (pos) => {
+      const lat = pos.coords.latitude.toFixed(6);
+      const lng = pos.coords.longitude.toFixed(6);
+      const acc = Math.round(pos.coords.accuracy);
+      latEl.value = lat;
+      lngEl.value = lng;
+      if (status) {
+        status.textContent = `✓ Location set — accuracy ±${acc} m. Click Save Settings to apply.`;
+        status.style.color = 'var(--success,#22c55e)';
+      }
+      if (btn) { btn.disabled = false; btn.textContent = '📍 Detect My Location'; }
+    },
+    (err) => {
+      const msgs = {
+        1: 'Location permission denied. Please allow location access in your browser settings.',
+        2: 'Location unavailable. Make sure GPS is enabled on your device.',
+        3: 'Location request timed out. Try again.',
+      };
+      if (status) { status.textContent = msgs[err.code] || 'Could not get location.'; status.style.color = 'var(--danger)'; }
+      if (btn) { btn.disabled = false; btn.textContent = '📍 Detect My Location'; }
+    },
+    { enableHighAccuracy: true, timeout: 15000, maximumAge: 0 }
+  );
 }
 
 async function _caSaveSettings() {
@@ -18808,16 +19035,53 @@ window.hodDoAssignRep = async (studentId, studentName) => {
   }
 };
 
-window.hodRenameDevice = async (deviceId, currentName) => {
-  const newName = prompt(`Rename device:\n(current: ${currentName})`, currentName);
-  if (!newName || newName.trim() === currentName) return;
+function _openRenameModal(deviceId, currentName, onSuccess) {
+  openModal(`
+    <div style="padding:4px 0">
+      <h3 style="margin:0 0 6px;font-size:17px;font-weight:700">Rename Device</h3>
+      <p style="color:var(--muted);font-size:13px;margin:0 0 20px">
+        Current: <strong style="color:var(--text)">${esc(currentName)}</strong>
+      </p>
+      <label style="display:block;font-size:11px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px">New Name</label>
+      <input id="dev-rename-inp" type="text" value="${esc(currentName)}" maxlength="48"
+        placeholder="e.g. Lecture Hall A"
+        style="width:100%;padding:13px 14px;background:var(--surface,#1a2038);border:1.5px solid var(--border,#2d3a5c);border-radius:10px;color:var(--text,#fff);font-size:15px;outline:none;box-sizing:border-box;margin-bottom:20px"
+        onkeydown="if(event.key==='Enter')window._doDeviceRename('${esc(deviceId)}')">
+      <div style="display:flex;gap:10px">
+        <button onclick="closeModal()"
+          style="flex:1;padding:13px;background:transparent;border:1.5px solid var(--border,#2d3a5c);border-radius:10px;color:var(--muted,#94a3b8);font-size:14px;font-weight:600;cursor:pointer">
+          Cancel
+        </button>
+        <button id="dev-rename-save" onclick="window._doDeviceRename('${esc(deviceId)}')"
+          style="flex:1;padding:13px;background:var(--accent,#4f6ef7);border:none;border-radius:10px;color:#fff;font-size:14px;font-weight:700;cursor:pointer">
+          Save
+        </button>
+      </div>
+    </div>
+  `);
+  window._onRenameSuccess = onSuccess;
+  setTimeout(() => { const i = document.getElementById('dev-rename-inp'); if (i) { i.focus(); i.select(); } }, 60);
+}
+
+window._doDeviceRename = async (deviceId) => {
+  const inp = document.getElementById('dev-rename-inp');
+  const newName = (inp?.value || '').trim();
+  if (!newName) { inp?.focus(); return; }
+  const btn = document.getElementById('dev-rename-save');
+  if (btn) { btn.disabled = true; btn.textContent = 'Saving…'; }
   try {
-    await api('/api/devices/my/rename', { method: 'PATCH', body: JSON.stringify({ deviceName: newName.trim(), deviceId }) });
-    showToastNotif('✅ Device renamed successfully.', 'success');
-    renderHodDevices();
+    await api('/api/devices/my/rename', { method: 'PATCH', body: JSON.stringify({ deviceName: newName, deviceId }) });
+    closeModal();
+    showToastNotif('Device renamed successfully.', 'success');
+    if (typeof window._onRenameSuccess === 'function') window._onRenameSuccess();
   } catch (e) {
-    showToastNotif('❌ Failed to rename: ' + e.message, 'error');
+    if (btn) { btn.disabled = false; btn.textContent = 'Save'; }
+    showToastNotif('Failed to rename: ' + (e.message || 'Server error'), 'error');
   }
+};
+
+window.hodRenameDevice = (deviceId, currentName) => {
+  _openRenameModal(deviceId, currentName, renderHodDevices);
 };
 
 window.hodSetupDevice = async (deviceId) => {
@@ -19410,14 +19674,8 @@ window.adminDoAssignRep = async (deviceId, studentId, studentName) => {
   } catch(e) { showToastNotif('❌ ' + (e.message || 'Failed to assign'), 'error'); }
 };
 
-window.adminRenameDevice = async (deviceId, currentName) => {
-  const newName = prompt(`Rename device:\n(current: ${currentName})`, currentName);
-  if (!newName || !newName.trim() || newName.trim() === currentName) return;
-  try {
-    await api('/api/devices/my/rename', { method: 'PATCH', body: JSON.stringify({ deviceName: newName.trim(), deviceId }) });
-    showToastNotif('✅ Device renamed.', 'success');
-    renderAdminDevices();
-  } catch(e) { showToastNotif('❌ ' + (e.message || 'Failed to rename'), 'error'); }
+window.adminRenameDevice = (deviceId, currentName) => {
+  _openRenameModal(deviceId, currentName, renderAdminDevices);
 };
 
 window.adminFactoryReset = async (deviceId, deviceName, isOnline) => {

@@ -1,7 +1,7 @@
 const User    = require("../models/User");
 const Company = require("../models/Company");
 const { syncStudentToRoster } = require("../utils/rosterSync");
-const { sendStudentWelcome, sendEmployeeWelcome } = require("../services/emailService");
+const { sendStudentWelcome, sendEmployeeWelcome, sendRegistrationRejected } = require("../services/emailService");
 
 // Build the base query filter for the requesting user's role.
 // Uses req.companyFilter (set by companyIsolation middleware) so superadmin
@@ -81,10 +81,53 @@ exports.rejectUser = async (req, res) => {
     if (!user) {
       return res.status(404).json({ error: "User not found or already approved" });
     }
+    const reason = (req.body?.reason || '').trim() || null;
     await User.findByIdAndDelete(user._id);
+
+    if (user.email) {
+      Company.findById(user.company).select("name displayName").lean()
+        .then(company => sendRegistrationRejected({
+          email: user.email,
+          name: user.name,
+          orgName: company?.displayName || company?.name || '',
+          reason,
+        }))
+        .catch(err => console.error("[rejectUser] rejection email failed:", err.message));
+    }
+
     res.json({ message: `${user.name} has been rejected and removed` });
   } catch (error) {
     console.error("Reject user error:", error);
     res.status(500).json({ error: "Failed to reject user" });
+  }
+};
+
+exports.getSelfRegistrationStatus = async (req, res) => {
+  try {
+    const company = await Company.findById(req.user.company).select("selfRegistrationEnabled institutionCode").lean();
+    if (!company) return res.status(404).json({ error: "Company not found" });
+    res.json({ enabled: !!company.selfRegistrationEnabled, institutionCode: company.institutionCode });
+  } catch (error) {
+    console.error("getSelfRegistrationStatus error:", error);
+    res.status(500).json({ error: "Failed to get status" });
+  }
+};
+
+exports.toggleSelfRegistration = async (req, res) => {
+  try {
+    const { enabled } = req.body;
+    if (typeof enabled !== "boolean") {
+      return res.status(400).json({ error: "enabled must be a boolean" });
+    }
+    const company = await Company.findByIdAndUpdate(
+      req.user.company,
+      { selfRegistrationEnabled: enabled },
+      { new: true }
+    ).select("selfRegistrationEnabled institutionCode");
+    if (!company) return res.status(404).json({ error: "Company not found" });
+    res.json({ enabled: company.selfRegistrationEnabled, institutionCode: company.institutionCode });
+  } catch (error) {
+    console.error("toggleSelfRegistration error:", error);
+    res.status(500).json({ error: "Failed to update setting" });
   }
 };

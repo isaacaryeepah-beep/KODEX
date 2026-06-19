@@ -626,6 +626,71 @@ async function sendHodWelcome({ email, name, institutionName, department }) {
   return send({ to: email, subject: `Welcome to DIKLY -- ${institutionName}`, html });
 }
 
+// ── Registration rejection email ──────────────────────────────────────────────
+async function sendRegistrationRejected({ email, name, orgName, reason }) {
+  if (!email) return;
+  const html = wrap(`
+    <h1>Registration Update</h1>
+    <p>Hi <span class="highlight">${name}</span>, we have reviewed your registration request for <strong>${orgName}</strong>.</p>
+
+    <div class="info-box" style="border-left:4px solid ${C.red}">
+      <p><strong>Status:</strong> <span class="badge" style="background:${C.red};color:#fff;padding:2px 8px;border-radius:4px;font-size:12px">NOT APPROVED</span></p>
+      ${reason ? `<p style="margin-top:8px"><strong>Reason:</strong> ${reason}</p>` : ''}
+    </div>
+
+    <p>If you believe this is a mistake or have questions, please contact your institution administrator directly.</p>
+
+    <hr class="divider"/>
+    <p style="font-size:13px">This is an automated message from DIKLY. Please do not reply to this email.</p>
+  `, `Your DIKLY registration was not approved`);
+  return send({ to: email, subject: `Your DIKLY registration update — ${orgName}`, html });
+}
+
+// ── Self-registration pending email (sent to the applicant) ──────────────────
+async function sendSelfRegPending({ email, name, orgName, role }) {
+  if (!email) return;
+  const roleLabel = role === 'student' ? 'Student' : 'Employee';
+  const html = wrap(`
+    <h1>Registration Received ✅</h1>
+    <p>Hi <span class="highlight">${name}</span>, your ${roleLabel.toLowerCase()} registration request for <strong>${orgName}</strong> has been received.</p>
+
+    <div class="info-box">
+      <p><strong>Organisation:</strong> ${orgName}</p>
+      <p><strong>Role:</strong> ${roleLabel}</p>
+      <p><strong>Status:</strong> <span class="badge badge-orange">PENDING APPROVAL</span></p>
+    </div>
+
+    <p>An admin will review your request shortly. You will receive another email once your account is approved and ready to use.</p>
+
+    <hr class="divider"/>
+    <p style="font-size:13px">If you did not submit this request, please ignore this email.</p>
+  `, `Your DIKLY registration is under review`);
+  return send({ to: email, subject: `Your DIKLY registration is under review`, html });
+}
+
+// ── Notify admin of a new self-registration request ───────────────────────────
+async function sendAdminNewSelfReg({ adminEmail, applicantName, role, orgName }) {
+  if (!adminEmail) return;
+  const roleLabel = role === 'student' ? 'Student' : 'Employee';
+  const html = wrap(`
+    <h1>New Self-Registration Request 📋</h1>
+    <p>A new <strong>${roleLabel}</strong> has submitted a self-registration request for <strong>${orgName}</strong> on DIKLY.</p>
+
+    <div class="info-box">
+      <p><strong>Applicant:</strong> ${applicantName}</p>
+      <p><strong>Role:</strong> ${roleLabel}</p>
+      <p><strong>Organisation:</strong> ${orgName}</p>
+    </div>
+
+    <p>Log in to your admin portal to review and approve or reject the request.</p>
+
+    <div style="text-align:center;margin:28px 0">
+      <a href="${BASE_URL}" class="btn btn-primary">Review in DIKLY →</a>
+    </div>
+  `, `New ${roleLabel} registration request`);
+  return send({ to: adminEmail, subject: `New ${roleLabel} registration request — ${orgName}`, html });
+}
+
 module.exports = {
   send,
   sendWelcome,
@@ -642,4 +707,7 @@ module.exports = {
   sendStudentWelcome,
   sendEmployeeWelcome,
   sendHodWelcome,
+  sendSelfRegPending,
+  sendAdminNewSelfReg,
+  sendRegistrationRejected,
 };

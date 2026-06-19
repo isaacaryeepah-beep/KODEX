@@ -241,7 +241,7 @@ exports.deviceStatus = async (req, res) => {
     const latest   = devices.filter(d => d.lastSeenAt).sort((a,b) => new Date(b.lastSeenAt)-new Date(a.lastSeenAt))[0];
     const lastSeen  = latest?.lastSeenAt ? new Date(latest.lastSeenAt) : null;
     const secsSince = lastSeen ? Math.round((Date.now() - lastSeen.getTime()) / 1000) : null;
-    const deviceOnline = lastSeen ? (Date.now() - lastSeen.getTime()) < 15000 : false; // 15s window
+    const deviceOnline = lastSeen ? (Date.now() - lastSeen.getTime()) < 45000 : false; // 45s window (3 missed heartbeats)
     console.log(`[ESP32 status] lastSeen=${lastSeen?.toISOString()} secsSince=${secsSince} online=${deviceOnline}`);
 
     // V2 firmware hardware flags (populated from heartbeat)
@@ -353,7 +353,7 @@ exports.bleVerify = async (req, res) => {
       .filter(d => d.lastSeenAt)
       .sort((a, b) => new Date(b.lastSeenAt) - new Date(a.lastSeenAt))[0];
     const deviceOnline = latest
-      ? (Date.now() - new Date(latest.lastSeenAt).getTime()) < 15000 // 15s window
+      ? (Date.now() - new Date(latest.lastSeenAt).getTime()) < 45000 // 45s window (3 missed heartbeats)
       : false;
 
     if (!deviceOnline) {
