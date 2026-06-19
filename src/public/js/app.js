@@ -2508,6 +2508,7 @@ function buildSidebar() {
       links.push({ sep: true, label: 'CONTENT' });
       links.push({ id: 'search', label: 'Search', icon: svgIcon('<circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>') });
       links.push({ id: 'courses', label: 'Courses', icon: coursesIcon() });
+      links.push({ id: 'lec-course-videos', label: 'Course Videos', icon: svgIcon('<polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2" ry="2"/>') });
       links.push({ id: 'quizzes', label: 'Quizzes', icon: quizzesIcon() });
       links.push({ id: 'snap-quiz', label: 'Quiz Monitor', icon: svgIcon('<polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/>') });
       links.push({ id: 'timetable', label: 'Schedule', icon: svgIcon('<rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/>') });
@@ -2517,6 +2518,7 @@ function buildSidebar() {
       links.push({ sep: true, label: 'COMMUNICATE' });
       links.push({ id: 'messages', label: 'Messages', icon: svgIcon('<path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>') });
       links.push({ id: 'meetings', label: 'Meetings', icon: meetingsIcon() });
+      links.push({ id: 'lec-notifications', label: 'Notifications', icon: svgIcon('<path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/>') });
       links.push({ sep: true, label: 'INSIGHTS' });
       links.push({ id: 'lecturer-performance', label: 'Performance', icon: svgIcon('<line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/>') });
       links.push({ id: 'reports', label: 'Reports', icon: reportsIcon() });
@@ -2666,8 +2668,10 @@ function navigateTo(view) {
     case 'sign-in-out': renderSignInOut(); break;
     case 'corp-attendance': renderCorporateAttendance(); break;
     case 'subscription': renderSubscription(); break;
-    case 'course-videos': renderCourseVideos(); break;
-    case 'rep-device':   renderRepDevice(); break;
+    case 'course-videos':     renderCourseVideos(); break;
+    case 'lec-course-videos': renderLecturerCourseVideos(); break;
+    case 'lec-notifications': renderLecturerNotifications(); break;
+    case 'rep-device':        renderRepDevice(); break;
     case 'reports': renderReports(); break;
     case 'shifts': renderShifts(); break;
     case 'leave-requests': renderLeaveRequests(); break;
@@ -11722,6 +11726,222 @@ async function downloadReport(type, apiBase = 'reports', e) {
       btn.style.opacity = '';
     }
     if (card) card.style.pointerEvents = '';
+  }
+}
+
+// ── Lecturer — Course Videos Manager ─────────────────────────────────────────
+
+async function renderLecturerCourseVideos() {
+  const content = document.getElementById('main-content');
+  if (!content) return;
+  content.innerHTML = `
+    <div class="page-header">
+      <h2>Course Videos</h2>
+      <p>Manage video lectures for your courses</p>
+    </div>
+    <div id="lcv-body"><div class="loading-spinner" style="margin:60px auto"></div></div>`;
+
+  const body = document.getElementById('lcv-body');
+  try {
+    const [coursesData, videosData] = await Promise.all([
+      api('/api/courses'),
+      api('/api/course-videos/my-courses'),
+    ]);
+
+    const allCourses = (coursesData.courses || []).filter(c => {
+      const lid = c.lecturerId?._id || c.lecturerId;
+      return lid && lid.toString() === currentUser._id.toString();
+    });
+
+    if (!allCourses.length) {
+      body.innerHTML = `<div class="card" style="text-align:center;padding:48px 24px">
+        <div style="font-size:40px;margin-bottom:12px">🎬</div>
+        <h3>No Courses Assigned</h3>
+        <p style="color:var(--text-muted)">You have no courses assigned yet. Contact your admin.</p>
+      </div>`;
+      return;
+    }
+
+    const videosByCourse = {};
+    for (const v of (videosData.courses || [])) {
+      videosByCourse[v.course._id.toString()] = v.videos || [];
+    }
+
+    const platformIcon = p => ({ youtube:'▶️', vimeo:'🎥', googledrive:'📁', loom:'🔴' }[p] || '🎬');
+
+    body.innerHTML = allCourses.map(c => {
+      const cid = c._id.toString();
+      const vids = videosByCourse[cid] || [];
+      return `
+        <div class="card" style="margin-bottom:24px;padding:20px" id="lcv-section-${cid}">
+          <div style="display:flex;align-items:center;gap:10px;margin-bottom:16px">
+            <div style="width:4px;height:22px;background:var(--primary);border-radius:2px"></div>
+            <h3 style="margin:0;font-size:15px;flex:1">${esc(c.title)} <span style="font-size:12px;color:var(--text-muted);font-weight:400">${esc(c.code || '')}</span></h3>
+            <span style="font-size:12px;color:var(--text-muted)">${vids.length} video${vids.length !== 1 ? 's' : ''}</span>
+            <button onclick="_lcvOpenAdd('${cid}')" style="background:var(--primary);color:#fff;border:none;border-radius:8px;padding:6px 14px;font-size:12px;font-weight:600;cursor:pointer">+ Add Video</button>
+          </div>
+          <div id="lcv-list-${cid}">
+            ${vids.length ? vids.map(v => _lcvVideoRow(v)).join('') : `<p style="color:var(--text-muted);font-size:13px">No videos yet. Add your first video above.</p>`}
+          </div>
+        </div>`;
+    }).join('');
+
+  } catch (e) {
+    body.innerHTML = `<div class="card"><p style="color:var(--danger)">Error: ${e.message}</p></div>`;
+  }
+}
+
+function _lcvVideoRow(v) {
+  const platformIcon = p => ({ youtube:'▶️', vimeo:'🎥', googledrive:'📁', loom:'🔴' }[p] || '🎬');
+  return `
+    <div style="display:flex;align-items:center;gap:12px;padding:10px 0;border-bottom:1px solid var(--border)" id="lcv-row-${v._id}">
+      ${v.thumbnail
+        ? `<img src="${esc(v.thumbnail)}" style="width:72px;height:48px;object-fit:cover;border-radius:6px;flex-shrink:0">`
+        : `<div style="width:72px;height:48px;background:var(--bg);border-radius:6px;display:flex;align-items:center;justify-content:center;font-size:22px;flex-shrink:0">${platformIcon(v.platform)}</div>`}
+      <div style="flex:1;min-width:0">
+        <div style="font-size:13px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(v.title)}</div>
+        ${v.description ? `<div style="font-size:12px;color:var(--text-muted);margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(v.description)}</div>` : ''}
+        <div style="font-size:11px;color:var(--text-muted);margin-top:2px;text-transform:uppercase;letter-spacing:.5px">${platformIcon(v.platform)} ${esc(v.platform || 'video')}</div>
+      </div>
+      <button onclick="openVideoPlayer('${esc(v.title)}','${esc(v.embedUrl || v.url || '')}','${esc(v.platform || '')}')" style="background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:6px 12px;font-size:12px;cursor:pointer;color:var(--text)">▶ Play</button>
+      <button onclick="_lcvDelete('${v._id}','${esc(v.courseId?._id || v.courseId || '')}')" style="background:transparent;border:1px solid var(--danger);border-radius:8px;padding:6px 12px;font-size:12px;cursor:pointer;color:var(--danger)">Delete</button>
+    </div>`;
+}
+
+function _lcvOpenAdd(courseId) {
+  openModal(`
+    <h3 style="margin:0 0 16px">Add Video</h3>
+    <div style="display:flex;flex-direction:column;gap:12px">
+      <div>
+        <label style="font-size:12px;color:var(--text-muted);display:block;margin-bottom:4px">Video URL (YouTube, Vimeo, Drive, Loom)</label>
+        <input id="lcv-url" type="url" placeholder="https://youtu.be/..." style="width:100%;padding:10px;border:1px solid var(--border);border-radius:8px;background:var(--surface);color:var(--text);font-size:14px;box-sizing:border-box">
+      </div>
+      <div>
+        <label style="font-size:12px;color:var(--text-muted);display:block;margin-bottom:4px">Title</label>
+        <input id="lcv-title" type="text" placeholder="Lecture 1 – Introduction" style="width:100%;padding:10px;border:1px solid var(--border);border-radius:8px;background:var(--surface);color:var(--text);font-size:14px;box-sizing:border-box">
+      </div>
+      <div>
+        <label style="font-size:12px;color:var(--text-muted);display:block;margin-bottom:4px">Description (optional)</label>
+        <textarea id="lcv-desc" rows="2" placeholder="Brief description…" style="width:100%;padding:10px;border:1px solid var(--border);border-radius:8px;background:var(--surface);color:var(--text);font-size:14px;box-sizing:border-box;resize:vertical"></textarea>
+      </div>
+      <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:4px">
+        <button onclick="closeModal()" style="padding:8px 18px;border:1px solid var(--border);border-radius:8px;background:transparent;color:var(--text);cursor:pointer">Cancel</button>
+        <button onclick="_lcvSubmitAdd('${courseId}')" style="padding:8px 18px;background:var(--primary);color:#fff;border:none;border-radius:8px;font-weight:600;cursor:pointer">Add Video</button>
+      </div>
+    </div>`);
+}
+
+async function _lcvSubmitAdd(courseId) {
+  const url   = document.getElementById('lcv-url')?.value.trim();
+  const title = document.getElementById('lcv-title')?.value.trim();
+  const desc  = document.getElementById('lcv-desc')?.value.trim();
+  if (!url || !title) return showToastNotif('URL and title are required', 'error');
+  try {
+    const data = await api('/api/course-videos', { method: 'POST', body: JSON.stringify({ courseId, url, title, description: desc }) });
+    closeModal();
+    showToastNotif('Video added', 'success');
+    const list = document.getElementById(`lcv-list-${courseId}`);
+    if (list) {
+      const placeholder = list.querySelector('p');
+      if (placeholder) placeholder.remove();
+      list.insertAdjacentHTML('beforeend', _lcvVideoRow(data.video));
+      const section = document.getElementById(`lcv-section-${courseId}`);
+      const countEl = section?.querySelector('span[style*="text-muted"]');
+      if (countEl) {
+        const cur = parseInt(countEl.textContent) || 0;
+        const nxt = cur + 1;
+        countEl.textContent = `${nxt} video${nxt !== 1 ? 's' : ''}`;
+      }
+    }
+  } catch (e) {
+    showToastNotif(e.message || 'Failed to add video', 'error');
+  }
+}
+
+async function _lcvDelete(videoId, courseId) {
+  if (!confirm('Delete this video?')) return;
+  try {
+    await api(`/api/course-videos/${videoId}`, { method: 'DELETE' });
+    document.getElementById(`lcv-row-${videoId}`)?.remove();
+    showToastNotif('Video deleted', 'success');
+  } catch (e) {
+    showToastNotif(e.message || 'Failed to delete', 'error');
+  }
+}
+
+// ── Lecturer — Notifications ──────────────────────────────────────────────────
+
+async function renderLecturerNotifications() {
+  const content = document.getElementById('main-content');
+  if (!content) return;
+  content.innerHTML = `
+    <div class="page-header">
+      <h2>Notifications</h2>
+      <p>Alerts, submissions, and attendance flags</p>
+    </div>
+    <div id="lec-notif-body"><div class="loading-spinner" style="margin:60px auto"></div></div>`;
+
+  const body = document.getElementById('lec-notif-body');
+  try {
+    const [assignData, flagData, sessData] = await Promise.all([
+      api('/api/assignments/lecturer').catch(() => ({ assignments: [] })),
+      api('/api/attendance-sessions/flagged/new-devices').catch(() => ({ records: [] })),
+      api('/api/attendance-sessions?limit=10').catch(() => ({ sessions: [] })),
+    ]);
+
+    const assignments = assignData.assignments || [];
+    const flags       = flagData.records || [];
+    const sessions    = sessData.sessions || [];
+
+    const notifs = [];
+
+    // Ungraded submissions
+    const ungraded = assignments.filter(a => (a.submissionCount || 0) > (a.gradedCount || 0));
+    if (ungraded.length) {
+      ungraded.forEach(a => {
+        const pending = (a.submissionCount || 0) - (a.gradedCount || 0);
+        notifs.push({ icon: '📝', type: 'warn', title: `${pending} ungraded submission${pending > 1 ? 's' : ''}`, body: `Assignment: ${a.title}`, action: { label: 'Grade Now', fn: "navigateTo('assignments')" } });
+      });
+    }
+
+    // Flagged devices
+    if (flags.length) {
+      notifs.push({ icon: '🚨', type: 'warn', title: `${flags.length} flagged new device${flags.length > 1 ? 's' : ''}`, body: 'Students with unrecognised devices in recent attendance sessions', action: { label: 'Review', fn: "navigateTo('live-attendance')" } });
+    }
+
+    // Active sessions
+    const active = sessions.filter(s => s.status === 'active');
+    if (active.length) {
+      active.forEach(s => {
+        notifs.push({ icon: '●', type: 'ok', title: 'Active session', body: `${s.courseName || s.courseId} — started ${new Date(s.createdAt).toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'})}`, action: { label: 'View', fn: "navigateTo('live-attendance')" } });
+      });
+    }
+
+    // No notifications
+    if (!notifs.length) {
+      body.innerHTML = `<div class="card" style="text-align:center;padding:48px 24px">
+        <div style="font-size:36px;margin-bottom:12px">✅</div>
+        <h3>All clear</h3>
+        <p style="color:var(--text-muted)">No pending submissions, flags, or alerts.</p>
+      </div>`;
+      return;
+    }
+
+    const typeStyle = { ok: '#16a34a', warn: '#d97706', info: '#2563eb' };
+    const typeBg    = { ok: 'rgba(22,163,74,.08)', warn: 'rgba(217,119,6,.08)', info: 'rgba(37,99,235,.08)' };
+
+    body.innerHTML = notifs.map(n => `
+      <div class="card" style="display:flex;gap:14px;align-items:flex-start;padding:16px;margin-bottom:10px;border-left:3px solid ${typeStyle[n.type] || '#888'}">
+        <div style="font-size:22px;line-height:1;flex-shrink:0">${n.icon}</div>
+        <div style="flex:1;min-width:0">
+          <div style="font-size:14px;font-weight:600;color:var(--text);margin-bottom:2px">${esc(n.title)}</div>
+          <div style="font-size:12px;color:var(--text-muted)">${esc(n.body)}</div>
+        </div>
+        ${n.action ? `<button onclick="${n.action.fn}" style="flex-shrink:0;padding:6px 14px;background:var(--primary);color:#fff;border:none;border-radius:8px;font-size:12px;font-weight:600;cursor:pointer">${esc(n.action.label)}</button>` : ''}
+      </div>`).join('');
+
+  } catch (e) {
+    body.innerHTML = `<div class="card"><p style="color:var(--danger)">Error: ${e.message}</p></div>`;
   }
 }
 
