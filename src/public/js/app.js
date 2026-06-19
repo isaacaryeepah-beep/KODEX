@@ -6090,33 +6090,58 @@ function _renderSessionsHTML(content, sessions, isOffline) {
       ${filterPill}
       ${pendingCount > 0 ? `<span style="background:#fef3c7;color:#92400e;border:1px solid #fbbf24;border-radius:6px;padding:4px 12px;font-size:12px;font-weight:600">${pendingCount} action${pendingCount!==1?'s':''} pending sync</span>` : ''}
     </div>
-    <div class="card">
-      ${sessions.length ? `
+    <div class="card" style="padding:0;overflow:hidden">
+      ${sessions.length ? (isLecturer ? `
         <table>
           <thead><tr>
-            <th>Title</th>
-            ${isLecturer ? '<th>Course</th>' : ''}
-            <th>Status</th><th>Started</th><th>Stopped</th><th>Actions</th>
+            <th>Title</th><th>Course</th><th>Status</th><th>Started</th><th>Stopped</th><th>Actions</th>
           </tr></thead>
-          <tbody>${sessions.map((s, i) => `
+          <tbody>${sessions.map(s => `
             <tr>
               <td>${s.title || 'Untitled'}</td>
-              ${isLecturer ? `<td><span style="font-size:11px;font-weight:600;color:#6366f1;">${s.course ? esc(s.course.code || s.course.title || '') : '—'}</span></td>` : ''}
+              <td><span style="font-size:11px;font-weight:600;color:#6366f1;">${s.course ? esc(s.course.code || s.course.title || '') : '—'}</span></td>
               <td><span class="status-badge status-${s.status}">${s.status}</span></td>
               <td>${new Date(s.startedAt).toLocaleString()}</td>
               <td>${s.stoppedAt ? new Date(s.stoppedAt).toLocaleString() : '-'}</td>
-              <td>${['active','live','paused','locked'].includes(s.status) && canStart ? `
+              <td>${['active','live','paused','locked'].includes(s.status) ? `
                 <button class="btn btn-danger btn-sm" onclick="stopSession('${s._id}')">Stop</button>
                 ${!isOffline ? `<button class="btn btn-success btn-sm" onclick="generateQR('${s._id}')">QR Code</button>` : ''}
                 ${!isOffline ? `<button class="btn btn-sm" style="background:#7c3aed;color:#fff;font-size:11px" onclick="generateVerbalCode('${s._id}')">Verbal Code</button>` : ''}
-                <button class="btn btn-sm" style="font-size:11px;background:var(--bg);border:1px solid var(--border)" onclick="viewAttendees('${s._id}', '${(s.title||'Session').replace(/['\''\'']/g,'')}')">Attendees</button>
-              ` : ['active','live','paused','locked'].includes(s.status) ? `
-                <button class="btn btn-sm" style="font-size:11px;background:var(--bg);border:1px solid var(--border)" onclick="viewAttendees('${s._id}', '${(s.title||'Session').replace(/['\''\'']/g,'')}')">Attendees</button>
+                <button class="btn btn-sm" style="font-size:11px;background:var(--bg);border:1px solid var(--border)" onclick="viewAttendees('${s._id}', '${(s.title||'Session').replace(/'/g,'')}')">Attendees</button>
               ` : ''}</td>
             </tr>
           `).join('')}</tbody>
         </table>
-      ` : `<div class="empty-state"><p>${_sessionsFilterCourseId ? 'No sessions for this course yet.' : 'No sessions found'}</p></div>`}
+      ` : sessions.map(s => {
+        const isLive = ['active','live','paused','locked'].includes(s.status);
+        const lecturer = s.createdBy?.name || '—';
+        const dept = s.createdBy?.department || s.course?.department || '—';
+        const course = s.course ? (s.course.code || s.course.title || '') : '';
+        const safeTitle = (s.title || 'Session').replace(/'/g, '');
+        return `
+        <div style="padding:14px 16px;border-bottom:1px solid var(--border)">
+          <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:6px">
+            <span style="font-weight:700;font-size:14px;color:var(--text)">${esc(s.title || 'Untitled')}</span>
+            <span class="status-badge status-${s.status}" style="flex-shrink:0">${s.status}</span>
+          </div>
+          <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-bottom:4px">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#6b7280" stroke-width="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+            <span style="font-size:12px;font-weight:600;color:var(--text)">${esc(lecturer)}</span>
+            ${dept !== '—' ? `<span style="font-size:11px;color:#fff;background:#0891b2;padding:1px 7px;border-radius:20px;font-weight:600">${esc(dept)}</span>` : ''}
+            ${course ? `<span style="font-size:11px;color:#6366f1;background:#ede9fe;padding:1px 7px;border-radius:20px;font-weight:600">${esc(course)}</span>` : ''}
+          </div>
+          <div style="font-size:11px;color:var(--text-muted);margin-bottom:8px">
+            Started: ${new Date(s.startedAt).toLocaleString()}${s.stoppedAt ? ' · Stopped: ' + new Date(s.stoppedAt).toLocaleString() : ''}
+          </div>
+          <div style="display:flex;gap:6px;flex-wrap:wrap">
+            ${isLive && canStart ? `<button class="btn btn-danger btn-sm" style="flex:1" onclick="stopSession('${s._id}')">Stop</button>` : ''}
+            ${isLive && canStart && !isOffline ? `<button class="btn btn-success btn-sm" style="flex:1" onclick="generateQR('${s._id}')">QR Code</button>` : ''}
+            ${isLive && canStart && !isOffline ? `<button class="btn btn-sm" style="flex:1;background:#7c3aed;color:#fff;font-size:11px" onclick="generateVerbalCode('${s._id}')">Verbal</button>` : ''}
+            <button class="btn btn-sm" style="flex:1;font-size:11px;background:var(--bg);border:1px solid var(--border)" onclick="viewAttendees('${s._id}', '${safeTitle}')">Attendees</button>
+          </div>
+        </div>`;
+      }).join(''))
+      : `<div class="empty-state"><p>${_sessionsFilterCourseId ? 'No sessions for this course yet.' : 'No sessions found'}</p></div>`}
     </div>
   `;
 }
