@@ -15047,16 +15047,23 @@ async function _caLoadSettings() {
           <div style="font-size:11px;color:var(--text-light);margin-top:4px">Comma-separated list. Your current IP: <strong id="cas-myip">detecting…</strong></div>
         </div>
 
-        <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:14px">
-          <div class="form-group">
-            <label style="font-size:11px;font-weight:700;text-transform:uppercase;color:var(--text-light)">Office Latitude</label>
-            <input type="number" id="cas-lat" value="${s.officeLatitude ?? ''}" step="0.000001" placeholder="e.g. 5.603717"
-              style="width:100%;padding:9px 12px;border:1.5px solid var(--border);border-radius:8px;font-size:13px;margin-top:4px">
+        <div style="margin-top:14px">
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">
+            <label style="font-size:11px;font-weight:700;text-transform:uppercase;color:var(--text-light)">Office Location (Latitude / Longitude)</label>
+            <button class="btn btn-secondary btn-sm" id="cas-gps-btn" onclick="_caDetectLocation()" style="font-size:11px;padding:4px 10px">📍 Detect My Location</button>
           </div>
-          <div class="form-group">
-            <label style="font-size:11px;font-weight:700;text-transform:uppercase;color:var(--text-light)">Office Longitude</label>
-            <input type="number" id="cas-lng" value="${s.officeLongitude ?? ''}" step="0.000001" placeholder="e.g. -0.186964"
-              style="width:100%;padding:9px 12px;border:1.5px solid var(--border);border-radius:8px;font-size:13px;margin-top:4px">
+          <div id="cas-gps-status" style="font-size:11px;color:var(--text-muted);margin-bottom:8px;display:none"></div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+            <div class="form-group">
+              <label style="font-size:11px;font-weight:600;color:var(--text-light)">Latitude</label>
+              <input type="number" id="cas-lat" value="${s.officeLatitude ?? ''}" step="0.000001" placeholder="e.g. 5.603717"
+                style="width:100%;padding:9px 12px;border:1.5px solid var(--border);border-radius:8px;font-size:13px;margin-top:4px">
+            </div>
+            <div class="form-group">
+              <label style="font-size:11px;font-weight:600;color:var(--text-light)">Longitude</label>
+              <input type="number" id="cas-lng" value="${s.officeLongitude ?? ''}" step="0.000001" placeholder="e.g. -0.186964"
+                style="width:100%;padding:9px 12px;border:1.5px solid var(--border);border-radius:8px;font-size:13px;margin-top:4px">
+            </div>
           </div>
         </div>
 
@@ -15067,7 +15074,7 @@ async function _caLoadSettings() {
         </div>
 
         <button class="btn btn-primary" style="margin-top:20px" onclick="_caSaveSettings()">Save Settings</button>
-        <button class="btn btn-secondary btn-sm" style="margin-top:20px;margin-left:8px" onclick="_caDetectMyIP()">📡 Detect My IP</button>
+        <button class="btn btn-secondary btn-sm" id="cas-ip-btn" style="margin-top:20px;margin-left:8px" onclick="_caDetectMyIP()">📡 Detect My IP</button>
       </div>
 
       <div class="card" style="max-width:560px">
@@ -15138,13 +15145,60 @@ async function _caClearClockWindow() {
 }
 
 async function _caDetectMyIP() {
-  const el = document.getElementById('cas-myip');
+  const el  = document.getElementById('cas-myip');
+  const btn = document.getElementById('cas-ip-btn');
   if (!el) return;
+  el.textContent = 'detecting…';
+  if (btn) { btn.disabled = true; btn.textContent = '⏳ Detecting…'; }
   try {
-    const r = await fetch('https://api.ipify.org?format=json');
-    const d = await r.json();
+    const d = await api('/api/corporate-attendance/my-ip');
     el.textContent = d.ip || 'unknown';
-  } catch { el.textContent = 'unavailable'; }
+  } catch {
+    el.textContent = 'unavailable — ensure you are logged in and on the network';
+  } finally {
+    if (btn) { btn.disabled = false; btn.textContent = '📡 Detect My IP'; }
+  }
+}
+
+function _caDetectLocation() {
+  const btn    = document.getElementById('cas-gps-btn');
+  const status = document.getElementById('cas-gps-status');
+  const latEl  = document.getElementById('cas-lat');
+  const lngEl  = document.getElementById('cas-lng');
+  if (!latEl || !lngEl) return;
+
+  if (!navigator.geolocation) {
+    if (status) { status.textContent = 'Geolocation is not supported by this browser.'; status.style.color = 'var(--danger)'; status.style.display = 'block'; }
+    return;
+  }
+
+  if (btn) { btn.disabled = true; btn.textContent = '⏳ Getting GPS…'; }
+  if (status) { status.textContent = 'Requesting precise location from device GPS…'; status.style.color = 'var(--text-muted)'; status.style.display = 'block'; }
+
+  navigator.geolocation.getCurrentPosition(
+    (pos) => {
+      const lat = pos.coords.latitude.toFixed(6);
+      const lng = pos.coords.longitude.toFixed(6);
+      const acc = Math.round(pos.coords.accuracy);
+      latEl.value = lat;
+      lngEl.value = lng;
+      if (status) {
+        status.textContent = `✓ Location set — accuracy ±${acc} m. Click Save Settings to apply.`;
+        status.style.color = 'var(--success,#22c55e)';
+      }
+      if (btn) { btn.disabled = false; btn.textContent = '📍 Detect My Location'; }
+    },
+    (err) => {
+      const msgs = {
+        1: 'Location permission denied. Please allow location access in your browser settings.',
+        2: 'Location unavailable. Make sure GPS is enabled on your device.',
+        3: 'Location request timed out. Try again.',
+      };
+      if (status) { status.textContent = msgs[err.code] || 'Could not get location.'; status.style.color = 'var(--danger)'; }
+      if (btn) { btn.disabled = false; btn.textContent = '📍 Detect My Location'; }
+    },
+    { enableHighAccuracy: true, timeout: 15000, maximumAge: 0 }
+  );
 }
 
 async function _caSaveSettings() {
