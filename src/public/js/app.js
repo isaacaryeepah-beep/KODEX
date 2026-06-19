@@ -1412,11 +1412,12 @@ async function handleLecturerLogin() {
   const btn = document.querySelector('#lecturer-login-form button[type="submit"]');
   try {
     const email = document.getElementById('lecturer-login-email').value.trim();
+    const institutionCode = (document.getElementById('lecturer-login-code')?.value || '').trim().toUpperCase();
     const password = document.getElementById('lecturer-login-password').value;
     if (!email) return showLecturerError('Please enter your email');
     if (!password) return showLecturerError('Please enter your password');
     if (btn) { btn.textContent = 'Signing in…'; btn.disabled = true; }
-    const credentials = { email, password, loginRole: 'lecturer', portalMode: 'academic', deviceId: getDeviceFingerprint() };
+    const credentials = { email, password, loginRole: 'lecturer', portalMode: 'academic', deviceId: getDeviceFingerprint(), ...(institutionCode ? { institutionCode } : {}) };
 
     let data;
     if (!(await isOnlineAsync())) {
@@ -1659,12 +1660,13 @@ async function handleHodLogin() {
   const btn = document.querySelector('#hod-login-form button[type="submit"]');
   try {
     const email    = document.getElementById('hod-login-email').value.trim();
+    const institutionCode = (document.getElementById('hod-login-code')?.value || '').trim().toUpperCase();
     const password = document.getElementById('hod-login-password').value;
     if (!email)    return showHodError('Please enter your email.');
     if (!password) return showHodError('Please enter your password.');
     if (btn) { btn.textContent = 'Signing in…'; btn.disabled = true; }
 
-    const credentials = { email, password, loginRole: 'hod', portalMode: 'academic', deviceId: getDeviceFingerprint() };
+    const credentials = { email, password, loginRole: 'hod', portalMode: 'academic', deviceId: getDeviceFingerprint(), ...(institutionCode ? { institutionCode } : {}) };
     let data;
     if (!(await isOnlineAsync())) {
       showOfflineLoginNotice('hod-login-form');
@@ -6767,9 +6769,9 @@ async function renderUsers(filterRole='', filterDept='', filterSearch='') {
       const total = d.hod.length + d.lecturer.length + d.student.length + d.other.length;
       const grad = deptGradients[i % deptGradients.length];
       const hodName = d.hod[0] ? esc(d.hod[0].name.split(' ').slice(0,2).join(' ')) : '—';
-      const safeId = JSON.stringify(dept);
+      const safeDept = dept.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
       return `
-      <div onclick="renderDepartmentUsers(${safeId}, _cachedAllUsers)"
+      <div onclick="renderDepartmentUsers('${safeDept}', _cachedAllUsers)"
         style="background:var(--card);border:1px solid var(--border);border-radius:16px;overflow:hidden;cursor:pointer;transition:transform .18s,box-shadow .18s;box-shadow:var(--shadow-md)"
         onmouseover="this.style.transform='translateY(-3px)';this.style.boxShadow='var(--shadow-lg)'"
         onmouseout="this.style.transform='';this.style.boxShadow='var(--shadow-md)'">
@@ -6787,13 +6789,13 @@ async function renderUsers(filterRole='', filterDept='', filterSearch='') {
           <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:4px">
             <div style="background:#fef9c3;border-radius:10px;padding:10px 12px;text-align:center;cursor:pointer;transition:opacity .15s"
               onmouseover="this.style.opacity='.8'" onmouseout="this.style.opacity='1'"
-              onclick="event.stopPropagation();renderDepartmentUsers(${safeId},_cachedAllUsers,'lecturer')">
+              onclick="event.stopPropagation();renderDepartmentUsers('${safeDept}',_cachedAllUsers,'lecturer')">
               <div style="font-size:22px;font-weight:800;color:#a16207">${d.lecturer.length}</div>
               <div style="font-size:10px;font-weight:700;color:#92400e;text-transform:uppercase;letter-spacing:.4px">Lecturers</div>
             </div>
             <div style="background:#ede9fe;border-radius:10px;padding:10px 12px;text-align:center;cursor:pointer;transition:opacity .15s"
               onmouseover="this.style.opacity='.8'" onmouseout="this.style.opacity='1'"
-              onclick="event.stopPropagation();renderDepartmentUsers(${safeId},_cachedAllUsers,'student')">
+              onclick="event.stopPropagation();renderDepartmentUsers('${safeDept}',_cachedAllUsers,'student')">
               <div style="font-size:22px;font-weight:800;color:#7c3aed">${d.student.length}</div>
               <div style="font-size:10px;font-weight:700;color:#6d28d9;text-transform:uppercase;letter-spacing:.4px">Students</div>
             </div>
