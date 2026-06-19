@@ -357,6 +357,42 @@ exports.notifyQuizResultReleased = async (result, studentId, quizType = "normal"
   });
 };
 
+/**
+ * Notify a student that a grade/manual score has been saved for them.
+ * @param {{ _id, company }} student
+ * @param {{ code, title, _id }} course
+ * @param {string} entryLabel  — e.g. "Midterm Exam"
+ */
+exports.notifyGradeSaved = async (student, course, entryLabel) => {
+  await notify({
+    company:   student.company,
+    recipient: student._id,
+    type:      NOTIFICATION_TYPES.GRADE_RELEASED,
+    title:     "Grade recorded",
+    body:      `A score for "${entryLabel}" in ${course.code || course.title} has been entered.`,
+    link:      `/student/gradebook/${course._id}`,
+    data:      { courseId: course._id, entryLabel },
+  });
+};
+
+/**
+ * Notify the course lecturer that their course was approved by the HOD.
+ * @param {{ _id, code, title, lecturerId, company }} course
+ * @param {{ name }} approver  — HOD user object
+ */
+exports.notifyCourseApproved = async (course, approver) => {
+  if (!course.lecturerId) return;
+  await notify({
+    company:   course.company || course.companyId,
+    recipient: course.lecturerId,
+    type:      NOTIFICATION_TYPES.SYSTEM,
+    title:     "Course approved",
+    body:      `Your course "${course.code} – ${course.title}" has been approved by ${approver?.name || "HOD"} and is now published.`,
+    link:      `/courses/${course._id}`,
+    data:      { courseId: course._id },
+  });
+};
+
 // ---------------------------------------------------------------------------
 // System / admin
 // ---------------------------------------------------------------------------

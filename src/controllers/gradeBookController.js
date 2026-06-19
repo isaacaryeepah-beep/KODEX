@@ -18,6 +18,7 @@ const AttendanceSession    = require("../models/AttendanceSession");
 const AttendanceRecord     = require("../models/AttendanceRecord");
 const User                 = require("../models/User");
 const StudentRoster        = require("../models/StudentRoster");
+const notificationService  = require("../services/notificationService");
 const mongoose             = require("mongoose");
 // Phase 3–5 assessment models
 const NormalQuiz           = require("../models/NormalQuiz");
@@ -634,6 +635,24 @@ exports.saveManualScores = async (req, res) => {
     }
     await gb.save();
     res.json({ message: "Scores saved" });
+
+    // Fire-and-forget: notify each student whose score was saved
+    try {
+      const course = await Course.findById(courseId).select("code title companyId").lean();
+      if (course) {
+        const notifiedIds = scores
+          .filter(({ score }) => score !== null && score !== undefined && score !== "")
+          .map(({ studentId }) => studentId);
+        const students = await User.find({ _id: { $in: notifiedIds } }).select("_id company").lean();
+        for (const student of students) {
+          notificationService.notifyGradeSaved(
+            { _id: student._id, company: student.company || course.companyId },
+            { _id: course._id, code: course.code, title: course.title },
+            entry.label || "Assessment"
+          ).catch(() => {});
+        }
+      }
+    } catch (_) {}
   } catch (err) {
     console.error("saveManualScores:", err);
     res.status(500).json({ error: "Failed to save scores" });

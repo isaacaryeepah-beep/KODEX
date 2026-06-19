@@ -31,6 +31,7 @@ const NormalQuizResponse = require("../models/NormalQuizResponse");
 const NormalQuizResult   = require("../models/NormalQuizResult");
 const { ATTEMPT_STATUSES, GRADING_STATUSES } = require("../models/NormalQuizAttempt");
 const { QUESTION_TYPES, MANUAL_GRADE_TYPES } = require("../models/NormalQuizQuestion");
+const notificationService = require("../services/notificationService");
 
 // ─── Quiz discovery ───────────────────────────────────────────────────────────
 
@@ -383,6 +384,14 @@ exports.submitAttempt = async (req, res) => {
 
     // Upsert the NormalQuizResult document.
     await _upsertResult(attempt, quiz);
+
+    if (quiz?.autoReleaseResults && !hasManual) {
+      notificationService.notifyQuizResultReleased(
+        { _id: attempt._id, company: attempt.company, quiz: attempt.quiz },
+        attempt.student,
+        "normal"
+      ).catch(() => {});
+    }
 
     return res.json({
       message:        "Attempt submitted",

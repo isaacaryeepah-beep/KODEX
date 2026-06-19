@@ -4609,7 +4609,7 @@ async function renderLecturerDashboard(content) {
           <tbody>${sessionsData.sessions.map(s => `
             <tr>
               <td style="font-weight:500;color:var(--text)">${s.title || 'Untitled'}</td>
-              <td><span class="status-badge status-${s.status}">${s.status}</span></td>
+              <td><span class="status-badge status-${s.status}">${_sessionStatusLabel(s.status)}</span></td>
               <td>${new Date(s.startedAt).toLocaleString()}</td>
               <td>${s.createdBy?.name || 'N/A'}</td>
             </tr>
@@ -6068,6 +6068,21 @@ async function renderSessions(courseId, courseTitle) {
   }
 }
 
+const SESSION_STATUS_LABELS = {
+  active:              'Active',
+  live:                'Live',
+  paused:              'Paused',
+  locked:              'Locked',
+  stopped:             'Stopped',
+  ended:               'Ended',
+  scheduled:           'Scheduled',
+  device_disconnected: 'Device Disconnected',
+};
+
+function _sessionStatusLabel(status) {
+  return SESSION_STATUS_LABELS[status] || (status ? status.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase()) : '—');
+}
+
 function _renderSessionsHTML(content, sessions, isOffline) {
   const pendingCount = offlineQueueCount();
   const canStart = ['lecturer', 'manager'].includes(currentUser.role);
@@ -6100,7 +6115,7 @@ function _renderSessionsHTML(content, sessions, isOffline) {
             <tr>
               <td>${s.title || 'Untitled'}</td>
               <td><span style="font-size:11px;font-weight:600;color:#6366f1;">${s.course ? esc(s.course.code || s.course.title || '') : '—'}</span></td>
-              <td><span class="status-badge status-${s.status}">${s.status}</span></td>
+              <td><span class="status-badge status-${s.status}">${_sessionStatusLabel(s.status)}</span></td>
               <td>${new Date(s.startedAt).toLocaleString()}</td>
               <td>${s.stoppedAt ? new Date(s.stoppedAt).toLocaleString() : '-'}</td>
               <td>${['active','live','paused','locked'].includes(s.status) ? `
@@ -6122,7 +6137,7 @@ function _renderSessionsHTML(content, sessions, isOffline) {
         <div style="padding:14px 16px;border-bottom:1px solid var(--border)">
           <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:6px">
             <span style="font-weight:700;font-size:14px;color:var(--text)">${esc(s.title || 'Untitled')}</span>
-            <span class="status-badge status-${s.status}" style="flex-shrink:0">${s.status}</span>
+            <span class="status-badge status-${s.status}" style="flex-shrink:0">${_sessionStatusLabel(s.status)}</span>
           </div>
           <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-bottom:4px">
             <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#6b7280" stroke-width="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
@@ -11735,8 +11750,30 @@ function renderAdminReports(content, isAcademic) {
       <h2>Admin Reports</h2>
       <p>Full institution analytics — click any report card to download as PDF</p>
     </div>
+    <div class="actions-bar" style="margin-bottom:14px;">
+      <button class="btn btn-sm" style="background:#16a34a;color:#fff;font-weight:600" onclick="exportAttendanceCSV()">⬇ Export Attendance CSV</button>
+    </div>
     <div class="reports-grid">${cards}</div>
   `;
+}
+
+async function exportAttendanceCSV() {
+  try {
+    const res = await fetch(`${API}/api/reports/attendance/csv`, {
+      headers: { 'Authorization': `Bearer ${token}` },
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      toastError(err.error || 'Failed to export CSV');
+      return;
+    }
+    const blob = await res.blob();
+    const filename = 'attendance-' + new Date().toISOString().slice(0, 10) + '.csv';
+    await downloadBlob(blob, filename);
+    toastSuccess('Attendance CSV downloaded');
+  } catch (e) {
+    toastError('Export failed: ' + e.message);
+  }
 }
 
 async function downloadReport(type, apiBase = 'reports', e) {
@@ -14393,18 +14430,19 @@ function buildBottomNav(role) {
 
   // Priority items per role — most-used actions shown directly in bottom bar
   // Everything else is accessible via the sidebar (More button)
+  const isAcademic = currentUser?.company?.mode === 'academic';
   const PRIORITY = {
-    admin: currentUser?.company?.mode === 'academic'
-      ? ['dashboard', 'sessions', 'quizzes', 'reports']
-      : ['dashboard', 'sessions', 'users', 'reports'],
-    manager:    ['dashboard', 'sessions', 'reports', 'users'],
-    lecturer:   ['dashboard', 'sessions', 'quizzes', 'assignments'],
-    hod:        ['hod-overview', 'hod-courses', 'hod-lecturers', 'hod-reports', 'meetings'],
-    employee:   ['dashboard', 'sign-in-out', 'my-attendance', 'reports'],
-    student:    ['dashboard', 'mark-attendance', 'quizzes', 'assignments'],
-    superadmin: currentUser?.company?.mode === 'academic'
-      ? ['dashboard', 'sessions', 'quizzes', 'reports']
-      : ['dashboard', 'sessions', 'users', 'reports'],
+    admin: isAcademic
+      ? ['dashboard', 'sessions', 'users', 'reports']
+      : ['dashboard', 'sign-in-out', 'users', 'reports'],
+    manager:    ['dashboard', 'sessions', 'users', 'reports'],
+    lecturer:   ['dashboard', 'sessions', 'assignments', 'quizzes'],
+    hod:        ['hod-overview', 'hod-courses', 'hod-course-approvals', 'hod-reports'],
+    employee:   ['dashboard', 'sign-in-out', 'my-attendance', 'announcements'],
+    student:    ['dashboard', 'mark-attendance', 'assignments', 'timetable'],
+    superadmin: isAcademic
+      ? ['dashboard', 'sessions', 'users', 'reports']
+      : ['dashboard', 'sign-in-out', 'users', 'reports'],
   };
 
   const ICONS = {
@@ -14425,6 +14463,7 @@ function buildBottomNav(role) {
     search:          '<circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>',
     profile:         '<path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/>',
     // HOD-specific nav IDs
+    timetable:             '<rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/>',
     'hod-overview':        '<path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/>',
     'hod-sessions':        '<circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>',
     'hod-courses':         '<path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/>',
@@ -14440,10 +14479,10 @@ function buildBottomNav(role) {
 
   const LABELS = {
     'hod-overview': 'Overview', 'hod-sessions': 'Sessions', 'hod-courses': 'Courses', 'hod-lecturers': 'Lecturers',
-    'hod-students': 'Students', 'hod-reports': 'Reports',
+    'hod-students': 'Students', 'hod-reports': 'Reports', 'hod-course-approvals': 'Approvals',
     'sign-in-out': 'Sign In/Out', 'my-attendance': 'Attendance',
     'mark-attendance': 'Attendance', subscription: 'Subscribe',
-    announcements: 'Notices', assignments: 'Assignments',
+    announcements: 'Notices', assignments: 'Work', timetable: 'Timetable',
   };
 
   const priority = PRIORITY[role] || ['dashboard', 'sessions', 'reports'];

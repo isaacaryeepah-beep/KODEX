@@ -36,6 +36,7 @@ const { VIOLATION_TYPES, VIOLATION_SEVERITIES, ACTIONS_TAKEN } = require("../mod
 const { autoGradeAttempt } = require("../services/quizGradingService");
 const { analyzeSnapshot, generateQuizReport } = require("../services/aiProctoringService");
 const { broadcastQuizEvent } = require("../services/snapQuizBroadcast");
+const notificationService    = require("../services/notificationService");
 
 // ─── Quiz discovery ───────────────────────────────────────────────────────────
 
@@ -585,6 +586,14 @@ exports.submitAttempt = async (req, res) => {
     await attempt.save();
 
     const result = await _upsertResult(attempt, quiz);
+
+    if (quiz?.autoReleaseResults && !hasManual) {
+      notificationService.notifyQuizResultReleased(
+        { _id: result?._id || attempt._id, company: attempt.company, quiz: attempt.quiz },
+        attempt.student,
+        "snap"
+      ).catch(() => {});
+    }
 
     // Broadcast submission to monitoring dashboard
     broadcastQuizEvent(String(attempt.quiz), "attempt_submitted", {

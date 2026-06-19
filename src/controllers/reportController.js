@@ -370,3 +370,74 @@ exports.performanceReport = async (req, res) => {
     }
   }
 };
+
+/**
+ * GET /api/reports/attendance/csv
+ * Export attendance records as a CSV file (same filters as attendanceReport).
+ */
+exports.attendanceCsv = async (req, res) => {
+  try {
+    const { sessionId, startDate, endDate } = req.query;
+    const filter = { company: req.user.company };
+
+    if (req.user.role === "lecturer") {
+      const lecturerSessions = await AttendanceSession.find({
+        company: req.user.company,
+        createdBy: req.user._id,
+      }).select("_id");
+      const sessionIds = lecturerSessions.map((s) => s._id);
+      if (sessionId) {
+        if (!sessionIds.some((id) => id.toString() === sessionId)) {
+          return res.status(403).json({ error: "Access denied: session does not belong to you" });
+        }
+        filter.session = sessionId;
+      } else {
+        filter.session = { $in: sessionIds };
+      }
+    } else if (req.user.role === "student" || req.user.role === "employee") {
+      filter.user = req.user._id;
+      if (sessionId) filter.session = sessionId;
+    } else {
+      if (sessionId) filter.session = sessionId;
+    }
+
+    if (startDate || endDate) {
+      filter.checkInTime = {};
+      if (startDate) filter.checkInTime.$gte = new Date(startDate);
+      if (endDate) { const ed = new Date(endDate); ed.setHours(23, 59, 59, 999); filter.checkInTime.$lte = ed; }
+    }
+
+    const records = await AttendanceRecord.find(filter)
+      .populate("user", "name email IndexNumber role department")
+      .populate("session", "title startedAt stoppedAt")
+      .sort({ checkInTime: -1 });
+
+    const methodLabels = { qr_mark: "QR", code_mark: "Code", ble_mark: "BLE", jitsi_join: "Jitsi", manual: "Manual" };
+
+    const escape = (v) => {
+      const s = String(v ?? "");
+      return s.includes(",") || s.includes('"') || s.includes("\n") ? `"${s.replace(/"/g, '""')}"` : s;
+    };
+
+    const rows = [
+      ["Name", "Student ID / Email", "Session", "Check-in Time", "Status", "Method"].map(escape).join(","),
+      ...records.map((r) => [
+        r.user?.name ?? "Unknown",
+        r.user?.IndexNumber || r.user?.email || "",
+        r.session?.title || "Untitled",
+        r.checkInTime ? new Date(r.checkInTime).toISOString().replace("T", " ").substring(0, 19) : "",
+        r.status || "",
+        methodLabels[r.method] || r.method || "",
+      ].map(escape).join(",")),
+    ];
+
+    const csv = rows.join("\r\n");
+    res.setHeader("Content-Type", "text/csv");
+    res.setHeader("Content-Disposition", "attachment; filename=attendance-report.csv");
+    res.setHeader("Cache-Control", "no-cache");
+    res.send(csv);
+  } catch (error) {
+    console.error("Attendance CSV error:", error);
+    res.status(500).json({ error: "Failed to generate CSV" });
+  }
+};

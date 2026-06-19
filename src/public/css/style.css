@@ -1295,11 +1295,17 @@ table tbody tr:last-child td { border-bottom: none; }
   letter-spacing: .2px;
 }
 
-.status-active    { background: var(--success-light); color: #15803d; }
-.status-stopped   { background: var(--danger-light); color: #991b1b; }
-.status-present   { background: var(--success-light); color: #15803d; }
-.status-late      { background: var(--warning-light); color: #92400e; }
-.status-absent    { background: var(--danger-light); color: #991b1b; }
+.status-active              { background: var(--success-light); color: #15803d; }
+.status-stopped             { background: var(--danger-light); color: #991b1b; }
+.status-live                { background: #dcfce7; color: #15803d; }
+.status-paused              { background: #fef9c3; color: #92400e; }
+.status-locked              { background: #fee2e2; color: #991b1b; }
+.status-ended               { background: #f1f5f9; color: #475569; }
+.status-scheduled           { background: #dbeafe; color: #1e40af; }
+.status-device_disconnected { background: #fee2e2; color: #7c3aed; }
+.status-present             { background: var(--success-light); color: #15803d; }
+.status-late                { background: var(--warning-light); color: #92400e; }
+.status-absent              { background: var(--danger-light); color: #991b1b; }
 
 /* ══════════════════════════════════════════════════
    MODALS
