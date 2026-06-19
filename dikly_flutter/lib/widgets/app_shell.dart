@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -70,18 +71,21 @@ List<NavItem> _drawerItems(String role) {
       ];
     case 'lecturer':
       return const [
-        NavItem(label: 'Home',          icon: Icons.home_outlined,           selectedIcon: Icons.home,           route: '/dashboard/lecturer'),
-        NavItem(label: 'Attendance',    icon: Icons.fact_check_outlined,     selectedIcon: Icons.fact_check,     route: '/attendance',       section: 'ATTENDANCE'),
-        NavItem(label: 'Sessions',      icon: Icons.video_call_outlined,     selectedIcon: Icons.video_call,     route: '/sessions',         section: 'ACADEMIC'),
-        NavItem(label: 'My Courses',    icon: Icons.school_outlined,         selectedIcon: Icons.school,         route: '/courses'),
-        NavItem(label: 'Quizzes',       icon: Icons.quiz_outlined,           selectedIcon: Icons.quiz,           route: '/quizzes'),
-        NavItem(label: 'Assignments',   icon: Icons.assignment_outlined,     selectedIcon: Icons.assignment,     route: '/assignments'),
-        NavItem(label: 'Grade Book',    icon: Icons.grade_outlined,          selectedIcon: Icons.grade,          route: '/gradebook'),
-        NavItem(label: 'Timetable',     icon: Icons.calendar_today_outlined, selectedIcon: Icons.calendar_today, route: '/timetable'),
-        NavItem(label: 'Messages',      icon: Icons.message_outlined,        selectedIcon: Icons.message,        route: '/messages',         section: 'COMMUNICATE'),
-        NavItem(label: 'Meetings',      icon: Icons.groups_outlined,         selectedIcon: Icons.groups,         route: '/meetings'),
-        NavItem(label: 'Announcements', icon: Icons.campaign_outlined,       selectedIcon: Icons.campaign,       route: '/announcements'),
-        NavItem(label: 'Reports',       icon: Icons.bar_chart_outlined,      selectedIcon: Icons.bar_chart,      route: '/reports'),
+        NavItem(label: 'Dashboard',         icon: Icons.dashboard_outlined,       selectedIcon: Icons.dashboard,       route: '/dashboard/lecturer'),
+        NavItem(label: 'Sessions',          icon: Icons.video_call_outlined,      selectedIcon: Icons.video_call,      route: '/sessions'),
+        NavItem(label: 'Attendance Device', icon: Icons.wifi_tethering_outlined,  selectedIcon: Icons.wifi_tethering,  route: '/lecturer/attendance-device'),
+        NavItem(label: 'Search',            icon: Icons.search_outlined,          selectedIcon: Icons.search,          route: '/courses',               section: 'CONTENT'),
+        NavItem(label: 'Courses',           icon: Icons.school_outlined,          selectedIcon: Icons.school,          route: '/courses'),
+        NavItem(label: 'Course Videos',     icon: Icons.play_circle_outline,      selectedIcon: Icons.play_circle,     route: '/courses'),
+        NavItem(label: 'Proctored/Snap Quiz', icon: Icons.quiz_outlined,          selectedIcon: Icons.quiz,            route: '/quizzes'),
+        NavItem(label: 'Quiz Monitor',      icon: Icons.monitor_outlined,         selectedIcon: Icons.monitor,         route: '/quizzes'),
+        NavItem(label: 'Timetable',         icon: Icons.calendar_today_outlined,  selectedIcon: Icons.calendar_today,  route: '/timetable'),
+        NavItem(label: 'Question Bank',     icon: Icons.library_books_outlined,   selectedIcon: Icons.library_books,   route: '/quizzes'),
+        NavItem(label: 'Assignment',        icon: Icons.assignment_outlined,      selectedIcon: Icons.assignment,      route: '/assignments'),
+        NavItem(label: 'Grade Book',        icon: Icons.grade_outlined,           selectedIcon: Icons.grade,           route: '/gradebook'),
+        NavItem(label: 'Messages',          icon: Icons.message_outlined,         selectedIcon: Icons.message,         route: '/messages',              section: 'COMMUNICATE'),
+        NavItem(label: 'Meetings',          icon: Icons.groups_outlined,          selectedIcon: Icons.groups,          route: '/meetings'),
+        NavItem(label: 'Announcements',     icon: Icons.campaign_outlined,        selectedIcon: Icons.campaign,        route: '/announcements'),
       ];
     case 'hod':
       return const [
@@ -98,40 +102,56 @@ List<NavItem> _drawerItems(String role) {
       ];
     case 'admin':
       return const [
-        NavItem(label: 'Home',          icon: Icons.home_outlined,         selectedIcon: Icons.home,         route: '/dashboard/admin'),
-        NavItem(label: 'Users',         icon: Icons.people_outlined,       selectedIcon: Icons.people,       route: '/admin/users',      section: 'MANAGEMENT'),
-        NavItem(label: 'Branches',      icon: Icons.account_tree_outlined, selectedIcon: Icons.account_tree, route: '/admin/branches'),
-        NavItem(label: 'Audit Logs',    icon: Icons.history_rounded,       selectedIcon: Icons.history,      route: '/admin/audit-logs'),
-        NavItem(label: 'Sessions',      icon: Icons.video_call_outlined,   selectedIcon: Icons.video_call,   route: '/sessions',         section: 'ACADEMIC'),
-        NavItem(label: 'Courses',       icon: Icons.school_outlined,       selectedIcon: Icons.school,       route: '/courses'),
-        NavItem(label: 'Reports',       icon: Icons.bar_chart_outlined,    selectedIcon: Icons.bar_chart,    route: '/reports'),
-        NavItem(label: 'Messages',      icon: Icons.message_outlined,      selectedIcon: Icons.message,      route: '/messages',         section: 'COMMUNICATE'),
-        NavItem(label: 'Announcements', icon: Icons.campaign_outlined,     selectedIcon: Icons.campaign,     route: '/announcements'),
-        NavItem(label: 'Meetings',      icon: Icons.groups_outlined,       selectedIcon: Icons.groups,       route: '/meetings'),
+        NavItem(label: 'Dashboard',        icon: Icons.dashboard_outlined,       selectedIcon: Icons.dashboard,       route: '/dashboard/admin'),
+        NavItem(label: 'Approvals',        icon: Icons.pending_actions_outlined, selectedIcon: Icons.pending_actions, route: '/admin/users',            section: 'MANAGE'),
+        NavItem(label: 'Search',           icon: Icons.search_outlined,          selectedIcon: Icons.search,          route: '/admin/users'),
+        NavItem(label: 'Users',            icon: Icons.people_outlined,          selectedIcon: Icons.people,          route: '/admin/users'),
+        NavItem(label: 'Sessions',         icon: Icons.video_call_outlined,      selectedIcon: Icons.video_call,      route: '/sessions'),
+        NavItem(label: 'Attendance',       icon: Icons.fact_check_outlined,      selectedIcon: Icons.fact_check,      route: '/attendance',             section: 'ACADEMIC'),
+        NavItem(label: 'Schedule',         icon: Icons.calendar_today_outlined,  selectedIcon: Icons.calendar_today,  route: '/timetable'),
+        NavItem(label: 'Courses',          icon: Icons.school_outlined,          selectedIcon: Icons.school,          route: '/courses'),
+        NavItem(label: 'Course Approvals', icon: Icons.check_circle_outline,     selectedIcon: Icons.check_circle,    route: '/courses'),
+        NavItem(label: 'Quizzes',          icon: Icons.quiz_outlined,            selectedIcon: Icons.quiz,            route: '/quizzes'),
+        NavItem(label: 'Assignments',      icon: Icons.assignment_outlined,      selectedIcon: Icons.assignment,      route: '/assignments'),
+        NavItem(label: 'Grade Book',       icon: Icons.grade_outlined,           selectedIcon: Icons.grade,           route: '/gradebook'),
+        NavItem(label: 'Announcements',    icon: Icons.campaign_outlined,        selectedIcon: Icons.campaign,        route: '/announcements'),
+        NavItem(label: 'Programmes',       icon: Icons.account_tree_outlined,    selectedIcon: Icons.account_tree,    route: '/admin/branches'),
+        NavItem(label: 'Class Reps',       icon: Icons.groups_outlined,          selectedIcon: Icons.groups,          route: '/admin/users'),
+        NavItem(label: 'Devices',          icon: Icons.devices_outlined,         selectedIcon: Icons.devices,         route: '/admin/users'),
+        NavItem(label: 'Messages',         icon: Icons.message_outlined,         selectedIcon: Icons.message,         route: '/messages',               section: 'COMMUNICATE'),
+        NavItem(label: 'Meetings',         icon: Icons.groups_outlined,          selectedIcon: Icons.groups,          route: '/meetings'),
+        NavItem(label: 'Reports',          icon: Icons.bar_chart_outlined,       selectedIcon: Icons.bar_chart,       route: '/reports',                section: 'INSIGHTS'),
+        NavItem(label: 'FAQ Center',       icon: Icons.help_outline,             selectedIcon: Icons.help,            route: '/reports',                section: 'SUPPORT'),
+        NavItem(label: 'Subscription',     icon: Icons.card_membership_outlined, selectedIcon: Icons.card_membership, route: '/subscription'),
       ];
     case 'manager':
       return const [
-        NavItem(label: 'Home',            icon: Icons.home_outlined,           selectedIcon: Icons.home,           route: '/dashboard/manager'),
-        NavItem(label: 'Live Attendance', icon: Icons.radio_button_checked,    selectedIcon: Icons.radio_button_checked, route: '/corporate-attendance', section: 'ATTENDANCE'),
-        NavItem(label: 'Team',            icon: Icons.group_outlined,          selectedIcon: Icons.group,          route: '/manager/team',        section: 'MANAGEMENT'),
-        NavItem(label: 'Leave Requests',  icon: Icons.event_note_outlined,     selectedIcon: Icons.event_note,     route: '/manager/leave-requests'),
-        NavItem(label: 'Timesheets',      icon: Icons.schedule_outlined,       selectedIcon: Icons.schedule,       route: '/manager/timesheets'),
-        NavItem(label: 'Shifts',          icon: Icons.access_time_outlined,    selectedIcon: Icons.access_time,    route: '/shifts'),
-        NavItem(label: 'Reports',         icon: Icons.bar_chart_outlined,      selectedIcon: Icons.bar_chart,      route: '/reports'),
-        NavItem(label: 'Messages',        icon: Icons.message_outlined,        selectedIcon: Icons.message,        route: '/messages',            section: 'COMMUNICATE'),
-        NavItem(label: 'Meetings',        icon: Icons.groups_outlined,         selectedIcon: Icons.groups,         route: '/meetings'),
-        NavItem(label: 'Announcements',   icon: Icons.campaign_outlined,       selectedIcon: Icons.campaign,       route: '/announcements'),
+        NavItem(label: 'Dashboard',           icon: Icons.dashboard_outlined,      selectedIcon: Icons.dashboard,      route: '/dashboard/manager'),
+        NavItem(label: 'Approvals',           icon: Icons.pending_actions_outlined, selectedIcon: Icons.pending_actions, route: '/manager/leave-requests', section: 'MANAGE'),
+        NavItem(label: 'Team',                icon: Icons.group_outlined,          selectedIcon: Icons.group,          route: '/manager/team'),
+        NavItem(label: 'Sign In / Out',       icon: Icons.login_outlined,          selectedIcon: Icons.login,          route: '/sign-in-out',            section: 'WORKFORCE'),
+        NavItem(label: 'Team Attendance',     icon: Icons.fact_check_outlined,     selectedIcon: Icons.fact_check,     route: '/corporate-attendance'),
+        NavItem(label: 'Shifts',              icon: Icons.access_time_outlined,    selectedIcon: Icons.access_time,    route: '/shifts'),
+        NavItem(label: 'Leave',               icon: Icons.event_note_outlined,     selectedIcon: Icons.event_note,     route: '/manager/leave-requests'),
+        NavItem(label: 'Training & Assessments', icon: Icons.school_outlined,      selectedIcon: Icons.school,         route: '/performance'),
+        NavItem(label: 'Timesheets',          icon: Icons.schedule_outlined,       selectedIcon: Icons.schedule,       route: '/manager/timesheets'),
+        NavItem(label: 'Expenses',            icon: Icons.receipt_long_outlined,   selectedIcon: Icons.receipt_long,   route: '/expenses'),
+        NavItem(label: 'Messages',            icon: Icons.message_outlined,        selectedIcon: Icons.message,        route: '/messages',               section: 'COMMUNICATE'),
+        NavItem(label: 'Meetings',            icon: Icons.groups_outlined,         selectedIcon: Icons.groups,         route: '/meetings'),
+        NavItem(label: 'Announcements',       icon: Icons.campaign_outlined,       selectedIcon: Icons.campaign,       route: '/announcements'),
       ];
     case 'employee':
       return const [
-        NavItem(label: 'Home',          icon: Icons.home_outlined,            selectedIcon: Icons.home,           route: '/dashboard/employee'),
-        NavItem(label: 'Clock In/Out',  icon: Icons.login_outlined,           selectedIcon: Icons.login,          route: '/sign-in-out',       section: 'ATTENDANCE'),
-        NavItem(label: 'My Attendance', icon: Icons.fact_check_outlined,      selectedIcon: Icons.fact_check,     route: '/corporate-attendance'),
-        NavItem(label: 'My Shift',      icon: Icons.access_time_outlined,     selectedIcon: Icons.access_time,    route: '/employee/shift',    section: 'WORK'),
-        NavItem(label: 'My Leaves',     icon: Icons.event_available_outlined, selectedIcon: Icons.event_available, route: '/employee/leaves'),
-        NavItem(label: 'Performance',   icon: Icons.trending_up_outlined,     selectedIcon: Icons.trending_up,    route: '/performance'),
-        NavItem(label: 'Messages',      icon: Icons.message_outlined,         selectedIcon: Icons.message,        route: '/messages',          section: 'COMMUNICATE'),
-        NavItem(label: 'Announcements', icon: Icons.campaign_outlined,        selectedIcon: Icons.campaign,       route: '/announcements'),
+        NavItem(label: 'Dashboard',       icon: Icons.dashboard_outlined,       selectedIcon: Icons.dashboard,       route: '/dashboard/employee'),
+        NavItem(label: 'Home',            icon: Icons.home_outlined,            selectedIcon: Icons.home,            route: '/dashboard/employee'),
+        NavItem(label: 'Clock In / Out',  icon: Icons.login_outlined,           selectedIcon: Icons.login,           route: '/sign-in-out',           section: 'ATTENDANCE'),
+        NavItem(label: 'My Attendance',   icon: Icons.fact_check_outlined,      selectedIcon: Icons.fact_check,      route: '/corporate-attendance'),
+        NavItem(label: 'My Shift',        icon: Icons.access_time_outlined,     selectedIcon: Icons.access_time,     route: '/employee/shift'),
+        NavItem(label: 'Leave',           icon: Icons.event_available_outlined, selectedIcon: Icons.event_available, route: '/employee/leaves'),
+        NavItem(label: 'My Assessments',  icon: Icons.school_outlined,          selectedIcon: Icons.school,          route: '/performance'),
+        NavItem(label: 'Notifications',   icon: Icons.notifications_outlined,   selectedIcon: Icons.notifications,   route: '/announcements',         section: 'COMMUNICATE'),
+        NavItem(label: 'Announcements',   icon: Icons.campaign_outlined,        selectedIcon: Icons.campaign,        route: '/announcements'),
+        NavItem(label: 'Messages',        icon: Icons.message_outlined,         selectedIcon: Icons.message,         route: '/messages'),
       ];
     default:
       return const [
@@ -168,12 +188,19 @@ List<NavItem> _bottomItems(String role) {
         NavItem(label: 'Messages',icon: Icons.message_outlined,    selectedIcon: Icons.message,    route: '/messages'),
       ];
     case 'admin':
+      return const [
+        NavItem(label: 'Home',      icon: Icons.dashboard_outlined,    selectedIcon: Icons.dashboard,    route: '/dashboard/admin'),
+        NavItem(label: 'Users',     icon: Icons.people_outlined,       selectedIcon: Icons.people,       route: '/admin/users'),
+        NavItem(label: 'Sessions',  icon: Icons.video_call_outlined,   selectedIcon: Icons.video_call,   route: '/sessions'),
+        NavItem(label: 'Courses',   icon: Icons.school_outlined,       selectedIcon: Icons.school,       route: '/courses'),
+        NavItem(label: 'Messages',  icon: Icons.message_outlined,      selectedIcon: Icons.message,      route: '/messages'),
+      ];
     case 'hod':
       return const [
-        NavItem(label: 'Home',    icon: Icons.home_outlined,       selectedIcon: Icons.home,       route: '/dashboard/admin'),
-        NavItem(label: 'Users',   icon: Icons.people_outlined,     selectedIcon: Icons.people,     route: '/admin/users'),
+        NavItem(label: 'Home',    icon: Icons.dashboard_outlined,  selectedIcon: Icons.dashboard,  route: '/dashboard/hod'),
+        NavItem(label: 'Sessions',icon: Icons.video_call_outlined, selectedIcon: Icons.video_call, route: '/sessions'),
         NavItem(label: 'Courses', icon: Icons.school_outlined,     selectedIcon: Icons.school,     route: '/courses'),
-        NavItem(label: 'Meetings',icon: Icons.video_call_outlined, selectedIcon: Icons.video_call, route: '/meetings'),
+        NavItem(label: 'Approvals',icon: Icons.pending_actions_outlined, selectedIcon: Icons.pending_actions, route: '/hod/approvals'),
         NavItem(label: 'Messages',icon: Icons.message_outlined,    selectedIcon: Icons.message,    route: '/messages'),
       ];
     case 'employee':
@@ -226,13 +253,18 @@ class AppShell extends ConsumerWidget {
     int selectedIndex = navItems.indexWhere((item) => currentRoute.startsWith(item.route));
     if (selectedIndex < 0) selectedIndex = 0;
 
+    final companyName = user?.company ?? '';
+    final workspaceType = (user?.role == 'manager' || user?.role == 'employee')
+        ? 'Corporate'
+        : 'Academic';
+
     return Scaffold(
       appBar: AppBar(
         backgroundColor: appBarColor ?? Colors.white,
         foregroundColor: appBarForeground,
         iconTheme: IconThemeData(color: appBarForeground ?? DiklyColors.text),
         elevation: 0,
-        scrolledUnderElevation: 0,
+        scrolledUnderElevation: 0.5,
         surfaceTintColor: Colors.transparent,
         title: Row(
           mainAxisSize: MainAxisSize.min,
@@ -248,21 +280,32 @@ class AppShell extends ConsumerWidget {
                 overflow: TextOverflow.ellipsis,
               ),
             ),
+            if (companyName.isNotEmpty) ...[
+              const SizedBox(width: 6),
+              Text(
+                '— $companyName',
+                style: GoogleFonts.dmSans(
+                  fontSize: 12,
+                  color: const Color(0xFF9CA3AF),
+                ),
+                overflow: TextOverflow.ellipsis,
+              ),
+            ],
             const SizedBox(width: 8),
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
               decoration: BoxDecoration(
-                color: roleColor.withOpacity(0.10),
+                color: const Color(0xFF2563EB).withValues(alpha: 0.08),
                 borderRadius: BorderRadius.circular(20),
-                border: Border.all(color: roleColor.withOpacity(0.25)),
+                border: Border.all(color: const Color(0xFF2563EB).withValues(alpha: 0.20)),
               ),
               child: Text(
-                role.toUpperCase(),
+                workspaceType,
                 style: GoogleFonts.dmSans(
                   fontSize: 10,
-                  fontWeight: FontWeight.w700,
-                  color: roleColor,
-                  letterSpacing: 0.5,
+                  fontWeight: FontWeight.w600,
+                  color: const Color(0xFF2563EB),
+                  letterSpacing: 0.3,
                 ),
               ),
             ),
@@ -279,11 +322,11 @@ class AppShell extends ConsumerWidget {
         actions: [
           if (actions != null) ...actions!,
           IconButton(
-            icon: const Icon(Icons.notifications_none_rounded),
+            icon: const Icon(Icons.notifications_none_rounded, size: 22),
             onPressed: () {},
           ),
           IconButton(
-            icon: const Icon(Icons.person_outline_rounded),
+            icon: const Icon(Icons.person_outline_rounded, size: 22),
             onPressed: () => context.push('/profile'),
           ),
         ],
@@ -356,17 +399,21 @@ class _DiklyDrawer extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  // DIKLY logo
+                  // DIKLY logo (matching web's blue gradient icon)
                   Row(
                     children: [
                       Container(
-                        width: 32,
-                        height: 32,
+                        width: 34,
+                        height: 34,
                         decoration: BoxDecoration(
-                          color: roleColor,
+                          gradient: const LinearGradient(
+                            colors: [Color(0xFF2563EB), Color(0xFF7C3AED)],
+                            begin: Alignment.topLeft,
+                            end: Alignment.bottomRight,
+                          ),
                           borderRadius: BorderRadius.circular(8),
                         ),
-                        child: const Icon(Icons.bolt_rounded, color: Colors.white, size: 20),
+                        child: const Icon(Icons.layers_rounded, color: Colors.white, size: 20),
                       ),
                       const SizedBox(width: 10),
                       Text(
@@ -386,7 +433,7 @@ class _DiklyDrawer extends StatelessWidget {
                     children: [
                       CircleAvatar(
                         radius: 20,
-                        backgroundColor: roleColor.withOpacity(0.12),
+                        backgroundColor: roleColor.withValues(alpha: 0.12),
                         child: Text(
                           user?.initials ?? 'U',
                           style: GoogleFonts.dmSans(
@@ -434,16 +481,16 @@ class _DiklyDrawer extends StatelessWidget {
                 children: [
                   for (final item in items) ...[
                     if (item.section != null) ...[
-                      const SizedBox(height: 10),
+                      const SizedBox(height: 14),
                       Padding(
-                        padding: const EdgeInsets.fromLTRB(8, 0, 8, 6),
+                        padding: const EdgeInsets.fromLTRB(12, 0, 8, 6),
                         child: Text(
                           item.section!,
                           style: GoogleFonts.dmSans(
-                            fontSize: 9,
+                            fontSize: 10,
                             fontWeight: FontWeight.w700,
-                            color: const Color(0xFF9CA3AF),
-                            letterSpacing: 1.2,
+                            color: const Color(0xFF94A3B8),
+                            letterSpacing: 1.0,
                           ),
                         ),
                       ),
@@ -454,33 +501,47 @@ class _DiklyDrawer extends StatelessWidget {
               ),
             ),
 
-            // Institution code
+            // Institution code (matching web's bottom bar)
             if (instCode.isNotEmpty) ...[
               const Divider(height: 1, color: Color(0xFFF3F4F6)),
               Padding(
-                padding: const EdgeInsets.fromLTRB(18, 10, 18, 6),
+                padding: const EdgeInsets.fromLTRB(18, 12, 18, 8),
                 child: Row(
                   children: [
                     Text(
-                      'CODE',
+                      'INSTITUTION CODE',
                       style: GoogleFonts.dmSans(
                         fontSize: 9,
-                        fontWeight: FontWeight.w700,
+                        fontWeight: FontWeight.w600,
                         color: const Color(0xFF9CA3AF),
-                        letterSpacing: 1.0,
+                        letterSpacing: 0.8,
                       ),
                     ),
-                    const SizedBox(width: 8),
-                    Expanded(
+                    const SizedBox(width: 10),
+                    Text(
+                      instCode,
+                      style: GoogleFonts.dmSans(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w800,
+                        color: DiklyColors.text,
+                        letterSpacing: 0.5,
+                      ),
+                    ),
+                    const Spacer(),
+                    GestureDetector(
+                      onTap: () {
+                        Clipboard.setData(ClipboardData(text: instCode));
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(content: Text('Code copied: $instCode'), duration: const Duration(seconds: 2)),
+                        );
+                      },
                       child: Text(
-                        instCode,
+                        'Copy',
                         style: GoogleFonts.dmSans(
                           fontSize: 12,
-                          fontWeight: FontWeight.w700,
-                          color: DiklyColors.text,
-                          letterSpacing: 0.5,
+                          fontWeight: FontWeight.w600,
+                          color: DiklyColors.primary,
                         ),
-                        overflow: TextOverflow.ellipsis,
                       ),
                     ),
                   ],
@@ -554,15 +615,15 @@ class _DrawerTile extends StatelessWidget {
       margin: const EdgeInsets.only(bottom: 2),
       decoration: isActive
           ? BoxDecoration(
-              color: const Color(0xA8FFF0B9),
+              color: const Color(0xFF2563EB).withValues(alpha: 0.08),
               borderRadius: BorderRadius.circular(10),
-              border: Border.all(color: const Color(0xFFF59E0B).withOpacity(0.4)),
+              border: Border.all(color: const Color(0xFF2563EB).withValues(alpha: 0.18)),
             )
           : null,
       child: ListTile(
         leading: Icon(
           isActive ? item.selectedIcon : item.icon,
-          color: isActive ? const Color(0xFFB45309) : const Color(0xFF6B7280),
+          color: isActive ? const Color(0xFF2563EB) : const Color(0xFF6B7280),
           size: 20,
         ),
         title: Text(
@@ -570,7 +631,7 @@ class _DrawerTile extends StatelessWidget {
           style: GoogleFonts.dmSans(
             fontSize: 14,
             fontWeight: isActive ? FontWeight.w700 : FontWeight.w500,
-            color: isActive ? const Color(0xFF92400E) : DiklyColors.textSecondary,
+            color: isActive ? const Color(0xFF2563EB) : DiklyColors.textSecondary,
           ),
         ),
         contentPadding: const EdgeInsets.symmetric(horizontal: 12),
@@ -647,7 +708,7 @@ class _BottomItem extends StatelessWidget {
         curve: Curves.easeInOut,
         padding: EdgeInsets.symmetric(horizontal: isSelected ? 16 : 12, vertical: 8),
         decoration: BoxDecoration(
-          color: isSelected ? DiklyColors.primary.withOpacity(0.10) : Colors.transparent,
+          color: isSelected ? DiklyColors.primary.withValues(alpha: 0.10) : Colors.transparent,
           borderRadius: BorderRadius.circular(40),
         ),
         child: Row(

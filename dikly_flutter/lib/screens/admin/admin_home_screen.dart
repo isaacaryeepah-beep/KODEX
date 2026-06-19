@@ -88,7 +88,7 @@ class AdminHomeScreen extends ConsumerWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      '${_greeting()}, $firstName',
+                      '${_greeting()}, $firstName \u{1F44B}',
                       style: GoogleFonts.dmSans(
                         fontSize: 22,
                         fontWeight: FontWeight.w800,
@@ -98,7 +98,7 @@ class AdminHomeScreen extends ConsumerWidget {
                     ),
                     const SizedBox(height: 3),
                     Text(
-                      user?.company ?? user?.institutionCode ?? 'Admin Portal',
+                      "Here's what's happening at ${user?.company ?? 'your institution'} today.",
                       style: GoogleFonts.dmSans(fontSize: 13, color: DiklyColors.textMuted),
                     ),
                   ],
@@ -116,17 +116,33 @@ class AdminHomeScreen extends ConsumerWidget {
         // ── Quick actions ──────────────────────────────────────────────
         DiklyFadeIn(
           delay: const Duration(milliseconds: 60),
-          child: SingleChildScrollView(
-            scrollDirection: Axis.horizontal,
-            child: Row(
-              children: [
-                DiklyQuickChip(icon: Icons.person_add_outlined,    label: 'Add User',   color: const Color(0xFF059669), onTap: () => context.push('/admin/users')),
-                DiklyQuickChip(icon: Icons.campaign_outlined,      label: 'Announce',   color: const Color(0xFFD97706), onTap: () => context.push('/announcements')),
-                DiklyQuickChip(icon: Icons.bar_chart_rounded,      label: 'Reports',    color: _theme.primary,          onTap: () => context.push('/reports')),
-                DiklyQuickChip(icon: Icons.pending_actions_outlined,label: 'Approvals', color: const Color(0xFFDC2626), onTap: () => context.push('/admin/users')),
-                DiklyQuickChip(icon: Icons.account_tree_outlined,  label: 'Branches',   color: const Color(0xFF0891B2), onTap: () => context.push('/admin/branches')),
-              ],
-            ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Padding(
+                padding: const EdgeInsets.only(bottom: 10),
+                child: Text(
+                  'QUICK ACTIONS',
+                  style: GoogleFonts.dmSans(
+                    fontSize: 10,
+                    fontWeight: FontWeight.w700,
+                    color: const Color(0xFF9CA3AF),
+                    letterSpacing: 1.0,
+                  ),
+                ),
+              ),
+              SingleChildScrollView(
+                scrollDirection: Axis.horizontal,
+                child: Row(
+                  children: [
+                    DiklyQuickChip(icon: Icons.play_circle_outline, label: 'Start session', color: const Color(0xFF059669), onTap: () => context.push('/sessions')),
+                    DiklyQuickChip(icon: Icons.person_add_outlined, label: 'Add user',      color: const Color(0xFF2563EB), onTap: () => context.push('/admin/users')),
+                    DiklyQuickChip(icon: Icons.campaign_outlined,   label: 'Post announcement', color: const Color(0xFFD97706), onTap: () => context.push('/announcements')),
+                    DiklyQuickChip(icon: Icons.bar_chart_rounded,   label: 'View reports',  color: const Color(0xFF374151), onTap: () => context.push('/reports')),
+                  ],
+                ),
+              ),
+            ],
           ),
         ),
         const SizedBox(height: 22),
@@ -144,27 +160,29 @@ class AdminHomeScreen extends ConsumerWidget {
             children: [
               _AdminStatCard(
                 value: '${d['totalUsers'] ?? 0}',
-                label: 'Total Users',
-                trend: 'USERS',
+                label: 'Total users',
+                subtitle: 'Students, lecturers & staff',
                 icon: Icons.people_rounded,
                 color: _theme.primary,
               ),
               _AdminStatCard(
                 value: '${d['activeSessions'] ?? 0}',
-                label: 'Active Sessions',
-                trend: 'NOW',
+                label: 'Active sessions',
+                subtitle: 'No active sessions',
                 icon: Icons.video_call_rounded,
                 color: const Color(0xFF059669),
               ),
               _AdminStatCard(
                 value: '${d['totalSessions'] ?? 0}',
-                label: 'Total Sessions',
+                label: 'Total sessions',
+                subtitle: 'All time',
                 icon: Icons.history_rounded,
                 color: const Color(0xFF0891B2),
               ),
               _AdminStatCard(
                 value: '${d['pendingApprovals'] ?? 0}',
-                label: 'Pending Approvals',
+                label: 'Pending approvals',
+                subtitle: 'All clear',
                 icon: Icons.pending_rounded,
                 color: const Color(0xFFD97706),
               ),
@@ -284,32 +302,36 @@ class _CodeCard extends StatelessWidget {
         );
       },
       child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
         decoration: BoxDecoration(
-          color: Colors.white,
+          color: const Color(0xFFF9FAFB),
           borderRadius: BorderRadius.circular(10),
           border: Border.all(color: const Color(0xFFE5E7EB)),
-          boxShadow: const [BoxShadow(color: Color(0x08000000), blurRadius: 4, offset: Offset(0, 1))],
         ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
+        child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
             Text(
-              'INST. CODE',
-              style: GoogleFonts.dmSans(fontSize: 9, fontWeight: FontWeight.w700, color: const Color(0xFF9CA3AF), letterSpacing: 0.8),
+              'Institution code',
+              style: GoogleFonts.dmSans(fontSize: 11, color: const Color(0xFF6B7280)),
             ),
-            const SizedBox(height: 2),
-            Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Text(
-                  code,
-                  style: GoogleFonts.dmSans(fontSize: 14, fontWeight: FontWeight.w800, color: DiklyColors.text, letterSpacing: 0.5),
-                ),
-                const SizedBox(width: 6),
-                const Icon(Icons.copy_rounded, size: 13, color: Color(0xFF9CA3AF)),
-              ],
+            const SizedBox(width: 8),
+            Text(
+              code,
+              style: GoogleFonts.dmSans(fontSize: 15, fontWeight: FontWeight.w800, color: DiklyColors.text, letterSpacing: 0.5),
+            ),
+            const SizedBox(width: 10),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(6),
+                border: Border.all(color: const Color(0xFFE5E7EB)),
+              ),
+              child: Text(
+                'Copy',
+                style: GoogleFonts.dmSans(fontSize: 11, fontWeight: FontWeight.w600, color: const Color(0xFF6B7280)),
+              ),
             ),
           ],
         ),
@@ -325,42 +347,54 @@ class _AdminStatCard extends StatelessWidget {
   final String label;
   final IconData icon;
   final Color color;
-  final String? trend;
+  final String? subtitle;
 
   const _AdminStatCard({
     required this.value,
     required this.label,
     required this.icon,
     required this.color,
-    this.trend,
+    this.subtitle,
   });
 
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.all(14),
+      padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(12),
+        borderRadius: BorderRadius.circular(14),
         border: Border(
           top:    BorderSide(color: color, width: 4),
           left:   const BorderSide(color: Color(0xFFE5E7EB)),
           right:  const BorderSide(color: Color(0xFFE5E7EB)),
           bottom: const BorderSide(color: Color(0xFFE5E7EB)),
         ),
-        boxShadow: const [BoxShadow(color: Color(0x06000000), blurRadius: 4, offset: Offset(0, 1))],
+        boxShadow: const [BoxShadow(color: Color(0x08000000), blurRadius: 6, offset: Offset(0, 2))],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          // Top row: label + icon
           Row(
-            mainAxisAlignment: MainAxisAlignment.end,
             children: [
+              Expanded(
+                child: Text(
+                  label,
+                  style: GoogleFonts.dmSans(
+                    fontSize: 11,
+                    fontWeight: FontWeight.w600,
+                    color: const Color(0xFF6B7280),
+                  ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
               Container(
-                width: 30,
-                height: 30,
+                width: 32,
+                height: 32,
                 decoration: BoxDecoration(
-                  color: color.withOpacity(0.10),
+                  color: color.withValues(alpha: 0.10),
                   borderRadius: BorderRadius.circular(8),
                 ),
                 child: Icon(icon, size: 16, color: color),
@@ -368,41 +402,28 @@ class _AdminStatCard extends StatelessWidget {
             ],
           ),
           const Spacer(),
+          // Big number
           Text(
             value,
             style: GoogleFonts.dmSans(
-              fontSize: 26,
+              fontSize: 28,
               fontWeight: FontWeight.w800,
               color: DiklyColors.text,
               height: 1.0,
             ),
           ),
-          if (trend != null) ...[
-            const SizedBox(height: 2),
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-              decoration: BoxDecoration(
-                color: color.withOpacity(0.08),
-                borderRadius: BorderRadius.circular(20),
+          if (subtitle != null) ...[
+            const SizedBox(height: 4),
+            Text(
+              subtitle!,
+              style: GoogleFonts.dmSans(
+                fontSize: 11,
+                color: const Color(0xFF9CA3AF),
               ),
-              child: Text(
-                trend!,
-                style: GoogleFonts.dmSans(fontSize: 9, fontWeight: FontWeight.w700, color: color),
-              ),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
             ),
           ],
-          const SizedBox(height: 4),
-          Text(
-            label.toUpperCase(),
-            style: GoogleFonts.dmSans(
-              fontSize: 9,
-              fontWeight: FontWeight.w600,
-              color: const Color(0xFF9CA3AF),
-              letterSpacing: 0.6,
-            ),
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-          ),
         ],
       ),
     );
