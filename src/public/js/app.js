@@ -2357,6 +2357,8 @@ function showDashboard(data) {
     buildSidebar();
     loadAnnBadge();
     startNotifPolling();
+    if (currentUser?.role === 'lecturer') _startLecturerQuizBadge();
+    if (currentUser?.role === 'hod') _startHodQuizBadge();
     _notifSound.updateBtn();
     applyBranding(); // async — applies colors/logo in background
     // Show offline banner immediately when logged in via cached credentials
@@ -3948,6 +3950,53 @@ Current: ${currentDept || 'None'}`, currentDept || '');
 }
 
 
+// ── Quiz Monitor badge polling (Lecturer + HOD) ──────────────────────────────
+function _applyQuizBadge(navId, count) {
+  const el = document.getElementById(navId);
+  if (!el) return;
+  el.style.position = 'relative';
+  let badge = el.querySelector('.qm-badge');
+  if (count > 0) {
+    if (!badge) {
+      badge = document.createElement('span');
+      badge.className = 'qm-badge';
+      badge.style.cssText = 'position:absolute;top:4px;right:4px;background:#ef4444;color:#fff;font-size:9px;font-weight:700;padding:1px 5px;border-radius:20px;min-width:14px;text-align:center;line-height:14px;pointer-events:none';
+      el.appendChild(badge);
+    }
+    badge.textContent = count;
+  } else if (badge) {
+    badge.remove();
+  }
+}
+
+async function _updateLecturerQuizBadge() {
+  try {
+    const data = await api('/api/lecturer/snap-quizzes').catch(() => ({ quizzes: [] }));
+    const active = (data.quizzes || []).filter(q => q.status === 'open' || q.status === 'active');
+    _applyQuizBadge('nav-snap-quiz', active.length);
+  } catch { /* silent */ }
+}
+
+async function _updateHodQuizBadge() {
+  try {
+    const data = await api('/api/lecturer/snap-quizzes/department-overview').catch(() => api('/api/lecturer/snap-quizzes').catch(() => ({ quizzes: [] })));
+    const active = (data.quizzes || []).filter(q => q.status === 'open' || q.status === 'active');
+    _applyQuizBadge('nav-hod-quiz-monitor', active.length);
+  } catch { /* silent */ }
+}
+
+let _lecturerQuizBadgeTimer, _hodQuizBadgeTimer;
+function _startLecturerQuizBadge() {
+  _updateLecturerQuizBadge();
+  clearInterval(_lecturerQuizBadgeTimer);
+  _lecturerQuizBadgeTimer = setInterval(_updateLecturerQuizBadge, 60000);
+}
+function _startHodQuizBadge() {
+  _updateHodQuizBadge();
+  clearInterval(_hodQuizBadgeTimer);
+  _hodQuizBadgeTimer = setInterval(_updateHodQuizBadge, 60000);
+}
+
 // ── HOD — Quiz Monitor ────────────────────────────────────────────────────
 async function renderHodQuizMonitor() {
   const content = document.getElementById('main-content');
@@ -3960,21 +4009,7 @@ async function renderHodQuizMonitor() {
     const sessions = allQuizzes.filter(q => q.status === 'open' || q.status === 'active');
     const esc = s => s == null ? '' : String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
 
-    const navQuizzesEl = document.getElementById('nav-hod-quiz-monitor');
-    if (navQuizzesEl) {
-      const badge = navQuizzesEl.querySelector('.qm-badge');
-      if (sessions.length > 0) {
-        if (!badge) {
-          const b = document.createElement('span');
-          b.className = 'qm-badge';
-          b.style.cssText = 'position:absolute;top:4px;right:4px;background:#ef4444;color:#fff;font-size:9px;font-weight:700;padding:1px 5px;border-radius:20px;min-width:14px;text-align:center;line-height:14px;';
-          b.textContent = sessions.length;
-          navQuizzesEl.appendChild(b);
-        } else {
-          badge.textContent = sessions.length;
-        }
-      } else if (badge) badge.remove();
-    }
+    _applyQuizBadge('nav-hod-quiz-monitor', sessions.length);
 
     if (sessions.length === 0) {
       content.innerHTML = `
