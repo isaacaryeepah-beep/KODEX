@@ -1214,18 +1214,25 @@ document.getElementById('login-btn').addEventListener('click', async () => {
 
   const btn     = document.getElementById('login-btn');
   const btnText = document.getElementById('login-btn-text');
+
+  // Immediate visual feedback — change button appearance before any async work
   btn.disabled = true;
+  btn.style.opacity = '0.75';
   if (btnText) btnText.textContent = 'Verifying…';
 
-  try {
-    if (!state.user) throw new Error('No active session. Please return to the portal and sign in.');
+  // Clear any previous error
+  const errEl = document.getElementById('login-error-msg');
+  if (errEl) { errEl.style.display = 'none'; errEl.textContent = ''; }
 
-    // Backend verification — server confirms the index number matches the token
+  try {
+    if (!state.user) throw new Error('Session expired. Please go back to the portal and sign in again.');
+
+    // Backend verification — JWT already proves identity; this confirms the index number
     await api('POST', '/api/student/snap-quizzes/verify-identity', { indexNumber: entered });
 
-    // All good
+    // Success — load quiz list then switch screen
     state.deviceFingerprint = buildFingerprint();
-    loadQuizList();
+    await loadQuizList();
     show('quiz-list-screen');
     toast('Welcome back!', 'success');
 
@@ -1237,6 +1244,7 @@ document.getElementById('login-btn').addEventListener('click', async () => {
     showLoginError(e.message || 'Verification failed. Please try again.');
   } finally {
     btn.disabled = false;
+    btn.style.opacity = '';
     if (btnText) btnText.textContent = 'Continue';
   }
 });

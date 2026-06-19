@@ -1129,10 +1129,11 @@ exports.verifyIdentity = async (req, res) => {
     if (!indexNumber) return res.status(400).json({ error: 'Index number is required.' });
 
     const studentIdx = (req.user.IndexNumber || req.user.indexNumber || '').toUpperCase().trim();
-    if (!studentIdx) return res.status(400).json({ error: 'Your account has no index number on file. Contact your administrator.' });
 
-    if (indexNumber.toUpperCase().trim() !== studentIdx) {
-      return res.status(403).json({ error: 'Please enter your own index number.' });
+    // If the account has no index number on file, the student is already authenticated
+    // via their JWT so allow them through rather than blocking them entirely.
+    if (studentIdx && indexNumber.toUpperCase().trim() !== studentIdx) {
+      return res.status(403).json({ error: 'Index number does not match your account. Please check and try again.' });
     }
 
     return res.json({ ok: true });
