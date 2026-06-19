@@ -194,7 +194,7 @@ html, body { height: 100%; background: var(--navy); color: var(--white); font-fa
 /* Responsive */
 @media (max-width: 768px) {
   .main { flex-direction: column; height: auto; overflow: auto; }
-  .sidebar { width: 100%; min-width: 0; border-right: none; border-bottom: 1px solid var(--navy3); max-height: 40vh; }
+  .sidebar { width: 100%; min-width: 0; border-right: none; border-bottom: 1px solid var(--navy3); max-height: 55vh; }
   .stats-row { grid-template-columns: repeat(2, 1fr); }
   .toolbar input { width: 160px; }
 }
@@ -319,8 +319,20 @@ html, body { height: 100%; background: var(--navy); color: var(--white); font-fa
 </div>
 
 <div class="main">
-  <!-- SIDEBAR: student list -->
+  <!-- SIDEBAR -->
   <div class="sidebar">
+
+    <!-- Quiz Controls -->
+    <div class="sidebar-section" id="quiz-controls-sidebar" style="display:none">
+      <h3>Quiz Controls</h3>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:6px">
+        <button class="btn btn-primary" style="font-size:12px;padding:8px 10px" onclick="openQuiz()">🟢 Open</button>
+        <button class="btn btn-ghost"   style="font-size:12px;padding:8px 10px" onclick="closeQuiz()">🔴 Close</button>
+      </div>
+      <button class="btn btn-ghost" style="font-size:12px;padding:8px 12px;width:100%" onclick="forceSubmitFlagged()">⛔ Submit All Flagged</button>
+    </div>
+
+    <!-- Stats -->
     <div class="sidebar-section">
       <h3><span class="live-dot" id="live-dot" style="display:none"></span>Students</h3>
       <div class="summary-grid" id="summary-grid">
@@ -329,40 +341,36 @@ html, body { height: 100%; background: var(--navy); color: var(--white); font-fa
         <div class="sum-box"><div class="sum-val" style="color:var(--accent)">—</div><div class="sum-key">Done</div></div>
         <div class="sum-box"><div class="sum-val" style="color:var(--red)">—</div><div class="sum-key">Terminated</div></div>
       </div>
-      <div style="margin-top:10px">
-        <input class="sidebar-search" id="student-search" placeholder="Search student…" oninput="filterStudentList(this.value)" />
+    </div>
+
+    <!-- Risk Analytics -->
+    <div class="sidebar-section" id="risk-section" style="display:none">
+      <h3>Risk Analytics</h3>
+      <div id="risk-bar-visual" style="height:6px;border-radius:3px;background:var(--navy3);overflow:hidden;display:flex;margin-bottom:8px"></div>
+      <div style="display:flex;justify-content:space-between;flex-wrap:wrap;gap:4px">
+        <span id="risk-safe" style="font-size:11px;font-weight:700;color:var(--green)">— Safe</span>
+        <span id="risk-warn" style="font-size:11px;font-weight:700;color:var(--yellow)">— Suspicious</span>
+        <span id="risk-high" style="font-size:11px;font-weight:700;color:var(--red)">— High Risk</span>
       </div>
     </div>
+
+    <!-- Search -->
+    <div class="sidebar-section">
+      <input class="sidebar-search" id="student-search" placeholder="Search student…" oninput="filterStudentList(this.value)" />
+    </div>
+
+    <!-- Student list -->
     <div class="student-list" id="student-list">
       <div class="detail-placeholder" style="height:200px">
         <div class="icon">🔍</div>
         <p>Select a snap quiz above to begin monitoring</p>
       </div>
     </div>
+
   </div>
 
   <!-- DETAIL PANEL -->
   <div style="flex:1;display:flex;flex-direction:column;overflow:hidden;background:var(--navy);">
-    <!-- Controls bar -->
-    <div id="quiz-controls" style="display:none;padding:8px 16px;background:var(--navy2);border-bottom:1px solid var(--navy3);display:flex;gap:8px;align-items:center;flex-wrap:wrap">
-      <span style="font-size:12px;font-weight:700;color:var(--muted);margin-right:4px">QUIZ CONTROLS</span>
-      <button class="btn btn-primary" style="font-size:12px;padding:7px 14px" onclick="openQuiz()">🟢 Open Quiz</button>
-      <button class="btn btn-ghost"   style="font-size:12px;padding:7px 14px" onclick="closeQuiz()">🔴 Close Quiz</button>
-      <button class="btn btn-ghost"   style="font-size:12px;padding:7px 14px" onclick="forceSubmitFlagged()">⛔ Submit All Flagged</button>
-      <button class="btn btn-ghost"   style="font-size:12px;padding:7px 14px;margin-left:auto" onclick="exportCSV()">⬇ Export CSV</button>
-    </div>
-
-    <!-- Risk analytics bar -->
-    <div id="risk-bar" style="display:none;padding:8px 16px;background:var(--navy2);border-bottom:1px solid var(--navy3);display:flex;gap:16px;align-items:center;flex-wrap:wrap">
-      <span style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.5px">Risk Analytics</span>
-      <div style="display:flex;gap:10px;flex-wrap:wrap">
-        <span id="risk-safe"    style="font-size:12px;font-weight:700;color:var(--green)">— Safe</span>
-        <span id="risk-warn"    style="font-size:12px;font-weight:700;color:var(--yellow)">— Suspicious</span>
-        <span id="risk-high"    style="font-size:12px;font-weight:700;color:var(--red)">— High Risk</span>
-      </div>
-      <div id="risk-bar-visual" style="flex:1;height:8px;border-radius:4px;background:var(--navy3);overflow:hidden;display:flex;min-width:120px"></div>
-    </div>
-
     <div class="tab-bar">
       <button class="tab-btn active" id="tab-detail"     onclick="switchTab('detail')">Student Detail</button>
       <button class="tab-btn"        id="tab-grid"       onclick="switchTab('grid')">Camera Grid</button>
@@ -495,6 +503,10 @@ function resetView() {
   allViolationsFilter = '';
   const ss = document.getElementById('student-search');
   if (ss) ss.value = '';
+  const ctrlBar2 = document.getElementById('quiz-controls-sidebar');
+  if (ctrlBar2) ctrlBar2.style.display = 'none';
+  const riskSec = document.getElementById('risk-section');
+  if (riskSec) riskSec.style.display = 'none';
 }
 
 document.getElementById('refresh-btn').addEventListener('click', () => {
@@ -542,8 +554,8 @@ function renderSidebar(attempts) {
   `;
 
   // Show quiz controls and risk analytics
-  const ctrlBar = document.getElementById('quiz-controls');
-  if (ctrlBar) ctrlBar.style.display = total > 0 ? 'flex' : 'none';
+  const ctrlBar = document.getElementById('quiz-controls-sidebar');
+  if (ctrlBar) ctrlBar.style.display = total > 0 ? '' : 'none';
   updateRiskAnalytics(attempts);
 
   const list = document.getElementById('student-list');
@@ -821,7 +833,7 @@ function updateRiskAnalytics(attempts) {
     `<div style="width:${sp}%;background:var(--green);height:100%"></div>
      <div style="width:${wp}%;background:var(--yellow);height:100%"></div>
      <div style="width:${hp}%;background:var(--red);height:100%"></div>`;
-  document.getElementById('risk-bar').style.display = 'flex';
+  document.getElementById('risk-section').style.display = '';
 }
 
 // ── Quiz Controls ─────────────────────────────────────────────────────
