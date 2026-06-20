@@ -202,6 +202,69 @@ function _devPairedHTML(d) {
     </div>
   </div>
 
+  <!-- Offline Attendance card -->
+  <div class="dev-card" id="dev-offline-card">
+    <div class="dev-card-header">
+      <span class="dev-card-title">Offline Attendance</span>
+      ${d.hasOfflinePin
+        ? `<span class="dev-badge dev-badge-green" style="font-size:10px">PIN Set ✓</span>`
+        : `<span class="dev-badge dev-badge-red" style="font-size:10px">PIN Not Set</span>`}
+    </div>
+
+    <!-- How it works -->
+    <div style="margin-bottom:14px">
+      <p style="font-size:11px;font-weight:700;color:var(--text-secondary,#6b7280);text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px">How it works</p>
+      <div style="display:flex;flex-direction:column;gap:7px">
+        <div style="display:flex;align-items:flex-start;gap:8px;font-size:12px;color:var(--text-secondary,#6b7280)">
+          <span style="width:18px;height:18px;border-radius:50%;background:rgba(79,110,247,.12);color:#4f6ef7;font-size:9px;font-weight:800;display:flex;align-items:center;justify-content:center;flex-shrink:0;margin-top:1px">1</span>
+          Connect your phone to <strong style="color:var(--text)">${d.apSSID ? _esc(d.apSSID) : 'Dikly-XXXXXX'}</strong> WiFi
+        </div>
+        <div style="display:flex;align-items:flex-start;gap:8px;font-size:12px;color:var(--text-secondary,#6b7280)">
+          <span style="width:18px;height:18px;border-radius:50%;background:rgba(79,110,247,.12);color:#4f6ef7;font-size:9px;font-weight:800;display:flex;align-items:center;justify-content:center;flex-shrink:0;margin-top:1px">2</span>
+          The captive portal opens automatically — pick your course &amp; enter your PIN
+        </div>
+        <div style="display:flex;align-items:flex-start;gap:8px;font-size:12px;color:var(--text-secondary,#6b7280)">
+          <span style="width:18px;height:18px;border-radius:50%;background:rgba(79,110,247,.12);color:#4f6ef7;font-size:9px;font-weight:800;display:flex;align-items:center;justify-content:center;flex-shrink:0;margin-top:1px">3</span>
+          Session starts — students connect to the same WiFi and mark attendance
+        </div>
+        <div style="display:flex;align-items:flex-start;gap:8px;font-size:12px;color:var(--text-secondary,#6b7280)">
+          <span style="width:18px;height:18px;border-radius:50%;background:rgba(79,110,247,.12);color:#4f6ef7;font-size:9px;font-weight:800;display:flex;align-items:center;justify-content:center;flex-shrink:0;margin-top:1px">4</span>
+          When internet returns, records sync to the server automatically
+        </div>
+      </div>
+    </div>
+
+    <div style="border-top:1px solid var(--border);padding-top:14px">
+      <p style="font-size:11px;font-weight:700;color:var(--text-secondary,#6b7280);text-transform:uppercase;letter-spacing:.5px;margin-bottom:10px">
+        Your Offline PIN
+      </p>
+      ${d.hasOfflinePin ? `
+      <div style="background:rgba(16,185,129,.08);border:1px solid rgba(16,185,129,.2);border-radius:10px;padding:10px 14px;font-size:13px;color:#10b981;margin-bottom:10px">
+        ✓ PIN is set — you can start offline sessions without internet
+      </div>` : `
+      <div style="background:rgba(239,68,68,.07);border:1px solid rgba(239,68,68,.15);border-radius:10px;padding:10px 14px;font-size:13px;color:#ef4444;margin-bottom:10px">
+        ⚠ No PIN set — you won't be able to start offline sessions until you set one
+      </div>`}
+
+      <div id="dev-pin-form">
+        <div style="display:flex;gap:8px;align-items:center">
+          <input id="dev-pin-input" type="password" inputmode="numeric" maxlength="4" placeholder="4-digit PIN"
+            style="flex:1;padding:10px 12px;background:var(--input-bg,var(--bg));border:1.5px solid var(--border);border-radius:10px;color:var(--text);font-size:15px;font-family:monospace;letter-spacing:4px;outline:none"
+            oninput="this.value=this.value.replace(/\\D/g,'').slice(0,4)">
+          <button class="dev-btn dev-btn-primary" onclick="_devSetOfflinePin()" style="white-space:nowrap">
+            ${d.hasOfflinePin ? 'Change PIN' : 'Set PIN'}
+          </button>
+        </div>
+        ${d.hasOfflinePin ? `
+        <button class="dev-btn dev-btn-ghost dev-btn-sm" onclick="_devClearOfflinePin()"
+          style="margin-top:8px;color:#ef4444;border-color:rgba(239,68,68,.3)">
+          Remove PIN
+        </button>` : ''}
+        <div id="dev-pin-status" style="display:none;margin-top:8px;font-size:13px;border-radius:8px;padding:8px 12px"></div>
+      </div>
+    </div>
+  </div>
+
   <!-- Activity card -->
   <div class="dev-card dev-card-activity" id="dev-activity-card">
     <div class="dev-card-header">
@@ -362,6 +425,48 @@ async function _devLoadActivity() {
 
 function _devRefresh() {
   renderAttendanceDevice();
+}
+
+// ── Offline PIN management ────────────────────────────────────────────────────
+
+async function _devSetOfflinePin() {
+  const input  = document.getElementById('dev-pin-input');
+  const status = document.getElementById('dev-pin-status');
+  const pin    = (input?.value || '').trim();
+  if (!pin || !/^\d{4}$/.test(pin)) {
+    _devPinStatus('Enter exactly 4 digits.', false);
+    return;
+  }
+  try {
+    await api('/api/class-rep/set-pin', { method: 'POST', body: JSON.stringify({ pin }) });
+    _devPinStatus('PIN set successfully. You can now start offline sessions.', true);
+    if (input) input.value = '';
+    // Refresh the card after 1.5s so the badge updates
+    setTimeout(renderAttendanceDevice, 1500);
+  } catch (e) {
+    _devPinStatus(e.message || 'Failed to set PIN.', false);
+  }
+}
+
+async function _devClearOfflinePin() {
+  if (!confirm('Remove your offline PIN? You won\'t be able to start offline sessions until you set a new one.')) return;
+  try {
+    await api('/api/class-rep/set-pin', { method: 'DELETE' });
+    _devPinStatus('PIN removed.', true);
+    setTimeout(renderAttendanceDevice, 1200);
+  } catch (e) {
+    _devPinStatus(e.message || 'Failed to remove PIN.', false);
+  }
+}
+
+function _devPinStatus(msg, ok) {
+  const el = document.getElementById('dev-pin-status');
+  if (!el) return;
+  el.style.display = 'block';
+  el.style.background = ok ? 'rgba(16,185,129,.08)' : 'rgba(239,68,68,.07)';
+  el.style.border     = ok ? '1px solid rgba(16,185,129,.2)' : '1px solid rgba(239,68,68,.15)';
+  el.style.color      = ok ? '#10b981' : '#ef4444';
+  el.textContent      = msg;
 }
 
 // ── one-tap setup flow ────────────────────────────────────────────────────────
@@ -1311,13 +1416,16 @@ async function adLoadDevices() {
         const ip = d.localIp || '—';
 
         const lecturerPills = (d.assignedLecturers || []).map(a => {
-          const lecName = a.lecturerId?.name || 'Unknown';
-          const crsName = a.courseId?.title || a.courseId?.name || 'Unknown Course';
-          const lecId   = a.lecturerId?._id || a.lecturerId || '';
-          const crsId   = a.courseId?._id   || a.courseId   || '';
+          const lecName     = a.lecturerId?.name || 'Unknown';
+          const crsName     = a.courseId?.title || a.courseId?.name || 'Unknown Course';
+          const lecId       = a.lecturerId?._id || a.lecturerId || '';
+          const crsId       = a.courseId?._id   || a.courseId   || '';
+          const pinBadge    = a.lecturerId?.hasOfflinePin
+            ? `<span title="Offline PIN set" style="background:#dcfce7;color:#16a34a;border-radius:4px;padding:0 4px;font-size:9px;font-weight:700;margin-left:2px">PIN✓</span>`
+            : `<span title="No offline PIN — lecturer cannot start offline sessions" style="background:#fee2e2;color:#dc2626;border-radius:4px;padding:0 4px;font-size:9px;font-weight:700;margin-left:2px">NO PIN</span>`;
           return `<span class="ad-lec-pill">
             <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="8" r="4"/><path d="M4 20c0-4 3.6-7 8-7s8 3 8 7"/></svg>
-            ${lecName} · ${crsName}
+            ${lecName} · ${crsName}${pinBadge}
             <button class="ad-lec-remove" onclick="adRemoveLecturer('${d.deviceId}','${lecId}','${crsId}')" title="Remove">&times;</button>
           </span>`;
         }).join('');

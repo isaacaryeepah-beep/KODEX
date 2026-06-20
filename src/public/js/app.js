@@ -4414,66 +4414,76 @@ async function renderClassRepMgmt() {
             <p style="color:#64748b;font-size:13px;margin-bottom:16px">Use "Assign New Rep" to browse students and appoint up to 2 reps per class group.</p>
             <button class="btn btn-primary btn-sm" onclick="crOpenBrowse()">Assign New Rep</button>
           </div>`
-        : `<div style="overflow-x:auto;">
-            <table style="width:100%;border-collapse:collapse;font-size:13px;">
-              <thead>
-                <tr style="border-bottom:2px solid var(--border);">
-                  <th style="text-align:left;padding:10px 12px;font-weight:700;color:var(--text-muted);font-size:11px;text-transform:uppercase;">Name</th>
-                  <th style="text-align:left;padding:10px 12px;font-weight:700;color:var(--text-muted);font-size:11px;text-transform:uppercase;">Index No.</th>
-                  <th style="text-align:left;padding:10px 12px;font-weight:700;color:var(--text-muted);font-size:11px;text-transform:uppercase;">Programme</th>
-                  <th style="text-align:left;padding:10px 12px;font-weight:700;color:var(--text-muted);font-size:11px;text-transform:uppercase;">Level / Group</th>
-                  <th style="text-align:left;padding:10px 12px;font-weight:700;color:var(--text-muted);font-size:11px;text-transform:uppercase;">Session</th>
-                  <th style="text-align:left;padding:10px 12px;font-weight:700;color:var(--text-muted);font-size:11px;text-transform:uppercase;">Department</th>
-                  <th style="text-align:left;padding:10px 12px;font-weight:700;color:var(--text-muted);font-size:11px;text-transform:uppercase;">Device</th>
-                  <th style="text-align:left;padding:10px 12px;font-weight:700;color:var(--text-muted);font-size:11px;text-transform:uppercase;"></th>
-                </tr>
-              </thead>
-              <tbody>
-                ${reps.map(r => `
-                  <tr style="border-bottom:1px solid var(--border);">
-                    <td style="padding:10px 12px;">
-                      <div style="display:flex;align-items:center;gap:8px;">
-                        ${r.profilePhoto
-                          ? `<img src="${esc(r.profilePhoto)}" style="width:32px;height:32px;border-radius:50%;object-fit:cover;" onerror="this.style.display='none'">`
-                          : `<div style="width:32px;height:32px;border-radius:50%;background:linear-gradient(135deg,#7c3aed,#6366f1);display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;color:#fff">${esc((r.name||'?')[0].toUpperCase())}</div>`}
-                        <div>
-                          <div style="font-weight:600">${esc(r.name)}</div>
-                          <div style="font-size:11px;color:var(--text-muted)">${esc(r.email||'')}</div>
-                        </div>
-                      </div>
-                    </td>
-                    <td style="padding:10px 12px;color:var(--text-muted);font-family:monospace;">${esc(r.IndexNumber||r.indexNumber||'—')}</td>
-                    <td style="padding:10px 12px;">${r.programme ? `<span style="background:#ede9fe;color:#7c3aed;padding:2px 8px;border-radius:20px;font-size:11px;font-weight:700">${esc(r.programme)}</span>` : '—'}</td>
-                    <td style="padding:10px 12px;">
-                      ${r.studentLevel ? `<span style="background:#dbeafe;color:#1d4ed8;padding:2px 7px;border-radius:20px;font-size:11px;font-weight:700;margin-right:3px">L${esc(r.studentLevel)}</span>` : ''}
-                      ${r.studentGroup ? `<span style="background:#ecfdf5;color:#059669;padding:2px 7px;border-radius:20px;font-size:11px;font-weight:700">Grp ${esc(r.studentGroup)}</span>` : ''}
-                    </td>
-                    <td style="padding:10px 12px;">
-                      ${r.sessionType ? `<span style="background:#fff7ed;color:#c2410c;padding:2px 8px;border-radius:20px;font-size:11px;font-weight:600">${esc(r.sessionType)}</span>` : '—'}
-                      ${r.semester ? `<span style="font-size:11px;color:var(--text-muted);margin-left:4px">Sem ${esc(r.semester)}</span>` : ''}
-                    </td>
-                    <td style="padding:10px 12px;color:var(--text-muted);font-size:12px">${esc(r.department||'—')}</td>
-                    <td style="padding:10px 12px;">
-                      ${(() => {
-                        const assignedDevice = devices.find(d => d.classRepId && (d.classRepId._id || d.classRepId) === r._id);
-                        const assignedDeviceId = assignedDevice ? (assignedDevice.deviceId || '') : '';
-                        const opts = `<option value="">— None —</option>` +
-                          devices.map(d => {
-                            const did = d.deviceId || '';
-                            const label = esc(d.deviceName || d.deviceId);
-                            const sel = did === assignedDeviceId ? 'selected' : '';
-                            return `<option value="${esc(did)}" ${sel}>${label}</option>`;
-                          }).join('');
-                        return `<select onchange="crAssignDeviceInline(this,'${r._id}','${esc(r.name).replace(/'/g,"\\'")}')"
-                          style="font-size:12px;border:1.5px solid var(--border);border-radius:8px;padding:4px 8px;background:var(--bg,#fff);color:var(--text);max-width:160px">${opts}</select>`;
-                      })()}
-                    </td>
-                    <td style="padding:10px 12px;white-space:nowrap;">
-                      <button class="btn btn-xs" style="background:#fee2e2;color:#b91c1c;border:1px solid #fca5a5;" onclick="crRemoveRep('${r._id}','${esc(r.name).replace(/'/g,"\\'")}')">Remove</button>
-                    </td>
-                  </tr>`).join('')}
-              </tbody>
-            </table>
+        : `<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:14px;">
+            ${reps.map(r => {
+              const initials = (r.name||'?').split(' ').filter(Boolean).slice(0,2).map(p=>p[0].toUpperCase()).join('');
+              const avatarColors = ['#4f6ef7','#7c3aed','#059669','#dc2626','#d97706','#0891b2'];
+              const avatarBg = avatarColors[(r.name||'').split('').reduce((a,c)=>a+c.charCodeAt(0),0) % avatarColors.length];
+              const assignedDevice = devices.find(d => d.classRepId && (d.classRepId._id || d.classRepId) === r._id);
+              const assignedDeviceId = assignedDevice ? (assignedDevice.deviceId || '') : '';
+              const opts = `<option value="">— None —</option>` +
+                devices.map(d => {
+                  const did = d.deviceId || '';
+                  const label = esc(d.deviceName || d.deviceId);
+                  const sel = did === assignedDeviceId ? 'selected' : '';
+                  return `<option value="${esc(did)}" ${sel}>${label}</option>`;
+                }).join('');
+              return `
+              <div style="background:var(--card,#111827);border:1px solid var(--border);border-radius:14px;overflow:hidden;display:flex;flex-direction:column;">
+                <!-- Card header: avatar + name + CR badge -->
+                <div style="padding:16px 16px 12px;display:flex;align-items:flex-start;gap:12px;">
+                  <div style="flex-shrink:0;">
+                    ${r.profilePhoto
+                      ? `<img src="${esc(r.profilePhoto)}" style="width:44px;height:44px;border-radius:50%;object-fit:cover;border:2px solid var(--border);" onerror="this.outerHTML='<div style=\\'width:44px;height:44px;border-radius:50%;background:${avatarBg};display:flex;align-items:center;justify-content:center;font-size:15px;font-weight:800;color:#fff\\'>${initials}</div>'">`
+                      : `<div style="width:44px;height:44px;border-radius:50%;background:${avatarBg};display:flex;align-items:center;justify-content:center;font-size:15px;font-weight:800;color:#fff">${initials}</div>`}
+                  </div>
+                  <div style="flex:1;min-width:0;">
+                    <div style="font-size:14px;font-weight:700;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${esc(r.name||'Unknown')}</div>
+                    ${r.email ? `<div style="font-size:11px;color:var(--text-muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-top:1px">${esc(r.email)}</div>` : ''}
+                    <div style="display:flex;flex-wrap:wrap;gap:5px;margin-top:7px;">
+                      ${r.IndexNumber||r.indexNumber ? `<span style="background:rgba(79,110,247,.12);color:#4f6ef7;padding:2px 8px;border-radius:20px;font-size:11px;font-weight:700;font-family:monospace">${esc(r.IndexNumber||r.indexNumber)}</span>` : ''}
+                      ${r.programme ? `<span style="background:rgba(124,58,237,.12);color:#7c3aed;padding:2px 8px;border-radius:20px;font-size:11px;font-weight:700">${esc(r.programme)}</span>` : ''}
+                    </div>
+                  </div>
+                  <span style="flex-shrink:0;background:rgba(79,110,247,.15);color:#4f6ef7;font-size:10px;font-weight:800;padding:3px 7px;border-radius:6px;letter-spacing:.5px">CR</span>
+                </div>
+
+                <!-- Info grid -->
+                <div style="display:grid;grid-template-columns:1fr 1fr;gap:0;border-top:1px solid var(--border);border-bottom:1px solid var(--border);">
+                  <div style="padding:10px 14px;border-right:1px solid var(--border);">
+                    <div style="font-size:9px;font-weight:700;color:var(--text-muted);letter-spacing:.6px;text-transform:uppercase;margin-bottom:3px">Level / Group</div>
+                    <div style="display:flex;gap:4px;flex-wrap:wrap;">
+                      ${r.studentLevel ? `<span style="background:rgba(29,78,216,.12);color:#4f6ef7;padding:1px 7px;border-radius:20px;font-size:11px;font-weight:700">L${esc(r.studentLevel)}</span>` : '<span style="font-size:12px;color:var(--text-muted)">—</span>'}
+                      ${r.studentGroup ? `<span style="background:rgba(5,150,105,.12);color:#059669;padding:1px 7px;border-radius:20px;font-size:11px;font-weight:700">Grp ${esc(r.studentGroup)}</span>` : ''}
+                    </div>
+                  </div>
+                  <div style="padding:10px 14px;">
+                    <div style="font-size:9px;font-weight:700;color:var(--text-muted);letter-spacing:.6px;text-transform:uppercase;margin-bottom:3px">Session</div>
+                    <div style="display:flex;align-items:center;gap:4px;flex-wrap:wrap;">
+                      ${r.sessionType ? `<span style="background:rgba(194,65,12,.1);color:#ea580c;padding:1px 7px;border-radius:20px;font-size:11px;font-weight:600">${esc(r.sessionType)}</span>` : '<span style="font-size:12px;color:var(--text-muted)">—</span>'}
+                      ${r.semester ? `<span style="font-size:11px;color:var(--text-muted)">Sem ${esc(r.semester)}</span>` : ''}
+                    </div>
+                  </div>
+                  <div style="padding:10px 14px;border-right:1px solid var(--border);border-top:1px solid var(--border);">
+                    <div style="font-size:9px;font-weight:700;color:var(--text-muted);letter-spacing:.6px;text-transform:uppercase;margin-bottom:3px">Department</div>
+                    <div style="font-size:12px;font-weight:600;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${esc(r.department||'—')}</div>
+                  </div>
+                  <div style="padding:10px 14px;border-top:1px solid var(--border);">
+                    <div style="font-size:9px;font-weight:700;color:var(--text-muted);letter-spacing:.6px;text-transform:uppercase;margin-bottom:3px">Class Key</div>
+                    <div style="font-size:11px;color:var(--text-muted);">${r.classKey ? esc(r.classKey) : [r.studentLevel&&`L${r.studentLevel}`,r.studentGroup&&`Grp ${r.studentGroup}`,r.sessionType].filter(Boolean).join(' · ')||'—'}</div>
+                  </div>
+                </div>
+
+                <!-- Device row + Remove -->
+                <div style="padding:10px 14px 14px;display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+                  <div style="font-size:11px;font-weight:600;color:var(--text-muted);white-space:nowrap;">Device:</div>
+                  <select onchange="crAssignDeviceInline(this,'${r._id}','${esc(r.name).replace(/'/g,"\\'")}')"
+                    style="flex:1;min-width:100px;font-size:12px;border:1.5px solid var(--border);border-radius:8px;padding:5px 8px;background:var(--input-bg,var(--bg));color:var(--text);">${opts}</select>
+                  <button onclick="crRemoveRep('${r._id}','${esc(r.name).replace(/'/g,"\\'")}'')"
+                    style="flex-shrink:0;background:rgba(185,28,28,.1);color:#ef4444;border:1px solid rgba(185,28,28,.2);border-radius:8px;padding:5px 12px;font-size:12px;font-weight:600;cursor:pointer;">Remove</button>
+                </div>
+              </div>`;
+            }).join('')}
           </div>`}
 
       <!-- Browse & Assign modal -->
