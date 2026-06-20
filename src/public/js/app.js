@@ -2984,7 +2984,7 @@ function navigateTo(view) {
     case 'hod-students':         renderHodStudents(); break;
     case 'hod-reports':          renderHodReports(); break;
 
-    case 'admin-devices':        renderAdminDevices(); break;
+    case 'admin-devices':        renderAdminDevices().catch(e => { if (content) content.innerHTML = `<div class="card" style="margin-top:20px;border-left:4px solid var(--danger)"><div style="font-size:14px;font-weight:700;color:var(--danger);margin-bottom:6px">Devices failed to load</div><div style="font-size:13px;color:var(--text-secondary)">${e.message||'Unknown error'}</div><button class="btn btn-secondary btn-sm" style="margin-top:12px" onclick="navigateTo('admin-devices')">Retry</button></div>`; }); break;
     case 'hod-course-approvals': renderHodCourseApprovals(); break;
     case 'hod-unlock-students':  renderHodUnlockStudents(); break;
     case 'class-rep-mgmt':       renderClassRepMgmt(); break;
