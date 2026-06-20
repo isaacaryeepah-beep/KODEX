@@ -6,6 +6,41 @@ const API = window.location.hostname === 'localhost' || window.location.hostname
   ? ''
   : window.location.origin;
 
+// Lazy script loader — returns a Promise that resolves when the script is ready.
+// Calling it twice for the same URL is a no-op (resolved immediately on 2nd call).
+const _loadedScripts = new Set();
+function _loadScript(src) {
+  if (_loadedScripts.has(src)) return Promise.resolve();
+  return new Promise((resolve, reject) => {
+    const el = document.createElement('script');
+    el.src = src;
+    el.onload  = () => { _loadedScripts.add(src); resolve(); };
+    el.onerror = () => reject(new Error('Script load failed: ' + src));
+    document.head.appendChild(el);
+  });
+}
+// Role → scripts that should be preloaded right after login so first navigation is instant.
+const _ROLE_SCRIPTS = {
+  student:    ['/js/pages-academic.js'],
+  lecturer:   ['/js/pages-academic.js', '/js/pages-device.js'],
+  admin:      ['/js/pages-academic.js', '/js/pages-device.js', '/js/pages-corporate.js'],
+  manager:    ['/js/manager-portal.js', '/js/pages-corporate.js'],
+  hod:        ['/js/manager-portal.js', '/js/pages-academic.js'],
+  employee:   ['/js/pages-corporate.js'],
+  superadmin: ['/js/manager-portal.js', '/js/pages-corporate.js'],
+};
+function _preloadForRole(role) {
+  const scripts = _ROLE_SCRIPTS[role] || [];
+  scripts.forEach(src => _loadScript(src).catch(() => {}));
+}
+// Lazy-aware _safeRender: ensures `scriptSrc` is loaded before calling fn.
+// If the script is already loaded (preloaded for the role), resolves instantly.
+function _lazyRender(content, scriptSrc, fn, label) {
+  _loadScript(scriptSrc)
+    .catch(() => {}) // if CDN/network blip, try calling fn anyway
+    .then(() => _safeRender(content, fn, label));
+}
+
 // Opens external URLs in system browser. Uses Capacitor Browser plugin when
 // running inside the native app so the in-app WebView is not navigated away.
 async function openUrl(url, forceExternal = false) {
@@ -190,28 +225,29 @@ function stopNotifPolling() {
   if (_notifPollTimer) { clearInterval(_notifPollTimer); _notifPollTimer = null; }
 }
 
-// ── SSE real-time notifications ───────────────────────────────────────────────
-let _sseSource      = null;
-let _notifUnread    = 0;
-let _notifPanelOpen = false;
-let _sseFailures    = 0;
-let _sseRetryTimer  = null;
+// ── Real-time notification SSE ────────────────────────────────────────────────
+let _sseSource       = null;
+let _notifUnread     = 0;
+let _notifPanelOpen  = false;
 
 function _updateNotifBadge(count) {
   _notifUnread = count;
   const badge = document.getElementById('notif-bell-badge');
   if (!badge) return;
   if (count > 0) {
-    badge.textContent   = count > 99 ? '99+' : count;
-    badge.style.display = 'inline-block';
+    badge.textContent    = count > 99 ? '99+' : count;
+    badge.style.display  = 'inline-block';
   } else {
-    badge.style.display = 'none';
+    badge.style.display  = 'none';
   }
 }
 
+let _sseFailures = 0;
+let _sseRetryTimer = null;
+
 function startSSE(isRetry = false) {
   if (_sseRetryTimer) { clearTimeout(_sseRetryTimer); _sseRetryTimer = null; }
-  if (!isRetry) _sseFailures = 0;
+  if (!isRetry) _sseFailures = 0; // fresh start (login/reload) resets the backoff counter
   if (_sseSource) { _sseSource.close(); _sseSource = null; }
   const token = localStorage.getItem('token');
   if (!token) return;
@@ -219,7 +255,7 @@ function startSSE(isRetry = false) {
   _sseSource = new EventSource(`/api/notifications/stream?token=${encodeURIComponent(token)}`);
 
   _sseSource.onmessage = (e) => {
-    _sseFailures = 0;
+    _sseFailures = 0; // reset backoff on successful message
     try {
       const msg = JSON.parse(e.data);
       if (msg.event === 'unread_count') {
@@ -228,7 +264,12 @@ function startSSE(isRetry = false) {
         const n = msg.notification;
         _updateNotifBadge(_notifUnread + 1);
         _notifSound.playChime('announcement');
-        if (window.toast) window.toast(n.body || '', 'info', { title: n.title, duration: 6000 });
+        if (window.toast) {
+          window.toast(n.body || '', 'info', {
+            title: n.title,
+            duration: 6000,
+          });
+        }
         if (_notifPanelOpen) _loadNotifPanel();
       }
     } catch (_) {}
@@ -237,15 +278,76 @@ function startSSE(isRetry = false) {
   _sseSource.onerror = () => {
     if (_sseSource) { _sseSource.close(); _sseSource = null; }
     _sseFailures++;
+    // Stop retrying after 5 consecutive failures (likely auth issue or server offline)
     if (_sseFailures > 5) return;
+    // Exponential backoff: 5s, 10s, 20s, 40s, 60s
     const delay = Math.min(5000 * Math.pow(2, _sseFailures - 1), 60000);
     _sseRetryTimer = setTimeout(() => { if (currentUser) startSSE(true); }, delay);
   };
 }
 
 function stopSSE() {
-  if (_sseRetryTimer) { clearTimeout(_sseRetryTimer); _sseRetryTimer = null; }
   if (_sseSource) { _sseSource.close(); _sseSource = null; }
+}
+
+async function _loadNotifPanel() {
+  const list = document.getElementById('notif-panel-list');
+  if (!list) return;
+  try {
+    const d = await api('/api/notifications?limit=15');
+    const notifs = d.notifications || [];
+    if (!notifs.length) {
+      list.innerHTML = '<p style="text-align:center;color:var(--text-muted);font-size:13px;padding:20px">All caught up!</p>';
+      return;
+    }
+    list.innerHTML = notifs.map(n => `
+      <div onclick="_notifPanelClick('${n._id}','${n.link || ''}')"
+           style="display:flex;gap:10px;padding:10px 16px;cursor:pointer;border-bottom:1px solid var(--border);align-items:flex-start;background:${n.isRead ? 'transparent' : 'var(--primary-ultra-light,#f0f4ff)'}">
+        <div style="width:8px;height:8px;border-radius:50%;background:${n.isRead ? 'transparent' : 'var(--primary)'};margin-top:5px;flex-shrink:0"></div>
+        <div style="flex:1;min-width:0">
+          <div style="font-weight:${n.isRead ? '400' : '600'};font-size:13px;line-height:1.3">${n.title}</div>
+          ${n.body ? `<div style="font-size:12px;color:var(--text-light);margin-top:2px">${n.body}</div>` : ''}
+          <div style="font-size:11px;color:var(--text-muted);margin-top:3px">${_timeAgo(new Date(n.createdAt))}</div>
+        </div>
+      </div>`).join('');
+  } catch (_) {
+    list.innerHTML = '<p style="text-align:center;color:var(--text-muted);font-size:13px;padding:20px">Could not load</p>';
+  }
+}
+
+async function _notifPanelClick(id, link) {
+  await api('/api/notifications/' + id + '/read', { method: 'PATCH' }).catch(() => {});
+  _updateNotifBadge(Math.max(0, _notifUnread - 1));
+  closeNotifPanel();
+  if (link) location.href = link;
+}
+
+function toggleNotifPanel() {
+  const panel = document.getElementById('notif-panel');
+  if (!panel) return;
+  _notifPanelOpen = !_notifPanelOpen;
+  panel.style.display = _notifPanelOpen ? 'flex' : 'none';
+  if (_notifPanelOpen) _loadNotifPanel();
+}
+
+function closeNotifPanel() {
+  const panel = document.getElementById('notif-panel');
+  if (panel) panel.style.display = 'none';
+  _notifPanelOpen = false;
+}
+
+async function markAllNotifsRead() {
+  await api('/api/notifications/read-all', { method: 'PATCH' }).catch(() => {});
+  _updateNotifBadge(0);
+  _loadNotifPanel();
+}
+
+function _timeAgo(date) {
+  const s = Math.floor((Date.now() - date) / 1000);
+  if (s < 60)   return 'just now';
+  if (s < 3600)  return Math.floor(s / 60) + 'm ago';
+  if (s < 86400) return Math.floor(s / 3600) + 'h ago';
+  return Math.floor(s / 86400) + 'd ago';
 }
 
 // ═══════════════════════════════════════════════════════
@@ -413,10 +515,12 @@ function stopSSE() {
 
     const el = document.createElement('div');
     el.className = `toast toast-${t}`;
+    const title = options.title;
     el.innerHTML = `
       <span class="toast-icon">${ICONS[t]}</span>
       <div class="toast-body">
-        <div class="toast-msg">${message}</div>
+        ${title ? `<div class="toast-title">${title}</div>` : ''}
+        ${message ? `<div class="toast-msg">${message}</div>` : ''}
       </div>
       <span class="toast-close">×</span>
       <div class="toast-progress" style="width:100%"></div>
@@ -616,6 +720,17 @@ async function attemptOfflineLogin(credentials) {
       throw new Error('Wrong email or password.');
     }
 
+    // Check if the cached JWT has expired — expired tokens cause all API calls to silently 401
+    try {
+      const jwtPayload = JSON.parse(atob(profile.token.split('.')[1]));
+      if (jwtPayload.exp && jwtPayload.exp * 1000 < Date.now()) {
+        throw new Error('Your offline session token has expired. Please connect to the internet to sign in again.');
+      }
+    } catch (e) {
+      if (e.message.includes('offline session token')) throw e;
+      // Malformed JWT — continue; the server will reject it on first API call
+    }
+
     // Return a fake login response matching the real API shape
     console.log('[OfflineLogin] Offline login successful for', profileKey);
     return {
@@ -638,6 +753,24 @@ function clearOfflineProfile(userRole, email, indexNumber, institutionCode) {
     localStorage.setItem(OFFLINE_LOGIN_KEY, JSON.stringify(profiles));
   } catch (e) {
     console.warn('[OfflineLogin] Could not clear profile:', e);
+  }
+}
+
+// ── Clear offline profile by user ID (used on logout — no need to reconstruct key) ──
+function clearOfflineProfileById(userId) {
+  try {
+    const profiles = JSON.parse(localStorage.getItem(OFFLINE_LOGIN_KEY) || '{}');
+    let changed = false;
+    for (const key of Object.keys(profiles)) {
+      const uid = profiles[key]?.user?.id || profiles[key]?.user?._id;
+      if (uid && uid.toString() === userId.toString()) {
+        delete profiles[key];
+        changed = true;
+      }
+    }
+    if (changed) localStorage.setItem(OFFLINE_LOGIN_KEY, JSON.stringify(profiles));
+  } catch (e) {
+    console.warn('[OfflineLogin] Could not clear profile by ID:', e);
   }
 }
 
@@ -840,22 +973,20 @@ async function syncOfflineQueue() {
 }
 
 function showToastNotif(msg, type) {
-  const t = document.createElement('div');
-  t.style.cssText = [
-    'position:fixed','bottom:24px','left:50%','transform:translateX(-50%)',
-    'padding:10px 20px','border-radius:8px','font-size:13px','font-weight:600',
-    'z-index:10000','box-shadow:0 4px 16px rgba(0,0,0,0.15)',
-    type === 'success' ? 'background:#dcfce7;color:#166534;border:1px solid #86efac' :
-                         'background:#fef3c7;color:#92400e;border:1px solid #fbbf24'
-  ].join(';');
-  t.textContent = msg;
-  document.body.appendChild(t);
-  setTimeout(() => t.remove(), 3500);
+  if (!msg) return;
+  // Route through the modern stacking toast system so messages never overlap
+  const t = type === 'success' ? 'success'
+          : type === 'error'   ? 'error'
+          : type === 'warn'    ? 'warning'
+          : 'info';
+  if (window.toast) { window.toast(msg, t); return; }
+  // Fallback if called before the modern system is ready
+  console.info('[toast]', type, msg);
 }
 
 // Alias used by Corporate Phase 1 functions (shifts, leave)
 function toast(msg, type) {
-  showToastNotif(msg, type === 'ok' ? 'success' : 'warn');
+  showToastNotif(msg, type === 'ok' ? 'success' : type || 'info');
 }
 
 // Listen for online/offline events
@@ -873,6 +1004,7 @@ window.addEventListener('DOMContentLoaded', () => {
 let currentUser = null;
 let currentUserTrial = null; // mirrors data.userTrial from the last /me response
 let currentView = 'dashboard';
+let _appOfflineMode = false; // true when logged in via cached credentials (no server reachable)
 
 function svgIcon(path, size = 18) {
   return `<svg width="${size}" height="${size}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${path}</svg>`;
@@ -912,19 +1044,103 @@ function assignmentsIcon() {
   return svgIcon('<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/>');
 }
 
-async function api(path, options = {}) {
+async function _doFetch(path, options, tok) {
   const headers = { 'Content-Type': 'application/json' };
-  if (token) headers['Authorization'] = `Bearer ${token}`;
-  const res = await fetch(`${API}${path}`, { ...options, headers: { ...headers, ...options.headers } });
+  if (tok) headers['Authorization'] = `Bearer ${tok}`;
+  return fetch(`${API}${path}`, { ...options, headers: { ...headers, ...options.headers } });
+}
+
+// ── Session expiry warning ────────────────────────────────────────────────────
+let _expiryTimer = null;
+let _expiryBannerVisible = false;
+
+function _scheduleExpiryWarning() {
+  if (_expiryTimer) { clearTimeout(_expiryTimer); _expiryTimer = null; }
+  if (!token) return;
+  try {
+    const payload = JSON.parse(atob(token.split('.')[1]));
+    const msLeft  = payload.exp * 1000 - Date.now();
+    const warnAt  = msLeft - 2 * 60 * 1000; // 2 min before expiry
+    if (warnAt <= 0) return;
+    _expiryTimer = setTimeout(_showExpiryBanner, warnAt);
+  } catch (_) {}
+}
+
+function _showExpiryBanner() {
+  if (_expiryBannerVisible || !currentUser) return;
+  _expiryBannerVisible = true;
+  const banner = document.createElement('div');
+  banner.id = 'session-expiry-banner';
+  banner.style.cssText = 'position:fixed;bottom:80px;left:50%;transform:translateX(-50%);z-index:9999;background:#1e293b;color:#fff;padding:12px 20px;border-radius:12px;display:flex;align-items:center;gap:12px;box-shadow:0 4px 20px rgba(0,0,0,.35);font-size:13px;max-width:360px;width:90%';
+  banner.innerHTML = `
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#fbbf24" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+    <span style="flex:1">Your session expires in 2 minutes</span>
+    <button onclick="stayLoggedIn()" style="background:#3b82f6;color:#fff;border:none;padding:6px 12px;border-radius:7px;font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap">Stay logged in</button>
+  `;
+  document.body.appendChild(banner);
+  setTimeout(_dismissExpiryBanner, 90 * 1000);
+}
+
+function _dismissExpiryBanner() {
+  const el = document.getElementById('session-expiry-banner');
+  if (el) el.remove();
+  _expiryBannerVisible = false;
+}
+
+async function stayLoggedIn() {
+  _dismissExpiryBanner();
+  const ok = await _tryRefreshToken();
+  if (ok) {
+    _scheduleExpiryWarning();
+    showToastNotif('Session extended', 'success');
+  } else {
+    showToastNotif('Could not extend session — please log in again', 'error');
+  }
+}
+
+let _refreshing = null;
+async function _tryRefreshToken() {
+  const rt = localStorage.getItem('refreshToken');
+  if (!rt) return false;
+  try {
+    const r = await fetch(`${API}/api/auth/refresh`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ refreshToken: rt }),
+    });
+    if (!r.ok) return false;
+    const d = await r.json();
+    token = d.token;
+    localStorage.setItem('token', token);
+    if (d.refreshToken) localStorage.setItem('refreshToken', d.refreshToken);
+    _scheduleExpiryWarning();
+    return true;
+  } catch { return false; }
+}
+
+async function api(path, options = {}) {
+  let res = await _doFetch(path, options, token);
+  if (res.status === 401 && path !== '/api/auth/refresh') {
+    if (!_refreshing) _refreshing = _tryRefreshToken().finally(() => { _refreshing = null; });
+    const refreshed = await _refreshing;
+    if (refreshed) {
+      res = await _doFetch(path, options, token);
+    }
+  }
   if (res.headers.get('content-type')?.includes('application/json')) {
     const data = await res.json();
     if (!res.ok) {
-      // Subscription gate — redirect lecturer to subscription page automatically
-      if (res.status === 403 && data.subscriptionRequired) {
-        showSubscriptionGate(data.message);
-        throw new Error(data.error || 'Subscription required');
+      // 402 = institution or personal subscription expired — hard full-screen block
+      if (res.status === 402 && data.subscriptionExpired) {
+        showSubscriptionBlock(data.message, data.isAdmin);
+        throw new Error(data.message || 'Subscription expired');
       }
-      const err = new Error(data.error || 'Request failed');
+      // Legacy 403 subscription gate (old middleware responses)
+      if (res.status === 403 && (data.subscriptionExpired || data.subscriptionRequired)) {
+        showSubscriptionBlock(data.message, data.isAdmin);
+        throw new Error(data.message || data.error || 'Subscription required');
+      }
+      const err = new Error(data.message || data.error || 'Request failed');
       err.status = res.status;
       err.data   = data;
       throw err;
@@ -942,9 +1158,9 @@ async function apiUpload(urlPath, formData, method = 'POST') {
   if (res.headers.get('content-type')?.includes('application/json')) {
     const data = await res.json();
     if (!res.ok) {
-      if (res.status === 403 && data.subscriptionRequired) {
-        showSubscriptionGate(data.message);
-        throw new Error(data.error || 'Subscription required');
+      if ((res.status === 402 || res.status === 403) && (data.subscriptionExpired || data.subscriptionRequired)) {
+        showSubscriptionBlock(data.message, data.isAdmin);
+        throw new Error(data.error || 'Subscription expired');
       }
       throw new Error(data.error || data.message || 'Request failed');
     }
@@ -954,45 +1170,61 @@ async function apiUpload(urlPath, formData, method = 'POST') {
   return res;
 }
 
-let _subGateFired = false;
-function showSubscriptionGate(message) {
-  // Roles that never pay — ignore subscription gates
-  const freeRoles = ['employee', 'student', 'hod'];
-  if (currentUser && freeRoles.includes(currentUser.role)) return;
+let _subBlockActive = false;
+function showSubscriptionBlock(message, isAdmin) {
+  if (_subBlockActive) return;
+  _subBlockActive = true;
 
-  // If the user already has an active personal subscription, suppress the gate.
-  // This fires when multiple parallel API calls return 403 before the middleware
-  // catches up, or during login before the server fix propagates.
-  if (currentUserTrial?.isSubscribed) return;
-  if (currentUser?.subscriptionExpiry && new Date(currentUser.subscriptionExpiry) > new Date()) return;
+  const msg = message || 'Your subscription has expired. Access is suspended.';
+  const isAdminUser = isAdmin || (currentUser && currentUser.role === 'admin');
+  const institutionName = currentUser?.company?.name || currentUser?.institutionName || '';
 
-  // Deduplicate — multiple concurrent 403s should show only one toast
-  if (_subGateFired) return;
-  _subGateFired = true;
-  setTimeout(() => { _subGateFired = false; }, 3000);
+  // Remove any existing block overlay
+  const existing = document.getElementById('_sub-block-overlay');
+  if (existing) existing.remove();
 
-  // Navigate to subscription page and show a toast if possible
-  try {
-    if (typeof navigateTo === 'function') navigateTo('subscription');
-    const msg = message || 'Your 30-day free trial has expired. Subscribe to continue using DIKLY.';
-    if (typeof toastError === 'function') {
-      toastError(msg);
-    } else {
-      // Fallback if toast not yet available
-      const content = document.getElementById('main-content');
-      if (content) {
-        content.innerHTML = `
-          <div class="card" style="max-width:480px;margin:40px auto;text-align:center;padding:32px">
-            <div style="font-size:40px;margin-bottom:16px">🔒</div>
-            <h3 style="margin-bottom:8px">Subscription Required</h3>
-            <p style="color:var(--text-muted);margin-bottom:20px">${msg}</p>
-            <button class="btn btn-primary" onclick="navigateTo('subscription')">View Subscription</button>
-          </div>`;
+  const overlay = document.createElement('div');
+  overlay.id = '_sub-block-overlay';
+  overlay.style.cssText = [
+    'position:fixed', 'inset:0', 'z-index:99999',
+    'background:rgba(15,23,42,0.97)',
+    'display:flex', 'align-items:center', 'justify-content:center',
+    'padding:24px', 'box-sizing:border-box',
+  ].join(';');
+
+  overlay.innerHTML = `
+    <div style="background:#fff;border-radius:16px;max-width:460px;width:100%;padding:40px 32px;text-align:center;box-shadow:0 25px 60px rgba(0,0,0,.5)">
+      <div style="width:72px;height:72px;border-radius:50%;background:#fef2f2;display:flex;align-items:center;justify-content:center;margin:0 auto 20px;font-size:32px">🔒</div>
+      <h2 style="margin:0 0 8px;font-size:22px;font-weight:700;color:#0f172a">Subscription Expired</h2>
+      ${institutionName ? `<p style="margin:0 0 16px;font-size:13px;font-weight:600;color:#6366f1;letter-spacing:.4px;text-transform:uppercase">${esc(institutionName)}</p>` : ''}
+      <p style="margin:0 0 28px;font-size:14px;color:#475569;line-height:1.6">${esc(msg)}</p>
+      ${isAdminUser
+        ? `<div style="display:flex;flex-direction:column;gap:10px">
+            <button onclick="(function(){var o=document.getElementById('_sub-block-overlay');if(o)o.remove();_subBlockActive=false;document.body.style.overflow='';navigateTo('subscription');})();"
+              style="background:#6366f1;color:#fff;border:none;border-radius:8px;padding:12px 24px;font-size:14px;font-weight:600;cursor:pointer;width:100%">
+              Renew Subscription
+            </button>
+            <p style="margin:0;font-size:12px;color:#94a3b8">Renewing will immediately restore access for all users.</p>
+          </div>`
+        : `<div style="background:#f8fafc;border-radius:8px;padding:14px 16px;text-align:left">
+            <p style="margin:0 0 4px;font-size:13px;font-weight:600;color:#0f172a">What to do</p>
+            <p style="margin:0;font-size:13px;color:#64748b;line-height:1.5">Contact your <strong>institution administrator</strong> and ask them to renew the DIKLY subscription. All features will be restored immediately after renewal.</p>
+          </div>`
       }
-    }
-  } catch(e) {
-    console.warn('showSubscriptionGate:', e.message);
-  }
+      <p style="margin:20px 0 0;font-size:12px;color:#94a3b8">Need help? Contact support at <strong>support@dikly.sbs</strong></p>
+    </div>
+  `;
+
+  document.body.appendChild(overlay);
+
+  // Prevent any interaction with the app behind the overlay
+  document.body.style.overflow = 'hidden';
+}
+
+// Legacy alias — kept for any old callers
+function showSubscriptionGate(message) {
+  const isAdmin = currentUser && currentUser.role === 'admin';
+  showSubscriptionBlock(message, isAdmin);
 }
 
 function timeAgo(dateStr) {
@@ -1066,9 +1298,7 @@ function selectPortal(type) {
   if (type === 'admin-corporate' || type === 'admin-academic' || type === 'manager') {
     const isAcademic = type === 'admin-academic';
     const isManager  = type === 'manager';
-    // Manager uses the same admin login form — override selectedPortalType
-    if (isManager) selectedPortalType = 'admin-corporate';
-    // Make sure portal-selector is hidden and admin-auth is visible
+    // selectedPortalType stays as 'manager' — used in handleAdminLogin to send loginRole:'manager'
     const portalSel = document.getElementById('portal-selector');
     if (portalSel) portalSel.classList.add('hidden');
     const adminAuth = document.getElementById('admin-auth');
@@ -1103,6 +1333,7 @@ function showPortalSelector() {
   document.getElementById('employee-auth').classList.add('hidden');
   document.getElementById('student-auth').classList.add('hidden');
   document.getElementById('portal-selector').classList.remove('hidden');
+  const mrf = document.getElementById('manager-register-form'); if (mrf) mrf.classList.add('hidden');
   document.querySelectorAll('.auth-container input').forEach(i => i.value = '');
   document.querySelectorAll('.error-msg').forEach(e => e.style.display = 'none');
   selectedPortalType = null;
@@ -1114,15 +1345,51 @@ function backToPortalSelector() {
 
 function showAdminRegister() {
   document.getElementById('admin-login-form').classList.add('hidden');
-  document.getElementById('admin-register-form').classList.remove('hidden');
   document.getElementById('admin-auth-error').style.display = 'none';
+  if (selectedPortalType === 'manager') {
+    document.getElementById('admin-register-form').classList.add('hidden');
+    document.getElementById('manager-register-form').classList.remove('hidden');
+  } else {
+    document.getElementById('manager-register-form').classList.add('hidden');
+    document.getElementById('admin-register-form').classList.remove('hidden');
+  }
 }
 
 function showAdminLogin() {
   document.getElementById('admin-register-form').classList.add('hidden');
+  document.getElementById('manager-register-form').classList.add('hidden');
   document.getElementById('admin-login-form').classList.remove('hidden');
   document.getElementById('admin-auth-error').style.display = 'none';
   const f = document.getElementById('admin-forgot-form'); if(f) f.classList.add('hidden');
+}
+
+async function handleManagerRegister() {
+  try {
+    const name            = document.getElementById('manager-reg-name').value.trim();
+    const email           = document.getElementById('manager-reg-email').value.trim();
+    const phone           = document.getElementById('manager-reg-phone').value.trim();
+    const password        = document.getElementById('manager-reg-password').value;
+    const institutionCode = document.getElementById('manager-reg-code').value.trim().toUpperCase();
+    if (!name || !email || !password || !institutionCode) {
+      return showAdminError('Please fill in all required fields');
+    }
+    if (password.length < 8) {
+      return showAdminError('Password must be at least 8 characters');
+    }
+    const data = await api('/api/auth/register-manager', {
+      method: 'POST',
+      body: JSON.stringify({ name, email, phone: phone || undefined, password, institutionCode }),
+    });
+    const el = document.getElementById('admin-auth-error');
+    el.textContent = data.message || 'Registration submitted! Your account is pending admin approval.';
+    el.style.background = '#f0fdf4';
+    el.style.color = '#15803d';
+    el.style.border = '1px solid #86efac';
+    el.style.display = 'block';
+    showAdminLogin();
+  } catch (e) {
+    showAdminError(e.message || 'Registration failed');
+  }
 }
 
 function showAdminForgot() {
@@ -1388,6 +1655,7 @@ function friendlyError(msg) {
   if (m.includes('too many requests'))            return 'Too many requests. Please slow down and try again.';
   if (m.includes('no offline profile'))           return 'You\'re offline. Please connect to the internet to login for the first time.';
   if (m.includes('offline session expired'))      return 'Offline session expired. Please connect to login again.';
+  if (m.includes('offline session token has expired')) return 'Your offline session has expired. Please connect to the internet to sign in again.';
   if (m.includes('incorrect password'))           return 'Wrong email or password.';
   if (m.includes('network') || m.includes('fetch')) return 'Network error. Please check your connection.';
   return msg; // fallback: show as-is
@@ -1402,9 +1670,9 @@ async function handleAdminLogin() {
     if (!password) return showAdminError('Please enter your password.');
     if (btn) { btn.textContent = 'Signing in…'; btn.disabled = true; }
 
-    const portalMode = selectedPortalType === 'admin-academic' ? 'academic' : 'corporate';
-    // loginRole 'admin' allows both admin and manager roles (PORTAL_ALLOWED_ROLES.admin = ['admin','manager'])
-    const credentials = { email, password, loginRole: 'admin', portalMode, deviceId: getDeviceFingerprint() };
+    const portalMode  = selectedPortalType === 'admin-academic' ? 'academic' : 'corporate';
+    const loginRole   = selectedPortalType === 'manager' ? 'manager' : 'admin';
+    const credentials = { email, password, loginRole, portalMode, deviceId: getDeviceFingerprint() };
 
     let data;
     if (!(await isOnlineAsync())) {
@@ -1418,7 +1686,9 @@ async function handleAdminLogin() {
 
     token = data.token;
     localStorage.setItem('token', token);
+    if (data.refreshToken) localStorage.setItem('refreshToken', data.refreshToken);
     currentUser = data.user;
+    if (window.DiklyIDB) window.DiklyIDB.saveUserSession(data.user, data.token).catch(() => {});
     showDashboard(data);
     requestPushPermission().catch(() => {});
   } catch (e) {
@@ -1459,6 +1729,7 @@ async function handleAdminRegister() {
     const data = await api('/api/auth/register', { method: 'POST', body: JSON.stringify(body) });
     token = data.token;
     localStorage.setItem('token', token);
+    if (data.refreshToken) localStorage.setItem('refreshToken', data.refreshToken);
     currentUser = data.user;
     showDashboard(data);
   } catch (e) {
@@ -1470,12 +1741,11 @@ async function handleLecturerLogin() {
   const btn = document.querySelector('#lecturer-login-form button[type="submit"]');
   try {
     const email = document.getElementById('lecturer-login-email').value.trim();
-    const institutionCode = (document.getElementById('lecturer-login-code')?.value || '').trim().toUpperCase();
     const password = document.getElementById('lecturer-login-password').value;
     if (!email) return showLecturerError('Please enter your email');
     if (!password) return showLecturerError('Please enter your password');
     if (btn) { btn.textContent = 'Signing in…'; btn.disabled = true; }
-    const credentials = { email, password, loginRole: 'lecturer', portalMode: 'academic', deviceId: getDeviceFingerprint(), ...(institutionCode ? { institutionCode } : {}) };
+    const credentials = { email, password, loginRole: 'lecturer', portalMode: 'academic', deviceId: getDeviceFingerprint() };
 
     let data;
     if (!(await isOnlineAsync())) {
@@ -1495,6 +1765,7 @@ async function handleLecturerLogin() {
 
     token = data.token;
     localStorage.setItem('token', token);
+    if (data.refreshToken) localStorage.setItem('refreshToken', data.refreshToken);
     currentUser = data.user;
     showDashboard(data);
   } catch (e) {
@@ -1718,13 +1989,12 @@ async function handleHodLogin() {
   const btn = document.querySelector('#hod-login-form button[type="submit"]');
   try {
     const email    = document.getElementById('hod-login-email').value.trim();
-    const institutionCode = (document.getElementById('hod-login-code')?.value || '').trim().toUpperCase();
     const password = document.getElementById('hod-login-password').value;
     if (!email)    return showHodError('Please enter your email.');
     if (!password) return showHodError('Please enter your password.');
     if (btn) { btn.textContent = 'Signing in…'; btn.disabled = true; }
 
-    const credentials = { email, password, loginRole: 'hod', portalMode: 'academic', deviceId: getDeviceFingerprint(), ...(institutionCode ? { institutionCode } : {}) };
+    const credentials = { email, password, loginRole: 'hod', portalMode: 'academic', deviceId: getDeviceFingerprint() };
     let data;
     if (!(await isOnlineAsync())) {
       showOfflineLoginNotice('hod-login-form');
@@ -1736,6 +2006,7 @@ async function handleHodLogin() {
     }
     token = data.token;
     localStorage.setItem('token', token);
+    if (data.refreshToken) localStorage.setItem('refreshToken', data.refreshToken);
     currentUser = data.user;
     showDashboard(data);
   } catch (e) {
@@ -1815,6 +2086,7 @@ async function handleEmployeeLogin() {
 
     token = data.token;
     localStorage.setItem('token', token);
+    if (data.refreshToken) localStorage.setItem('refreshToken', data.refreshToken);
     currentUser = data.user;
     showDashboard(data);
   } catch (e) {
@@ -1887,6 +2159,7 @@ async function handleStudentLogin() {
 
     token = data.token;
     localStorage.setItem('token', token);
+    if (data.refreshToken) localStorage.setItem('refreshToken', data.refreshToken);
     currentUser = data.user;
     showDashboard(data);
   } catch (e) {
@@ -1921,8 +2194,6 @@ async function handleStudentRegister() {
     const studentGroup = document.getElementById('student-reg-group')?.value?.trim().toUpperCase();
     const sessionType = document.getElementById('student-reg-session-type')?.value?.trim();
     const semester = document.getElementById('student-reg-semester')?.value?.trim();
-    const email = document.getElementById('student-reg-email')?.value?.trim().toLowerCase();
-    const phone = document.getElementById('student-reg-phone')?.value?.trim();
     if (!name) return showStudentError('Please enter your full name.');
     if (!institutionCode) return showStudentError('Please enter your Institution Code.');
     if (!indexNumber) return showStudentError('Student ID / Index Number is required.');
@@ -1936,12 +2207,11 @@ async function handleStudentRegister() {
     if (!studentGroup) return showStudentError('Please enter your group (e.g. A, B, C).');
     if (!sessionType) return showStudentError('Please select your session type.');
     if (!semester) return showStudentError('Please select your semester.');
-    if (!email || !/^\S+@\S+\.\S+$/.test(email)) return showStudentError('Please enter a valid email address.');
-    if (!phone) return showStudentError('Phone number is required so lecturers can reach you by SMS.');
-    const data = await api('/api/auth/register-student', { method: 'POST', body: JSON.stringify({ name, indexNumber, email, phone, password, institutionCode, department, programme, studentLevel, studentGroup, sessionType, semester }) });
+    const data = await api('/api/auth/register-student', { method: 'POST', body: JSON.stringify({ name, indexNumber, password, institutionCode, department, programme, studentLevel, studentGroup, sessionType, semester }) });
     if (data.token) {
       token = data.token;
       localStorage.setItem('token', token);
+      if (data.refreshToken) localStorage.setItem('refreshToken', data.refreshToken);
       currentUser = data.user;
       showDashboard(data);
       if (data.departmentNote) toastWarning(data.departmentNote);
@@ -2013,17 +2283,25 @@ async function handleStudentForgotPassword() {
 }
 
 async function handleLogout() {
-  stopSSE();
   stopNotifPolling();
+  stopSSE();
   try {
     if (isOnline()) await api('/api/auth/logout', { method: 'POST' });
   } catch (e) {}
+  if (window.DiklyIDB) window.DiklyIDB.clearAll().catch(() => {});
   resetBranding();
+  // Clear this user's offline profile so their credentials don't persist on shared devices
+  const _logoutUserId = currentUser?._id || currentUser?.id;
+  if (_logoutUserId) clearOfflineProfileById(_logoutUserId);
+  _appOfflineMode = false;
   token = null;
   currentUser = null;
   currentUserTrial = null;
   window.currentUser = null;
   localStorage.removeItem('token');
+  localStorage.removeItem('refreshToken');
+  if (_expiryTimer) { clearTimeout(_expiryTimer); _expiryTimer = null; }
+  _dismissExpiryBanner();
   document.getElementById('main-content').innerHTML = '';
   document.getElementById('sidebar-nav').innerHTML = '';
   document.getElementById('user-name').textContent = '';
@@ -2260,17 +2538,10 @@ function showDashboard(data) {
     showForceChangePassword();
     return;
   }
-  // Hard-hide subscription banners for students — they never need a subscription
-  if (currentUser?.role === 'student') {
-    const tb  = document.getElementById('trial-banner');
-    const teb = document.getElementById('trial-expired-banner');
-    if (tb)  { tb.style.display  = 'none'; tb.innerHTML  = ''; }
-    if (teb) { teb.style.display = 'none'; teb.innerHTML = ''; }
-    currentUserTrial = null;     // never cache subscription state for students
-  } else if (data?.userTrial) {
-    // Cache userTrial so showSubscriptionGate can check active subscription status
+  if (data?.userTrial) {
     currentUserTrial = data.userTrial;
   }
+  _scheduleExpiryWarning();
   try {
     window.currentUser = currentUser; // expose for faq-assistant.js (let ≠ window prop)
     document.getElementById('auth-page').style.display = 'none';
@@ -2285,20 +2556,6 @@ function showDashboard(data) {
     const roleEl = document.getElementById('user-role');
     roleEl.textContent = currentUser.role || '';
     roleEl.className = `role-badge role-${currentUser.role || 'user'}`;
-    // Class rep badge
-    const repBadgeId = 'sidebar-class-rep-badge';
-    let repBadge = document.getElementById(repBadgeId);
-    if (currentUser.isClassRep) {
-      if (!repBadge) {
-        repBadge = document.createElement('span');
-        repBadge.id = repBadgeId;
-        repBadge.style.cssText = 'display:inline-block;background:#7c3aed;color:#fff;font-size:9px;font-weight:700;padding:2px 6px;border-radius:20px;letter-spacing:.4px;text-transform:uppercase;margin-left:4px;vertical-align:middle';
-        repBadge.textContent = 'Class Rep';
-        roleEl.parentNode.insertBefore(repBadge, roleEl.nextSibling);
-      }
-    } else if (repBadge) {
-      repBadge.remove();
-    }
     // Mark role on body so CSS can scope role-specific overrides (e.g. hide banners for student)
     document.body.setAttribute('data-role', currentUser.role || '');
 
@@ -2326,8 +2583,8 @@ function showDashboard(data) {
     // ── Per-user subscription banner (lecturer / manager / admin) ──────────
     // userTrial comes from authController and is always based on the individual
     // user's trialEndDate + subscriptionExpiry — NOT the company trial.
-    const PAID_FE = ['lecturer', 'manager', 'admin'];
-    const isSubRole = (role === 'employee' || role === 'student' || role === 'hod');
+    const PAID_FE = ['lecturer', 'manager', 'admin', 'student', 'employee'];
+    const isSubRole = (role === 'hod'); // only HODs are fully free now
     const userTrial = data.userTrial || null;
 
     const _bannerEl   = document.getElementById('trial-banner');
@@ -2335,16 +2592,24 @@ function showDashboard(data) {
     const _hideBoth   = () => { _bannerEl.style.display = 'none'; _expiredEl.style.display = 'none'; };
     const _dayLabel   = n => `${n} day${n !== 1 ? 's' : ''}`;
 
-    if (isSubRole) {
+    // HODs are fully free — no banners needed
+    if (role === 'hod') {
       _hideBoth();
-    } else if (PAID_FE.includes(role) && userTrial) {
+    } else if ((PAID_FE.includes(role) || role === 'student' || role === 'employee') && userTrial) {
       const daysLeft = userTrial.daysLeft || 0;
       const status   = userTrial.status;
 
+      const _isStudent  = role === 'student';
+      const _isEmployee = role === 'employee';
+      const _trialLabel = _isStudent ? `${daysLeft <= 3 ? 'Trial Ending' : 'Free Trial'} (45-day)`
+                        : _isEmployee ? 'Company Trial'
+                        : daysLeft <= 3 ? 'Trial Ending Soon' : '30-Day Free Trial';
+      const _planTitle  = _isStudent ? 'Semester Plan Active'
+                        : _isEmployee ? 'Monthly Plan Active'
+                        : (currentUser?.company?.mode === 'corporate' ? 'Monthly Plan Active' : 'Semester Plan Active');
+
       if (status === 'active') {
-        const _subMode   = currentUser?.company?.mode || 'academic';
-        const _planTitle = _subMode === 'corporate' ? 'Monthly Plan Active' : 'Semester Plan Active';
-        const _planDays  = _subMode === 'corporate' ? 30 : 112;
+        const _planDays    = (_isStudent || (!_isEmployee && currentUser?.company?.mode !== 'corporate')) ? 112 : 30;
         const _displayDays = Math.min(daysLeft, _planDays);
         _expiredEl.style.display = 'none';
         _bannerEl.className = 'trial-banner sub--active';
@@ -2370,14 +2635,14 @@ function showDashboard(data) {
           <div class="sub-banner-left">
             <div class="sub-banner-icon sub-banner-icon--${urgent ? 'urgent' : 'trial'}">${urgent ? '⚠' : '⏳'}</div>
             <div class="sub-banner-text">
-              <span class="sub-banner-title">${urgent ? 'Trial Ending Soon' : '30-Day Free Trial'}</span>
+              <span class="sub-banner-title">${_trialLabel}</span>
               <span class="sub-banner-sep">·</span>
               <span class="sub-banner-detail">${_dayLabel(daysLeft)} remaining</span>
             </div>
           </div>
           <div class="sub-banner-right">
             <div class="sub-banner-pill">${urgent ? 'Expiring' : 'Trial'}</div>
-            <button class="sub-banner-cta" onclick="navigateTo('subscription')">${urgent ? 'Upgrade Now' : 'Upgrade'}</button>
+            ${!_isEmployee ? `<button class="sub-banner-cta" onclick="navigateTo('subscription')">${urgent ? 'Subscribe Now' : 'Subscribe'}</button>` : ''}
           </div>`;
         _bannerEl.style.display = 'flex';
 
@@ -2388,23 +2653,23 @@ function showDashboard(data) {
           <div class="sub-banner-left">
             <div class="sub-banner-icon sub-banner-icon--expired">✕</div>
             <div class="sub-banner-text">
-              <span class="sub-banner-title">Trial Expired</span>
+              <span class="sub-banner-title">${_isStudent ? 'Trial Expired' : _isEmployee ? 'Company Trial Ended' : 'Trial Expired'}</span>
               <span class="sub-banner-sep">·</span>
               <span class="sub-banner-detail" id="sub-expired-label">Subscribe to continue via Paystack</span>
             </div>
           </div>
           <div class="sub-banner-right">
-            <button class="sub-banner-cta" onclick="paySubscription()">Subscribe Now</button>
+            <button class="sub-banner-cta" onclick="navigateTo('subscription')">Subscribe Now</button>
           </div>`;
         _expiredEl.style.display = 'flex';
         // Populate live price asynchronously
         api('/api/payments/plans').then(pd => {
           const el = document.getElementById('sub-expired-label');
           if (!el) return;
-          const lp = pd?.plans?.[0];
+          const lp  = pd?.plans?.[0];
           const cur = lp?.currency === 'GHS' ? '₵' : (lp?.currency || '₵');
-          const amt = lp?.price ?? ((currentUser?.company?.mode === 'corporate') ? 150 : 300);
-          const per = currentUser?.company?.mode === 'corporate' ? '/month' : '/semester';
+          const amt = lp?.price ?? (_isStudent ? 20 : _isEmployee ? 15 : 300);
+          const per = lp?.id?.includes('month') ? '/month' : '/semester';
           el.textContent = `Subscribe to continue — ${cur}${amt}${per} via Paystack`;
         }).catch(() => {});
       }
@@ -2433,12 +2698,10 @@ function showDashboard(data) {
     loadAnnBadge();
     startNotifPolling();
     startSSE();
-    if (currentUser?.role === 'lecturer') _startLecturerQuizBadge();
-    if (currentUser?.role === 'hod') _startHodQuizBadge();
     _notifSound.updateBtn();
     applyBranding(); // async — applies colors/logo in background
     // Show offline banner immediately when logged in via cached credentials
-    if (data?.offlineMode) showOfflineBanner(false);
+    if (data?.offlineMode) { _appOfflineMode = true; showOfflineBanner(false); }
     // If student arrived via QR scan link, go straight to mark-attendance to auto-submit
     if (new URLSearchParams(window.location.search).get('qr_token')) {
       navigateTo('mark-attendance');
@@ -2471,28 +2734,30 @@ function buildSidebar() {
       links.push({ id: 'approvals', label: 'Approvals', icon: approvalsIcon() });
       links.push({ id: 'search', label: 'Search', icon: svgIcon('<circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>') });
       links.push({ id: 'users', label: 'Users', icon: usersIcon() });
-      links.push({ id: 'sessions', label: 'Sessions', icon: sessionsIcon() });
       if (currentUser.company?.mode === 'academic') {
+        links.push({ id: 'sessions', label: 'Sessions', icon: sessionsIcon() });
         links.push({ sep: true, label: 'ACADEMIC' });
-        links.push({ id: 'live-attendance', label: 'Attendance', icon: attendanceIcon() });
-        links.push({ id: 'timetable', label: 'Schedule', icon: svgIcon('<rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/>') });
         links.push({ id: 'courses', label: 'Courses', icon: coursesIcon() });
         links.push({ id: 'hod-course-approvals', label: 'Course Approvals', icon: svgIcon('<path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/>') });
-        links.push({ id: 'quizzes', label: 'Quizzes', icon: quizzesIcon() });
-        links.push({ id: 'assignments', label: 'Assignments', icon: assignmentsIcon() });
+        links.push({ id: 'quizzes', label: 'Proctored/Snap Quiz', icon: quizzesIcon() });
         links.push({ id: 'gradebook', label: 'Grade Book', icon: svgIcon('<path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/>') });
         links.push({ id: 'announcements', label: 'Announcements', icon: svgIcon('<path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/>') });
         links.push({ id: 'programmes', label: 'Programmes', icon: svgIcon('<path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/>') });
-        links.push({ id: 'class-reps', label: 'Class Reps', icon: svgIcon('<path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><polyline points="23 21 23 19 19 19"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/>') });
-        links.push({ id: 'admin-devices', label: 'Devices', icon: svgIcon('<rect x="5" y="2" width="14" height="20" rx="2" ry="2"/><line x1="12" y1="18" x2="12.01" y2="18"/>') });
+        links.push({ id: 'hod-unlock-students', label: 'Unlock Students', icon: svgIcon('<rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/>') });
+        links.push({ id: 'class-rep-mgmt',     label: 'Class Reps',      icon: svgIcon('<path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/><polyline points="9 11 12 14 22 4"/>') });
+        links.push({ id: 'admin-devices',      label: 'Devices',         icon: svgIcon('<rect x="5" y="2" width="14" height="20" rx="2" ry="2"/><line x1="12" y1="18" x2="12.01" y2="18"/>') });
       }
       if (currentUser.company?.mode === 'corporate') {
         links.push({ sep: true, label: 'WORKFORCE' });
-        links.push({ id: 'corp-attendance',label: 'Attendance', icon: svgIcon('<path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/><polyline points="9 11 12 14 22 4"/>') });
+        links.push({ id: 'sign-in-out',    label: 'Sign In / Out',   icon: attendanceIcon() });
+        links.push({ id: 'corp-attendance',label: 'Team Attendance', icon: svgIcon('<path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/><polyline points="9 11 12 14 22 4"/>') });
+        links.push({ id: 'corp-clock-settings', label: 'Clock Settings', icon: svgIcon('<circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/><circle cx="12" cy="12" r="2"/>') });
         links.push({ id: 'shifts',         label: 'Shifts',          icon: svgIcon('<rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/>') });
         links.push({ id: 'leave-requests', label: 'Leave Requests',  icon: svgIcon('<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/>') });
         links.push({ id: 'timesheets',     label: 'Timesheets',      icon: svgIcon('<rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/><line x1="8" y1="14" x2="16" y2="14"/>') });
         links.push({ id: 'expenses-mgr',   label: 'Expenses',        icon: svgIcon('<line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/>') });
+        links.push({ id: 'performance',    label: 'Performance',     icon: svgIcon('<line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/>') });
+        links.push({ id: 'branches',       label: 'Branches',        icon: svgIcon('<line x1="6" y1="3" x2="6" y2="15"/><circle cx="18" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><path d="M18 9a9 9 0 0 1-9 9"/>') });
         links.push({ id: 'announcements',  label: 'Announcements',   icon: svgIcon('<path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/>') });
         links.push({ id: 'audit-logs',     label: 'Audit Logs',      icon: svgIcon('<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><line x1="10" y1="9" x2="10" y2="9"/>') });
       }
@@ -2504,47 +2769,50 @@ function buildSidebar() {
       links.push({ sep: true, label: 'SUPPORT' });
       links.push({ id: 'faq-center', label: 'FAQ Center', icon: svgIcon('<circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/>') });
       links.push({ id: 'subscription', label: 'Subscription', icon: subscriptionIcon() });
-      links.push({ id: 'contact', label: 'Contact Us', icon: svgIcon('<path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07A19.5 19.5 0 0 1 4.15 13a19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 3.06 2h3a2 2 0 0 1 2 1.72c.127.96.361 1.903.7 2.81a2 2 0 0 1-.45 2.11L7.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0 1 21 17z"/>') });
-      links.push({ id: 'about', label: 'About', icon: svgIcon('<circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>') });
       break;
     case 'manager':
-      links.push({ id: 'dashboard', label: 'Dashboard', icon: dashboardIcon() });
       links.push({ sep: true, label: 'MANAGE' });
       links.push({ id: 'approvals', label: 'Approvals', icon: approvalsIcon() });
-      links.push({ id: 'users', label: 'Users', icon: usersIcon() });
+      links.push({ id: 'users', label: 'Team', icon: usersIcon() });
       if (currentUser.company?.mode === 'corporate') {
         links.push({ sep: true, label: 'WORKFORCE' });
-        links.push({ id: 'sign-in-out', label: 'Sign In / Out', icon: attendanceIcon() });
-        links.push({ id: 'corp-attendance', label: 'Team Attendance', icon: svgIcon('<path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/><polyline points="9 11 12 14 22 4"/>') });
-        links.push({ id: 'shifts', label: 'Shifts', icon: svgIcon('<rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/>') });
-        links.push({ id: 'timesheets', label: 'Timesheets', icon: svgIcon('<rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/><line x1="8" y1="14" x2="16" y2="14"/>') });
-        links.push({ id: 'leave-requests', label: 'Leave Requests', icon: svgIcon('<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/>') });
-        links.push({ id: 'expenses-mgr', label: 'Expenses', icon: svgIcon('<line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/>') });
-        links.push({ id: 'announcements', label: 'Announcements', icon: svgIcon('<path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/>') });
+        links.push({ id: 'sign-in-out',    label: 'Sign In / Out',   icon: attendanceIcon() });
+        links.push({ id: 'corp-attendance',label: 'Team Attendance', icon: svgIcon('<path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/><polyline points="9 11 12 14 22 4"/>') });
+        links.push({ id: 'shifts',         label: 'Shifts',          icon: svgIcon('<rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/>') });
+        links.push({ id: 'leave-requests', label: 'Leave',           icon: svgIcon('<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/>') });
+        links.push({ id: 'timesheets',     label: 'Timesheets',      icon: svgIcon('<rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/><line x1="8" y1="14" x2="16" y2="14"/>') });
+        links.push({ id: 'expenses-mgr',   label: 'Expenses',        icon: svgIcon('<line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/>') });
+        links.push({ id: 'performance',    label: 'Performance',     icon: svgIcon('<line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/>') });
+        links.push({ id: 'branches',       label: 'Branches',        icon: svgIcon('<line x1="6" y1="3" x2="6" y2="15"/><circle cx="18" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><path d="M18 9a9 9 0 0 1-9 9"/>') });
+        links.push({ sep: true, label: 'COMMUNICATE' });
+        links.push({ id: 'announcements',  label: 'Announcements',   icon: svgIcon('<path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/>') });
+        links.push({ id: 'messages',       label: 'Messages',        icon: svgIcon('<path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>') });
+        links.push({ id: 'meetings',       label: 'Meetings',        icon: meetingsIcon() });
+        links.push({ sep: true, label: 'INSIGHTS' });
+        links.push({ id: 'reports',        label: 'Reports',         icon: reportsIcon() });
+        links.push({ id: 'audit-logs',     label: 'Audit Logs',      icon: svgIcon('<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><line x1="10" y1="9" x2="10" y2="9"/>') });
+      } else {
+        links.push({ sep: true, label: 'COMMUNICATE' });
+        links.push({ id: 'messages', label: 'Messages', icon: svgIcon('<path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>') });
+        links.push({ id: 'meetings', label: 'Meetings', icon: meetingsIcon() });
+        links.push({ sep: true, label: 'INSIGHTS' });
+        links.push({ id: 'reports', label: 'Reports', icon: reportsIcon() });
       }
-      links.push({ sep: true, label: 'COMMUNICATE' });
-      links.push({ id: 'messages', label: 'Messages', icon: svgIcon('<path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>') });
-      links.push({ id: 'meetings', label: 'Meetings', icon: meetingsIcon() });
-      links.push({ sep: true, label: 'INSIGHTS' });
-      links.push({ id: 'reports', label: 'Reports', icon: reportsIcon() });
       links.push({ sep: true, label: 'SUPPORT' });
       links.push({ id: 'faq-center', label: 'FAQ Center', icon: svgIcon('<circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/>') });
       links.push({ id: 'subscription', label: 'Subscription', icon: subscriptionIcon() });
-      links.push({ id: 'contact', label: 'Contact Us', icon: svgIcon('<path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07A19.5 19.5 0 0 1 4.15 13a19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 3.06 2h3a2 2 0 0 1 2 1.72c.127.96.361 1.903.7 2.81a2 2 0 0 1-.45 2.11L7.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0 1 21 17z"/>') });
-      links.push({ id: 'about', label: 'About', icon: svgIcon('<circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>') });
       break;
     case 'hod':
       links.push({ sep: true, label: 'DEPARTMENT' });
       links.push({ id: 'hod-overview',     label: 'Overview',       icon: dashboardIcon() });
       links.push({ id: 'hod-sessions',     label: 'Sessions',       icon: sessionsIcon() });
-      links.push({ id: 'live-attendance',  label: 'Attendance',     icon: attendanceIcon() });
-      links.push({ id: 'timetable',        label: 'Schedule',       icon: svgIcon('<rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/>') });
       links.push({ id: 'hod-courses',      label: 'Courses',        icon: coursesIcon() });
+      links.push({ id: 'timetable',        label: 'Timetable',      icon: svgIcon('<rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/>') });
       links.push({ id: 'hod-lecturers',    label: 'Lecturers',      icon: svgIcon('<path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/>') });
       links.push({ id: 'hod-students',     label: 'Students',       icon: usersIcon() });
       links.push({ sep: true, label: 'INSIGHTS' });
       links.push({ id: 'hod-performance',  label: 'Performance',    icon: svgIcon('<line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/>') });
-      links.push({ id: 'hod-quiz-monitor', label: 'Quiz Monitor',   icon: svgIcon('<polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/>') });
+      links.push({ id: 'quiz-monitor',     label: 'Quiz Monitor 🔴', icon: svgIcon('<path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7z"/><circle cx="12" cy="12" r="3"/>') });
       links.push({ id: 'hod-alerts',       label: 'Smart Alerts',   icon: svgIcon('<path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/>') });
       links.push({ id: 'hod-reports',      label: 'Reports',        icon: reportsIcon() });
       links.push({ sep: true, label: 'COMMUNICATE' });
@@ -2556,31 +2824,28 @@ function buildSidebar() {
       links.push({ id: 'approvals',           label: 'Approvals',        icon: approvalsIcon() });
       links.push({ id: 'hod-course-approvals',label: 'Course Approvals', icon: svgIcon('<path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/>') });
       links.push({ id: 'hod-unlock-students', label: 'Locked Students',  icon: svgIcon('<rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/>') });
-      links.push({ id: 'class-reps',          label: 'Class Reps',       icon: svgIcon('<path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/>') });
       links.push({ id: 'admin-devices',       label: 'Devices',          icon: svgIcon('<rect x="5" y="2" width="14" height="20" rx="2" ry="2"/><line x1="12" y1="18" x2="12.01" y2="18"/>') });
+      links.push({ id: 'class-rep-mgmt',     label: 'Class Reps',       icon: svgIcon('<path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/><polyline points="9 11 12 14 22 4"/>') });
       links.push({ sep: true, label: 'SUPPORT' });
       links.push({ id: 'faq-center',       label: 'FAQ Center',     icon: svgIcon('<circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/>') });
-      links.push({ id: 'contact', label: 'Contact Us', icon: svgIcon('<path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07A19.5 19.5 0 0 1 4.15 13a19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 3.06 2h3a2 2 0 0 1 2 1.72c.127.96.361 1.903.7 2.81a2 2 0 0 1-.45 2.11L7.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0 1 21 17z"/>') });
-      links.push({ id: 'about', label: 'About', icon: svgIcon('<circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>') });
+      links.push({ id: 'subscription',     label: 'Subscription',   icon: subscriptionIcon() });
       break;
     case 'lecturer':
       links.push({ id: 'sessions', label: 'Sessions', icon: sessionsIcon() });
-      links.push({ id: 'live-attendance', label: 'Attendance', icon: attendanceIcon() });
       links.push({ id: 'attendance-device', label: 'Attendance Device', icon: svgIcon('<rect x="5" y="2" width="14" height="20" rx="2" ry="2"/><line x1="12" y1="18" x2="12.01" y2="18"/>') });
       links.push({ sep: true, label: 'CONTENT' });
       links.push({ id: 'search', label: 'Search', icon: svgIcon('<circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>') });
       links.push({ id: 'courses', label: 'Courses', icon: coursesIcon() });
-      links.push({ id: 'lec-course-videos', label: 'Course Videos', icon: svgIcon('<polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2" ry="2"/>') });
-      links.push({ id: 'quizzes', label: 'Quizzes', icon: quizzesIcon() });
-      links.push({ id: 'snap-quiz', label: 'Quiz Monitor', icon: svgIcon('<polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/>') });
-      links.push({ id: 'timetable', label: 'Schedule', icon: svgIcon('<rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/>') });
+      links.push({ id: 'course-videos', label: 'Course Videos', icon: svgIcon('<polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2" ry="2"/>') });
+      links.push({ id: 'quizzes', label: 'Proctored/Snap Quiz', icon: quizzesIcon() });
+      links.push({ id: 'quiz-monitor', label: 'Quiz Monitor 🔴', icon: svgIcon('<path d="M1 6s4-2 11-2 11 2 11 2v3s-4 2-11 2S1 9 1 9V6z"/><path d="M1 6v12s4 2 11 2 11-2 11-2V6"/><line x1="12" y1="12" x2="12" y2="20"/>') });
+      links.push({ id: 'timetable', label: 'Timetable', icon: svgIcon('<rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/>') });
       links.push({ id: 'question-bank', label: 'Question Bank', icon: svgIcon('<ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"/><path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"/>') });
-      links.push({ id: 'assignments', label: 'Assignments / Quiz', icon: assignmentsIcon() });
+      links.push({ id: 'assignments', label: 'Assignment', icon: assignmentsIcon() });
       links.push({ id: 'gradebook', label: 'Grade Book', icon: svgIcon('<path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/>') });
       links.push({ sep: true, label: 'COMMUNICATE' });
       links.push({ id: 'messages', label: 'Messages', icon: svgIcon('<path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>') });
       links.push({ id: 'meetings', label: 'Meetings', icon: meetingsIcon() });
-      links.push({ id: 'lec-notifications', label: 'Notifications', icon: svgIcon('<path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/>') });
       links.push({ sep: true, label: 'INSIGHTS' });
       links.push({ id: 'lecturer-performance', label: 'Performance', icon: svgIcon('<line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/>') });
       links.push({ id: 'reports', label: 'Reports', icon: reportsIcon() });
@@ -2588,8 +2853,6 @@ function buildSidebar() {
       links.push({ sep: true, label: 'SUPPORT' });
       links.push({ id: 'faq-center', label: 'FAQ Center', icon: svgIcon('<circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/>') });
       links.push({ id: 'subscription', label: 'Subscription', icon: subscriptionIcon() });
-      links.push({ id: 'contact', label: 'Contact Us', icon: svgIcon('<path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07A19.5 19.5 0 0 1 4.15 13a19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 3.06 2h3a2 2 0 0 1 2 1.72c.127.96.361 1.903.7 2.81a2 2 0 0 1-.45 2.11L7.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0 1 21 17z"/>') });
-      links.push({ id: 'about', label: 'About', icon: svgIcon('<circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>') });
       break;
     case 'employee':
       links.push({ id: 'emp-home',      label: 'Home',            icon: svgIcon('<path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/>') });
@@ -2598,7 +2861,6 @@ function buildSidebar() {
       links.push({ id: 'my-attendance', label: 'My Attendance',   icon: sessionsIcon() });
       links.push({ id: 'my-shift',      label: 'My Shift',        icon: svgIcon('<rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/>') });
       links.push({ id: 'my-leaves',     label: 'Leave',           icon: svgIcon('<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/>') });
-      links.push({ id: 'my-expenses',   label: 'Expenses',        icon: svgIcon('<line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/>') });
       links.push({ sep: true, label: 'COMMUNICATE' });
       links.push({ id: 'emp-notifications', label: 'Notifications', icon: svgIcon('<path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/>') });
       links.push({ id: 'announcements', label: 'Announcements', icon: svgIcon('<path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/>') });
@@ -2609,49 +2871,50 @@ function buildSidebar() {
       links.push({ id: 'reports',       label: 'Reports',         icon: reportsIcon() });
       links.push({ sep: true, label: 'SUPPORT' });
       links.push({ id: 'emp-assistant', label: 'Assistant', icon: svgIcon('<path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/><circle cx="12" cy="10" r="1"/><circle cx="8" cy="10" r="1"/><circle cx="16" cy="10" r="1"/>') });
-      links.push({ id: 'subscription',  label: 'Subscription',    icon: subscriptionIcon() });
       links.push({ id: 'support',       label: 'Support',         icon: svgIcon('<circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/>') });
       links.push({ id: 'faq-center',    label: 'FAQ Center',      icon: svgIcon('<path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/><line x1="9" y1="10" x2="15" y2="10"/><line x1="12" y1="7" x2="12" y2="13"/>') });
-      links.push({ id: 'contact',       label: 'Contact Us',      icon: svgIcon('<path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07A19.5 19.5 0 0 1 4.69 12a19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 3.6 1.28h3a2 2 0 0 1 2 1.72c.127.96.361 1.903.7 2.81a2 2 0 0 1-.45 2.11L7.91 8.7a16 16 0 0 0 6.29 6.29l1.41-1.41a2 2 0 0 1 2.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0 1 22 16.92z"/>') });
-      links.push({ id: 'about',         label: 'About',           icon: svgIcon('<circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>') });
+      links.push({ id: 'subscription',  label: 'Subscription',    icon: subscriptionIcon() });
       break;
     case 'student':
       links.push({ sep: true, label: 'ATTENDANCE' });
+      links.push({ id: 'mark-attendance', label: 'Mark Attendance', icon: attendanceIcon() });
       links.push({ id: 'my-attendance', label: 'My Attendance', icon: sessionsIcon() });
-      if (currentUser.isClassRep) {
-        links.push({ sep: true, label: 'CLASS REP' });
-        links.push({ id: 'rep-device', label: 'My Device', icon: svgIcon('<rect x="5" y="2" width="14" height="20" rx="2" ry="2"/><line x1="12" y1="18" x2="12.01" y2="18"/>') });
-      }
       links.push({ sep: true, label: 'ACADEMIC' });
       links.push({ id: 'courses', label: 'My Courses', icon: coursesIcon() });
-      links.push({ id: 'course-videos', label: 'Course Videos', icon: svgIcon('<polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2" ry="2"/>') });
       links.push({ id: 'timetable', label: 'Timetable', icon: svgIcon('<rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/>') });
-      links.push({ id: 'quizzes', label: 'Quizzes', icon: quizzesIcon() });
-      links.push({ id: 'snap-quiz', label: 'Exam Portal', icon: svgIcon('<path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>') });
-      links.push({ id: 'assignments', label: 'Assignments', icon: assignmentsIcon() });
+      links.push({ id: 'quizzes', label: 'Proctored/Snap Quiz', icon: quizzesIcon() });
+      links.push({ id: 'assignments', label: 'Assignment', icon: assignmentsIcon() });
       links.push({ id: 'gradebook', label: 'My Grades', icon: svgIcon('<path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/>') });
       links.push({ id: 'quiz-history', label: 'My Results', icon: svgIcon('<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/>') });
+      links.push({ id: 'course-videos', label: 'Course Videos', icon: svgIcon('<polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2" ry="2"/>') });
       links.push({ sep: true, label: 'COMMUNICATE' });
       links.push({ id: 'messages', label: 'Messages', icon: svgIcon('<path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>') });
       links.push({ id: 'meetings', label: 'Meetings', icon: meetingsIcon() });
       links.push({ id: 'announcements', label: 'Announcements', icon: svgIcon('<path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/>') });
+      if (currentUser.isClassRep) {
+        links.push({ sep: true, label: 'CLASS REP' });
+        links.push({ id: 'class-device', label: 'Class Device', icon: svgIcon('<rect x="5" y="2" width="14" height="20" rx="2" ry="2"/><line x1="12" y1="18" x2="12.01" y2="18"/><polyline points="9 11 12 14 22 4"/>') });
+        links.push({ id: 'class-announcements', label: 'Class Announcements', icon: svgIcon('<path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/><line x1="12" y1="2" x2="12" y2="4"/>') });
+        links.push({ id: 'class-timetable', label: 'Class Timetable', icon: svgIcon('<rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/><line x1="12" y1="14" x2="12" y2="18"/><line x1="10" y1="16" x2="14" y2="16"/>') });
+      }
       links.push({ sep: true, label: 'SUPPORT' });
-      links.push({ id: 'subscription', label: 'Subscription', icon: subscriptionIcon() });
       links.push({ id: 'support', label: 'Support', icon: svgIcon('<circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/>') });
       links.push({ id: 'faq-center', label: 'FAQ Center', icon: svgIcon('<path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/><line x1="9" y1="10" x2="15" y2="10"/><line x1="12" y1="7" x2="12" y2="13"/>') });
-      links.push({ id: 'contact',   label: 'Contact Us', icon: svgIcon('<path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07A19.5 19.5 0 0 1 4.69 12a19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 3.6 1.28h3a2 2 0 0 1 2 1.72c.127.96.361 1.903.7 2.81a2 2 0 0 1-.45 2.11L7.91 8.7a16 16 0 0 0 6.29 6.29l1.41-1.41a2 2 0 0 1 2.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0 1 22 16.92z"/>') });
-      links.push({ id: 'about',     label: 'About',      icon: svgIcon('<circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>') });
+      links.push({ id: 'subscription', label: 'Subscription', icon: subscriptionIcon() });
       break;
     case 'superadmin':
-      links.push({ id: 'superadmin-platform', label: 'Platform',   icon: svgIcon('<rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/>') });
-      links.push({ id: 'approvals',            label: 'Approvals',  icon: approvalsIcon() });
-      links.push({ id: 'search',               label: 'Search',     icon: svgIcon('<circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>') });
+      links.push({ id: 'superadmin-platform', label: 'Platform',     icon: svgIcon('<rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/>') });
+      links.push({ id: 'approvals',            label: 'Approvals',    icon: approvalsIcon() });
+      links.push({ id: 'search',               label: 'Search',       icon: svgIcon('<circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>') });
+      links.push({ sep: true, label: 'SUPPORT' });
       break;
   }
 
   // Universal links shown for all roles
   const universalLinks = [
     { id: 'profile',  label: 'My Profile',  icon: svgIcon('<path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/>') },
+    { id: 'contact',  label: 'Contact Us',  icon: svgIcon('<path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07A19.5 19.5 0 0 1 4.15 13a19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 3.06 2h3a2 2 0 0 1 2 1.72c.127.96.361 1.903.7 2.81a2 2 0 0 1-.45 2.11L7.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0 1 21 17z"/>') },
+    { id: 'about',    label: 'About',       icon: svgIcon('<circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>') },
   ];
 
   // Inject divider below logo if not already present
@@ -2669,23 +2932,25 @@ function buildSidebar() {
       return `<a onclick="navigateTo('${l.id}')" id="nav-${l.id}" data-tooltip="${l.label}">${l.id==='announcements'?'<div class="ann-line"></div>':''} ${l.icon}<span>${l.label}</span>${l.id==='announcements'?'<span id="ann-badge" style="display:none;position:absolute;top:4px;right:4px;background:#ef4444;color:#fff;font-size:9px;font-weight:700;padding:1px 5px;border-radius:20px;min-width:14px;text-align:center;line-height:14px;"></span>':''}</a>`;
     }).join('');
 
-  // Institution code footer at the bottom of the sidebar
-  const instCode = currentUser?.company?.institutionCode || currentUser?.company?.code || currentUser?.institutionCode || null;
-  const existingFooter = sidebar?.querySelector('.sidebar-inst-footer');
-  if (existingFooter) existingFooter.remove();
-  if (instCode && sidebar) {
-    const footer = document.createElement('div');
-    footer.className = 'sidebar-inst-footer';
-    footer.innerHTML = `
-      <div style="font-size:9px;font-weight:700;letter-spacing:.8px;text-transform:uppercase;color:rgba(255,255,255,.45);margin-bottom:4px">Institution Code</div>
-      <div style="display:flex;align-items:center;gap:8px">
-        <span style="font-size:14px;font-weight:800;letter-spacing:3px;color:rgba(255,255,255,.9);font-family:monospace">${instCode}</span>
-        <button onclick="navigator.clipboard.writeText('${instCode}').then(()=>showToastNotif('Code copied!','success'))"
-          style="font-size:10px;font-weight:600;padding:2px 8px;border-radius:6px;border:1px solid rgba(255,255,255,.25);background:rgba(255,255,255,.1);color:rgba(255,255,255,.8);cursor:pointer;line-height:16px">
-          Copy
-        </button>
+  // Institution code chip — visible to all roles that belong to an institution
+  const instCode = currentUser.company?.institutionCode || currentUser.company?.code;
+  if (instCode && role !== 'superadmin') {
+    let chip = sidebar && sidebar.querySelector('.sidebar-inst-chip');
+    if (!chip) {
+      chip = document.createElement('div');
+      chip.className = 'sidebar-inst-chip';
+      if (sidebar) sidebar.appendChild(chip);
+    }
+    chip.innerHTML = `
+      <div style="padding:10px 14px 12px;border-top:1px solid rgba(255,255,255,.08);">
+        <div style="font-size:9.5px;font-weight:700;letter-spacing:.8px;text-transform:uppercase;opacity:.5;margin-bottom:4px">Institution Code</div>
+        <div style="display:flex;align-items:center;gap:6px;">
+          <span id="sidebar-inst-code-val" style="font-family:monospace;font-size:13px;font-weight:700;letter-spacing:.5px;background:rgba(255,255,255,.08);padding:4px 9px;border-radius:7px;flex:1;text-align:center;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${instCode}</span>
+          <button onclick="(function(){navigator.clipboard.writeText('${instCode}');const b=document.getElementById('sidebar-copy-btn');if(b){b.textContent='✓';setTimeout(()=>{b.textContent='Copy'},1500);}})();" id="sidebar-copy-btn"
+                  style="font-size:10px;font-weight:700;padding:4px 8px;border-radius:6px;border:1px solid rgba(255,255,255,.18);background:rgba(255,255,255,.1);cursor:pointer;color:inherit;flex-shrink:0;transition:background .15s"
+                  onmouseover="this.style.background='rgba(255,255,255,.2)'" onmouseout="this.style.background='rgba(255,255,255,.1)'">Copy</button>
+        </div>
       </div>`;
-    sidebar.appendChild(footer);
   }
 }
 
@@ -2694,6 +2959,8 @@ function navigateTo(view) {
   if (window._empClockTimer) { clearInterval(window._empClockTimer); window._empClockTimer = null; }
   // Stop thread poll when leaving messages
   if (view !== 'messages') _stopThreadPoll();
+  // Stop QR camera stream if navigating away from mark-attendance
+  if (view !== 'mark-attendance' && typeof _stopQrScanner === 'function') _stopQrScanner();
   currentView = view;
   document.querySelectorAll('.sidebar-nav a').forEach(a => a.classList.remove('active'));
   const navEl = document.getElementById(`nav-${view}`);
@@ -2709,31 +2976,26 @@ function navigateTo(view) {
   switch (view) {
     case 'dashboard': renderDashboard(); break;
     case 'sessions': renderSessions(); break;
-    case 'attendance-device': _safeRender(content, renderAttendanceDevice, 'Attendance Device'); break;
+    case 'attendance-device': _lazyRender(content, '/js/pages-device.js', renderAttendanceDevice, 'Attendance Device'); break;
     case 'users': renderUsers(); break;
     case 'meetings': renderMeetings(); break;
     case 'courses': renderCourses(); break;
     case 'quizzes': renderQuizzes(); break;
-    case 'snap-quiz':
-      if (currentUser?.role === 'student') { window.open('/snap-quiz.html', '_blank'); }
-      else { window.open('/snap-quiz-lecturer.html', '_blank'); }
-      break;
     case 'quiz-history': renderStudentQuizHistory(); break;
+    case 'quiz-monitor': renderQuizMonitorPage(); break;
     case 'lecturer-performance': renderLecturerPerformance(); break;
-    case 'timetable': currentUser.role === 'student' ? renderStudentTimetable() : renderLecturerTimetable(); break;
+    case 'timetable': (currentUser.role === 'student' || currentUser.role === 'hod') ? renderStudentTimetable() : renderLecturerTimetable(); break;
     case 'question-bank': renderQuestionBank(); break;
     case 'my-attendance': renderMyAttendance(); break;
     case 'mark-attendance': renderMarkAttendance(); break;
     case 'emp-home': renderEmployeeDashboard(document.getElementById('main-content')); break;
     case 'emp-notifications': renderEmpNotifications(); break;
+    case 'all-notifications': renderAllNotifications(); break;
     case 'emp-assistant': renderEmpAssistant(); break;
     case 'sign-in-out': renderSignInOut(); break;
     case 'corp-attendance': renderCorporateAttendance(); break;
+    case 'corp-clock-settings': renderCorpClockSettings(); break;
     case 'subscription': renderSubscription(); break;
-    case 'course-videos':     renderCourseVideos(); break;
-    case 'lec-course-videos': renderLecturerCourseVideos(); break;
-    case 'lec-notifications': renderLecturerNotifications(); break;
-    case 'rep-device':        renderRepDevice(); break;
     case 'reports': renderReports(); break;
     case 'shifts': renderShifts(); break;
     case 'leave-requests': renderLeaveRequests(); break;
@@ -2745,20 +3007,21 @@ function navigateTo(view) {
     case 'profile':     renderProfile(); break;
     case 'contact':     renderContact(); break;
     case 'about':       renderAbout(); break;
-    case 'superadmin-platform': renderSuperadminDashboard(document.getElementById('main-content')); break;
-    case 'hod-overview':         renderHodDashboard(); break;
-    case 'hod-courses':          renderHodCourses(); break;
-    case 'hod-sessions':         renderHodSessions(); break;
-    case 'hod-lecturers':        renderHodLecturers(); break;
-    case 'hod-students':         renderHodStudents(); break;
-    case 'hod-reports':          renderHodReports(); break;
+    case 'superadmin-platform': _loadScript('/js/manager-portal.js').then(() => renderSuperadminDashboard(document.getElementById('main-content'))).catch(() => {}); break;
+    case 'hod-overview':         _loadScript('/js/manager-portal.js').then(() => renderHodDashboard()).catch(() => {}); break;
+    case 'hod-courses':          _loadScript('/js/manager-portal.js').then(() => renderHodCourses()).catch(() => {}); break;
+    case 'hod-sessions':         _loadScript('/js/manager-portal.js').then(() => renderHodSessions()).catch(() => {}); break;
+    case 'hod-lecturers':        _loadScript('/js/manager-portal.js').then(() => renderHodLecturers()).catch(() => {}); break;
+    case 'hod-students':         _loadScript('/js/manager-portal.js').then(() => renderHodStudents()).catch(() => {}); break;
+    case 'hod-reports':          _loadScript('/js/manager-portal.js').then(() => renderHodReports()).catch(() => {}); break;
 
-    case 'hod-course-approvals': renderHodCourseApprovals(); break;
-    case 'hod-unlock-students':  renderHodUnlockStudents(); break;
-    case 'hod-performance':      renderHodPerformance(); break;
-    case 'hod-quiz-monitor':     renderHodQuizMonitor(); break;
-    case 'hod-alerts':           renderHodAlerts(); break;
-    case 'hod-messaging':        renderHodMessaging(); break;
+    case 'admin-devices':        _loadScript('/js/pages-device.js').then(() => renderAdminDevices()).catch(() => {}); break;
+    case 'hod-course-approvals': _loadScript('/js/manager-portal.js').then(() => renderHodCourseApprovals()).catch(() => {}); break;
+    case 'hod-unlock-students':  _loadScript('/js/manager-portal.js').then(() => renderHodUnlockStudents()).catch(() => {}); break;
+    case 'class-rep-mgmt':       renderClassRepMgmt(); break;
+    case 'hod-performance':      _loadScript('/js/manager-portal.js').then(() => renderHodPerformance()).catch(() => {}); break;
+    case 'hod-alerts':           _loadScript('/js/manager-portal.js').then(() => renderHodAlerts()).catch(() => {}); break;
+    case 'hod-messaging':        _loadScript('/js/manager-portal.js').then(() => renderHodMessaging()).catch(() => {}); break;
     case 'announcements': renderAnnouncements(); break;
     case 'gradebook': renderGradeBook(); break;
     case 'training':       renderTraining(); break;
@@ -2781,30 +3044,23 @@ function navigateTo(view) {
     case 'assets':         renderAssets(); break;
     case 'my-assets':      renderMyAssets(); break;
     case 'messages':      renderMessages(); break;
-    case 'faq-center':    _safeRender(content, renderFAQCenter,    'FAQ Center');    break;
-    case 'support':       _safeRender(content, renderSupport,      'Support');       break;
-    case 'payroll':       _safeRender(content, renderPayroll,      'Payroll');       break;
-    case 'audit-logs':    _safeRender(content, renderAuditLogs,    'Audit Logs');    break;
-    case 'programmes':    _safeRender(content, renderProgrammes,   'Programmes');    break;
-    case 'calendar-events': _safeRender(content, renderCalendarEvents, 'Calendar'); break;
-    case 'forums':        _safeRender(content, renderForums,       'Forums');        break;
-    case 'badges':        _safeRender(content, renderBadges,       'Badges');        break;
-    case 'transcripts':   _safeRender(content, renderTranscripts,  'Transcripts');   break;
-    case 'evaluations':   _safeRender(content, renderEvaluations,  'Evaluations');   break;
-    case 'live-attendance':
-      if (currentUser?.role === 'lecturer' || currentUser?.role === 'hod') {
-        _safeRender(content, renderLecturerAttendance, 'Attendance');
-      } else {
-        _safeRender(content, renderLiveAttendance, 'Live Attendance');
-      }
-      break;
-    case 'branches':        _safeRender(content, renderBranches,       'Branches');        break;
-    case 'class-reps':      _safeRender(content, renderClassReps,      'Class Reps');      break;
-    case 'admin-devices':
-      if (currentUser?.role === 'hod') renderHodDevices();
-      else _safeRender(content, renderAdminDevices, 'Devices');
-      break;
+    case 'faq-center':      _lazyRender(content, '/js/pages-faq.js',       () => renderFAQCenter(), 'FAQ Center');      break;
+    case 'support':         _lazyRender(content, '/js/pages-faq.js',       () => renderSupport(),   'Support');         break;
+    case 'payroll':         _lazyRender(content, '/js/pages-corporate.js', renderPayroll,        'Payroll');         break;
+    case 'audit-logs':      _lazyRender(content, '/js/pages-corporate.js', renderAuditLogs,      'Audit Logs');      break;
+    case 'programmes':      _lazyRender(content, '/js/pages-corporate.js', renderProgrammes,     'Programmes');      break;
+    case 'calendar-events': _lazyRender(content, '/js/pages-academic.js',  renderCalendarEvents, 'Calendar');        break;
+    case 'forums':          _lazyRender(content, '/js/pages-academic.js',  renderForums,         'Forums');          break;
+    case 'badges':          _lazyRender(content, '/js/pages-academic.js',  renderBadges,         'Badges');          break;
+    case 'transcripts':     _lazyRender(content, '/js/pages-academic.js',  renderTranscripts,    'Transcripts');     break;
+    case 'evaluations':     _lazyRender(content, '/js/pages-academic.js',  renderEvaluations,    'Evaluations');     break;
+    case 'live-attendance': _lazyRender(content, '/js/manager-portal.js',  renderLiveAttendance, 'Live Attendance'); break;
+    case 'branches':        _lazyRender(content, '/js/manager-portal.js',  renderBranches,       'Branches');        break;
     case 'my-profile':      renderProfile(); break;
+    case 'class-device':         renderClassDevice(); break;
+    case 'class-announcements':  renderClassAnnouncements(); break;
+    case 'class-timetable':      renderClassTimetable(); break;
+    case 'course-videos':        renderCourseVideos(); break;
     default: renderDashboard();
   }
 }
@@ -2831,6 +3087,7 @@ async function renderDashboard() {
   const content = document.getElementById('main-content');
   if (!content) return;
   const role = currentUser.role;
+  _preloadForRole(role);
 
   // Clear immediately so stale content from a previous role never flashes
   content.innerHTML = `<div class="dashboard-skeleton">
@@ -2845,6 +3102,8 @@ async function renderDashboard() {
   </div>`;
 
   try {
+    const roleScripts = _ROLE_SCRIPTS[role] || [];
+    await Promise.all(roleScripts.map(s => _loadScript(s).catch(() => {})));
     switch (role) {
       case 'admin':
         await renderAdminDashboard(content);
@@ -2887,54 +3146,20 @@ async function renderApprovals() {
   if (!content) return;
   content.innerHTML = '<div class="loading">Loading approvals…</div>';
   try {
-    const role      = currentUser.role;
+    const data = await api('/api/approvals/pending');
+    const pending = data.pending || [];
+    const role    = currentUser.role;
     const isHod     = role === 'hod';
     const isManager = role === 'manager';
-    const isAdmin   = role === 'admin' || role === 'superadmin';
-
-    const [approvalData, selfRegData] = await Promise.all([
-      api('/api/approvals/pending'),
-      isAdmin ? api('/api/approvals/self-registration').catch(() => null) : Promise.resolve(null),
-    ]);
-
-    const pending = approvalData.pending || [];
-    const selfRegEnabled = selfRegData?.enabled ?? false;
-    const institutionCode = selfRegData?.institutionCode || '';
-    const selfRegUrl = `${window.location.origin}/register.html?code=${encodeURIComponent(institutionCode)}`;
 
     const subtitle = isHod
       ? `Lecturer &amp; student requests for <strong>${currentUser.department || 'your department'}</strong>`
       : isManager
         ? 'Employee registration requests pending your approval'
-        : 'Review and approve registration requests';
+        : 'Review and approve employee and manager registration requests';
 
+    // HODs don't need a department column (all in same dept); managers don't need one either
     const showDeptCol = !isHod && !isManager;
-
-    const selfRegPanel = isAdmin ? `
-      <div class="card" style="margin-bottom:20px;padding:20px 24px">
-        <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px">
-          <div>
-            <div style="font-size:15px;font-weight:600;color:var(--text);margin-bottom:4px">Self-Registration</div>
-            <div style="font-size:13px;color:var(--text-muted)">Allow students &amp; employees to register themselves — you review and approve each request.</div>
-          </div>
-          <div style="display:flex;align-items:center;gap:12px">
-            <label style="display:flex;align-items:center;gap:8px;cursor:pointer;user-select:none">
-              <div id="self-reg-toggle" data-on="${selfRegEnabled ? '1' : '0'}" onclick="toggleSelfReg()" style="width:44px;height:24px;border-radius:12px;background:${selfRegEnabled ? 'var(--primary)' : 'var(--border)'};position:relative;cursor:pointer;transition:background .2s">
-                <div style="width:18px;height:18px;border-radius:50%;background:#fff;position:absolute;top:3px;left:${selfRegEnabled ? '23px' : '3px'};transition:left .2s"></div>
-              </div>
-              <span id="self-reg-label" style="font-size:13px;font-weight:600;color:${selfRegEnabled ? 'var(--primary)' : 'var(--text-muted)'}">${selfRegEnabled ? 'Open' : 'Closed'}</span>
-            </label>
-          </div>
-        </div>
-        ${selfRegEnabled ? `
-        <div style="margin-top:16px;padding:12px 14px;background:var(--bg);border-radius:8px;border:1px solid var(--border)">
-          <div style="font-size:12px;color:var(--text-muted);margin-bottom:6px;font-weight:600;letter-spacing:.5px">REGISTRATION LINK — share this with your students / employees</div>
-          <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
-            <code style="font-size:12px;color:var(--text);word-break:break-all;flex:1">${selfRegUrl}</code>
-            <button class="btn btn-sm" onclick="navigator.clipboard.writeText('${selfRegUrl}').then(()=>showToastNotif('Link copied!','success'))">Copy</button>
-          </div>
-        </div>` : ''}
-      </div>` : '';
 
     content.innerHTML = `
       <div class="page-header">
@@ -2943,7 +3168,6 @@ async function renderApprovals() {
           <p>${subtitle}</p>
         </div>
       </div>
-      ${selfRegPanel}
       <div class="card">
         ${pending.length ? `
           <table>
@@ -2957,14 +3181,14 @@ async function renderApprovals() {
             </tr></thead>
             <tbody>${pending.map(u => `
               <tr>
-                <td style="font-weight:500">${esc(u.name)}${u.selfRegistered ? ' <span style="font-size:10px;padding:1px 5px;border-radius:10px;background:#ede9fe;color:#7c3aed;font-weight:600;vertical-align:middle">SELF-REG</span>' : ''}</td>
-                <td style="font-size:13px;color:var(--text-light)">${esc(u.email || u.IndexNumber || u.indexNumber || 'N/A')}</td>
-                <td><span class="status-badge status-active">${esc(u.role)}</span></td>
-                ${showDeptCol ? `<td>${u.department ? `<span style="font-size:11px;padding:2px 7px;border-radius:20px;background:#ecfeff;color:#0891b2;font-weight:600;">${esc(u.department)}</span>` : '—'}</td>` : ''}
+                <td style="font-weight:500">${u.name}</td>
+                <td style="font-size:13px;color:var(--text-light)">${u.email || u.IndexNumber || u.indexNumber || 'N/A'}</td>
+                <td><span class="status-badge status-active">${u.role}</span></td>
+                ${showDeptCol ? `<td>${u.department ? `<span style="font-size:11px;padding:2px 7px;border-radius:20px;background:#ecfeff;color:#0891b2;font-weight:600;">${u.department}</span>` : '—'}</td>` : ''}
                 <td style="font-size:13px;color:var(--text-light)">${new Date(u.createdAt).toLocaleDateString()}</td>
                 <td style="white-space:nowrap">
                   <button class="btn btn-sm" style="background:#22c55e;color:#fff;margin-right:6px" onclick="approveUser('${u._id}')">✓ Approve</button>
-                  <button class="btn btn-danger btn-sm" onclick="rejectUser('${u._id}','${esc(u.name)}')">✕ Reject</button>
+                  <button class="btn btn-danger btn-sm" onclick="rejectUser('${u._id}')">✕ Reject</button>
                 </td>
               </tr>
             `).join('')}</tbody>
@@ -2974,18 +3198,6 @@ async function renderApprovals() {
     `;
   } catch (e) {
     content.innerHTML = `<div class="card"><p style="color:#ef4444">Failed to load approvals: ${e.message}</p></div>`;
-  }
-}
-
-async function toggleSelfReg() {
-  const toggle = document.getElementById('self-reg-toggle');
-  if (!toggle) return;
-  const newVal = toggle.dataset.on !== '1';
-  try {
-    await api('/api/approvals/self-registration', { method: 'PATCH', body: JSON.stringify({ enabled: newVal }) });
-    renderApprovals();
-  } catch (e) {
-    toastError(e.message);
   }
 }
 
@@ -2999,31 +3211,10 @@ async function approveUser(userId) {
   }
 }
 
-function rejectUser(userId, userName) {
-  openModal(`
-    <div style="max-width:400px">
-      <h3 style="margin-bottom:8px;font-size:16px">Reject Registration</h3>
-      <p style="font-size:13px;color:var(--text-muted);margin-bottom:16px">
-        Rejecting <strong>${esc(userName || 'this user')}</strong> will delete their account and notify them by email.
-      </p>
-      <label style="font-size:12px;font-weight:600;text-transform:uppercase;letter-spacing:.5px;color:var(--text-muted)">
-        Reason (optional — included in rejection email)
-      </label>
-      <textarea id="reject-reason" rows="3" placeholder="e.g. Could not verify your identity. Please contact the office." maxlength="300"
-        style="width:100%;margin-top:6px;padding:9px 12px;border:1.5px solid var(--border);border-radius:8px;font-size:13px;background:var(--bg);color:var(--text);resize:vertical"></textarea>
-      <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:16px">
-        <button class="btn btn-secondary" onclick="closeModal()">Cancel</button>
-        <button class="btn btn-danger" onclick="_confirmReject('${esc(userId)}')">Reject &amp; Notify</button>
-      </div>
-    </div>
-  `);
-}
-
-async function _confirmReject(userId) {
-  const reason = (document.getElementById('reject-reason')?.value || '').trim();
-  closeModal();
+async function rejectUser(userId) {
+  if (!confirm('Reject and remove this user? This cannot be undone.')) return;
   try {
-    await api(`/api/approvals/${userId}/reject`, { method: 'DELETE', body: JSON.stringify({ reason }) });
+    await api(`/api/approvals/${userId}/reject`, { method: 'DELETE' });
     renderApprovals();
   } catch (e) {
     toastError(e.message);
@@ -3135,22 +3326,43 @@ async function renderHodDashboard(content) {
   }
 
   try {
-    const [sessData, userStats] = await Promise.all([
-      api('/api/attendance-sessions?limit=5'),
-      api('/api/users/stats')
-    ]);
-    const sessions   = sessData.sessions   || [];
-    const stats      = userStats           || {};
-    const lecturers  = stats.lecturers     || 0;
-    const students   = stats.students      || 0;
-    const hods       = stats.hods          || 0;
-    const activeSess = sessions.filter(s => s.active).length;
+    const deptQs = currentUser.department ? '&department=' + encodeURIComponent(currentUser.department) : '';
+    let sessions, lecturers, students, activeSess, _offlineBanner = '';
+    const _hc = !isOnline() ? offlineRead('hod_dashboard') : null;
+    if (_hc) {
+      sessions  = _hc.sessions  || [];
+      lecturers = _hc.lecturers || 0;
+      students  = _hc.students  || 0;
+      _offlineBanner = `<div style="display:inline-flex;align-items:center;gap:6px;background:#fef3c7;border:1px solid #fde68a;border-radius:20px;padding:3px 12px;font-size:11.5px;font-weight:600;color:#92400e;margin-bottom:10px">📡 Offline · Cached data</div>`;
+    } else {
+      const [sessData, lecturerData, studentData] = await Promise.all([
+        api('/api/attendance-sessions?limit=5'),
+        api('/api/users?role=lecturer' + deptQs),
+        api('/api/users?role=student' + deptQs),
+      ]);
+      sessions  = sessData.sessions   || [];
+      lecturers = (lecturerData.users || []).length;
+      students  = (studentData.users  || []).length;
+      offlineCache('hod_dashboard', { sessions, lecturers, students });
+    }
+    activeSess = sessions.filter(s => ['active','live','paused','locked'].includes(s.status)).length;
 
-    content.innerHTML = `
-      <div class="page-header">
+    content.innerHTML = _offlineBanner + `
+
+      <div class="page-header" style="display:flex;align-items:flex-start;justify-content:space-between;flex-wrap:wrap;gap:12px;">
         <div>
           <h2>Department Overview</h2>
           <p>Welcome back, ${currentUser.name} · <strong style="color:#0891b2;">${currentUser.department || 'No Department Assigned'}</strong> — ${currentUser.company?.name || ''}</p>
+        </div>
+        <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center;">
+          <button onclick="navigateTo('announcements')" style="display:inline-flex;align-items:center;gap:8px;padding:10px 20px;background:linear-gradient(135deg,#0891b2,#0e7490);color:#fff;border:none;border-radius:10px;font-size:14px;font-weight:700;cursor:pointer;box-shadow:0 4px 14px rgba(8,145,178,.35);">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
+            Announcements
+          </button>
+          <button onclick="navigateTo('subscription')" style="display:inline-flex;align-items:center;gap:8px;padding:10px 20px;background:linear-gradient(135deg,#6366f1,#8b5cf6);color:#fff;border:none;border-radius:10px;font-size:14px;font-weight:700;cursor:pointer;box-shadow:0 4px 14px rgba(99,102,241,.35);">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>
+            Subscription
+          </button>
         </div>
       </div>
       <div class="stats-grid" style="margin-bottom:20px;">
@@ -3182,7 +3394,7 @@ async function renderHodDashboard(content) {
                   <div style="font-size:13px;font-weight:600;">${s.title || s.courseName || 'Untitled'}</div>
                   <div style="font-size:11px;color:var(--text-muted);">${s.createdBy?.name || '—'} · ${timeAgo(s.createdAt)}</div>
                 </div>
-                <span class="tag ${s.active ? 'tag-green' : 'tag-gray'}">${s.active ? 'Live' : 'Ended'}</span>
+                <span class="tag ${['active','live','paused','locked'].includes(s.status) ? 'tag-green' : 'tag-gray'}">${['active','live','paused','locked'].includes(s.status) ? 'Live' : 'Ended'}</span>
               </div>`).join('')
           }
           <button class="btn btn-secondary btn-sm" style="margin-top:12px;width:100%;" onclick="navigateTo('hod-sessions')">View All Sessions →</button>
@@ -3267,10 +3479,24 @@ async function renderHodDashboard(content) {
 async function renderHodSessions() {
   const content = document.getElementById('main-content');
   content.innerHTML = '<div class="loading">Loading sessions…</div>';
-  try {
-    const dept = currentUser.department ? '&department=' + encodeURIComponent(currentUser.department) : '';
-    const data = await api('/api/attendance-sessions?limit=100' + dept);
-    const sessions = data.sessions || [];
+  let sessions = [], _isOff = false;
+  if (!isOnline()) {
+    const _c = offlineRead('hod_sessions');
+    if (_c) { sessions = _c.sessions || []; _isOff = true; }
+    else { content.innerHTML = `<div style="text-align:center;padding:60px 20px"><div style="font-size:48px;margin-bottom:12px">📡</div><div style="font-size:18px;font-weight:700">You're Offline</div><p style="color:var(--text-muted);margin-top:8px">Connect once while online to cache this page.</p></div>`; return; }
+  } else {
+    try {
+      const dept = currentUser.department ? '&department=' + encodeURIComponent(currentUser.department) : '';
+      const data = await api('/api/attendance-sessions?limit=100' + dept);
+      sessions = data.sessions || [];
+      offlineCache('hod_sessions', data);
+    } catch(e) {
+      const _c = offlineRead('hod_sessions');
+      if (_c) { sessions = _c.sessions || []; _isOff = true; }
+      else { content.innerHTML = `<div class="card"><p style="color:#ef4444;">${e.message}</p></div>`; return; }
+    }
+  }
+  { const data = { sessions }; /* compat */
     content.innerHTML = `
       <div class="page-header" style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:10px;">
         <div><h2>All Sessions</h2><p>Department-wide attendance sessions — ${sessions.length} total</p></div>
@@ -3294,104 +3520,229 @@ async function renderHodSessions() {
                   <td style="padding:10px 12px;color:var(--text-muted);">${s.createdBy?.name || '—'}</td>
                   <td style="padding:10px 12px;">${s.attendanceCount ?? s.records?.length ?? '—'}</td>
                   <td style="padding:10px 12px;color:var(--text-muted);font-size:12px;">${fmtDate(s.createdAt)}</td>
-                  <td style="padding:10px 12px;"><span class="tag ${s.active ? 'tag-green' : 'tag-gray'}">${s.active ? 'Live' : 'Ended'}</span></td>
+                  <td style="padding:10px 12px;"><span class="tag ${['active','live','paused','locked'].includes(s.status) ? 'tag-green' : 'tag-gray'}">${['active','live','paused','locked'].includes(s.status) ? 'Live' : 'Ended'}</span></td>
                 </tr>`).join('')}
           </tbody>
         </table>
-      </div>`;
-  } catch(e) {
-    content.innerHTML = `<div class="card"><p style="color:#ef4444;">${e.message}</p></div>`;
+      </div>`+ (_isOff ? `<div style="display:inline-flex;align-items:center;gap:6px;background:#fef3c7;border:1px solid #fde68a;border-radius:20px;padding:3px 12px;font-size:11.5px;font-weight:600;color:#92400e;margin-bottom:10px">📡 Offline · Cached data</div>` : '');
   }
 }
 
 async function renderHodLecturers() {
   const content = document.getElementById('main-content');
   content.innerHTML = '<div class="loading">Loading lecturers…</div>';
-  try {
-    const dept = currentUser.department ? '&department=' + encodeURIComponent(currentUser.department) : '';
-    const data = await api('/api/users?role=lecturer&limit=200' + dept);
-    const lecturers = data.users || [];
+  let lecturers = [], courses = [], _isOff = false;
+  if (!isOnline()) {
+    const _c = offlineRead('hod_lecturers');
+    if (_c) { lecturers = _c.lecturers || []; courses = _c.courses || []; _isOff = true; }
+    else { content.innerHTML = `<div style="text-align:center;padding:60px 20px"><div style="font-size:48px;margin-bottom:12px">📡</div><div style="font-size:18px;font-weight:700">You're Offline</div><p style="color:var(--text-muted);margin-top:8px">Connect once while online to cache this page.</p></div>`; return; }
+  } else {
+    try {
+      const dept = currentUser.department ? '&department=' + encodeURIComponent(currentUser.department) : '';
+      const [lecturerData, courseData] = await Promise.all([
+        api('/api/users?role=lecturer&limit=200' + dept),
+        api('/api/courses?limit=500'),
+      ]);
+      lecturers = lecturerData.users || [];
+      courses   = courseData.courses || courseData || [];
+      offlineCache('hod_lecturers', { lecturers, courses });
+    } catch(e) {
+      const _c = offlineRead('hod_lecturers');
+      if (_c) { lecturers = _c.lecturers || []; courses = _c.courses || []; _isOff = true; }
+      else { content.innerHTML = `<div class="card"><p style="color:#ef4444;">${e.message}</p></div>`; return; }
+    }
+  }
+  {
+
+    // Build map: lecturerId → [course titles]
+    const coursesByLecturer = {};
+    for (const c of courses) {
+      const lid = c.lecturerId?._id || c.lecturerId;
+      if (!lid) continue;
+      const key = lid.toString();
+      if (!coursesByLecturer[key]) coursesByLecturer[key] = [];
+      coursesByLecturer[key].push(c.title || c.code || 'Untitled');
+    }
+
+    const deptLabel = currentUser.department ? `in ${currentUser.department}` : 'in your institution';
     content.innerHTML = `
       <div class="page-header">
-        <div><h2>Lecturers</h2><p>${lecturers.length} lecturer${lecturers.length !== 1 ? 's' : ''} in your institution</p></div>
+        <div><h2>Lecturers</h2><p>${lecturers.length} lecturer${lecturers.length !== 1 ? 's' : ''} ${deptLabel}</p></div>
         <button class="btn btn-secondary btn-sm" onclick="hodExportCSV('lecturers')">Export CSV</button>
       </div>
       <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:12px;">
         ${lecturers.length === 0 ? '<div class="empty-state"><p>No lecturers found.</p></div>' :
-          lecturers.map(u => `
-            <div class="card" style="display:flex;align-items:center;gap:12px;padding:14px 16px;">
-              <div style="width:38px;height:38px;border-radius:50%;background:#ecfeff;color:#0891b2;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:15px;flex-shrink:0;">
+          lecturers.map(u => {
+            const lecCourses = coursesByLecturer[u._id] || [];
+            const courseChips = lecCourses.slice(0, 3).map(t =>
+              `<span style="font-size:10px;padding:2px 7px;border-radius:20px;background:#f0fdf4;color:#166534;border:1px solid #bbf7d0;font-weight:600;white-space:nowrap;">${esc(t)}</span>`
+            ).join('');
+            const moreTag = lecCourses.length > 3
+              ? `<span style="font-size:10px;color:var(--text-muted)">+${lecCourses.length - 3} more</span>`
+              : '';
+            return `
+            <div class="card" style="display:flex;align-items:flex-start;gap:12px;padding:14px 16px;">
+              <div style="width:38px;height:38px;border-radius:50%;background:#ecfeff;color:#0891b2;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:15px;flex-shrink:0;margin-top:2px;">
                 ${(u.name||'?')[0].toUpperCase()}
               </div>
               <div style="min-width:0;flex:1;">
-                <div style="font-weight:700;font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${u.name}</div>
-                <div style="font-size:11px;color:var(--text-muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${u.email}</div>
+                <div style="font-weight:700;font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${esc(u.name)}</div>
+                <div style="font-size:11px;color:var(--text-muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${esc(u.email)}</div>
                 <div style="display:flex;gap:6px;align-items:center;margin-top:4px;flex-wrap:wrap;">
                   <span class="tag ${u.isApproved ? 'tag-green' : 'tag-amber'}">${u.isApproved ? 'Active' : 'Pending'}</span>
-                  ${u.department ? `<span style="font-size:10px;padding:2px 6px;border-radius:20px;background:#ecfeff;color:#0891b2;font-weight:600;">${u.department}</span>` : ''}
-                  
+                  ${u.department ? `<span style="font-size:10px;padding:2px 6px;border-radius:20px;background:#ecfeff;color:#0891b2;font-weight:600;">${esc(u.department)}</span>` : ''}
                 </div>
+                ${lecCourses.length ? `<div style="display:flex;gap:4px;flex-wrap:wrap;margin-top:6px;">${courseChips}${moreTag}</div>` : '<div style="font-size:11px;color:var(--text-muted);margin-top:5px;">No courses assigned</div>'}
               </div>
-            </div>`).join('')}
+            </div>`;
+          }).join('')}
       </div>`;
-  } catch(e) {
-    content.innerHTML = `<div class="card"><p style="color:#ef4444;">${e.message}</p></div>`;
   }
 }
+
+let _hodCachedStudents = null;
 
 async function renderHodStudents() {
   const content = document.getElementById('main-content');
   content.innerHTML = '<div class="loading">Loading students…</div>';
+  if (!isOnline()) {
+    const _c = offlineRead('hod_students');
+    if (_c) { _hodCachedStudents = _c; _renderHodLevelCards(content, _c); return; }
+    content.innerHTML = `<div style="text-align:center;padding:60px 20px"><div style="font-size:48px;margin-bottom:12px">📡</div><div style="font-size:18px;font-weight:700">You're Offline</div><p style="color:var(--text-muted);margin-top:8px">Connect once while online to cache this page.</p></div>`; return;
+  }
   try {
     const dept = currentUser.department ? '&department=' + encodeURIComponent(currentUser.department) : '';
     const data = await api('/api/users?role=student&limit=500' + dept);
-    const students = data.users || [];
-    content.innerHTML = `
-      <div class="page-header">
-        <div><h2>Students</h2><p>${students.length} student${students.length !== 1 ? 's' : ''} enrolled</p></div>
-        <div style="display:flex;gap:8px;align-items:center;">
-          <button class="btn btn-secondary btn-sm" onclick="hodExportCSV('students')">Export CSV</button>
-          <input id="hod-stu-search" placeholder="Search students…" oninput="hodFilterStudents()" style="padding:8px 12px;border:1.5px solid var(--border);border-radius:8px;font-size:13px;font-family:inherit;outline:none;min-width:200px;">
-        </div>
-      </div>
-      <div id="hod-stu-list" style="overflow-x:auto;">
-        <table style="width:100%;border-collapse:collapse;font-size:13px;">
-          <thead>
-            <tr style="border-bottom:2px solid var(--border);">
-              <th style="text-align:left;padding:10px 12px;font-weight:700;color:var(--text-muted);font-size:11px;text-transform:uppercase;">Name</th>
-              <th style="text-align:left;padding:10px 12px;font-weight:700;color:var(--text-muted);font-size:11px;text-transform:uppercase;">Index No.</th>
-              <th style="text-align:left;padding:10px 12px;font-weight:700;color:var(--text-muted);font-size:11px;text-transform:uppercase;">Programme</th>
-              <th style="text-align:left;padding:10px 12px;font-weight:700;color:var(--text-muted);font-size:11px;text-transform:uppercase;">Level / Group</th>
-              <th style="text-align:left;padding:10px 12px;font-weight:700;color:var(--text-muted);font-size:11px;text-transform:uppercase;">Session</th>
-              <th style="text-align:left;padding:10px 12px;font-weight:700;color:var(--text-muted);font-size:11px;text-transform:uppercase;">Status</th>
-              <th style="text-align:left;padding:10px 12px;font-weight:700;color:var(--text-muted);font-size:11px;text-transform:uppercase;"></th>
-            </tr>
-          </thead>
-          <tbody id="hod-stu-tbody">
-            ${students.length === 0 ? '<tr><td colspan="4" style="padding:24px;text-align:center;color:var(--text-muted);">No students found.</td></tr>' :
-              students.map(u => `
-                <tr class="hod-stu-row" data-name="${(u.name||'').toLowerCase()}" data-index="${(u.indexNumber||'').toLowerCase()}" style="border-bottom:1px solid var(--border);">
-                  <td style="padding:10px 12px;font-weight:600;">${u.name}</td>
-                  <td style="padding:10px 12px;color:var(--text-muted);font-family:monospace;">${u.IndexNumber || u.indexNumber || '—'}</td>
-                  <td style="padding:10px 12px;">${u.programme ? `<span style="background:#ede9fe;color:#7c3aed;padding:2px 8px;border-radius:20px;font-size:11px;font-weight:700">${esc(u.programme)}</span>` : '—'}</td>
-                  <td style="padding:10px 12px;">
-                    ${u.studentLevel ? `<span style="background:#dbeafe;color:#1d4ed8;padding:2px 7px;border-radius:20px;font-size:11px;font-weight:700;margin-right:3px">L${esc(u.studentLevel)}</span>` : ''}
-                    ${u.studentGroup ? `<span style="background:#ecfdf5;color:#059669;padding:2px 7px;border-radius:20px;font-size:11px;font-weight:700">Grp ${esc(u.studentGroup)}</span>` : ''}
-                    ${!u.studentLevel && !u.studentGroup ? '—' : ''}
-                  </td>
-                  <td style="padding:10px 12px;">
-                    ${u.sessionType ? `<span style="background:#fff7ed;color:#c2410c;padding:2px 8px;border-radius:20px;font-size:11px;font-weight:600">${esc(u.sessionType)}</span>` : '—'}
-                    ${u.semester ? `<span style="font-size:11px;color:var(--text-muted);margin-left:4px">Sem ${esc(u.semester)}</span>` : ''}
-                  </td>
-                  <td style="padding:10px 12px;"><span class="tag ${u.isApproved ? 'tag-green' : 'tag-amber'}">${u.isApproved ? 'Active' : 'Pending'}</span></td>
-                  <td style="padding:10px 12px;"><button class="btn btn-xs btn-secondary" onclick="hodViewStudentAttendance('${u._id}','${u.name.replace(/'/g,"\\'")}')">Attendance</button></td>
-                </tr>`).join('')}
-          </tbody>
-        </table>
-      </div>`;
+    _hodCachedStudents = data.users || [];
+    offlineCache('hod_students', _hodCachedStudents);
+    _renderHodLevelCards(content, _hodCachedStudents);
   } catch(e) {
+    const _c = offlineRead('hod_students');
+    if (_c) { _hodCachedStudents = _c; _renderHodLevelCards(content, _c); return; }
     content.innerHTML = `<div class="card"><p style="color:#ef4444;">${e.message}</p></div>`;
   }
+}
+
+function _renderHodLevelCards(content, allStudents) {
+  const levelMap = {};
+  allStudents.forEach(u => {
+    const lv = u.studentLevel ? String(u.studentLevel) : 'Unassigned';
+    if (!levelMap[lv]) levelMap[lv] = [];
+    levelMap[lv].push(u);
+  });
+  const levels = Object.keys(levelMap).sort((a, b) => {
+    if (a === 'Unassigned') return 1;
+    if (b === 'Unassigned') return -1;
+    return Number(a) - Number(b);
+  });
+
+  const cards = levels.map(lv => {
+    const studs = levelMap[lv];
+    const active = studs.filter(u => u.isApproved).length;
+    const accent = _deptColor('Level ' + lv);
+    const lvEnc = encodeURIComponent(lv);
+    return `
+      <div onclick="_renderHodLevelStudents(decodeURIComponent('${lvEnc}'), _hodCachedStudents)"
+           style="background:#fff;border:1.5px solid #e8eaed;border-radius:16px;padding:0;cursor:pointer;overflow:hidden;box-shadow:0 1px 4px rgba(0,0,0,.06);transition:box-shadow .18s;position:relative"
+           onmouseover="this.style.boxShadow='0 6px 24px rgba(0,0,0,.11)'" onmouseout="this.style.boxShadow='0 1px 4px rgba(0,0,0,.06)'">
+        <div style="height:5px;background:${accent};border-radius:16px 16px 0 0"></div>
+        <div style="padding:20px 22px 18px">
+          <div style="display:flex;align-items:center;gap:12px;margin-bottom:14px">
+            <div style="width:42px;height:42px;border-radius:12px;background:${accent}1a;display:flex;align-items:center;justify-content:center;flex-shrink:0">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="${accent}" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+            </div>
+            <div>
+              <div style="font-size:16px;font-weight:800;color:#0f172a">Level ${lv === 'Unassigned' ? '<span style="color:#94a3b8">Unassigned</span>' : lv}</div>
+              <div style="font-size:12px;color:#64748b;margin-top:1px">${studs.length} student${studs.length !== 1 ? 's' : ''}</div>
+            </div>
+          </div>
+          <div style="display:flex;gap:10px;flex-wrap:wrap">
+            <span style="font-size:11px;font-weight:600;background:${accent}15;color:${accent};padding:3px 10px;border-radius:20px">${active} Active</span>
+            ${studs.length - active > 0 ? `<span style="font-size:11px;font-weight:600;background:#fef3c715;color:#b45309;padding:3px 10px;border-radius:20px">${studs.length - active} Pending</span>` : ''}
+          </div>
+        </div>
+      </div>`;
+  }).join('');
+
+  content.innerHTML = `
+    <div class="page-header" style="margin-bottom:24px">
+      <div>
+        <h2 style="font-size:22px;font-weight:800;letter-spacing:-.5px;color:#0f172a;margin-bottom:2px">Students</h2>
+        <p style="color:#64748b;font-size:13px">${allStudents.length} student${allStudents.length !== 1 ? 's' : ''} enrolled${currentUser.department ? ' · ' + esc(currentUser.department) : ''}</p>
+      </div>
+      <button class="btn btn-secondary btn-sm" onclick="hodExportCSV('students')">Export CSV</button>
+    </div>
+    ${levels.length === 0
+      ? `<div style="background:#fff;border:1px solid #e8eaed;border-radius:16px;padding:60px 20px;text-align:center"><p style="color:#64748b">No students found.</p></div>`
+      : `<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:16px">${cards}</div>`}`;
+}
+
+function _renderHodLevelStudents(level, allStudents) {
+  const content = document.getElementById('main-content');
+  const studs = allStudents.filter(u => {
+    const lv = u.studentLevel ? String(u.studentLevel) : 'Unassigned';
+    return lv === level;
+  });
+  const accent = _deptColor('Level ' + level);
+
+  content.innerHTML = `
+    <div class="page-header" style="margin-bottom:20px">
+      <div style="display:flex;align-items:center;gap:10px">
+        <button onclick="_renderHodLevelCards(document.getElementById('main-content'),_hodCachedStudents)"
+                style="background:none;border:none;cursor:pointer;padding:6px 8px;border-radius:8px;color:#64748b;font-size:13px;display:flex;align-items:center;gap:5px;transition:background .15s"
+                onmouseover="this.style.background='#f1f5f9'" onmouseout="this.style.background='none'">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="15 18 9 12 15 6"/></svg>
+          All Levels
+        </button>
+        <span style="color:#cbd5e1">›</span>
+        <span style="font-size:14px;font-weight:700;color:#0f172a">Level ${esc(level)}</span>
+      </div>
+      <div style="display:flex;gap:8px;align-items:center">
+        <button class="btn btn-secondary btn-sm" onclick="hodExportCSV('students')">Export CSV</button>
+        <input id="hod-stu-search" placeholder="Search students…" oninput="hodFilterStudents()"
+               style="padding:8px 12px;border:1.5px solid var(--border);border-radius:8px;font-size:13px;font-family:inherit;outline:none;min-width:200px;">
+      </div>
+    </div>
+    <div id="hod-stu-list" style="overflow-x:auto;">
+      <table style="width:100%;border-collapse:collapse;font-size:13px;background:#fff;border:1px solid #e8eaed;border-radius:14px;overflow:hidden;box-shadow:0 1px 4px rgba(0,0,0,.05)">
+        <thead>
+          <tr style="border-bottom:2px solid var(--border);background:#f8fafc">
+            <th style="text-align:left;padding:12px 14px;font-weight:700;color:var(--text-muted);font-size:11px;text-transform:uppercase;letter-spacing:.5px">Name</th>
+            <th style="text-align:left;padding:12px 14px;font-weight:700;color:var(--text-muted);font-size:11px;text-transform:uppercase;letter-spacing:.5px">Index No.</th>
+            <th style="text-align:left;padding:12px 14px;font-weight:700;color:var(--text-muted);font-size:11px;text-transform:uppercase;letter-spacing:.5px">Programme</th>
+            <th style="text-align:left;padding:12px 14px;font-weight:700;color:var(--text-muted);font-size:11px;text-transform:uppercase;letter-spacing:.5px">Group</th>
+            <th style="text-align:left;padding:12px 14px;font-weight:700;color:var(--text-muted);font-size:11px;text-transform:uppercase;letter-spacing:.5px">Session</th>
+            <th style="text-align:left;padding:12px 14px;font-weight:700;color:var(--text-muted);font-size:11px;text-transform:uppercase;letter-spacing:.5px">Status</th>
+            <th style="text-align:left;padding:12px 14px;font-weight:700;color:var(--text-muted);font-size:11px;text-transform:uppercase;letter-spacing:.5px"></th>
+          </tr>
+        </thead>
+        <tbody id="hod-stu-tbody">
+          ${studs.length === 0 ? `<tr><td colspan="7" style="padding:32px;text-align:center;color:var(--text-muted)">No students in Level ${esc(level)}.</td></tr>` :
+            studs.map(u => `
+              <tr class="hod-stu-row" data-name="${esc((u.name||'').toLowerCase())}" data-index="${esc((u.IndexNumber||u.indexNumber||'').toLowerCase())}" style="border-bottom:1px solid var(--border);">
+                <td style="padding:11px 14px;font-weight:600">${esc(u.name)}</td>
+                <td style="padding:11px 14px;color:var(--text-muted);font-family:monospace">${u.IndexNumber || u.indexNumber || '—'}</td>
+                <td style="padding:11px 14px">${u.programme ? `<span style="background:#ede9fe;color:#7c3aed;padding:2px 9px;border-radius:20px;font-size:11px;font-weight:700">${esc(u.programme)}</span>` : '—'}</td>
+                <td style="padding:11px 14px">${u.studentGroup ? `<span style="background:#ecfdf5;color:#059669;padding:2px 9px;border-radius:20px;font-size:11px;font-weight:700">Grp ${esc(u.studentGroup)}</span>` : '—'}</td>
+                <td style="padding:11px 14px">
+                  ${u.sessionType ? `<span style="background:#fff7ed;color:#c2410c;padding:2px 9px;border-radius:20px;font-size:11px;font-weight:600">${esc(u.sessionType)}</span>` : '—'}
+                  ${u.semester ? `<span style="font-size:11px;color:var(--text-muted);margin-left:4px">Sem ${esc(u.semester)}</span>` : ''}
+                  ${u.academicYear ? `<span style="font-size:10px;color:var(--text-muted);margin-left:4px">${esc(u.academicYear)}</span>` : ''}
+                </td>
+                <td style="padding:11px 14px">
+                  <span class="tag ${u.isApproved ? 'tag-green' : 'tag-amber'}">${u.isApproved ? 'Active' : 'Pending'}</span>
+                  ${u.isClassRep ? '<span class="tag" style="background:#7c3aed;color:#fff;margin-left:4px">Rep</span>' : ''}
+                </td>
+                <td style="padding:11px 14px;display:flex;gap:6px;flex-wrap:wrap">
+                  <button class="btn btn-xs btn-secondary" onclick="hodViewStudentAttendance('${u._id}','${(u.name||'').replace(/'/g,"\\'")}')">Attendance</button>
+                  ${u.isClassRep
+                    ? `<button class="btn btn-xs" style="background:#fee2e2;color:#b91c1c;border:1px solid #fca5a5;" onclick="hodToggleClassRep('${u._id}','${esc(u.name).replace(/'/g,"\\'")}',false)">Remove Rep</button>`
+                    : `<button class="btn btn-xs" style="background:#faf5ff;color:#7c3aed;border:1px solid #d8b4fe;" onclick="hodToggleClassRep('${u._id}','${esc(u.name).replace(/'/g,"\\'")}',true)">Make Rep</button>`}
+                </td>
+              </tr>`).join('')}
+        </tbody>
+      </table>
+    </div>`;
 }
 
 function hodFilterStudents() {
@@ -3400,6 +3751,23 @@ function hodFilterStudents() {
     const match = row.dataset.name.includes(q) || row.dataset.index.includes(q);
     row.style.display = match ? '' : 'none';
   });
+}
+
+async function hodToggleClassRep(studentId, name, assign) {
+  const action = assign ? `Make ${name} a class representative?` : `Remove ${name} as class representative?`;
+  if (!confirm(action)) return;
+  try {
+    if (assign) {
+      await api('/api/class-rep-admin/assign', { method: 'POST', body: JSON.stringify({ studentId }) });
+      toastSuccess(`${name} is now a class representative`);
+    } else {
+      await api(`/api/class-rep-admin/remove/${studentId}`, { method: 'DELETE' });
+      toastSuccess(`${name} removed as class representative`);
+    }
+    renderHodStudents();
+  } catch(e) {
+    toastError(e.message || 'Failed to update class representative');
+  }
 }
 
 async function renderHodReports() {
@@ -3413,7 +3781,7 @@ async function renderHodReports() {
     ]);
     const sessions  = sessData.sessions || [];
     const stats     = userStats || {};
-    const ended     = sessions.filter(s => !s.active);
+    const ended     = sessions.filter(s => !['active','live','paused','locked'].includes(s.status));
     const totalAtt  = ended.reduce((sum, s) => sum + (s.attendanceCount ?? s.records?.length ?? 0), 0);
     const avgAtt    = ended.length ? Math.round(totalAtt / ended.length) : 0;
 
@@ -3519,7 +3887,7 @@ async function renderHodReports() {
     const trendMap = {};
     const now = Date.now();
     const days30 = 30 * 24 * 60 * 60 * 1000;
-    sessions.filter(s => !s.active && new Date(s.createdAt) > now - days30).forEach(s => {
+    sessions.filter(s => !['active','live','paused','locked'].includes(s.status) && new Date(s.createdAt) > now - days30).forEach(s => {
       const d = new Date(s.createdAt).toLocaleDateString('en-GB', { day: '2-digit', month: 'short' });
       trendMap[d] = (trendMap[d] || 0) + (s.attendanceCount ?? s.records?.length ?? 0);
     });
@@ -3531,7 +3899,7 @@ async function renderHodReports() {
         if (!window.Chart) {
           await new Promise((res, rej) => {
             const s = document.createElement('script');
-            s.src = 'https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js';
+            s.src = 'https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js';
             s.onload = res; s.onerror = rej; document.head.appendChild(s);
           });
         }
@@ -3631,7 +3999,7 @@ async function renderHodQuizzes() {
 
     content.innerHTML = `
       <div class="page-header">
-        <div><h2>Department Quizzes</h2><p>All quizzes in the ${currentUser.department || 'department'}</p></div>
+        <div><h2>Quizzes</h2><p>All quizzes in the ${currentUser.department || 'department'}</p></div>
       </div>
 
       <div class="stats-grid" style="margin-bottom:20px;">
@@ -3707,7 +4075,7 @@ async function hodExportCSV(type) {
       const hodDept = currentUser.department ? '&department=' + encodeURIComponent(currentUser.department) : '';
       const d = await api('/api/attendance-sessions?limit=200' + hodDept);
       headers = ['Session', 'Lecturer', 'Date', 'Attendance', 'Status'];
-      rows = (d.sessions || []).map(s => [s.title || s.courseName || 'Session', s.createdBy?.name || '', fmtDate(s.createdAt), s.attendanceCount ?? s.records?.length ?? 0, s.active ? 'Live' : 'Ended']);
+      rows = (d.sessions || []).map(s => [s.title || s.courseName || 'Session', s.createdBy?.name || '', fmtDate(s.createdAt), s.attendanceCount ?? s.records?.length ?? 0, ['active','live','paused','locked'].includes(s.status) ? 'Live' : 'Ended']);
       filename = 'DIKLY_Attendance_' + (currentUser.department || 'All') + '.csv';
     } else if (type === 'courses') {
       const d = await api('/api/hod/course-overview');
@@ -3765,7 +4133,6 @@ async function renderHodCourses() {
                 <th style="text-align:left;padding:10px 12px;font-size:11px;font-weight:700;color:var(--text-muted);text-transform:uppercase;">Last Session</th>
                 <th style="text-align:center;padding:10px 12px;font-size:11px;font-weight:700;color:var(--text-muted);text-transform:uppercase;">Total Att.</th>
                 <th style="text-align:left;padding:10px 12px;font-size:11px;font-weight:700;color:var(--text-muted);text-transform:uppercase;">Status</th>
-                <th style="text-align:center;padding:10px 12px;font-size:11px;font-weight:700;color:var(--text-muted);text-transform:uppercase;">Assign</th>
               </tr>
             </thead>
             <tbody>
@@ -3781,11 +4148,6 @@ async function renderHodCourses() {
                   <td style="padding:10px 12px;font-size:12px;color:var(--text-muted);">${c.lastSessionAt ? timeAgo(c.lastSessionAt) : '—'}</td>
                   <td style="padding:10px 12px;text-align:center;">${c.totalAttendance}</td>
                   <td style="padding:10px 12px;">${activityBadge(c)}</td>
-                  <td style="padding:10px 12px;text-align:center;">
-                    <button class="btn btn-secondary btn-sm" onclick="showAssignLecturerModal('${c._id}','${esc(c.title)}','${c.lecturer?._id||''}')">
-                      ${c.lecturer ? 'Reassign' : 'Assign'}
-                    </button>
-                  </td>
                 </tr>`).join('')}
             </tbody>
           </table>
@@ -3793,80 +4155,6 @@ async function renderHodCourses() {
   } catch(e) {
     content.innerHTML = `<div class="card"><p style="color:#ef4444;">${e.message}</p></div>`;
   }
-}
-
-// ── HOD — Assign Lecturer Modal ────────────────────────────────────────────
-async function showAssignLecturerModal(courseId, courseTitle, currentLecturerId) {
-  showModal(`
-    <div style="padding:4px 0 8px">
-      <h3 style="font-size:16px;font-weight:700;margin-bottom:4px">Assign Lecturer</h3>
-      <p style="font-size:13px;color:var(--text-muted);margin-bottom:18px">${esc(courseTitle)}</p>
-      <div id="assign-lect-msg" style="display:none;padding:10px 14px;border-radius:8px;font-size:13px;margin-bottom:14px"></div>
-      <div class="form-group">
-        <label>Search Lecturer</label>
-        <input type="text" id="assign-lect-search" placeholder="Type a name…" oninput="hodSearchLecturers(this.value)" autocomplete="off">
-      </div>
-      <div id="assign-lect-results" style="max-height:220px;overflow-y:auto;margin-bottom:16px"></div>
-      <input type="hidden" id="assign-lect-id" value="${currentLecturerId || ''}">
-      <div id="assign-lect-selected" style="display:${currentLecturerId ? 'flex' : 'none'};align-items:center;gap:8px;padding:10px 12px;background:rgba(79,110,247,0.1);border-radius:8px;border:1.5px solid var(--primary);margin-bottom:16px;font-size:13px;font-weight:600;color:var(--text-primary)">
-        <span id="assign-lect-name" style="flex:1"></span>
-        <button onclick="hodClearLecturerSelection()" style="background:none;border:none;color:var(--text-muted);cursor:pointer;font-size:16px;line-height:1">×</button>
-      </div>
-      <div style="display:flex;gap:8px">
-        <button class="btn btn-secondary" style="flex:1" onclick="closeModal()">Cancel</button>
-        <button class="btn btn-primary" style="flex:1" onclick="hodConfirmAssignLecturer('${courseId}')">Assign</button>
-      </div>
-    </div>
-  `);
-  window._hodAssignCourseId = courseId;
-}
-
-async function hodSearchLecturers(q) {
-  const box = document.getElementById('assign-lect-results');
-  if (!box) return;
-  if (q.trim().length < 2) { box.innerHTML = ''; return; }
-  try {
-    const data = await api(`/api/class-rep/search-lecturers?q=${encodeURIComponent(q.trim())}`);
-    const lecturers = data.users || [];
-    if (!lecturers.length) { box.innerHTML = '<div style="font-size:13px;color:var(--text-muted);padding:8px 4px">No lecturers found</div>'; return; }
-    box.innerHTML = lecturers.map(l => `
-      <div onclick="hodSelectLecturer('${l._id}','${esc(l.name)}')"
-        style="padding:10px 12px;border-radius:8px;cursor:pointer;font-size:13px;border:1.5px solid var(--border);margin-bottom:6px;display:flex;align-items:center;gap:10px;background:var(--bg)">
-        <div style="width:32px;height:32px;border-radius:50%;background:linear-gradient(135deg,var(--primary),#6366f1);display:flex;align-items:center;justify-content:center;font-weight:700;color:#fff;font-size:13px;flex-shrink:0">${esc(l.name[0].toUpperCase())}</div>
-        <div><div style="font-weight:600">${esc(l.name)}</div><div style="font-size:11px;color:var(--text-muted)">${esc(l.email||'')}</div></div>
-      </div>`).join('');
-  } catch(e) { box.innerHTML = `<div style="font-size:13px;color:#ef4444">${e.message}</div>`; }
-}
-
-function hodSelectLecturer(id, name) {
-  document.getElementById('assign-lect-id').value = id;
-  document.getElementById('assign-lect-name').textContent = name;
-  document.getElementById('assign-lect-selected').style.display = 'flex';
-  document.getElementById('assign-lect-results').innerHTML = '';
-  document.getElementById('assign-lect-search').value = '';
-}
-
-function hodClearLecturerSelection() {
-  document.getElementById('assign-lect-id').value = '';
-  document.getElementById('assign-lect-name').textContent = '';
-  document.getElementById('assign-lect-selected').style.display = 'none';
-}
-
-async function hodConfirmAssignLecturer(courseId) {
-  const lecturerId = document.getElementById('assign-lect-id')?.value;
-  const msg = document.getElementById('assign-lect-msg');
-  const show = (text, ok) => {
-    msg.textContent = text; msg.style.display = 'block';
-    msg.style.background = ok ? 'rgba(34,197,94,0.1)' : 'rgba(239,68,68,0.1)';
-    msg.style.color = ok ? '#16a34a' : '#ef4444';
-    msg.style.border = `1px solid ${ok ? '#bbf7d0' : '#fecaca'}`;
-  };
-  if (!lecturerId) return show('Please select a lecturer first.', false);
-  try {
-    await api(`/api/courses/${courseId}/assign-lecturer`, { method: 'PUT', body: JSON.stringify({ lecturerId }) });
-    show('Lecturer assigned successfully!', true);
-    setTimeout(() => { closeModal(); renderHodCourses(); }, 1200);
-  } catch(e) { show(e.message || 'Failed to assign lecturer.', false); }
 }
 
 // ── FEATURE 3b: HOD — Course Approval Queue ────────────────────────────────
@@ -4106,113 +4394,343 @@ Current: ${currentDept || 'None'}`, currentDept || '');
 }
 
 
-// ── Quiz Monitor badge polling (Lecturer + HOD) ──────────────────────────────
-function _applyQuizBadge(navId, count) {
-  const el = document.getElementById(navId);
-  if (!el) return;
-  el.style.position = 'relative';
-  let badge = el.querySelector('.qm-badge');
-  if (count > 0) {
-    if (!badge) {
-      badge = document.createElement('span');
-      badge.className = 'qm-badge';
-      badge.style.cssText = 'position:absolute;top:4px;right:4px;background:#ef4444;color:#fff;font-size:9px;font-weight:700;padding:1px 5px;border-radius:20px;min-width:14px;text-align:center;line-height:14px;pointer-events:none';
-      el.appendChild(badge);
-    }
-    badge.textContent = count;
-  } else if (badge) {
-    badge.remove();
+// ── Class Rep Management (HOD + Admin) ────────────────────────────────────
+async function renderClassRepMgmt() {
+  const content = document.getElementById('main-content');
+  content.innerHTML = '<div class="loading">Loading class representatives…</div>';
+  try {
+    const [repsData, devicesData] = await Promise.all([
+      api('/api/class-rep-admin/list'),
+      api('/api/devices/all').catch(() => ({ devices: [] })),
+    ]);
+    const reps    = repsData.reps || [];
+    const devices = devicesData.devices || [];
+
+    // Group reps by class key for the 2-rep cap display
+    const repsByClass = {};
+    reps.forEach(r => {
+      const key = `${r.studentLevel}||${r.studentGroup}||${r.sessionType}||${r.semester}||${r.programme}`;
+      if (!repsByClass[key]) repsByClass[key] = [];
+      repsByClass[key].push(r._id);
+    });
+
+    content.innerHTML = `
+      <div class="page-header" style="flex-wrap:wrap;gap:10px;">
+        <div>
+          <h2>Class Representatives</h2>
+          <p>${reps.length} active rep${reps.length !== 1 ? 's' : ''} · Max 2 per class group</p>
+        </div>
+        <button class="btn btn-primary btn-sm" onclick="crOpenBrowse()">
+          ${svgIcon('<path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="8.5" cy="7" r="4"/><line x1="20" y1="8" x2="20" y2="14"/><line x1="23" y1="11" x2="17" y2="11"/>', 14)}
+          Assign New Rep
+        </button>
+      </div>
+
+      ${reps.length === 0
+        ? `<div class="card" style="text-align:center;padding:48px 20px;">
+            <div style="width:56px;height:56px;border-radius:16px;background:#ede9fe;display:flex;align-items:center;justify-content:center;margin:0 auto 14px">
+              ${svgIcon('<path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/>', 24, '#7c3aed')}
+            </div>
+            <h3 style="font-size:15px;font-weight:700;color:#0f172a;margin-bottom:6px">No class reps assigned yet</h3>
+            <p style="color:#64748b;font-size:13px;margin-bottom:16px">Use "Assign New Rep" to browse students and appoint up to 2 reps per class group.</p>
+            <button class="btn btn-primary btn-sm" onclick="crOpenBrowse()">Assign New Rep</button>
+          </div>`
+        : `<div style="overflow-x:auto;">
+            <table style="width:100%;border-collapse:collapse;font-size:13px;">
+              <thead>
+                <tr style="border-bottom:2px solid var(--border);">
+                  <th style="text-align:left;padding:10px 12px;font-weight:700;color:var(--text-muted);font-size:11px;text-transform:uppercase;">Name</th>
+                  <th style="text-align:left;padding:10px 12px;font-weight:700;color:var(--text-muted);font-size:11px;text-transform:uppercase;">Index No.</th>
+                  <th style="text-align:left;padding:10px 12px;font-weight:700;color:var(--text-muted);font-size:11px;text-transform:uppercase;">Programme</th>
+                  <th style="text-align:left;padding:10px 12px;font-weight:700;color:var(--text-muted);font-size:11px;text-transform:uppercase;">Level / Group</th>
+                  <th style="text-align:left;padding:10px 12px;font-weight:700;color:var(--text-muted);font-size:11px;text-transform:uppercase;">Session</th>
+                  <th style="text-align:left;padding:10px 12px;font-weight:700;color:var(--text-muted);font-size:11px;text-transform:uppercase;">Department</th>
+                  <th style="text-align:left;padding:10px 12px;font-weight:700;color:var(--text-muted);font-size:11px;text-transform:uppercase;">Device</th>
+                  <th style="text-align:left;padding:10px 12px;font-weight:700;color:var(--text-muted);font-size:11px;text-transform:uppercase;"></th>
+                </tr>
+              </thead>
+              <tbody>
+                ${reps.map(r => `
+                  <tr style="border-bottom:1px solid var(--border);">
+                    <td style="padding:10px 12px;">
+                      <div style="display:flex;align-items:center;gap:8px;">
+                        ${r.profilePhoto
+                          ? `<img src="${esc(r.profilePhoto)}" style="width:32px;height:32px;border-radius:50%;object-fit:cover;" onerror="this.style.display='none'">`
+                          : `<div style="width:32px;height:32px;border-radius:50%;background:linear-gradient(135deg,#7c3aed,#6366f1);display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;color:#fff">${esc((r.name||'?')[0].toUpperCase())}</div>`}
+                        <div>
+                          <div style="font-weight:600">${esc(r.name)}</div>
+                          <div style="font-size:11px;color:var(--text-muted)">${esc(r.email||'')}</div>
+                        </div>
+                      </div>
+                    </td>
+                    <td style="padding:10px 12px;color:var(--text-muted);font-family:monospace;">${esc(r.IndexNumber||r.indexNumber||'—')}</td>
+                    <td style="padding:10px 12px;">${r.programme ? `<span style="background:#ede9fe;color:#7c3aed;padding:2px 8px;border-radius:20px;font-size:11px;font-weight:700">${esc(r.programme)}</span>` : '—'}</td>
+                    <td style="padding:10px 12px;">
+                      ${r.studentLevel ? `<span style="background:#dbeafe;color:#1d4ed8;padding:2px 7px;border-radius:20px;font-size:11px;font-weight:700;margin-right:3px">L${esc(r.studentLevel)}</span>` : ''}
+                      ${r.studentGroup ? `<span style="background:#ecfdf5;color:#059669;padding:2px 7px;border-radius:20px;font-size:11px;font-weight:700">Grp ${esc(r.studentGroup)}</span>` : ''}
+                    </td>
+                    <td style="padding:10px 12px;">
+                      ${r.sessionType ? `<span style="background:#fff7ed;color:#c2410c;padding:2px 8px;border-radius:20px;font-size:11px;font-weight:600">${esc(r.sessionType)}</span>` : '—'}
+                      ${r.semester ? `<span style="font-size:11px;color:var(--text-muted);margin-left:4px">Sem ${esc(r.semester)}</span>` : ''}
+                    </td>
+                    <td style="padding:10px 12px;color:var(--text-muted);font-size:12px">${esc(r.department||'—')}</td>
+                    <td style="padding:10px 12px;">
+                      ${(() => {
+                        const assignedDevice = devices.find(d => d.classRepId && (d.classRepId._id || d.classRepId) === r._id);
+                        const assignedDeviceId = assignedDevice ? (assignedDevice.deviceId || '') : '';
+                        const opts = `<option value="">— None —</option>` +
+                          devices.map(d => {
+                            const did = d.deviceId || '';
+                            const label = esc(d.deviceName || d.deviceId);
+                            const sel = did === assignedDeviceId ? 'selected' : '';
+                            return `<option value="${esc(did)}" ${sel}>${label}</option>`;
+                          }).join('');
+                        return `<select onchange="crAssignDeviceInline(this,'${r._id}','${esc(r.name).replace(/'/g,"\\'")}')"
+                          style="font-size:12px;border:1.5px solid var(--border);border-radius:8px;padding:4px 8px;background:var(--bg,#fff);color:var(--text);max-width:160px">${opts}</select>`;
+                      })()}
+                    </td>
+                    <td style="padding:10px 12px;white-space:nowrap;">
+                      <button class="btn btn-xs" style="background:#fee2e2;color:#b91c1c;border:1px solid #fca5a5;" onclick="crRemoveRep('${r._id}','${esc(r.name).replace(/'/g,"\\'")}')">Remove</button>
+                    </td>
+                  </tr>`).join('')}
+              </tbody>
+            </table>
+          </div>`}
+
+      <!-- Browse & Assign modal -->
+      <div id="cr-browse-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:9999;display:none;align-items:center;justify-content:center;padding:16px;">
+        <div style="background:#fff;border-radius:16px;width:100%;max-width:680px;max-height:90vh;overflow-y:auto;box-shadow:0 20px 60px rgba(0,0,0,.25);">
+          <div style="padding:20px 24px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;">
+            <div>
+              <div style="font-size:16px;font-weight:800;color:#0f172a">Browse Students</div>
+              <div style="font-size:12px;color:var(--text-muted);margin-top:2px">Filter by class group, then assign a student as class rep</div>
+            </div>
+            <button onclick="crCloseBrowse()" style="background:none;border:none;cursor:pointer;padding:4px;border-radius:8px;color:var(--text-muted)">${svgIcon('<line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>', 20)}</button>
+          </div>
+          <div style="padding:20px 24px;">
+            <div style="margin-bottom:14px;">
+              <label style="font-size:11px;font-weight:700;color:var(--text-muted);display:block;margin-bottom:4px">INDEX NUMBER <span style="color:#ef4444">*</span></label>
+              <input id="cr-f-index" type="text" placeholder="e.g. UG/IT/23/0001" style="width:100%;padding:9px 12px;border:1.5px solid var(--border);border-radius:8px;font-size:13px;font-family:inherit;outline:none;box-sizing:border-box;text-transform:uppercase;" oninput="this.value=this.value.toUpperCase()" />
+              <div style="font-size:11px;color:var(--text-muted);margin-top:4px">Enter the student's index number to look them up. You may also apply filters below to narrow results.</div>
+            </div>
+            <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(130px,1fr));gap:10px;margin-bottom:16px;">
+              <div>
+                <label style="font-size:11px;font-weight:700;color:var(--text-muted);display:block;margin-bottom:4px">DEPARTMENT</label>
+                <input id="cr-f-dept" type="text" placeholder="e.g. Computer Science" style="width:100%;padding:7px 10px;border:1.5px solid var(--border);border-radius:8px;font-size:13px;font-family:inherit;outline:none;box-sizing:border-box;" />
+              </div>
+              <div>
+                <label style="font-size:11px;font-weight:700;color:var(--text-muted);display:block;margin-bottom:4px">LEVEL</label>
+                <select id="cr-f-level" style="width:100%;padding:7px 10px;border:1.5px solid var(--border);border-radius:8px;font-size:13px;font-family:inherit;outline:none;">
+                  <option value="">All</option>
+                  <option value="100">100</option><option value="200">200</option><option value="300">300</option><option value="400">400</option><option value="500">500</option>
+                </select>
+              </div>
+              <div>
+                <label style="font-size:11px;font-weight:700;color:var(--text-muted);display:block;margin-bottom:4px">GROUP</label>
+                <select id="cr-f-group" style="width:100%;padding:7px 10px;border:1.5px solid var(--border);border-radius:8px;font-size:13px;font-family:inherit;outline:none;">
+                  <option value="">All</option>
+                  <option value="A">A</option><option value="B">B</option><option value="C">C</option><option value="D">D</option>
+                </select>
+              </div>
+              <div>
+                <label style="font-size:11px;font-weight:700;color:var(--text-muted);display:block;margin-bottom:4px">SESSION</label>
+                <select id="cr-f-session" style="width:100%;padding:7px 10px;border:1.5px solid var(--border);border-radius:8px;font-size:13px;font-family:inherit;outline:none;">
+                  <option value="">All</option>
+                  <option value="Regular">Regular</option><option value="Evening">Evening</option><option value="Weekend">Weekend</option><option value="Distance">Distance</option>
+                </select>
+              </div>
+              <div>
+                <label style="font-size:11px;font-weight:700;color:var(--text-muted);display:block;margin-bottom:4px">SEMESTER</label>
+                <select id="cr-f-semester" style="width:100%;padding:7px 10px;border:1.5px solid var(--border);border-radius:8px;font-size:13px;font-family:inherit;outline:none;">
+                  <option value="">All</option>
+                  <option value="1">Sem 1</option><option value="2">Sem 2</option>
+                </select>
+              </div>
+            </div>
+            <button class="btn btn-primary btn-sm" onclick="crFetchStudents()" style="margin-bottom:16px;">Search Students</button>
+            <div id="cr-student-list"><p style="color:var(--text-muted);font-size:13px;">Use filters above then click Search.</p></div>
+          </div>
+        </div>
+      </div>`;
+  } catch(e) {
+    content.innerHTML = `<div class="card"><p style="color:#ef4444;">${e.message}</p></div>`;
   }
 }
 
-async function _updateLecturerQuizBadge() {
+window.crOpenBrowse = function() {
+  const modal = document.getElementById('cr-browse-modal');
+  if (modal) { modal.style.display = 'flex'; }
+};
+
+window.crCloseBrowse = function() {
+  const modal = document.getElementById('cr-browse-modal');
+  if (modal) { modal.style.display = 'none'; }
+};
+
+window.crFetchStudents = async function() {
+  const listEl  = document.getElementById('cr-student-list');
+  const indexEl = document.getElementById('cr-f-index');
+  if (!listEl) return;
+
+  const indexNumber = (indexEl?.value || '').trim().toUpperCase();
+  if (!indexNumber) {
+    indexEl && (indexEl.style.border = '1.5px solid #ef4444');
+    listEl.innerHTML = '<p style="color:#ef4444;font-size:13px;font-weight:600;">Index number is required. Please enter the student\'s index number.</p>';
+    indexEl?.focus();
+    return;
+  }
+  if (indexEl) indexEl.style.border = '1.5px solid var(--border)';
+
+  listEl.innerHTML = '<div class="loading" style="padding:16px 0;">Loading…</div>';
   try {
-    const data = await api('/api/lecturer/snap-quizzes').catch(() => ({ quizzes: [] }));
-    const active = (data.quizzes || []).filter(q => q.status === 'open' || q.status === 'active');
-    _applyQuizBadge('nav-snap-quiz', active.length);
-  } catch { /* silent */ }
-}
+    const level      = document.getElementById('cr-f-level')?.value    || '';
+    const group    = document.getElementById('cr-f-group')?.value    || '';
+    const session  = document.getElementById('cr-f-session')?.value  || '';
+    const semester = document.getElementById('cr-f-semester')?.value || '';
+    const dept     = document.getElementById('cr-f-dept')?.value.trim() || '';
+    const params = new URLSearchParams();
+    params.set('indexNumber', indexNumber);
+    if (level)    params.set('level', level);
+    if (group)    params.set('group', group);
+    if (session)  params.set('sessionType', session);
+    if (semester) params.set('semester', semester);
+    if (dept)     params.set('department', dept);
 
-async function _updateHodQuizBadge() {
-  try {
-    const data = await api('/api/lecturer/snap-quizzes/department-overview').catch(() => api('/api/lecturer/snap-quizzes').catch(() => ({ quizzes: [] })));
-    const active = (data.quizzes || []).filter(q => q.status === 'open' || q.status === 'active');
-    _applyQuizBadge('nav-hod-quiz-monitor', active.length);
-  } catch { /* silent */ }
-}
+    const data = await api('/api/class-rep-admin/students?' + params.toString());
+    const students = data.students || [];
 
-let _lecturerQuizBadgeTimer, _hodQuizBadgeTimer;
-function _startLecturerQuizBadge() {
-  _updateLecturerQuizBadge();
-  clearInterval(_lecturerQuizBadgeTimer);
-  _lecturerQuizBadgeTimer = setInterval(_updateLecturerQuizBadge, 60000);
-}
-function _startHodQuizBadge() {
-  _updateHodQuizBadge();
-  clearInterval(_hodQuizBadgeTimer);
-  _hodQuizBadgeTimer = setInterval(_updateHodQuizBadge, 60000);
-}
+    // Count reps per class key from the loaded students themselves
+    const repCountByKey = {};
+    students.forEach(s => {
+      const key = `${s.studentLevel}||${s.studentGroup}||${s.sessionType}||${s.semester}||${s.programme}`;
+      if (!repCountByKey[key]) repCountByKey[key] = 0;
+      if (s.isClassRep) repCountByKey[key]++;
+    });
 
-// ── HOD — Quiz Monitor ────────────────────────────────────────────────────
-async function renderHodQuizMonitor() {
-  const content = document.getElementById('main-content');
-  if (!content) return;
-  content.innerHTML = '<div class="loading">Loading quiz monitor…</div>';
-  try {
-    // Fetch all quizzes visible to HOD (department-overview) and filter to open/active ones
-    const data = await api('/api/lecturer/snap-quizzes/department-overview').catch(() => api('/api/lecturer/snap-quizzes').catch(() => ({ quizzes: [] })));
-    const allQuizzes = data.quizzes || data.data || [];
-    const sessions = allQuizzes.filter(q => q.status === 'open' || q.status === 'active');
-    const esc = s => s == null ? '' : String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
-
-    _applyQuizBadge('nav-hod-quiz-monitor', sessions.length);
-
-    if (sessions.length === 0) {
-      content.innerHTML = `
-        <div class="page-header"><h2>Quiz Monitor</h2><p>Live student quiz activity for your department</p></div>
-        <div class="card" style="text-align:center;padding:56px 40px;color:var(--text-muted)">
-          <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="margin-bottom:16px;opacity:.4"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
-          <div style="font-size:16px;font-weight:600;margin-bottom:8px">No open quizzes right now</div>
-          <div style="font-size:13px">Open a quiz from the <a onclick="navigateTo('quizzes')" style="color:var(--accent);cursor:pointer;text-decoration:underline">Quizzes</a> page to see live student status here.</div>
-        </div>`;
+    if (students.length === 0) {
+      listEl.innerHTML = '<p style="color:var(--text-muted);font-size:13px;">No students found for those filters.</p>';
       return;
     }
 
-    content.innerHTML = `
-      <div class="page-header" style="display:flex;align-items:flex-start;justify-content:space-between;flex-wrap:wrap;gap:10px">
-        <div>
-          <h2>Quiz Monitor</h2>
-          <p>${sessions.length} open quiz${sessions.length !== 1 ? 'zes' : ''} in progress</p>
-        </div>
-        <button class="btn btn-secondary btn-sm" onclick="renderHodQuizMonitor()">↻ Refresh</button>
-      </div>
-      <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:16px">
-        ${sessions.map(s => `
-        <div class="card" style="padding:16px">
-          <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px">
-            <span style="display:inline-flex;align-items:center;gap:5px;font-size:11px;font-weight:700;padding:3px 8px;border-radius:20px;background:#dcfce7;color:#16a34a">
-              <span style="width:6px;height:6px;border-radius:50%;background:#16a34a"></span>Open
-            </span>
-            <span style="font-size:12px;color:var(--text-muted)">${esc(s.course?.title || s.course?.code || s.courseName || '')}</span>
-          </div>
-          <div style="font-size:15px;font-weight:700;margin-bottom:6px">${esc(s.title || 'Quiz')}</div>
-          <div style="font-size:12px;color:var(--text-muted);margin-bottom:12px">Lecturer: ${esc(s.lecturer?.name || s.lecturerName || '—')}</div>
-          <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;font-size:13px">
-            <div style="background:var(--bg);border-radius:8px;padding:10px;text-align:center">
-              <div style="font-size:20px;font-weight:800;color:var(--accent)">${s.attemptCount ?? s.participantCount ?? 0}</div>
-              <div style="font-size:10px;font-weight:600;text-transform:uppercase;color:var(--text-muted)">Attempts</div>
-            </div>
-            <div style="background:var(--bg);border-radius:8px;padding:10px;text-align:center">
-              <div style="font-size:20px;font-weight:800">${s.questionCount ?? (s.questions?.length ?? 0)}</div>
-              <div style="font-size:10px;font-weight:600;text-transform:uppercase;color:var(--text-muted)">Questions</div>
-            </div>
-          </div>
-        </div>`).join('')}
+    listEl.innerHTML = `
+      <div style="font-size:12px;color:var(--text-muted);margin-bottom:10px;">${students.length} student${students.length!==1?'s':''} found · reps shown at top</div>
+      <div style="overflow-x:auto;">
+        <table style="width:100%;border-collapse:collapse;font-size:13px;">
+          <thead>
+            <tr style="border-bottom:2px solid var(--border);">
+              <th style="text-align:left;padding:8px 10px;font-weight:700;color:var(--text-muted);font-size:11px;text-transform:uppercase;">Name</th>
+              <th style="text-align:left;padding:8px 10px;font-weight:700;color:var(--text-muted);font-size:11px;text-transform:uppercase;">Index</th>
+              <th style="text-align:left;padding:8px 10px;font-weight:700;color:var(--text-muted);font-size:11px;text-transform:uppercase;">Level/Group</th>
+              <th style="text-align:left;padding:8px 10px;font-weight:700;color:var(--text-muted);font-size:11px;text-transform:uppercase;">Status</th>
+              <th style="text-align:left;padding:8px 10px;"></th>
+            </tr>
+          </thead>
+          <tbody>
+            ${students.map(s => {
+              const key = `${s.studentLevel}||${s.studentGroup}||${s.sessionType}||${s.semester}||${s.programme}`;
+              const repCount = repCountByKey[key] || 0;
+              const atCap = repCount >= 2;
+              const isRep = s.isClassRep;
+              return `<tr style="border-bottom:1px solid var(--border);${isRep?'background:#faf5ff;':''}">
+                <td style="padding:8px 10px;font-weight:600;">${esc(s.name)}</td>
+                <td style="padding:8px 10px;color:var(--text-muted);font-family:monospace;font-size:12px;">${esc(s.IndexNumber||s.indexNumber||'—')}</td>
+                <td style="padding:8px 10px;">
+                  ${s.studentLevel ? `<span style="background:#dbeafe;color:#1d4ed8;padding:1px 6px;border-radius:20px;font-size:11px;font-weight:700">L${esc(s.studentLevel)}</span>` : ''}
+                  ${s.studentGroup ? `<span style="background:#ecfdf5;color:#059669;padding:1px 6px;border-radius:20px;font-size:11px;font-weight:700;margin-left:2px">Grp ${esc(s.studentGroup)}</span>` : ''}
+                </td>
+                <td style="padding:8px 10px;">
+                  ${isRep
+                    ? `<span style="background:#7c3aed;color:#fff;padding:2px 8px;border-radius:20px;font-size:10px;font-weight:800;">CLASS REP</span>`
+                    : `<span style="background:#f1f5f9;color:#64748b;padding:2px 8px;border-radius:20px;font-size:10px;font-weight:600;">Student</span>`}
+                  ${atCap && !isRep ? `<span style="font-size:10px;color:#dc2626;margin-left:4px">2/2 cap</span>` : ''}
+                </td>
+                <td style="padding:8px 10px;text-align:right;">
+                  ${isRep
+                    ? `<button class="btn btn-xs" style="background:#fee2e2;color:#b91c1c;border:1px solid #fca5a5;" onclick="crRemoveRepBrowse('${s._id}','${esc(s.name).replace(/'/g,"\\'")}')">Remove</button>`
+                    : atCap
+                      ? `<button class="btn btn-xs" disabled style="opacity:.4;cursor:not-allowed;">Cap reached</button>`
+                      : `<button class="btn btn-xs btn-primary" onclick="crAssignRep('${s._id}','${esc(s.name).replace(/'/g,"\\'")}')">Make Rep</button>`}
+                </td>
+              </tr>`;
+            }).join('')}
+          </tbody>
+        </table>
       </div>`;
   } catch(e) {
-    content.innerHTML = `<div class="card" style="color:#ef4444">Failed to load quiz monitor: ${e.message}</div>`;
+    listEl.innerHTML = `<p style="color:#ef4444;font-size:13px;">${e.message}</p>`;
   }
-}
+};
+
+window.crAssignRep = async function(studentId, name) {
+  if (!confirm(`Assign ${name} as a class representative?`)) return;
+  try {
+    await api('/api/class-rep-admin/assign', { method: 'POST', body: JSON.stringify({ studentId }) });
+    toastSuccess(`${name} is now a class representative`);
+    crCloseBrowse();
+    renderClassRepMgmt();
+  } catch(e) {
+    toastError(e.message || 'Failed to assign class representative');
+  }
+};
+
+window.crRemoveRep = async function(userId, name) {
+  if (!confirm(`Remove ${name} as class representative?`)) return;
+  try {
+    await api(`/api/class-rep-admin/remove/${userId}`, { method: 'DELETE' });
+    toastSuccess(`${name} is no longer a class representative`);
+    renderClassRepMgmt();
+  } catch(e) {
+    toastError(e.message || 'Failed to remove class representative');
+  }
+};
+
+window.crRemoveRepBrowse = async function(userId, name) {
+  if (!confirm(`Remove ${name} as class representative?`)) return;
+  try {
+    await api(`/api/class-rep-admin/remove/${userId}`, { method: 'DELETE' });
+    toastSuccess(`${name} is no longer a class representative`);
+    crFetchStudents();
+    // refresh main list in background
+    api('/api/class-rep-admin/list').then(d => {
+      const countEl = document.querySelector('.page-header p');
+      if (countEl) { const n = (d.reps||[]).length; countEl.textContent = `${n} active rep${n!==1?'s':''} · Max 2 per class group`; }
+    }).catch(() => {});
+  } catch(e) {
+    toastError(e.message || 'Failed to remove class representative');
+  }
+};
+
+window.crAssignDeviceInline = async function(selectEl, repId, repName) {
+  const deviceId = selectEl.value;
+  const prev = selectEl.dataset.prev ?? selectEl.value;
+  selectEl.dataset.prev = deviceId;
+  selectEl.disabled = true;
+  try {
+    if (deviceId) {
+      await api(`/api/devices/${deviceId}/assign-class-rep`, {
+        method: 'PATCH',
+        body: JSON.stringify({ classRepId: repId }),
+      });
+      toastSuccess(`Device assigned to ${repName}`);
+    } else {
+      // "— None —" selected: find the previously assigned device and unassign it
+      const data = await api('/api/devices/all').catch(() => ({ devices: [] }));
+      const assigned = (data.devices || []).find(d => d.classRepId && (d.classRepId._id || d.classRepId) === repId);
+      if (assigned) {
+        await api(`/api/devices/${assigned.deviceId}/assign-class-rep`, {
+          method: 'PATCH',
+          body: JSON.stringify({ classRepId: null }),
+        });
+        toastSuccess('Device unassigned');
+      }
+    }
+  } catch(e) {
+    toastError(e.message || 'Failed to update device assignment');
+    selectEl.value = prev;
+  } finally {
+    selectEl.disabled = false;
+  }
+};
 
 // ── HOD — Department Performance Dashboard ────────────────────────────────
 async function renderHodPerformance() {
@@ -4608,12 +5126,17 @@ async function renderSuperadminDashboard(content) {
 
 
 async function renderLecturerDashboard(content) {
-  const [sessionsData, coursesData, quizzesData, meetingsData] = await Promise.all([
+  let _ld = !isOnline() ? offlineRead('lecturer_dashboard') : null;
+  if (!isOnline() && !_ld) { content.innerHTML = `<div style="text-align:center;padding:60px 20px"><div style="font-size:48px;margin-bottom:12px">📡</div><div style="font-size:18px;font-weight:700">You're Offline</div><p style="color:var(--text-muted);margin-top:8px">Connect once while online to cache this page.</p></div>`; return; }
+  const [sessionsData, coursesData, quizzesData, meetingsData] = _ld
+    ? [_ld.sessionsData, _ld.coursesData, _ld.quizzesData, _ld.meetingsData]
+    : await Promise.all([
     api('/api/attendance-sessions?limit=5').catch(() => ({ sessions: [], pagination: { total: 0 } })),
     api('/api/courses').catch(() => ({ courses: [] })),
     api('/api/lecturer/quizzes').catch(() => ({ quizzes: [] })),
     api('/api/meetings?limit=10').catch(() => ({ data: [] })),
   ]);
+  if (!_ld) offlineCache('lecturer_dashboard', { sessionsData, coursesData, quizzesData, meetingsData });
 
   const totalStudents  = coursesData.courses.reduce((sum, c) => sum + (c.enrolledStudents?.length || 0), 0);
   const activeCourses  = coursesData.courses.length;
@@ -4630,7 +5153,7 @@ async function renderLecturerDashboard(content) {
     return d.toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' });
   };
   const _fmtTime = iso => new Date(iso).toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' });
-  const _joinUrl  = m => `https://meet.jit.si/${m.roomName}`;
+  const _joinUrl  = m => `/lecturer-meeting?meeting=${m._id}`;
 
   const _meetingStatusMeta = m => {
     if (m.status === 'live') return { label: 'Live', cls: 'sched-status--live' };
@@ -4659,7 +5182,7 @@ async function renderLecturerDashboard(content) {
     <div class="quick-actions">
       <button class="btn btn-primary btn-sm" onclick="navigateTo('sessions'); showStartSessionModal()">${sessionsIcon()} Start Session</button>
       <button class="btn btn-secondary btn-sm" onclick="navigateTo('courses'); setTimeout(showCreateCourseModal, 300)">${coursesIcon()} Create Course</button>
-      <button class="btn btn-secondary btn-sm" onclick="navigateTo('quizzes'); setTimeout(showCreateQuizModal, 300)">${quizzesIcon()} Create Quiz</button>
+      <button class="btn btn-secondary btn-sm" onclick="renderProctoredQuizzes(); setTimeout(showCreateQuizModal, 300)">${quizzesIcon()} Create Quiz</button>
     </div>
     <div class="card">
       <div class="card-title">Recent Sessions</div>
@@ -4669,7 +5192,7 @@ async function renderLecturerDashboard(content) {
           <tbody>${sessionsData.sessions.map(s => `
             <tr>
               <td style="font-weight:500;color:var(--text)">${s.title || 'Untitled'}</td>
-              <td><span class="status-badge status-${s.status}">${_sessionStatusLabel(s.status)}</span></td>
+              <td><span class="status-badge status-${s.status}">${s.status}</span></td>
               <td>${new Date(s.startedAt).toLocaleString()}</td>
               <td>${s.createdBy?.name || 'N/A'}</td>
             </tr>
@@ -5148,7 +5671,7 @@ async function employeeSignIn() {
     _showGPSBlockedModal(gpsErr.message);
     return;
   }
-  if (gpsData.accuracy != null && gpsData.accuracy > 100) {
+  if (gpsData.accuracy != null && gpsData.accuracy > 500) {
     _showStrictBlockedModal(`GPS accuracy too poor (${gpsData.accuracy}m). Move to an open area and try again.`);
     return;
   }
@@ -5181,7 +5704,7 @@ async function employeeSignOut() {
     _showGPSBlockedModal(gpsErr.message);
     return;
   }
-  if (gpsData.accuracy != null && gpsData.accuracy > 100) {
+  if (gpsData.accuracy != null && gpsData.accuracy > 500) {
     _showStrictBlockedModal(`GPS accuracy too poor (${gpsData.accuracy}m). Move to an open area and try again.`);
     return;
   }
@@ -5205,9 +5728,6 @@ async function employeeSignOut() {
 }
 
 async function renderSignInOut() {
-  if (['admin', 'superadmin'].includes(currentUser?.role)) {
-    return navigateTo('corp-attendance');
-  }
   const content = document.getElementById('main-content');
   if (!content) return;
   try {
@@ -5477,19 +5997,26 @@ async function viewStudentQuizResult(quizId) {
 }
 
 async function renderStudentDashboard(content) {
-  const [attendance, coursesData, quizzesData, meetingsData, activeSessionData] = await Promise.all([
+  let _sd = !isOnline() ? offlineRead('student_dashboard') : null;
+  if (!isOnline() && !_sd) { content.innerHTML = `<div style="text-align:center;padding:60px 20px"><div style="font-size:48px;margin-bottom:12px">📡</div><div style="font-size:18px;font-weight:700">You're Offline</div><p style="color:var(--text-muted);margin-top:8px">Connect once while online to cache this page.</p></div>`; return; }
+  const [attendance, coursesData, quizzesData, meetingsData, activeSessionData, upcomingAsgData] = _sd
+    ? [_sd.attendance, _sd.coursesData, _sd.quizzesData, _sd.meetingsData, _sd.activeSessionData, _sd.upcomingAsgData]
+    : await Promise.all([
     api('/api/attendance-sessions/my-attendance?limit=5').catch(() => ({ records: [], pagination: { total: 0 } })),
     api('/api/courses').catch(() => ({ courses: [] })),
     api('/api/student/quizzes').catch(() => ({ quizzes: [] })),
-    api('/api/zoom').catch(() => ({ meetings: [] })),
+    api('/api/meetings').catch(() => ({ data: [] })),
     api('/api/attendance-sessions/active').catch(() => ({ session: null })),
+    api('/api/student/assignments/upcoming').catch(() => ({ assignments: [] })),
   ]);
+  if (!_sd) offlineCache('student_dashboard', { attendance, coursesData, quizzesData, meetingsData, activeSessionData, upcomingAsgData });
 
   const totalCheckins = attendance.pagination.total;
   const enrolledCourses = coursesData.courses.length;
   const quizzesTaken = quizzesData.quizzes.length;
-  const upcomingMeetings = meetingsData.meetings.filter(m => m.status === 'scheduled');
+  const upcomingMeetings = (meetingsData.data || meetingsData.meetings || []).filter(m => m.status === 'scheduled');
   const activeSession = activeSessionData.session;
+  const upcomingAssignments = upcomingAsgData.assignments || [];
   const attendanceRate = totalCheckins > 0 ? Math.round((attendance.records.filter(r => r.status === 'present').length / attendance.records.length) * 100) : 0;
 
   const methodLabel = (m) => {
@@ -5514,25 +6041,28 @@ async function renderStudentDashboard(content) {
     </div>`;
   })() : '';
 
+  const classRepBanner = currentUser.isClassRep ? `
+    <div style="background:linear-gradient(135deg,#ede9fe,#f5f3ff);border:1.5px solid #c4b5fd;border-radius:12px;padding:16px 20px;margin-bottom:16px;display:flex;gap:14px;align-items:center;cursor:pointer" onclick="navigateTo('class-device')">
+      <div style="width:44px;height:44px;border-radius:12px;background:linear-gradient(135deg,#7c3aed,#6366f1);display:flex;align-items:center;justify-content:center;flex-shrink:0">
+        ${svgIcon('<path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/><polyline points="9 11 12 14 22 4"/>', 20, '#fff')}
+      </div>
+      <div style="flex:1">
+        <div style="font-weight:700;color:#5b21b6;font-size:14px;display:flex;align-items:center;gap:6px">
+          <span style="background:#7c3aed;color:#fff;font-size:10px;font-weight:800;padding:2px 7px;border-radius:20px;letter-spacing:.5px">CLASS REP</span>
+          You are a Class Representative
+        </div>
+        <div style="color:#6d28d9;font-size:12px;margin-top:2px">Tap to manage the class device &amp; connect attendance for your group.</div>
+      </div>
+      <div style="color:#7c3aed;opacity:.7">${svgIcon('<polyline points="9 18 15 12 9 6"/>', 18)}</div>
+    </div>` : '';
+
   content.innerHTML = `
     <div class="page-header">
       <h2>Welcome back, ${currentUser.name.split(' ')[0]}</h2>
       <p>${currentUser.company?.name || 'Your institution'}${currentUser.indexNumber ? ' \u2022 ' + currentUser.indexNumber : ''}</p>
     </div>
+    ${classRepBanner}
     ${devLockBanner}
-
-    ${currentUser.isClassRep ? `
-      <div style="background:rgba(124,58,237,0.06);border:1.5px solid rgba(124,58,237,0.25);border-radius:14px;padding:14px 18px;margin-bottom:18px;display:flex;align-items:center;gap:14px">
-        <div style="width:40px;height:40px;border-radius:12px;background:linear-gradient(135deg,#7c3aed,#6d28d9);display:flex;align-items:center;justify-content:center;flex-shrink:0">
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
-        </div>
-        <div style="flex:1;min-width:0">
-          <div style="font-size:11px;font-weight:800;color:#7c3aed;text-transform:uppercase;letter-spacing:.7px;margin-bottom:2px">Class Representative</div>
-          <div style="font-size:13px;color:var(--text)">You represent your class. Manage attendance sessions from <strong style="color:#7c3aed;cursor:pointer" onclick="navigateTo('rep-device')">My Device</strong>.</div>
-        </div>
-        <span style="background:#7c3aed;color:#fff;font-size:10px;font-weight:700;padding:4px 10px;border-radius:20px;letter-spacing:.4px;flex-shrink:0">REP</span>
-      </div>
-    ` : ''}
 
     ${activeSession ? `
       <div class="card" style="border-left:4px solid var(--success);background:linear-gradient(135deg,#f0fdf4,#ecfdf5);cursor:pointer" onclick="navigateTo('mark-attendance')">
@@ -5558,6 +6088,7 @@ async function renderStudentDashboard(content) {
     </div>
     
     <div class="quick-actions">
+      <button class="btn btn-primary btn-sm" onclick="navigateTo('mark-attendance')">Mark Attendance</button>
       <button class="btn btn-secondary btn-sm" onclick="navigateTo('my-attendance')">View History</button>
       <button class="btn btn-secondary btn-sm" onclick="navigateTo('courses')">My Courses</button>
       <button class="btn btn-secondary btn-sm" onclick="navigateTo('quizzes')">Quizzes</button>
@@ -5573,12 +6104,41 @@ async function renderStudentDashboard(content) {
               <div style="font-weight:600;font-size:14px">${m.title}</div>
               <div style="font-size:12px;color:var(--text-light)">${new Date(m.scheduledStart).toLocaleString()} — ${m.duration} min</div>
             </div>
-            ${m.joinUrl ? `<a href="${m.joinUrl}" target="_blank" class="btn btn-success btn-sm">Join</a>` : ''}
+            ${m._id ? `<button class="btn btn-success btn-sm" onclick="joinMeeting('${m._id}')">Join</button>` : ''}
           </div>
         `).join('')}
       </div>
     ` : ''}
-    
+
+    ${upcomingAssignments.length > 0 ? `
+      <div class="card">
+        <div class="card-title" style="display:flex;align-items:center;justify-content:space-between">
+          <span>Upcoming Assignments</span>
+          <button class="btn btn-secondary btn-sm" onclick="location.href='/assignments.html'">View All</button>
+        </div>
+        ${upcomingAssignments.slice(0, 5).map(a => {
+          const hoursLeft = Math.round((new Date(a.dueDate) - Date.now()) / 3600000);
+          const daysLeft  = Math.floor(hoursLeft / 24);
+          const urgency   = hoursLeft <= 24 ? 'color:#dc2626' : hoursLeft <= 48 ? 'color:#d97706' : 'color:var(--text-light)';
+          const timeLabel = daysLeft >= 2 ? `${daysLeft}d left` : hoursLeft >= 1 ? `${hoursLeft}h left` : 'Due soon';
+          const subStatus = a.submission ? a.submission.status : null;
+          const badge     = subStatus === 'graded' ? '<span style="font-size:11px;background:#dcfce7;color:#166534;border-radius:8px;padding:2px 8px;font-weight:600">Graded</span>'
+                          : subStatus ? '<span style="font-size:11px;background:#dbeafe;color:#1e40af;border-radius:8px;padding:2px 8px;font-weight:600">Submitted</span>'
+                          : '<span style="font-size:11px;background:#fef3c7;color:#92400e;border-radius:8px;padding:2px 8px;font-weight:600">Pending</span>';
+          return `<div style="display:flex;align-items:center;justify-content:space-between;padding:10px 0;border-bottom:1px solid var(--border);cursor:pointer" onclick="location.href='/assignments.html?id=${a._id}'">
+            <div style="flex:1;min-width:0">
+              <div style="font-weight:600;font-size:14px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${a.title}</div>
+              <div style="font-size:12px;color:var(--text-light)">${a.course?.code || ''} ${a.course?.title || ''}</div>
+            </div>
+            <div style="display:flex;align-items:center;gap:8px;flex-shrink:0;margin-left:12px">
+              ${badge}
+              <span style="font-size:12px;font-weight:600;${urgency}">${timeLabel}</span>
+            </div>
+          </div>`;
+        }).join('')}
+      </div>
+    ` : ''}
+
     <div class="card">
       <div class="card-title">Recent Attendance</div>
       ${attendance.records.length ? `
@@ -5599,12 +6159,17 @@ async function renderStudentDashboard(content) {
 }
 
 async function renderAdminDashboard(content) {
-  const [sessionsData, usersData, pendingData, announcementsData] = await Promise.all([
+  let _ad = !isOnline() ? offlineRead('admin_dashboard') : null;
+  if (!isOnline() && !_ad) { content.innerHTML = `<div style="text-align:center;padding:60px 20px"><div style="font-size:48px;margin-bottom:12px">📡</div><div style="font-size:18px;font-weight:700">You're Offline</div><p style="color:var(--text-muted);margin-top:8px">Connect once while online to cache this page.</p></div>`; return; }
+  const [sessionsData, usersData, pendingData, announcementsData] = _ad
+    ? [_ad.sessionsData, _ad.usersData, _ad.pendingData, _ad.announcementsData]
+    : await Promise.all([
     api('/api/attendance-sessions?limit=5').catch(() => ({ sessions: [], pagination: { total: 0 } })),
     api('/api/users').catch(() => ({ users: [] })),
     api('/api/approvals/pending').catch(() => ({ pending: [] })),
     api('/api/announcements').catch(() => ({ announcements: [] })),
   ]);
+  if (!_ad) offlineCache('admin_dashboard', { sessionsData, usersData, pendingData, announcementsData });
 
   const activeSessions = sessionsData.sessions.filter(s => ['active', 'live', 'paused', 'locked'].includes(s.status)).length;
   // Auto-refresh every 30s if there are active sessions
@@ -5723,10 +6288,6 @@ async function renderAdminDashboard(content) {
       <div class="quick-actions-bar">
         <div class="section-label">Quick actions</div>
         <div class="actions-row">
-          <button class="action-chip blue" onclick="navigateTo('sessions')">
-            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="16"/><line x1="8" y1="12" x2="16" y2="12"/></svg>
-            Start session
-          </button>
           <button class="action-chip green" onclick="navigateTo('users')">
             <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="8.5" cy="7" r="4"/><line x1="20" y1="8" x2="20" y2="14"/><line x1="23" y1="11" x2="17" y2="11"/></svg>
             Add user
@@ -5794,7 +6355,7 @@ async function _renderAdminCharts(sessionsData, usersData) {
     if (!window.Chart) {
       await new Promise((res, rej) => {
         const s = document.createElement('script');
-        s.src = 'https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js';
+        s.src = 'https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js';
         s.onload = res; s.onerror = rej;
         document.head.appendChild(s);
       });
@@ -6100,11 +6661,20 @@ async function renderManagerDashboard(content) {
 let _sessionsFilterCourseId = '';
 let _sessionsFilterCourseTitle = '';
 
+let _sessionsAutoRefreshTimer = null;
+
 async function renderSessions(courseId, courseTitle) {
   // Allow passing a courseId to pre-filter (e.g. from course page)
   if (courseId) { _sessionsFilterCourseId = courseId; _sessionsFilterCourseTitle = courseTitle || ''; }
   const content = document.getElementById('main-content');
   if (!content) return;
+
+  // Auto-refresh every 30 s so the UI reflects watchdog-killed sessions
+  if (_sessionsAutoRefreshTimer) clearInterval(_sessionsAutoRefreshTimer);
+  _sessionsAutoRefreshTimer = setInterval(() => {
+    if (document.getElementById('main-content')) renderSessions();
+    else { clearInterval(_sessionsAutoRefreshTimer); _sessionsAutoRefreshTimer = null; }
+  }, 30_000);
 
   // Offline: render from cache immediately
   if (!isOnline()) {
@@ -6115,9 +6685,27 @@ async function renderSessions(courseId, courseTitle) {
 
   try {
     const qs = _sessionsFilterCourseId ? `?courseId=${_sessionsFilterCourseId}` : '';
-    const data = await api('/api/attendance-sessions' + qs);
+    const [data, flaggedData, deviceData] = await Promise.allSettled([
+      api('/api/attendance-sessions' + qs),
+      ['lecturer', 'hod', 'admin', 'superadmin'].includes(currentUser.role)
+        ? api('/api/attendance-sessions/flagged/new-devices?limit=200')
+        : Promise.resolve(null),
+      api('/api/devices/my').catch(() => null),
+    ]).then(r => r.map(p => p.status === 'fulfilled' ? p.value : null));
+
     offlineCache('sessions', data);
-    _renderSessionsHTML(content, data.sessions || [], false);
+
+    // Build sessionId → flag count map for row badges
+    const flaggedBySession = {};
+    if (flaggedData?.records) {
+      for (const r of flaggedData.records) {
+        const sid = r.session?._id || r.session;
+        if (sid) flaggedBySession[sid] = (flaggedBySession[sid] || 0) + 1;
+      }
+    }
+    const pendingDeviceRecords = deviceData?.data?.pendingRecordsCount || 0;
+
+    _renderSessionsHTML(content, data?.sessions || [], false, { flaggedBySession, pendingDeviceRecords });
   } catch (e) {
     const cached = offlineRead('sessions');
     if (cached) {
@@ -6128,25 +6716,13 @@ async function renderSessions(courseId, courseTitle) {
   }
 }
 
-const SESSION_STATUS_LABELS = {
-  active:              'Active',
-  live:                'Live',
-  paused:              'Paused',
-  locked:              'Locked',
-  stopped:             'Stopped',
-  ended:               'Ended',
-  scheduled:           'Scheduled',
-  device_disconnected: 'Device Disconnected',
-};
-
-function _sessionStatusLabel(status) {
-  return SESSION_STATUS_LABELS[status] || (status ? status.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase()) : '—');
-}
-
-function _renderSessionsHTML(content, sessions, isOffline) {
+function _renderSessionsHTML(content, sessions, isOffline, extras) {
   const pendingCount = offlineQueueCount();
   const canStart = ['lecturer', 'manager'].includes(currentUser.role);
   const isLecturer = currentUser.role === 'lecturer';
+  const flaggedBySession = extras?.flaggedBySession || {};
+  const pendingDeviceRecords = extras?.pendingDeviceRecords || 0;
+  const totalFlags = Object.values(flaggedBySession).reduce((a, b) => a + b, 0);
 
   const filterPill = _sessionsFilterCourseId
     ? `<div style="display:flex;align-items:center;gap:6px;background:#eff6ff;border:1px solid #bfdbfe;border-radius:20px;padding:3px 10px 3px 8px;font-size:12px;color:#1e40af;font-weight:600;">
@@ -6155,106 +6731,184 @@ function _renderSessionsHTML(content, sessions, isOffline) {
       </div>`
     : '';
 
+  const newDeviceBanner = totalFlags > 0
+    ? `<div onclick="showFlaggedDevicesModal()" style="background:#fff7ed;border:1px solid #fed7aa;border-radius:8px;padding:10px 14px;margin-bottom:12px;display:flex;align-items:center;gap:10px;font-size:13px;color:#92400e;cursor:pointer;">
+        <span style="font-size:18px">⚠️</span>
+        <span><strong>${totalFlags} new-device flag${totalFlags !== 1 ? 's' : ''}</strong> detected — a student marked attendance from an unrecognised device. <u>Review now</u></span>
+      </div>`
+    : '';
+
+  const pendingDeviceBanner = pendingDeviceRecords > 0
+    ? `<div style="background:#f0f9ff;border:1px solid #bae6fd;border-radius:8px;padding:10px 14px;margin-bottom:12px;display:flex;align-items:center;gap:10px;font-size:13px;color:#0369a1;">
+        <span style="font-size:18px">📴</span>
+        <span><strong>${pendingDeviceRecords} record${pendingDeviceRecords !== 1 ? 's' : ''} pending sync</strong> — the classroom device recorded attendance offline and will sync to the server when it reconnects to the internet.</span>
+      </div>`
+    : '';
+
   content.innerHTML = `
     <div class="page-header">
       <h2>Attendance Sessions</h2>
       <p>Manage attendance sessions${isOffline ? ' <span style="color:#f59e0b;font-weight:600">(Offline — showing cached data)</span>' : ''}</p>
     </div>
+    ${newDeviceBanner}
+    ${pendingDeviceBanner}
     <div class="actions-bar" style="margin-bottom:14px;">
       ${canStart ? `<button class="btn btn-primary btn-sm" onclick="showStartSessionModal()">Start New Session</button>` : ''}
       ${filterPill}
       ${pendingCount > 0 ? `<span style="background:#fef3c7;color:#92400e;border:1px solid #fbbf24;border-radius:6px;padding:4px 12px;font-size:12px;font-weight:600">${pendingCount} action${pendingCount!==1?'s':''} pending sync</span>` : ''}
     </div>
-    <div>
-      ${sessions.length ? (isLecturer ? `
+    <div class="card">
+      ${sessions.length ? `
         <table>
           <thead><tr>
-            <th>Title</th><th>Course</th><th>Status</th><th>Started</th><th>Stopped</th><th>Actions</th>
+            <th>Title</th>
+            ${isLecturer ? '<th>Course</th>' : ''}
+            <th>Status</th><th>Started</th><th>Stopped</th><th>Actions</th>
           </tr></thead>
-          <tbody>${sessions.map(s => `
-            <tr>
-              <td>${s.title || 'Untitled'}</td>
-              <td><span style="font-size:11px;font-weight:600;color:#6366f1;">${s.course ? esc(s.course.code || s.course.title || '') : '—'}</span></td>
-              <td><span class="status-badge status-${s.status}">${_sessionStatusLabel(s.status)}</span></td>
+          <tbody>${sessions.map((s, i) => {
+            const flags = flaggedBySession[s._id] || 0;
+            const flagBadge = flags > 0
+              ? `<span onclick="showFlaggedDevicesModal('${s._id}')" title="${flags} new-device flag${flags !== 1 ? 's' : ''} — click to review" style="background:#fef3c7;color:#92400e;border:1px solid #fbbf24;border-radius:4px;padding:1px 6px;font-size:11px;font-weight:700;margin-left:6px;cursor:pointer;">⚠️ ${flags}</span>`
+              : '';
+            return `
+            <tr style="${flags > 0 ? 'background:#fffbeb;' : ''}">
+              <td>${s.title || 'Untitled'}${flagBadge}</td>
+              ${isLecturer ? `<td><span style="font-size:11px;font-weight:600;color:#6366f1;">${s.course ? esc(s.course.code || s.course.title || '') : '—'}</span></td>` : ''}
+              <td><span class="status-badge status-${s.status}">${s.status}</span></td>
               <td>${new Date(s.startedAt).toLocaleString()}</td>
               <td>${s.stoppedAt ? new Date(s.stoppedAt).toLocaleString() : '-'}</td>
-              <td>${['active','live','paused','locked'].includes(s.status) ? `
+              <td>${['active','live','paused','locked'].includes(s.status) && canStart ? `
                 <button class="btn btn-danger btn-sm" onclick="stopSession('${s._id}')">Stop</button>
                 ${!isOffline ? `<button class="btn btn-success btn-sm" onclick="generateQR('${s._id}')">QR Code</button>` : ''}
                 ${!isOffline ? `<button class="btn btn-sm" style="background:#7c3aed;color:#fff;font-size:11px" onclick="generateVerbalCode('${s._id}')">Verbal Code</button>` : ''}
-                <button class="btn btn-sm" style="font-size:11px;background:var(--bg);border:1px solid var(--border)" onclick="viewAttendees('${s._id}', '${(s.title||'Session').replace(/'/g,'')}')">Attendees</button>
+                <button class="btn btn-sm" style="font-size:11px;background:var(--bg);border:1px solid var(--border)" onclick="viewAttendees('${s._id}', '${(s.title||'Session').replace(/['\''\'']/g,'')}')">Attendees</button>
+              ` : ['active','live','paused','locked'].includes(s.status) ? `
+                <button class="btn btn-sm" style="font-size:11px;background:var(--bg);border:1px solid var(--border)" onclick="viewAttendees('${s._id}', '${(s.title||'Session').replace(/['\''\'']/g,'')}')">Attendees</button>
               ` : ''}</td>
-            </tr>
-          `).join('')}</tbody>
+            </tr>`;
+          }).join('')}</tbody>
         </table>
-      ` : (() => {
-        const fmtDt = d => d ? new Date(d).toLocaleString('en-GB',{day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'}) : null;
-        const duration = (a, b) => {
-          if (!a || !b) return null;
-          const m = Math.round((new Date(b) - new Date(a)) / 60000);
-          return m < 60 ? `${m}m` : `${Math.floor(m/60)}h ${m%60}m`;
-        };
-        const accentColor = st => ({ active:'#16a34a', live:'#16a34a', paused:'#f59e0b', locked:'#6366f1', stopped:'#ef4444', ended:'#94a3b8', device_disconnected:'#7c3aed' }[st] || '#94a3b8');
-        const dotStyle = st => ['active','live'].includes(st)
-          ? `width:8px;height:8px;border-radius:50%;background:#16a34a;box-shadow:0 0 0 3px rgba(22,163,74,.2);animation:pulse 1.8s infinite;flex-shrink:0`
-          : `width:8px;height:8px;border-radius:50%;background:${accentColor(st)};flex-shrink:0`;
-
-        return `<div style="display:flex;flex-direction:column;gap:12px;padding:16px">` +
-          sessions.map(s => {
-            const isLive    = ['active','live','paused','locked'].includes(s.status);
-            const lecturer  = s.createdBy?.name || '—';
-            const initial   = (s.createdBy?.name || '?')[0].toUpperCase();
-            const dept      = s.createdBy?.department || s.course?.department || '';
-            const course    = s.course ? (s.course.code || s.course.title || '') : '';
-            const safeTitle = (s.title || 'Session').replace(/'/g, '');
-            const dur       = duration(s.startedAt, s.stoppedAt || (isLive ? new Date() : null));
-            const ac        = accentColor(s.status);
-            return `
-            <div style="background:var(--card);border:1px solid var(--border);border-radius:14px;overflow:hidden;border-left:4px solid ${ac};display:flex;flex-direction:column">
-              <div style="padding:14px 16px 10px">
-                <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:10px;margin-bottom:10px">
-                  <div style="display:flex;align-items:center;gap:8px;min-width:0">
-                    <span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:${ac};${isLive?'box-shadow:0 0 0 3px rgba(22,163,74,.2);animation:pulse 1.8s infinite':''}flex-shrink:0;margin-top:4px"></span>
-                    <div>
-                      <div style="font-size:14px;font-weight:700;color:var(--text);line-height:1.3">${esc(s.title || 'Untitled Session')}</div>
-                      ${course ? `<span style="font-size:10px;font-weight:700;font-family:monospace;color:#6366f1;background:#ede9fe;padding:1px 7px;border-radius:4px;letter-spacing:.5px">${esc(course)}</span>` : ''}
-                    </div>
-                  </div>
-                  <span class="status-badge status-${s.status}" style="flex-shrink:0;font-size:10px">${_sessionStatusLabel(s.status)}</span>
-                </div>
-
-                <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:8px">
-                  <div style="width:24px;height:24px;border-radius:50%;background:linear-gradient(135deg,${ac},${ac}aa);display:flex;align-items:center;justify-content:center;color:#fff;font-size:10px;font-weight:800;flex-shrink:0">${initial}</div>
-                  <span style="font-size:12px;font-weight:600;color:var(--text)">${esc(lecturer)}</span>
-                  ${dept ? `<span style="font-size:10px;color:#fff;background:#0891b2;padding:1px 8px;border-radius:20px;font-weight:600">${esc(dept)}</span>` : ''}
-                </div>
-
-                <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;font-size:11px;color:var(--text-muted)">
-                  <span style="display:flex;align-items:center;gap:4px">
-                    <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
-                    ${fmtDt(s.startedAt) || '—'}
-                  </span>
-                  ${s.stoppedAt ? `<span style="display:flex;align-items:center;gap:4px"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/></svg>${fmtDt(s.stoppedAt)}</span>` : ''}
-                  ${dur ? `<span style="background:var(--bg);padding:1px 7px;border-radius:20px;font-weight:600">⏱ ${dur}</span>` : ''}
-                </div>
-              </div>
-
-              <div style="padding:10px 16px;border-top:1px solid var(--border);background:var(--bg);display:flex;gap:6px;flex-wrap:wrap">
-                ${isLive && canStart ? `<button class="btn btn-danger btn-sm" style="font-size:11px;flex:1;min-width:70px" onclick="stopSession('${s._id}')">■ Stop</button>` : ''}
-                ${isLive && canStart && !isOffline ? `<button class="btn btn-success btn-sm" style="font-size:11px;flex:1;min-width:70px" onclick="generateQR('${s._id}')">⬛ QR Code</button>` : ''}
-                ${isLive && canStart && !isOffline ? `<button class="btn btn-sm" style="font-size:11px;flex:1;min-width:70px;background:#7c3aed;color:#fff" onclick="generateVerbalCode('${s._id}')">🔑 Verbal</button>` : ''}
-                <button class="btn btn-sm" style="font-size:11px;flex:1;min-width:80px;background:var(--card);border:1px solid var(--border)" onclick="viewAttendees('${s._id}','${safeTitle}')">👥 Attendees</button>
-              </div>
-            </div>`;
-          }).join('') + `</div>`;
-      })()
-      : `<div class="empty-state"><p>${_sessionsFilterCourseId ? 'No sessions for this course yet.' : 'No sessions found'}</p></div>`}
+      ` : `<div class="empty-state"><p>${_sessionsFilterCourseId ? 'No sessions for this course yet.' : 'No sessions found'}</p></div>`}
     </div>
   `;
 }
 
 
-async function showStartSessionModal() {
+// ── Flagged new-device review modal ──────────────────────────────────────────
+async function showFlaggedDevicesModal(sessionId) {
+  const container = document.getElementById('modal-container');
+  if (!container) return;
+  container.classList.remove('hidden');
+  container.innerHTML = `<div class="modal-overlay"><div class="modal"><p style="color:var(--text-muted);text-align:center;padding:16px 0">⏳ Loading flagged records…</p></div></div>`;
+
+  try {
+    const qs = sessionId ? `?sessionId=${encodeURIComponent(sessionId)}&limit=100` : '?limit=100';
+    const data = await api('/api/attendance-sessions/flagged/new-devices' + qs);
+    const records = data.records || [];
+
+    if (!records.length) {
+      container.innerHTML = `
+        <div class="modal-overlay" onclick="closeModal(event)">
+          <div class="modal" onclick="event.stopPropagation()" style="text-align:center;max-width:400px">
+            <div style="font-size:40px;margin-bottom:12px">✅</div>
+            <h3 style="margin-bottom:8px">All Clear</h3>
+            <p style="font-size:13px;color:var(--text-muted);margin-bottom:20px">No unresolved new-device flags.</p>
+            <button class="btn btn-secondary btn-sm" onclick="closeModal()">Close</button>
+          </div>
+        </div>`;
+      return;
+    }
+
+    const rows = records.map(r => {
+      const studentName  = esc(r.user?.name || 'Unknown');
+      const indexNum     = esc(r.user?.indexNumber || '—');
+      const sessionTitle = esc(r.session?.title || 'Session');
+      const deviceId     = esc(r.deviceId || '—');
+      const time         = r.checkInTime ? new Date(r.checkInTime).toLocaleString() : '—';
+      const shortDev     = r.deviceId ? r.deviceId.slice(0, 16) + (r.deviceId.length > 16 ? '…' : '') : '—';
+      return `
+        <tr id="flagrow-${r._id}">
+          <td style="font-size:13px"><strong>${studentName}</strong><br><span style="color:var(--text-muted);font-size:11px">${indexNum}</span></td>
+          <td style="font-size:12px;color:var(--text-muted)">${sessionTitle}</td>
+          <td style="font-size:11px;font-family:monospace;color:#7c3aed" title="${deviceId}">${shortDev}</td>
+          <td style="font-size:11px;color:var(--text-muted)">${time}</td>
+          <td style="white-space:nowrap">
+            <button class="btn btn-sm" style="font-size:11px;background:#dcfce7;color:#166534;border:1px solid #86efac;margin-right:4px"
+              onclick="resolveFlaggedRecord('${r._id}','trust')">Trust Device</button>
+            <button class="btn btn-sm" style="font-size:11px;background:var(--bg);color:var(--text-muted);border:1px solid var(--border)"
+              onclick="resolveFlaggedRecord('${r._id}','dismiss')">Dismiss</button>
+          </td>
+        </tr>`;
+    }).join('');
+
+    container.innerHTML = `
+      <div class="modal-overlay" onclick="closeModal(event)">
+        <div class="modal" onclick="event.stopPropagation()" style="max-width:780px;width:95vw">
+          <h3 style="margin-bottom:4px">⚠️ New-Device Flags</h3>
+          <p style="font-size:12px;color:var(--text-muted);margin-bottom:16px">
+            These students marked attendance from a device not previously seen on their account.
+            <strong>Trust Device</strong> adds it to their trusted list and clears all matching flags.
+            <strong>Dismiss</strong> clears only this flag.
+          </p>
+          <div style="overflow-x:auto">
+            <table style="width:100%;font-size:13px">
+              <thead><tr style="font-size:11px;color:var(--text-muted)">
+                <th style="text-align:left;padding:6px 8px">Student</th>
+                <th style="text-align:left;padding:6px 8px">Session</th>
+                <th style="text-align:left;padding:6px 8px">Device ID</th>
+                <th style="text-align:left;padding:6px 8px">Time</th>
+                <th style="text-align:left;padding:6px 8px">Action</th>
+              </tr></thead>
+              <tbody>${rows}</tbody>
+            </table>
+          </div>
+          <div style="margin-top:16px;text-align:right">
+            <button class="btn btn-secondary btn-sm" onclick="closeModal()">Close</button>
+          </div>
+        </div>
+      </div>`;
+  } catch (e) {
+    container.innerHTML = `
+      <div class="modal-overlay" onclick="closeModal(event)">
+        <div class="modal" onclick="event.stopPropagation()" style="text-align:center;max-width:380px">
+          <p style="color:#dc2626">Failed to load flagged records: ${esc(e.message)}</p>
+          <button class="btn btn-secondary btn-sm" style="margin-top:12px" onclick="closeModal()">Close</button>
+        </div>
+      </div>`;
+  }
+}
+
+async function resolveFlaggedRecord(recordId, action) {
+  const row = document.getElementById('flagrow-' + recordId);
+  if (row) row.style.opacity = '0.4';
+
+  try {
+    const endpoint = action === 'trust'
+      ? `/api/attendance-sessions/flagged/${recordId}/trust`
+      : `/api/attendance-sessions/flagged/${recordId}/resolve`;
+
+    const result = await api(endpoint, { method: 'POST' });
+
+    if (row) row.remove();
+
+    const tbody = document.querySelector('#modal-container tbody');
+    if (tbody && !tbody.children.length) {
+      closeModal();
+      toastSuccess('All flags resolved.');
+    } else if (action === 'trust') {
+      toastSuccess(`Device trusted for ${result.studentName || 'student'} — all matching flags cleared.`);
+    } else {
+      toastSuccess('Flag dismissed.');
+    }
+
+    renderSessions();
+  } catch (e) {
+    if (row) row.style.opacity = '1';
+    toastError('Failed: ' + e.message);
+  }
+}
+
+async function showStartSessionModal(offlineOverride) {
   // Force a fresh connectivity check each time this is opened (covers Retry path)
   _serverCheckTs = 0;
 
@@ -6298,14 +6952,13 @@ async function showStartSessionModal() {
       <div class="modal-overlay" onclick="closeModal(event)">
         <div class="modal" onclick="event.stopPropagation()" style="text-align:center;max-width:400px">
           <div style="font-size:40px;margin-bottom:12px">📟</div>
-          <h3 style="margin-bottom:8px">Device Not Paired</h3>
+          <h3 style="margin-bottom:8px">No Device Connected</h3>
           <p style="font-size:13px;color:var(--text-muted);margin-bottom:20px;line-height:1.6">
-            You haven't paired a classroom device yet.<br>
-            Open <strong>Attendance Device</strong>, generate a pairing code, and enter it on your ESP32.
+            No attendance device is connected to your session yet.<br><br>
+            Ask your <strong>class rep</strong> to open the app, go to <strong>Class Device</strong>, and connect the device to you before you start.
           </p>
           <div style="display:flex;gap:8px;justify-content:center">
             <button class="btn btn-secondary btn-sm" onclick="closeModal()">Cancel</button>
-            <button class="btn btn-primary btn-sm" onclick="closeModal();navigateTo('attendance-device')">Open Pairing</button>
             <button class="btn btn-primary btn-sm" onclick="showStartSessionModal()">↻ Retry</button>
           </div>
         </div>
@@ -6313,36 +6966,15 @@ async function showStartSessionModal() {
     return;
   }
 
-  // Device registered but offline
-  if (!checkError && deviceStatus && deviceStatus.hasDevice && !deviceStatus.deviceOnline) {
-    const lastSeen = deviceStatus.lastSeenAt
-      ? `Last seen: ${new Date(deviceStatus.lastSeenAt).toLocaleString()}`
-      : 'Last seen: Never';
-    container.innerHTML = `
-      <div class="modal-overlay" onclick="closeModal(event)">
-        <div class="modal" onclick="event.stopPropagation()" style="text-align:center;max-width:400px">
-          <div style="font-size:40px;margin-bottom:12px">📟</div>
-          <h3 style="margin-bottom:8px">Device is Offline</h3>
-          <p style="font-size:13px;color:var(--text-muted);margin-bottom:16px;line-height:1.6">
-            The <strong>DIKLY classroom device</strong> is not responding.<br>
-            Power it on, wait a few seconds, then try again.
-          </p>
-          <div style="background:#fef3c7;border:1px solid #fde68a;border-radius:8px;padding:10px 14px;font-size:12px;color:#92400e;margin-bottom:20px;text-align:left">
-            <strong>${lastSeen}</strong><br>
-            Status: Offline — no heartbeat in last 20s
-          </div>
-          <div style="display:flex;gap:8px;justify-content:center">
-            <button class="btn btn-secondary btn-sm" onclick="closeModal()">Cancel</button>
-            <button class="btn btn-primary btn-sm" onclick="showStartSessionModal()">↻ Retry</button>
-          </div>
-        </div>
-      </div>`;
-    return;
+  // Device registered but offline — automatically proceed in offline mode (no explicit button needed).
+  // The device will sync the rotating code as soon as it reconnects to WiFi.
+  if (!offlineOverride && !checkError && deviceStatus && deviceStatus.hasDevice && !deviceStatus.deviceOnline) {
+    offlineOverride = 'offline';
   }
 
   // Device check failed — network error or server unreachable.
   // BLOCK — never silently proceed. Show retry screen.
-  if (checkError) {
+  if (!offlineOverride && checkError) {
     container.innerHTML = `
       <div class="modal-overlay" onclick="closeModal(event)">
         <div class="modal" onclick="event.stopPropagation()" style="text-align:center;max-width:400px">
@@ -6360,7 +6992,7 @@ async function showStartSessionModal() {
       </div>`;
     return;
   }
-  // ── Device confirmed online — show session form ────────────
+  // ── Device confirmed online (or offline override) — show session form ────────────
 
   // Fetch courses — always from dikly.sbs (hardcoded in API constant)
   // If this fails, it means the server is unreachable — show clear error.
@@ -6394,19 +7026,59 @@ async function showStartSessionModal() {
     return;
   }
 
+  // Build class group badge from the paired device info
+  const devData = deviceStatus?.hasDevice
+    ? (() => {
+        try { return null; } catch(_) { return null; } // populated below
+      })()
+    : null;
+  let groupBadge = '';
+  try {
+    const devResp = await api('/api/devices/my');
+    const dev = devResp?.data || null;
+    if (dev) {
+      const parts = [
+        dev.assignedDepartment,
+        dev.assignedLevel && 'Level ' + dev.assignedLevel,
+        dev.assignedGroup && 'Group ' + dev.assignedGroup,
+      ].filter(Boolean);
+      if (parts.length) {
+        groupBadge = `<div style="display:flex;align-items:center;gap:8px;background:#f0fdf4;border:1px solid #bbf7d0;border-radius:8px;padding:8px 12px;font-size:12px;color:#166534;margin-bottom:14px">
+          <span style="font-size:16px">📍</span>
+          <div><span style="font-weight:600">Device:</span> ${esc(dev.deviceName || dev.deviceId)}<br><span style="font-weight:600">Class Group:</span> ${esc(parts.join(' · '))}</div>
+        </div>`;
+      }
+    }
+  } catch(_) { /* non-critical */ }
+
+  const offlineBanner = offlineOverride ? `
+    <div style="background:#fef3c7;border:1px solid #fde68a;border-radius:8px;padding:10px 14px;font-size:12px;color:#92400e;margin-bottom:14px;display:flex;align-items:flex-start;gap:8px">
+      <span style="font-size:16px;flex-shrink:0">📶</span>
+      <div><strong>Offline Mode</strong> — The classroom device has no internet. The session will start and the device will sync the rotating code when WiFi reconnects. Students mark attendance using the code on the device screen.</div>
+    </div>` : '';
+
   container.innerHTML = `
     <div class="modal-overlay" onclick="closeModal(event)">
-      <div class="modal" onclick="event.stopPropagation()">
+      <div class="modal" onclick="event.stopPropagation()" data-offline="${offlineOverride ? '1' : ''}">
         <h3>Start New Session</h3>
+        ${offlineBanner}
+        ${groupBadge}
         <div class="form-group">
           <label>Course <span style="color:red">*</span></label>
-          <select id="session-course" style="width:100%;padding:9px 12px;border:1.5px solid var(--border);border-radius:8px;font-size:13px">
+          <select id="session-course" onchange="loadSessionDevices(this.value)" style="width:100%;padding:9px 12px;border:1.5px solid var(--border);border-radius:8px;font-size:13px">
             <option value="">— Select Course —</option>
             ${courses
                 .filter(c => !c.needsApproval || c.approvalStatus === 'approved')
                 .map(c => `<option value="${c._id}">${esc(c.title)}${c.level?' · L'+c.level:''}${c.group?' · Grp '+c.group:''}</option>`).join('')}
           </select>
           ${courses.some(c => c.needsApproval && c.approvalStatus !== 'approved') ? `<p style="font-size:11px;color:#b45309;margin-top:4px">Some courses are hidden because they are pending approval or rejected.</p>` : ''}
+        </div>
+        <div class="form-group" id="session-device-group" style="display:none">
+          <label>Classroom Device <span style="color:red">*</span></label>
+          <select id="session-device" style="width:100%;padding:9px 12px;border:1.5px solid var(--border);border-radius:8px;font-size:13px">
+            <option value="">— Loading devices… —</option>
+          </select>
+          <p id="session-device-hint" style="font-size:11px;color:var(--text-muted);margin-top:4px"></p>
         </div>
         <div class="form-group">
           <label>Session Title <span style="font-weight:400;color:var(--text-muted);font-size:12px">(optional)</span></label>
@@ -6421,11 +7093,54 @@ async function showStartSessionModal() {
   `;
 }
 
+async function loadSessionDevices(courseId) {
+  const group  = document.getElementById('session-device-group');
+  const select = document.getElementById('session-device');
+  const hint   = document.getElementById('session-device-hint');
+  if (!group || !select) return;
+
+  if (!courseId) {
+    group.style.display = 'none';
+    return;
+  }
+
+  group.style.display = 'block';
+  select.innerHTML = '<option value="">— Loading devices… —</option>';
+  if (hint) hint.textContent = '';
+
+  try {
+    const data = await api(`/api/devices/available?courseId=${encodeURIComponent(courseId)}`);
+    const devices = data.devices || [];
+    if (!devices.length) {
+      select.innerHTML = '<option value="">— No devices found for this course —</option>';
+      if (hint) hint.textContent = 'Ask an admin or class rep to assign a device to this group.';
+      return;
+    }
+    select.innerHTML = '<option value="">— Select Device —</option>' +
+      devices.map(d => {
+        const label = [d.deviceName || d.deviceId, d.assignedGroup ? 'Grp ' + d.assignedGroup : '', d.online ? '● Online' : '○ Offline'].filter(Boolean).join(' · ');
+        return `<option value="${esc(d.deviceId)}"${d.online ? '' : ' style="color:var(--text-muted)"'}>${esc(label)}</option>`;
+      }).join('');
+    if (hint) hint.textContent = devices.length === 1 ? 'One device found — selected automatically.' : `${devices.length} devices available for this course's group.`;
+    if (devices.length === 1) select.value = devices[0].deviceId;
+  } catch (e) {
+    select.innerHTML = '<option value="">— Failed to load devices —</option>';
+    if (hint) hint.textContent = e.message || 'Could not fetch devices.';
+  }
+}
+
 async function startSession() {
   const title    = document.getElementById('session-title')?.value?.trim();
   const courseId = document.getElementById('session-course')?.value;
+  const deviceEl = document.getElementById('session-device');
+  const deviceId = deviceEl?.closest('#session-device-group')?.style.display !== 'none'
+    ? deviceEl?.value || null
+    : null;
 
   if (!courseId) { toastWarning('Please select a course.'); return; }
+  if (deviceEl?.closest('#session-device-group')?.style.display !== 'none' && !deviceId) {
+    toastWarning('Please select a classroom device.'); return;
+  }
 
   // Don't close modal yet — keep it open so we can show errors in it
   const container = document.getElementById('modal-container');
@@ -6454,26 +7169,73 @@ async function startSession() {
 
   try {
     const hotspotKey = sessionStorage.getItem('dikly_esp32_hotspot_key') || '';
-    await api('/api/attendance-sessions/start', {
+    const result = await api('/api/attendance-sessions/start', {
       method: 'POST',
       headers: hotspotKey ? { 'x-esp32-hotspot-key': hotspotKey } : {},
-      body: JSON.stringify({ title, courseId }),
+      body: JSON.stringify({ title, courseId, ...(deviceId ? { deviceId } : {}) }),
     });
     closeModal();
+    if (result.offlineMode) {
+      toastInfo('Session started in offline mode — device will sync when it reconnects.');
+    } else if (result.warning) {
+      if (container) container.innerHTML = `
+        <div class="modal-overlay" onclick="closeModal(event)">
+          <div class="modal" onclick="event.stopPropagation()" style="max-width:440px">
+            <div style="font-size:36px;text-align:center;margin-bottom:10px">⚠️</div>
+            <h3 style="text-align:center;margin-bottom:10px">Course Mismatch Warning</h3>
+            <p style="font-size:13px;color:var(--text-muted);line-height:1.6;margin-bottom:18px">${esc(result.warning)}</p>
+            <div style="display:flex;gap:8px;justify-content:center">
+              <button class="btn btn-primary btn-sm" onclick="closeModal()">OK, Continue</button>
+            </div>
+          </div>
+        </div>`;
+    }
     renderSessions();
   } catch (e) {
     // Device offline or not registered — show in-modal block screen
     if (e.status === 503) {
-      const msg = e.data?.message || 'The classroom device is not responding. Power it on and try again.';
+      const msg = e.data?.message || 'The classroom device is not responding. Power it on, connect to DIKLY-CLASSROOM WiFi, then try again.';
       if (container) container.innerHTML = `
         <div class="modal-overlay" onclick="closeModal(event)">
-          <div class="modal" onclick="event.stopPropagation()" style="text-align:center;max-width:400px">
+          <div class="modal" onclick="event.stopPropagation()" style="text-align:center;max-width:420px">
             <div style="font-size:40px;margin-bottom:12px">📟</div>
-            <h3 style="margin-bottom:8px">Device is Offline</h3>
+            <h3 style="margin-bottom:8px">Device Not Detected</h3>
             <p style="font-size:13px;color:var(--text-muted);margin-bottom:16px;line-height:1.6">${esc(msg)}</p>
+            <div style="background:#fef3c7;border:1px solid #fde68a;border-radius:8px;padding:10px 14px;font-size:12px;color:#92400e;margin-bottom:20px;text-align:left">
+              <strong>If the device has no internet:</strong> Connect your phone to <strong>DIKLY-CLASSROOM</strong> WiFi first, then tap Retry.
+            </div>
             <div style="display:flex;gap:8px;justify-content:center">
               <button class="btn btn-secondary btn-sm" onclick="closeModal()">Cancel</button>
               <button class="btn btn-primary btn-sm" onclick="showStartSessionModal()">↻ Retry</button>
+            </div>
+          </div>
+        </div>`;
+    } else if (e.status === 403 && e.data?.timetableBlocked) {
+      const msg  = e.data?.message || 'This session is outside your scheduled time window.';
+      const sched = e.data?.scheduledTime;
+      const schedLine = sched ? `<div style="background:#fef3c7;border:1px solid #fde68a;border-radius:8px;padding:10px 14px;font-size:12px;color:#92400e;margin-bottom:20px;text-align:left">Scheduled: <strong>${sched.start} – ${sched.end}</strong></div>` : '';
+      if (container) container.innerHTML = `
+        <div class="modal-overlay" onclick="closeModal(event)">
+          <div class="modal" onclick="event.stopPropagation()" style="text-align:center;max-width:400px">
+            <div style="font-size:40px;margin-bottom:12px">🕐</div>
+            <h3 style="margin-bottom:8px">Not Your Scheduled Time</h3>
+            <p style="font-size:13px;color:var(--text-muted);margin-bottom:14px;line-height:1.6">${esc(msg)}</p>
+            ${schedLine}
+            <div style="display:flex;gap:8px;justify-content:center">
+              <button class="btn btn-secondary btn-sm" onclick="closeModal()">OK</button>
+            </div>
+          </div>
+        </div>`;
+    } else if (e.status === 403 && e.data?.deviceAssigned === false) {
+      const msg = e.data?.message || 'You are not assigned to this attendance device.';
+      if (container) container.innerHTML = `
+        <div class="modal-overlay" onclick="closeModal(event)">
+          <div class="modal" onclick="event.stopPropagation()" style="text-align:center;max-width:400px">
+            <div style="font-size:40px;margin-bottom:12px">🚫</div>
+            <h3 style="margin-bottom:8px">Device Not Assigned to You</h3>
+            <p style="font-size:13px;color:var(--text-muted);margin-bottom:20px;line-height:1.6">${esc(msg)}</p>
+            <div style="display:flex;gap:8px;justify-content:center">
+              <button class="btn btn-secondary btn-sm" onclick="closeModal()">OK</button>
             </div>
           </div>
         </div>`;
@@ -6514,7 +7276,7 @@ async function stopSession(id) {
 // QR auto-rotation state
 let _qrRotateTimer = null;
 let _qrCountdownTimer = null;
-const QR_EXPIRY_SECONDS = 15;
+const QR_EXPIRY_SECONDS = 60;
 
 function _stopQrTimers() {
   if (_qrRotateTimer)   { clearTimeout(_qrRotateTimer);  _qrRotateTimer = null; }
@@ -6580,12 +7342,12 @@ async function generateQR(sessionId) {
                     style="transition:stroke-dashoffset 1s linear,stroke 0.3s"/>
                 </svg>
                 <div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center">
-                  <span id="qr-countdown" style="font-size:16px;font-weight:800;color:var(--primary)">${QR_EXPIRY_SECONDS}</span>
+                  <span id="qr-countdown" style="font-size:16px;font-weight:800;color:var(--primary)">${Math.floor(QR_EXPIRY_SECONDS/60)}:${String(QR_EXPIRY_SECONDS%60).padStart(2,'0')}</span>
                 </div>
               </div>
               <div id="qr-status" style="display:inline-flex;align-items:center;gap:6px;background:rgba(34,197,94,0.1);border:1px solid rgba(34,197,94,0.3);border-radius:999px;padding:5px 14px;font-size:12px;font-weight:600;color:#16a34a">
                 <span style="width:7px;height:7px;border-radius:50%;background:#16a34a;display:inline-block;animation:pulse-green 1.5s infinite"></span>
-                Live · Auto-refreshes every ${QR_EXPIRY_SECONDS}s
+                Live · Auto-refreshes every 1 min
               </div>
             </div>
 
@@ -6601,17 +7363,18 @@ async function generateQR(sessionId) {
       const ring = document.getElementById('qr-ring');
       const countEl = document.getElementById('qr-countdown');
       const circumference = 170;
+      const _fmtTime = s => `${Math.floor(s/60)}:${String(s%60).padStart(2,'0')}`;
 
       _qrCountdownTimer = setInterval(() => {
         remaining--;
-        if (countEl) countEl.textContent = remaining;
+        if (countEl) countEl.textContent = _fmtTime(remaining);
         if (ring) {
           const offset = circumference * (1 - remaining / QR_EXPIRY_SECONDS);
           ring.style.strokeDashoffset = offset;
-          // Turn orange at 5s, red at 3s
-          if (remaining <= 3)       ring.style.stroke = '#ef4444';
-          else if (remaining <= 5)  ring.style.stroke = '#f97316';
-          else                      ring.style.stroke = 'var(--primary)';
+          // Turn orange at 15s, red at 5s
+          if (remaining <= 5)        ring.style.stroke = '#ef4444';
+          else if (remaining <= 15)  ring.style.stroke = '#f97316';
+          else                       ring.style.stroke = 'var(--primary)';
         }
         if (remaining <= 0) {
           clearInterval(_qrCountdownTimer);
@@ -6631,11 +7394,21 @@ async function generateQR(sessionId) {
       }, QR_EXPIRY_SECONDS * 1000);
 
     } catch (e) {
+      _stopQrTimers();
+      const sessionEnded = e.message?.toLowerCase().includes('not active') || e.message?.toLowerCase().includes('not found');
       container.innerHTML = `
-        <div class="modal-overlay" onclick="_stopQrTimers();closeModal(event)">
-          <div class="modal" style="text-align:center">
-            <p style="color:var(--danger)">${e.message}</p>
-            <button class="btn btn-primary btn-sm" onclick="_stopQrTimers();closeModal()">Close</button>
+        <div class="modal-overlay" onclick="closeModal(event)">
+          <div class="modal" style="text-align:center;max-width:360px">
+            <div style="font-size:40px;margin-bottom:12px">${sessionEnded ? '📴' : '⚠️'}</div>
+            <h3 style="margin:0 0 8px">${sessionEnded ? 'Session Ended' : 'QR Error'}</h3>
+            <p style="color:var(--text-light);font-size:14px;margin-bottom:20px">
+              ${sessionEnded
+                ? 'The classroom device went offline and the session was automatically stopped.'
+                : e.message}
+            </p>
+            <div class="modal-actions" style="justify-content:center">
+              <button class="btn btn-primary btn-sm" onclick="closeModal();renderSessions()">Back to Sessions</button>
+            </div>
           </div>
         </div>`;
     }
@@ -6648,34 +7421,68 @@ async function generateVerbalCode(sessionId) {
   const container = document.getElementById('modal-container');
   container.classList.remove('hidden');
 
+  let _verbalTimer = null;
+  let _verbalRefreshTimer = null;
+
+  function _stopVerbalTimers() {
+    if (_verbalTimer)        { clearInterval(_verbalTimer);   _verbalTimer = null; }
+    if (_verbalRefreshTimer) { clearTimeout(_verbalRefreshTimer); _verbalRefreshTimer = null; }
+  }
+
   async function _fetchAndShow() {
+    _stopVerbalTimers();
     try {
-      const data = await api('/api/qr-tokens/generate', {
-        method: 'POST',
-        body: JSON.stringify({ sessionId, codeType: 'verbal', expiryMinutes: 5 })
-      });
-      const { code, expiresAt } = data.qrToken;
-      const expiry = new Date(expiresAt);
-      const totalSecs = Math.round((expiry - Date.now()) / 1000);
+      // Try to get the device code first (same HMAC code the ESP32 screen shows).
+      // Falls back to QR-token verbal code for sessions without a device.
+      let code, totalSecs, isDeviceCode = false, windowSecs = 300;
+
+      try {
+        const dc = await api(`/api/attendance-sessions/${sessionId}/current-code`);
+        code = dc.code;
+        totalSecs = dc.expiresInSeconds;
+        windowSecs = dc.windowSeconds || 300;
+        isDeviceCode = true;
+      } catch (_) {
+        // No device seed on this session — fall back to QR token verbal code
+        const data = await api('/api/qr-tokens/generate', {
+          method: 'POST',
+          body: JSON.stringify({ sessionId, codeType: 'verbal', expiryMinutes: 5 })
+        });
+        const qr = data.qrToken;
+        code = qr.code;
+        totalSecs = Math.round((new Date(qr.expiresAt) - Date.now()) / 1000);
+      }
+
+      const modeWord = currentUser.company?.mode === 'corporate' ? 'employees' : 'students';
+      const subtitle = isDeviceCode
+        ? 'This is the code currently shown on the classroom device screen.'
+        : `Read this code out loud. All ${modeWord} can use it within the time window.`;
+      const badgeText = isDeviceCode
+        ? '📟 Live device code — matches classroom screen'
+        : `Multi-use · All ${modeWord} can enter this code`;
+
+      const fmtTime = s => s >= 60 ? `${Math.floor(s/60)}m ${s%60}s` : `${s}s`;
 
       container.innerHTML = `
-        <div class="modal-overlay" onclick="closeModal(event)">
+        <div class="modal-overlay" onclick="_stopVerbalTimers();closeModal(event)">
           <div class="modal" onclick="event.stopPropagation()" style="text-align:center;max-width:380px">
             <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px">
-              <h3 style="margin:0">Verbal Attendance Code</h3>
-              <button onclick="closeModal()" style="background:none;border:none;font-size:20px;cursor:pointer;color:var(--text-light)">×</button>
+              <h3 style="margin:0">${isDeviceCode ? 'Device Attendance Code' : 'Verbal Attendance Code'}</h3>
+              <button onclick="_stopVerbalTimers();closeModal()" style="background:none;border:none;font-size:20px;cursor:pointer;color:var(--text-light)">×</button>
             </div>
-            <p style="color:var(--text-light);font-size:12px;margin-bottom:16px">Read this code out loud. All ${currentUser.company?.mode === 'corporate' ? 'employees' : 'students'} can use it within the time window.</p>
+            <p style="color:var(--text-light);font-size:12px;margin-bottom:16px">${subtitle}</p>
             <div style="font-size:64px;font-weight:900;color:#7c3aed;letter-spacing:12px;margin-bottom:8px;font-family:monospace">${code}</div>
-            <div style="display:inline-flex;align-items:center;gap:6px;background:rgba(124,58,237,0.1);border:1px solid rgba(124,58,237,0.3);border-radius:999px;padding:5px 14px;font-size:12px;font-weight:600;color:#7c3aed;margin-bottom:6px">
+            <div style="display:inline-flex;align-items:center;gap:6px;background:rgba(124,58,237,0.1);border:1px solid rgba(124,58,237,0.3);border-radius:999px;padding:5px 14px;font-size:12px;font-weight:600;color:#7c3aed;margin-bottom:10px">
               <span style="width:7px;height:7px;border-radius:50%;background:#7c3aed;display:inline-block;animation:pulse-green 1.5s infinite"></span>
-              Multi-use · All ${currentUser.company?.mode === 'corporate' ? 'employees' : 'students'} can enter this code
+              ${badgeText}
             </div>
-            <p style="color:var(--text-light);font-size:12px;margin-bottom:4px">Expires in: <span id="verbal-countdown" style="font-weight:700;color:#7c3aed">${Math.floor(totalSecs/60)}m ${totalSecs%60}s</span></p>
-            <p style="color:var(--text-muted);font-size:11px;margin-bottom:20px">Expires at ${expiry.toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'})}</p>
+            <p style="color:var(--text-light);font-size:12px;margin-bottom:20px">
+              ${isDeviceCode ? 'Rotates in:' : 'Expires in:'}
+              <span id="verbal-countdown" style="font-weight:700;color:#7c3aed">${fmtTime(totalSecs)}</span>
+            </p>
             <div class="modal-actions" style="justify-content:center;gap:8px">
-              <button class="btn btn-sm" style="background:#7c3aed;color:#fff" onclick="generateVerbalCode('${sessionId}')">New Code</button>
-              <button class="btn btn-primary btn-sm" onclick="closeModal()">Close</button>
+              <button class="btn btn-sm" style="background:#7c3aed;color:#fff" onclick="generateVerbalCode('${sessionId}')">Refresh</button>
+              <button class="btn btn-primary btn-sm" onclick="_stopVerbalTimers();closeModal()">Close</button>
             </div>
           </div>
         </div>
@@ -6684,14 +7491,24 @@ async function generateVerbalCode(sessionId) {
       // Countdown timer
       let secs = totalSecs;
       const countEl = () => document.getElementById('verbal-countdown');
-      const timer = setInterval(() => {
+      _verbalTimer = setInterval(() => {
         secs--;
-        if (secs <= 0) { clearInterval(timer); if (countEl()) countEl().textContent = 'Expired'; return; }
-        if (countEl()) countEl().textContent = Math.floor(secs/60) + 'm ' + (secs%60) + 's';
+        if (secs <= 0) {
+          clearInterval(_verbalTimer); _verbalTimer = null;
+          if (countEl()) countEl().textContent = 'Rotating…';
+          return;
+        }
+        if (countEl()) countEl().textContent = fmtTime(secs);
       }, 1000);
 
+      // Auto-refresh when the window rolls over
+      if (isDeviceCode) {
+        _verbalRefreshTimer = setTimeout(() => generateVerbalCode(sessionId), totalSecs * 1000);
+      }
+
     } catch(e) {
-      const msg = e.message || 'Failed to generate code';
+      _stopVerbalTimers();
+      const msg = e.message || 'Failed to get code';
       const isSubError = msg.toLowerCase().includes('subscription') || msg.toLowerCase().includes('trial');
       container.innerHTML = `<div class="modal-overlay" onclick="closeModal(event)"><div class="modal" onclick="event.stopPropagation()" style="text-align:center;padding:24px">
         <div style="font-size:36px;margin-bottom:12px">${isSubError ? '🔒' : '⚠️'}</div>
@@ -6706,276 +7523,473 @@ async function generateVerbalCode(sessionId) {
 }
 
 
-// ── Shared helper: render a single user row card ──────────────────────────────
-function _userRowCard(u, canManage) {
-  const roleAvatarColor = {
-    admin: '#dc2626', superadmin: '#0d1117', hod: '#0891b2',
-    lecturer: '#a16207', student: '#7c3aed', manager: '#1d4ed8', employee: '#15803d'
-  };
-  const initials  = (u.name || '?').split(' ').map(w => w[0]).join('').slice(0,2).toUpperCase();
-  const avatarBg  = roleAvatarColor[u.role] || '#6b7280';
-  const identifier = u.indexNumber || u.IndexNumber || u.employeeId || '';
-  const emailOrId  = u.email ? u.email : identifier || 'N/A';
-  const tags = u.role === 'student' ? [
-    u.programme    ? `<span style="background:#ede9fe;color:#7c3aed;padding:2px 7px;border-radius:20px;font-size:10px;font-weight:700">${esc(u.programme)}</span>` : '',
-    u.studentLevel ? `<span style="background:#dbeafe;color:#1d4ed8;padding:2px 7px;border-radius:20px;font-size:10px;font-weight:700">L${esc(u.studentLevel)}</span>` : '',
-    u.studentGroup ? `<span style="background:#ecfdf5;color:#059669;padding:2px 7px;border-radius:20px;font-size:10px;font-weight:700">Grp ${esc(u.studentGroup)}</span>` : '',
-    u.sessionType  ? `<span style="background:#fff7ed;color:#c2410c;padding:2px 7px;border-radius:20px;font-size:10px;font-weight:600">${esc(u.sessionType)}</span>` : '',
-  ].filter(Boolean).join('') : '';
-  return `
-  <div id="user-row-${u._id}" style="padding:14px 16px;border-bottom:1px solid var(--border);transition:background .15s" onmouseover="this.style.background='var(--card-hover)'" onmouseout="this.style.background=''">
-    <div style="display:flex;align-items:center;gap:12px">
-      ${canManage ? `<input type="checkbox" class="user-checkbox" value="${u._id}" onchange="updateBulkActions()" style="flex-shrink:0;width:16px;height:16px;accent-color:var(--primary);cursor:pointer">` : ''}
-      <div style="width:40px;height:40px;border-radius:50%;background:${avatarBg};display:flex;align-items:center;justify-content:center;flex-shrink:0;font-weight:700;font-size:14px;color:#fff">${initials}</div>
-      <div style="flex:1;min-width:0">
-        <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">
-          <span style="font-weight:700;font-size:14px;color:var(--text)">${esc(u.name)}</span>
-          <span class="role-badge role-${u.role}" style="flex-shrink:0">${u.role}</span>
-          ${u.isClassRep ? `<span style="background:#7c3aed;color:#fff;font-size:9px;font-weight:700;padding:2px 6px;border-radius:20px;flex-shrink:0;letter-spacing:.4px">CLASS REP</span>` : ''}
-          ${u.isActive
-            ? `<span style="background:#dcfce7;color:#15803d;font-size:10px;font-weight:700;padding:2px 7px;border-radius:20px;flex-shrink:0">Active</span>`
-            : `<span style="background:#fee2e2;color:#dc2626;font-size:10px;font-weight:700;padding:2px 7px;border-radius:20px;flex-shrink:0">Inactive</span>`}
-        </div>
-        <div style="font-size:12px;color:var(--text-light);margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(emailOrId)}${identifier && u.email ? ` · ${esc(identifier)}` : ''}</div>
-      </div>
-    </div>
-    ${tags ? `<div style="display:flex;gap:4px;flex-wrap:wrap;margin-top:8px;padding-left:${canManage ? '68px' : '52px'}">${tags}</div>` : ''}
-    ${canManage ? `
-    <div style="display:flex;gap:6px;margin-top:10px;padding-left:28px">
-      ${u.isActive
-        ? `<button class="btn btn-sm" style="flex:1;background:#f59e0b;color:#fff;font-size:11px;padding:6px 4px" onclick="deactivateUser('${u._id}')">Deactivate</button>`
-        : `<button class="btn btn-sm" style="flex:1;background:#22c55e;color:#fff;font-size:11px;padding:6px 4px" onclick="activateUser('${u._id}')">Activate</button>`}
-      <button class="btn btn-sm" style="flex:1;background:#6366f1;color:#fff;font-size:11px;padding:6px 4px" onclick="adminResetStudentPassword('${u._id}', this)">🔑 Reset</button>
-      ${u.role === 'student' && u.deviceId ? `<button class="btn btn-sm" style="flex:1;background:#f97316;color:#fff;font-size:11px;padding:6px 4px" onclick="clearStudentDeviceLock('${u._id}', this)">🔓 Unlock</button>` : ''}
-      <button class="btn btn-danger btn-sm" style="flex:1;font-size:11px;padding:6px 4px" onclick="deleteUserPermanently('${u._id}', this)">Delete</button>
-    </div>` : ''}
-  </div>`;
+// ── Colour palette for department accent bars ─────────────────────────────────
+let _cachedUsers = null;
+const _DEPT_COLORS = ['#6366f1','#8b5cf6','#ec4899','#f97316','#14b8a6','#22c55e','#3b82f6','#f59e0b','#ef4444','#06b6d4'];
+function _deptColor(name) {
+  let h = 0;
+  for (let i = 0; i < (name||'').length; i++) h = ((h * 31) + name.charCodeAt(i)) | 0;
+  return _DEPT_COLORS[Math.abs(h) % _DEPT_COLORS.length];
 }
 
-// ── Department drill-down view ─────────────────────────────────────────────────
-function renderDepartmentUsers(deptName, allUsers, filterRole = '') {
-  const content = document.getElementById('main-content');
-  if (!content) return;
-  const canManage = ['admin','superadmin'].includes(currentUser.role);
-
-  let deptUsers = deptName === '__none__'
-    ? allUsers.filter(u => !u.department)
-    : allUsers.filter(u => u.department === deptName);
-
-  if (filterRole) deptUsers = deptUsers.filter(u => u.role === filterRole);
-
-  const roleOrder = ['admin','hod','lecturer','student','employee','manager'];
-  const roleLabel = { admin:'Admins', hod:'Head of Department', lecturer:'Lecturers', student:'Students', employee:'Employees', manager:'Managers' };
-  const roleSectionColor = { hod:'#0891b2', lecturer:'#a16207', student:'#7c3aed', admin:'#dc2626', employee:'#15803d', manager:'#1d4ed8' };
-
-  const grouped = {};
-  for (const r of roleOrder) {
-    const members = deptUsers.filter(u => u.role === r);
-    if (members.length) grouped[r] = members;
-  }
-
-  const sections = Object.entries(grouped).map(([role, members]) => `
-    <div style="margin-bottom:20px">
-      <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px">
-        <div style="width:4px;height:20px;border-radius:2px;background:${roleSectionColor[role]||'#6b7280'}"></div>
-        <span style="font-weight:700;font-size:14px;color:var(--text)">${roleLabel[role]||role}</span>
-        <span style="background:${roleSectionColor[role]||'#6b7280'}20;color:${roleSectionColor[role]||'#6b7280'};font-size:11px;font-weight:700;padding:2px 9px;border-radius:20px">${members.length}</span>
-      </div>
-      <div class="card" style="padding:0;overflow:hidden">
-        ${members.map(u => _userRowCard(u, canManage)).join('')}
-      </div>
-    </div>
-  `).join('');
-
-  const displayName = deptName === '__none__' ? 'Unassigned Users' : esc(deptName);
-  const roleTitle = filterRole ? ` — ${roleLabel[filterRole] || filterRole}` : '';
-  const safeDepId = JSON.stringify(deptName);
-
-  content.innerHTML = `
-    <div style="display:flex;align-items:center;gap:12px;margin-bottom:20px;flex-wrap:wrap">
-      <button onclick="renderUsers()" style="display:flex;align-items:center;gap:6px;background:none;border:1.5px solid var(--border);border-radius:10px;padding:8px 14px;font-size:13px;font-weight:600;color:var(--text);cursor:pointer">
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M19 12H5M12 5l-7 7 7 7"/></svg>
-        Departments
-      </button>
-      ${filterRole ? `<button onclick="renderDepartmentUsers(${safeDepId},_cachedAllUsers)" style="display:flex;align-items:center;gap:6px;background:none;border:1.5px solid var(--border);border-radius:10px;padding:8px 14px;font-size:13px;font-weight:600;color:var(--text);cursor:pointer">All Members</button>` : ''}
-      <div>
-        <h2 style="margin:0;font-size:20px">${displayName}${roleTitle}</h2>
-        <p style="color:var(--text-light);font-size:13px;margin-top:2px">${deptUsers.length} member${deptUsers.length!==1?'s':''}</p>
-      </div>
-      ${canManage ? `<button class="btn btn-primary btn-sm" style="margin-left:auto" onclick="showCreateUserModal()">+ Add User</button>` : ''}
-    </div>
-    ${sections || `<div class="card" style="padding:48px;text-align:center">
-      <div style="font-size:36px;margin-bottom:10px">👥</div>
-      <div style="font-weight:600;color:var(--text)">No ${filterRole ? (roleLabel[filterRole]||filterRole).toLowerCase() : 'members'} in this department</div>
-    </div>`}
-  `;
-}
-
-// ── Main users page ────────────────────────────────────────────────────────────
 async function renderUsers(filterRole='', filterDept='', filterSearch='') {
   const content = document.getElementById('main-content');
   if (!content) return;
-  content.innerHTML = '<div class="loading">Loading…</div>';
+  content.innerHTML = '<div style="padding:40px;text-align:center;color:var(--text-muted)">Loading users…</div>';
+  if (!isOnline()) {
+    const _c = offlineRead('users_list');
+    if (_c) {
+      _cachedUsers = _c;
+      window._hodDepts = [...new Set(_c.filter(u => u.role==='hod' && u.department).map(u => u.department))].sort();
+      const mode = currentUser.company?.mode || 'corporate';
+      if (mode === 'academic') _renderUserDeptCards(content, _c, filterSearch);
+      else _renderUsersCorporateTable(content, _c, filterRole, filterDept, filterSearch);
+      return;
+    }
+    content.innerHTML = `<div style="text-align:center;padding:60px 20px"><div style="font-size:48px;margin-bottom:12px">📡</div><div style="font-size:18px;font-weight:700">You're Offline</div><p style="color:var(--text-muted);margin-top:8px">Connect once while online to cache this page.</p></div>`; return;
+  }
   try {
     const data = await api('/api/users');
+    _cachedUsers = data.users || [];
+    offlineCache('users_list', _cachedUsers);
+    window._hodDepts = [...new Set(_cachedUsers.filter(u => u.role==='hod' && u.department).map(u => u.department))].sort();
     const mode = currentUser.company?.mode || 'corporate';
-    const isManager = currentUser.role === 'manager';
-    const canManage = ['manager', 'admin', 'superadmin'].includes(currentUser.role);
-    const addLabel = isManager ? 'Add Employee' : 'Add User';
+    if (mode === 'academic') {
+      _renderUserDeptCards(content, _cachedUsers, filterSearch);
+    } else {
+      _renderUsersCorporateTable(content, _cachedUsers, filterRole, filterDept, filterSearch);
+    }
+  } catch(e) {
+    const _c = offlineRead('users_list');
+    if (_c) {
+      _cachedUsers = _c;
+      window._hodDepts = [...new Set(_c.filter(u => u.role==='hod' && u.department).map(u => u.department))].sort();
+      const mode = currentUser.company?.mode || 'corporate';
+      if (mode === 'academic') _renderUserDeptCards(content, _c, filterSearch);
+      else _renderUsersCorporateTable(content, _c, filterRole, filterDept, filterSearch);
+      return;
+    }
+    content.innerHTML = `<div class="card"><p style="color:#ef4444">Error loading users: ${e.message}</p></div>`;
+  }
+}
 
-    const allUsers = (data.users || []).filter(u => u._id !== currentUser.id);
+// ── View 1: Department overview cards ─────────────────────────────────────────
+function _renderUserDeptCards(content, allUsers, filterSearch='') {
+  const canManage = ['admin','superadmin'].includes(currentUser.role);
+  const _roleRank = {superadmin:6,admin:5,manager:4,hod:3,lecturer:3,employee:2,student:1};
+  const _myRank = _roleRank[currentUser.role] || 0;
+  const selfId = (currentUser._id || currentUser.id || '').toString();
 
-    // ── Corporate / flat list (unchanged behaviour) ─────────────────────────
-    if (mode !== 'academic') {
-      let list = allUsers;
-      if (filterSearch) {
-        const q = filterSearch.toLowerCase();
-        list = list.filter(u => u.name?.toLowerCase().includes(q) || u.email?.toLowerCase().includes(q) || u.indexNumber?.toLowerCase().includes(q));
-      }
-      if (filterRole) list = list.filter(u => u.role === filterRole);
+  const deptMap = {};
+  const staffNoDept = [];
+  allUsers.forEach(u => {
+    if (u._id?.toString() === selfId) return;
+    if (u.role === 'student') {
+      const d = u.department || '—';
+      if (!deptMap[d]) deptMap[d] = { students:[], lecturers:[], hod:null, levels:new Set() };
+      deptMap[d].students.push(u);
+      if (u.studentLevel) deptMap[d].levels.add(u.studentLevel);
+    } else if (u.role === 'lecturer' || u.role === 'hod') {
+      if (u.department) {
+        if (!deptMap[u.department]) deptMap[u.department] = { students:[], lecturers:[], hod:null, levels:new Set() };
+        if (u.role === 'hod') deptMap[u.department].hod = u;
+        else deptMap[u.department].lecturers.push(u);
+      } else { staffNoDept.push(u); }
+    } else { staffNoDept.push(u); }
+  });
 
-      content.innerHTML = `
-        <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;margin-bottom:16px">
-          <div>
-            <h2 style="margin:0;font-size:20px">${isManager ? 'Employees' : 'Users'}</h2>
-            <p style="color:var(--text-light);font-size:13px;margin-top:2px"><b>${list.length}</b> member${list.length!==1?'s':''}</p>
-          </div>
-          <div style="display:flex;gap:8px;flex-wrap:wrap">
-            ${canManage ? `<button class="btn btn-primary btn-sm" onclick="showCreateUserModal()">+ ${addLabel}</button>` : ''}
-            ${['admin','superadmin'].includes(currentUser.role) ? `<button class="btn btn-sm" style="background:#f59e0b;color:#fff" onclick="renderResetLogs()">🔐 Reset Log</button>` : ''}
-          </div>
+  let entries = Object.entries(deptMap);
+  if (filterSearch) {
+    const q = filterSearch.toLowerCase();
+    entries = entries.filter(([dn, d]) =>
+      dn.toLowerCase().includes(q) ||
+      d.hod?.name?.toLowerCase().includes(q) ||
+      d.lecturers.some(l => l.name?.toLowerCase().includes(q)) ||
+      d.students.some(s => s.name?.toLowerCase().includes(q) || (s.indexNumber||s.IndexNumber||'').toLowerCase().includes(q))
+    );
+  }
+  entries.sort(([a],[b]) => a.localeCompare(b));
+  const totalStudents = allUsers.filter(u => u.role==='student' && u._id?.toString()!==selfId).length;
+
+  content.innerHTML = `
+    <div class="page-header">
+      <div>
+        <h2>Users</h2>
+        <p>${totalStudents} students · ${entries.length} department${entries.length!==1?'s':''}</p>
+      </div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap">
+        ${canManage?`<button class="btn btn-primary btn-sm" onclick="showCreateUserModal()">＋ Add User</button>`:''}
+        ${canManage?`<button class="btn btn-sm btn-secondary" onclick="showBulkImportModal()">📥 Bulk Import</button>`:''}
+        ${canManage?`<button class="btn btn-sm" style="background:#f59e0b;color:#fff" onclick="renderResetLogs()">🔐 Reset Log</button>`:''}
+      </div>
+    </div>
+    <div style="margin-bottom:18px">
+      <input id="user-search-input" placeholder="Search departments, names, index numbers…" value="${esc(filterSearch)}"
+        oninput="renderUsers('','',this.value)"
+        style="width:100%;max-width:420px;padding:9px 14px;border:1.5px solid var(--border);border-radius:10px;font-size:13px;font-family:inherit;outline:none;box-sizing:border-box">
+    </div>
+    <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(265px,1fr));gap:16px;margin-bottom:28px">
+      ${entries.map(([deptName, d]) => {
+        const col = _deptColor(deptName);
+        const levArr = Array.from(d.levels).sort();
+        const enc = encodeURIComponent(deptName);
+        return `
+          <div class="card" tabindex="0" role="button"
+            style="padding:0;overflow:hidden;cursor:pointer;border:1.5px solid var(--border);transition:box-shadow .2s,transform .15s;outline:none"
+            onmouseenter="this.style.boxShadow='0 6px 24px rgba(0,0,0,.12)';this.style.transform='translateY(-2px)'"
+            onmouseleave="this.style.boxShadow='';this.style.transform=''"
+            onclick="_renderUserDeptDetail(decodeURIComponent('${enc}'),_cachedUsers)"
+            onkeydown="if(event.key==='Enter')_renderUserDeptDetail(decodeURIComponent('${enc}'),_cachedUsers)">
+            <div style="height:4px;background:${col}"></div>
+            <div style="padding:18px 20px 16px">
+              <div style="display:flex;align-items:flex-start;gap:12px;margin-bottom:14px">
+                <div style="width:46px;height:46px;border-radius:12px;background:${col}1a;display:flex;align-items:center;justify-content:center;font-size:22px;font-weight:800;color:${col};flex-shrink:0">
+                  ${esc(deptName.charAt(0).toUpperCase())}
+                </div>
+                <div style="flex:1;min-width:0">
+                  <div style="font-weight:700;font-size:14px;line-height:1.25;word-break:break-word">${esc(deptName)}</div>
+                  <div style="font-size:11px;color:var(--text-muted);margin-top:3px">
+                    ${d.hod?`HOD: <strong>${esc(d.hod.name)}</strong>`:`<span style="color:#f59e0b">No HOD assigned</span>`}
+                  </div>
+                </div>
+              </div>
+              <div style="display:grid;grid-template-columns:repeat(3,1fr);text-align:center;gap:4px;margin-bottom:12px">
+                <div>
+                  <div style="font-size:22px;font-weight:700;color:${col}">${d.students.length}</div>
+                  <div style="font-size:10px;color:var(--text-muted);text-transform:uppercase;letter-spacing:.4px">Students</div>
+                </div>
+                <div>
+                  <div style="font-size:22px;font-weight:700">${d.lecturers.length}</div>
+                  <div style="font-size:10px;color:var(--text-muted);text-transform:uppercase;letter-spacing:.4px">Lecturers</div>
+                </div>
+                <div>
+                  <div style="font-size:22px;font-weight:700">${levArr.length}</div>
+                  <div style="font-size:10px;color:var(--text-muted);text-transform:uppercase;letter-spacing:.4px">Levels</div>
+                </div>
+              </div>
+              ${levArr.length?`<div style="display:flex;flex-wrap:wrap;gap:4px;margin-bottom:12px">
+                ${levArr.map(lv=>`<span style="padding:2px 9px;border-radius:20px;font-size:11px;font-weight:700;background:${col}1a;color:${col}">${esc(lv)}</span>`).join('')}
+              </div>`:''}
+              <div style="border-top:1px solid var(--border);padding-top:10px;display:flex;justify-content:space-between;align-items:center">
+                <span style="font-size:11px;color:var(--text-muted)">${levArr.length} level${levArr.length!==1?'s':''}</span>
+                <span style="font-size:12px;font-weight:700;color:${col}">Open →</span>
+              </div>
+            </div>
+          </div>`;
+      }).join('')}
+    </div>
+    ${staffNoDept.length?`
+      <div style="font-size:11px;font-weight:700;color:var(--text-muted);letter-spacing:.8px;text-transform:uppercase;margin-bottom:10px">Other Staff</div>
+      <div class="card" style="padding:0;overflow:hidden">
+        <table>
+          <thead><tr><th>Name</th><th>Email</th><th>Role</th><th>Status</th>${canManage?'<th>Actions</th>':''}</tr></thead>
+          <tbody>
+            ${staffNoDept.filter(u => {
+              if (!filterSearch) return true;
+              const q = filterSearch.toLowerCase();
+              return u.name?.toLowerCase().includes(q) || u.email?.toLowerCase().includes(q);
+            }).map(u => {
+              const canAct = (_roleRank[u.role]||0) < _myRank;
+              return `<tr id="user-row-${u._id}">
+                <td style="font-weight:500">${esc(u.name)}</td>
+                <td style="font-size:12px;color:var(--text-muted)">${esc(u.email||'—')}</td>
+                <td><span class="role-badge role-${u.role}">${u.role}</span></td>
+                <td><span class="status-badge ${u.isActive?'status-active':'status-stopped'}">${u.isActive?'Active':'Inactive'}</span></td>
+                ${canManage?`<td style="white-space:nowrap">${canAct?`
+                  ${u.isActive?`<button class="btn btn-sm" style="background:#f59e0b;color:#fff;font-size:11px" onclick="deactivateUser('${u._id}')">Deactivate</button>`:`<button class="btn btn-sm" style="background:#22c55e;color:#fff;font-size:11px" onclick="activateUser('${u._id}')">Activate</button>`}
+                  <button class="btn btn-sm" style="background:#6366f1;color:#fff;font-size:11px" onclick="adminResetStudentPassword('${u._id}',this)">🔑 Reset</button>
+                  <button class="btn btn-danger btn-sm" style="font-size:11px" onclick="deleteUserPermanently('${u._id}',this)">Delete</button>
+                `:'—'}</td>`:''}
+              </tr>`;
+            }).join('')}
+          </tbody>
+        </table>
+      </div>`:''}
+  `;
+}
+
+// ── View 2: Level cards inside a department ────────────────────────────────────
+function _renderUserDeptDetail(deptName, allUsers) {
+  const content = document.getElementById('main-content');
+  if (!content) return;
+  const canManage = ['admin','superadmin'].includes(currentUser.role);
+  const _roleRank = {superadmin:6,admin:5,manager:4,hod:3,lecturer:3,employee:2,student:1};
+  const _myRank = _roleRank[currentUser.role] || 0;
+  const col = _deptColor(deptName);
+  const encDept = encodeURIComponent(deptName);
+
+  const deptStudents = allUsers.filter(u => u.role==='student' && u.department===deptName);
+  const deptLecturers = allUsers.filter(u => u.role==='lecturer' && u.department===deptName);
+  const deptHod = allUsers.find(u => u.role==='hod' && u.department===deptName);
+
+  const levelMap = {};
+  deptStudents.forEach(s => {
+    const lv = s.studentLevel || 'Unclassified';
+    if (!levelMap[lv]) levelMap[lv] = [];
+    levelMap[lv].push(s);
+  });
+
+  const staffList = [...(deptHod?[deptHod]:[]), ...deptLecturers];
+
+  content.innerHTML = `
+    <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;font-size:13px">
+      <span style="color:var(--primary);cursor:pointer;font-weight:500" onclick="renderUsers()">Users</span>
+      <span style="color:var(--text-muted)">›</span>
+      <span style="font-weight:600">${esc(deptName)}</span>
+    </div>
+    <div class="page-header" style="margin-bottom:20px">
+      <div style="display:flex;align-items:center;gap:14px">
+        <div style="width:52px;height:52px;border-radius:14px;background:${col}1a;display:flex;align-items:center;justify-content:center;font-size:24px;font-weight:800;color:${col};flex-shrink:0">
+          ${esc(deptName.charAt(0).toUpperCase())}
         </div>
-        <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px">
-          <div style="position:relative;flex:1;min-width:180px">
-            <svg style="position:absolute;left:10px;top:50%;transform:translateY(-50%);color:var(--text-muted);pointer-events:none" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
-            <input placeholder="Search…" value="${filterSearch}" oninput="renderUsers(document.getElementById('_uf-role').value,'',this.value)"
-              style="width:100%;padding:8px 11px 8px 32px;border:1.5px solid var(--border);border-radius:10px;font-size:13px;font-family:inherit;outline:none;background:var(--card);color:var(--text)">
-          </div>
-          <select id="_uf-role" onchange="renderUsers(this.value,'',document.querySelector('[placeholder=\\'Search…\\']').value)"
-            style="padding:8px 10px;border:1.5px solid var(--border);border-radius:10px;font-size:13px;font-family:inherit;outline:none;background:var(--card);color:var(--text)">
-            <option value="">All Roles</option>
-            <option value="admin" ${filterRole==='admin'?'selected':''}>Admin</option>
-            <option value="manager" ${filterRole==='manager'?'selected':''}>Manager</option>
-            <option value="employee" ${filterRole==='employee'?'selected':''}>Employee</option>
-          </select>
+        <div>
+          <h2 style="margin:0">${esc(deptName)}</h2>
+          <p style="margin:0;font-size:13px;color:var(--text-muted)">
+            ${deptStudents.length} students · ${deptLecturers.length} lecturer${deptLecturers.length!==1?'s':''}${deptHod?' · HOD: '+esc(deptHod.name):''}
+          </p>
         </div>
-        <div id="bulk-actions" style="display:none;gap:8px;align-items:center;background:var(--primary-ultra-light);border:1px solid #bfdbfe;border-radius:10px;padding:10px 14px;margin-bottom:10px">
-          <span id="selected-count" style="font-size:13px;color:var(--text-light);flex:1">0 selected</span>
+      </div>
+      ${canManage?`<button class="btn btn-primary btn-sm" onclick="showCreateUserModal()">＋ Add User</button>`:''}
+    </div>
+    <div style="font-size:11px;font-weight:700;color:var(--text-muted);letter-spacing:.8px;text-transform:uppercase;margin-bottom:12px">Levels</div>
+    <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:14px;margin-bottom:28px">
+      ${Object.entries(levelMap).sort(([a],[b])=>a.localeCompare(b)).map(([lv, students]) => {
+        const groups = {};
+        const sessions = {};
+        students.forEach(s => {
+          groups[s.studentGroup||'Unassigned'] = (groups[s.studentGroup||'Unassigned']||0)+1;
+          sessions[s.sessionType||'Regular'] = (sessions[s.sessionType||'Regular']||0)+1;
+        });
+        const active = students.filter(s=>s.isActive).length;
+        const encLv = encodeURIComponent(lv);
+        return `
+          <div class="card" tabindex="0" role="button"
+            style="padding:18px;cursor:pointer;border:1.5px solid var(--border);transition:box-shadow .2s,transform .15s;outline:none"
+            onmouseenter="this.style.boxShadow='0 6px 24px rgba(0,0,0,.12)';this.style.transform='translateY(-2px)'"
+            onmouseleave="this.style.boxShadow='';this.style.transform=''"
+            onclick="_renderUserLevelDetail(decodeURIComponent('${encDept}'),decodeURIComponent('${encLv}'),_cachedUsers,'')"
+            onkeydown="if(event.key==='Enter')_renderUserLevelDetail(decodeURIComponent('${encDept}'),decodeURIComponent('${encLv}'),_cachedUsers,'')">
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
+              <span style="font-size:26px;font-weight:800;color:${col}">${esc(lv)}</span>
+              <span style="padding:3px 10px;border-radius:20px;background:${col}1a;color:${col};font-size:11px;font-weight:700">${students.length}</span>
+            </div>
+            <div style="display:flex;flex-wrap:wrap;gap:4px;margin-bottom:8px">
+              ${Object.entries(groups).sort().map(([g,c])=>`<span style="padding:2px 8px;border-radius:20px;font-size:11px;background:#f3f4f6;color:#374151;font-weight:600">Grp ${esc(g)}: ${c}</span>`).join('')}
+            </div>
+            <div style="display:flex;flex-wrap:wrap;gap:4px;margin-bottom:10px">
+              ${Object.entries(sessions).map(([st,c])=>`<span style="padding:2px 8px;border-radius:20px;font-size:11px;font-weight:600;background:${st==='Regular'?'#f0fdf4':'#fff7ed'};color:${st==='Regular'?'#166534':'#9a3412'}">${esc(st)}: ${c}</span>`).join('')}
+            </div>
+            <div style="border-top:1px solid var(--border);padding-top:8px;display:flex;justify-content:space-between;align-items:center">
+              <span style="font-size:11px;color:${active===students.length?'#22c55e':'#f59e0b'}">${active}/${students.length} active</span>
+              <span style="font-size:12px;font-weight:700;color:${col}">View →</span>
+            </div>
+          </div>`;
+      }).join('')}
+    </div>
+    <div style="font-size:11px;font-weight:700;color:var(--text-muted);letter-spacing:.8px;text-transform:uppercase;margin-bottom:10px">Department Staff</div>
+    <div class="card" style="padding:0;overflow:hidden">
+      <table>
+        <thead><tr><th>Name</th><th>Email</th><th>Role</th><th>Status</th>${canManage?'<th>Actions</th>':''}</tr></thead>
+        <tbody>
+          ${staffList.length ? staffList.map(u => {
+            const canAct = (_roleRank[u.role]||0) < _myRank;
+            return `<tr id="user-row-${u._id}">
+              <td style="font-weight:500">${esc(u.name)}</td>
+              <td style="font-size:12px;color:var(--text-muted)">${esc(u.email||'—')}</td>
+              <td><span class="role-badge role-${u.role}">${u.role}</span></td>
+              <td><span class="status-badge ${u.isActive?'status-active':'status-stopped'}">${u.isActive?'Active':'Inactive'}</span></td>
+              ${canManage?`<td style="white-space:nowrap">${canAct?`
+                ${u.isActive?`<button class="btn btn-sm" style="background:#f59e0b;color:#fff;font-size:11px" onclick="deactivateUser('${u._id}')">Deactivate</button>`:`<button class="btn btn-sm" style="background:#22c55e;color:#fff;font-size:11px" onclick="activateUser('${u._id}')">Activate</button>`}
+                <button class="btn btn-sm" style="background:#6366f1;color:#fff;font-size:11px" onclick="adminResetStudentPassword('${u._id}',this)">🔑 Reset</button>
+                <button class="btn btn-danger btn-sm" style="font-size:11px" onclick="deleteUserPermanently('${u._id}',this)">Delete</button>
+              `:'—'}</td>`:''}
+            </tr>`;
+          }).join('') : `<tr><td colspan="${canManage?5:4}" style="text-align:center;padding:16px;color:var(--text-muted)">No staff in this department yet</td></tr>`}
+        </tbody>
+      </table>
+    </div>
+  `;
+}
+
+// ── View 3: Student list within a level ────────────────────────────────────────
+function _renderUserLevelDetail(deptName, level, allUsers, groupFilter='') {
+  const content = document.getElementById('main-content');
+  if (!content) return;
+  const canManage = ['admin','superadmin'].includes(currentUser.role);
+  const _roleRank = {superadmin:6,admin:5,manager:4,hod:3,lecturer:3,employee:2,student:1};
+  const _myRank = _roleRank[currentUser.role] || 0;
+  const col = _deptColor(deptName);
+  const encDept = encodeURIComponent(deptName);
+  const encLv = encodeURIComponent(level);
+
+  let students = allUsers.filter(u => u.role==='student' && u.department===deptName && u.studentLevel===level);
+  const allGroups = [...new Set(students.map(s=>s.studentGroup).filter(Boolean))].sort();
+  if (groupFilter) students = students.filter(s=>s.studentGroup===groupFilter);
+  const colCount = canManage ? 7 : 5;
+
+  const studentRow = u => {
+    const canAct = (_roleRank[u.role]||0) < _myRank;
+    return `<tr id="user-row-${u._id}"
+      data-name="${(u.name||'').toLowerCase()}"
+      data-idx="${(u.IndexNumber||u.indexNumber||'').toLowerCase()}"
+      data-email="${(u.email||'').toLowerCase()}">
+      ${canManage?`<td><input type="checkbox" class="user-checkbox" value="${u._id}" onchange="updateBulkActions()"></td>`:''}
+      <td style="font-weight:500">${esc(u.name)}</td>
+      <td style="font-family:monospace;font-size:12px;color:var(--text-muted)">${esc(u.IndexNumber||u.indexNumber||'—')}</td>
+      <td style="font-size:12px;color:var(--text-muted)">${esc(u.email||'—')}</td>
+      <td style="font-size:11px;white-space:nowrap">
+        ${u.programme?`<span style="background:#ede9fe;color:#7c3aed;padding:1px 6px;border-radius:20px;font-weight:700;margin-right:2px">${esc(u.programme)}</span>`:''}
+        ${u.studentGroup?`<span style="background:#ecfdf5;color:#059669;padding:1px 6px;border-radius:20px;font-weight:700;margin-right:2px">Grp ${esc(u.studentGroup)}</span>`:''}
+        ${u.sessionType?`<span style="padding:1px 6px;border-radius:20px;font-weight:600;margin-right:2px;background:${u.sessionType==='Regular'?'#f0fdf4':'#fff7ed'};color:${u.sessionType==='Regular'?'#166534':'#9a3412'}">${esc(u.sessionType)}</span>`:''}
+        ${u.semester?`<span style="color:var(--text-muted)">Sem ${esc(u.semester)}</span>`:''}
+      </td>
+      <td><span class="status-badge ${u.isActive?'status-active':'status-stopped'}">${u.isActive?'Active':'Inactive'}</span></td>
+      ${canManage?`<td style="white-space:nowrap">${canAct?`
+        ${u.isActive?`<button class="btn btn-sm" style="background:#f59e0b;color:#fff;font-size:11px" onclick="deactivateUser('${u._id}')">Deactivate</button>`:`<button class="btn btn-sm" style="background:#22c55e;color:#fff;font-size:11px" onclick="activateUser('${u._id}')">Activate</button>`}
+        <button class="btn btn-sm" style="background:#6366f1;color:#fff;font-size:11px" onclick="adminResetStudentPassword('${u._id}',this)">🔑 Reset</button>
+        ${u.deviceId?`<button class="btn btn-sm" style="background:#f97316;color:#fff;font-size:11px" onclick="clearStudentDeviceLock('${u._id}',this)">🔓 Unlock</button>`:''}
+        <button class="btn btn-danger btn-sm" style="font-size:11px" onclick="deleteUserPermanently('${u._id}',this)">Delete</button>
+      `:'—'}</td>`:''}
+    </tr>`;
+  };
+
+  content.innerHTML = `
+    <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;font-size:13px">
+      <span style="color:var(--primary);cursor:pointer;font-weight:500" onclick="renderUsers()">Users</span>
+      <span style="color:var(--text-muted)">›</span>
+      <span style="color:var(--primary);cursor:pointer;font-weight:500" onclick="_renderUserDeptDetail(decodeURIComponent('${encDept}'),_cachedUsers)">${esc(deptName)}</span>
+      <span style="color:var(--text-muted)">›</span>
+      <span style="font-weight:600">${esc(level)}</span>
+    </div>
+    <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;margin-bottom:16px">
+      <div>
+        <h2 style="margin:0;display:flex;align-items:center;gap:10px">
+          ${esc(deptName)}
+          <span style="padding:3px 12px;border-radius:20px;font-size:14px;background:${col}1a;color:${col};font-weight:800">${esc(level)}</span>
+        </h2>
+        <p style="margin:4px 0 0;font-size:13px;color:var(--text-muted)">${students.length} student${students.length!==1?'s':''}${groupFilter?' · Group '+esc(groupFilter):''}</p>
+      </div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+        ${canManage?`<button class="btn btn-primary btn-sm" onclick="showCreateUserModal()">＋ Add</button>`:''}
+        <input id="level-search" placeholder="Search students…"
+          oninput="_filterLevelRows(this.value)"
+          style="padding:7px 11px;border:1.5px solid var(--border);border-radius:8px;font-size:13px;font-family:inherit;outline:none;min-width:160px">
+        ${allGroups.length>1?`
+          <select onchange="_renderUserLevelDetail(decodeURIComponent('${encDept}'),decodeURIComponent('${encLv}'),_cachedUsers,this.value)"
+            style="padding:7px 10px;border:1.5px solid var(--border);border-radius:8px;font-size:13px;font-family:inherit;outline:none">
+            <option value="">All Groups</option>
+            ${allGroups.map(g=>`<option value="${esc(g)}" ${groupFilter===g?'selected':''}>${esc(g)}</option>`).join('')}
+          </select>`:''}
+      </div>
+    </div>
+    ${canManage?`
+      <div id="bulk-actions" style="display:none;gap:8px;align-items:center;margin-bottom:10px;padding:10px 14px;background:#f8fafc;border-radius:8px;border:1px solid var(--border)">
+        <span id="selected-count" style="font-size:13px;color:var(--text-muted)">0 selected</span>
+        <button class="btn btn-sm" style="background:#22c55e;color:#fff" onclick="bulkUserAction('activate')">Activate</button>
+        <button class="btn btn-sm" style="background:#f59e0b;color:#fff" onclick="bulkUserAction('deactivate')">Deactivate</button>
+        <button class="btn btn-danger btn-sm" onclick="bulkUserAction('delete')">Delete</button>
+      </div>`:''}
+    <div class="card" style="padding:0;overflow:hidden">
+      <table>
+        <thead><tr>
+          ${canManage?`<th style="width:36px"><input type="checkbox" id="select-all-users" onchange="toggleSelectAllUsers()"></th>`:''}
+          <th>Name</th><th>Index No.</th><th>Email</th><th>Classification</th><th>Status</th>
+          ${canManage?'<th>Actions</th>':''}
+        </tr></thead>
+        <tbody id="students-level-tbody">
+          ${students.map(studentRow).join('')}
+          ${students.length===0?`<tr><td colspan="${colCount}" style="text-align:center;padding:24px;color:var(--text-muted)">No students found</td></tr>`:''}
+        </tbody>
+      </table>
+    </div>
+  `;
+}
+
+function _filterLevelRows(searchVal) {
+  const q = (searchVal||'').toLowerCase();
+  document.querySelectorAll('#students-level-tbody tr[data-name]').forEach(row => {
+    const matches = !q || row.dataset.name.includes(q) || row.dataset.idx.includes(q) || row.dataset.email.includes(q);
+    row.style.display = matches ? '' : 'none';
+  });
+}
+
+// ── Corporate table (non-academic fallback) ────────────────────────────────────
+function _renderUsersCorporateTable(content, allUsers, filterRole='', filterDept='', filterSearch='') {
+  const canManage = ['manager','admin','superadmin'].includes(currentUser.role);
+  const isManager = currentUser.role === 'manager';
+  const _roleRank = {superadmin:6,admin:5,manager:4,hod:3,lecturer:3,employee:2,student:1};
+  const _myRank = _roleRank[currentUser.role] || 0;
+  const canActOn = u => (_roleRank[u.role]||0) < _myRank;
+  const selfId = (currentUser._id||currentUser.id||'').toString();
+
+  let users = allUsers.filter(u => u._id?.toString()!==selfId);
+  if (filterRole) users = users.filter(u => u.role===filterRole);
+  if (filterDept) users = users.filter(u => u.department===filterDept);
+  if (filterSearch) {
+    const q = filterSearch.toLowerCase();
+    users = users.filter(u => u.name?.toLowerCase().includes(q) || u.email?.toLowerCase().includes(q) || u.department?.toLowerCase().includes(q));
+  }
+  const allDepts = [...new Set(allUsers.map(u=>u.department).filter(Boolean))].sort();
+
+  content.innerHTML = `
+    <div class="page-header"><h2>${isManager?'Employees':'Users'}</h2><p>Manage team members · ${users.length} shown</p></div>
+    <div class="actions-bar" style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:10px">
+      ${canManage?`<button class="btn btn-primary btn-sm" onclick="showCreateUserModal()">${isManager?'Add Employee':'Add User'}</button>`:''}
+      ${['admin','superadmin'].includes(currentUser.role)?`<button class="btn btn-sm" style="background:#f59e0b;color:#fff" onclick="renderResetLogs()">🔐 Reset Log</button>`:''}
+      <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin-left:auto">
+        <input id="user-search-input" placeholder="Search name / email…" value="${esc(filterSearch)}"
+          oninput="_renderUsersCorporateTable(document.getElementById('main-content'),_cachedUsers,document.getElementById('user-role-filter').value,document.getElementById('user-dept-filter').value,this.value)"
+          style="padding:7px 11px;border:1.5px solid var(--border);border-radius:8px;font-size:13px;font-family:inherit;outline:none;min-width:180px">
+        <select id="user-role-filter" onchange="_renderUsersCorporateTable(document.getElementById('main-content'),_cachedUsers,this.value,document.getElementById('user-dept-filter').value,document.getElementById('user-search-input').value)"
+          style="padding:7px 10px;border:1.5px solid var(--border);border-radius:8px;font-size:13px;font-family:inherit;outline:none">
+          <option value="">All Roles</option>
+          <option value="admin" ${filterRole==='admin'?'selected':''}>Admin</option>
+          <option value="manager" ${filterRole==='manager'?'selected':''}>Manager</option>
+          <option value="employee" ${filterRole==='employee'?'selected':''}>Employee</option>
+        </select>
+        <select id="user-dept-filter" onchange="_renderUsersCorporateTable(document.getElementById('main-content'),_cachedUsers,document.getElementById('user-role-filter').value,this.value,document.getElementById('user-search-input').value)"
+          style="padding:7px 10px;border:1.5px solid var(--border);border-radius:8px;font-size:13px;font-family:inherit;outline:none">
+          <option value="">All Departments</option>
+          ${allDepts.map(d=>`<option value="${esc(d)}" ${filterDept===d?'selected':''}>${esc(d)}</option>`).join('')}
+        </select>
+      </div>
+      ${canManage?`
+        <div id="bulk-actions" style="display:none;gap:8px;align-items:center;margin-left:auto">
+          <span id="selected-count" style="font-size:13px;color:var(--text-muted)">0 selected</span>
           <button class="btn btn-sm" style="background:#22c55e;color:#fff" onclick="bulkUserAction('activate')">Activate</button>
           <button class="btn btn-sm" style="background:#f59e0b;color:#fff" onclick="bulkUserAction('deactivate')">Deactivate</button>
           <button class="btn btn-danger btn-sm" onclick="bulkUserAction('delete')">Delete</button>
-        </div>
-        <div class="card" style="padding:0;overflow:hidden">
-          ${canManage && list.length ? `<div style="padding:10px 16px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:10px;background:var(--border-light)">
-            <input type="checkbox" id="select-all-users" onchange="toggleSelectAllUsers()" style="width:16px;height:16px;accent-color:var(--primary);cursor:pointer">
-            <span style="font-size:12px;color:var(--text-muted);font-weight:600;letter-spacing:.4px;text-transform:uppercase">Select All</span>
-          </div>` : ''}
-          ${list.length ? list.map(u => _userRowCard(u, canManage)).join('') : `<div style="text-align:center;padding:48px;color:var(--text-muted)"><div style="font-size:32px;margin-bottom:8px">👥</div><div style="font-weight:600">No users found</div></div>`}
-        </div>`;
-      return;
-    }
-
-    // ── Academic mode: department cards ─────────────────────────────────────
-    const deptMap = {};
-    for (const u of allUsers) {
-      const key = u.department || '__none__';
-      if (!deptMap[key]) deptMap[key] = { hod:[], lecturer:[], student:[], other:[] };
-      if (u.role === 'hod')           deptMap[key].hod.push(u);
-      else if (u.role === 'lecturer') deptMap[key].lecturer.push(u);
-      else if (u.role === 'student')  deptMap[key].student.push(u);
-      else                            deptMap[key].other.push(u);
-    }
-
-    const deptGradients = [
-      'linear-gradient(135deg,#4f6ef7,#7c3aed)',
-      'linear-gradient(135deg,#0891b2,#059669)',
-      'linear-gradient(135deg,#d97706,#dc2626)',
-      'linear-gradient(135deg,#7c3aed,#0891b2)',
-      'linear-gradient(135deg,#059669,#4f6ef7)',
-      'linear-gradient(135deg,#dc2626,#d97706)',
-    ];
-
-    const deptNames = Object.keys(deptMap).filter(k => k !== '__none__').sort();
-    const unassigned = deptMap['__none__'];
-
-    const deptCards = deptNames.map((dept, i) => {
-      const d = deptMap[dept];
-      const total = d.hod.length + d.lecturer.length + d.student.length + d.other.length;
-      const grad = deptGradients[i % deptGradients.length];
-      const hodName = d.hod[0] ? esc(d.hod[0].name.split(' ').slice(0,2).join(' ')) : '—';
-      const safeDept = dept.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
-      return `
-      <div onclick="renderDepartmentUsers('${safeDept}', _cachedAllUsers)"
-        style="background:var(--card);border:1px solid var(--border);border-radius:16px;overflow:hidden;cursor:pointer;transition:transform .18s,box-shadow .18s;box-shadow:var(--shadow-md)"
-        onmouseover="this.style.transform='translateY(-3px)';this.style.boxShadow='var(--shadow-lg)'"
-        onmouseout="this.style.transform='';this.style.boxShadow='var(--shadow-md)'">
-        <div style="background:${grad};padding:18px 20px 14px">
-          <div style="font-size:11px;font-weight:700;letter-spacing:.8px;text-transform:uppercase;color:rgba(255,255,255,.75);margin-bottom:4px">Department</div>
-          <div style="font-weight:800;font-size:17px;color:#fff;line-height:1.3">${esc(dept)}</div>
-          <div style="font-size:12px;color:rgba(255,255,255,.8);margin-top:6px">${total} member${total!==1?'s':''}</div>
-        </div>
-        <div style="padding:14px 20px">
-          ${d.hod.length ? `<div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">
-            <span style="font-size:18px">👤</span>
-            <div><div style="font-size:10px;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:.4px">HOD</div>
-            <div style="font-size:13px;font-weight:600;color:var(--text)">${hodName}</div></div>
-          </div>` : ''}
-          <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:4px">
-            <div style="background:#fef9c3;border-radius:10px;padding:10px 12px;text-align:center;cursor:pointer;transition:opacity .15s"
-              onmouseover="this.style.opacity='.8'" onmouseout="this.style.opacity='1'"
-              onclick="event.stopPropagation();renderDepartmentUsers('${safeDept}',_cachedAllUsers,'lecturer')">
-              <div style="font-size:22px;font-weight:800;color:#a16207">${d.lecturer.length}</div>
-              <div style="font-size:10px;font-weight:700;color:#92400e;text-transform:uppercase;letter-spacing:.4px">Lecturers</div>
-            </div>
-            <div style="background:#ede9fe;border-radius:10px;padding:10px 12px;text-align:center;cursor:pointer;transition:opacity .15s"
-              onmouseover="this.style.opacity='.8'" onmouseout="this.style.opacity='1'"
-              onclick="event.stopPropagation();renderDepartmentUsers('${safeDept}',_cachedAllUsers,'student')">
-              <div style="font-size:22px;font-weight:800;color:#7c3aed">${d.student.length}</div>
-              <div style="font-size:10px;font-weight:700;color:#6d28d9;text-transform:uppercase;letter-spacing:.4px">Students</div>
-            </div>
-          </div>
-          ${d.other.length ? `<div style="margin-top:8px;font-size:11px;color:var(--text-muted)">${d.other.length} other member${d.other.length!==1?'s':''}</div>` : ''}
-        </div>
-      </div>`;
-    }).join('');
-
-    const unassignedTotal = unassigned ? (unassigned.hod.length + unassigned.lecturer.length + unassigned.student.length + unassigned.other.length) : 0;
-
-    window._cachedAllUsers = allUsers;
-
-    content.innerHTML = `
-      <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;margin-bottom:20px">
-        <div>
-          <h2 style="margin:0;font-size:20px">Departments</h2>
-          <p style="color:var(--text-light);font-size:13px;margin-top:2px">${deptNames.length} department${deptNames.length!==1?'s':''} · ${allUsers.length} members total</p>
-        </div>
-        <div style="display:flex;gap:8px;flex-wrap:wrap">
-          ${canManage ? `<button class="btn btn-primary btn-sm" onclick="showCreateUserModal()">+ Add User</button>` : ''}
-          ${canManage ? `<button class="btn btn-sm btn-secondary" onclick="showBulkImportModal()">📥 Bulk Import</button>` : ''}
-          ${['admin','superadmin'].includes(currentUser.role) ? `<button class="btn btn-sm" style="background:#f59e0b;color:#fff" onclick="renderResetLogs()">🔐 Reset Log</button>` : ''}
-        </div>
-      </div>
-
-      <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:16px">
-        ${deptCards}
-        ${unassignedTotal > 0 ? `
-        <div onclick="renderDepartmentUsers('__none__', _cachedAllUsers)"
-          style="background:var(--card);border:1.5px dashed var(--border);border-radius:16px;overflow:hidden;cursor:pointer;transition:transform .18s,box-shadow .18s"
-          onmouseover="this.style.transform='translateY(-3px)';this.style.boxShadow='var(--shadow-lg)'"
-          onmouseout="this.style.transform='';this.style.boxShadow=''">
-          <div style="background:linear-gradient(135deg,#6b7280,#374151);padding:18px 20px 14px">
-            <div style="font-size:11px;font-weight:700;letter-spacing:.8px;text-transform:uppercase;color:rgba(255,255,255,.7);margin-bottom:4px">No Department</div>
-            <div style="font-weight:800;font-size:17px;color:#fff">Unassigned</div>
-            <div style="font-size:12px;color:rgba(255,255,255,.75);margin-top:6px">${unassignedTotal} member${unassignedTotal!==1?'s':''}</div>
-          </div>
-          <div style="padding:14px 20px;color:var(--text-muted);font-size:13px">Users without a department assignment</div>
-        </div>` : ''}
-      </div>
-    `;
-  } catch (e) {
-    content.innerHTML = `<div class="card" style="padding:24px"><p style="color:var(--danger)">Error: ${esc(e.message)}</p></div>`;
-  }
+        </div>`:''}
+    </div>
+    <div class="card" style="padding:0;overflow:hidden">
+      ${users.length?`
+        <table>
+          <thead><tr>
+            ${canManage?'<th style="width:40px"><input type="checkbox" id="select-all-users" onchange="toggleSelectAllUsers()"></th>':''}
+            <th>Name</th><th>Employee ID</th><th>Email</th><th>Role</th><th>Status</th>
+            ${canManage?'<th>Actions</th>':''}
+          </tr></thead>
+          <tbody>${users.map(u=>`
+            <tr id="user-row-${u._id}">
+              ${canManage?`<td>${canActOn(u)?`<input type="checkbox" class="user-checkbox" value="${u._id}" onchange="updateBulkActions()">`:''}</td>`:''}
+              <td style="font-weight:500">${esc(u.name)}</td>
+              <td style="font-size:12px;color:var(--text-muted)">${esc(u.employeeId||'—')}</td>
+              <td style="font-size:12px;color:var(--text-muted)">${esc(u.email||'—')}</td>
+              <td><span class="role-badge role-${u.role}">${u.role}</span>${u.department?`<span style="font-size:10px;margin-left:5px;padding:2px 6px;border-radius:20px;background:#ecfeff;color:#0891b2;font-weight:600">${esc(u.department)}</span>`:''}</td>
+              <td><span class="status-badge ${u.isActive?'status-active':'status-stopped'}">${u.isActive?'Active':'Inactive'}</span></td>
+              ${canManage?`<td style="white-space:nowrap">${canActOn(u)?`
+                ${u.isActive?`<button class="btn btn-sm" style="background:#f59e0b;color:#fff;font-size:11px" onclick="deactivateUser('${u._id}')">Deactivate</button>`:`<button class="btn btn-sm" style="background:#22c55e;color:#fff;font-size:11px" onclick="activateUser('${u._id}')">Activate</button>`}
+                <button class="btn btn-sm" style="background:#6366f1;color:#fff;font-size:11px" onclick="adminResetStudentPassword('${u._id}',this)">🔑 Reset</button>
+                <button class="btn btn-danger btn-sm" style="font-size:11px" onclick="deleteUserPermanently('${u._id}',this)">Delete</button>
+              `:'—'}</td>`:''}
+            </tr>`).join('')}
+          </tbody>
+        </table>
+      `:`<div class="empty-state"><p>No users found</p></div>`}
+    </div>
+  `;
 }
+
 
 async function renderResetLogs() {
   const content = document.getElementById('main-content');
@@ -7138,9 +8152,9 @@ async function showCreateUserModal() {
           <label>Role</label>
           <select id="new-user-role" onchange="toggleUserFields(); onCreateUserRoleChange();">${roles}</select>
         </div>` : `<input type="hidden" id="new-user-role" value="${defaultRole}">`}
-        <div class="form-group" id="new-user-email-group" ${defaultRole === 'student' ? 'class="hidden"' : ''}>
-          <label>Email</label>
-          <input type="email" id="new-user-email" placeholder="user@company.com">
+        <div class="form-group" id="new-user-email-group">
+          <label>Email <span style="color:red">*</span></label>
+          <input type="email" id="new-user-email" placeholder="user@example.com">
         </div>
         <div class="form-group ${defaultRole !== 'student' ? 'hidden' : ''}" id="new-user-index-group">
           <label>Student ID / Index Number <span style="color:red">*</span></label>
@@ -7213,6 +8227,17 @@ async function showCreateUserModal() {
               </select>
             </div>
           </div>
+          <div class="form-group">
+            <label>Academic Year <span style="color:red">*</span></label>
+            <select id="new-user-academic-year" style="width:100%;padding:9px 12px;border:1.5px solid var(--border);border-radius:8px;font-size:13px">
+              <option value="">— Select Academic Year —</option>
+              ${(() => {
+                const yr = new Date().getFullYear();
+                return [yr-1, yr, yr+1].map(y => `<option value="${y}/${y+1}" ${y === yr ? 'selected' : ''}>${y}/${y+1}</option>`).join('');
+              })()}
+            </select>
+            <p style="font-size:11px;color:var(--text-light);margin-top:4px">The academic year this student is enrolled in.</p>
+          </div>
         </div>
         <div class="form-group">
           <label>Phone Number <span style="color:red">*</span></label>
@@ -7231,7 +8256,7 @@ async function showCreateUserModal() {
 
 function toggleUserFields() {
   const role = document.getElementById('new-user-role').value;
-  document.getElementById('new-user-email-group').classList.toggle('hidden', role === 'student');
+  // Email is required for ALL roles — never hide it
   document.getElementById('new-user-index-group').classList.toggle('hidden', role !== 'student');
   const deptGroup  = document.getElementById('new-user-dept-group');
   const deptReq    = document.getElementById('new-user-dept-req');
@@ -7259,6 +8284,12 @@ async function createUser() {
       password: document.getElementById('new-user-password').value,
       role,
     };
+    // Email is required for all roles
+    const email = document.getElementById('new-user-email').value.trim();
+    if (!email) { toastWarning('Email address is required.'); return; }
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) { toastWarning('Please enter a valid email address.'); return; }
+    body.email = email;
+
     if (role === 'student') {
       const idx = document.getElementById('new-user-index').value.trim().toUpperCase();
       if (!idx) { toastWarning('Student ID / Index Number is required.'); return; }
@@ -7270,18 +8301,19 @@ async function createUser() {
       const studentGroup= document.getElementById('new-user-group')?.value?.trim().toUpperCase();
       const sessionType = document.getElementById('new-user-session-type')?.value;
       const semester    = document.getElementById('new-user-semester')?.value;
+      const academicYear = document.getElementById('new-user-academic-year')?.value;
       if (!programme)    { toastWarning('Please select the student\'s programme (e.g. BSc, HND).'); return; }
       if (!studentLevel) { toastWarning('Please select the student\'s level.'); return; }
       if (!studentGroup) { toastWarning('Please enter the student\'s group (e.g. A, B, C).'); return; }
       if (!sessionType)  { toastWarning('Please select the session type (Morning, Evening etc.).'); return; }
       if (!semester)     { toastWarning('Please select the semester.'); return; }
+      if (!academicYear) { toastWarning('Please select the academic year.'); return; }
       body.programme    = programme;
       body.studentLevel = studentLevel;
       body.studentGroup = studentGroup;
       body.sessionType  = sessionType;
       body.semester     = semester;
-    } else {
-      body.email = document.getElementById('new-user-email').value;
+      body.academicYear = academicYear;
     }
     const phone = document.getElementById('new-user-phone').value.trim();
     if (!phone) { toastWarning('Phone number is required.'); return; }
@@ -7422,11 +8454,49 @@ async function deleteUserPermanently(id, btnOrName) {
   }
 }
 
+async function createInstantMeeting() {
+  try {
+    const now = new Date();
+    const end = new Date(now.getTime() + 60 * 60000);
+    const data = await api('/api/meetings/create', {
+      method: 'POST',
+      body: JSON.stringify({
+        title: 'Instant Meeting',
+        meetingType: 'meeting',
+        scheduledStart: now.toISOString(),
+        scheduledEnd: end.toISOString(),
+        openToCompany: true,
+      }),
+    });
+    const id = (data.data || data)._id;
+    if (!id) throw new Error('No meeting ID returned');
+    window.location.href = `/lecturer-meeting?meeting=${encodeURIComponent(id)}`;
+  } catch (e) {
+    toastError(e.message || 'Could not create meeting');
+  }
+}
+
 async function renderMeetings() {
   const content = document.getElementById('main-content');
   if (!content) return;
+  content.innerHTML = '<div style="padding:32px;text-align:center;color:var(--text-muted);">Loading meetings…</div>';
+  if (!isOnline()) {
+    const _c = offlineRead('meetings');
+    if (_c) { /* render below */ Object.assign(arguments, [_c]); }
+    else { content.innerHTML = `<div style="text-align:center;padding:60px 20px"><div style="font-size:48px;margin-bottom:12px">📡</div><div style="font-size:18px;font-weight:700">You're Offline</div><p style="color:var(--text-muted);margin-top:8px">Connect once while online to cache this page.</p></div>`; return; }
+  }
+  const _meetingsCached = !isOnline() ? offlineRead('meetings') : null;
+  let data;
+  if (_meetingsCached) { data = _meetingsCached; }
+  else {
+    try { data = await api('/api/meetings'); offlineCache('meetings', data); }
+    catch(e) {
+      const _c = offlineRead('meetings');
+      if (_c) { data = _c; }
+      else { content.innerHTML = `<div class="card"><p style="color:#ef4444;">${e.message}</p></div>`; return; }
+    }
+  }
   try {
-    const data = await api('/api/zoom');
     const canCreate = ['manager', 'lecturer'].includes(currentUser.role);
     const canManageExisting = ['manager', 'lecturer', 'admin', 'superadmin', 'hod'].includes(currentUser.role);
 
@@ -7434,42 +8504,79 @@ async function renderMeetings() {
     const isDeviceLocked = devLock?.isLocked && devLock?.lockedUntil && new Date(devLock.lockedUntil) > new Date();
 
     function fmtDate(dt) {
+      if (!dt) return '—';
       const d = new Date(dt);
       return d.toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' })
            + ' · ' + d.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' });
     }
 
+    function fmtDuration(start, end) {
+      if (!start || !end) return '—';
+      const min = Math.round((new Date(end) - new Date(start)) / 60000);
+      if (min < 60) return `${min}m`;
+      const h = Math.floor(min / 60), m = min % 60;
+      return m ? `${h}h ${m}m` : `${h}h`;
+    }
+
+    const MEETING_TYPE_LABELS = {
+      meeting: 'Meeting', lecture: 'Lecture', proctored_quiz: 'Proctored Quiz',
+      snap_quiz: 'Snap Quiz', oral_exam: 'Oral Exam',
+      staff_conference: 'Staff Conference', live_assessment: 'Live Assessment',
+    };
+    const MEETING_TYPE_ICONS = {
+      lecture: '🎓', meeting: '🎥', proctored_quiz: '📝',
+      snap_quiz: '⚡', oral_exam: '🗣️', staff_conference: '👔', live_assessment: '📋',
+    };
+
     function meetingCard(m) {
-      const isLive      = m.status === 'live' || m.status === 'active';
+      const isLive      = m.status === 'live';
       const isScheduled = m.status === 'scheduled';
       const isEnded     = ['ended', 'completed', 'cancelled'].includes(m.status);
-      const isCreator   = m.createdBy?._id === currentUser._id;
-      const isAdmin     = ['admin', 'superadmin'].includes(currentUser.role);
-      const canControl  = canManageExisting && (isCreator || isAdmin);
+      // Support both old (createdBy) and new (creatorId) field shapes
+      const hostId   = m.creatorId?._id || m.creatorId || m.createdBy?._id;
+      const hostName = m.creatorId?.name || m.createdBy?.name || 'Unknown';
+      const isCreator   = String(hostId) === String(currentUser._id);
+      const isAdmin     = ['admin', 'superadmin', 'hod'].includes(currentUser.role);
+      const isInvigil   = (m.invigilators || []).some(i => String(i._id || i) === String(currentUser._id));
+      const canControl  = canManageExisting && (isCreator || isAdmin || isInvigil);
+      const durationMin = m.scheduledStart && m.scheduledEnd
+        ? Math.round((new Date(m.scheduledEnd) - new Date(m.scheduledStart)) / 60000)
+        : (m.duration || '—');
 
       const borderColor = isLive ? '#22c55e' : isScheduled ? '#3b82f6' : '#e5e7eb';
-      const statusBadgeStyle = isLive ? 'background:#dcfce7;color:#15803d;' : isScheduled ? 'background:#dbeafe;color:#1d4ed8;' : isEnded && m.status==='cancelled' ? 'background:#fee2e2;color:#b91c1c;' : 'background:#f3f4f6;color:#6b7280;';
+      const statusBadgeStyle = isLive ? 'background:#dcfce7;color:#15803d;' : isScheduled ? 'background:#dbeafe;color:#1d4ed8;' : m.status==='cancelled' ? 'background:#fee2e2;color:#b91c1c;' : 'background:#f3f4f6;color:#6b7280;';
       const statusText = isLive ? '● LIVE' : isScheduled ? 'Scheduled' : m.status === 'cancelled' ? 'Cancelled' : 'Ended';
-      const safeName = (m.title || '').replace(/'/g, "\\'");
+      const typeLabel  = MEETING_TYPE_LABELS[m.meetingType] || '';
+      const safeName   = (m.title || '').replace(/'/g, "\\'");
 
       return `<div style="background:#fff;border-radius:14px;box-shadow:0 1px 6px rgba(0,0,0,0.07);padding:16px;border:1px solid #f1f5f9;border-left:4px solid ${borderColor};margin-bottom:0;">
         <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px;margin-bottom:10px;">
           <div style="flex:1;min-width:0;">
             <div style="font-weight:700;font-size:15px;color:#0f172a;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${esc(m.title)}</div>
-            ${m.course ? `<div style="font-size:11px;font-weight:600;color:#7c3aed;margin-top:2px;">${esc(m.course.title||'')}</div>` : ''}
+            ${typeLabel ? `<div style="font-size:10px;font-weight:700;color:#7c3aed;margin-top:2px;text-transform:uppercase;letter-spacing:.5px;">${typeLabel}</div>` : ''}
           </div>
           <span style="${statusBadgeStyle}padding:3px 10px;border-radius:20px;font-size:11px;font-weight:700;flex-shrink:0;">${statusText}</span>
         </div>
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:12px;font-size:12px;color:#64748b;">
-          <div><div style="font-weight:600;color:#0f172a;">Host</div>${esc(m.createdBy?.name||'Unknown')}</div>
-          <div><div style="font-weight:600;color:#0f172a;">Duration</div>${m.duration} min</div>
+          <div><div style="font-weight:600;color:#0f172a;">Host</div>${esc(hostName)}</div>
+          <div><div style="font-weight:600;color:#0f172a;">Duration</div>${durationMin} min</div>
           <div style="grid-column:1/-1;"><div style="font-weight:600;color:#0f172a;">Start</div>${fmtDate(m.scheduledStart)}</div>
         </div>
         <div style="display:flex;gap:6px;flex-wrap:wrap;">
-          ${isLive && !isDeviceLocked ? `<button style="flex:1;background:#22c55e;color:#fff;border:none;padding:10px 14px;border-radius:9px;font-weight:700;cursor:pointer;font-size:14px;min-width:90px;" onclick="joinMeeting('${m._id}')">▶ Join</button>` : ''}
+          ${isLive && !canControl && !isDeviceLocked ? `<button style="flex:1;background:#22c55e;color:#fff;border:none;padding:10px 14px;border-radius:9px;font-weight:700;cursor:pointer;font-size:14px;min-width:90px;" onclick="joinMeeting('${m._id}')">▶ Join</button>` : ''}
+          ${isLive && canControl ? `<button style="flex:1;background:#22c55e;color:#fff;border:none;padding:10px 14px;border-radius:9px;font-weight:700;cursor:pointer;font-size:14px;min-width:90px;" onclick="startMeeting('${m._id}')">▶ Rejoin</button>` : ''}
           ${isLive && isDeviceLocked ? `<span style="background:#fef3c7;color:#92400e;padding:8px 12px;border-radius:9px;font-size:12px;font-weight:600;">🔒 Locked</span>` : ''}
           ${isScheduled && !canControl ? `<span style="background:#eff6ff;color:#1d4ed8;padding:8px 12px;border-radius:9px;font-size:12px;font-weight:600;">Not Live Yet</span>` : ''}
-          ${canControl && isScheduled ? `<button style="flex:1;background:#3b82f6;color:#fff;border:none;padding:10px 14px;border-radius:9px;font-weight:700;cursor:pointer;font-size:14px;min-width:90px;" onclick="startMeeting('${m._id}')">▶ Start</button>` : ''}
+          ${canControl && isScheduled ? (() => {
+            const now = Date.now();
+            const start = m.scheduledStart ? new Date(m.scheduledStart).getTime() : 0;
+            const minsUntil = Math.ceil((start - now) / 60000);
+            const canStart = now >= start - 60000; // allow 1 min early
+            return canStart
+              ? `<button style="flex:1;background:#3b82f6;color:#fff;border:none;padding:10px 14px;border-radius:9px;font-weight:700;cursor:pointer;font-size:14px;min-width:90px;" onclick="startMeeting('${m._id}')">▶ Start</button>`
+              : `<button disabled style="flex:1;background:#93c5fd;color:#fff;border:none;padding:10px 14px;border-radius:9px;font-weight:600;font-size:13px;min-width:90px;cursor:not-allowed;" title="Meeting hasn't reached its scheduled time">⏳ In ${minsUntil}m</button>`;
+          })() : ''}
+          ${canControl && isLive ? `<button style="background:#0ea5e9;color:#fff;border:none;padding:10px 14px;border-radius:9px;font-weight:700;cursor:pointer;" onclick="openMeetingMonitor('${m._id}')">👁 Monitor</button>` : ''}
           ${canControl && isLive ? `<button style="background:#ef4444;color:#fff;border:none;padding:10px 14px;border-radius:9px;font-weight:700;cursor:pointer;" onclick="endMeeting('${m._id}')">■ End</button>` : ''}
           ${canControl && (isScheduled || isLive) ? `<button style="background:#f1f5f9;color:#374151;border:none;padding:10px 14px;border-radius:9px;font-weight:600;cursor:pointer;" onclick="cancelMeeting('${m._id}')">Cancel</button>` : ''}
           <button style="background:#f1f5f9;color:#374151;border:none;padding:10px 14px;border-radius:9px;font-weight:600;cursor:pointer;" onclick="viewMeetingDetail('${m._id}')">Details</button>
@@ -7478,7 +8585,7 @@ async function renderMeetings() {
       </div>`;
     }
 
-    const meetings = data.meetings || [];
+    const meetings = data.data || data.meetings || [];
     const live      = meetings.filter(m => m.status === 'live' || m.status === 'active');
     const scheduled = meetings.filter(m => m.status === 'scheduled');
     const past      = meetings.filter(m => ['ended', 'completed', 'cancelled'].includes(m.status));
@@ -7520,7 +8627,7 @@ async function showCreateMeetingModal() {
     courses = d.courses || d || [];
   } catch(e) { courses = []; }
 
-  const courseOptions = `<option value="">— No specific course —</option>` +
+  const courseOptions = `<option value="">— Select a course —</option>` +
     courses.map(c => `<option value="${c._id}">${esc(c.title)}${c.level?' · L'+c.level:''}${c.group?' · Grp '+c.group:''}</option>`).join('');
   // default scheduled start = now+5min, end = now+65min
   const now = new Date();
@@ -7556,24 +8663,26 @@ async function showCreateMeetingModal() {
           <textarea id="meeting-desc" rows="2" placeholder="What is this meeting about?" style="resize:vertical;"></textarea>
         </div>
 
-        <div class="form-group">
-          <label>Course <span style="color:var(--text-muted);font-weight:400;font-size:12px">(optional)</span></label>
-          <select id="meeting-course" style="width:100%;padding:9px 12px;border:1.5px solid var(--border);border-radius:8px;font-size:13px">
-            ${courseOptions}
-          </select>
-        </div>
-
-        <div class="form-group">
-          <label>Target Audience <span style="color:var(--text-muted);font-weight:400;font-size:12px">(optional)</span></label>
-          <select id="meeting-audience" style="width:100%;padding:9px 12px;border:1.5px solid var(--border);border-radius:8px;font-size:13px" onchange="document.getElementById('meeting-group-row').style.display=this.value==='group'?'block':'none'">
-            <option value="all">All enrolled students</option>
-            <option value="group">Specific group only</option>
-          </select>
-        </div>
-        <div class="form-group" id="meeting-group-row" style="display:none">
-          <label>Group</label>
-          <input type="text" id="meeting-group" placeholder="e.g. A, B, C" style="width:100%;padding:9px 12px;border:1.5px solid var(--border);border-radius:8px;font-size:13px">
-          <p style="font-size:11px;color:var(--text-muted);margin-top:4px">Only students in this group will see this meeting.</p>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+          <div class="form-group">
+            <label>Meeting Type</label>
+            <select id="meeting-type" style="width:100%;padding:9px 12px;border:1.5px solid var(--border);border-radius:8px;font-size:13px">
+              <option value="meeting">General Meeting</option>
+              ${currentUser?.company?.mode !== 'corporate' ? `
+              <option value="lecture">Lecture</option>
+              <option value="oral_exam">Oral Exam</option>
+              <option value="live_assessment">Live Assessment</option>
+              ` : ''}
+              <option value="staff_conference">Staff Conference</option>
+            </select>
+          </div>
+          ${currentUser?.company?.mode !== 'corporate' ? `
+          <div class="form-group">
+            <label>Course</label>
+            <select id="meeting-course" style="width:100%;padding:9px 12px;border:1.5px solid var(--border);border-radius:8px;font-size:13px">
+              ${courseOptions}
+            </select>
+          </div>` : ''}
         </div>
 
         <div id="meeting-error" style="color:#ef4444;margin:8px 0;display:none;font-size:13px;"></div>
@@ -7595,14 +8704,13 @@ async function showCreateMeetingModal() {
 }
 
 async function createMeeting() {
-  const title = document.getElementById('meeting-title')?.value.trim();
-  const start = document.getElementById('meeting-start')?.value;
-  const end   = document.getElementById('meeting-end')?.value;
-  const desc  = document.getElementById('meeting-desc')?.value.trim();
-  const courseId = document.getElementById('meeting-course')?.value || undefined;
-  const targetAudience = document.getElementById('meeting-audience')?.value || 'all';
-  const targetGroup = (document.getElementById('meeting-group')?.value || '').trim();
-  const errEl = document.getElementById('meeting-error');
+  const title      = document.getElementById('meeting-title')?.value.trim();
+  const start      = document.getElementById('meeting-start')?.value;
+  const end        = document.getElementById('meeting-end')?.value;
+  const desc       = document.getElementById('meeting-desc')?.value.trim();
+  const courseId   = document.getElementById('meeting-course')?.value || undefined;
+  const meetingType = document.getElementById('meeting-type')?.value || 'meeting';
+  const errEl      = document.getElementById('meeting-error');
 
   if (!title) { errEl.textContent = 'Please enter a meeting title.'; errEl.style.display = 'block'; return; }
   if (!start || !end) { errEl.textContent = 'Please set a start and end time.'; errEl.style.display = 'block'; return; }
@@ -7612,14 +8720,13 @@ async function createMeeting() {
   if (schedBtn) { schedBtn.textContent = 'Scheduling…'; schedBtn.disabled = true; }
 
   try {
-    await api('/api/zoom', { method: 'POST', body: JSON.stringify({
-      title,
+    await api('/api/meetings/create', { method: 'POST', body: JSON.stringify({
+      title, meetingType,
       scheduledStart: start,
-      scheduledEnd: end,
-      description: desc || undefined,
-      courseId: courseId || undefined,
-      targetAudience,
-      targetGroup: targetAudience === 'group' ? targetGroup || undefined : undefined,
+      scheduledEnd:   end,
+      description:    desc || undefined,
+      linkedCourseId: courseId || undefined,
+      openToCompany:  !courseId,
     }) });
     closeModal();
     renderMeetings();
@@ -7632,9 +8739,11 @@ async function createMeeting() {
 }
 
 async function createAndStartMeeting() {
-  const title = document.getElementById('meeting-title').value.trim();
-  const errEl = document.getElementById('meeting-error');
-  const btn   = document.getElementById('start-meeting-btn');
+  const title       = document.getElementById('meeting-title').value.trim();
+  const courseId    = document.getElementById('meeting-course')?.value || '';
+  const meetingType = document.getElementById('meeting-type')?.value || 'meeting';
+  const errEl       = document.getElementById('meeting-error');
+  const btn         = document.getElementById('start-meeting-btn');
   if (!title) {
     errEl.textContent = 'Please enter a meeting title.';
     errEl.style.display = 'block';
@@ -7644,88 +8753,263 @@ async function createAndStartMeeting() {
   const now = new Date();
   const end = new Date(now.getTime() + 60 * 60 * 1000);
   try {
-    const data = await api('/api/zoom', { method: 'POST', body: JSON.stringify({
-      title,
+    const data = await api('/api/meetings/create', { method: 'POST', body: JSON.stringify({
+      title, meetingType,
       scheduledStart: now.toISOString().slice(0,16),
-      scheduledEnd: end.toISOString().slice(0,16),
+      scheduledEnd:   end.toISOString().slice(0,16),
+      linkedCourseId: courseId || undefined,
+      openToCompany:  !courseId,
     }) });
     closeModal();
-    await startMeeting(data.meeting._id);
+    const newId = (data.data || data.meeting || data)?._id;
+    if (!newId) throw new Error('No meeting ID returned');
+    window.location.href = `/lecturer-meeting?meeting=${encodeURIComponent(newId)}`;
   } catch(e) {
-    if (btn) { btn.textContent = '🎥 Start Meeting'; btn.disabled = false; }
+    if (btn) { btn.textContent = 'Start Now'; btn.disabled = false; }
     errEl.textContent = e.message;
     errEl.style.display = 'block';
   }
 }
 
-async function startMeeting(id) {
-  try {
-    await api(`/api/zoom/${id}/start`, { method: 'POST' });
-    // Join as host — records attendance and returns roomName / jitsiConfig
-    const joinData    = await api(`/api/zoom/${id}/join`, { method: 'POST' });
-    const jitsiConfig = joinData?.data?.jitsiConfig;
-    const legacyUrl   = joinData?.data?.secureJoinUrl || joinData?.joinUrl;
-    const roomName    = jitsiConfig?.roomName || joinData?.roomName;
-    renderMeetings();
-    if (roomName) {
-      const embedConfig = jitsiConfig || {
-        roomName,
-        domain:      legacyUrl ? (() => { try { return new URL(legacyUrl).hostname; } catch(e) { return 'meet.jit.si'; } })() : 'meet.jit.si',
-        displayName: currentUser?.name  || '',
-        email:       currentUser?.email || '',
-        subject:     '',
-      };
-      showJitsiEmbed(embedConfig);
-    } else if (legacyUrl) {
-      window.open(legacyUrl, '_blank');
+function startMeeting(id) {
+  window.location.href = `/lecturer-meeting?meeting=${encodeURIComponent(id)}`;
+}
+
+const PROCTORED_TYPES = ['proctored_quiz', 'snap_quiz', 'oral_exam', 'live_assessment'];
+
+// True on iPhone, iPad (incl. desktop-mode iPad), and Android browsers.
+// On mobile we navigate directly to the Jitsi URL instead of embedding an iframe,
+// because iOS Safari reloads cross-origin iframes after granting camera/mic permission
+// which silently breaks the External API and leaves the meeting stuck on a black screen.
+const _isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent)
+  || (navigator.maxTouchPoints > 1 && /Macintosh/i.test(navigator.userAgent));
+
+// Mobile join: pre-request camera/mic so the user understands why (and iOS remembers the
+// choice for the DIKLY domain), then navigate to the real Jitsi room in the same tab.
+async function _joinMeetingMobile(roomUrl) {
+  if (navigator.mediaDevices?.getUserMedia) {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+      stream.getTracks().forEach(t => t.stop()); // release camera/mic immediately; Jitsi re-acquires
+    } catch (err) {
+      if (err.name === 'NotAllowedError' || err.name === 'PermissionDeniedError') {
+        toastError('Camera and microphone access are required to join the meeting.');
+        return;
+      }
+      // NotFoundError, OverconstrainedError, etc. — navigate anyway; Jitsi will show its own error
     }
-  } catch (e) {
-    toastError(e.message);
+  }
+  window.location.href = roomUrl + '#config.deeplinking.disabled=true';
+}
+
+function joinMeeting(id) {
+  window.location.href = `/student-meeting?meeting=${encodeURIComponent(id)}`;
+}
+
+// ── PROCTORING HELPERS ────────────────────────────────────────────────────────
+
+let _antiCheatMeetingId  = null;
+let _antiCheatListeners  = {};
+let _antiCheatFullscreen = false;
+
+function _postProctoringEvent(meetingId, type, metadata) {
+  const tok = localStorage.getItem('dikly_token');
+  if (!tok || !meetingId) return;
+  fetch(`/api/meetings/${meetingId}/proctoring/event`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${tok}` },
+    body: JSON.stringify({ type, metadata: metadata || null }),
+  }).catch(() => {});
+}
+
+function startMeetingAntiCheat(meetingId) {
+  stopMeetingAntiCheat();
+  _antiCheatMeetingId = meetingId;
+
+  _antiCheatListeners.visibility = () => {
+    if (document.hidden) _postProctoringEvent(meetingId, 'tab_switch', null);
+  };
+  _antiCheatListeners.fullscreen = () => {
+    const inFS = !!(document.fullscreenElement || document.webkitFullscreenElement);
+    if (_antiCheatFullscreen && !inFS) _postProctoringEvent(meetingId, 'fullscreen_exit', null);
+    if (!_antiCheatFullscreen && inFS) _postProctoringEvent(meetingId, 'fullscreen_enter', null);
+    _antiCheatFullscreen = inFS;
+  };
+
+  document.addEventListener('visibilitychange', _antiCheatListeners.visibility);
+  document.addEventListener('fullscreenchange', _antiCheatListeners.fullscreen);
+  document.addEventListener('webkitfullscreenchange', _antiCheatListeners.fullscreen);
+
+  _postProctoringEvent(meetingId, 'session_start', null);
+}
+
+function stopMeetingAntiCheat() {
+  if (_antiCheatListeners.visibility) {
+    document.removeEventListener('visibilitychange', _antiCheatListeners.visibility);
+  }
+  if (_antiCheatListeners.fullscreen) {
+    document.removeEventListener('fullscreenchange', _antiCheatListeners.fullscreen);
+    document.removeEventListener('webkitfullscreenchange', _antiCheatListeners.fullscreen);
+  }
+  _antiCheatListeners  = {};
+  _antiCheatMeetingId  = null;
+  _antiCheatFullscreen = false;
+}
+
+function showProctoredJoinStaging(meetingId, jitsiConfig, jitsiToken) {
+  document.getElementById('proctored-staging-overlay')?.remove();
+
+  const overlay = document.createElement('div');
+  overlay.id = 'proctored-staging-overlay';
+  overlay.style.cssText = 'position:fixed;inset:0;z-index:10000;background:#0f172a;display:flex;align-items:center;justify-content:center;';
+  overlay.innerHTML = `
+    <div style="background:#1e293b;border-radius:16px;padding:32px;max-width:440px;width:90%;box-shadow:0 25px 60px rgba(0,0,0,0.5);">
+      <div style="text-align:center;margin-bottom:24px;">
+        <div style="font-size:36px;margin-bottom:8px;">🔒</div>
+        <h2 style="color:#f1f5f9;margin:0 0 6px;font-size:18px;font-weight:700;">Proctored Session Check</h2>
+        <p style="color:#94a3b8;margin:0;font-size:13px;">Complete all checks before joining</p>
+      </div>
+
+      <div id="staging-checklist" style="display:flex;flex-direction:column;gap:10px;margin-bottom:24px;">
+        <div id="check-camera" class="staging-check" style="display:flex;align-items:center;gap:10px;padding:10px 14px;border-radius:10px;background:#0f172a;">
+          <span id="check-camera-icon" style="font-size:18px;">⏳</span>
+          <span style="color:#cbd5e1;font-size:13px;flex:1;">Camera access</span>
+          <span id="check-camera-status" style="font-size:11px;color:#64748b;">Checking…</span>
+        </div>
+        <div id="check-mic" class="staging-check" style="display:flex;align-items:center;gap:10px;padding:10px 14px;border-radius:10px;background:#0f172a;">
+          <span id="check-mic-icon" style="font-size:18px;">⏳</span>
+          <span style="color:#cbd5e1;font-size:13px;flex:1;">Microphone access</span>
+          <span id="check-mic-status" style="font-size:11px;color:#64748b;">Checking…</span>
+        </div>
+        <div id="check-anticheat" class="staging-check" style="display:flex;align-items:center;gap:10px;padding:10px 14px;border-radius:10px;background:#0f172a;">
+          <span id="check-anticheat-icon" style="font-size:18px;">⏳</span>
+          <span style="color:#cbd5e1;font-size:13px;flex:1;">Anti-cheat monitoring</span>
+          <span id="check-anticheat-status" style="font-size:11px;color:#64748b;">Pending…</span>
+        </div>
+      </div>
+
+      <div id="staging-preview" style="display:none;margin-bottom:16px;border-radius:10px;overflow:hidden;background:#000;aspect-ratio:16/9;max-height:180px;">
+        <video id="staging-video" autoplay muted playsinline style="width:100%;height:100%;object-fit:cover;"></video>
+      </div>
+
+      <div id="staging-error" style="display:none;background:#7f1d1d;border-radius:8px;padding:10px 14px;color:#fca5a5;font-size:12px;margin-bottom:16px;"></div>
+
+      <div style="display:flex;gap:10px;">
+        <button id="staging-cancel-btn" onclick="document.getElementById('proctored-staging-overlay').remove();renderMeetings();"
+          style="flex:1;background:#334155;color:#cbd5e1;border:none;padding:11px;border-radius:9px;font-weight:600;cursor:pointer;font-size:14px;">
+          Cancel
+        </button>
+        <button id="staging-join-btn" disabled
+          style="flex:2;background:#3b82f6;color:#fff;border:none;padding:11px;border-radius:9px;font-weight:700;cursor:pointer;font-size:14px;opacity:0.5;"
+          onclick="_proctoredConfirmJoin('${meetingId}')">
+          Join Session
+        </button>
+      </div>
+    </div>
+  `;
+  document.body.appendChild(overlay);
+
+  // Store config so the confirm handler can reach it
+  overlay._jitsiConfig = jitsiConfig;
+  overlay._jitsiToken  = jitsiToken;
+
+  _runStagingChecks(meetingId);
+}
+
+async function _runStagingChecks(meetingId) {
+  let cameraOk = false;
+  let micOk    = false;
+  let stream   = null;
+
+  const setCheck = (id, ok, label) => {
+    const icon   = document.getElementById(`check-${id}-icon`);
+    const status = document.getElementById(`check-${id}-status`);
+    const row    = document.getElementById(`check-${id}`);
+    if (!icon) return;
+    icon.textContent   = ok ? '✅' : '❌';
+    status.textContent = label;
+    row.style.background = ok ? 'rgba(34,197,94,0.08)' : 'rgba(239,68,68,0.08)';
+  };
+
+  // Camera check
+  try {
+    stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+    cameraOk = true;
+    micOk    = true;
+    setCheck('camera', true, 'Allowed');
+    setCheck('mic',    true, 'Allowed');
+
+    const preview = document.getElementById('staging-preview');
+    const video   = document.getElementById('staging-video');
+    if (preview && video) {
+      video.srcObject = stream;
+      preview.style.display = 'block';
+    }
+  } catch (err) {
+    const errEl = document.getElementById('staging-error');
+    if (err.name === 'NotAllowedError' || err.name === 'PermissionDeniedError') {
+      setCheck('camera', false, 'Denied');
+      setCheck('mic',    false, 'Denied');
+      if (errEl) {
+        errEl.style.display = 'block';
+        errEl.textContent = 'Camera and microphone access was denied. Please allow access in your browser settings and try again.';
+      }
+    } else if (err.name === 'NotFoundError') {
+      setCheck('camera', false, 'Not found');
+      setCheck('mic',    false, 'Not found');
+      if (errEl) {
+        errEl.style.display = 'block';
+        errEl.textContent = 'No camera or microphone detected. Connect a device and try again.';
+      }
+    } else {
+      setCheck('camera', false, err.message);
+      setCheck('mic',    false, err.message);
+      if (errEl) { errEl.style.display = 'block'; errEl.textContent = err.message; }
+    }
+  }
+
+  // Anti-cheat check (always succeeds — just activating monitoring)
+  setCheck('anticheat', true, 'Active');
+
+  // Enable join button only if both camera and mic are OK
+  if (cameraOk && micOk) {
+    const btn = document.getElementById('staging-join-btn');
+    if (btn) { btn.disabled = false; btn.style.opacity = '1'; }
+  }
+
+  // Stop preview stream when overlay is removed so camera light turns off
+  const overlay = document.getElementById('proctored-staging-overlay');
+  if (overlay && stream) {
+    overlay._previewStream = stream;
   }
 }
 
-async function joinMeeting(id) {
-  try {
-    const data = await api(`/api/zoom/${id}/join`, { method: 'POST' });
-    // meetingController returns jitsiConfig nested under data.data
-    // zoomController returns roomName + joinUrl at root level
-    const jitsiConfig = data.data?.jitsiConfig;
-    const secureUrl   = data.data?.secureJoinUrl;
-    const legacyUrl   = data.joinUrl;
-    const roomName    = jitsiConfig?.roomName || data.roomName;
+function _proctoredConfirmJoin(meetingId) {
+  const overlay = document.getElementById('proctored-staging-overlay');
+  if (!overlay) return;
 
-    if (roomName) {
-      const embedConfig = jitsiConfig || {
-        roomName,
-        domain:      legacyUrl ? (() => { try { return new URL(legacyUrl).hostname; } catch(e) { return 'meet.jit.si'; } })() : 'meet.jit.si',
-        displayName: currentUser?.name  || '',
-        email:       currentUser?.email || '',
-        subject:     '',
-      };
-      showJitsiEmbed(embedConfig);
-    } else if (secureUrl) {
-      window.open(secureUrl, '_blank');
-    } else if (legacyUrl) {
-      window.open(legacyUrl, '_blank');
-    } else {
-      toastError('No join URL available');
-    }
-  } catch (e) {
-    const msg = e.message || 'Failed to join meeting';
-    if (msg.includes('locked') || msg.includes('device')) {
-      toastError('🔒 ' + msg);
-    } else if (msg.includes('not started') || msg.includes('not currently live')) {
-      toastError('Meeting is not live yet. Wait for the host to start.');
-    } else if (msg.includes('ended')) {
-      toastError('This meeting has ended.');
-    } else {
-      toastError(msg);
-    }
-    renderMeetings();
+  // Stop preview stream
+  if (overlay._previewStream) {
+    overlay._previewStream.getTracks().forEach(t => t.stop());
+    overlay._previewStream = null;
   }
+
+  const jitsiConfig = overlay._jitsiConfig;
+  const jitsiToken  = overlay._jitsiToken;
+  overlay.remove();
+
+  if (_isMobile) {
+    // Permission was already granted during staging checks — navigate directly
+    const roomUrl = `https://${jitsiConfig.domain}/${jitsiConfig.roomName}${jitsiToken ? '?jwt=' + jitsiToken : ''}`;
+    window.location.href = roomUrl + '#config.deeplinking.disabled=true';
+    return;
+  }
+
+  startMeetingAntiCheat(meetingId);
+  showJitsiEmbed(jitsiConfig, jitsiToken);
 }
 
-function showJitsiEmbed(config) {
+function showJitsiEmbed(config, jitsiToken) {
   document.getElementById('jitsi-room-overlay')?.remove();
   if (window._jitsiApi) { try { window._jitsiApi.dispose(); } catch(e) {} window._jitsiApi = null; }
 
@@ -7744,13 +9028,17 @@ function showJitsiEmbed(config) {
   `;
   document.body.appendChild(overlay);
 
-  const domain = config.domain || 'meet.jit.si';
+  const domain = config.domain;
+  if (!domain) {
+    console.error('[Jitsi] No domain in jitsiConfig — check JITSI_DOMAIN server env var');
+    return;
+  }
   if (window.JitsiMeetExternalAPI) {
-    _initJitsiEmbed(config, domain);
+    _initJitsiEmbed(config, domain, jitsiToken);
   } else {
     const script = document.createElement('script');
     script.src = `https://${domain}/external_api.js`;
-    script.onload = () => _initJitsiEmbed(config, domain);
+    script.onload = () => _initJitsiEmbed(config, domain, jitsiToken);
     script.onerror = () => {
       toastError('Could not load embedded meeting. Opening in new tab instead.');
       overlay.remove();
@@ -7760,43 +9048,91 @@ function showJitsiEmbed(config) {
   }
 }
 
-function _initJitsiEmbed(config, domain) {
+let _jitsiJoined      = false;
+let _jitsiWatchdog    = null;
+let _jitsiWatchdogHits = 0;
+const _JITSI_MAX_INITS = 3;
+
+function _initJitsiEmbed(config, domain, jitsiToken) {
   const container = document.getElementById('jitsi-embed-container');
   if (!container) return;
-  window._jitsiApi = new JitsiMeetExternalAPI(domain, {
-    roomName: config.roomName,
-    width: '100%',
-    height: '100%',
+
+  if (window._jitsiApi) { try { window._jitsiApi.dispose(); } catch(e) {} window._jitsiApi = null; }
+
+  // Toolbar buttons: prefer server-provided configOverwrite.toolbarButtons (Jitsi 9584+),
+  // fall back to interfaceConfigOverwrite.TOOLBAR_BUTTONS (older builds), then hard-coded defaults.
+  const toolbarButtons = config.configOverwrite?.toolbarButtons
+    || config.interfaceConfigOverwrite?.TOOLBAR_BUTTONS
+    || (config.isModerator
+      ? ['microphone','camera','closedcaptions','desktop','chat','raisehand',
+         'tileview','select-background','mute-everyone','kick-participant',
+         'participants-pane','security','settings','hangup']
+      : ['microphone','camera','chat','raisehand','tileview','select-background','desktop','hangup']);
+
+  const options = {
+    roomName:   config.roomName,
+    width:      '100%',
+    height:     '100%',
     parentNode: container,
     userInfo: {
       displayName: config.displayName || currentUser?.name || '',
       email:       config.email       || currentUser?.email || '',
     },
     configOverwrite: {
-      startWithAudioMuted:     config.configOverwrite?.startWithAudioMuted ?? true,
-      startWithVideoMuted:     false,
-      enableNoisyMicDetection: true,
-      disableDeepLinking:      true,
+      startWithAudioMuted:       config.configOverwrite?.startWithAudioMuted ?? true,
+      startWithVideoMuted:       false,
+      enableNoisyMicDetection:   true,
+      disableDeepLinking:        true,
+      enableWelcomePage:         false,
+      prejoinPageEnabled:        false,
       ...(config.configOverwrite || {}),
+      // Always enforce these regardless of what server sends
+      toolbarButtons,
+      disableWatermark: true,
     },
     interfaceConfigOverwrite: {
       MOBILE_APP_PROMO:          false,
       SHOW_JITSI_WATERMARK:      false,
       SHOW_WATERMARK_FOR_GUESTS: false,
-      TOOLBAR_BUTTONS: [
-        'microphone','camera','closedcaptions','desktop',
-        'chat','raisehand','tileview','select-background','hangup',
-      ],
       ...(config.interfaceConfigOverwrite || {}),
+      TOOLBAR_BUTTONS: toolbarButtons,
     },
-  });
+  };
+
+  // Attach Jitsi JWT when self-hosted auth is enabled
+  if (jitsiToken) options.jwt = jitsiToken;
+
+  _jitsiJoined = false;
+  window._jitsiApi = new JitsiMeetExternalAPI(domain, options);
   window._jitsiApi.addEventListeners({
     readyToClose:          () => leaveJitsiMeeting(),
     videoConferenceLeft:   () => leaveJitsiMeeting(),
+    videoConferenceJoined: () => {
+      _jitsiJoined = true;
+      clearTimeout(_jitsiWatchdog);
+      _jitsiWatchdogHits = 0;
+    },
   });
+
+  // iOS Safari reloads the cross-origin iframe after granting camera/mic permission,
+  // which silently breaks the External API. Reinit if videoConferenceJoined hasn't
+  // fired within 20 seconds (max 3 attempts).
+  clearTimeout(_jitsiWatchdog);
+  if (_jitsiWatchdogHits < _JITSI_MAX_INITS) {
+    _jitsiWatchdog = setTimeout(() => {
+      if (!_jitsiJoined && document.getElementById('jitsi-embed-container')) {
+        _jitsiWatchdogHits++;
+        _initJitsiEmbed(config, domain, jitsiToken);
+      }
+    }, 20000);
+  }
 }
 
 function leaveJitsiMeeting() {
+  stopMeetingAntiCheat();
+  clearTimeout(_jitsiWatchdog);
+  _jitsiJoined = false;
+  _jitsiWatchdogHits = 0;
   if (window._jitsiApi) { try { window._jitsiApi.dispose(); } catch(e) {} window._jitsiApi = null; }
   document.getElementById('jitsi-room-overlay')?.remove();
   renderMeetings();
@@ -7805,8 +9141,10 @@ function leaveJitsiMeeting() {
 async function endMeeting(id) {
   if (!confirm('End this meeting? All participants will be marked as left.')) return;
   try {
-    await api(`/api/zoom/${id}/end`, { method: 'POST' });
+    await api(`/api/meetings/${id}/end`, { method: 'POST' });
+    leaveJitsiMeeting();
     renderMeetings();
+    toastSuccess('Meeting ended.');
   } catch (e) {
     toastError(e.message);
   }
@@ -7815,11 +9153,20 @@ async function endMeeting(id) {
 async function cancelMeeting(id) {
   if (!confirm('Cancel this meeting?')) return;
   try {
-    await api(`/api/zoom/${id}/cancel`, { method: 'POST' });
+    await api(`/api/meetings/${id}/cancel`, { method: 'POST' });
     renderMeetings();
   } catch (e) {
     toastError(e.message);
   }
+}
+
+async function openMeetingMonitor(id) {
+  // Pass the DIKLY access token (not the short-lived meeting token) so the
+  // monitor page can authenticate all of its API calls.
+  const accessToken = localStorage.getItem('dikly_token') || localStorage.getItem('token') || '';
+  if (!accessToken) { toastError('Not authenticated — please log in again.'); return; }
+  const monitorUrl = `/meeting-monitor.html?meeting=${encodeURIComponent(id)}&token=${encodeURIComponent(accessToken)}`;
+  window.open(monitorUrl, '_blank', 'noopener');
 }
 
 async function viewMeetingDetail(id) {
@@ -7827,9 +9174,9 @@ async function viewMeetingDetail(id) {
   if (!content) return;
   content.innerHTML = '<div class="card"><p>Loading meeting details...</p></div>';
   try {
-    const data = await api(`/api/zoom/${id}`);
-    const m = data.meeting;
-    const isCreator = m.createdBy?._id === currentUser._id;
+    const data = await api(`/api/meetings/${id}`);
+    const m = data.data || data.meeting || data;
+    const isCreator = m.creatorId?._id?.toString() === currentUser._id || m.creatorId?.toString() === currentUser._id || m.createdBy?._id === currentUser._id;
     const isAdmin = ['admin', 'superadmin'].includes(currentUser.role);
     const canManage = ['manager', 'lecturer', 'admin', 'superadmin'].includes(currentUser.role) && (isCreator || isAdmin);
 
@@ -7842,7 +9189,7 @@ async function viewMeetingDetail(id) {
       <div class="page-header" style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;">
         <div>
           <h2>${m.title}</h2>
-          <p>Hosted by ${m.createdBy?.name || 'Unknown'} <span class="status-badge" style="${statusStyle(m.status)}">${m.status.charAt(0).toUpperCase() + m.status.slice(1)}</span></p>
+          <p>Hosted by ${m.creatorId?.name || m.createdBy?.name || 'Unknown'} <span class="status-badge" style="${statusStyle(m.status)}">${m.status.charAt(0).toUpperCase() + m.status.slice(1)}</span></p>
         </div>
         <button class="btn btn-secondary btn-sm" onclick="renderMeetings()">Back to Meetings</button>
       </div>
@@ -7853,12 +9200,12 @@ async function viewMeetingDetail(id) {
           <p><strong>End:</strong> ${new Date(m.scheduledEnd).toLocaleString()}</p>
           <p><strong>Duration:</strong> ${m.duration} minutes</p>
           ${m.course ? `<p><strong>Course:</strong> ${m.course.code} - ${m.course.title}</p>` : ''}
-          <p><strong>Join Link:</strong> <a href="${m.joinUrl}" target="_blank" style="color:#3b82f6;word-break:break-all;">${m.joinUrl}</a></p>
+          <p><strong>Join Link:</strong> <a href="${canManage ? '/lecturer-meeting?meeting=' + m._id : '/session-preflight?meeting=' + m._id}" target="_blank" style="color:#3b82f6;word-break:break-all;">${window.location.origin}${canManage ? '/lecturer-meeting?meeting=' + m._id : '/session-preflight?meeting=' + m._id}</a></p>
           ${m.inviteLink ? `<p><strong>Invite Link:</strong> <a href="${m.inviteLink}" target="_blank" style="color:#16a34a;word-break:break-all;font-weight:600">▶ ${m.inviteLink}</a></p>` : ''}
           ${canManage ? `<button class="btn btn-sm" style="background:#0ea5e9;color:#fff;margin-top:4px" onclick="showInviteLinkForm('${m._id}', \`${m.inviteLink || ''}\`)">🔗 ${m.inviteLink ? 'Update' : 'Add'} Invite Link</button>` : ''}
           <div style="margin-top:12px;">
-            ${m.status === 'active' || m.status === 'live' ? `<button class="btn btn-success btn-sm" onclick="joinMeeting('${m._id}')">Join Meeting</button>` : ''}
-            ${canManage && m.status === 'active' ? `<button class="btn btn-danger btn-sm" style="margin-left:4px;" onclick="endMeeting('${m._id}')">End Meeting</button>` : ''}
+            ${m.status === 'live' || m.status === 'active' ? `<button class="btn btn-success btn-sm" onclick="joinMeeting('${m._id}')">Join Meeting</button>` : ''}
+            ${canManage && (m.status === 'live' || m.status === 'active') ? `<button class="btn btn-danger btn-sm" style="margin-left:4px;" onclick="endMeeting('${m._id}')">End Meeting</button>` : ''}
           </div>
         </div>
         <div class="card">
@@ -7983,105 +9330,76 @@ function _renderCoursesHTML(content, courses, isOffline) {
     return '<span style="background:#dcfce7;color:#166534;border:1px solid #bbf7d0;padding:2px 9px;border-radius:20px;font-size:10px;font-weight:700;">✓ Approved</span>';
   }
 
-  // Palette: cycle through accent colors for visual variety
-  const COURSE_PALETTES = [
-    { bg:'#4f6ef7', light:'#eef0fe', text:'#3b5bdb' },
-    { bg:'#7c3aed', light:'#f3eeff', text:'#6d28d9' },
-    { bg:'#0891b2', light:'#e0f7fa', text:'#0e7490' },
-    { bg:'#059669', light:'#d1fae5', text:'#047857' },
-    { bg:'#dc2626', light:'#fee2e2', text:'#b91c1c' },
-    { bg:'#d97706', light:'#fef3c7', text:'#b45309' },
-  ];
-
-  function courseCard(course, idx) {
+  function courseCard(course) {
     const approved   = !course.needsApproval || course.approvalStatus === 'approved';
     const titleEsc   = esc(course.title).replace(/'/g, "\\'");
     const codeEsc    = esc(course.code).replace(/'/g, "\\'");
-    const lecturer   = course.lecturerId?.name || course.lecturer?.name || '—';
-    const lecInitial = lecturer[0].toUpperCase();
-    const enrolled   = course.enrolledStudents?.length ?? course.enrolled ?? 0;
-    const dept       = course.department || course.lecturerId?.department || '';
-    const palette    = COURSE_PALETTES[idx % COURSE_PALETTES.length];
-
-    const statusPill = !course.needsApproval ? ''
-      : course.approvalStatus === 'pending'
-        ? `<span style="background:rgba(255,255,255,.25);color:#fff;padding:2px 9px;border-radius:20px;font-size:10px;font-weight:700;backdrop-filter:blur(4px)">⏳ Pending</span>`
-        : course.approvalStatus === 'rejected'
-          ? `<span style="background:rgba(255,255,255,.25);color:#fff;padding:2px 9px;border-radius:20px;font-size:10px;font-weight:700;backdrop-filter:blur(4px)">✕ Rejected</span>`
-          : `<span style="background:rgba(255,255,255,.25);color:#fff;padding:2px 9px;border-radius:20px;font-size:10px;font-weight:700;backdrop-filter:blur(4px)">✓ Approved</span>`;
+    const accent     = _deptColor(course.code || course.title || '');
+    const enrolled   = course.rosterCount ?? course.enrolledStudents?.length ?? 0;
 
     let actions = '';
     if (!isOffline && canManageRoster) {
       const uploadBtn = approved
-        ? `<button class="btn btn-sm" style="display:inline-flex;align-items:center;gap:5px;font-size:11px;background:${palette.bg};color:#fff;border:none;font-weight:600" onclick="showUploadRosterModal('${course._id}','${codeEsc}')"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>Upload</button>`
-        : `<span style="font-size:10px;color:var(--text-muted);font-style:italic">${course.approvalStatus === 'pending' ? '⏳ Awaiting approval' : '✕ Rejected'}</span>`;
+        ? `<button class="btn btn-primary btn-sm" style="display:inline-flex;align-items:center;gap:5px;font-size:11.5px" onclick="showUploadRosterModal('${course._id}','${codeEsc}')"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>Upload</button>`
+        : `<span style="font-size:11px;color:var(--text-muted);font-style:italic">${course.approvalStatus === 'pending' ? 'Awaiting HOD approval' : 'Rejected'}</span>`;
       actions = `
         ${uploadBtn}
-        <button class="btn btn-sm" style="display:inline-flex;align-items:center;gap:4px;font-size:11px;background:var(--bg);border:1px solid var(--border);font-weight:500" onclick="viewRoster('${course._id}','${codeEsc}')"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/></svg>Roster</button>
-        <button class="btn btn-sm" style="display:inline-flex;align-items:center;gap:4px;font-size:11px;background:${palette.light};color:${palette.text};border:1px solid ${palette.bg}33;font-weight:500" onclick="openBulkEmailModal('${course._id}','${titleEsc}')"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg>Email</button>
-        <button class="btn btn-sm" style="display:inline-flex;align-items:center;gap:4px;font-size:11px;background:#dcfce7;color:#166534;border:1px solid #bbf7d0;font-weight:500" onclick="openBulkSmsModal('${course._id}','${titleEsc}')"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>SMS</button>`;
+        <button class="btn btn-sm" style="background:#f8fafc;border:1px solid #e2e8f0;color:#475569;display:inline-flex;align-items:center;gap:4px;font-size:11.5px" onclick="viewRoster('${course._id}','${codeEsc}')"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/></svg>Roster</button>
+        <button class="btn btn-sm" style="background:#ede9fe;color:#6d28d9;border:1px solid #ddd6fe;display:inline-flex;align-items:center;gap:4px;font-size:11.5px" onclick="openBulkEmailModal('${course._id}','${titleEsc}')"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg>Email</button>
+        <button class="btn btn-sm" style="background:#dcfce7;color:#166534;border:1px solid #bbf7d0;display:inline-flex;align-items:center;gap:4px;font-size:11.5px" onclick="openBulkSmsModal('${course._id}','${titleEsc}')"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>SMS</button>`;
     } else if (!isOffline && isStudent) {
-      actions = `<button class="btn btn-sm" style="background:#f0fdf4;color:#16a34a;border:1px solid #bbf7d0;display:inline-flex;align-items:center;gap:4px;font-size:11px;font-weight:500" onclick="generateCertificate('${course._id}','${titleEsc}')">🎓 Certificate</button>`;
+      actions = `<button class="btn btn-sm" style="background:#f0fdf4;color:#16a34a;border:1px solid #bbf7d0;font-size:11.5px" onclick="generateCertificate('${course._id}','${titleEsc}')">🎓 Certificate</button>`;
     } else if (!isOffline) {
-      actions = `<button class="btn btn-sm" style="background:var(--bg);border:1px solid var(--border);display:inline-flex;align-items:center;gap:4px;font-size:11px;font-weight:500" onclick="viewRoster('${course._id}','${codeEsc}')"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/></svg>View Roster</button>`;
+      actions = `<button class="btn btn-sm" style="background:var(--bg);border:1px solid var(--border);font-size:11.5px" onclick="viewRoster('${course._id}','${codeEsc}')">View Roster</button>`;
     }
 
     return `
-      <div style="background:var(--card);border:1px solid var(--border);border-radius:16px;overflow:hidden;display:flex;flex-direction:column;transition:transform .15s,box-shadow .15s;box-shadow:0 2px 8px rgba(0,0,0,.06)" onmouseover="this.style.transform='translateY(-2px)';this.style.boxShadow='0 8px 24px rgba(0,0,0,.12)'" onmouseout="this.style.transform='translateY(0)';this.style.boxShadow='0 2px 8px rgba(0,0,0,.06)'">
-
-        <!-- Coloured header band -->
-        <div style="background:linear-gradient(135deg,${palette.bg} 0%,${palette.bg}cc 100%);padding:18px 18px 14px;position:relative;overflow:hidden">
-          <div style="position:absolute;top:-12px;right:-12px;width:80px;height:80px;border-radius:50%;background:rgba(255,255,255,.08)"></div>
-          <div style="position:absolute;bottom:-20px;right:16px;width:56px;height:56px;border-radius:50%;background:rgba(255,255,255,.06)"></div>
-          <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:8px;position:relative">
-            <div>
-              <span style="font-family:monospace;font-size:11px;font-weight:800;background:rgba(255,255,255,.22);color:#fff;padding:3px 10px;border-radius:20px;letter-spacing:.8px;display:inline-block;margin-bottom:8px">${esc(course.code)}</span>
-              <div style="font-size:15px;font-weight:700;color:#fff;line-height:1.3;max-width:180px">${esc(course.title)}</div>
+      <div style="background:#fff;border:1.5px solid #e8eaed;border-radius:16px;overflow:hidden;box-shadow:0 1px 4px rgba(0,0,0,.06);display:flex;flex-direction:column;transition:box-shadow .18s"
+           onmouseover="this.style.boxShadow='0 6px 24px rgba(0,0,0,.11)'" onmouseout="this.style.boxShadow='0 1px 4px rgba(0,0,0,.06)'">
+        <div style="height:5px;background:${accent}"></div>
+        <div style="padding:18px 20px 14px;flex:1;display:flex;flex-direction:column;gap:12px">
+          <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px">
+            <div style="min-width:0">
+              <div style="display:flex;align-items:center;gap:7px;flex-wrap:wrap;margin-bottom:5px">
+                <span style="font-family:monospace;font-size:11px;font-weight:700;background:${accent}18;color:${accent};padding:2px 8px;border-radius:5px;letter-spacing:.3px">${esc(course.code)}</span>
+                ${course.level ? `<span style="background:#dbeafe;color:#1d4ed8;padding:2px 7px;border-radius:20px;font-size:10.5px;font-weight:700">Level ${esc(String(course.level))}</span>` : ''}
+                ${course.group ? `<span style="background:#ecfdf5;color:#059669;padding:2px 7px;border-radius:20px;font-size:10.5px;font-weight:600">Group ${esc(course.group)}</span>` : ''}
+              </div>
+              <div style="font-size:14px;font-weight:700;color:#0f172a;line-height:1.3">${esc(course.title)}</div>
+              ${course.lecturerId?.name ? `<div style="font-size:11.5px;color:#64748b;margin-top:3px">👨‍🏫 ${esc(course.lecturerId.name)}</div>` : ''}
             </div>
-            <div style="display:flex;flex-direction:column;align-items:flex-end;gap:5px;flex-shrink:0">
-              ${statusPill}
-              <div style="width:32px;height:32px;border-radius:50%;background:rgba(255,255,255,.2);display:flex;align-items:center;justify-content:center;color:#fff;font-size:13px;font-weight:800;margin-top:2px">${lecInitial}</div>
+            <div style="flex-shrink:0">${statusBadge(course)}</div>
+          </div>
+          <div style="display:flex;align-items:center;gap:6px;padding:10px 12px;background:#f8fafc;border-radius:10px;border:1px solid #f1f5f9">
+            <div style="width:28px;height:28px;border-radius:8px;background:${accent}18;display:flex;align-items:center;justify-content:center">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="${accent}" stroke-width="2.5"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
             </div>
+            <span style="font-size:13px;font-weight:700;color:#0f172a">${enrolled}</span>
+            <span style="font-size:12px;color:#64748b">student${enrolled !== 1 ? 's' : ''} enrolled</span>
           </div>
-        </div>
-
-        <!-- Body -->
-        <div style="padding:14px 16px 10px;flex:1">
-          <div style="font-size:12px;font-weight:600;color:var(--text);margin-bottom:10px;display:flex;align-items:center;gap:6px">
-            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
-            ${esc(lecturer)}
+          <div style="display:flex;flex-wrap:wrap;gap:6px;align-items:center;padding-top:2px">
+            ${actions}
           </div>
-          <div style="display:flex;flex-wrap:wrap;gap:5px">
-            ${dept ? `<span style="font-size:10px;color:#fff;background:#0891b2;padding:2px 9px;border-radius:20px;font-weight:600">${esc(dept)}</span>` : ''}
-            ${course.level ? `<span style="font-size:10px;background:#ede9fe;color:#7c3aed;padding:2px 9px;border-radius:20px;font-weight:700">Level ${esc(String(course.level))}</span>` : ''}
-            ${course.group ? `<span style="font-size:10px;background:#ecfdf5;color:#059669;padding:2px 9px;border-radius:20px;font-weight:600">Group ${esc(course.group)}</span>` : ''}
-            <span style="font-size:10px;background:var(--bg);border:1px solid var(--border);color:var(--text-muted);padding:2px 9px;border-radius:20px;font-weight:600;display:inline-flex;align-items:center;gap:3px"><svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/></svg>${enrolled} enrolled</span>
-          </div>
-        </div>
-
-        <!-- Action footer -->
-        <div style="padding:10px 16px;border-top:1px solid var(--border);background:var(--bg);display:flex;flex-wrap:wrap;gap:6px;align-items:center">
-          ${actions}
         </div>
       </div>`;
   }
 
   content.innerHTML = `
-    <div style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:10px;margin-bottom:20px">
+    <div style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:10px;margin-bottom:24px">
       <div>
-        <h2 style="font-size:22px;font-weight:800;letter-spacing:-.5px;color:var(--text);margin-bottom:2px">${isStudent ? 'My Courses' : 'Courses'}</h2>
-        <p style="color:var(--text-muted);font-size:13px">${isStudent ? 'Your enrolled academic courses' : 'Manage academic courses'}${isOffline ? ' · <span style="color:#f59e0b;font-weight:600">Offline — cached</span>' : ''}</p>
+        <h2 style="font-size:22px;font-weight:800;letter-spacing:-.5px;color:#0f172a;margin-bottom:2px">${isStudent ? 'My Courses' : 'Courses'}</h2>
+        <p style="color:#64748b;font-size:13px">${isStudent ? 'Your enrolled academic courses' : 'Manage academic courses'}${isOffline ? ' · <span style="color:#f59e0b;font-weight:600">Offline — cached</span>' : ''}</p>
       </div>
       ${canCreate && !isOffline ? `<button class="btn btn-primary" onclick="showCreateCourseModal()" style="display:flex;align-items:center;gap:6px"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>Create Course</button>` : ''}
     </div>
     ${courses.length
-      ? `<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:16px">${courses.map((c,i) => courseCard(c,i)).join('')}</div>`
-      : `<div style="background:var(--card);border:1px solid var(--border);border-radius:16px;padding:60px 20px;text-align:center;box-shadow:0 1px 4px rgba(0,0,0,.05)">
+      ? `<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:16px">${courses.map(courseCard).join('')}</div>`
+      : `<div style="background:#fff;border:1px solid #e8eaed;border-radius:16px;padding:60px 20px;text-align:center;box-shadow:0 1px 4px rgba(0,0,0,.05)">
           <div style="width:56px;height:56px;border-radius:16px;background:#eff6ff;display:flex;align-items:center;justify-content:center;margin:0 auto 16px">
             <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#2563eb" stroke-width="1.8"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg>
           </div>
-          <h3 style="font-size:16px;font-weight:700;color:var(--text);margin-bottom:6px">No courses yet</h3>
-          <p style="color:var(--text-muted);font-size:13px;margin-bottom:20px">${canCreate ? 'Create your first course to get started' : 'No courses have been assigned to you yet'}</p>
+          <h3 style="font-size:16px;font-weight:700;color:#0f172a;margin-bottom:6px">No courses yet</h3>
+          <p style="color:#64748b;font-size:13px;margin-bottom:20px">${canCreate ? 'Create your first course to get started' : 'No courses have been assigned to you yet'}</p>
           ${canCreate && !isOffline ? '<button class="btn btn-primary" onclick="showCreateCourseModal()">+ Create Course</button>' : ''}
         </div>`}
   `;
@@ -8309,6 +9627,19 @@ async function renderQuizzes() {
   const content = document.getElementById('main-content');
   if (!content) return;
   const role = currentUser.role;
+  // Lecturer and student: open the quizzes panel in assignments.html
+  if (role === 'student' || role === 'lecturer') {
+    window.location.href = '/assignments.html?tab=quizzes';
+    return;
+  }
+  // Admin / superadmin keep the proctored quiz overview
+  await renderAdminQuizzes(content);
+}
+
+async function renderProctoredQuizzes() {
+  const content = document.getElementById('main-content');
+  if (!content) return;
+  const role = currentUser.role;
   if (role === 'lecturer') {
     await renderLecturerQuizzes(content);
   } else if (role === 'student') {
@@ -8421,18 +9752,6 @@ async function showCreateQuizModal() {
             <option value="">Select a course</option>
             ${courses.map(c => `<option value="${c._id}">${esc(c.title)}${c.level?' · L'+c.level:''}${c.group?' · Grp '+c.group:''}</option>`).join('')}
           </select></div>
-          <div class="form-group">
-            <label>Target Audience</label>
-            <select id="cq-audience" style="width:100%;padding:8px;border:1px solid #d1d5db;border-radius:6px;" onchange="document.getElementById('cq-group-row').style.display=this.value==='group'?'block':'none'">
-              <option value="all">All enrolled students</option>
-              <option value="group">Specific group only</option>
-            </select>
-          </div>
-          <div class="form-group" id="cq-group-row" style="display:none">
-            <label>Group *</label>
-            <input type="text" id="cq-group" placeholder="e.g. A, B, C" style="width:100%;padding:8px;border:1px solid #d1d5db;border-radius:6px;">
-            <p style="font-size:11px;color:#9ca3af;margin-top:4px">Only students in this group will see the quiz.</p>
-          </div>
           <div class="form-group"><label>Time Limit (minutes)</label><input type="number" id="cq-timelimit" value="30" min="1" style="width:100%;padding:8px;border:1px solid #d1d5db;border-radius:6px;"></div>
           <div class="form-group"><label>Start Time *</label><input type="datetime-local" id="cq-start" style="width:100%;padding:8px;border:1px solid #d1d5db;border-radius:6px;"></div>
           <div class="form-group"><label>End Time *</label><input type="datetime-local" id="cq-end" style="width:100%;padding:8px;border:1px solid #d1d5db;border-radius:6px;"></div>
@@ -8469,17 +9788,10 @@ async function submitCreateQuiz() {
   const endTime = document.getElementById('cq-end').value;
   const maxAttempts = parseInt(document.getElementById('cq-max-attempts')?.value ?? '1');
   const scorePolicy = document.getElementById('cq-score-policy')?.value || 'best';
-  const targetAudience = document.getElementById('cq-audience')?.value || 'all';
-  const targetGroup = (document.getElementById('cq-group')?.value || '').trim();
   const errEl = document.getElementById('cq-error');
 
   if (!title || !courseId || !startTime || !endTime) {
     errEl.textContent = 'Please fill in all required fields.';
-    errEl.style.display = 'block';
-    return;
-  }
-  if (targetAudience === 'group' && !targetGroup) {
-    errEl.textContent = 'Please enter the group name/letter.';
     errEl.style.display = 'block';
     return;
   }
@@ -8489,7 +9801,7 @@ async function submitCreateQuiz() {
   try {
     const data = await api('/api/lecturer/quizzes', {
       method: 'POST',
-      body: JSON.stringify({ title, description, courseId, timeLimit, startTime: new Date(startTime).toISOString(), endTime: new Date(endTime).toISOString(), maxAttempts: isNaN(maxAttempts) ? 1 : maxAttempts, scorePolicy, targetAudience, targetGroup: targetAudience === 'group' ? targetGroup : null })
+      body: JSON.stringify({ title, description, courseId, timeLimit, startTime: new Date(startTime).toISOString(), endTime: new Date(endTime).toISOString(), maxAttempts: isNaN(maxAttempts) ? 1 : maxAttempts, scorePolicy })
     });
     closeQuizModal();
     showAddQuestionsView(data.quiz._id);
@@ -8530,17 +9842,20 @@ async function showAddQuestionsView(quizId) {
         <div class="form-group" style="margin-bottom:16px;">
           <label style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:#6b7280;display:block;margin-bottom:8px;">Question Type</label>
           <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;">
-            <label id="aq-lbl-single" style="display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;cursor:pointer;padding:12px 6px;border:2px solid var(--primary);border-radius:10px;background:var(--primary);color:#fff;font-size:12px;font-weight:700;text-align:center;line-height:1.3;">
+            <label id="aq-lbl-single" style="display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;cursor:pointer;padding:16px 10px;border:2px solid #0f172a;border-radius:12px;background:#0f172a;color:#fff;font-size:12px;font-weight:700;text-align:center;line-height:1.3;">
               <input type="radio" name="aq-type" value="single" checked onchange="aqToggleType('single')" style="display:none;">
-              <span style="font-size:18px;">🔘</span>Single Answer
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="4" fill="currentColor" stroke="none"/></svg>
+              SINGLE ANSWER
             </label>
-            <label id="aq-lbl-multi" style="display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;cursor:pointer;padding:12px 6px;border:2px solid #e5e7eb;border-radius:10px;background:var(--card);color:#374151;font-size:12px;font-weight:700;text-align:center;line-height:1.3;">
+            <label id="aq-lbl-multi" style="display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;cursor:pointer;padding:16px 10px;border:2px solid #e5e7eb;border-radius:12px;background:#fff;color:#374151;font-size:12px;font-weight:700;text-align:center;line-height:1.3;">
               <input type="radio" name="aq-type" value="multiple" onchange="aqToggleType('multiple')" style="display:none;">
-              <span style="font-size:18px;">☑️</span>Multi Answer
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="3"/><polyline points="9 12 11 14 15 10"/></svg>
+              MULTI ANSWER
             </label>
-            <label id="aq-lbl-fill" style="display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;cursor:pointer;padding:12px 6px;border:2px solid #e5e7eb;border-radius:10px;background:var(--card);color:#374151;font-size:12px;font-weight:700;text-align:center;line-height:1.3;">
+            <label id="aq-lbl-fill" style="display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;cursor:pointer;padding:16px 10px;border:2px solid #e5e7eb;border-radius:12px;background:#fff;color:#374151;font-size:12px;font-weight:700;text-align:center;line-height:1.3;">
               <input type="radio" name="aq-type" value="fill" onchange="aqToggleType('fill')" style="display:none;">
-              <span style="font-size:18px;">✏️</span>Fill In
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="2" x2="22" y2="6"/><path d="M7.5 20.5L19 9l-4-4L3.5 16.5 2 22z"/></svg>
+              FILL IN
             </label>
           </div>
           <p id="aq-type-hint" style="font-size:12px;color:#9ca3af;margin-top:8px;">One correct answer — student picks one option.</p>
@@ -8661,8 +9976,8 @@ function aqToggleType(type) {
     : isFill
       ? 'Fill in the blank — student types their answer.'
       : 'One correct answer — student picks one option.';
-  const primStyle = 'display:flex;align-items:center;gap:6px;cursor:pointer;padding:8px 16px;border:2px solid var(--primary);border-radius:8px;background:var(--primary);color:#fff;font-size:13px;font-weight:600;';
-  const secStyle  = 'display:flex;align-items:center;gap:6px;cursor:pointer;padding:8px 16px;border:2px solid #e5e7eb;border-radius:8px;background:#fff;color:#374151;font-size:13px;font-weight:600;';
+  const primStyle = 'display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;cursor:pointer;padding:16px 10px;border:2px solid #0f172a;border-radius:12px;background:#0f172a;color:#fff;font-size:12px;font-weight:700;text-align:center;line-height:1.3;';
+  const secStyle  = 'display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;cursor:pointer;padding:16px 10px;border:2px solid #e5e7eb;border-radius:12px;background:#fff;color:#374151;font-size:12px;font-weight:700;text-align:center;line-height:1.3;';
   document.getElementById('aq-lbl-single').style.cssText = (!isMulti && !isFill) ? primStyle : secStyle;
   document.getElementById('aq-lbl-multi').style.cssText  = isMulti ? primStyle : secStyle;
   document.getElementById('aq-lbl-fill').style.cssText   = isFill  ? primStyle : secStyle;
@@ -8792,64 +10107,6 @@ async function viewLecturerQuizDetail(quizId) {
 
 function openLiveMonitor(quizId) {
   window.open('/proctor-dashboard.html?quizId=' + quizId, '_blank');
-}
-
-async function renderLecturerAttendance() {
-  const content = document.getElementById('main-content');
-  if (!content) return;
-  try {
-    const data = await api('/api/attendance-sessions');
-    const sessions = data.sessions || data || [];
-    const fmt = d => new Date(d).toLocaleString('en-GB',{day:'numeric',month:'short',year:'numeric',hour:'2-digit',minute:'2-digit'});
-    const statusBadge = s => {
-      if (s.status === 'active') return `<span style="background:#dcfce7;color:#166534;padding:2px 9px;border-radius:20px;font-size:11px;font-weight:700;display:inline-flex;align-items:center;gap:4px"><span style="width:6px;height:6px;border-radius:50%;background:#16a34a;animation:pulse 1.8s infinite"></span>Live</span>`;
-      if (s.status === 'stopped') return `<span style="background:#f1f5f9;color:#475569;padding:2px 9px;border-radius:20px;font-size:11px;font-weight:700">Ended</span>`;
-      return `<span style="background:#fef3c7;color:#92400e;padding:2px 9px;border-radius:20px;font-size:11px;font-weight:700">Scheduled</span>`;
-    };
-    content.innerHTML = `
-      <div style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:10px;margin-bottom:20px">
-        <div>
-          <h2 style="font-size:22px;font-weight:800;color:#0f172a;margin-bottom:2px">Attendance Sessions</h2>
-          <p style="color:#64748b;font-size:13px">Manage and review attendance for your classes</p>
-        </div>
-        <button class="btn btn-primary" onclick="navigateTo('attendance-device')" style="display:flex;align-items:center;gap:6px">
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
-          New Session
-        </button>
-      </div>
-      ${!sessions.length ? `
-        <div style="text-align:center;padding:60px 20px;background:#fff;border:1px solid #e8eaed;border-radius:16px">
-          <div style="width:56px;height:56px;border-radius:16px;background:#eff6ff;display:flex;align-items:center;justify-content:center;margin:0 auto 16px">
-            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#2563eb" stroke-width="1.8"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
-          </div>
-          <h3 style="font-size:17px;font-weight:700;color:#0f172a;margin-bottom:6px">No attendance sessions yet</h3>
-          <p style="color:#64748b;font-size:13px;margin-bottom:20px">Start a session from your Attendance Device page</p>
-          <button class="btn btn-primary" onclick="navigateTo('attendance-device')">Go to Attendance Device</button>
-        </div>` :
-        sessions.map(s => `
-          <div style="background:#fff;border:1px solid #e8eaed;border-radius:14px;padding:16px 20px;margin-bottom:12px;box-shadow:0 1px 4px rgba(0,0,0,.04)">
-            <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:12px;flex-wrap:wrap">
-              <div>
-                <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px">
-                  <span style="font-size:14px;font-weight:700;color:#0f172a">${esc(s.course?.code || s.courseCode || 'Session')}</span>
-                  ${statusBadge(s)}
-                </div>
-                <div style="font-size:12px;color:#64748b">${esc(s.course?.title || '')}${s.startTime ? ' · Started ' + fmt(s.startTime) : ''}</div>
-              </div>
-              <div style="display:flex;gap:6px;flex-wrap:wrap;flex-shrink:0">
-                <a href="/api/attendance-sessions/${s._id}/records" target="_blank" class="btn btn-sm" style="background:#eff6ff;color:#2563eb;border:1px solid #bfdbfe;font-weight:600">View Records</a>
-              </div>
-            </div>
-            <div style="display:flex;gap:16px;margin-top:12px;padding:10px 12px;background:#f8fafc;border-radius:8px;flex-wrap:wrap">
-              <span style="font-size:12px;color:#64748b"><strong style="color:#0f172a">${s.presentCount ?? s.attendance?.length ?? '—'}</strong> present</span>
-              ${s.absentCount != null ? `<span style="font-size:12px;color:#64748b"><strong style="color:#0f172a">${s.absentCount}</strong> absent</span>` : ''}
-              ${s.code ? `<span style="font-size:12px;color:#64748b">Code: <strong style="color:#0f172a;font-family:monospace">${s.code}</strong></span>` : ''}
-            </div>
-          </div>`).join('')}
-    `;
-  } catch (e) {
-    content.innerHTML = `<div class="card"><p style="color:#dc2626">Error: ${e.message}</p></div>`;
-  }
 }
 
 function copyQuizId(id) {
@@ -9198,14 +10455,14 @@ async function renderStudentQuizzes(content, showAll) {
           ${q.canAttempt && !q.canContinue ? `<button class="btn btn-primary" style="flex:1;" onclick="startStudentQuiz('${q._id}')">${q.attemptCount > 0 ? '↩ Retake' : '▶ Take Quiz'}</button>` : ''}
           ${q.isSubmitted ? `<button class="btn btn-secondary" style="flex:1;" onclick="viewStudentResult('${q._id}')">📊 View Result</button>` : ''}
           ${q.status === 'closed' && !q.isSubmitted ? `<div style="font-size:12px;color:var(--text-muted);padding:8px 0;">This quiz has closed.</div>` : ''}
-          ${q.status === 'upcoming' && !q.canAttempt ? `<div style="font-size:12px;color:#7c3aed;padding:8px 0;">Not open yet — check back at the start time.</div>` : ''}
+          ${q.status === 'upcoming' && !q.canAttempt ? `<div style="font-size:12px;color:#7c3aed;padding:8px 0;" id="quiz-countdown-${q._id}">Opens at ${new Date(q.startTime).toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'})}</div>` : ''}
         </div>
       </div>`;
     }
 
     content.innerHTML = `
       <div class="page-header" style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:10px;margin-bottom:16px;">
-        <div><h2>Quizzes</h2><p>Your available quizzes and assessments</p></div>
+        <div><h2>Quizzes</h2><p>Your scheduled proctored and snap quizzes</p></div>
       </div>
       <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:13px;font-weight:500;margin-bottom:16px;padding:10px 14px;background:var(--card);border-radius:8px;border:1px solid var(--border);">
         <input type="checkbox" ${showAll ? 'checked' : ''} onchange="renderStudentQuizzes(document.getElementById('main-content'), this.checked)" style="accent-color:var(--primary);width:15px;height:15px;">
@@ -9215,6 +10472,20 @@ async function renderStudentQuizzes(content, showAll) {
         ? quizzes.map(q => quizCard(q)).join('')
         : '<div class="card"><div class="empty-state"><p>No quizzes available right now.</p><p style="font-size:13px;color:var(--text-muted);margin-top:4px;">Check back when your lecturer opens a quiz.</p></div></div>'}
     `;
+
+    // Auto-refresh when the next upcoming quiz opens (within 30 min)
+    if (window._quizOpenTimer) { clearTimeout(window._quizOpenTimer); window._quizOpenTimer = null; }
+    const upcoming = quizzes.filter(q => q.status === 'upcoming');
+    if (upcoming.length > 0) {
+      const next = upcoming.reduce((a, b) => new Date(a.startTime) < new Date(b.startTime) ? a : b);
+      const msUntilOpen = new Date(next.startTime) - Date.now();
+      if (msUntilOpen > 0 && msUntilOpen <= 30 * 60 * 1000) {
+        window._quizOpenTimer = setTimeout(() => {
+          const c = document.getElementById('main-content');
+          if (c && currentView === 'quizzes') renderStudentQuizzes(c, showAll);
+        }, msUntilOpen + 500);
+      }
+    }
   } catch (e) {
     content.innerHTML = `<div class="card"><p style="color:#ef4444;">Error: ${e.message}</p></div>`;
   }
@@ -9232,7 +10503,11 @@ async function startStudentQuiz(quizId) {
     const timeLimit = data.timeLimit || 30;
     const attempt = data.attempt;
     const startedAt = new Date(attempt.startedAt);
-    const endTime = new Date(startedAt.getTime() + timeLimit * 60 * 1000);
+    // Correct for clock drift: use server time offset so timer is accurate
+    const clockOffset = data.serverTime ? (new Date(data.serverTime) - Date.now()) : 0;
+    const attemptEnd = new Date(startedAt.getTime() + timeLimit * 60 * 1000);
+    const quizEnd = data.quizEndTime ? new Date(data.quizEndTime) : null;
+    const endTime = quizEnd && quizEnd < attemptEnd ? quizEnd : attemptEnd;
 
     content.innerHTML = `
       <div class="page-header" style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;">
@@ -9250,6 +10525,23 @@ async function startStudentQuiz(quizId) {
                     style="width:100%;padding:11px 14px;border:1.5px solid #d1d5db;border-radius:8px;font-size:14px;font-family:inherit;outline:none;transition:border-color .15s;"
                     onfocus="this.style.borderColor='#6366f1'" onblur="this.style.borderColor='#d1d5db'">
                   <p style="font-size:11px;color:#9ca3af;margin-top:5px;">Spelling counts — answer is not case-sensitive.</p>
+                </div>`
+              : q.questionType === 'explain'
+              ? `<div style="margin-top:6px;">
+                  <textarea id="sq-explain-${q._id}" rows="5" placeholder="Type your answer here…"
+                    style="width:100%;padding:11px 14px;border:1.5px solid #d1d5db;border-radius:8px;font-size:14px;font-family:inherit;outline:none;transition:border-color .15s;resize:vertical;box-sizing:border-box;"
+                    onfocus="this.style.borderColor='#6366f1'" onblur="this.style.borderColor='#d1d5db'"></textarea>
+                  <p style="font-size:11px;color:#9ca3af;margin-top:5px;">This question will be manually graded by your instructor.</p>
+                </div>`
+              : q.questionType === 'multiple'
+              ? `<div style="display:flex;flex-direction:column;gap:8px;">
+                  <p style="font-size:11px;color:#6b7280;margin:0 0 4px;">Select all that apply.</p>
+                  ${q.options.map((opt, oi) => `
+                    <label style="display:flex;align-items:center;gap:8px;padding:10px;border:1px solid #e5e7eb;border-radius:8px;cursor:pointer;transition:background 0.15s;" onmouseover="this.style.background='#f3f4f6'" onmouseout="this.style.background=''">
+                      <input type="checkbox" name="sq-${q._id}" value="${oi}" style="accent-color:#3b82f6;width:16px;height:16px;">
+                      <span><strong>${String.fromCharCode(65 + oi)}.</strong> ${opt}</span>
+                    </label>
+                  `).join('')}
                 </div>`
               : `<div style="display:flex;flex-direction:column;gap:8px;">
               ${q.options.map((opt, oi) => `
@@ -9271,7 +10563,7 @@ async function startStudentQuiz(quizId) {
     window._quizQuestions = questions;
 
     function updateTimer() {
-      const now = new Date();
+      const now = new Date(Date.now() + clockOffset);
       const remaining = Math.max(0, endTime - now);
       const mins = Math.floor(remaining / 60000);
       const secs = Math.floor((remaining % 60000) / 1000);
@@ -9308,12 +10600,24 @@ async function submitStudentQuiz(quizId) {
     window._quizTabHandler = null;
   }
   window._quizSubmitting = false;
+  if (_appOfflineMode) {
+    toastError('You are offline. Connect to the internet to submit your quiz.');
+    return;
+  }
   if (quizTimerInterval) { clearInterval(quizTimerInterval); quizTimerInterval = null; }
   const questions = window._quizQuestions || [];
   const answers = questions.map(q => {
     if (q.questionType === 'fill') {
       const input = document.getElementById(`sq-fill-${q._id}`);
       return { questionId: q._id, selectedAnswer: null, selectedAnswerText: input ? input.value.trim() : '' };
+    }
+    if (q.questionType === 'explain') {
+      const textarea = document.getElementById(`sq-explain-${q._id}`);
+      return { questionId: q._id, selectedAnswer: null, selectedAnswerText: textarea ? textarea.value.trim() : '' };
+    }
+    if (q.questionType === 'multiple') {
+      const checked = Array.from(document.querySelectorAll(`input[name="sq-${q._id}"]:checked`)).map(el => parseInt(el.value));
+      return { questionId: q._id, selectedAnswer: checked, selectedAnswerText: null };
     }
     const selected = document.querySelector(`input[name="sq-${q._id}"]:checked`);
     return { questionId: q._id, selectedAnswer: selected ? parseInt(selected.value) : -1, selectedAnswerText: null };
@@ -9382,8 +10686,33 @@ async function viewStudentResult(quizId) {
                     </div>
                     ${!a.isCorrect ? `<div style="padding:8px 12px;border-radius:6px;border:1px solid #22c55e;background:#f0fdf4;color:#15803d;">← Correct answer: <strong>${q.correctAnswerText || ''}</strong></div>` : ''}
                   </div>`
+                : q.questionType === 'explain'
+                ? `<div style="display:flex;flex-direction:column;gap:6px;font-size:13px;">
+                    <div style="padding:8px 12px;border-radius:6px;border:1px solid #e5e7eb;background:#f9fafb;">
+                      Your answer: <em>${a.selectedAnswerText || '(no answer)'}</em>
+                    </div>
+                    ${a.pendingManualGrade ? `<div style="padding:6px 12px;border-radius:6px;background:#fffbeb;border:1px solid #fde68a;color:#92400e;font-size:12px;">⏳ Awaiting manual grading by instructor</div>` : ''}
+                  </div>`
+                : q.questionType === 'multiple'
+                ? `<div style="display:flex;flex-direction:column;gap:6px;">
+                  ${(q.options || []).map((opt, oi) => {
+                    const correctArr = Array.isArray(q.correctAnswer) ? q.correctAnswer : [];
+                    const selectedArr = Array.isArray(a.selectedAnswer) ? a.selectedAnswer : [];
+                    const isCorrectOpt = correctArr.includes(oi);
+                    const isSelectedOpt = selectedArr.includes(oi);
+                    let style = 'padding:8px 12px;border-radius:6px;border:1px solid #e5e7eb;';
+                    if (isCorrectOpt) style += 'background:#f0fdf4;border-color:#22c55e;color:#15803d;';
+                    if (isSelectedOpt && !isCorrectOpt) style += 'background:#fef2f2;border-color:#ef4444;color:#dc2626;';
+                    return `<div style="${style}">
+                      <strong>${String.fromCharCode(65 + oi)}.</strong> ${opt}
+                      ${isCorrectOpt ? ' ✓ Correct' : ''}
+                      ${isSelectedOpt && !isCorrectOpt ? ' ✗ Your selection' : ''}
+                      ${isSelectedOpt && isCorrectOpt ? ' ✓ Your selection' : ''}
+                    </div>`;
+                  }).join('')}
+                </div>`
                 : `<div style="display:flex;flex-direction:column;gap:6px;">
-                ${q.options.map((opt, oi) => {
+                ${(q.options || []).map((opt, oi) => {
                   let style = 'padding:8px 12px;border-radius:6px;border:1px solid #e5e7eb;';
                   if (oi === q.correctAnswer) style += 'background:#f0fdf4;border-color:#22c55e;color:#15803d;';
                   if (oi === a.selectedAnswer && !a.isCorrect) style += 'background:#fef2f2;border-color:#ef4444;color:#dc2626;';
@@ -9405,12 +10734,262 @@ async function viewStudentResult(quizId) {
   }
 }
 
+// ── Snap Quiz Live Monitoring Dashboard ───────────────────────────────────────
+
+async function renderQuizMonitorPage() {
+  const content = document.getElementById('main-content');
+  content.innerHTML = '<div class="loading">Loading quiz list…</div>';
+  try {
+    const isHodOrAdmin = ['hod', 'admin', 'superadmin'].includes(currentUser?.role);
+    const endpoint = isHodOrAdmin
+      ? '/api/lecturer/snap-quizzes/department-overview?status=open&limit=100'
+      : '/api/lecturer/snap-quizzes?status=open&limit=50';
+    const data = await api(endpoint).catch(() => api('/api/lecturer/snap-quizzes?status=open&limit=50'));
+    const quizzes = data.quizzes || [];
+    if (!quizzes.length) {
+      content.innerHTML = `<div class="page-header"><div><h2>Quiz Monitor</h2><p>No open quizzes right now</p></div></div>
+        <div class="card" style="text-align:center;padding:48px">
+          <div style="font-size:36px;margin-bottom:12px">📋</div>
+          <p style="color:var(--text-muted)">Open a quiz from the <a href="#" onclick="navigateTo('quizzes');return false">Quizzes</a> page to see live student status here.</p>
+        </div>`;
+      return;
+    }
+    content.innerHTML = `
+      <div class="page-header"><div><h2>Quiz Monitor</h2><p>Select a quiz to watch live</p></div></div>
+      <div style="display:grid;gap:10px;max-width:800px">
+        ${quizzes.map(q => `
+          <div style="background:var(--card);border:1.5px solid #22c55e;border-radius:12px;padding:14px 18px;display:flex;align-items:center;justify-content:space-between;gap:12px;cursor:pointer" onclick="renderQuizLiveDashboard('${q._id}','${esc(q.title).replace(/'/g,"\\'")}')" onmouseover="this.style.boxShadow='0 4px 16px rgba(0,0,0,.1)'" onmouseout="this.style.boxShadow=''">
+            <div>
+              <div style="font-weight:700;font-size:14px">${esc(q.title)}</div>
+              <div style="font-size:11px;color:var(--text-muted);margin-top:3px">
+                <span style="background:#dcfce7;color:#166534;padding:2px 7px;border-radius:20px;font-size:10px;font-weight:700">LIVE</span>
+                · ${q.timeLimitMinutes} min
+                · Security: <strong>${q.securityLevel || 'medium'}</strong>
+              </div>
+            </div>
+            <button class="btn btn-primary btn-sm">Monitor →</button>
+          </div>`).join('')}
+      </div>`;
+  } catch (e) {
+    content.innerHTML = `<div class="card"><p>Error: ${e.message}</p></div>`;
+  }
+}
+
+let _quizMonitorWs = null;
+let _quizMonitorRefreshTimer = null;
+
+async function renderQuizLiveDashboard(quizId, quizTitle) {
+  const content = document.getElementById('main-content');
+  content.innerHTML = '<div class="loading">Connecting to live monitor…</div>';
+
+  // Cleanup previous ws
+  if (_quizMonitorWs) { try { _quizMonitorWs.close(); } catch(_) {} _quizMonitorWs = null; }
+  if (_quizMonitorRefreshTimer) { clearInterval(_quizMonitorRefreshTimer); _quizMonitorRefreshTimer = null; }
+
+  const render = async () => {
+    try {
+      const d = await api(`/api/lecturer/snap-quizzes/${quizId}/live-monitor`);
+      _renderQuizMonitorUI(d, quizId, quizTitle);
+    } catch (e) {
+      content.innerHTML = `<div class="card"><p>Error: ${e.message}</p><button class="btn btn-secondary btn-sm" onclick="renderQuizMonitorPage()">← Back</button></div>`;
+    }
+  };
+
+  await render();
+
+  // Connect WebSocket for live updates
+  try {
+    const token = localStorage.getItem('diklyToken') || sessionStorage.getItem('diklyToken') || '';
+    const wsUrl = (location.protocol === 'https:' ? 'wss' : 'ws') + '://' + location.host + '/ws/monitor?token=' + encodeURIComponent(token);
+    const ws = new WebSocket(wsUrl);
+    _quizMonitorWs = ws;
+    ws.onopen = () => ws.send(JSON.stringify({ type: 'subscribe', quizId }));
+    ws.onmessage = (ev) => {
+      try {
+        const msg = JSON.parse(ev.data);
+        if (msg.type && msg.type.startsWith('quiz:')) {
+          _handleQuizMonitorEvent(msg.type.replace('quiz:', ''), msg.payload);
+        }
+      } catch (_) {}
+    };
+    ws.onerror = ws.onclose = () => { _quizMonitorWs = null; };
+  } catch (_) {}
+
+  // Fallback: refresh stats every 20s in case WS is unavailable
+  _quizMonitorRefreshTimer = setInterval(render, 20000);
+}
+
+function _handleQuizMonitorEvent(eventType, payload) {
+  const feed = document.getElementById('qm-feed');
+  if (!feed) return;
+  const colors = { violation_logged: '#ef4444', attempt_started: '#22c55e', attempt_submitted: '#3b82f6', attempt_auto_submitted: '#f59e0b', heartbeat_missed: '#f97316', snapshot_analyzed: '#8b5cf6' };
+  const icons  = { violation_logged: '⚠️', attempt_started: '▶️', attempt_submitted: '✅', attempt_auto_submitted: '⏰', heartbeat_missed: '💔', snapshot_analyzed: '🤖' };
+  const labels = { violation_logged: 'Violation', attempt_started: 'Started', attempt_submitted: 'Submitted', attempt_auto_submitted: 'Auto-submitted', heartbeat_missed: 'Missed heartbeat', snapshot_analyzed: 'AI analysis' };
+  const color = colors[eventType] || '#64748b';
+  const icon  = icons[eventType]  || '📌';
+  const label = labels[eventType] || eventType;
+
+  const item = document.createElement('div');
+  item.style.cssText = `display:flex;align-items:flex-start;gap:10px;padding:8px 12px;border-left:3px solid ${color};background:${color}11;border-radius:0 8px 8px 0;margin-bottom:6px`;
+  item.innerHTML = `
+    <span style="font-size:14px;margin-top:1px">${icon}</span>
+    <div style="flex:1;min-width:0">
+      <div style="font-size:12px;font-weight:700;color:${color}">${label}</div>
+      <div style="font-size:11px;color:var(--text-muted);margin-top:1px">${payload.studentId ? 'Student: ...'+String(payload.studentId).slice(-6) : ''}${payload.violationType ? ' · '+payload.violationType : ''}${payload.causedTermination ? ' · <strong style="color:#ef4444">TERMINATED</strong>' : ''}</div>
+    </div>
+    <span style="font-size:10px;color:#94a3b8;white-space:nowrap">${new Date().toLocaleTimeString()}</span>`;
+  feed.prepend(item);
+  while (feed.children.length > 50) feed.removeChild(feed.lastChild);
+
+  // Update student row if present
+  if (payload.attemptId) {
+    const row = document.getElementById('qm-student-' + payload.attemptId);
+    if (row && eventType === 'violation_logged') {
+      const vc = row.querySelector('.qm-vcount');
+      if (vc) vc.textContent = (parseInt(vc.textContent) || 0) + 1;
+    }
+    if (row && (eventType === 'attempt_submitted' || eventType === 'attempt_auto_submitted')) {
+      row.style.opacity = '0.6';
+      const st = row.querySelector('.qm-status');
+      if (st) { st.textContent = eventType === 'attempt_auto_submitted' ? 'Auto-submitted' : 'Submitted'; st.style.color = '#22c55e'; }
+    }
+  }
+}
+
+function _renderQuizMonitorUI(d, quizId, quizTitle) {
+  const content = document.getElementById('main-content');
+  const { quiz, students, recentViolations, summary } = d;
+  const secColors = { low: '#22c55e', medium: '#6366f1', high: '#dc2626' };
+  const secColor = secColors[quiz.securityLevel] || '#6366f1';
+  const fmt = n => n ?? '—';
+
+  const studentRows = students.map(s => {
+    const statusColor = s.status === 'active' ? '#22c55e' : s.isTerminated ? '#ef4444' : '#64748b';
+    const statusLabel = s.isTerminated ? 'Terminated' : s.status === 'active' ? 'Active' : s.status === 'submitted' ? 'Submitted' : s.status === 'auto_submitted' ? 'Auto-submitted' : s.status;
+    const onlineDot = s.online ? '🟢' : s.status === 'active' ? '🔴' : '⚫';
+    const minutes = s.timeRemaining != null ? Math.floor(s.timeRemaining / 60) + ':' + String(s.timeRemaining % 60).padStart(2, '0') : '—';
+    return `<tr id="qm-student-${s.attemptId}" style="border-bottom:1px solid var(--border)">
+      <td style="padding:10px 12px">
+        <div style="font-weight:600;font-size:13px">${esc(s.student.name)}</div>
+        <div style="font-size:10px;color:var(--text-muted)">${esc(s.student.indexNumber || s.student.email)}</div>
+        <div style="font-size:10px;color:#94a3b8">${esc(s.platform)}</div>
+      </td>
+      <td style="padding:10px 12px">
+        ${onlineDot} <span class="qm-status" style="font-size:12px;font-weight:600;color:${statusColor}">${statusLabel}</span>
+      </td>
+      <td style="padding:10px 12px;text-align:center">
+        <span class="qm-vcount" style="font-size:13px;font-weight:700;color:${(s.violationCount||0) > 0 ? '#ef4444' : '#64748b'}">${s.violationCount||0}</span>
+      </td>
+      <td style="padding:10px 12px;text-align:center;font-size:12px;color:var(--text-muted)">${minutes}</td>
+      <td style="padding:10px 12px;text-align:center">
+        ${s.percentageScore != null ? `<span style="font-size:12px;font-weight:700">${s.percentageScore}%</span>` : '<span style="color:#94a3b8;font-size:11px">—</span>'}
+      </td>
+      <td style="padding:10px 12px;text-align:center">
+        <button class="btn btn-xs" style="font-size:10px" onclick="sqForceSubmit('${quizId}','${s.attemptId}','${esc(s.student.name).replace(/'/g,"\\'")}')">Force Submit</button>
+      </td>
+    </tr>`;
+  }).join('');
+
+  content.innerHTML = `
+    <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:18px;flex-wrap:wrap">
+      <div>
+        <div style="display:flex;align-items:center;gap:10px">
+          <button class="btn btn-secondary btn-sm" onclick="renderQuizMonitorPage()">← Back</button>
+          <h2 style="font-size:18px;font-weight:800;margin:0">${esc(quizTitle)}</h2>
+          <span style="background:#dcfce7;color:#166534;padding:3px 10px;border-radius:20px;font-size:11px;font-weight:700">● LIVE</span>
+        </div>
+        <div style="margin-top:4px;font-size:12px;color:var(--text-muted)">
+          Security: <span style="background:${secColor}22;color:${secColor};padding:1px 8px;border-radius:20px;font-size:11px;font-weight:700">${(quiz.securityLevel||'medium').toUpperCase()}</span>
+          · ${quiz.monitoringMode === 'ai' ? '🤖 AI Monitoring ON' : '📋 Standard monitoring'}
+          ${quiz.mobileMonitoring ? ' · 📱 Mobile' : ''}
+        </div>
+      </div>
+      <button class="btn btn-sm" style="background:#f1f5f9;border:1px solid var(--border)" onclick="renderQuizLiveDashboard('${quizId}','${esc(quizTitle).replace(/'/g,"\\'")}')">🔄 Refresh</button>
+    </div>
+
+    <!-- KPI row -->
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:10px;margin-bottom:18px">
+      ${[
+        { label:'Total', value:fmt(summary.total),     color:'#6366f1' },
+        { label:'Active', value:fmt(summary.active),   color:'#22c55e' },
+        { label:'Submitted', value:fmt(summary.submitted), color:'#3b82f6' },
+        { label:'Online now', value:fmt(summary.online),  color:'#10b981' },
+        { label:'Terminated', value:fmt(summary.terminated), color:'#ef4444' },
+      ].map(k => `<div style="background:var(--card);border:1.5px solid ${k.color}33;border-radius:12px;padding:14px;text-align:center">
+        <div style="font-size:22px;font-weight:800;color:${k.color}">${k.value}</div>
+        <div style="font-size:11px;color:var(--text-muted);margin-top:2px">${k.label}</div>
+      </div>`).join('')}
+    </div>
+
+    <div style="display:grid;grid-template-columns:1fr 300px;gap:16px;align-items:start">
+      <!-- Student table -->
+      <div style="background:var(--card);border:1px solid var(--border);border-radius:14px;overflow:hidden">
+        <div style="padding:12px 16px;border-bottom:1px solid var(--border);font-weight:700;font-size:13px">Students (${students.length})</div>
+        <div style="overflow-x:auto">
+          <table style="width:100%;border-collapse:collapse;font-size:12px">
+            <thead><tr style="background:var(--bg);border-bottom:1.5px solid var(--border)">
+              <th style="padding:8px 12px;text-align:left;font-size:11px;color:var(--text-muted);text-transform:uppercase">Student</th>
+              <th style="padding:8px 12px;text-align:left;font-size:11px;color:var(--text-muted);text-transform:uppercase">Status</th>
+              <th style="padding:8px 12px;text-align:center;font-size:11px;color:var(--text-muted);text-transform:uppercase">Violations</th>
+              <th style="padding:8px 12px;text-align:center;font-size:11px;color:var(--text-muted);text-transform:uppercase">Time left</th>
+              <th style="padding:8px 12px;text-align:center;font-size:11px;color:var(--text-muted);text-transform:uppercase">Score</th>
+              <th style="padding:8px 12px;text-align:center;font-size:11px;color:var(--text-muted);text-transform:uppercase">Action</th>
+            </tr></thead>
+            <tbody>${studentRows || '<tr><td colspan="6" style="text-align:center;padding:24px;color:var(--text-muted)">No students yet</td></tr>'}</tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- Live event feed -->
+      <div style="background:var(--card);border:1px solid var(--border);border-radius:14px;overflow:hidden">
+        <div style="padding:12px 16px;border-bottom:1px solid var(--border);font-weight:700;font-size:13px;display:flex;align-items:center;justify-content:space-between">
+          Live Events
+          <span style="width:8px;height:8px;border-radius:50%;background:#22c55e;display:inline-block" title="WebSocket connected"></span>
+        </div>
+        <div id="qm-feed" style="padding:10px;max-height:480px;overflow-y:auto">
+          ${recentViolations.length === 0
+            ? '<p style="font-size:12px;color:#94a3b8;text-align:center;padding:24px 0">No events yet</p>'
+            : recentViolations.map(v => `
+              <div style="display:flex;align-items:flex-start;gap:8px;padding:7px 10px;border-left:3px solid ${v.severity==='critical'?'#ef4444':v.severity==='warning'?'#f59e0b':'#94a3b8'};background:${v.severity==='critical'?'#fef2f2':v.severity==='warning'?'#fffbeb':'#f8fafc'};border-radius:0 8px 8px 0;margin-bottom:5px">
+                <div style="flex:1;min-width:0">
+                  <div style="font-size:11px;font-weight:700;color:${v.severity==='critical'?'#ef4444':'#f59e0b'}">${v.violationType?.replace(/_/g,' ') || 'Event'}</div>
+                  ${v.causedTermination ? '<div style="font-size:10px;color:#ef4444;font-weight:700">SESSION TERMINATED</div>' : ''}
+                </div>
+                <span style="font-size:10px;color:#94a3b8;white-space:nowrap">${v.occurredAt ? new Date(v.occurredAt).toLocaleTimeString() : ''}</span>
+              </div>`).join('')}
+        </div>
+      </div>
+    </div>`;
+}
+
+window.sqForceSubmit = async function(quizId, attemptId, studentName) {
+  if (!confirm(`Force-submit quiz for ${studentName}? This cannot be undone.`)) return;
+  try {
+    await api(`/api/lecturer/snap-quizzes/${quizId}/attempts/${attemptId}/force-submit`, { method: 'POST' });
+    toastSuccess(`Submitted for ${studentName}`);
+    const row = document.getElementById('qm-student-' + attemptId);
+    if (row) {
+      row.style.opacity = '0.6';
+      const st = row.querySelector('.qm-status');
+      if (st) { st.textContent = 'Force-submitted'; st.style.color = '#22c55e'; }
+    }
+  } catch (e) {
+    toastError(e.message);
+  }
+};
+
+// Cleanup ws when navigating away
+document.addEventListener('navigated', () => {
+  if (_quizMonitorWs) { try { _quizMonitorWs.close(); } catch(_) {} _quizMonitorWs = null; }
+  if (_quizMonitorRefreshTimer) { clearInterval(_quizMonitorRefreshTimer); _quizMonitorRefreshTimer = null; }
+});
+
 async function renderAdminQuizzes(content) {
   try {
     const data = await api('/api/admin/quizzes');
     const quizzes = data.quizzes || [];
     content.innerHTML = `
-      <div class="page-header"><h2>All Quizzes</h2><p>Overview of quizzes across all lecturers</p></div>
+      <div class="page-header"><h2>Quizzes</h2><p>Overview of all quizzes across all lecturers</p></div>
 
       <!-- Duplicate finder tool -->
       <div class="card" style="margin-bottom:16px;border:2px solid #fde68a;background:#fffbeb">
@@ -10427,7 +12006,7 @@ async function exportBankToPDF() {
     }
   });
 
-  doc.save(`DIKLY_QuestionBank_${new Date().toISOString().slice(0,10)}.pdf`);
+  await downloadBlob(doc.output('blob'), `DIKLY_QuestionBank_${new Date().toISOString().slice(0,10)}.pdf`);
   toastSuccess(`PDF saved with ${selected.length} question${selected.length !== 1 ? 's' : ''} ✓`);
 }
 
@@ -10724,6 +12303,603 @@ async function handleQrScan() {
   try {
     await api('/api/attendance-sessions/mark', {
       method: 'POST',
+      signal: AbortSignal.timeout(30000),
+      body: JSON.stringify({ qrToken, method: 'qr_mark' }),
+    });
+    if (content) {
+      content.innerHTML = `
+        <div class="card" style="text-align:center;padding:48px 24px;max-width:400px;margin:40px auto;border-left:4px solid var(--success)">
+          <div style="font-size:56px;margin-bottom:16px">✅</div>
+          <div style="font-size:20px;font-weight:800;color:var(--success)">Attendance Marked!</div>
+          <p style="color:var(--text-light);font-size:13px;margin-top:8px">You have been checked in successfully.</p>
+          <button class="btn btn-primary" style="margin-top:20px" onclick="navigateTo('my-attendance')">View My Attendance</button>
+        </div>`;
+    }
+  } catch(e) {
+    if (content) {
+      const expired = e.message?.toLowerCase().includes('expired');
+      const timedOut = e.name === 'TimeoutError' || e.name === 'AbortError';
+      const msg = timedOut ? 'Request timed out. Please check your connection and try again.' : esc(e.message || 'Failed');
+      content.innerHTML = `
+        <div class="card" style="text-align:center;padding:48px 24px;max-width:400px;margin:40px auto;border-left:4px solid var(--danger)">
+          <div style="font-size:56px;margin-bottom:16px">${expired ? '⏰' : '❌'}</div>
+          <div style="font-size:20px;font-weight:800;color:var(--danger)">${expired ? 'QR Code Expired' : 'Failed'}</div>
+          <p style="color:var(--text-light);font-size:13px;margin-top:8px">${expired ? 'This QR code has expired. Ask your lecturer/manager for a fresh one.' : msg}</p>
+          <button class="btn btn-secondary" style="margin-top:20px" onclick="navigateTo('mark-attendance')">Go Back</button>
+        </div>`;
+    }
+  }
+  return true;
+}
+
+// ── CLASS REP DEVICE PAGE ─────────────────────────────────────────────────────
+async function renderClassDevice() {
+  const root = document.getElementById('main-content');
+  if (!root) return;
+  root.innerHTML = '<div class="loading">Loading device…</div>';
+  try {
+    const [devRes, lecRes] = await Promise.all([
+      api('/api/class-rep/device'),
+      api('/api/class-rep/lecturers'),
+    ]);
+    const device = devRes.device;
+    const lecturers = lecRes.lecturers || [];
+
+    const deviceStatus = device
+      ? (deviceOnline
+        ? '<span style="color:#16a34a;font-weight:700">● Online</span>'
+        : '<span style="color:#dc2626;font-weight:700">● Offline</span>')
+      : null;
+
+    const activeInfo = device && device.activeLecturerId
+      ? `<div style="margin-top:12px;padding:12px 16px;background:#f0fdf4;border:1.5px solid #86efac;border-radius:10px;font-size:13px">
+          <strong>Currently connected to:</strong> ${esc(device.activeLecturerId.name || 'Lecturer')}<br>
+          <span style="color:#64748b;font-size:12px">Connected at ${new Date(device.connectedAt).toLocaleTimeString()}</span>
+          <br><button onclick="classRepDisconnect()" style="margin-top:10px;padding:7px 16px;background:#dc2626;color:#fff;border:none;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer">End Session &amp; Release Device</button>
+         </div>`
+      : '';
+
+    const localIp = device && device.localIp ? device.localIp : null;
+    const currentSsid = device && device.currentNetwork ? device.currentNetwork : null;
+    const deviceOnline = device ? (Date.now() - new Date(device.lastHeartbeat || 0).getTime() < 20000) : false;
+
+    root.innerHTML = `
+      <div style="max-width:560px;margin:0 auto">
+        <h2 style="font-size:20px;font-weight:800;margin-bottom:4px">Class Device</h2>
+        <p style="color:#64748b;font-size:13px;margin-bottom:24px">Manage the attendance device for your class</p>
+
+        ${!device ? `
+          <div style="text-align:center;padding:48px 20px;background:#f8fafc;border-radius:16px;border:1.5px dashed #e2e8f0">
+            <div style="font-size:40px;margin-bottom:12px">&#128225;</div>
+            <h3 style="font-size:16px;font-weight:700;margin-bottom:6px">No device assigned</h3>
+            <p style="color:#64748b;font-size:13px">Ask your admin to assign an attendance device to your class.</p>
+          </div>` : `
+          <div style="background:#fff;border:1.5px solid #e2e8f0;border-radius:14px;padding:18px;margin-bottom:20px">
+            <div style="display:flex;align-items:center;gap:12px;margin-bottom:4px">
+              <span style="font-size:28px">&#128225;</span>
+              <div>
+                <div style="font-weight:700;font-size:15px">${esc(device.deviceName || device.deviceId)}</div>
+                <div style="font-size:12px;color:#64748b">${deviceStatus}</div>
+              </div>
+            </div>
+            ${activeInfo}
+          </div>
+
+          ${!device.activeLecturerId ? `
+          <div style="background:#fff;border:1.5px solid #e2e8f0;border-radius:14px;padding:18px;margin-bottom:20px">
+            <h3 style="font-size:15px;font-weight:700;margin-bottom:14px">Connect Device to a Lecturer</h3>
+            ${!deviceOnline ? `
+            <div style="background:#fef3c7;border:1px solid #fde68a;border-radius:8px;padding:12px 14px;font-size:13px;color:#92400e;display:flex;align-items:flex-start;gap:8px">
+              <span style="flex-shrink:0;font-size:16px">📶</span>
+              <div><strong>Device is offline.</strong> Power it on and wait for it to connect before linking to a lecturer.</div>
+            </div>` :
+            !lecturers.length ? `<p style="color:#64748b;font-size:13px">No lecturers found for your class courses.</p>` : `
+            <div style="margin-bottom:12px">
+              <label style="font-size:12px;font-weight:600;text-transform:uppercase;letter-spacing:.5px;color:#64748b;display:block;margin-bottom:6px">Select Lecturer &amp; Course</label>
+              <select id="cr-lecturer-select" style="width:100%;padding:10px 12px;border:1.5px solid #e2e8f0;border-radius:8px;font-size:13px">
+                <option value="">&mdash; Choose lecturer / course &mdash;</option>
+                ${lecturers.map(l => `<option value="${l.lecturerId}|${l.courseId}">${esc(l.lecturerName)} — ${esc(l.courseCode)}: ${esc(l.courseTitle)}</option>`).join('')}
+              </select>
+            </div>
+            <div id="cr-pin-wrap" style="margin-bottom:12px;display:none">
+              <label style="font-size:12px;font-weight:600;text-transform:uppercase;letter-spacing:.5px;color:#64748b;display:block;margin-bottom:6px">Lecturer PIN (if required)</label>
+              <input id="cr-pin" type="password" inputmode="numeric" maxlength="4" placeholder="4-digit PIN" style="width:100%;padding:10px 12px;border:1.5px solid #e2e8f0;border-radius:8px;font-size:16px;letter-spacing:4px;box-sizing:border-box">
+            </div>
+            <div id="cr-error" style="color:#dc2626;font-size:13px;margin-bottom:8px;display:none"></div>
+            <button id="cr-connect-btn" onclick="classRepConnect()" style="width:100%;padding:11px;background:#1e293b;color:#fff;border:none;border-radius:9px;font-size:14px;font-weight:700;cursor:pointer">
+              Connect &amp; Start Session
+            </button>`}
+          </div>` : ''}
+
+          <!-- WiFi Management -->
+          ${localIp ? `
+          <div style="background:#fff;border:1.5px solid #e2e8f0;border-radius:14px;padding:18px">
+            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px">
+              <h3 style="font-size:15px;font-weight:700;margin:0">Device WiFi</h3>
+              ${currentSsid ? `<span style="font-size:12px;color:#16a34a;font-weight:600;background:#f0fdf4;padding:3px 10px;border-radius:20px;border:1px solid #86efac">&#9679; ${esc(currentSsid)}</span>` : ''}
+            </div>
+            <p style="font-size:12px;color:#64748b;margin-bottom:14px">Change the WiFi network the device is connected to — useful when moving between campus branches.</p>
+            <button onclick="crScanWifi('${localIp}')" id="cr-wifi-scan-btn"
+              style="width:100%;padding:10px;background:#f8fafc;color:#1e293b;border:1.5px solid #e2e8f0;border-radius:9px;font-size:13px;font-weight:700;cursor:pointer;margin-bottom:14px">
+              Scan for Networks
+            </button>
+            <div id="cr-wifi-list" style="display:none"></div>
+            <div id="cr-wifi-msg" style="font-size:13px;margin-top:8px"></div>
+          </div>` : ''}
+        `}
+      </div>
+    `;
+
+    // Show PIN field when a lecturer is selected
+    const sel = document.getElementById('cr-lecturer-select');
+    if (sel) sel.addEventListener('change', () => {
+      const pinWrap = document.getElementById('cr-pin-wrap');
+      if (pinWrap) pinWrap.style.display = sel.value ? 'block' : 'none';
+    });
+
+  } catch (e) {
+    root.innerHTML = `<div style="color:#dc2626;padding:20px">Error: ${esc(e.message)}</div>`;
+  }
+}
+
+window.classRepConnect = async function() {
+  const sel = document.getElementById('cr-lecturer-select');
+  const pin = document.getElementById('cr-pin') ? document.getElementById('cr-pin').value : '';
+  const errEl = document.getElementById('cr-error');
+  const btn = document.getElementById('cr-connect-btn');
+  if (!sel || !sel.value) { if (errEl) { errEl.textContent = 'Please select a lecturer'; errEl.style.display = 'block'; } return; }
+  const parts = sel.value.split('|');
+  const lecturerId = parts[0];
+  const courseId = parts[1];
+  if (btn) { btn.disabled = true; btn.textContent = 'Connecting…'; }
+  if (errEl) errEl.style.display = 'none';
+  try {
+    await api('/api/class-rep/connect', { method: 'POST', body: JSON.stringify({ lecturerId, courseId, lecturerPin: pin }) });
+    showToastNotif('Device connected successfully', 'success');
+    renderClassDevice();
+  } catch (e) {
+    const requiresPin = e.data && e.data.requiresPin;
+    const msg = requiresPin ? 'Incorrect PIN — ask the lecturer for their 4-digit PIN' : (e.message || 'Failed to connect');
+    if (errEl) { errEl.textContent = msg; errEl.style.display = 'block'; }
+    if (requiresPin) { const pw = document.getElementById('cr-pin-wrap'); if (pw) pw.style.display = 'block'; }
+    if (btn) { btn.disabled = false; btn.textContent = 'Connect & Start Session'; }
+  }
+};
+
+window.classRepDisconnect = async function() {
+  if (!confirm('End the session and release the device?')) return;
+  const btn = event && event.target;
+  if (btn) { btn.disabled = true; btn.textContent = 'Releasing…'; }
+  try {
+    await api('/api/class-rep/disconnect', { method: 'POST', body: '{}' });
+    showToastNotif('Device released', 'success');
+    renderClassDevice();
+  } catch (e) {
+    showToastNotif(e.message || 'Failed to disconnect', 'error');
+    if (btn) { btn.disabled = false; btn.textContent = 'End Session & Release Device'; }
+  }
+};
+
+window.saveLecturerPin = async function() {
+  const pin = document.getElementById('lecturer-pin-input') ? document.getElementById('lecturer-pin-input').value : '';
+  if (!pin || !/^\d{4}$/.test(pin)) { showToastNotif('PIN must be 4 digits', 'error'); return; }
+  try {
+    await api('/api/class-rep/set-pin', { method: 'POST', body: JSON.stringify({ pin }) });
+    showToastNotif('PIN saved', 'success');
+    const input = document.getElementById('lecturer-pin-input');
+    if (input) input.value = '';
+  } catch (e) { showToastNotif(e.message || 'Failed to save PIN', 'error'); }
+};
+
+window.clearLecturerPin = async function() {
+  if (!confirm('Remove your Class Rep PIN? Class reps will be able to connect the device without entering a PIN.')) return;
+  try {
+    await api('/api/class-rep/set-pin', { method: 'DELETE' });
+    showToastNotif('PIN cleared — class reps can now connect freely', 'success');
+    const input = document.getElementById('lecturer-pin-input');
+    if (input) input.value = '';
+  } catch (e) { showToastNotif(e.message || 'Failed to clear PIN', 'error'); }
+};
+
+// ─── Class Rep WiFi Management ────────────────────────────────────────────────
+window.crScanWifi = async function(localIp) {
+  const btn     = document.getElementById('cr-wifi-scan-btn');
+  const listEl  = document.getElementById('cr-wifi-list');
+  const msgEl   = document.getElementById('cr-wifi-msg');
+  if (!listEl || !msgEl) return;
+
+  btn.disabled = true;
+  btn.textContent = 'Scanning…';
+  listEl.style.display = 'none';
+  msgEl.textContent = '';
+
+  try {
+    const res = await fetch(`http://${localIp}/wifi/scan`, { signal: AbortSignal.timeout(12000) });
+    if (!res.ok) throw new Error('Device returned an error');
+    const nets = await res.json();
+    const list = Array.isArray(nets) ? nets : (nets.networks || []);
+    list.sort((a, b) => (b.rssi || 0) - (a.rssi || 0));
+
+    if (!list.length) {
+      msgEl.innerHTML = '<span style="color:#64748b">No networks found. Try scanning again.</span>';
+      return;
+    }
+
+    listEl.style.display = 'block';
+    listEl.innerHTML = list.map((n, i) => {
+      const rssi  = n.rssi || -90;
+      const bars  = rssi > -60 ? 4 : rssi > -75 ? 3 : rssi > -85 ? 2 : 1;
+      const barHtml = [1,2,3,4].map(b =>
+        `<span style="display:inline-block;width:4px;height:${4+b*4}px;border-radius:1px;background:${b<=bars?'#16a34a':'#e2e8f0'};margin-right:2px;vertical-align:bottom"></span>`
+      ).join('');
+      const badge = n.open
+        ? `<span style="font-size:10px;font-weight:700;color:#16a34a;background:#f0fdf4;border:1px solid #86efac;padding:2px 7px;border-radius:20px">OPEN</span>`
+        : `<span style="font-size:10px;font-weight:700;color:#64748b;background:#f8fafc;border:1px solid #e2e8f0;padding:2px 7px;border-radius:20px">PWD</span>`;
+      const ssidEsc = esc(n.ssid || '(Hidden)');
+      const ssidRaw = (n.ssid || '').replace(/'/g, "\\'");
+      return `
+        <div id="cr-net-${i}" style="display:flex;align-items:center;justify-content:space-between;padding:11px 14px;
+             border-bottom:1px solid #f1f5f9;cursor:pointer;transition:background .1s"
+             onmouseenter="this.style.background='#f8fafc'" onmouseleave="this.style.background=''"
+             onclick="crSelectNetwork('${localIp}','${ssidRaw}',${n.open?'true':'false'},${i})">
+          <div style="display:flex;align-items:center;gap:10px">
+            <div style="display:flex;align-items:flex-end;height:20px">${barHtml}</div>
+            <span style="font-size:13px;font-weight:600;color:#1e293b">${ssidEsc}</span>
+          </div>
+          ${badge}
+        </div>
+        <div id="cr-pwd-${i}" style="display:none;padding:10px 14px;background:#f8fafc;border-bottom:1px solid #f1f5f9">
+          <input id="cr-pwd-input-${i}" type="password" placeholder="Enter WiFi password"
+            style="width:100%;padding:9px 12px;border:1.5px solid #e2e8f0;border-radius:8px;font-size:13px;box-sizing:border-box;margin-bottom:8px">
+          <div style="display:flex;gap:8px">
+            <button onclick="crConnectWifi('${localIp}','${ssidRaw}',${i})"
+              style="flex:1;padding:9px;background:#1e293b;color:#fff;border:none;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer">
+              Connect
+            </button>
+            <button onclick="document.getElementById('cr-pwd-${i}').style.display='none'"
+              style="padding:9px 14px;background:#f1f5f9;color:#64748b;border:none;border-radius:8px;font-size:13px;cursor:pointer">
+              Cancel
+            </button>
+          </div>
+        </div>`;
+    }).join('');
+
+    // Wrap in a bordered container
+    listEl.style.cssText = 'display:block;border:1.5px solid #e2e8f0;border-radius:10px;overflow:hidden';
+
+  } catch (e) {
+    const isBlocked = e.message && (e.message.includes('Failed to fetch') || e.message.includes('NetworkError'));
+    msgEl.innerHTML = isBlocked
+      ? `<span style="color:#dc2626">Could not reach device. Make sure you're on the same WiFi network as the device.</span>`
+      : `<span style="color:#dc2626">Scan failed: ${esc(e.message)}</span>`;
+  } finally {
+    btn.disabled = false;
+    btn.textContent = 'Scan for Networks';
+  }
+};
+
+window.crSelectNetwork = function(localIp, ssid, isOpen, idx) {
+  if (isOpen) {
+    crConnectWifi(localIp, ssid, idx, true);
+  } else {
+    // Toggle password field
+    const pwd = document.getElementById(`cr-pwd-${idx}`);
+    if (pwd) {
+      const visible = pwd.style.display !== 'none';
+      pwd.style.display = visible ? 'none' : 'block';
+      if (!visible) document.getElementById(`cr-pwd-input-${idx}`)?.focus();
+    }
+  }
+};
+
+window.crConnectWifi = async function(localIp, ssid, idx, isOpen = false) {
+  const msgEl   = document.getElementById('cr-wifi-msg');
+  const pwdInput = document.getElementById(`cr-pwd-input-${idx}`);
+  const password = isOpen ? '' : (pwdInput ? pwdInput.value : '');
+
+  if (msgEl) { msgEl.innerHTML = `<span style="color:#64748b">Connecting to <strong>${esc(ssid)}</strong>…</span>`; }
+
+  try {
+    const res = await fetch(`http://${localIp}/wifi/reconfigure`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ ssid, password }),
+      signal: AbortSignal.timeout(35000),
+    });
+    const json = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(json.error || 'Connection failed');
+    if (msgEl) msgEl.innerHTML = `<span style="color:#16a34a;font-weight:600">✓ Connected to <strong>${esc(ssid)}</strong>. Device is restarting…</span>`;
+    showToastNotif(`Device switching to ${ssid}`, 'success');
+    // Refresh after device reboots (~3s)
+    setTimeout(() => renderClassDevice(), 4000);
+  } catch (e) {
+    const msg = e.message.includes('aborted') || e.message.includes('timeout')
+      ? 'Timed out — device may be rebooting on the new network'
+      : (e.message || 'Failed to connect');
+    if (msgEl) msgEl.innerHTML = `<span style="color:#dc2626">${esc(msg)}</span>`;
+    showToastNotif(msg, 'error');
+  }
+};
+// ─────────────────────────────────────────────────────────────────────────────
+async function renderMarkAttendance() {
+  const content = document.getElementById('main-content');
+  if (!content) return;
+
+  // Capture esp32key from URL if redirected from ESP32 captive portal
+  handleEsp32KeyParam();
+
+  // Check if arriving via QR scan deep link
+  if (await handleQrScan()) return;
+
+  // ── Step 1: Fetch active session from server first ───────────────────────────
+  content.innerHTML = `
+    <div class="page-header"><h2>Mark Attendance</h2><p>Check in to active sessions</p></div>
+    <div class="card" style="text-align:center;padding:32px 20px">
+      <div style="font-size:32px;margin-bottom:12px">📡</div>
+      <div style="font-size:16px;font-weight:700;margin-bottom:6px">Checking for active sessions…</div>
+    </div>`;
+
+  let serverSession = null;
+  if (isOnline()) {
+    try {
+      const data = await api('/api/attendance-sessions/active');
+      serverSession = data.session;
+      if (serverSession) offlineCache('activeSession', serverSession);
+    } catch (e) { /* server unreachable */ }
+  } else {
+    serverSession = offlineCache('activeSession') || null;
+  }
+
+  // Does this session require an ESP32 device for proximity?
+  const requiresDevice = !!(serverSession?.deviceId);
+
+  // ── Step 2: ESP32 discovery (only when session requires a device) ─────────────
+  let deviceFound = false;
+  let deviceSession = null;
+
+  if (requiresDevice || !serverSession) {
+    // Show searching message only when device is needed
+    content.innerHTML = `
+      <div class="page-header"><h2>Mark Attendance</h2><p>Check in to active sessions</p></div>
+      <div class="card" style="text-align:center;padding:32px 20px">
+        <div style="font-size:32px;margin-bottom:12px">📡</div>
+        <div style="font-size:16px;font-weight:700;margin-bottom:6px">Looking for classroom device…</div>
+        <p style="font-size:13px;color:var(--text-light)">Make sure your phone is connected to the classroom WiFi hotspot.</p>
+      </div>`;
+    deviceFound = await discoverESP32();
+    if (deviceFound) {
+      try { deviceSession = await esp32Api('/session'); } catch (e) {}
+    }
+  }
+
+  // If device is required but not found, block with clear instructions
+  if (requiresDevice && !deviceFound) {
+    content.innerHTML = `
+      <div class="page-header"><h2>Mark Attendance</h2><p>Check in to active sessions</p></div>
+      ${serverSession ? `<div class="card" style="border-left:4px solid var(--primary);margin-bottom:16px;padding:14px 16px">
+        <div style="font-size:11px;text-transform:uppercase;color:var(--primary);font-weight:700">Active Session</div>
+        <div style="font-size:16px;font-weight:700;margin-top:4px">${esc(serverSession.title || 'Attendance Session')}</div>
+        <div style="font-size:12px;color:var(--text-muted);margin-top:2px">You must connect to the classroom device to mark attendance.</div>
+      </div>` : ''}
+      <div class="card" style="text-align:center;padding:40px 20px">
+        <div style="font-size:52px;margin-bottom:14px">📴</div>
+        <div style="font-size:18px;font-weight:700;margin-bottom:10px">Connect to Classroom WiFi First</div>
+        <p style="font-size:13px;color:var(--text-light);max-width:320px;margin:0 auto;line-height:1.7">
+          Your phone must be connected to the <strong>classroom device's WiFi hotspot</strong>
+          before you can mark attendance.<br><br>
+          Go to your phone's WiFi settings and connect to the classroom hotspot, then come back here.
+        </p>
+        <button class="btn btn-primary btn-sm" style="margin-top:24px" onclick="renderMarkAttendance()">I'm Connected — Try Again</button>
+      </div>`;
+    return;
+  }
+
+  const session = serverSession || (deviceSession?.sessionId ? deviceSession : null);
+
+  // ── Step 3: No active session ────────────────────────────────────────────────
+  if (!session) {
+    const connectedBanner = deviceFound ? `
+      <div class="card" style="border-left:4px solid var(--success);background:#f0fdf4;padding:14px 16px;margin-bottom:16px">
+        <div style="display:flex;align-items:center;gap:10px">
+          <span style="font-size:22px">📶</span>
+          <div>
+            <div style="font-weight:700;font-size:14px;color:#15803d">Connected to classroom device</div>
+            <div style="font-size:12px;color:#166534;margin-top:2px">Proximity verified — you are in the classroom.</div>
+          </div>
+        </div>
+      </div>` : '';
+    content.innerHTML = `
+      <div class="page-header"><h2>Mark Attendance</h2><p>Check in to active sessions</p></div>
+      ${connectedBanner}
+      <div class="card" style="text-align:center;padding:40px 20px">
+        <div style="font-size:48px;margin-bottom:14px">⏳</div>
+        <div style="font-size:18px;font-weight:700;margin-bottom:8px">No Active Session</div>
+        <p style="font-size:14px;color:var(--text-light)">Your lecturer hasn't started a session yet.</p>
+        <button class="btn btn-secondary btn-sm" style="margin-top:16px" onclick="renderMarkAttendance()">Refresh</button>
+      </div>`;
+    return;
+  }
+
+  // ── Step 4: Check if already marked ─────────────────────────────────────────
+  let alreadyMarked = false;
+  if (isOnline() && serverSession) {
+    alreadyMarked = await api('/api/attendance-sessions/my-attendance?limit=100')
+      .then(d => d.records.some(r => r.session?._id === serverSession._id))
+      .catch(() => false);
+  }
+
+  // ── Step 5: Render session + code entry ──────────────────────────────────────
+  const deviceIp = esp32IP || '192.168.4.1';
+  const proximityBanner = deviceFound
+    ? `<div class="card" style="border-left:4px solid var(--success);background:#f0fdf4;padding:14px 16px;margin-bottom:16px">
+        <div style="display:flex;align-items:center;gap:10px">
+          <span style="font-size:22px">📶</span>
+          <div>
+            <div style="font-weight:700;font-size:14px;color:#15803d">Connected to classroom device</div>
+            <div style="font-size:12px;color:#166534;margin-top:2px">
+              Proximity verified — you are in the classroom.${!isOnline() ? ' Offline mode — attendance will sync automatically.' : ''}
+            </div>
+          </div>
+        </div>
+      </div>`
+    : '';
+  content.innerHTML = `
+    <div class="page-header"><h2>Mark Attendance</h2><p>Check in to active sessions</p></div>
+    ${proximityBanner}
+
+    <div class="card" style="border-left:4px solid var(--primary);margin-bottom:16px">
+      <div style="font-size:11px;text-transform:uppercase;color:var(--primary);font-weight:700;letter-spacing:0.5px">Active Session</div>
+      <div style="font-size:18px;font-weight:700;margin-top:4px">${esc(session.title || 'Attendance Session')}</div>
+      ${session.course ? `<div style="font-size:13px;color:var(--text-light);margin-top:2px">${esc(session.course.title || session.course.code || '')}</div>` : ''}
+      <div style="font-size:12px;color:var(--text-muted);margin-top:4px">Started ${new Date(session.startedAt).toLocaleString()}</div>
+    </div>
+
+    ${alreadyMarked ? `
+      <div class="card" style="text-align:center;border-left:4px solid var(--success)">
+        <div style="font-size:52px;margin-bottom:8px">✅</div>
+        <div style="font-size:18px;font-weight:700;color:var(--success)">Attendance Already Marked</div>
+        <p style="font-size:13px;color:var(--text-light);margin-top:4px">You have already checked in for this session.</p>
+      </div>
+    ` : `
+      <div class="card">
+        <div class="card-title">Enter Attendance Code</div>
+        <p style="font-size:13px;color:var(--text-muted);margin-bottom:14px">Type the 6-digit code shown on the classroom device screen, or scan the QR code.</p>
+        <div class="form-group">
+          <label>6-Digit Code</label>
+          <input type="text" id="mark-code-input" placeholder="000000" maxlength="6" inputmode="numeric"
+            style="font-size:28px;text-align:center;letter-spacing:10px;font-weight:700" autofocus
+            onkeydown="if(event.key==='Enter') submitCodeMark('${deviceIp}')">
+        </div>
+        <div id="mark-code-msg" style="display:none;padding:10px 14px;border-radius:8px;font-size:13px;margin-bottom:12px"></div>
+        <button class="btn btn-primary" onclick="submitCodeMark('${deviceIp}')" style="width:100%;margin-bottom:10px">Mark Attendance</button>
+        <button class="btn btn-secondary" onclick="openQrScanner()" style="width:100%">📷 Scan QR Code Instead</button>
+        <div id="qr-scanner-area" style="display:none;margin-top:14px"></div>
+      </div>
+    `}
+  `;
+  document.getElementById('mark-code-input')?.focus();
+}
+
+let _qrScanStream = null;
+let _qrScanRaf = null;
+
+function _stopQrScanner() {
+  if (_qrScanRaf) { cancelAnimationFrame(_qrScanRaf); _qrScanRaf = null; }
+  if (_qrScanStream) { _qrScanStream.getTracks().forEach(t => t.stop()); _qrScanStream = null; }
+}
+
+async function openQrScanner() {
+  const area = document.getElementById('qr-scanner-area');
+  if (!area) return;
+
+  // Toggle off if already open
+  if (area.style.display !== 'none') {
+    _stopQrScanner();
+    area.style.display = 'none';
+    area.innerHTML = '';
+    return;
+  }
+
+  area.style.display = 'block';
+  area.innerHTML = '<div style="text-align:center;padding:20px;font-size:13px;color:var(--text-muted)">Starting camera…</div>';
+
+  // Load jsQR lazily from CDN
+  if (!window.jsQR) {
+    await new Promise((resolve, reject) => {
+      const s = document.createElement('script');
+      s.src = 'https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.min.js';
+      s.onload = resolve; s.onerror = reject;
+      document.head.appendChild(s);
+    }).catch(() => {
+      area.innerHTML = '<div style="color:var(--danger);font-size:13px;padding:12px">Could not load QR scanner. Please enter the code manually.</div>';
+    });
+    if (!window.jsQR) return;
+  }
+
+  let stream;
+  try {
+    stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' }, audio: false });
+  } catch (err) {
+    area.innerHTML = '<div style="color:var(--danger);font-size:13px;padding:12px">Camera access denied. Please enter the code manually or allow camera permission.</div>';
+    return;
+  }
+  _qrScanStream = stream;
+
+  area.innerHTML = `
+    <div style="position:relative;border-radius:10px;overflow:hidden;background:#000;max-width:100%">
+      <video id="qr-video" autoplay playsinline muted style="width:100%;display:block;max-height:260px;object-fit:cover"></video>
+      <canvas id="qr-canvas" style="display:none"></canvas>
+      <div style="position:absolute;inset:0;pointer-events:none;display:flex;align-items:center;justify-content:center">
+        <div style="width:180px;height:180px;border:3px solid rgba(255,255,255,.8);border-radius:12px;box-shadow:0 0 0 4000px rgba(0,0,0,.3)"></div>
+      </div>
+    </div>
+    <p style="font-size:12px;color:var(--text-muted);text-align:center;margin-top:8px">Point at the QR code on the classroom screen</p>
+    <button class="btn btn-secondary btn-sm" onclick="openQrScanner()" style="width:100%;margin-top:6px">Cancel</button>`;
+
+  const video = document.getElementById('qr-video');
+  const canvas = document.getElementById('qr-canvas');
+  video.srcObject = stream;
+  await video.play().catch(() => {});
+
+  const scan = () => {
+    if (!video.videoWidth) { _qrScanRaf = requestAnimationFrame(scan); return; }
+    canvas.width = video.videoWidth;
+    canvas.height = video.videoHeight;
+    const ctx = canvas.getContext('2d');
+    ctx.drawImage(video, 0, 0);
+    const img = ctx.getImageData(0, 0, canvas.width, canvas.height);
+    const result = window.jsQR(img.data, img.width, img.height, { inversionAttempts: 'dontInvert' });
+    if (result?.data) {
+      _stopQrScanner();
+      area.style.display = 'none';
+      area.innerHTML = '';
+      // Extract qr_token from the encoded URL
+      try {
+        const url = new URL(result.data);
+        const qrToken = url.searchParams.get('qr_token');
+        const qrCode  = url.searchParams.get('qr_code');
+        if (qrToken) {
+          _submitQrToken(qrToken, qrCode);
+        } else {
+          // Maybe raw 6-digit code was encoded
+          const raw = result.data.replace(/\D/g, '');
+          if (raw.length === 6) {
+            const inp = document.getElementById('mark-code-input');
+            if (inp) { inp.value = raw; inp.dispatchEvent(new Event('input')); }
+          } else {
+            toastError('Unrecognised QR code. Enter the code manually.');
+          }
+        }
+      } catch(_) {
+        const raw = result.data.replace(/\D/g, '');
+        if (raw.length === 6) {
+          const inp = document.getElementById('mark-code-input');
+          if (inp) { inp.value = raw; }
+        } else {
+          toastError('Unrecognised QR code. Enter the code manually.');
+        }
+      }
+      return;
+    }
+    _qrScanRaf = requestAnimationFrame(scan);
+  };
+  _qrScanRaf = requestAnimationFrame(scan);
+}
+
+async function _submitQrToken(qrToken, qrCode) {
+  const content = document.getElementById('main-content');
+  if (content) {
+    content.innerHTML = `
+      <div class="card" style="text-align:center;padding:48px 24px;max-width:400px;margin:40px auto">
+        <div style="font-size:48px;margin-bottom:16px">⏳</div>
+        <div style="font-size:18px;font-weight:700">Marking your attendance…</div>
+        <p style="color:var(--text-light);font-size:13px;margin-top:8px">Please wait</p>
+      </div>`;
+  }
+  try {
+    await api('/api/attendance-sessions/mark', {
+      method: 'POST',
+      signal: AbortSignal.timeout(30000),
       body: JSON.stringify({ qrToken, method: 'qr_mark' }),
     });
     if (content) {
@@ -10742,180 +12918,11 @@ async function handleQrScan() {
         <div class="card" style="text-align:center;padding:48px 24px;max-width:400px;margin:40px auto;border-left:4px solid var(--danger)">
           <div style="font-size:56px;margin-bottom:16px">${expired ? '⏰' : '❌'}</div>
           <div style="font-size:20px;font-weight:800;color:var(--danger)">${expired ? 'QR Code Expired' : 'Failed'}</div>
-          <p style="color:var(--text-light);font-size:13px;margin-top:8px">${expired ? 'This QR code has expired. Ask your lecturer/manager for a fresh one.' : e.message}</p>
+          <p style="color:var(--text-light);font-size:13px;margin-top:8px">${expired ? 'This QR code has expired. Ask your lecturer for a fresh one.' : esc(e.message || 'Failed')}</p>
           <button class="btn btn-secondary" style="margin-top:20px" onclick="navigateTo('mark-attendance')">Go Back</button>
         </div>`;
     }
   }
-  return true;
-}
-
-async function renderMarkAttendance() {
-  const content = document.getElementById('main-content');
-  if (!content) return;
-
-  // Capture esp32key from URL if redirected from ESP32 captive portal
-  handleEsp32KeyParam();
-
-  // Check if arriving via QR scan deep link
-  if (await handleQrScan()) return;
-
-  // Offline: show queued state and cached session info
-  if (!isOnline()) {
-    const cachedSession = offlineRead('activeSession');
-    const pendingCount  = offlineQueueCount();
-
-    // SVG icons
-    const wifiOffIcon  = svgIcon('<line x1="1" y1="1" x2="23" y2="23"/><path d="M16.72 11.06A10.94 10.94 0 0 1 19 12.55"/><path d="M5 12.55a10.94 10.94 0 0 1 5.17-2.39"/><path d="M10.71 5.05A16 16 0 0 1 22.56 9"/><path d="M1.42 9a15.91 15.91 0 0 1 4.7-2.88"/><path d="M8.53 16.11a6 6 0 0 1 6.95 0"/><line x1="12" y1="20" x2="12.01" y2="20"/>', 22);
-    const radarIcon    = svgIcon('<circle cx="12" cy="12" r="2"/><path d="M16.24 7.76a6 6 0 0 1 0 8.49m-8.48-.01a6 6 0 0 1 0-8.49m11.31-2.82a10 10 0 0 1 0 14.14m-14.14 0a10 10 0 0 1 0-14.14"/>', 48);
-
-    content.innerHTML = `
-      <div class="page-header"><h2>Mark Attendance</h2><p>Check in to active sessions</p></div>
-
-      <!-- Offline status bar -->
-      <div class="card" style="border-left:4px solid #f59e0b;background:#fffbeb;padding:14px 16px;margin-bottom:16px">
-        <div style="display:flex;align-items:center;gap:12px">
-          <div style="flex-shrink:0;width:36px;height:36px;border-radius:50%;background:#fef3c7;display:flex;align-items:center;justify-content:center;color:#92400e">
-            ${wifiOffIcon}
-          </div>
-          <div style="flex:1;min-width:0">
-            <div style="font-weight:700;font-size:15px;color:#92400e">No Internet Connection</div>
-            <div style="font-size:12px;color:#b45309;margin-top:2px">
-              ${pendingCount > 0
-                ? `${pendingCount} pending action${pendingCount !== 1 ? 's' : ''} will sync automatically when you reconnect`
-                : 'Reconnect to submit attendance and access live sessions'}
-            </div>
-          </div>
-          ${pendingCount > 0 ? `
-            <div style="flex-shrink:0;background:#f59e0b;color:#fff;font-size:12px;font-weight:700;padding:4px 10px;border-radius:999px">
-              ${pendingCount} pending
-            </div>
-          ` : ''}
-        </div>
-      </div>
-
-      ${cachedSession ? `
-        <!-- Cached session -->
-        <div class="card" style="border-left:4px solid var(--success);background:#f0fdf4;padding:16px;margin-bottom:16px">
-          <div style="font-size:11px;text-transform:uppercase;letter-spacing:.6px;font-weight:700;color:var(--success);margin-bottom:6px">Last Known Active Session</div>
-          <div style="font-size:17px;font-weight:700;color:var(--text-primary)">${cachedSession.title || 'Untitled Session'}</div>
-          ${cachedSession.course ? `<div style="font-size:13px;color:var(--text-light);margin-top:3px">${cachedSession.course.code ? cachedSession.course.code + ' — ' : ''}${cachedSession.course.title || ''}</div>` : ''}
-          <div style="font-size:12px;color:var(--text-muted);margin-top:4px">Started ${new Date(cachedSession.startedAt).toLocaleString()}</div>
-        </div>
-
-        <!-- Explain that attendance requires internet (offline queuing disabled to prevent fraud) -->
-        <div class="card" style="text-align:center;padding:28px 20px">
-          <div style="display:inline-flex;align-items:center;justify-content:center;width:56px;height:56px;border-radius:50%;background:#f0f9ff;color:#0369a1;margin-bottom:14px">
-            ${radarIcon}
-          </div>
-          <div style="font-size:16px;font-weight:700;margin-bottom:8px">Internet Required to Mark Attendance</div>
-          <p style="font-size:13px;color:var(--text-light);max-width:300px;margin:0 auto;line-height:1.6">
-            Connect to <strong>classroom WiFi with internet access</strong> to submit your attendance code.
-            Offline marking is disabled to prevent remote fraud.
-          </p>
-        </div>
-      ` : `
-        <!-- No cached data at all -->
-        <div class="card" style="text-align:center;padding:48px 24px">
-          <div style="display:inline-flex;align-items:center;justify-content:center;width:72px;height:72px;border-radius:50%;background:#f0f9ff;color:#0369a1;margin-bottom:16px">
-            ${radarIcon}
-          </div>
-          <div style="font-size:18px;font-weight:700;margin-bottom:8px">No Offline Data Available</div>
-          <p style="font-size:14px;color:var(--text-light);max-width:300px;margin:0 auto;line-height:1.6">
-            Open this page while online at least once so session data can be saved for offline use.
-          </p>
-        </div>
-      `}
-    `;
-    return;
-  }
-
-  let activeSession = null;
-  try {
-    const data = await api('/api/attendance-sessions/active');
-    activeSession = data.session;
-    if (activeSession) offlineCache('activeSession', activeSession); // cache for offline
-  } catch (e) {}
-
-  const alreadyMarked = activeSession ? await api('/api/attendance-sessions/my-attendance?limit=100')
-    .then(d => d.records.some(r => r.session?._id === activeSession._id))
-    .catch(() => false) : false;
-
-  content.innerHTML = `
-    <div class="page-header">
-      <h2>Mark Attendance</h2>
-      <p>Check in to active sessions</p>
-    </div>
-    
-    ${activeSession ? `
-      <div class="card" style="border-left: 4px solid var(--success); background: #f0fdf4">
-        <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px">
-          <div>
-            <div style="font-size:12px;text-transform:uppercase;color:var(--success);font-weight:700;letter-spacing:0.5px">Active Session</div>
-            <div style="font-size:18px;font-weight:700;margin-top:4px">${activeSession.title || 'Untitled Session'}</div>
-            <div style="font-size:13px;color:var(--text-light);margin-top:2px">Started ${new Date(activeSession.startedAt).toLocaleString()} by ${activeSession.createdBy?.name || 'Unknown'}</div>
-            ${activeSession.course ? `<div style="font-size:13px;color:var(--text-light)">Course: ${activeSession.course.title || activeSession.course.code || ''}</div>` : ''}
-          </div>
-          <span class="status-badge status-active" style="font-size:13px;padding:6px 14px">LIVE</span>
-        </div>
-      </div>
-      
-      ${alreadyMarked ? `
-        <div class="card" style="text-align:center;border-left:4px solid var(--primary)">
-          <div style="font-size:48px;margin-bottom:8px">${svgIcon('<polyline points="9 11 12 14 22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/>', 48)}</div>
-          <div style="font-size:18px;font-weight:700;color:var(--success)">Attendance Already Marked</div>
-          <p style="font-size:13px;color:var(--text-light);margin-top:4px">You have already checked in for this session.</p>
-        </div>
-      ` : `
-        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:16px;margin-bottom:16px">
-          
-          <div class="card mark-method-card" onclick="showCodeEntry()" style="cursor:pointer;text-align:center;transition:all 0.2s">
-            <div style="font-size:36px;margin-bottom:12px">${svgIcon('<rect x="3" y="3" width="18" height="18" rx="2"/><path d="M7 7h.01M7 12h.01M12 7h.01M12 12h.01M17 7h.01M7 17h.01M12 17h.01M17 12h.01M17 17h.01"/>', 42)}</div>
-            <div style="font-size:16px;font-weight:700">Enter Code</div>
-            <p style="font-size:12px;color:var(--text-light);margin-top:4px">Type the verbal code read out by your lecturer</p>
-          </div>
-
-          <div class="card mark-method-card" onclick="showQrEntry()" style="cursor:pointer;text-align:center;transition:all 0.2s">
-            <div style="font-size:36px;margin-bottom:12px">${svgIcon('<rect x="2" y="2" width="8" height="8" rx="1"/><rect x="14" y="2" width="8" height="8" rx="1"/><rect x="2" y="14" width="8" height="8" rx="1"/><rect x="14" y="14" width="4" height="4"/><path d="M18 14h4v4M14 18h4v4"/>', 42)}</div>
-            <div style="font-size:16px;font-weight:700">QR Code</div>
-            <p style="font-size:12px;color:var(--text-light);margin-top:4px">Enter QR token from your lecturer's screen</p>
-          </div>
-          
-          <div class="card mark-method-card" onclick="showJitsiJoin()" style="cursor:pointer;text-align:center;transition:all 0.2s">
-            <div style="font-size:36px;margin-bottom:12px">${svgIcon('<path d="M23 7l-7 5 7 5V7z"/><rect x="1" y="5" width="15" height="14" rx="2" ry="2"/>', 42)}</div>
-            <div style="font-size:16px;font-weight:700">Join Meeting</div>
-            <p style="font-size:12px;color:var(--text-light);margin-top:4px">Mark attendance by joining the session meeting</p>
-          </div>
-        </div>
-        
-        <div id="mark-input-area"></div>
-      `}
-    ` : `
-      <div class="card" style="text-align:center;padding:40px 20px">
-        <div style="margin-bottom:16px">${svgIcon('<circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>', 48)}</div>
-        <div style="font-size:18px;font-weight:700;margin-bottom:8px">No Active Session</div>
-        <p style="font-size:14px;color:var(--text-light)">There are no active attendance sessions right now.</p>
-        <p style="font-size:13px;color:var(--text-light);margin-top:8px">Your lecturer will start a session when it's time to mark attendance.</p>
-        <button class="btn btn-secondary btn-sm" style="margin-top:16px" onclick="navigateTo('mark-attendance')">Refresh</button>
-      </div>
-    `}
-  `;
-}
-
-function showCodeEntry() {
-  const area = document.getElementById('mark-input-area');
-  if (!area) return;
-  area.innerHTML = `
-    <div class="card">
-      <div class="card-title">Enter Attendance Code</div>
-      <div class="form-group">
-        <label>6-Digit Code</label>
-        <input type="text" id="mark-code-input" placeholder="Enter code" maxlength="4" style="font-size:24px;text-align:center;letter-spacing:8px;font-weight:700;text-transform:uppercase" autofocus>
-      </div>
-      <button class="btn btn-primary" onclick="submitCodeMark()" style="width:100%">Submit Code</button>
-    </div>
-  `;
-  document.getElementById('mark-code-input')?.focus();
 }
 
 function showQrEntry() {
@@ -10936,44 +12943,50 @@ function showQrEntry() {
   `;
 }
 
-async function submitCodeMark() {
-  const code = document.getElementById('mark-code-input')?.value?.toUpperCase().trim();
-  if (!code || code.length !== 4) { toastWarning('Please enter the 4-character code.'); return; }
+async function submitCodeMark(deviceIp) {
+  const code = document.getElementById('mark-code-input')?.value?.trim();
+  const msgEl = document.getElementById('mark-code-msg');
+  const showMsg = (txt, ok) => {
+    if (!msgEl) return;
+    msgEl.textContent = txt;
+    msgEl.style.background = ok ? '#f0fdf4' : '#fef2f2';
+    msgEl.style.color = ok ? '#15803d' : '#dc2626';
+    msgEl.style.border = ok ? '1px solid #86efac' : '1px solid #fca5a5';
+    msgEl.style.display = 'block';
+  };
 
-  // If ESP32 is detected, submit locally (works offline)
-  if (bleDetected && esp32IP) {
-    try {
-      await submitToESP32(code);
-      offlineCache('pendingMark', null);
-      toastSuccess('Attendance marked successfully!');
-      navigateTo('mark-attendance');
-      return;
-    } catch(e) {
-      // Fall through to server if ESP32 submission fails
-      console.warn('[BLE] ESP32 submission failed, trying server:', e.message);
-    }
+  if (!code || code.length !== 6 || !/^\d{6}$/.test(code)) {
+    showMsg('Please enter the 6-digit code shown on the classroom device.', false); return;
   }
 
-  // Offline queuing is disabled — attendance must be marked in real-time
-  // while connected to the classroom WiFi (DIKLY-CLASSROOM).
-  if (!(await isOnlineAsync())) {
-    toastError('You must be connected to the classroom WiFi (DIKLY-CLASSROOM) and have internet access to mark attendance.');
-    return;
-  }
+  const btn = document.querySelector('#mark-input-area .btn-primary');
+  if (btn) { btn.textContent = 'Submitting…'; btn.disabled = true; }
+  const restoreBtn = () => { if (btn) { btn.textContent = 'Mark Attendance'; btn.disabled = false; } };
 
+  // Device is the authority — always submit directly to the classroom device.
+  // Students must be on the device's WiFi hotspot; no server bypass allowed.
+  const ip = deviceIp || esp32IP || '192.168.4.1';
   try {
-    await api('/api/attendance-sessions/mark', {
+    const resp = await fetch(`http://${ip}/attend`, {
       method: 'POST',
-      body: JSON.stringify({ code, method: 'code_mark' }),
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        userId:      currentUser?._id || currentUser?.id || '',
+        indexNumber: currentUser?.indexNumber || currentUser?.IndexNumber || '',
+        code,
+      }),
+      signal: AbortSignal.timeout(8000),
     });
-    offlineCache('pendingMark', null);
-    toastSuccess('Attendance marked successfully!');
-    navigateTo('mark-attendance');
+    const result = await resp.json();
+    if (!resp.ok || result.error) throw new Error(result.error || 'Device rejected the code');
+    showMsg('✓ Attendance marked! You can now disconnect from classroom WiFi.', true);
+    setTimeout(() => navigateTo('mark-attendance'), 2200);
   } catch (e) {
-    if (e.data && e.data.esp32Required) {
-      toastError('You must be connected to the classroom WiFi (DIKLY-CLASSROOM) to mark attendance.');
+    restoreBtn();
+    if (e.name === 'TimeoutError' || e.name === 'AbortError') {
+      showMsg('Device not responding. Make sure you are still connected to the classroom WiFi.', false);
     } else {
-      toastError(e.message);
+      showMsg(e.message || 'Failed to submit. Stay connected to classroom WiFi and try again.', false);
     }
   }
 }
@@ -11012,13 +13025,16 @@ async function submitQrMark() {
   try {
     await api('/api/attendance-sessions/mark', {
       method: 'POST',
+      signal: AbortSignal.timeout(30000),
       body: JSON.stringify({ qrToken, method: 'qr_mark' }),
     });
     offlineCache('pendingMark', null);
     toastSuccess('Attendance marked successfully!');
     navigateTo('mark-attendance');
   } catch (e) {
-    if (e.data && e.data.esp32Required) {
+    if (e.name === 'TimeoutError' || e.name === 'AbortError') {
+      toastError('Request timed out. Please check your connection and try again.');
+    } else if (e.data && e.data.esp32Required) {
       toastError('You must be connected to the classroom WiFi (DIKLY-CLASSROOM) to mark attendance.');
     } else {
       toastError(e.message);
@@ -11117,17 +13133,28 @@ async function markBLE() {
       });
     } catch (e) {
       // Map server error codes to clear messages
-      const code = e.data?.code;
-      if (code === 'NOT_ON_HOTSPOT')      throw new Error(
+      const errCode = e.data?.code;
+      // ble-verify endpoint has been removed — fall back to code entry
+      if (e.status === 410 || e.message?.includes('BLE verification has been removed')) {
+        if (area) area.innerHTML = `
+          <div class="card" style="text-align:center;padding:28px 20px;border-left:4px solid var(--warning);background:#fffbeb">
+            <div style="font-size:40px;margin-bottom:12px">📟</div>
+            <div style="font-size:15px;font-weight:700;margin-bottom:8px">BLE Check-in Unavailable</div>
+            <p style="font-size:13px;color:var(--text-muted);margin-bottom:16px">Please use the attendance code shown on the classroom device instead.</p>
+            <button class="btn btn-primary btn-sm" onclick="showCodeEntry()">Enter Code</button>
+          </div>`;
+        return;
+      }
+      if (errCode === 'NOT_ON_HOTSPOT')      throw new Error(
         'Connected to DIKLY-CLASSROOM but still failing?\n\n' +
         'Android is routing traffic through mobile data instead of WiFi.\n\n' +
         'Fix: Go to Settings → Wi-Fi → tap & hold DIKLY-CLASSROOM → ' +
         'Network usage → set to \'Always use this network\', then retry.'
       );
-      if (code === 'TOKEN_EXPIRED')       throw new Error('Token expired — move closer to the device and try again.');
-      if (code === 'INVALID_TOKEN')       throw new Error('Invalid token. You must be physically next to the classroom device.');
-      if (code === 'TOKEN_ALREADY_USED')  throw new Error('This token was already used. Each BLE scan is single-use.');
-      if (code === 'DEVICE_OFFLINE')      throw new Error('Classroom device is offline. Ask your lecturer to power it on.');
+      if (errCode === 'TOKEN_EXPIRED')       throw new Error('Token expired — move closer to the device and try again.');
+      if (errCode === 'INVALID_TOKEN')       throw new Error('Invalid token. You must be physically next to the classroom device.');
+      if (errCode === 'TOKEN_ALREADY_USED')  throw new Error('This token was already used. Each BLE scan is single-use.');
+      if (errCode === 'DEVICE_OFFLINE')      throw new Error('Classroom device is offline. Ask your lecturer to power it on.');
       throw e;
     }
 
@@ -11179,8 +13206,8 @@ async function showJitsiJoin() {
   if (!area) return;
   let meetingsHtml = '<p style="color:var(--text-light);font-size:13px">Loading meetings...</p>';
   try {
-    const data = await api('/api/zoom');
-    const available = data.meetings.filter(m => m.status === 'scheduled' || m.status === 'active');
+    const data = await api('/api/meetings');
+    const available = (data.data || data.meetings || []).filter(m => m.status === 'scheduled' || m.status === 'live');
     if (available.length > 0) {
       meetingsHtml = available.map(m => `
         <div style="display:flex;align-items:center;justify-content:space-between;padding:12px;border:1px solid var(--border);border-radius:8px;margin-bottom:8px">
@@ -11189,7 +13216,7 @@ async function showJitsiJoin() {
             <div style="font-size:12px;color:var(--text-light)">${new Date(m.scheduledStart).toLocaleString()} — ${m.duration} min</div>
             <span class="status-badge" style="${m.status === 'active' ? 'background:#22c55e;color:#fff;' : 'background:#3b82f6;color:#fff;'}font-size:11px;margin-top:4px;">${m.status === 'active' ? 'Live' : 'Scheduled'}</span>
           </div>
-          <button class="btn btn-success btn-sm" onclick="submitJitsiJoin('${m._id}', '${m.joinUrl || ''}')">Join & Mark</button>
+          <button class="btn btn-success btn-sm" onclick="submitJitsiJoin('${m._id}')">Join & Mark</button>
         </div>
       `).join('');
     } else {
@@ -11206,12 +13233,35 @@ async function showJitsiJoin() {
   `;
 }
 
-async function submitJitsiJoin(meetingId, joinUrl) {
+async function submitJitsiJoin(meetingId) {
   try {
-    await api(`/api/zoom/${meetingId}/join`, { method: 'POST' });
-    if (joinUrl) window.open(joinUrl, '_blank');
+    const data        = await api(`/api/meetings/${meetingId}/join`);
+    const d           = data.data || data;
+    const jitsiToken  = d.jitsiToken;
+    const jitsiConfig = d.jitsiConfig;
+    const meetingUrl  = d.meetingUrl;
+
+    if (!meetingUrl && !jitsiConfig?.roomName) {
+      toastError('No meeting room returned — contact your admin.');
+      return;
+    }
+
     toastSuccess('Attendance marked via meeting join!');
-    navigateTo('mark-attendance');
+
+    if (_isMobile) {
+      // Always prefer the canonical meetingUrl (has all config hash params)
+      const roomUrl = meetingUrl || `https://${jitsiConfig.domain}/${jitsiConfig.roomName}${jitsiToken ? '?jwt=' + jitsiToken : ''}`;
+      await _joinMeetingMobile(roomUrl);
+      return;
+    }
+
+    if (jitsiConfig?.roomName) {
+      showJitsiEmbed(jitsiConfig, jitsiToken);
+      navigateTo('mark-attendance');
+    } else {
+      // LiveKit or external URL — open directly
+      window.location.href = meetingUrl;
+    }
   } catch (e) {
     toastError(e.message);
   }
@@ -11224,10 +13274,10 @@ function showMarkAttendanceModal() {
     <div class="modal-overlay" onclick="closeModal(event)">
       <div class="modal" onclick="event.stopPropagation()">
         <h3>Mark Attendance</h3>
-        <p style="font-size:13px;color:var(--text-light);margin-bottom:16px">Enter the 4-character code shown by your lecturer or manager.</p>
+        <p style="font-size:13px;color:var(--text-light);margin-bottom:16px">Enter the 6-digit code shown on the classroom device screen.</p>
         <div class="form-group">
           <label>Attendance Code</label>
-          <input type="text" id="attend-code" placeholder="Enter code" maxlength="4" style="font-size:22px;text-align:center;letter-spacing:8px;font-weight:700;text-transform:uppercase" autofocus>
+          <input type="text" id="attend-code" placeholder="000000" maxlength="6" inputmode="numeric" style="font-size:22px;text-align:center;letter-spacing:8px;font-weight:700" autofocus>
         </div>
         <div class="modal-actions">
           <button class="btn btn-secondary btn-sm" onclick="closeModal()">Cancel</button>
@@ -11242,7 +13292,7 @@ function showMarkAttendanceModal() {
 async function markAttendance() {
   try {
     const code = document.getElementById('attend-code').value;
-    if (!code || code.length !== 4) { toastWarning('Please enter the 4-character code.'); return; }
+    if (!code || !/^\d{6}$/.test(code)) { toastWarning('Please enter the 6-digit attendance code.'); return; }
     await api('/api/attendance-sessions/mark', {
       method: 'POST',
       body: JSON.stringify({ code, method: 'code_mark' }),
@@ -11257,9 +13307,14 @@ async function markAttendance() {
 
 async function paySubscription() {
   try {
-    // Determine plan from company mode; fallback by role so managers never pay for semester plan
-    const mode   = currentUser?.company?.mode || (currentUser?.role === 'manager' ? 'corporate' : 'academic');
-    const planId = mode === 'corporate' ? 'monthly' : 'semester';
+    const role = currentUser?.role;
+    let planId;
+    if (role === 'student')       planId = 'student_semester';
+    else if (role === 'employee') planId = 'employee_monthly';
+    else {
+      const mode = currentUser?.company?.mode || (role === 'manager' ? 'corporate' : 'academic');
+      planId = mode === 'corporate' ? 'monthly' : 'semester';
+    }
 
     // Show loading state on button
     const btn = document.querySelector('[onclick="paySubscription()"]');
@@ -11288,37 +13343,156 @@ async function renderSubscription() {
   const content = document.getElementById('main-content');
   if (!content) return;
 
+  // HODs see the institution subscription status
+  if (currentUser && currentUser.role === 'hod') {
+    content.innerHTML = '<div class="loading">Loading subscription info…</div>';
+    try {
+      const meData = await api('/api/auth/me');
+      const ut        = meData.userTrial || {};
+      const status    = ut.status   || 'expired';
+      const rawDays   = ut.daysLeft || 0;
+      const daysLeft  = Math.min(rawDays, 365);
+      const expiry    = ut.subscriptionExpiry
+        ? new Date(ut.subscriptionExpiry).toLocaleDateString('en-GB', { day:'numeric', month:'long', year:'numeric' })
+        : '—';
+      const isActive  = status === 'active';
+      const isTrial   = status === 'trial';
+      const isExpired = !isActive && !isTrial;
+
+      const statusColor = isActive ? '#16a34a' : isTrial ? '#d97706' : '#dc2626';
+      const statusBg    = isActive ? '#f0fdf4' : isTrial ? '#fffbeb' : '#fef2f2';
+      const statusBorder= isActive ? '#86efac' : isTrial ? '#fde68a' : '#fca5a5';
+      const statusLabel = isActive ? 'Active' : isTrial ? 'Free Trial' : 'Expired';
+      const statusIcon  = isActive ? '✅' : isTrial ? '⏳' : '❌';
+
+      const urgentBanner = (isExpired || (daysLeft <= 14 && daysLeft > 0)) ? `
+        <div style="background:${isExpired?'#fef2f2':'#fffbeb'};border:1.5px solid ${isExpired?'#fca5a5':'#fde68a'};border-radius:12px;padding:16px 20px;margin-bottom:20px;display:flex;gap:14px;align-items:flex-start;">
+          <div style="font-size:24px;flex-shrink:0">${isExpired?'🔴':'⚠️'}</div>
+          <div>
+            <div style="font-weight:700;color:${isExpired?'#b91c1c':'#92400e'};font-size:14px;margin-bottom:4px">
+              ${isExpired ? 'Subscription Expired — Access Restricted' : `Subscription Expiring in ${daysLeft} Day${daysLeft!==1?'s':''}`}
+            </div>
+            <div style="font-size:13px;color:${isExpired?'#dc2626':'#b45309'};">
+              ${isExpired ? 'Your institution\'s subscription has expired. Contact your admin to renew immediately to restore full access.' : 'Remind your institution admin to renew before access is restricted.'}
+            </div>
+          </div>
+        </div>` : '';
+
+      content.innerHTML = `
+        <div class="page-header">
+          <h2>Subscription</h2>
+          <p>Institution access plan · ${currentUser.company?.name || 'Your Institution'}</p>
+        </div>
+
+        ${urgentBanner}
+
+        <div class="stats-grid" style="margin-bottom:24px;">
+          <div class="stat-card">
+            <div class="stat-value" style="color:${statusColor}">${statusIcon} ${statusLabel}</div>
+            <div class="stat-label">Plan Status</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-value" style="color:${daysLeft > 30 ? 'var(--success)' : daysLeft > 7 ? '#d97706' : '#dc2626'}">${daysLeft}</div>
+            <div class="stat-label">Days Remaining</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-value" style="font-size:15px">${expiry}</div>
+            <div class="stat-label">${isActive ? 'Expires On' : isTrial ? 'Trial Ends' : 'Expired On'}</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-value" style="font-size:14px">${currentUser.company?.name || '—'}</div>
+            <div class="stat-label">Institution</div>
+          </div>
+        </div>
+
+        <div class="card" style="max-width:520px;">
+          <div style="display:flex;align-items:center;gap:14px;margin-bottom:20px;">
+            <div style="width:48px;height:48px;border-radius:14px;background:${statusBg};border:1.5px solid ${statusBorder};display:flex;align-items:center;justify-content:center;font-size:22px;flex-shrink:0">${statusIcon}</div>
+            <div>
+              <div style="font-weight:700;font-size:16px;color:#0f172a;">Institution Plan</div>
+              <div style="font-size:13px;color:#64748b;">Your HOD access is included in your institution's subscription</div>
+            </div>
+          </div>
+
+          <div style="background:${statusBg};border:1.5px solid ${statusBorder};border-radius:10px;padding:14px 16px;margin-bottom:20px;">
+            <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;">
+              <div>
+                <div style="font-size:13px;font-weight:700;color:${statusColor};">Status: ${statusLabel}</div>
+                <div style="font-size:12px;color:#64748b;margin-top:2px;">Expires: ${expiry}</div>
+              </div>
+              <div style="text-align:right;">
+                <div style="font-size:22px;font-weight:800;color:${statusColor};">${daysLeft}</div>
+                <div style="font-size:11px;color:#64748b;">days left</div>
+              </div>
+            </div>
+          </div>
+
+          <div style="border-top:1px solid var(--border);padding-top:16px;">
+            <div style="font-size:13px;font-weight:700;color:#374151;margin-bottom:10px;">What's Included</div>
+            <ul style="font-size:13px;color:#64748b;margin:0;padding-left:18px;line-height:2;">
+              <li>Full department management access</li>
+              <li>Student &amp; lecturer oversight</li>
+              <li>Attendance monitoring &amp; reports</li>
+              <li>Course approvals &amp; performance analytics</li>
+              <li>Class representative management</li>
+              <li>Smart alerts &amp; department messaging</li>
+            </ul>
+          </div>
+
+          <div style="margin-top:20px;padding:12px 14px;background:#f8fafc;border-radius:8px;font-size:12px;color:#64748b;">
+            💡 To renew or upgrade the institution plan, contact your <strong>institution admin</strong>. Subscription management is handled at the admin level.
+          </div>
+        </div>`;
+    } catch(e) {
+      content.innerHTML = `<div class="card"><p style="color:var(--danger)">${esc(e.message)}</p></div>`;
+    }
+    return;
+  }
+
   try {
     const [meData, plansData] = await Promise.all([
       api('/api/auth/me'),
       api('/api/payments/plans').catch(() => null),
     ]);
     const ut      = meData.userTrial || {};
-    const status    = ut.status   || 'expired';
-    const rawDays   = ut.daysLeft || 0;
-    // Determine plan based on company mode; fallback by role so managers never see semester plan
-    const mode       = currentUser?.company?.mode || (currentUser?.role === 'manager' ? 'corporate' : 'academic');
-    const isCorp     = mode === 'corporate';
-    // Cap displayed days at plan maximum — corporate is strictly 30 days per period
-    const _planMax  = isCorp ? 30 : 112;
-    const daysLeft  = Math.min(rawDays, _planMax);
-    const expiry   = ut.subscriptionExpiry
+    const status  = ut.status   || 'expired';
+    const rawDays = ut.daysLeft || 0;
+    const role    = currentUser?.role;
+    const isStudent  = role === 'student';
+    const isEmployee = role === 'employee';
+    const mode       = currentUser?.company?.mode || (role === 'manager' ? 'corporate' : 'academic');
+    const isCorp     = isEmployee || mode === 'corporate';
+    const _planMax   = (isStudent || (!isCorp)) ? 112 : 30;
+    const daysLeft   = Math.min(rawDays, _planMax);
+    const expiry     = ut.subscriptionExpiry
       ? new Date(ut.subscriptionExpiry).toLocaleDateString('en-GB', { day:'numeric', month:'long', year:'numeric' })
       : '—';
 
-    // Use live price from API; fall back to defaults if unavailable
-    const livePlan    = plansData?.plans?.[0];
-    const liveCur     = plansData?.plans?.[0]?.currency || 'GHS';
-    const liveAmt     = livePlan?.price ?? (isCorp ? 150 : 300);
-    const liveSym     = liveCur === 'GHS' ? '₵' : liveCur + ' ';
+    const livePlan   = plansData?.plans?.[0];
+    const liveCur    = livePlan?.currency || 'GHS';
+    const liveAmt    = livePlan?.price ?? (isStudent ? 20 : isEmployee ? 15 : isCorp ? 150 : 300);
+    const liveSym    = liveCur === 'GHS' ? '₵' : liveCur + ' ';
 
-    const planName   = isCorp ? 'Monthly Plan'    : 'Semester Plan';
+    const planName   = isStudent  ? 'Student Semester Plan'
+                     : isEmployee ? 'Employee Monthly Plan'
+                     : isCorp     ? 'Monthly Plan' : 'Semester Plan';
     const planPrice  = `${liveSym}${liveAmt}`;
-    const planPeriod = isCorp ? '30 days / month' : '1 semester (16 weeks)';
-    const planId     = isCorp ? 'monthly'         : 'semester';
-    const planLabel  = isCorp ? `${liveSym}${liveAmt} / month` : `${liveSym}${liveAmt} / semester`;
-    const planFeatures = isCorp
-      ? ['Full platform access', 'Attendance & clock in/out management', 'Leave &amp; expense management', 'Performance tracking &amp; reporting', 'Renew any time — days stack up']
+    const planPeriod = (isStudent || (!isCorp)) ? '1 semester (16 weeks)' : '30 days / month';
+    const planId     = isStudent  ? 'student_semester'
+                     : isEmployee ? 'employee_monthly'
+                     : isCorp     ? 'monthly' : 'semester';
+    const planLabel  = (isStudent || (!isCorp)) ? `${liveSym}${liveAmt} / semester` : `${liveSym}${liveAmt} / month`;
+    const trialNote  = isStudent
+      ? `You received a 45-day free trial on account creation. After it ends, subscribe for ${liveSym}${liveAmt}/semester to keep access.`
+      : isEmployee
+      ? `Employees are covered by the company trial while it is active. After it ends, subscribe for ${liveSym}${liveAmt}/month individually.`
+      : null;
+    const planFeatures = isStudent
+      ? ['Full student portal access', 'Attend classes &amp; mark attendance', 'Take quizzes &amp; assignments', 'View grades &amp; results', 'Access the secure exam portal']
+      : isEmployee
+      ? ['Full employee portal access', 'Clock in/out &amp; attendance tracking', 'Leave &amp; expense management', 'Performance tracking', 'Internal messaging &amp; announcements']
+      : isCorp
+      ? ['Full platform access', 'Attendance &amp; clock in/out management', 'Leave &amp; expense management', 'Performance tracking &amp; reporting', 'Renew any time — days stack up']
       : ['Full platform access', 'Attendance marking &amp; session management', 'Assessment creation &amp; grading', 'Grade book &amp; reports', 'Renew any time — days stack up'];
 
     const statusColor = status === 'active' ? 'var(--success)' : status === 'trial' ? '#f59e0b' : 'var(--danger)';
@@ -11374,9 +13548,17 @@ async function renderSubscription() {
             ⚠️ Your subscription has expired. Renew to continue using DIKLY.
           </div>` : ''}
 
-        ${status === 'trial' ? `
+        ${trialNote ? `
+          <div style="background:#f0f9ff;border:1px solid #bae6fd;border-radius:8px;padding:12px 14px;margin-bottom:16px;font-size:13px;color:#0369a1">
+            ℹ️ ${trialNote}
+          </div>` : ''}
+
+        ${status === 'trial' && !trialNote ? `
           <div style="background:#fffbeb;border:1px solid #fde68a;border-radius:8px;padding:12px 14px;margin-bottom:16px;font-size:13px;color:#92400e">
             ⏳ 30-day free trial active — <strong>${daysLeft} days</strong> left. Subscribe before it ends to avoid interruption.
+          </div>` : status === 'trial' && isStudent ? `
+          <div style="background:#fffbeb;border:1px solid #fde68a;border-radius:8px;padding:12px 14px;margin-bottom:16px;font-size:13px;color:#92400e">
+            ⏳ 45-day free trial active — <strong>${daysLeft} days</strong> left. Subscribe before it ends to keep access.
           </div>` : ''}
 
         <button class="btn btn-primary" style="width:100%;padding:14px;font-size:15px;font-weight:600;letter-spacing:0.3px;border-radius:10px"
@@ -11393,225 +13575,6 @@ async function renderSubscription() {
   }
 }
 
-// ─── Course Videos ────────────────────────────────────────────────────────────
-
-window.openVideoPlayer = function(title, embedUrl, platform) {
-  let mediaHtml;
-  const safePlatforms = ['youtube', 'vimeo', 'googledrive', 'loom'];
-  if (embedUrl && safePlatforms.includes((platform || '').toLowerCase())) {
-    mediaHtml = `<iframe src="${esc(embedUrl)}" style="width:100%;height:400px;border:none;border-radius:10px"
-      allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-      allowfullscreen></iframe>`;
-  } else if (embedUrl) {
-    mediaHtml = `<video src="${esc(embedUrl)}" controls style="width:100%;border-radius:10px;max-height:400px">
-      Your browser does not support video playback.
-    </video>`;
-  } else {
-    mediaHtml = `<div style="padding:40px;text-align:center;color:var(--text-muted)">No playable source available for this video.</div>`;
-  }
-  openModal(`
-    <div style="min-width:min(680px,90vw)">
-      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
-        <h3 style="margin:0;font-size:16px;color:var(--text)">${esc(title)}</h3>
-        <button onclick="closeModal()" style="background:none;border:none;color:var(--text-muted);cursor:pointer;font-size:20px;line-height:1">&times;</button>
-      </div>
-      ${mediaHtml}
-    </div>
-  `);
-};
-
-async function renderCourseVideos() {
-  const content = document.getElementById('main-content');
-  if (!content) return;
-
-  content.innerHTML = `
-    <div class="page-header">
-      <h2>Course Videos</h2>
-      <p>Video lectures from your enrolled courses</p>
-    </div>
-    <div id="cv-body"><div class="loading-spinner" style="margin:60px auto"></div></div>`;
-
-  const body = document.getElementById('cv-body');
-  try {
-    const data = await api('/api/course-videos/my-courses');
-    const courses = data.courses || [];
-
-    if (!courses.length) {
-      body.innerHTML = `<div class="card" style="text-align:center;padding:48px 24px">
-        <div style="font-size:40px;margin-bottom:12px">🎬</div>
-        <h3 style="margin-bottom:8px">No Videos Yet</h3>
-        <p style="color:var(--text-muted)">Your lecturers haven't uploaded any course videos yet. Check back later.</p>
-      </div>`;
-      return;
-    }
-
-    const platformIcon = p => ({
-      youtube:     '▶️',
-      vimeo:       '🎥',
-      googledrive: '📁',
-      loom:        '🔴',
-    }[p] || '🎬');
-
-    body.innerHTML = courses.map(({ course, videos }) => {
-      const vids = videos || [];
-      const vidCards = vids.length ? vids.map(v => `
-        <div class="card" style="padding:0;overflow:hidden;cursor:pointer;transition:transform .15s,box-shadow .15s"
-          onmouseenter="this.style.transform='translateY(-2px)';this.style.boxShadow='0 6px 20px rgba(0,0,0,.25)'"
-          onmouseleave="this.style.transform='';this.style.boxShadow=''"
-          onclick="openVideoPlayer('${esc(v.title)}','${esc(v.embedUrl || v.url || '')}','${esc(v.platform || '')}')">
-          ${v.thumbnail
-            ? `<img src="${esc(v.thumbnail)}" alt="${esc(v.title)}" style="width:100%;height:140px;object-fit:cover">`
-            : `<div style="width:100%;height:140px;background:var(--bg);display:flex;align-items:center;justify-content:center;font-size:36px">${platformIcon(v.platform)}</div>`}
-          <div style="padding:12px">
-            <div style="font-size:13px;font-weight:600;color:var(--text);margin-bottom:4px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(v.title)}</div>
-            ${v.description ? `<div style="font-size:12px;color:var(--text-muted);display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden">${esc(v.description)}</div>` : ''}
-            <div style="font-size:11px;color:var(--text-muted);margin-top:6px;text-transform:uppercase;letter-spacing:.5px">${platformIcon(v.platform)} ${esc(v.platform || 'video')}</div>
-          </div>
-        </div>`).join('')
-        : `<p style="color:var(--text-muted);font-size:13px;padding:8px 0">No videos uploaded for this course yet.</p>`;
-
-      return `
-        <div style="margin-bottom:32px">
-          <div style="display:flex;align-items:center;gap:10px;margin-bottom:14px">
-            <div style="width:4px;height:22px;background:var(--primary);border-radius:2px"></div>
-            <h3 style="margin:0;font-size:16px;color:var(--text)">${esc(course.title)}</h3>
-            <span style="font-size:12px;color:var(--text-muted);padding:2px 8px;border:1px solid var(--border);border-radius:12px">${esc(course.code)}</span>
-            <span style="font-size:12px;color:var(--text-muted);margin-left:auto">${vids.length} video${vids.length !== 1 ? 's' : ''}</span>
-          </div>
-          <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:16px">
-            ${vidCards}
-          </div>
-        </div>`;
-    }).join('');
-
-  } catch (e) {
-    body.innerHTML = `<div class="card"><p style="color:var(--danger)">Error loading videos: ${e.message}</p></div>`;
-  }
-}
-
-// ─── Class Rep — Device Management ───────────────────────────────────────────
-
-async function renderRepDevice() {
-  const content = document.getElementById('main-content');
-  if (!content) return;
-  content.innerHTML = `
-    <div class="page-header">
-      <h2>My Device</h2>
-      <p>Connect the attendance device to a lecturer to start a session</p>
-    </div>
-    <div id="rep-device-body"><div class="loading-spinner" style="margin:60px auto"></div></div>`;
-  await _repDeviceRefresh();
-}
-
-async function _repDeviceRefresh() {
-  const body = document.getElementById('rep-device-body');
-  if (!body) return;
-  try {
-    const [devData, lecData] = await Promise.all([
-      api('/api/class-rep/device'),
-      api('/api/class-rep/lecturers'),
-    ]);
-    const device   = devData.device;
-    const lecturers = lecData.lecturers || [];
-
-    if (!device) {
-      body.innerHTML = `
-        <div class="card" style="text-align:center;padding:48px 24px">
-          <div style="font-size:40px;margin-bottom:12px">📡</div>
-          <h3 style="margin-bottom:8px">No Device Assigned</h3>
-          <p style="color:var(--text-muted)">No attendance device has been assigned to your class yet. Contact your admin or HOD.</p>
-        </div>`;
-      return;
-    }
-
-    const isOnlineDevice = device.lastHeartbeat && (Date.now() - new Date(device.lastHeartbeat).getTime()) < 45000;
-    const isConnected    = !!device.activeLecturerId;
-
-    const lecOptions = lecturers.length
-      ? lecturers.map(l => `<option value="${esc(l.lecturerId)}" data-course="${esc(l.courseId||'')}">${esc(l.lecturerName)} — ${esc(l.courseTitle)} (${esc(l.courseCode)})</option>`).join('')
-      : '<option value="">No lecturers found for your class</option>';
-
-    body.innerHTML = `
-      <div class="card" style="max-width:540px;margin-bottom:20px">
-        <div style="display:flex;align-items:center;gap:12px;margin-bottom:18px">
-          <div style="width:48px;height:48px;border-radius:12px;background:${isOnlineDevice ? '#dcfce7' : '#fee2e2'};display:flex;align-items:center;justify-content:center;font-size:22px">
-            ${isOnlineDevice ? '🟢' : '🔴'}
-          </div>
-          <div>
-            <div style="font-size:16px;font-weight:700;color:var(--text)">${esc(device.name || device.deviceId)}</div>
-            <div style="font-size:12px;color:var(--text-muted);margin-top:2px">${isOnlineDevice ? 'Online' : 'Offline'} · ID: ${esc(device.deviceId)}</div>
-          </div>
-        </div>
-
-        ${isConnected ? `
-          <div style="padding:14px 16px;background:#ede9fe;border-radius:10px;margin-bottom:16px">
-            <div style="font-size:12px;font-weight:700;color:#6d28d9;text-transform:uppercase;letter-spacing:.4px;margin-bottom:4px">Active Session</div>
-            <div style="font-size:14px;font-weight:600;color:var(--text)">${esc(device.activeLecturerId?.name || 'Lecturer')}</div>
-            ${device.connectedAt ? `<div style="font-size:12px;color:var(--text-muted);margin-top:2px">Started ${new Date(device.connectedAt).toLocaleTimeString()}</div>` : ''}
-          </div>
-          <button class="btn btn-danger" style="width:100%" onclick="_repDisconnect()">End Session &amp; Release Device</button>
-        ` : `
-          ${!isOnlineDevice ? `<div style="padding:12px 14px;background:#fef2f2;border:1px solid #fca5a5;border-radius:8px;margin-bottom:14px;font-size:13px;color:#dc2626">
-            Device is offline. Power it on and wait for the green indicator before connecting.
-          </div>` : ''}
-          <div class="form-group" style="margin-bottom:12px">
-            <label style="font-size:12px;font-weight:600;text-transform:uppercase;letter-spacing:.5px;color:var(--text-muted);display:block;margin-bottom:6px">Select Lecturer &amp; Course</label>
-            <select id="rep-lec-select" style="width:100%;padding:10px 12px;border:1.5px solid var(--border);border-radius:8px;font-size:13px;background:var(--bg);color:var(--text)">
-              <option value="">— Choose a lecturer —</option>
-              ${lecOptions}
-            </select>
-          </div>
-          <div class="form-group" id="rep-pin-wrap" style="margin-bottom:14px;display:none">
-            <label style="font-size:12px;font-weight:600;text-transform:uppercase;letter-spacing:.5px;color:var(--text-muted);display:block;margin-bottom:6px">Lecturer PIN</label>
-            <input type="password" id="rep-pin-input" maxlength="4" inputmode="numeric" placeholder="4-digit PIN"
-              style="width:100%;padding:10px 12px;border:1.5px solid var(--border);border-radius:8px;font-size:13px;background:var(--bg);color:var(--text)"
-              onkeydown="if(event.key==='Enter')_repConnect()">
-          </div>
-          <div id="rep-connect-err" style="display:none;color:var(--danger);font-size:13px;margin-bottom:10px"></div>
-          <button class="btn btn-primary" style="width:100%" onclick="_repConnect()" ${!isOnlineDevice ? 'disabled' : ''}>Connect Device to Lecturer</button>
-        `}
-      </div>
-      <div style="font-size:12px;color:var(--text-muted);max-width:540px">
-        💡 Tip: Connect the device before the lecturer arrives. The session starts as soon as students begin scanning.
-        When class is over, tap <strong>End Session</strong> to release the device.
-      </div>`;
-
-    document.getElementById('rep-lec-select')?.addEventListener('change', function() {
-      const pinWrap = document.getElementById('rep-pin-wrap');
-      if (pinWrap) pinWrap.style.display = this.value ? 'block' : 'none';
-    });
-  } catch (e) {
-    body.innerHTML = `<div class="card"><p style="color:var(--danger)">Error: ${esc(e.message)}</p></div>`;
-  }
-}
-
-async function _repConnect() {
-  const sel    = document.getElementById('rep-lec-select');
-  const errEl  = document.getElementById('rep-connect-err');
-  const lecturerId  = sel?.value;
-  const courseId    = sel?.selectedOptions[0]?.dataset?.course || '';
-  const lecturerPin = document.getElementById('rep-pin-input')?.value?.trim();
-  if (!lecturerId) { if (errEl) { errEl.textContent = 'Please select a lecturer.'; errEl.style.display = 'block'; } return; }
-  try {
-    if (errEl) errEl.style.display = 'none';
-    await api('/api/class-rep/connect', { method: 'POST', body: JSON.stringify({ lecturerId, courseId: courseId || undefined, lecturerPin: lecturerPin || undefined }) });
-    showToastNotif('Device connected successfully!', 'success');
-    _repDeviceRefresh();
-  } catch (e) {
-    if (errEl) { errEl.textContent = e.message; errEl.style.display = 'block'; }
-  }
-}
-
-async function _repDisconnect() {
-  if (!confirm('End the active session and release the device?')) return;
-  try {
-    await api('/api/class-rep/disconnect', { method: 'POST', body: JSON.stringify({}) });
-    showToastNotif('Session ended.', 'success');
-    _repDeviceRefresh();
-  } catch (e) {
-    toastError(e.message);
-  }
-}
 
 async function renderSearch() {
   const content = document.getElementById('main-content');
@@ -11861,30 +13824,8 @@ function renderAdminReports(content, isAcademic) {
       <h2>Admin Reports</h2>
       <p>Full institution analytics — click any report card to download as PDF</p>
     </div>
-    <div class="actions-bar" style="margin-bottom:14px;">
-      <button class="btn btn-sm" style="background:#16a34a;color:#fff;font-weight:600" onclick="exportAttendanceCSV()">⬇ Export Attendance CSV</button>
-    </div>
     <div class="reports-grid">${cards}</div>
   `;
-}
-
-async function exportAttendanceCSV() {
-  try {
-    const res = await fetch(`${API}/api/reports/attendance/csv`, {
-      headers: { 'Authorization': `Bearer ${token}` },
-    });
-    if (!res.ok) {
-      const err = await res.json().catch(() => ({}));
-      toastError(err.error || 'Failed to export CSV');
-      return;
-    }
-    const blob = await res.blob();
-    const filename = 'attendance-' + new Date().toISOString().slice(0, 10) + '.csv';
-    await downloadBlob(blob, filename);
-    toastSuccess('Attendance CSV downloaded');
-  } catch (e) {
-    toastError('Export failed: ' + e.message);
-  }
 }
 
 async function downloadReport(type, apiBase = 'reports', e) {
@@ -11916,222 +13857,6 @@ async function downloadReport(type, apiBase = 'reports', e) {
       btn.style.opacity = '';
     }
     if (card) card.style.pointerEvents = '';
-  }
-}
-
-// ── Lecturer — Course Videos Manager ─────────────────────────────────────────
-
-async function renderLecturerCourseVideos() {
-  const content = document.getElementById('main-content');
-  if (!content) return;
-  content.innerHTML = `
-    <div class="page-header">
-      <h2>Course Videos</h2>
-      <p>Manage video lectures for your courses</p>
-    </div>
-    <div id="lcv-body"><div class="loading-spinner" style="margin:60px auto"></div></div>`;
-
-  const body = document.getElementById('lcv-body');
-  try {
-    const [coursesData, videosData] = await Promise.all([
-      api('/api/courses'),
-      api('/api/course-videos/my-courses'),
-    ]);
-
-    const allCourses = (coursesData.courses || []).filter(c => {
-      const lid = c.lecturerId?._id || c.lecturerId;
-      return lid && lid.toString() === currentUser._id.toString();
-    });
-
-    if (!allCourses.length) {
-      body.innerHTML = `<div class="card" style="text-align:center;padding:48px 24px">
-        <div style="font-size:40px;margin-bottom:12px">🎬</div>
-        <h3>No Courses Assigned</h3>
-        <p style="color:var(--text-muted)">You have no courses assigned yet. Contact your admin.</p>
-      </div>`;
-      return;
-    }
-
-    const videosByCourse = {};
-    for (const v of (videosData.courses || [])) {
-      videosByCourse[v.course._id.toString()] = v.videos || [];
-    }
-
-    const platformIcon = p => ({ youtube:'▶️', vimeo:'🎥', googledrive:'📁', loom:'🔴' }[p] || '🎬');
-
-    body.innerHTML = allCourses.map(c => {
-      const cid = c._id.toString();
-      const vids = videosByCourse[cid] || [];
-      return `
-        <div class="card" style="margin-bottom:24px;padding:20px" id="lcv-section-${cid}">
-          <div style="display:flex;align-items:center;gap:10px;margin-bottom:16px">
-            <div style="width:4px;height:22px;background:var(--primary);border-radius:2px"></div>
-            <h3 style="margin:0;font-size:15px;flex:1">${esc(c.title)} <span style="font-size:12px;color:var(--text-muted);font-weight:400">${esc(c.code || '')}</span></h3>
-            <span style="font-size:12px;color:var(--text-muted)">${vids.length} video${vids.length !== 1 ? 's' : ''}</span>
-            <button onclick="_lcvOpenAdd('${cid}')" style="background:var(--primary);color:#fff;border:none;border-radius:8px;padding:6px 14px;font-size:12px;font-weight:600;cursor:pointer">+ Add Video</button>
-          </div>
-          <div id="lcv-list-${cid}">
-            ${vids.length ? vids.map(v => _lcvVideoRow(v)).join('') : `<p style="color:var(--text-muted);font-size:13px">No videos yet. Add your first video above.</p>`}
-          </div>
-        </div>`;
-    }).join('');
-
-  } catch (e) {
-    body.innerHTML = `<div class="card"><p style="color:var(--danger)">Error: ${e.message}</p></div>`;
-  }
-}
-
-function _lcvVideoRow(v) {
-  const platformIcon = p => ({ youtube:'▶️', vimeo:'🎥', googledrive:'📁', loom:'🔴' }[p] || '🎬');
-  return `
-    <div style="display:flex;align-items:center;gap:12px;padding:10px 0;border-bottom:1px solid var(--border)" id="lcv-row-${v._id}">
-      ${v.thumbnail
-        ? `<img src="${esc(v.thumbnail)}" style="width:72px;height:48px;object-fit:cover;border-radius:6px;flex-shrink:0">`
-        : `<div style="width:72px;height:48px;background:var(--bg);border-radius:6px;display:flex;align-items:center;justify-content:center;font-size:22px;flex-shrink:0">${platformIcon(v.platform)}</div>`}
-      <div style="flex:1;min-width:0">
-        <div style="font-size:13px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(v.title)}</div>
-        ${v.description ? `<div style="font-size:12px;color:var(--text-muted);margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(v.description)}</div>` : ''}
-        <div style="font-size:11px;color:var(--text-muted);margin-top:2px;text-transform:uppercase;letter-spacing:.5px">${platformIcon(v.platform)} ${esc(v.platform || 'video')}</div>
-      </div>
-      <button onclick="openVideoPlayer('${esc(v.title)}','${esc(v.embedUrl || v.url || '')}','${esc(v.platform || '')}')" style="background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:6px 12px;font-size:12px;cursor:pointer;color:var(--text)">▶ Play</button>
-      <button onclick="_lcvDelete('${v._id}','${esc(v.courseId?._id || v.courseId || '')}')" style="background:transparent;border:1px solid var(--danger);border-radius:8px;padding:6px 12px;font-size:12px;cursor:pointer;color:var(--danger)">Delete</button>
-    </div>`;
-}
-
-function _lcvOpenAdd(courseId) {
-  openModal(`
-    <h3 style="margin:0 0 16px">Add Video</h3>
-    <div style="display:flex;flex-direction:column;gap:12px">
-      <div>
-        <label style="font-size:12px;color:var(--text-muted);display:block;margin-bottom:4px">Video URL (YouTube, Vimeo, Drive, Loom)</label>
-        <input id="lcv-url" type="url" placeholder="https://youtu.be/..." style="width:100%;padding:10px;border:1px solid var(--border);border-radius:8px;background:var(--surface);color:var(--text);font-size:14px;box-sizing:border-box">
-      </div>
-      <div>
-        <label style="font-size:12px;color:var(--text-muted);display:block;margin-bottom:4px">Title</label>
-        <input id="lcv-title" type="text" placeholder="Lecture 1 – Introduction" style="width:100%;padding:10px;border:1px solid var(--border);border-radius:8px;background:var(--surface);color:var(--text);font-size:14px;box-sizing:border-box">
-      </div>
-      <div>
-        <label style="font-size:12px;color:var(--text-muted);display:block;margin-bottom:4px">Description (optional)</label>
-        <textarea id="lcv-desc" rows="2" placeholder="Brief description…" style="width:100%;padding:10px;border:1px solid var(--border);border-radius:8px;background:var(--surface);color:var(--text);font-size:14px;box-sizing:border-box;resize:vertical"></textarea>
-      </div>
-      <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:4px">
-        <button onclick="closeModal()" style="padding:8px 18px;border:1px solid var(--border);border-radius:8px;background:transparent;color:var(--text);cursor:pointer">Cancel</button>
-        <button onclick="_lcvSubmitAdd('${courseId}')" style="padding:8px 18px;background:var(--primary);color:#fff;border:none;border-radius:8px;font-weight:600;cursor:pointer">Add Video</button>
-      </div>
-    </div>`);
-}
-
-async function _lcvSubmitAdd(courseId) {
-  const url   = document.getElementById('lcv-url')?.value.trim();
-  const title = document.getElementById('lcv-title')?.value.trim();
-  const desc  = document.getElementById('lcv-desc')?.value.trim();
-  if (!url || !title) return showToastNotif('URL and title are required', 'error');
-  try {
-    const data = await api('/api/course-videos', { method: 'POST', body: JSON.stringify({ courseId, url, title, description: desc }) });
-    closeModal();
-    showToastNotif('Video added', 'success');
-    const list = document.getElementById(`lcv-list-${courseId}`);
-    if (list) {
-      const placeholder = list.querySelector('p');
-      if (placeholder) placeholder.remove();
-      list.insertAdjacentHTML('beforeend', _lcvVideoRow(data.video));
-      const section = document.getElementById(`lcv-section-${courseId}`);
-      const countEl = section?.querySelector('span[style*="text-muted"]');
-      if (countEl) {
-        const cur = parseInt(countEl.textContent) || 0;
-        const nxt = cur + 1;
-        countEl.textContent = `${nxt} video${nxt !== 1 ? 's' : ''}`;
-      }
-    }
-  } catch (e) {
-    showToastNotif(e.message || 'Failed to add video', 'error');
-  }
-}
-
-async function _lcvDelete(videoId, courseId) {
-  if (!confirm('Delete this video?')) return;
-  try {
-    await api(`/api/course-videos/${videoId}`, { method: 'DELETE' });
-    document.getElementById(`lcv-row-${videoId}`)?.remove();
-    showToastNotif('Video deleted', 'success');
-  } catch (e) {
-    showToastNotif(e.message || 'Failed to delete', 'error');
-  }
-}
-
-// ── Lecturer — Notifications ──────────────────────────────────────────────────
-
-async function renderLecturerNotifications() {
-  const content = document.getElementById('main-content');
-  if (!content) return;
-  content.innerHTML = `
-    <div class="page-header">
-      <h2>Notifications</h2>
-      <p>Alerts, submissions, and attendance flags</p>
-    </div>
-    <div id="lec-notif-body"><div class="loading-spinner" style="margin:60px auto"></div></div>`;
-
-  const body = document.getElementById('lec-notif-body');
-  try {
-    const [assignData, flagData, sessData] = await Promise.all([
-      api('/api/assignments/lecturer').catch(() => ({ assignments: [] })),
-      api('/api/attendance-sessions/flagged/new-devices').catch(() => ({ records: [] })),
-      api('/api/attendance-sessions?limit=10').catch(() => ({ sessions: [] })),
-    ]);
-
-    const assignments = assignData.assignments || [];
-    const flags       = flagData.records || [];
-    const sessions    = sessData.sessions || [];
-
-    const notifs = [];
-
-    // Ungraded submissions
-    const ungraded = assignments.filter(a => (a.submissionCount || 0) > (a.gradedCount || 0));
-    if (ungraded.length) {
-      ungraded.forEach(a => {
-        const pending = (a.submissionCount || 0) - (a.gradedCount || 0);
-        notifs.push({ icon: '📝', type: 'warn', title: `${pending} ungraded submission${pending > 1 ? 's' : ''}`, body: `Assignment: ${a.title}`, action: { label: 'Grade Now', fn: "navigateTo('assignments')" } });
-      });
-    }
-
-    // Flagged devices
-    if (flags.length) {
-      notifs.push({ icon: '🚨', type: 'warn', title: `${flags.length} flagged new device${flags.length > 1 ? 's' : ''}`, body: 'Students with unrecognised devices in recent attendance sessions', action: { label: 'Review', fn: "navigateTo('live-attendance')" } });
-    }
-
-    // Active sessions
-    const active = sessions.filter(s => s.status === 'active');
-    if (active.length) {
-      active.forEach(s => {
-        notifs.push({ icon: '●', type: 'ok', title: 'Active session', body: `${s.courseName || s.courseId} — started ${new Date(s.createdAt).toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'})}`, action: { label: 'View', fn: "navigateTo('live-attendance')" } });
-      });
-    }
-
-    // No notifications
-    if (!notifs.length) {
-      body.innerHTML = `<div class="card" style="text-align:center;padding:48px 24px">
-        <div style="font-size:36px;margin-bottom:12px">✅</div>
-        <h3>All clear</h3>
-        <p style="color:var(--text-muted)">No pending submissions, flags, or alerts.</p>
-      </div>`;
-      return;
-    }
-
-    const typeStyle = { ok: '#16a34a', warn: '#d97706', info: '#2563eb' };
-    const typeBg    = { ok: 'rgba(22,163,74,.08)', warn: 'rgba(217,119,6,.08)', info: 'rgba(37,99,235,.08)' };
-
-    body.innerHTML = notifs.map(n => `
-      <div class="card" style="display:flex;gap:14px;align-items:flex-start;padding:16px;margin-bottom:10px;border-left:3px solid ${typeStyle[n.type] || '#888'}">
-        <div style="font-size:22px;line-height:1;flex-shrink:0">${n.icon}</div>
-        <div style="flex:1;min-width:0">
-          <div style="font-size:14px;font-weight:600;color:var(--text);margin-bottom:2px">${esc(n.title)}</div>
-          <div style="font-size:12px;color:var(--text-muted)">${esc(n.body)}</div>
-        </div>
-        ${n.action ? `<button onclick="${n.action.fn}" style="flex-shrink:0;padding:6px 14px;background:var(--primary);color:#fff;border:none;border-radius:8px;font-size:12px;font-weight:600;cursor:pointer">${esc(n.action.label)}</button>` : ''}
-      </div>`).join('');
-
-  } catch (e) {
-    body.innerHTML = `<div class="card"><p style="color:var(--danger)">Error: ${e.message}</p></div>`;
   }
 }
 
@@ -12204,20 +13929,6 @@ function _renderAttendeesHTML(el, data, isOffline) {
   `;
 }
 
-function openModal(html, opts = {}) {
-  const container = document.getElementById('modal-container');
-  if (!container) return;
-  const maxW = opts.maxWidth || '520px';
-  container.innerHTML = `
-    <div class="modal-overlay" onclick="closeModal(event)" style="padding:16px">
-      <div class="modal" style="max-width:${maxW};width:100%;position:relative">
-        <button onclick="closeModal()" style="position:absolute;top:12px;right:12px;background:none;border:none;cursor:pointer;color:var(--text-muted);font-size:18px;line-height:1;padding:4px 6px;border-radius:6px" title="Close">✕</button>
-        ${html}
-      </div>
-    </div>`;
-  container.classList.remove('hidden');
-}
-
 function closeModal(event) {
   if (event && event.target !== event.currentTarget) return;
   _stopQrTimers(); // always clean up QR rotation if active
@@ -12273,26 +13984,6 @@ async function renderProfile() {
         </div>` : ''}
       </div>
 
-      ${['employee','manager'].includes(u.role) ? `
-      <div style="margin-bottom:20px;padding-top:20px;border-top:1px solid var(--border)">
-        <h3 style="font-size:14px;font-weight:700;margin-bottom:12px;color:var(--text-primary)">Work Information</h3>
-        <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
-          ${[
-            ['Designation',      u.designation   || '—'],
-            ['Department',       u.department    || '—'],
-            ['Employment Type',  u.employmentType ? u.employmentType.replace('_',' ').replace(/\b\w/g,c=>c.toUpperCase()) : '—'],
-            ['Work Location',    u.workLocation  ? u.workLocation.charAt(0).toUpperCase()+u.workLocation.slice(1) : '—'],
-            ['Date Hired',       u.dateHired     ? new Date(u.dateHired).toLocaleDateString('en-GB',{day:'2-digit',month:'short',year:'numeric'}) : '—'],
-            ['Reporting Manager',u.reportingManager ? (u.reportingManager.name||u.reportingManager) : '—'],
-          ].map(([label,val])=>`
-          <div style="background:var(--bg);border-radius:8px;padding:10px 12px;border:1px solid var(--border)">
-            <div style="font-size:11px;color:var(--text-muted);margin-bottom:2px">${label}</div>
-            <div style="font-size:13px;font-weight:600">${val}</div>
-          </div>`).join('')}
-        </div>
-        <p style="font-size:11px;color:var(--text-muted);margin-top:10px">To update these details, contact your administrator.</p>
-      </div>` : ''}
-
       <div style="margin-bottom:20px;padding-top:20px;border-top:1px solid var(--border)">
         <h3 style="font-size:14px;font-weight:700;margin-bottom:12px;color:var(--text-primary)">Change Password</h3>
         <div class="form-group">
@@ -12326,52 +14017,35 @@ async function renderProfile() {
         </div>
       </div>` : ''}
       <button class="btn btn-primary" onclick="saveProfile()" style="width:100%">Save Changes</button>
-    </div>
 
-    ${u.role === 'lecturer' ? `
-    <div class="card" style="max-width:520px;margin-top:20px">
-      <h3 style="font-size:14px;font-weight:700;margin-bottom:4px;color:var(--text-primary)">Offline Attendance PIN</h3>
-      <p style="font-size:12px;color:var(--text-muted);margin-bottom:16px">Your 4-digit PIN is entered on the classroom device to start an offline attendance session. Set it once; update it anytime.</p>
-      <div id="pin-msg" style="display:none;padding:10px 14px;border-radius:8px;font-size:13px;margin-bottom:14px"></div>
-      <div class="form-group">
-        <label>New PIN</label>
-        <input type="password" id="att-pin" placeholder="4 digits" maxlength="4" inputmode="numeric" autocomplete="off">
-      </div>
-      <div class="form-group">
-        <label>Confirm PIN</label>
-        <input type="password" id="att-pin-confirm" placeholder="Repeat PIN" maxlength="4" inputmode="numeric" autocomplete="off">
-      </div>
-      <button class="btn btn-primary" onclick="saveAttendancePin()" style="width:100%">Set PIN</button>
-    </div>` : ''}
+      ${u.role === 'lecturer' ? `
+      <div style="margin-top:28px;padding-top:24px;border-top:1px solid var(--border)">
+        <h3 style="font-size:14px;font-weight:700;margin-bottom:4px;color:var(--text-primary)">Class Rep PIN</h3>
+        <p style="font-size:12px;color:var(--text-muted);margin-bottom:14px">Set a 4-digit PIN that your class rep must enter to connect the attendance device to your session. Leave blank to allow connection without a PIN.</p>
+        <div style="display:flex;gap:10px;align-items:flex-end">
+          <div style="flex:1">
+            <input type="password" id="lecturer-pin-input" inputmode="numeric" maxlength="4" placeholder="4-digit PIN" style="width:100%;padding:10px 12px;border:1.5px solid var(--border);border-radius:8px;font-size:18px;letter-spacing:6px;box-sizing:border-box">
+          </div>
+          <button onclick="saveLecturerPin()" style="padding:10px 18px;background:var(--primary);color:#fff;border:none;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer;white-space:nowrap">Save PIN</button>
+          <button onclick="clearLecturerPin()" style="padding:10px 14px;background:transparent;color:#ef4444;border:1.5px solid #ef4444;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;white-space:nowrap">Clear PIN</button>
+        </div>
+      </div>` : ''}
 
-    <div class="card" style="max-width:520px;margin-top:20px">
-      <h3 style="font-size:14px;font-weight:700;margin-bottom:4px;color:var(--text-primary)">Signed-in Devices</h3>
-      <p style="font-size:12px;color:var(--text-muted);margin-bottom:16px">All devices that have logged into your account</p>
-      <div id="devices-list"><div style="color:var(--text-muted);font-size:13px">Loading devices…</div></div>
+      <div style="margin-top:28px;padding-top:24px;border-top:1px solid var(--border)">
+        <h3 style="font-size:14px;font-weight:700;margin-bottom:4px;color:var(--text-primary)">Signed-in Devices</h3>
+        <p style="font-size:12px;color:var(--text-muted);margin-bottom:16px">All devices that have logged into your account</p>
+        <div id="devices-list"><div style="color:var(--text-muted);font-size:13px">Loading devices…</div></div>
+      </div>
+
+      ${currentUser.role !== 'student' ? `
+      <div style="margin-top:28px;padding-top:24px;border-top:1px solid var(--border)">
+        <h3 style="font-size:14px;font-weight:700;margin-bottom:4px;color:#ef4444">Danger Zone</h3>
+        <p style="font-size:12px;color:var(--text-muted);margin-bottom:14px">Permanently delete your account and all associated data.</p>
+        <a href="/delete-account" target="_blank" style="display:inline-block;padding:10px 20px;border-radius:8px;border:1.5px solid #ef4444;color:#ef4444;font-size:13px;font-weight:600;text-decoration:none;background:transparent">Delete Account</a>
+      </div>` : ''}
     </div>
   `;
   loadMyDevices();
-}
-
-async function saveAttendancePin() {
-  const pin     = (document.getElementById('att-pin')?.value || '').trim();
-  const confirm = (document.getElementById('att-pin-confirm')?.value || '').trim();
-  const msg     = document.getElementById('pin-msg');
-  const show = (text, ok) => {
-    msg.textContent = text;
-    msg.style.display = 'block';
-    msg.style.background = ok ? 'rgba(34,197,94,0.1)' : 'rgba(239,68,68,0.1)';
-    msg.style.color = ok ? '#16a34a' : '#ef4444';
-    msg.style.border = `1px solid ${ok ? '#bbf7d0' : '#fecaca'}`;
-  };
-  if (!/^\d{4}$/.test(pin)) return show('PIN must be exactly 4 digits.', false);
-  if (pin !== confirm)       return show('PINs do not match.', false);
-  try {
-    await api('/api/class-rep/set-pin', { method: 'POST', body: JSON.stringify({ pin }) });
-    show('PIN set successfully. You can now use it on the classroom device.', true);
-    document.getElementById('att-pin').value = '';
-    document.getElementById('att-pin-confirm').value = '';
-  } catch (e) { show(e.message || 'Failed to set PIN.', false); }
 }
 
 async function loadMyDevices() {
@@ -12409,13 +14083,9 @@ async function loadMyDevices() {
           <div style="font-size:11px;color:var(--text-muted);margin-top:2px">${esc(d.ipAddress) || 'IP unknown'} · Last seen ${timeAgo(d.lastSeenAt)}</div>
           ${d.userAgent ? `<div style="font-size:10px;color:var(--text-muted);margin-top:1px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(d.userAgent)}</div>` : ''}
         </div>
-        ${!d.isCurrent ? `<button data-device-id="${esc(d.deviceId)}" class="remove-device-btn" style="flex-shrink:0;padding:6px 12px;border-radius:8px;border:1.5px solid #ef4444;background:transparent;color:#ef4444;font-size:12px;font-weight:600;cursor:pointer">Remove</button>` : ''}
+        ${!d.isCurrent ? `<button onclick="removeDevice('${esc(d.deviceId)}')" style="flex-shrink:0;padding:6px 12px;border-radius:8px;border:1.5px solid #ef4444;background:transparent;color:#ef4444;font-size:12px;font-weight:600;cursor:pointer">Remove</button>` : ''}
       </div>
     `).join('');
-
-    container.querySelectorAll('.remove-device-btn').forEach(btn => {
-      btn.addEventListener('click', () => removeDevice(btn.dataset.deviceId));
-    });
 
     // Show device lock warning if active
     if (data.deviceLock?.isLocked && data.deviceLock?.lockedUntil) {
@@ -12436,10 +14106,10 @@ async function removeDevice(deviceId) {
   if (!confirm('Remove this device from your trusted list?')) return;
   try {
     await api(`/api/auth/my-devices/${encodeURIComponent(deviceId)}`, { method: 'DELETE' });
-    showToastNotif('✅ Device removed', 'success');
+    showToast('Device removed', 'success');
     loadMyDevices();
   } catch (e) {
-    showToastNotif('❌ Failed to remove device', 'error');
+    showToast('Failed to remove device', 'error');
   }
 }
 
@@ -12595,7 +14265,7 @@ async function renderStudentGradeBook(content) {
                 <div style="font-weight:700;font-size:15px;margin-bottom:4px;">${c.title}</div>
                 <div style="font-size:12px;color:var(--text-muted);margin-bottom:10px;">${c.code} · ${c.lecturerId?.name || 'N/A'}</div>
                 <div style="display:flex;justify-content:space-between;align-items:center;">
-                  <span style="font-size:12px;color:var(--text-light);">${c.enrolledStudents?.length || 0} students</span>
+                  <span style="font-size:12px;color:var(--text-light);">${c.rosterCount ?? c.enrolledStudents?.length ?? 0} students</span>
                   <span class="btn btn-sm btn-primary" style="pointer-events:none;">View Grades →</span>
                 </div>
               </div>`).join('')}
@@ -12707,7 +14377,7 @@ async function renderLecturerGradeBook(content) {
                 <div style="font-weight:700;font-size:15px;margin-bottom:4px;">${c.title}</div>
                 <div style="font-size:12px;color:var(--text-muted);margin-bottom:10px;">${c.code} · ${c.lecturerId?.name || 'N/A'}</div>
                 <div style="display:flex;justify-content:space-between;align-items:center;">
-                  <span style="font-size:12px;color:var(--text-light);">${c.enrolledStudents?.length || 0} students</span>
+                  <span style="font-size:12px;color:var(--text-light);">${c.rosterCount ?? c.enrolledStudents?.length ?? 0} students</span>
                   <span class="btn btn-sm btn-primary" style="pointer-events:none;">Open →</span>
                 </div>
               </div>`).join('')}
@@ -13036,7 +14706,8 @@ async function loadAnnBadge() {
 
 const ANN_COLORS = { info:'#6366f1', warning:'#f59e0b', success:'#22c55e', urgent:'#ef4444' };
 const ANN_ICONS  = { info:'ℹ️', warning:'⚠️', success:'✅', urgent:'🚨' };
-const ANN_CAN_POST = ['admin','superadmin','lecturer','manager','hod','student'];
+const ANN_CAN_POST = ['admin','superadmin','lecturer','manager','hod'];
+// Class reps can post via class-announcements page, not the general announcements page
 
 async function renderAnnouncements() {
   const content = document.getElementById('main-content');
@@ -13056,7 +14727,7 @@ async function renderAnnouncements() {
     const data = await api('/api/announcements');
     offlineCache('announcements', data);
     const anns = data.announcements || [];
-    const canPost = ANN_CAN_POST.includes(currentUser.role) && (currentUser.role !== 'student' || currentUser.isClassRep);
+    const canPost = ANN_CAN_POST.includes(currentUser.role);
     const isAdmin = ['admin','superadmin'].includes(currentUser.role);
 
     content.innerHTML = `
@@ -13065,7 +14736,7 @@ async function renderAnnouncements() {
           <h2>Announcements</h2>
           <p>Institution-wide notices and updates</p>
         </div>
-        ${canPost ? `<button class="btn btn-primary" onclick="${currentUser.isClassRep ? 'openClassRepAnnouncementModal()' : 'openPostAnnouncementModal()'}">＋ Post Announcement</button>` : ''}
+        ${canPost ? `<button class="btn btn-primary" onclick="openPostAnnouncementModal()">＋ Post Announcement</button>` : ''}
       </div>
       <div id="ann-list">
         ${anns.length === 0
@@ -13086,7 +14757,7 @@ function annCard(a, canPost, isAdmin) {
   const color = ANN_COLORS[a.type] || '#6366f1';
   const icon  = ANN_ICONS[a.type]  || 'ℹ️';
   const canDelete = isAdmin || (canPost && String(a.author?._id) === String(currentUser._id || currentUser.id));
-  const audienceLabel = { all:'Everyone', students:'Students', employees:'Employees' }[a.audience] || 'Everyone';
+  const audienceLabel = { all:'Everyone', students:'Students', employees:'Employees', lecturers:'Lecturers', hod:'HODs', class_group:'Class Group', department:'Department', programme:'Programme', course:'Course' }[a.audience] || 'Everyone';
   return `
     <div class="card" style="margin-bottom:12px;border-left:4px solid ${color};position:relative;${a.pinned?'background:linear-gradient(135deg,var(--card),#fefce8);':''}" id="ann-${a._id}">
       ${a.pinned ? '<div style="position:absolute;top:10px;right:12px;font-size:11px;color:#92400e;font-weight:700;background:#fef3c7;padding:2px 7px;border-radius:20px;">📌 Pinned</div>' : ''}
@@ -13221,62 +14892,6 @@ async function openPostAnnouncementModal() {
       <div style="padding:12px 20px;border-top:1px solid var(--border);display:flex;gap:8px;justify-content:flex-end;position:sticky;bottom:0;background:var(--card);border-radius:0 0 14px 14px;">
         <button class="btn btn-secondary" onclick="document.getElementById('ann-post-overlay').remove()">Cancel</button>
         <button class="btn btn-primary" onclick="submitAnnouncement()">📢 Post</button>
-      </div>
-    </div>`;
-  document.body.appendChild(ol);
-}
-
-function openClassRepAnnouncementModal() {
-  const existing = document.getElementById('ann-post-overlay');
-  if (existing) existing.remove();
-  const level = currentUser.studentLevel ? `Level ${currentUser.studentLevel}` : '';
-  const group = currentUser.studentGroup ? `Group ${currentUser.studentGroup}` : '';
-  const dept  = currentUser.department   || '';
-  const scopeLabel = [level, group, dept].filter(Boolean).join(' · ') || 'Your Class';
-
-  const ol = document.createElement('div');
-  ol.id = 'ann-post-overlay';
-  ol.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:400;display:flex;align-items:center;justify-content:center;padding:16px;backdrop-filter:blur(3px)';
-  ol.innerHTML = `
-    <div style="background:var(--card);border-radius:14px;width:100%;max-width:480px;max-height:92vh;overflow-y:auto;box-shadow:0 20px 60px rgba(0,0,0,.2);">
-      <div style="padding:16px 20px;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center;position:sticky;top:0;background:var(--card);z-index:1;border-radius:14px 14px 0 0;">
-        <h3 style="font-size:15px;font-weight:700;margin:0">📢 Class Announcement</h3>
-        <button onclick="document.getElementById('ann-post-overlay').remove()" style="width:26px;height:26px;border-radius:6px;border:1px solid var(--border);background:var(--bg);cursor:pointer;font-size:13px;">✕</button>
-      </div>
-      <div style="padding:18px 20px;display:flex;flex-direction:column;gap:13px;">
-        <div style="padding:8px 12px;background:rgba(79,110,247,.07);border-radius:8px;border-left:3px solid #4f6ef7;font-size:12px;color:var(--text-muted)">
-          📌 This announcement will be visible only to <strong style="color:var(--text)">${esc(scopeLabel)}</strong>
-        </div>
-        <div>
-          <label style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;color:var(--text-light);margin-bottom:5px;display:block;">Title *</label>
-          <input id="ann-title" placeholder="e.g. Study group at 4pm" style="width:100%;padding:9px 12px;border:1.5px solid var(--border);border-radius:8px;font-size:14px;font-family:inherit;outline:none;">
-        </div>
-        <div>
-          <label style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;color:var(--text-light);margin-bottom:5px;display:block;">Message *</label>
-          <textarea id="ann-body" rows="4" placeholder="What do you want to tell your class?" style="width:100%;padding:9px 12px;border:1.5px solid var(--border);border-radius:8px;font-size:13px;font-family:inherit;resize:vertical;outline:none;"></textarea>
-        </div>
-        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
-          <div>
-            <label style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;color:var(--text-light);margin-bottom:5px;display:block;">Type</label>
-            <select id="ann-type" style="width:100%;padding:8px 10px;border:1.5px solid var(--border);border-radius:8px;font-size:13px;font-family:inherit;outline:none;">
-              <option value="info">ℹ️ Info</option>
-              <option value="warning">⚠️ Warning</option>
-              <option value="success">✅ Good News</option>
-              <option value="urgent">🚨 Urgent</option>
-            </select>
-          </div>
-          <div>
-            <label style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;color:var(--text-light);margin-bottom:5px;display:block;">Expires At <span style="font-weight:400">(opt)</span></label>
-            <input id="ann-expires" type="datetime-local" style="width:100%;padding:8px 10px;border:1.5px solid var(--border);border-radius:8px;font-size:13px;font-family:inherit;outline:none;">
-          </div>
-        </div>
-        <input type="hidden" id="ann-audience" value="class_group">
-        <input type="hidden" id="ann-course" value="">
-        <div id="ann-post-err" style="display:none;padding:8px 12px;background:#fef2f2;border:1px solid #fecaca;border-radius:7px;color:#dc2626;font-size:12px;font-weight:500;"></div>
-      </div>
-      <div style="padding:12px 20px;border-top:1px solid var(--border);display:flex;gap:8px;justify-content:flex-end;position:sticky;bottom:0;background:var(--card);border-radius:0 0 14px 14px;">
-        <button class="btn btn-secondary" onclick="document.getElementById('ann-post-overlay').remove()">Cancel</button>
-        <button class="btn btn-primary" onclick="submitAnnouncement()">📢 Post to Class</button>
       </div>
     </div>`;
   document.body.appendChild(ol);
@@ -13695,7 +15310,8 @@ async function exportAttendanceToExcel(sessionId, sessionTitle) {
     ws['!cols'] = [{ wch: 25 }, { wch: 15 }, { wch: 12 }, { wch: 15 }, { wch: 22 }, { wch: 20 }];
 
     const filename = `Attendance_${(sessionTitle || 'session').replace(/[^a-z0-9]/gi, '_')}_${new Date().toISOString().slice(0,10)}.xlsx`;
-    window.XLSX.writeFile(wb, filename);
+    const wbout = window.XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
+    await downloadBlob(new Blob([wbout], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }), filename);
     showToastNotif('Excel file downloaded!', 'success');
   } catch(e) {
     showToastNotif('Export failed: ' + e.message, 'error');
@@ -13731,7 +15347,8 @@ async function exportAllAttendanceToExcel() {
     const wb = window.XLSX.utils.book_new();
     window.XLSX.utils.book_append_sheet(wb, ws, 'My Attendance');
     ws['!cols'] = [{ wch: 30 }, { wch: 15 }, { wch: 12 }, { wch: 15 }];
-    window.XLSX.writeFile(wb, `My_Attendance_${new Date().toISOString().slice(0,10)}.xlsx`);
+    const wboutAll = window.XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
+    await downloadBlob(new Blob([wboutAll], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }), `My_Attendance_${new Date().toISOString().slice(0,10)}.xlsx`);
     showToastNotif('Excel file downloaded!', 'success');
   } catch(e) {
     showToastNotif('Export failed: ' + e.message, 'error');
@@ -13772,7 +15389,7 @@ function _timetableGrid(slots, canEdit) {
               </div>
               ${s.course?.code ? `<div style="font-size:10px;color:var(--text-muted);">${esc(s.course.code)}</div>` : ''}
               ${s.room ? `<div style="font-size:10px;color:var(--text-muted);">📍 ${esc(s.room)}</div>` : ''}
-              ${!canEdit && s.lecturer?.name ? `<div style="font-size:10px;color:var(--text-muted);">👤 ${esc(s.lecturer.name)}</div>` : ''}
+              ${s.lecturer?.name ? `<div style="font-size:10px;color:var(--text-muted);">👤 ${esc(s.lecturer.name)}</div>` : ''}
               ${canEdit ? `<button onclick="event.stopPropagation();deleteSlot('${s._id}')"
                 style="position:absolute;top:4px;right:4px;background:none;border:none;cursor:pointer;
                 color:var(--text-muted);font-size:14px;line-height:1;padding:2px;">×</button>` : ''}
@@ -13789,32 +15406,112 @@ function _timetableGrid(slots, canEdit) {
     </div>`;
 }
 
+// ── Timetable ICS calendar export ────────────────────────────────────────────
+function exportTimetableICS(slots) {
+  if (!slots || slots.length === 0) { showToastNotif('No slots to export', 'error'); return; }
+  const DAYS = ['SU','MO','TU','WE','TH','FR','SA'];
+  const pad  = n => String(n).padStart(2, '0');
+
+  // Find the Monday of the current week as anchor
+  const now    = new Date();
+  const monday = new Date(now);
+  monday.setDate(now.getDate() - ((now.getDay() + 6) % 7));
+  monday.setHours(0, 0, 0, 0);
+
+  const uid = () => `${Date.now()}-${Math.random().toString(36).slice(2)}@kodex`;
+
+  const events = slots.map(slot => {
+    const [h, m]   = (slot.startTime || '00:00').split(':').map(Number);
+    const [eh, em] = (slot.endTime   || `${h+1}:00`).split(':').map(Number);
+    const dayOfWeek = slot.dayOfWeek ?? 1; // 0=Sun … 6=Sat
+    const diff = (dayOfWeek - 1 + 7) % 7;  // days from Monday
+    const date = new Date(monday);
+    date.setDate(monday.getDate() + diff);
+
+    const dtFmt = (d, hr, mn) =>
+      `${d.getFullYear()}${pad(d.getMonth()+1)}${pad(d.getDate())}T${pad(hr)}${pad(mn)}00`;
+
+    return [
+      'BEGIN:VEVENT',
+      `UID:${uid()}`,
+      `SUMMARY:${(slot.title || slot.courseName || 'Class').replace(/[,;\\]/g, '\\$&')}`,
+      `DTSTART:${dtFmt(date, h, m)}`,
+      `DTEND:${dtFmt(date, eh, em)}`,
+      `RRULE:FREQ=WEEKLY;BYDAY=${DAYS[dayOfWeek]}`,
+      slot.room ? `LOCATION:Room ${slot.room}` : '',
+      'END:VEVENT',
+    ].filter(Boolean).join('\r\n');
+  });
+
+  const ics = [
+    'BEGIN:VCALENDAR',
+    'VERSION:2.0',
+    'PRODID:-//KODEX//Timetable//EN',
+    'CALSCALE:GREGORIAN',
+    'METHOD:PUBLISH',
+    ...events,
+    'END:VCALENDAR',
+  ].join('\r\n');
+
+  const blob = new Blob([ics], { type: 'text/calendar;charset=utf-8' });
+  const a    = document.createElement('a');
+  a.href     = URL.createObjectURL(blob);
+  a.download = 'timetable.ics';
+  a.click();
+  URL.revokeObjectURL(a.href);
+  showToastNotif('Calendar downloaded — open it to import into Google/Apple Calendar', 'success');
+}
+
 let _timetableSlots = [];
 let _timetableCourses = [];
-let _timetableContext = 'lecturer';
 
 async function renderLecturerTimetable() {
   const content = document.getElementById('main-content');
   if (!content) return;
   content.innerHTML = '<div class="loading">Loading timetable…</div>';
-  try {
-    const [slotData, courseData] = await Promise.all([
-      api('/api/timetable'),
-      api('/api/courses').catch(() => api('/api/lecturer/quizzes').then(d => ({ courses: [] })).catch(() => ({ courses: [] }))),
-    ]);
-    _timetableSlots   = slotData.slots   || [];
-    _timetableCourses = (courseData.courses || courseData || []);
+  if (!isOnline()) {
+    const _c = offlineRead('lecturer_timetable');
+    if (_c) { _timetableSlots = _c.slots || []; _timetableCourses = _c.courses || []; }
+    else { content.innerHTML = `<div style="text-align:center;padding:60px 20px"><div style="font-size:48px;margin-bottom:12px">📡</div><div style="font-size:18px;font-weight:700">You're Offline</div><p style="color:var(--text-muted);margin-top:8px">Connect once while online to cache this page.</p></div>`; return; }
+  } else {
+    try {
+      const [slotData, courseData] = await Promise.all([
+        api('/api/timetable'),
+        api('/api/courses').catch(() => api('/api/lecturer/quizzes').then(d => ({ courses: [] })).catch(() => ({ courses: [] }))),
+      ]);
+      _timetableSlots   = slotData.slots   || [];
+      _timetableCourses = (courseData.courses || courseData || []);
+      offlineCache('lecturer_timetable', { slots: _timetableSlots, courses: _timetableCourses });
+    } catch(e) {
+      const _c = offlineRead('lecturer_timetable');
+      if (_c) { _timetableSlots = _c.slots || []; _timetableCourses = _c.courses || []; }
+      else { content.innerHTML = `<div class="card"><p style="color:var(--danger)">Error: ${e.message}</p></div>`; return; }
+    }
+  }
+  {
+
+    const isAdminView = ['admin','superadmin','manager'].includes(currentUser?.role);
+    const ttTitle    = isAdminView ? 'All Timetables' : 'My Timetable';
+    const ttSubtitle = isAdminView
+      ? 'All lecturers\' class slots — click any slot to edit or delete'
+      : 'Your weekly class timetable — click any slot to edit';
 
     content.innerHTML = `
       <div class="page-header" style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:10px;margin-bottom:20px">
         <div>
-          <h2 style="font-size:22px;font-weight:800;letter-spacing:-.5px;color:#0f172a;margin-bottom:2px">My Schedule</h2>
-          <p style="color:#64748b;font-size:13px">Your weekly class timetable — click any slot to edit</p>
+          <h2 style="font-size:22px;font-weight:800;letter-spacing:-.5px;color:#0f172a;margin-bottom:2px">${ttTitle}</h2>
+          <p style="color:#64748b;font-size:13px">${ttSubtitle}</p>
         </div>
-        <button class="btn btn-primary" onclick="openAddSlotModal()" style="display:flex;align-items:center;gap:6px">
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
-          Add Class
-        </button>
+        <div style="display:flex;gap:8px;flex-wrap:wrap">
+          <button class="btn btn-secondary" onclick="exportTimetableICS(_timetableSlots)" style="display:flex;align-items:center;gap:6px;font-size:13px">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+            Export .ics
+          </button>
+          <button class="btn btn-primary" onclick="openAddSlotModal()" style="display:flex;align-items:center;gap:6px">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+            Add Class
+          </button>
+        </div>
       </div>
       ${_timetableSlots.length === 0
         ? `<div style="background:#fff;border:1px solid #e8eaed;border-radius:16px;padding:60px 20px;text-align:center;box-shadow:0 1px 4px rgba(0,0,0,.05)">
@@ -13830,42 +15527,48 @@ async function renderLecturerTimetable() {
           </div>`
         : `<div style="background:#fff;border:1px solid #e8eaed;border-radius:14px;overflow-x:auto;box-shadow:0 1px 4px rgba(0,0,0,.05)">${_timetableGrid(_timetableSlots, true)}</div>`
       }`;
-  } catch(e) {
-    content.innerHTML = `<div class="card"><p style="color:var(--danger)">Error: ${e.message}</p></div>`;
   }
 }
 
 async function renderStudentTimetable() {
   const content = document.getElementById('main-content');
   if (!content) return;
-  _timetableContext = 'student';
   content.innerHTML = '<div class="loading">Loading timetable…</div>';
-  try {
-    const isRep = !!(currentUser && currentUser.isClassRep && currentUser.classRepCourse);
-    const requests = [api('/api/timetable')];
-    if (isRep) requests.push(api(`/api/courses/${currentUser.classRepCourse}`).catch(() => null));
-    const [slotData, courseData] = await Promise.all(requests);
-    const slots = slotData.slots || [];
-    if (isRep && courseData) {
-      const course = courseData.course || courseData;
-      _timetableCourses = course && course._id ? [course] : [];
+  let slots = [];
+  if (!isOnline()) {
+    const _c = offlineRead('student_timetable');
+    if (_c) { slots = _c.slots || []; }
+    else { content.innerHTML = `<div style="text-align:center;padding:60px 20px"><div style="font-size:48px;margin-bottom:12px">📡</div><div style="font-size:18px;font-weight:700">You're Offline</div><p style="color:var(--text-muted);margin-top:8px">Connect once while online to cache this page.</p></div>`; return; }
+  } else {
+    try {
+      const slotData = await api('/api/timetable');
+      slots = slotData.slots || [];
+      offlineCache('student_timetable', slotData);
+    } catch(e) {
+      const _c = offlineRead('student_timetable');
+      if (_c) { slots = _c.slots || []; }
+      else { content.innerHTML = `<div class="card"><p style="color:var(--danger)">Error: ${e.message}</p></div>`; return; }
     }
-    _timetableSlots = slots;
-
-    const addBtn = isRep
-      ? `<button class="btn btn-primary btn-sm" onclick="openAddSlotModal(1)" style="display:flex;align-items:center;gap:6px">
-           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
-           Add Class
-         </button>`
-      : '';
-
+  }
+  {
+    const isClassRep = currentUser.isClassRep;
+    const isHod = currentUser.role === 'hod';
     content.innerHTML = `
-      <div class="page-header" style="margin-bottom:20px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px">
+      <div class="page-header" style="margin-bottom:20px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px">
         <div>
-          <h2 style="font-size:22px;font-weight:800;letter-spacing:-.5px;color:#0f172a;margin-bottom:2px">Timetable</h2>
-          <p style="color:#64748b;font-size:13px">${isRep ? 'Manage your class timetable' : 'Your weekly class timetable based on enrolled courses'}</p>
+          <h2 style="font-size:22px;font-weight:800;letter-spacing:-.5px;color:#0f172a;margin-bottom:2px">${isHod ? 'Department Timetable' : 'My Timetable'}</h2>
+          <p style="color:#64748b;font-size:13px">${isHod ? 'Read-only view of all department class slots' : 'Your weekly class timetable based on enrolled courses'}</p>
         </div>
-        ${addBtn}
+        <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+          <button onclick="exportTimetableICS(slots)" style="display:inline-flex;align-items:center;gap:6px;padding:8px 14px;background:#f8fafc;border:1.5px solid #e2e8f0;color:#475569;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+            Export .ics
+          </button>
+          ${isClassRep ? `<button onclick="navigateTo('class-timetable')" style="display:inline-flex;align-items:center;gap:6px;padding:8px 14px;background:#f0fdf4;border:1.5px solid #86efac;color:#16a34a;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+            Edit Timetable
+          </button>` : ''}
+        </div>
       </div>
       ${slots.length === 0
         ? `<div style="background:#fff;border:1px solid #e8eaed;border-radius:16px;padding:60px 20px;text-align:center;box-shadow:0 1px 4px rgba(0,0,0,.05)">
@@ -13873,12 +15576,10 @@ async function renderStudentTimetable() {
               <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#2563eb" stroke-width="1.8"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
             </div>
             <h3 style="font-size:16px;font-weight:700;color:#0f172a;margin-bottom:6px">No classes scheduled yet</h3>
-            <p style="color:#64748b;font-size:13px">${isRep ? 'Add your first class slot using the button above.' : "Your lecturers haven't added timetable slots yet. Check back soon."}</p>
+            <p style="color:#64748b;font-size:13px">Your lecturers haven't added timetable slots yet. Check back soon.</p>
           </div>`
-        : `<div style="background:#fff;border:1px solid #e8eaed;border-radius:14px;overflow-x:auto;box-shadow:0 1px 4px rgba(0,0,0,.05)">${_timetableGrid(slots, isRep)}</div>`
+        : `<div style="background:#fff;border:1px solid #e8eaed;border-radius:14px;overflow-x:auto;box-shadow:0 1px 4px rgba(0,0,0,.05)">${_timetableGrid(slots, false)}</div>`
       }`;
-  } catch(e) {
-    content.innerHTML = `<div class="card"><p style="color:var(--danger)">Error: ${e.message}</p></div>`;
   }
 }
 
@@ -13889,20 +15590,44 @@ async function openEditSlotModal(slotId) {
   _openSlotModal(slot);
 }
 
-function _openSlotModal(slot, presetDay) {
+async function _openSlotModal(slot, presetDay) {
   const container = document.getElementById('modal-container');
   container.classList.remove('hidden');
   const isEdit = !!slot;
+  const isAdminOrHod = ['admin','superadmin','hod','manager'].includes(currentUser?.role)
+                    && currentUser?.company?.mode === 'academic';
+
   const colorOptions = TIMETABLE_COLORS.map(c =>
     `<span onclick="document.getElementById('slot-color').value='${c}';document.querySelectorAll('.color-dot').forEach(d=>d.style.outline='none');this.style.outline='3px solid ${c}';this.style.outlineOffset='2px'"
       class="color-dot" style="display:inline-block;width:22px;height:22px;border-radius:50%;background:${c};cursor:pointer;margin:2px;
       ${slot?.color===c||(!slot&&c==='#6366f1')?'outline:3px solid '+c+';outline-offset:2px':''}"></span>`
   ).join('');
 
+  // Fetch lecturers list for admin/HOD so they can assign slots to specific lecturers
+  let lecturerOptions = '';
+  if (isAdminOrHod) {
+    try {
+      const data = await api('/api/devices/lecturers-for-assignment');
+      const lecs = data.lecturers || [];
+      const currentLecId = slot?.lecturer?._id || slot?.lecturer || '';
+      lecturerOptions = `<div class="form-group">
+        <label>Lecturer <span style="color:red">*</span></label>
+        <select id="slot-lecturer" style="width:100%;padding:9px 12px;border:1.5px solid var(--border);border-radius:8px;font-size:13px">
+          <option value="">— Select lecturer —</option>
+          ${lecs.map(l => `<option value="${l._id}" ${l._id === currentLecId ? 'selected' : ''}>${esc(l.name)}</option>`).join('')}
+        </select>
+      </div>`;
+    } catch(_) {
+      lecturerOptions = `<div class="form-group"><p style="font-size:12px;color:#b45309">Could not load lecturers list.</p></div>`;
+    }
+  }
+
   container.innerHTML = `
     <div class="modal-overlay" onclick="closeModal(event)">
       <div class="modal" onclick="event.stopPropagation()" style="max-width:420px">
         <h3 style="margin:0 0 16px">${isEdit ? 'Edit Class Slot' : 'Add Class to Timetable'}</h3>
+
+        ${lecturerOptions}
 
         <div class="form-group">
           <label>Course <span style="color:red">*</span></label>
@@ -13954,19 +15679,24 @@ function _openSlotModal(slot, presetDay) {
 }
 
 async function saveSlot(slotId) {
-  const courseId  = document.getElementById('slot-course').value;
-  const dayOfWeek = document.getElementById('slot-day').value;
-  const startTime = document.getElementById('slot-start').value;
-  const endTime   = document.getElementById('slot-end').value;
-  const room      = document.getElementById('slot-room').value.trim();
-  const color     = document.getElementById('slot-color').value;
+  const courseId   = document.getElementById('slot-course').value;
+  const dayOfWeek  = document.getElementById('slot-day').value;
+  const startTime  = document.getElementById('slot-start').value;
+  const endTime    = document.getElementById('slot-end').value;
+  const room       = document.getElementById('slot-room').value.trim();
+  const color      = document.getElementById('slot-color').value;
+  const lecturerId = document.getElementById('slot-lecturer')?.value || null;
 
   if (!courseId) { toastWarning('Please select a course'); return; }
   if (!startTime || !endTime) { toastWarning('Please set start and end time'); return; }
   if (startTime >= endTime) { toastWarning('End time must be after start time'); return; }
+  if (document.getElementById('slot-lecturer') && !lecturerId) {
+    toastWarning('Please select a lecturer'); return;
+  }
 
   try {
-    const body = { courseId, dayOfWeek: Number(dayOfWeek), startTime, endTime, room, color };
+    const body = { courseId, dayOfWeek: Number(dayOfWeek), startTime, endTime, room, color,
+                   ...(lecturerId ? { lecturerId } : {}) };
     if (slotId) {
       await api(`/api/timetable/${slotId}`, { method: 'PUT', body: JSON.stringify(body) });
       showToastNotif('Class updated', 'success');
@@ -13975,7 +15705,7 @@ async function saveSlot(slotId) {
       showToastNotif('Class added to timetable', 'success');
     }
     closeModal();
-    _timetableContext === 'student' ? renderStudentTimetable() : renderLecturerTimetable();
+    renderLecturerTimetable();
   } catch(e) {
     toastError(e.message);
   }
@@ -13987,7 +15717,7 @@ async function deleteSlot(slotId) {
     await api(`/api/timetable/${slotId}`, { method: 'DELETE' });
     showToastNotif('Class removed', 'success');
     closeModal();
-    _timetableContext === 'student' ? renderStudentTimetable() : renderLecturerTimetable();
+    renderLecturerTimetable();
   } catch(e) {
     toastError(e.message);
   }
@@ -14436,7 +16166,7 @@ async function generateAttendanceReportCard() {
 
     doc.setFontSize(8); doc.setTextColor(150,150,150); doc.setFont('helvetica','normal');
     doc.text('Generated automatically by DIKLY — dikly.sbs', M, 285);
-    doc.save('DIKLY_Report_Card_' + (currentUser.indexNumber||'student') + '_' + new Date().toISOString().slice(0,10) + '.pdf');
+    await downloadBlob(doc.output('blob'), 'DIKLY_Report_Card_' + (currentUser.indexNumber||'student') + '_' + new Date().toISOString().slice(0,10) + '.pdf');
     showToastNotif('Report card downloaded!', 'success');
   } catch(e) { showToastNotif('Failed: ' + e.message, 'error'); }
 }
@@ -14509,7 +16239,7 @@ async function generateCertificate(courseId, courseTitle) {
     doc.setFontSize(8); doc.setTextColor(199,210,254);
     doc.text('dikly.sbs', W/2, H-16, { align: 'center' });
 
-    doc.save('DIKLY_Certificate_' + (courseTitle||'course').replace(/[^a-z0-9]/gi,'_') + '.pdf');
+    await downloadBlob(doc.output('blob'), 'DIKLY_Certificate_' + (courseTitle||'course').replace(/[^a-z0-9]/gi,'_') + '.pdf');
     showToastNotif('Certificate downloaded!', 'success');
   } catch(e) { showToastNotif('Failed: ' + e.message, 'error'); }
 }
@@ -14552,12 +16282,13 @@ function toggleMobileSidebar() {
   if (isOpen) {
     closeMobileSidebar();
   } else {
-    // 'sidebar-force-open' class beats display:none !important via specificity
     sidebar.classList.add('sidebar-force-open');
     requestAnimationFrame(() => {
       sidebar.classList.add('open');
       overlay.classList.add('active');
-      document.body.style.overflow = 'hidden';
+      // Lock .content (the SPA scroll container) — body is never the scroller here
+      const content = document.querySelector('.content');
+      if (content) content.style.overflowY = 'hidden';
     });
   }
 }
@@ -14567,7 +16298,6 @@ function closeMobileSidebar() {
   const overlay = document.getElementById('sidebar-overlay');
   if (sidebar) {
     sidebar.classList.remove('open');
-    // Remove force-show class after transition completes
     setTimeout(() => {
       if (!sidebar.classList.contains('open')) {
         sidebar.classList.remove('sidebar-force-open');
@@ -14575,14 +16305,57 @@ function closeMobileSidebar() {
     }, 300);
   }
   if (overlay) overlay.classList.remove('active');
-  document.body.style.overflow = '';
+  const content = document.querySelector('.content');
+  if (content) content.style.overflowY = '';
 }
+
+// ── iOS Safari scroll fix for mobile sidebar ──────────────────────────────────
+// On iOS, touch-scroll events on fixed elements propagate to the underlying page.
+// We intercept touchmove on the sidebar-nav and on the overlay separately:
+//   • sidebar-nav: allow scroll, but stop propagation so page doesn't move
+//   • overlay: block scroll entirely (tapping overlay closes sidebar)
+(function initSidebarScrollFix() {
+  let _touchStartY = 0;
+
+  document.addEventListener('touchstart', (e) => {
+    if (e.target.closest('.sidebar-nav')) {
+      _touchStartY = e.touches[0].clientY;
+    }
+  }, { passive: true });
+
+  document.addEventListener('touchmove', (e) => {
+    const nav = e.target.closest('.sidebar-nav');
+    if (nav) {
+      // Allow scroll within the nav, but stop it reaching the page
+      const atTop    = nav.scrollTop === 0;
+      const atBottom = nav.scrollTop + nav.clientHeight >= nav.scrollHeight;
+      const movingUp = e.touches[0].clientY < _touchStartY;   // finger going up = scroll down
+      const movingDn = e.touches[0].clientY > _touchStartY;   // finger going down = scroll up
+      if ((atTop && movingDn) || (atBottom && movingUp)) {
+        // At boundary — prevent rubber-banding into the page
+        e.preventDefault();
+      }
+      // Otherwise let the nav scroll naturally but stop propagation
+      e.stopPropagation();
+      return;
+    }
+    // Anywhere on the overlay (outside the sidebar) — block scroll entirely
+    if (e.target.closest('.sidebar-overlay') || e.target.closest('.sidebar-force-open')) {
+      const inSidebar = e.target.closest('.sidebar');
+      if (!inSidebar) e.preventDefault();
+    }
+  }, { passive: false });
+})();
 
 // Close sidebar when a nav item is tapped on mobile
 document.addEventListener('click', (e) => {
   const navLink = e.target.closest('.sidebar-nav a');
   if (navLink && window.innerWidth <= 768) {
     closeMobileSidebar();
+  }
+  // Close notification panel when clicking outside of it
+  if (_notifPanelOpen && !e.target.closest('#notif-panel') && !e.target.closest('#notif-bell-btn')) {
+    closeNotifPanel();
   }
 });
 
@@ -14597,25 +16370,25 @@ function buildBottomNav(role) {
 
   // Priority items per role — most-used actions shown directly in bottom bar
   // Everything else is accessible via the sidebar (More button)
-  const isAcademic = currentUser?.company?.mode === 'academic';
   const PRIORITY = {
-    admin: isAcademic
-      ? ['dashboard', 'sessions', 'users', 'reports']
-      : ['dashboard', 'sign-in-out', 'users', 'reports'],
-    manager:    ['dashboard', 'sessions', 'users', 'reports'],
-    lecturer:   ['dashboard', 'sessions', 'assignments', 'quizzes'],
-    hod:        ['hod-overview', 'hod-courses', 'hod-course-approvals', 'hod-reports'],
-    employee:   ['dashboard', 'sign-in-out', 'my-attendance', 'announcements'],
-    student:    ['dashboard', 'mark-attendance', 'assignments', 'timetable'],
-    superadmin: isAcademic
-      ? ['dashboard', 'sessions', 'users', 'reports']
-      : ['dashboard', 'sign-in-out', 'users', 'reports'],
+    admin: currentUser?.company?.mode === 'academic'
+      ? ['dashboard', 'sessions', 'quizzes', 'reports']
+      : ['dashboard', 'sessions', 'users', 'reports'],
+    manager:    ['dashboard', 'sessions', 'reports', 'users'],
+    lecturer:   ['dashboard', 'sessions', 'quizzes', 'assignments'],
+    hod:        ['hod-overview', 'hod-courses', 'hod-lecturers', 'hod-reports', 'meetings'],
+    employee:   ['dashboard', 'sign-in-out', 'my-attendance', 'reports'],
+    student:    ['dashboard', 'mark-attendance', 'quizzes', 'assignments'],
+    superadmin: currentUser?.company?.mode === 'academic'
+      ? ['dashboard', 'sessions', 'quizzes', 'reports']
+      : ['dashboard', 'sessions', 'users', 'reports'],
   };
 
   const ICONS = {
     dashboard:       '<rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/>',
     sessions:        '<circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>',
     quizzes:         '<path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><rect x="8" y="2" width="8" height="4" rx="1"/><path d="M9 14l2 2 4-4"/>',
+    'quiz-monitor':  '<path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7z"/><circle cx="12" cy="12" r="3"/><circle cx="12" cy="12" r="1" fill="red"/>',
     reports:         '<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/>',
     subscription:    '<rect x="1" y="4" width="22" height="16" rx="2"/><line x1="1" y1="10" x2="23" y2="10"/>',
     users:           '<path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/>',
@@ -14630,7 +16403,6 @@ function buildBottomNav(role) {
     search:          '<circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>',
     profile:         '<path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/>',
     // HOD-specific nav IDs
-    timetable:             '<rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/>',
     'hod-overview':        '<path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/>',
     'hod-sessions':        '<circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>',
     'hod-courses':         '<path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/>',
@@ -14646,10 +16418,12 @@ function buildBottomNav(role) {
 
   const LABELS = {
     'hod-overview': 'Overview', 'hod-sessions': 'Sessions', 'hod-courses': 'Courses', 'hod-lecturers': 'Lecturers',
-    'hod-students': 'Students', 'hod-reports': 'Reports', 'hod-course-approvals': 'Approvals',
+    'hod-students': 'Students', 'hod-reports': 'Reports',
     'sign-in-out': 'Sign In/Out', 'my-attendance': 'Attendance',
     'mark-attendance': 'Attendance', subscription: 'Subscribe',
-    announcements: 'Notices', assignments: 'Work', timetable: 'Timetable',
+    announcements: 'Notices', assignments: 'Assignment',
+    quizzes: 'Proctored/Snap Quiz',
+    'quiz-monitor': 'Quiz Monitor',
   };
 
   const priority = PRIORITY[role] || ['dashboard', 'sessions', 'reports'];
@@ -15563,7 +17337,7 @@ async function renderCorporateAttendance() {
          </a>`
       : '<span style="color:var(--text-light);font-size:11px">—</span>';
 
-    const isAdmin = ['admin', 'superadmin', 'manager'].includes(currentUser?.role);
+    const isAdmin = ['admin', 'superadmin'].includes(currentUser?.role);
 
     const verifiedBadge = v => {
       if (v === true)  return `<span style="color:#16a34a;font-size:12px;font-weight:700">✅ Verified</span>`;
@@ -15711,23 +17485,16 @@ async function _caLoadSettings() {
           <div style="font-size:11px;color:var(--text-light);margin-top:4px">Comma-separated list. Your current IP: <strong id="cas-myip">detecting…</strong></div>
         </div>
 
-        <div style="margin-top:14px">
-          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">
-            <label style="font-size:11px;font-weight:700;text-transform:uppercase;color:var(--text-light)">Office Location (Latitude / Longitude)</label>
-            <button class="btn btn-secondary btn-sm" id="cas-gps-btn" onclick="_caDetectLocation()" style="font-size:11px;padding:4px 10px">📍 Detect My Location</button>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:14px">
+          <div class="form-group">
+            <label style="font-size:11px;font-weight:700;text-transform:uppercase;color:var(--text-light)">Office Latitude</label>
+            <input type="number" id="cas-lat" value="${s.officeLatitude ?? ''}" step="0.000001" placeholder="e.g. 5.603717"
+              style="width:100%;padding:9px 12px;border:1.5px solid var(--border);border-radius:8px;font-size:13px;margin-top:4px">
           </div>
-          <div id="cas-gps-status" style="font-size:11px;color:var(--text-muted);margin-bottom:8px;display:none"></div>
-          <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
-            <div class="form-group">
-              <label style="font-size:11px;font-weight:600;color:var(--text-light)">Latitude</label>
-              <input type="number" id="cas-lat" value="${s.officeLatitude ?? ''}" step="0.000001" placeholder="e.g. 5.603717"
-                style="width:100%;padding:9px 12px;border:1.5px solid var(--border);border-radius:8px;font-size:13px;margin-top:4px">
-            </div>
-            <div class="form-group">
-              <label style="font-size:11px;font-weight:600;color:var(--text-light)">Longitude</label>
-              <input type="number" id="cas-lng" value="${s.officeLongitude ?? ''}" step="0.000001" placeholder="e.g. -0.186964"
-                style="width:100%;padding:9px 12px;border:1.5px solid var(--border);border-radius:8px;font-size:13px;margin-top:4px">
-            </div>
+          <div class="form-group">
+            <label style="font-size:11px;font-weight:700;text-transform:uppercase;color:var(--text-light)">Office Longitude</label>
+            <input type="number" id="cas-lng" value="${s.officeLongitude ?? ''}" step="0.000001" placeholder="e.g. -0.186964"
+              style="width:100%;padding:9px 12px;border:1.5px solid var(--border);border-radius:8px;font-size:13px;margin-top:4px">
           </div>
         </div>
 
@@ -15738,7 +17505,7 @@ async function _caLoadSettings() {
         </div>
 
         <button class="btn btn-primary" style="margin-top:20px" onclick="_caSaveSettings()">Save Settings</button>
-        <button class="btn btn-secondary btn-sm" id="cas-ip-btn" style="margin-top:20px;margin-left:8px" onclick="_caDetectMyIP()">📡 Detect My IP</button>
+        <button class="btn btn-secondary btn-sm" style="margin-top:20px;margin-left:8px" onclick="_caDetectMyIP(true)">📡 Detect My IP</button>
       </div>
 
       <div class="card" style="max-width:560px">
@@ -15808,61 +17575,24 @@ async function _caClearClockWindow() {
   await _caSaveClockWindow();
 }
 
-async function _caDetectMyIP() {
+async function _caDetectMyIP(addToInput = false) {
   const el  = document.getElementById('cas-myip');
-  const btn = document.getElementById('cas-ip-btn');
+  const inp = document.getElementById('cas-ips');
   if (!el) return;
-  el.textContent = 'detecting…';
-  if (btn) { btn.disabled = true; btn.textContent = '⏳ Detecting…'; }
   try {
     const d = await api('/api/corporate-attendance/my-ip');
-    el.textContent = d.ip || 'unknown';
-  } catch {
-    el.textContent = 'unavailable — ensure you are logged in and on the network';
-  } finally {
-    if (btn) { btn.disabled = false; btn.textContent = '📡 Detect My IP'; }
-  }
-}
-
-function _caDetectLocation() {
-  const btn    = document.getElementById('cas-gps-btn');
-  const status = document.getElementById('cas-gps-status');
-  const latEl  = document.getElementById('cas-lat');
-  const lngEl  = document.getElementById('cas-lng');
-  if (!latEl || !lngEl) return;
-
-  if (!navigator.geolocation) {
-    if (status) { status.textContent = 'Geolocation is not supported by this browser.'; status.style.color = 'var(--danger)'; status.style.display = 'block'; }
-    return;
-  }
-
-  if (btn) { btn.disabled = true; btn.textContent = '⏳ Getting GPS…'; }
-  if (status) { status.textContent = 'Requesting precise location from device GPS…'; status.style.color = 'var(--text-muted)'; status.style.display = 'block'; }
-
-  navigator.geolocation.getCurrentPosition(
-    (pos) => {
-      const lat = pos.coords.latitude.toFixed(6);
-      const lng = pos.coords.longitude.toFixed(6);
-      const acc = Math.round(pos.coords.accuracy);
-      latEl.value = lat;
-      lngEl.value = lng;
-      if (status) {
-        status.textContent = `✓ Location set — accuracy ±${acc} m. Click Save Settings to apply.`;
-        status.style.color = 'var(--success,#22c55e)';
+    const ip = d.ip || 'unknown';
+    el.textContent = ip;
+    if (addToInput && inp && ip !== 'unknown') {
+      const existing = inp.value.split(',').map(s => s.trim()).filter(Boolean);
+      if (!existing.includes(ip)) {
+        inp.value = [...existing, ip].join(', ');
+        toastSuccess(`IP ${ip} added to the allowed list — click Save Settings to apply`);
+      } else {
+        toastInfo(`IP ${ip} is already in the list`);
       }
-      if (btn) { btn.disabled = false; btn.textContent = '📍 Detect My Location'; }
-    },
-    (err) => {
-      const msgs = {
-        1: 'Location permission denied. Please allow location access in your browser settings.',
-        2: 'Location unavailable. Make sure GPS is enabled on your device.',
-        3: 'Location request timed out. Try again.',
-      };
-      if (status) { status.textContent = msgs[err.code] || 'Could not get location.'; status.style.color = 'var(--danger)'; }
-      if (btn) { btn.disabled = false; btn.textContent = '📍 Detect My Location'; }
-    },
-    { enableHighAccuracy: true, timeout: 15000, maximumAge: 0 }
-  );
+    }
+  } catch { el.textContent = 'unavailable'; }
 }
 
 async function _caSaveSettings() {
@@ -15887,6 +17617,109 @@ async function _caSaveSettings() {
 }
 
 // ── SHIFTS (Admin/Manager) ─────────────────────────────────────────────────
+// ── Corporate Clock In/Out Settings (direct admin page) ───────────────────
+async function renderCorpClockSettings() {
+  const content = document.getElementById('main-content');
+  if (!content) return;
+  content.innerHTML = '<div class="loading">Loading settings…</div>';
+  try {
+    const [s, win] = await Promise.all([
+      api('/api/corporate-attendance/settings').catch(() => ({})),
+      api('/api/corporate-attendance/clock-window').catch(() => ({})),
+    ]);
+
+    content.innerHTML = `
+      <div class="page-header" style="display:flex;align-items:flex-start;justify-content:space-between;flex-wrap:wrap;gap:12px;">
+        <div>
+          <h2>Clock In / Out Settings</h2>
+          <p>Configure attendance restrictions and allowed clock-in/out time windows.</p>
+        </div>
+        <button class="btn btn-secondary btn-sm" onclick="navigateTo('corp-attendance')">← Team Attendance</button>
+      </div>
+
+      <div class="card" style="max-width:600px;margin-bottom:20px">
+        <h3 style="font-size:15px;font-weight:700;margin-bottom:4px">Strict Attendance Settings</h3>
+        <p style="font-size:12px;color:var(--text-light);margin-bottom:18px">Employees can only clock in when on company WiFi AND inside the office geofence.</p>
+        <div style="display:flex;align-items:center;justify-content:space-between;padding:12px 0;border-bottom:1px solid var(--border)">
+          <div>
+            <div style="font-weight:600;font-size:13px">Require Company WiFi</div>
+            <div style="font-size:11px;color:var(--text-light)">Employees must be on the company IP range to clock in</div>
+          </div>
+          <label style="display:flex;align-items:center;gap:8px;cursor:pointer">
+            <input type="checkbox" id="cas-require-wifi" ${s.requireWifi ? 'checked' : ''} style="width:16px;height:16px;cursor:pointer">
+          </label>
+        </div>
+        <div style="display:flex;align-items:center;justify-content:space-between;padding:12px 0;border-bottom:1px solid var(--border)">
+          <div>
+            <div style="font-weight:600;font-size:13px">Require Geofence</div>
+            <div style="font-size:11px;color:var(--text-light)">Employees must be within the office location radius</div>
+          </div>
+          <label style="display:flex;align-items:center;gap:8px;cursor:pointer">
+            <input type="checkbox" id="cas-require-geo" ${s.requireGeofence ? 'checked' : ''} style="width:16px;height:16px;cursor:pointer">
+          </label>
+        </div>
+        <div style="padding:12px 0;border-bottom:1px solid var(--border)">
+          <div style="font-weight:600;font-size:13px;margin-bottom:6px">Allowed IP Addresses</div>
+          <div style="font-size:11px;color:var(--text-light);margin-bottom:8px">Comma-separated list of allowed IPs (leave blank to allow all)</div>
+          <input id="cas-ips" value="${esc((s.allowedIPs||[]).join(', '))}" placeholder="e.g. 192.168.1.1, 10.0.0.1" style="width:100%;padding:8px 10px;border:1px solid var(--border);border-radius:6px;font-size:13px;font-family:monospace">
+          <div style="margin-top:6px;display:flex;align-items:center;gap:8px;font-size:12px;color:var(--text-muted)">
+            My current IP: <strong id="cas-myip">—</strong>
+            <button onclick="_caDetectMyIP(true)" style="background:#f1f5f9;border:none;border-radius:6px;padding:2px 8px;font-size:11px;cursor:pointer">Detect &amp; Add</button>
+          </div>
+        </div>
+        <div style="padding:12px 0">
+          <div style="font-weight:600;font-size:13px;margin-bottom:6px">Geofence</div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:8px">
+            <div>
+              <label style="font-size:11px;font-weight:700;text-transform:uppercase;color:var(--text-muted)">Latitude</label>
+              <input id="cas-lat" type="number" step="any" value="${s.geofence?.lat||''}" placeholder="e.g. 5.6037" style="width:100%;padding:8px;border:1px solid var(--border);border-radius:6px;font-size:13px">
+            </div>
+            <div>
+              <label style="font-size:11px;font-weight:700;text-transform:uppercase;color:var(--text-muted)">Longitude</label>
+              <input id="cas-lng" type="number" step="any" value="${s.geofence?.lng||''}" placeholder="e.g. -0.1870" style="width:100%;padding:8px;border:1px solid var(--border);border-radius:6px;font-size:13px">
+            </div>
+          </div>
+          <div>
+            <label style="font-size:11px;font-weight:700;text-transform:uppercase;color:var(--text-muted)">Radius (metres)</label>
+            <input id="cas-radius" type="number" value="${s.geofence?.radius||100}" placeholder="100" style="width:120px;padding:8px;border:1px solid var(--border);border-radius:6px;font-size:13px">
+          </div>
+        </div>
+        <button class="btn btn-primary" onclick="_caSaveSettings()" style="margin-top:8px">Save Attendance Settings</button>
+      </div>
+
+      <div class="card" style="max-width:600px">
+        <h3 style="font-size:15px;font-weight:700;margin-bottom:4px">Clock-In / Clock-Out Time Windows</h3>
+        <p style="font-size:12px;color:var(--text-light);margin-bottom:18px">Restrict the times of day when employees can clock in or out. Leave blank for no restriction.</p>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:16px">
+          <div>
+            <div style="font-weight:700;font-size:13px;margin-bottom:8px;color:#0891b2">Clock-In Window</div>
+            <div style="display:flex;gap:8px;align-items:center;margin-bottom:6px">
+              <input type="time" id="cw-ci-start" value="${win.clockIn?.start||''}" style="flex:1;padding:7px;border:1px solid var(--border);border-radius:6px;font-size:13px">
+              <span style="color:var(--text-muted)">to</span>
+              <input type="time" id="cw-ci-end"   value="${win.clockIn?.end  ||''}" style="flex:1;padding:7px;border:1px solid var(--border);border-radius:6px;font-size:13px">
+            </div>
+          </div>
+          <div>
+            <div style="font-weight:700;font-size:13px;margin-bottom:8px;color:#7c3aed">Clock-Out Window</div>
+            <div style="display:flex;gap:8px;align-items:center;margin-bottom:6px">
+              <input type="time" id="cw-co-start" value="${win.clockOut?.start||''}" style="flex:1;padding:7px;border:1px solid var(--border);border-radius:6px;font-size:13px">
+              <span style="color:var(--text-muted)">to</span>
+              <input type="time" id="cw-co-end"   value="${win.clockOut?.end  ||''}" style="flex:1;padding:7px;border:1px solid var(--border);border-radius:6px;font-size:13px">
+            </div>
+          </div>
+        </div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap">
+          <button class="btn btn-primary" onclick="_caSaveClockWindow()">Save Time Windows</button>
+          <button class="btn btn-secondary" onclick="_caClearClockWindow()">Clear All Windows</button>
+        </div>
+      </div>`;
+
+    _caDetectMyIP(false);
+  } catch(e) {
+    content.innerHTML = `<div class="card"><p style="color:var(--danger)">${esc(e.message)}</p></div>`;
+  }
+}
+
 async function renderShifts() {
   const content = document.getElementById('main-content');
   if (!content) return;
@@ -16434,6 +18267,58 @@ async function renderEmpNotifications() {
                 <div style="font-size:12px;color:var(--text-muted);line-height:1.5">${esc(n.body)}</div>
               </div>
               ${n.action ? `<button class="btn btn-sm" style="background:var(--card);border:1px solid var(--border);flex-shrink:0;font-size:12px" onclick="${n.action.fn}">${n.action.label}</button>` : ''}
+            </div>`;
+          }).join('')}
+    `;
+  } catch(e) {
+    content.innerHTML = `<div class="card"><p style="color:#ef4444">Error: ${e.message}</p></div>`;
+  }
+}
+
+// ── Universal Notifications page (all roles) ─────────────────────────────────
+async function renderAllNotifications() {
+  const content = document.getElementById('main-content');
+  if (!content) return;
+  content.innerHTML = '<div class="loading">Loading notifications…</div>';
+  try {
+    const d = await api('/api/notifications?limit=50');
+    const notifs = d.notifications || [];
+    const typeStyles = {
+      ok:      { bg: '#f0fdf4', border: '#86efac' },
+      success: { bg: '#f0fdf4', border: '#86efac' },
+      warn:    { bg: '#fffbeb', border: '#fde68a' },
+      warning: { bg: '#fffbeb', border: '#fde68a' },
+      error:   { bg: '#fef2f2', border: '#fca5a5' },
+      info:    { bg: '#eff6ff', border: '#bfdbfe' },
+    };
+    const iconFor = t => t === 'ok' || t === 'success' ? '✅' : t === 'warn' || t === 'warning' ? '⚠️' : t === 'error' ? '❌' : '🔔';
+    const timeAgo = iso => {
+      const s = Math.floor((Date.now() - new Date(iso)) / 1000);
+      if (s < 60) return 'Just now';
+      if (s < 3600) return `${Math.floor(s/60)}m ago`;
+      if (s < 86400) return `${Math.floor(s/3600)}h ago`;
+      return new Date(iso).toLocaleDateString('en-GB', { day:'2-digit', month:'short' });
+    };
+    content.innerHTML = `
+      <div class="page-header">
+        <div><h2>Notifications</h2><p>${notifs.length} notification${notifs.length !== 1 ? 's' : ''}</p></div>
+        <button class="btn btn-secondary btn-sm" onclick="markAllNotifsRead();this.disabled=true;this.textContent='Marked'">Mark all read</button>
+      </div>
+      ${notifs.length === 0
+        ? `<div class="card" style="text-align:center;padding:48px 24px">
+            <div style="font-size:40px;margin-bottom:16px">🔔</div>
+            <div style="font-weight:600;font-size:15px;margin-bottom:6px">All clear!</div>
+            <p style="color:var(--text-muted);font-size:13px">No notifications right now.</p>
+          </div>`
+        : notifs.map(n => {
+            const st = typeStyles[n.type] || typeStyles.info;
+            return `<div style="background:${st.bg};border:1px solid ${st.border};border-radius:10px;padding:14px 16px;margin-bottom:10px;display:flex;gap:12px;align-items:flex-start${n.read ? ';opacity:0.7' : ''}">
+              <span style="font-size:20px;flex-shrink:0;margin-top:1px">${iconFor(n.type)}</span>
+              <div style="flex:1;min-width:0">
+                <div style="font-weight:700;font-size:13px;margin-bottom:3px">${esc(n.title || '')}</div>
+                <div style="font-size:12px;color:var(--text-muted);line-height:1.5">${esc(n.body || n.message || '')}</div>
+                <div style="font-size:11px;color:var(--text-light);margin-top:4px">${n.createdAt ? timeAgo(n.createdAt) : ''}</div>
+              </div>
             </div>`;
           }).join('')}
     `;
@@ -18043,7 +19928,7 @@ async function renderMyPerformance() {
       if (!window.Chart) {
         await new Promise((res, rej) => {
           const s = document.createElement('script');
-          s.src = 'https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js';
+          s.src = 'https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js';
           s.onload = res; s.onerror = rej;
           document.head.appendChild(s);
         });
@@ -19222,1180 +21107,74 @@ async function deleteBranch(id) {
 }
 
 // ══════════════════════════════════════════════════════════════
-// CLASS REPS (Admin)
+// AUDIT LOGS (manager + admin view)
 // ══════════════════════════════════════════════════════════════
-async function renderClassReps() {
-  const content = document.getElementById('main-content');
-  content.innerHTML = '<div class="loading">Loading…</div>';
-  const esc = s => s == null ? '' : String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
-
-  async function load() {
-    const { reps } = await api('/api/class-rep-admin/list');
-    content.innerHTML = `
-      <div class="page-header" style="display:flex;align-items:flex-start;justify-content:space-between;flex-wrap:wrap;gap:10px">
-        <div>
-          <h2>Class Representatives</h2>
-          <p>Assign or remove class rep roles for students</p>
-        </div>
-        <button class="btn btn-primary btn-sm" onclick="showAssignRepModal()">+ Assign Rep</button>
-      </div>
-
-      <div class="card" style="margin-bottom:20px;padding:14px 18px">
-        <div style="font-size:15px;font-weight:700">${reps.length} Class Representative${reps.length !== 1 ? 's' : ''}</div>
-        <div style="font-size:12px;color:var(--text-muted);margin-top:2px">Max 2 per class group</div>
-      </div>
-
-      ${reps.length === 0 ? `
-        <div class="card" style="text-align:center;padding:48px;color:var(--text-muted)">
-          <div style="font-size:36px;margin-bottom:12px">👥</div>
-          <div style="font-size:16px;font-weight:600;margin-bottom:6px">No class representatives assigned yet</div>
-          <div style="font-size:13px;margin-bottom:16px">Use "Assign Rep" to search for a student and appoint them.</div>
-          <button class="btn btn-primary btn-sm" onclick="showAssignRepModal()">+ Assign Rep</button>
-        </div>
-      ` : `
-        <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:14px">
-          ${reps.map(r => {
-            const initials = (r.name||'?')[0].toUpperCase();
-            const level = r.studentLevel ? `L${esc(r.studentLevel)}` : '';
-            const grp   = r.studentGroup ? `Gr ${esc(r.studentGroup)}` : '';
-            const badge = [level, grp].filter(Boolean).join(' · ');
-            return `
-            <div class="card" style="padding:0;overflow:hidden">
-              <div style="padding:14px 16px;display:flex;align-items:center;gap:12px;border-bottom:1px solid var(--border)">
-                <div style="width:40px;height:40px;border-radius:50%;background:rgba(79,110,247,.15);display:flex;align-items:center;justify-content:center;font-size:16px;font-weight:800;color:var(--accent);flex-shrink:0">${initials}</div>
-                <div style="flex:1;min-width:0">
-                  <div style="font-size:14px;font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(r.name)}</div>
-                  <div style="font-size:11px;color:var(--text-muted)">${esc(r.IndexNumber||'—')}</div>
-                </div>
-                <span style="font-size:10px;font-weight:700;padding:3px 9px;border-radius:20px;background:rgba(22,163,74,.12);color:#16a34a;white-space:nowrap">Class Rep</span>
-              </div>
-              <div style="padding:12px 16px;display:grid;gap:6px">
-                ${r.programme ? `<div style="font-size:12px"><span style="color:var(--text-muted)">Programme:</span> <strong>${esc(r.programme)}</strong></div>` : ''}
-                ${badge ? `<div style="font-size:12px"><span style="color:var(--text-muted)">Class:</span> <strong>${badge}</strong></div>` : ''}
-                ${r.sessionType ? `<div style="font-size:12px"><span style="color:var(--text-muted)">Session:</span> <strong>${esc(r.sessionType)}</strong></div>` : ''}
-                ${r.department ? `<div style="font-size:12px"><span style="color:var(--text-muted)">Dept:</span> <strong>${esc(r.department)}</strong></div>` : ''}
-              </div>
-              <div style="padding:10px 16px;border-top:1px solid var(--border);display:flex;gap:8px">
-                <button class="btn btn-sm" style="flex:1;background:rgba(79,110,247,.1);color:#4f6ef7;border:1px solid rgba(79,110,247,.2)"
-                  onclick="showAssignRepToDeviceModal('${r._id}','${esc(r.name)}')">Assign to Device</button>
-                <button class="btn btn-sm" style="flex:1;background:rgba(239,68,68,.1);color:#ef4444;border:1px solid rgba(239,68,68,.2)"
-                  onclick="removeClassRep('${r._id}','${esc(r.name)}')">Remove as Class Rep</button>
-              </div>
-            </div>`;
-          }).join('')}
-        </div>
-      `}
-    `;
-  }
-
-  try { await load(); } catch(e) {
-    content.innerHTML = `<div class="card" style="color:#ef4444">Failed to load class reps: ${e.message}</div>`;
-  }
-}
-
-async function removeClassRep(userId, name) {
-  if (!confirm(`Remove ${name} as class representative?`)) return;
-  try {
-    await api(`/api/class-rep-admin/remove/${userId}`, { method: 'DELETE' });
-    toastSuccess(`${name} removed as class rep`);
-    renderClassReps();
-  } catch(e) { toastError(e.message || 'Failed to remove'); }
-}
-
-async function showAssignRepToDeviceModal(repId, repName) {
-  openModal(`<div style="text-align:center;padding:16px 0"><div class="loading" style="margin:0 auto"></div><p style="color:var(--text-muted);font-size:13px;margin-top:10px">Loading devices…</p></div>`);
-  let devices = [];
-  try {
-    const data = await api('/api/devices/all');
-    devices = data.devices || [];
-  } catch(e) {
-    openModal(`<div style="padding:8px 0"><p style="color:#ef4444">Failed to load devices: ${e.message}</p><button class="btn btn-sm" onclick="closeModal()" style="margin-top:12px;width:100%">Close</button></div>`);
-    return;
-  }
-
-  const esc = s => s == null ? '' : String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
-  const dotColor = d => d.online ? '#16a34a' : '#9ca3af';
-
-  const deviceRows = devices.length === 0
-    ? `<p style="color:var(--text-muted);font-size:13px;text-align:center;padding:18px 0">No devices registered yet.</p>`
-    : devices.map(d => `
-      <div style="display:flex;align-items:center;gap:10px;padding:10px 12px;border-radius:9px;border:1.5px solid var(--border);margin-bottom:8px;cursor:pointer;transition:border-color .15s"
-        onmouseover="this.style.borderColor='#4f6ef7'" onmouseout="this.style.borderColor='var(--border)'"
-        onclick="_doAssignRepToDevice('${esc(d._id || d.deviceId)}','${esc(repId)}','${esc(repName)}','${esc(d.deviceName || d.name || 'Device')}')">
-        <span style="width:9px;height:9px;border-radius:50%;background:${dotColor(d)};flex-shrink:0;box-shadow:0 0 0 3px ${d.online ? 'rgba(22,163,74,.18)' : 'transparent'}"></span>
-        <div style="flex:1;min-width:0">
-          <div style="font-size:13px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(d.deviceName || d.name || 'Unnamed Device')}</div>
-          <div style="font-size:11px;color:var(--text-muted)">${esc(d.deviceId || d._id)} · ${d.online ? 'Online' : 'Offline'}</div>
-          ${d.classRep ? `<div style="font-size:10px;color:#f59e0b;margin-top:1px">Currently: ${esc(d.classRep?.name || 'another rep')}</div>` : ''}
-        </div>
-        <svg viewBox="0 0 24 24" fill="none" stroke="#4f6ef7" stroke-width="2" width="14" height="14"><polyline points="9 18 15 12 9 6"/></svg>
-      </div>`).join('');
-
-  openModal(`
-    <div>
-      <div style="display:flex;align-items:center;gap:9px;margin-bottom:14px">
-        <div style="width:34px;height:34px;border-radius:9px;background:rgba(79,110,247,.1);display:flex;align-items:center;justify-content:center;flex-shrink:0">
-          <svg viewBox="0 0 24 24" fill="none" stroke="#4f6ef7" stroke-width="2" width="16" height="16"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/></svg>
-        </div>
-        <div>
-          <h3 style="font-size:15px;font-weight:700;margin:0">Assign to Device</h3>
-          <p style="font-size:11px;color:var(--text-muted);margin:2px 0 0">Pick a device for <strong>${esc(repName)}</strong></p>
-        </div>
-      </div>
-      <div style="max-height:340px;overflow-y:auto">${deviceRows}</div>
-      <button onclick="closeModal()" style="margin-top:10px;width:100%;padding:10px;border-radius:9px;border:1.5px solid var(--border);background:transparent;color:var(--text-muted);font-size:13px;font-weight:600;cursor:pointer">Cancel</button>
-    </div>
-  `);
-}
-
-async function _doAssignRepToDevice(deviceId, repId, repName, deviceName) {
-  try {
-    await api(`/api/devices/${encodeURIComponent(deviceId)}/assign-class-rep`, {
-      method: 'PATCH',
-      body: JSON.stringify({ classRepId: repId }),
-    });
-    closeModal();
-    toastSuccess(`${repName} assigned to ${deviceName}`);
-    renderClassReps();
-  } catch(e) {
-    toastError(e.message || 'Failed to assign rep to device');
-  }
-}
-
-function _buildAssignRepModal({ title, subtitle, onSearch, isHod }) {
-  const hodDept = isHod ? (currentUser?.department || '') : '';
-  const selStyle = 'width:100%;padding:8px 10px;border:1.5px solid var(--border);border-radius:8px;background:var(--bg);color:var(--text-primary);font-size:12px;margin-top:3px';
-  const labelStyle = 'font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--text-muted)';
-  openModal(`
-    <div>
-      <div style="display:flex;align-items:center;gap:9px;margin-bottom:14px">
-        <div style="width:34px;height:34px;border-radius:9px;background:rgba(124,58,237,.1);display:flex;align-items:center;justify-content:center;flex-shrink:0">
-          <svg viewBox="0 0 24 24" fill="none" stroke="#7c3aed" stroke-width="2" width="16" height="16"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
-        </div>
-        <div>
-          <h3 style="font-size:15px;font-weight:700;margin:0">${title}</h3>
-          ${subtitle ? `<p style="font-size:11px;color:var(--text-muted);margin:2px 0 0">${subtitle}</p>` : ''}
-        </div>
-      </div>
-      <div style="background:var(--bg);border-radius:10px;padding:12px;border:1px solid var(--border);margin-bottom:12px">
-        <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.6px;color:var(--text-muted);margin-bottom:10px">Filter Students</div>
-        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px">
-          ${!isHod ? `
-          <div style="grid-column:1/-1">
-            <label style="${labelStyle}">Department</label>
-            <input type="text" id="rep-modal-dept" placeholder="e.g. Computer Science" oninput="${onSearch}" style="${selStyle}">
-          </div>` : `
-          <div style="grid-column:1/-1;padding:7px 10px;background:rgba(79,110,247,.06);border-radius:7px;border-left:3px solid #4f6ef7;font-size:11px;color:var(--text-muted)">
-            Showing students in your department: <strong style="color:var(--text-primary)">${hodDept}</strong>
-          </div>`}
-          <div>
-            <label style="${labelStyle}">Level / Year</label>
-            <select id="rep-modal-level" onchange="${onSearch}" style="${selStyle}">
-              <option value="">Any level</option>
-              <option value="100">Year 1 (100)</option>
-              <option value="200">Year 2 (200)</option>
-              <option value="300">Year 3 (300)</option>
-              <option value="400">Year 4 (400)</option>
-              <option value="500">Year 5 (500)</option>
-            </select>
-          </div>
-          <div>
-            <label style="${labelStyle}">Group</label>
-            <select id="rep-modal-group" onchange="${onSearch}" style="${selStyle}">
-              <option value="">Any group</option>
-              <option value="A">Group A</option>
-              <option value="B">Group B</option>
-              <option value="C">Group C</option>
-              <option value="D">Group D</option>
-            </select>
-          </div>
-        </div>
-        <div>
-          <label style="${labelStyle}">Name or Index Number</label>
-          <input type="text" id="rep-modal-search" placeholder="Search by name or index number…" oninput="${onSearch}" style="${selStyle}">
-        </div>
-      </div>
-      <div style="font-size:11px;color:var(--text-muted);margin-bottom:8px">Use filters to narrow the list, then click <strong>Assign</strong> on the correct student.</div>
-      <div id="rep-modal-results" style="max-height:280px;overflow-y:auto"></div>
-    </div>
-  `, { maxWidth: '560px' });
-}
-
-function _renderRepStudentResults(students, assignFn) {
-  const e2 = s => s == null ? '' : String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
-  const box = document.getElementById('rep-modal-results');
-  if (!box) return;
-  if (!students.length) { box.innerHTML = '<div style="color:var(--text-muted);font-size:13px;padding:10px 0;text-align:center">No students found matching these filters.</div>'; return; }
-  box.innerHTML = students.slice(0, 15).map(s => {
-    const initials = (s.name || '?')[0].toUpperCase();
-    const alreadyRep = s.isClassRep;
-    return `
-    <div style="display:flex;align-items:center;gap:10px;padding:10px 12px;border-radius:10px;border:1.5px solid ${alreadyRep ? 'rgba(22,163,74,.2)' : 'var(--border)'};margin-bottom:7px;background:${alreadyRep ? 'rgba(22,163,74,.04)' : 'var(--bg)'}">
-      <div style="width:36px;height:36px;border-radius:50%;background:rgba(124,58,237,.1);display:flex;align-items:center;justify-content:center;flex-shrink:0;font-size:13px;font-weight:800;color:#7c3aed">${initials}</div>
-      <div style="flex:1;min-width:0">
-        <div style="font-size:13px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${e2(s.name)}</div>
-        <div style="display:flex;flex-wrap:wrap;gap:4px;margin-top:3px">
-          ${s.IndexNumber ? `<span style="font-size:10px;font-weight:600;padding:1px 6px;border-radius:5px;background:rgba(79,110,247,.08);color:#4f6ef7">${e2(s.IndexNumber)}</span>` : ''}
-          ${s.studentLevel ? `<span style="font-size:10px;padding:1px 6px;border-radius:5px;background:var(--border);color:var(--text-muted)">Level ${e2(s.studentLevel)}</span>` : ''}
-          ${s.studentGroup ? `<span style="font-size:10px;padding:1px 6px;border-radius:5px;background:var(--border);color:var(--text-muted)">Group ${e2(s.studentGroup)}</span>` : ''}
-          ${s.department   ? `<span style="font-size:10px;padding:1px 6px;border-radius:5px;background:var(--border);color:var(--text-muted)">${e2(s.department)}</span>` : ''}
-          ${s.programme    ? `<span style="font-size:10px;padding:1px 6px;border-radius:5px;background:var(--border);color:var(--text-muted)">${e2(s.programme)}</span>` : ''}
-        </div>
-      </div>
-      <div style="flex-shrink:0">
-        ${alreadyRep
-          ? `<span style="display:inline-flex;align-items:center;gap:4px;font-size:11px;font-weight:600;padding:4px 9px;border-radius:20px;background:rgba(22,163,74,.1);color:#15803d"><svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="20 6 9 17 4 12"/></svg>Rep</span>`
-          : `<button class="btn btn-primary btn-sm" style="font-size:11px;padding:5px 12px" onclick="${assignFn}('${s._id}','${e2(s.name).replace(/'/g,"\\'")}')">Assign</button>`}
-      </div>
-    </div>`;
-  }).join('');
-}
-
-async function showAssignRepModal() {
-  const isHod = currentUser?.role === 'hod';
-  _buildAssignRepModal({ title: 'Assign Class Representative', isHod, onSearch: 'searchRepStudents()' });
-  if (isHod) searchRepStudents();
-}
-
-let _repSearchTimer;
-async function searchRepStudents() {
-  clearTimeout(_repSearchTimer);
-  _repSearchTimer = setTimeout(async () => {
-    const box = document.getElementById('rep-modal-results');
-    if (!box) return;
-    const q     = (document.getElementById('rep-modal-search')?.value || '').trim();
-    const level = document.getElementById('rep-modal-level')?.value || '';
-    const group = document.getElementById('rep-modal-group')?.value || '';
-    const dept  = document.getElementById('rep-modal-dept')?.value?.trim() || '';
-    const isHod = currentUser?.role === 'hod';
-    if (!q && !level && !group && !dept && !isHod) {
-      box.innerHTML = '<div style="color:var(--text-muted);font-size:13px;padding:10px 0;text-align:center">Enter a name, index number, or select a filter to search.</div>';
-      return;
-    }
-    box.innerHTML = '<div style="color:var(--text-muted);font-size:13px;padding:8px 0">Searching…</div>';
-    try {
-      const params = new URLSearchParams();
-      if (q)     params.set('indexNumber', q);
-      if (level) params.set('level', level);
-      if (group) params.set('group', group);
-      if (dept)  params.set('department', dept);
-      const { students } = await api(`/api/class-rep-admin/students?${params.toString()}`);
-      _renderRepStudentResults(students, 'doAssignRep');
-    } catch(e) { box.innerHTML = `<div style="color:#ef4444;font-size:13px">${e.message}</div>`; }
-  }, 300);
-}
-
-async function doAssignRep(studentId, name) {
-  try {
-    await api('/api/class-rep-admin/assign', { method: 'POST', body: JSON.stringify({ studentId }) });
-    closeModal();
-    toastSuccess(`${name} assigned as class representative`);
-    renderClassReps();
-  } catch(e) { toastError(e.message || 'Failed to assign'); }
-}
-
-// ══════════════════════════════════════════════════════════════
-// ADMIN DEVICES
-// ══════════════════════════════════════════════════════════════
-// ══════════════════════════════════════════════════════════════
-// HOD DEVICES — rich card management view
-// ══════════════════════════════════════════════════════════════
-async function renderHodDevices() {
+async function renderAuditLogs() {
   const content = document.getElementById('main-content');
   if (!content) return;
-  content.innerHTML = '<div class="loading">Loading devices…</div>';
+  content.innerHTML = '<div class="loading">Loading audit logs…</div>';
+  try {
+    const params = new URLSearchParams({ limit: 50 });
+    const data = await api('/api/audit-logs?' + params.toString());
+    const logs = data.logs || data.data || [];
+    const total = data.total || logs.length;
 
-  const esc = s => s == null ? '' : String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
-  const timeAgo = d => {
-    if (!d) return 'Never';
-    const m = Math.floor((Date.now() - new Date(d)) / 60000);
-    if (m < 1) return 'Just now';
-    if (m < 60) return `${m}m ago`;
-    if (m < 1440) return `${Math.floor(m/60)}h ${Math.floor(m%60)}m ago`;
-    return `${Math.floor(m/1440)}d ago`;
-  };
+    const severityColor = s => ({ critical: '#dc2626', high: '#ea580c', medium: '#d97706', low: '#2563eb', info: '#6b7280' }[s] || '#6b7280');
+    const severityBg    = s => ({ critical: '#fef2f2', high: '#fff7ed', medium: '#fffbeb', low: '#eff6ff', info: '#f9fafb' }[s] || '#f9fafb');
 
-  const render = async () => {
-    try {
-      const { devices } = await api('/api/devices/all');
-      const online  = devices.filter(d => d.online).length;
-      const offline = devices.length - online;
-      const now     = new Date().toLocaleTimeString([], { hour:'2-digit', minute:'2-digit' });
-      const instCode = currentUser?.company?.institutionCode || currentUser?.company?.code || currentUser?.institutionCode || '—';
-
-      content.innerHTML = `
-        <div class="page-header" style="display:flex;align-items:flex-start;justify-content:space-between;flex-wrap:wrap;gap:10px">
+    content.innerHTML = `
+      <div style="max-width:900px;margin:0 auto">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px;flex-wrap:wrap;gap:10px">
           <div>
-            <h2>Classroom Devices</h2>
-            <p>Manage and provision ESP32 attendance devices</p>
+            <h2 style="font-size:20px;font-weight:800;margin:0 0 2px">Audit Logs</h2>
+            <p style="color:#64748b;font-size:13px;margin:0">${total.toLocaleString()} records</p>
           </div>
-          <button class="btn btn-primary btn-sm" onclick="hodGeneratePairingCode()">+ Generate Pairing Code</button>
-        </div>
-
-        <!-- Institution code + security info cards -->
-        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px;margin-bottom:20px">
-          <div class="card" style="padding:18px 20px">
-            <div style="font-size:10px;font-weight:700;letter-spacing:.8px;text-transform:uppercase;color:var(--text-muted);margin-bottom:8px">Institution Code</div>
-            <div style="font-size:28px;font-weight:900;letter-spacing:6px;font-family:monospace;margin-bottom:10px">${esc(instCode)}</div>
-            <div style="font-size:12px;color:var(--text-muted);margin-bottom:10px">Class Rep needs this + a pairing code to set up a device. Keep it confidential.</div>
-            <button class="btn btn-secondary btn-sm" onclick="navigator.clipboard.writeText('${esc(instCode)}').then(()=>showToastNotif('Code copied!','success'))">Copy</button>
-          </div>
-          <div class="card" style="padding:18px 20px;display:flex;align-items:flex-start;gap:14px">
-            <div style="width:40px;height:40px;border-radius:10px;background:#ede9fe;display:flex;align-items:center;justify-content:center;flex-shrink:0">
-              <svg viewBox="0 0 24 24" fill="none" stroke="#7c3aed" stroke-width="2" width="20" height="20"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
-            </div>
-            <div>
-              <div style="font-weight:700;font-size:14px;margin-bottom:4px">Device pairing is secure</div>
-              <div style="font-size:12px;color:var(--text-muted)">JWT-authenticated · Company-isolated</div>
-            </div>
+          <div style="display:flex;gap:8px;flex-wrap:wrap">
+            <select id="al-severity" onchange="renderAuditLogs()" style="padding:7px 10px;border:1.5px solid #e2e8f0;border-radius:8px;font-size:13px">
+              <option value="">All severities</option>
+              <option value="critical">Critical</option>
+              <option value="high">High</option>
+              <option value="medium">Medium</option>
+              <option value="low">Low</option>
+              <option value="info">Info</option>
+            </select>
+            <input id="al-from" type="date" onchange="renderAuditLogs()" style="padding:7px 10px;border:1.5px solid #e2e8f0;border-radius:8px;font-size:13px">
+            <input id="al-to"   type="date" onchange="renderAuditLogs()" style="padding:7px 10px;border:1.5px solid #e2e8f0;border-radius:8px;font-size:13px">
           </div>
         </div>
 
-        <!-- Paired devices header -->
-        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
-          <div style="font-size:13px;font-weight:600">
-            Paired Devices <span style="color:var(--text-muted);font-weight:400">${devices.length}</span>
-          </div>
-          <div style="display:flex;align-items:center;gap:8px">
-            <span style="font-size:12px;color:var(--text-muted)">Updated ${now}</span>
-            <button class="btn btn-secondary btn-sm" onclick="renderHodDevices()">↻ Refresh</button>
-          </div>
-        </div>
-
-        ${devices.length === 0 ? `
-          <div class="card" style="text-align:center;padding:48px;color:var(--text-muted)">
-            <div style="font-size:36px;margin-bottom:12px">📡</div>
-            <div style="font-size:16px;font-weight:600;margin-bottom:6px">No Devices Paired</div>
-            <div style="font-size:13px">Lecturers can pair an ESP32 device from their Attendance Device page.</div>
-          </div>
-        ` : `
-          <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(320px,1fr));gap:16px">
-            ${devices.map(d => {
-              const devId   = esc(d.deviceId);
-              const devName = esc(d.deviceName || d.deviceId);
-              const isOnline = d.online;
-              const lecturer = d.pairedBy?.name || d.lecturerName || null;
-              const dept     = d.pairedBy?.department || null;
-              const group    = d.assignedGroup ? `Gr ${esc(d.assignedGroup)} · L${esc(d.assignedLevel||'?')}` : null;
-              const classRep = d.classRepId?.name || null;
-              const ip       = d.localIp || null;
-              const fw       = d.firmwareVersion || null;
-              const chipId   = d.chipId || d.deviceId;
-
-              return `
-              <div class="card" style="padding:0;overflow:hidden" id="hod-dev-card-${devId}">
-                <!-- Card header -->
-                <div style="padding:14px 16px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;gap:8px">
-                  <div style="display:flex;align-items:center;gap:10px;min-width:0">
-                    <div style="width:38px;height:38px;border-radius:10px;background:${isOnline ? '#dcfce7' : 'var(--bg)'};display:flex;align-items:center;justify-content:center;flex-shrink:0">
-                      <svg viewBox="0 0 24 24" fill="none" stroke="${isOnline ? '#16a34a' : '#9ca3af'}" stroke-width="2" width="18" height="18"><rect x="5" y="2" width="14" height="20" rx="2" ry="2"/><line x1="12" y1="18" x2="12.01" y2="18"/></svg>
+        ${!logs.length ? `
+          <div style="text-align:center;padding:48px;background:#f8fafc;border-radius:14px;border:1.5px dashed #e2e8f0">
+            <div style="font-size:36px;margin-bottom:10px">📋</div>
+            <p style="font-weight:700;margin-bottom:4px">No audit logs found</p>
+            <p style="color:#64748b;font-size:13px">Actions taken in the system will appear here.</p>
+          </div>` : `
+          <div style="display:flex;flex-direction:column;gap:8px">
+            ${logs.map(log => `
+              <div style="background:#fff;border:1.5px solid #e2e8f0;border-left:4px solid ${severityColor(log.severity)};border-radius:10px;padding:12px 16px">
+                <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:10px;flex-wrap:wrap">
+                  <div style="flex:1;min-width:0">
+                    <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px;flex-wrap:wrap">
+                      <span style="font-size:11px;font-weight:700;padding:2px 8px;border-radius:999px;background:${severityBg(log.severity)};color:${severityColor(log.severity)}">${(log.severity || 'info').toUpperCase()}</span>
+                      <span style="font-size:12px;font-weight:700;color:#1e293b">${esc(log.action || '—')}</span>
+                      ${log.resource ? `<span style="font-size:11px;color:#64748b">${esc(log.resource)}</span>` : ''}
                     </div>
-                    <div style="min-width:0">
-                      <div style="font-weight:700;font-size:14px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="${devName}">${devName}</div>
-                      <div style="font-size:11px;color:var(--text-muted);font-family:monospace">${esc(chipId)}</div>
-                    </div>
+                    <div style="font-size:13px;color:#334155">${esc(log.description || log.details || '—')}</div>
+                    ${log.actor?.name ? `<div style="font-size:12px;color:#64748b;margin-top:4px">By <strong>${esc(log.actor.name)}</strong>${log.actor.email ? ` (${esc(log.actor.email)})` : ''}</div>` : ''}
                   </div>
-                  <span style="flex-shrink:0;display:inline-flex;align-items:center;gap:5px;font-size:11px;font-weight:700;padding:3px 8px;border-radius:20px;background:${isOnline ? '#dcfce7' : 'var(--bg)'};color:${isOnline ? '#16a34a' : '#9ca3af'}">
-                    <span style="width:6px;height:6px;border-radius:50%;background:${isOnline ? '#16a34a' : '#9ca3af'}"></span>
-                    ${isOnline ? 'Online' : 'Offline'}
-                  </span>
+                  <div style="font-size:11px;color:#94a3b8;white-space:nowrap">${log.createdAt ? new Date(log.createdAt).toLocaleString() : '—'}</div>
                 </div>
-
-                <!-- Details -->
-                <div style="padding:12px 16px;display:grid;gap:8px;font-size:13px">
-                  ${lecturer ? `
-                  <div style="display:flex;justify-content:space-between;align-items:center">
-                    <span style="color:var(--text-muted)">Paired By</span>
-                    <span style="font-weight:500;text-align:right">
-                      ${esc(lecturer)}
-                      ${dept ? `<span style="margin-left:4px;font-size:11px;padding:2px 6px;border-radius:10px;background:#ede9fe;color:#7c3aed;font-weight:600">${esc(dept)}</span>` : ''}
-                    </span>
-                  </div>` : ''}
-                  ${group ? `
-                  <div style="display:flex;justify-content:space-between;align-items:center">
-                    <span style="color:var(--text-muted)">Class / Level</span>
-                    <span style="font-weight:500">${group}</span>
-                  </div>` : ''}
-                  ${classRep ? `
-                  <div style="display:flex;justify-content:space-between;align-items:center">
-                    <span style="color:var(--text-muted)">Class Rep</span>
-                    <span style="font-weight:500">${esc(classRep)}</span>
-                  </div>` : ''}
-                  ${ip ? `
-                  <div style="display:flex;justify-content:space-between;align-items:center">
-                    <span style="color:var(--text-muted)">IP Address</span>
-                    <span style="font-family:monospace;font-size:12px">${esc(ip)}</span>
-                  </div>` : ''}
-                  ${fw ? `
-                  <div style="display:flex;justify-content:space-between;align-items:center">
-                    <span style="color:var(--text-muted)">Firmware</span>
-                    <span style="font-size:12px;color:var(--text-muted)">${esc(fw)}</span>
-                  </div>` : ''}
-                  <div style="display:flex;justify-content:space-between;align-items:center">
-                    <span style="color:var(--text-muted)">Last Seen</span>
-                    <span style="color:var(--text-muted)">${timeAgo(d.lastHeartbeat)}</span>
-                  </div>
-                </div>
-
-                <!-- Action buttons -->
-                <div style="padding:10px 16px 14px;display:flex;gap:8px;flex-wrap:wrap;border-top:1px solid var(--border)">
-                  <button class="btn btn-primary btn-sm" onclick="hodAssignClassRep('${devId}', '${devName.replace(/'/g,'\\&#39;')}')">👤 Assign Class Rep</button>
-                  <button class="btn btn-secondary btn-sm" onclick="hodRenameDevice('${devId}', '${devName.replace(/'/g,'\\&#39;')}')">✏ Rename</button>
-                  <button class="btn btn-secondary btn-sm" onclick="hodSetupDevice('${devId}')">⚙ Setup</button>
-                  <button class="btn btn-sm" style="background:#fff7ed;color:#c2410c;border:1px solid #fed7aa" onclick="hodFactoryReset('${devId}', '${devName.replace(/'/g,'\\&#39;')}')">↺ Factory Reset</button>
-                  <button class="btn btn-danger btn-sm" onclick="hodRemoveDevice('${devId}', '${devName.replace(/'/g,'\\&#39;')}')">✕ Remove</button>
-                </div>
-              </div>`;
-            }).join('')}
+              </div>`).join('')}
           </div>
+          ${total > 50 ? `<p style="text-align:center;color:#64748b;font-size:13px;margin-top:16px">Showing 50 of ${total.toLocaleString()} entries. Use filters to narrow results.</p>` : ''}
         `}
-      `;
-    } catch (e) {
-      content.innerHTML = `<div class="card" style="color:#ef4444;padding:20px">Failed to load devices: ${esc(e.message)}</div>`;
-    }
-  };
-
-  await render();
-}
-
-window.hodGeneratePairingCode = async () => {
-  try {
-    const data = await api('/api/devices/pairing-code', { method: 'POST' });
-    const code = data.pairingCode || data.code || '—';
-    openModal(`
-      <div style="text-align:center;padding:8px 0">
-        <div style="width:48px;height:48px;border-radius:12px;background:#ede9fe;display:flex;align-items:center;justify-content:center;margin:0 auto 16px">
-          <svg viewBox="0 0 24 24" fill="none" stroke="#7c3aed" stroke-width="2" width="24" height="24"><rect x="5" y="2" width="14" height="20" rx="2" ry="2"/><line x1="12" y1="18" x2="12.01" y2="18"/></svg>
-        </div>
-        <h3 style="font-size:17px;font-weight:700;margin-bottom:6px">Pairing Code</h3>
-        <p style="font-size:13px;color:var(--text-muted);margin-bottom:20px">Share this code with the Class Rep to set up a device. It expires in a few minutes.</p>
-        <div style="font-size:44px;font-weight:900;letter-spacing:10px;color:#4f46e5;font-family:monospace;margin-bottom:20px">${code}</div>
-        <p style="font-size:12px;color:var(--text-muted)">The Class Rep connects to the <strong>DIKLY-XXXXXX</strong> hotspot and enters this code + the institution code.</p>
-        <button class="btn btn-primary" style="margin-top:16px" onclick="navigator.clipboard.writeText('${code}').then(()=>showToastNotif('Code copied!','success'))">Copy Code</button>
-      </div>
-    `);
-  } catch (e) {
-    showToastNotif('❌ Failed to generate pairing code: ' + e.message, 'error');
-  }
-};
-
-window.hodAssignClassRep = async (deviceId, deviceName) => {
-  const e2 = s => s == null ? '' : String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
-  window._hodRepDeviceId = deviceId;
-  _buildAssignRepModal({
-    title: 'Assign Class Rep',
-    subtitle: `Device: <strong>${e2(deviceName)}</strong>`,
-    isHod: true,
-    onSearch: 'hodSearchRepStudents()',
-  });
-  hodSearchRepStudents();
-};
-
-let _hodRepSearchTimer;
-window.hodSearchRepStudents = () => {
-  clearTimeout(_hodRepSearchTimer);
-  _hodRepSearchTimer = setTimeout(async () => {
-    const box = document.getElementById('rep-modal-results');
-    if (!box) return;
-    const q     = (document.getElementById('rep-modal-search')?.value || '').trim();
-    const level = document.getElementById('rep-modal-level')?.value || '';
-    const group = document.getElementById('rep-modal-group')?.value || '';
-    box.innerHTML = '<div style="color:var(--text-muted);font-size:13px;padding:8px 0">Searching…</div>';
-    try {
-      const params = new URLSearchParams();
-      if (q)     params.set('indexNumber', q);
-      if (level) params.set('level', level);
-      if (group) params.set('group', group);
-      const { students } = await api(`/api/class-rep-admin/students?${params.toString()}`);
-      _renderRepStudentResults(students, 'hodDoAssignRep');
-    } catch(e) {
-      box.innerHTML = `<div style="color:#ef4444;font-size:13px">${e.message}</div>`;
-    }
-  }, 300);
-};
-
-window.hodDoAssignRep = async (studentId, studentName) => {
-  const deviceId = window._hodRepDeviceId;
-  if (!deviceId) { showToastNotif('❌ Device reference lost — please close and try again.', 'error'); return; }
-  try {
-    await api(`/api/devices/${encodeURIComponent(deviceId)}/assign-class-rep`, {
-      method: 'PATCH',
-      body: JSON.stringify({ classRepId: studentId }),
-    });
-    closeModal();
-    showToastNotif(`✅ ${studentName} assigned as Class Rep for this device.`, 'success');
-    renderHodDevices();
+      </div>`;
   } catch(e) {
-    showToastNotif('❌ Failed to assign: ' + e.message, 'error');
-  }
-};
-
-function _openRenameModal(deviceId, currentName, onSuccess) {
-  openModal(`
-    <div style="padding:4px 0">
-      <h3 style="margin:0 0 6px;font-size:17px;font-weight:700">Rename Device</h3>
-      <p style="color:var(--muted);font-size:13px;margin:0 0 20px">
-        Current: <strong style="color:var(--text)">${esc(currentName)}</strong>
-      </p>
-      <label style="display:block;font-size:11px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px">New Name</label>
-      <input id="dev-rename-inp" type="text" value="${esc(currentName)}" maxlength="48"
-        placeholder="e.g. Lecture Hall A"
-        style="width:100%;padding:13px 14px;background:var(--surface,#1a2038);border:1.5px solid var(--border,#2d3a5c);border-radius:10px;color:var(--text,#fff);font-size:15px;outline:none;box-sizing:border-box;margin-bottom:20px"
-        onkeydown="if(event.key==='Enter')window._doDeviceRename('${esc(deviceId)}')">
-      <div style="display:flex;gap:10px">
-        <button onclick="closeModal()"
-          style="flex:1;padding:13px;background:transparent;border:1.5px solid var(--border,#2d3a5c);border-radius:10px;color:var(--muted,#94a3b8);font-size:14px;font-weight:600;cursor:pointer">
-          Cancel
-        </button>
-        <button id="dev-rename-save" onclick="window._doDeviceRename('${esc(deviceId)}')"
-          style="flex:1;padding:13px;background:var(--accent,#4f6ef7);border:none;border-radius:10px;color:#fff;font-size:14px;font-weight:700;cursor:pointer">
-          Save
-        </button>
-      </div>
-    </div>
-  `);
-  window._onRenameSuccess = onSuccess;
-  setTimeout(() => { const i = document.getElementById('dev-rename-inp'); if (i) { i.focus(); i.select(); } }, 60);
-}
-
-window._doDeviceRename = async (deviceId) => {
-  const inp = document.getElementById('dev-rename-inp');
-  const newName = (inp?.value || '').trim();
-  if (!newName) { inp?.focus(); return; }
-  const btn = document.getElementById('dev-rename-save');
-  if (btn) { btn.disabled = true; btn.textContent = 'Saving…'; }
-  try {
-    await api('/api/devices/my/rename', { method: 'PATCH', body: JSON.stringify({ deviceName: newName, deviceId }) });
-    closeModal();
-    showToastNotif('Device renamed successfully.', 'success');
-    if (typeof window._onRenameSuccess === 'function') window._onRenameSuccess();
-  } catch (e) {
-    if (btn) { btn.disabled = false; btn.textContent = 'Save'; }
-    showToastNotif('Failed to rename: ' + (e.message || 'Server error'), 'error');
-  }
-};
-
-window.hodRenameDevice = (deviceId, currentName) => {
-  _openRenameModal(deviceId, currentName, renderHodDevices);
-};
-
-window.hodSetupDevice = async (deviceId) => {
-  showToastNotif('Setup is done via the device\'s WiFi portal — power on the device and connect to the DIKLY-XXXXXX hotspot.', 'warn');
-};
-
-window.hodFactoryReset = async (deviceId, deviceName) => {
-  if (!confirm(`Factory reset "${deviceName}"?\n\nThis will clear all WiFi credentials and pairing data from the device firmware. It will need to be re-paired by a lecturer.`)) return;
-  try {
-    await api(`/api/devices/${encodeURIComponent(deviceId)}/factory-reset`, { method: 'POST' });
-    showToastNotif('✅ Factory reset command sent. Device will restart.', 'success');
-    setTimeout(renderHodDevices, 2000);
-  } catch (e) {
-    showToastNotif('❌ Failed to factory reset: ' + e.message, 'error');
-  }
-};
-
-window.hodRemoveDevice = async (deviceId, deviceName) => {
-  if (!confirm(`Remove "${deviceName}"?\n\nThis permanently unpairs the device from your institution. The physical device will need to be re-paired.`)) return;
-  try {
-    await api(`/api/devices/${encodeURIComponent(deviceId)}/remove`, { method: 'DELETE' });
-    showToastNotif('✅ Device removed.', 'success');
-    renderHodDevices();
-  } catch (e) {
-    showToastNotif('❌ Failed to remove device: ' + e.message, 'error');
-  }
-};
-
-
-async function renderAdminDevices() {
-  const content = document.getElementById('main-content');
-  if (!content) return;
-  content.innerHTML = '<div class="loading">Loading devices…</div>';
-
-  const esc = s => s == null ? '' : String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
-  const timeAgo = d => {
-    if (!d) return 'Never';
-    const m = Math.floor((Date.now() - new Date(d)) / 60000);
-    if (m < 1) return 'Just now';
-    if (m < 60) return `${m}m ago`;
-    if (m < 1440) return `${Math.floor(m/60)}h ${Math.floor(m%60)}m ago`;
-    return `${Math.floor(m/1440)}d ago`;
-  };
-
-  try {
-    const { devices } = await api('/api/devices/all');
-    const online  = devices.filter(d => d.online).length;
-    const offline = devices.length - online;
-    const now     = new Date().toLocaleTimeString([], { hour:'2-digit', minute:'2-digit' });
-    const instCode = currentUser?.company?.institutionCode || currentUser?.company?.code || currentUser?.institutionCode || '—';
-
-    content.innerHTML = `
-      <!-- Page header -->
-      <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;margin-bottom:18px">
-        <div>
-          <h2 style="font-size:20px;font-weight:800;margin:0 0 3px">Attendance Devices</h2>
-          <p style="font-size:13px;color:var(--text-muted);margin:0">Manage all ESP32 devices paired to your institution</p>
-        </div>
-        <button class="btn btn-primary" onclick="adminGeneratePairingCode()" style="display:flex;align-items:center;gap:7px;font-size:13px;padding:9px 18px;border-radius:10px;font-weight:600">
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
-          Generate Pairing Code
-        </button>
-      </div>
-
-      <!-- Compact summary bar -->
-      <div class="card" style="padding:14px 18px;margin-bottom:18px;display:flex;align-items:center;flex-wrap:wrap;gap:0">
-        <div style="display:flex;align-items:center;gap:10px;padding-right:20px;margin-right:20px;border-right:1px solid var(--border)">
-          <div style="width:34px;height:34px;border-radius:9px;background:rgba(79,110,247,.1);display:flex;align-items:center;justify-content:center;flex-shrink:0">
-            <svg viewBox="0 0 24 24" fill="none" stroke="#4f6ef7" stroke-width="2" width="15" height="15"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/></svg>
-          </div>
-          <div>
-            <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.7px;color:var(--text-muted)">Total</div>
-            <div style="font-size:20px;font-weight:800;line-height:1">${devices.length}</div>
-          </div>
-        </div>
-        <div style="display:flex;align-items:center;gap:10px;padding-right:20px;margin-right:20px;border-right:1px solid var(--border)">
-          <span style="width:10px;height:10px;border-radius:50%;background:#16a34a;flex-shrink:0;box-shadow:0 0 0 3px rgba(22,163,74,.18)"></span>
-          <div>
-            <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.7px;color:var(--text-muted)">Online</div>
-            <div style="font-size:20px;font-weight:800;color:#16a34a;line-height:1">${online}</div>
-          </div>
-        </div>
-        <div style="display:flex;align-items:center;gap:10px;padding-right:20px;margin-right:20px;border-right:1px solid var(--border)">
-          <span style="width:10px;height:10px;border-radius:50%;background:#9ca3af;flex-shrink:0"></span>
-          <div>
-            <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.7px;color:var(--text-muted)">Offline</div>
-            <div style="font-size:20px;font-weight:800;color:var(--text-muted);line-height:1">${offline}</div>
-          </div>
-        </div>
-        <div style="flex:1;display:flex;align-items:center;justify-content:space-between;gap:10px;min-width:160px;margin-top:0">
-          <div>
-            <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.7px;color:var(--text-muted)">Institution Code</div>
-            <div style="font-size:18px;font-weight:900;letter-spacing:4px;font-family:monospace;line-height:1.2">${esc(instCode)}</div>
-          </div>
-          <button onclick="navigator.clipboard.writeText('${esc(instCode)}').then(()=>showToastNotif('Copied!','success'))"
-            style="font-size:12px;font-weight:600;padding:5px 12px;border-radius:8px;border:1.5px solid var(--border);background:var(--bg);color:var(--text-muted);cursor:pointer;white-space:nowrap;flex-shrink:0">
-            Copy
-          </button>
-        </div>
-      </div>
-
-      <!-- Connection guide -->
-      <details style="margin-bottom:16px" id="dev-guide-details">
-        <summary style="display:flex;align-items:center;gap:8px;cursor:pointer;list-style:none;padding:12px 16px;background:var(--card);border-radius:12px;border:1px solid var(--border);font-size:13px;font-weight:600;user-select:none">
-          <svg viewBox="0 0 24 24" fill="none" stroke="#4f6ef7" stroke-width="2" width="15" height="15"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
-          <span style="flex:1">How to connect &amp; assign a device</span>
-          <svg class="dev-guide-arrow" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="13" height="13" style="color:var(--text-muted);transition:transform .2s"><polyline points="6 9 12 15 18 9"/></svg>
-        </summary>
-        <div style="padding:16px;background:var(--card);border:1px solid var(--border);border-top:none;border-radius:0 0 12px 12px">
-          <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:12px;margin-bottom:14px">
-            <div style="background:var(--bg);border-radius:10px;padding:13px 14px;border:1px solid var(--border)">
-              <div style="display:flex;align-items:center;gap:8px;margin-bottom:7px">
-                <div style="width:24px;height:24px;border-radius:7px;background:rgba(79,110,247,.1);display:flex;align-items:center;justify-content:center;flex-shrink:0;font-size:11px;font-weight:800;color:#4f6ef7">1</div>
-                <div style="font-size:12px;font-weight:700">Generate a Code</div>
-              </div>
-              <div style="font-size:11px;color:var(--text-muted);line-height:1.5">Click <strong>Generate Pairing Code</strong> above. You'll get a 6-digit one-time code (valid for 10 minutes) and your Institution Code.</div>
-            </div>
-            <div style="background:var(--bg);border-radius:10px;padding:13px 14px;border:1px solid var(--border)">
-              <div style="display:flex;align-items:center;gap:8px;margin-bottom:7px">
-                <div style="width:24px;height:24px;border-radius:7px;background:rgba(79,110,247,.1);display:flex;align-items:center;justify-content:center;flex-shrink:0;font-size:11px;font-weight:800;color:#4f6ef7">2</div>
-                <div style="font-size:12px;font-weight:700">Share with Class Rep</div>
-              </div>
-              <div style="font-size:11px;color:var(--text-muted);line-height:1.5">Give the Class Rep both codes. They power on the ESP32 device, connect it to WiFi via the hotspot, then enter the codes on the device.</div>
-            </div>
-            <div style="background:var(--bg);border-radius:10px;padding:13px 14px;border:1px solid var(--border)">
-              <div style="display:flex;align-items:center;gap:8px;margin-bottom:7px">
-                <div style="width:24px;height:24px;border-radius:7px;background:rgba(79,110,247,.1);display:flex;align-items:center;justify-content:center;flex-shrink:0;font-size:11px;font-weight:800;color:#4f6ef7">3</div>
-                <div style="font-size:12px;font-weight:700">Assign &amp; Configure</div>
-              </div>
-              <div style="font-size:11px;color:var(--text-muted);line-height:1.5">Once paired, the device appears here. Assign the <strong>Class Rep</strong> (so attendance is linked to their group) and add <strong>Lecturers + Courses</strong> the device will handle.</div>
-            </div>
-          </div>
-          <div style="background:rgba(79,110,247,.06);border-radius:8px;padding:10px 13px;border-left:3px solid #4f6ef7">
-            <div style="font-size:11px;color:var(--text-muted);line-height:1.5"><strong style="color:var(--text-primary)">Tip:</strong> Each device can have up to 2 class reps and multiple lecturers. The device uses BLE + WiFi proximity — students must be within range when the attendance session is live.</div>
-          </div>
-        </div>
-      </details>
-
-      <!-- Section header -->
-      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
-        <div style="font-size:14px;font-weight:700;display:flex;align-items:center;gap:8px">
-          Paired Devices
-          <span style="font-size:12px;font-weight:600;padding:2px 9px;border-radius:20px;background:rgba(79,110,247,.1);color:#4f6ef7">${devices.length}</span>
-        </div>
-        <div style="display:flex;align-items:center;gap:8px">
-          <span style="font-size:11px;color:var(--text-muted)">Updated ${now}</span>
-          <button onclick="renderAdminDevices()"
-            style="display:flex;align-items:center;gap:5px;font-size:12px;font-weight:600;padding:5px 11px;border-radius:8px;border:1.5px solid var(--border);background:var(--bg);color:var(--text-muted);cursor:pointer">
-            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>
-            Refresh
-          </button>
-        </div>
-      </div>
-
-      ${devices.length === 0 ? `
-        <div class="card" style="text-align:center;padding:56px 24px">
-          <div style="width:52px;height:52px;border-radius:14px;background:rgba(79,110,247,.08);display:flex;align-items:center;justify-content:center;margin:0 auto 14px">
-            <svg viewBox="0 0 24 24" fill="none" stroke="#4f6ef7" stroke-width="1.5" width="24" height="24"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/></svg>
-          </div>
-          <div style="font-size:16px;font-weight:700;margin-bottom:6px">No Devices Paired Yet</div>
-          <div style="font-size:13px;color:var(--text-muted);max-width:300px;margin:0 auto 20px;line-height:1.5">Generate a pairing code and share it with a Class Rep to set up a device.</div>
-          <button class="btn btn-primary" onclick="adminGeneratePairingCode()">+ Generate Pairing Code</button>
-        </div>
-      ` : `
-        <div style="display:flex;flex-direction:column;gap:12px">
-          ${devices.map(d => {
-            const did      = esc(d.deviceId || d._id);
-            const dname    = esc(d.deviceName || d.deviceId || 'Unknown');
-            const isOnline = d.online;
-            const chipId   = esc(d.chipId || d.deviceId || '');
-            const classRep = d.classRepId ? esc(d.classRepId.name) : null;
-            const repIndex = d.classRepId?.IndexNumber ? esc(d.classRepId.IndexNumber) : null;
-            const grp      = d.assignedGroup ? `L${esc(d.assignedLevel||'?')} · Gr ${esc(d.assignedGroup)}` : null;
-            const dept     = esc(d.assignedDepartment || '');
-            const ip       = esc(d.localIp || '');
-            const fw       = esc(d.firmwareVersion || '');
-            const lastSeen = timeAgo(d.lastHeartbeat);
-            const lecturers = (d.assignedLecturers || []).filter(a => a.lecturerId);
-
-            return `
-            <div class="card" style="padding:0;overflow:hidden;border-radius:14px">
-
-              <!-- Device header strip -->
-              <div style="padding:13px 16px;display:flex;align-items:center;gap:11px">
-                <div style="width:38px;height:38px;border-radius:10px;background:${isOnline ? 'rgba(22,163,74,.1)' : 'rgba(107,114,128,.08)'};display:flex;align-items:center;justify-content:center;flex-shrink:0">
-                  <svg viewBox="0 0 24 24" fill="none" stroke="${isOnline ? '#16a34a' : '#9ca3af'}" stroke-width="2" width="17" height="17"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/></svg>
-                </div>
-                <div style="flex:1;min-width:0">
-                  <div style="font-size:14px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${dname}</div>
-                  ${chipId ? `<div style="font-size:10px;color:var(--text-muted);font-family:monospace;margin-top:1px">${chipId}</div>` : ''}
-                </div>
-                <span style="display:inline-flex;align-items:center;gap:4px;font-size:11px;font-weight:700;padding:3px 9px;border-radius:20px;background:${isOnline ? 'rgba(22,163,74,.1)' : 'rgba(107,114,128,.1)'};color:${isOnline ? '#15803d' : '#6b7280'};flex-shrink:0">
-                  <span style="width:5px;height:5px;border-radius:50%;background:${isOnline ? '#16a34a' : '#9ca3af'}"></span>
-                  ${isOnline ? 'Online' : 'Offline'}
-                </span>
-              </div>
-
-              <!-- Info rows -->
-              <div style="padding:0 16px 4px;border-top:1px solid var(--border)">
-                <div style="display:grid;grid-template-columns:1fr 1fr;gap:1px;background:var(--border)">
-                  <div style="background:var(--card);padding:10px 0 10px 2px">
-                    <div style="font-size:9px;font-weight:800;text-transform:uppercase;letter-spacing:.8px;color:var(--text-muted);margin-bottom:4px">Class Rep</div>
-                    <div style="font-size:13px;font-weight:600;color:${classRep ? 'var(--text-primary)' : 'var(--text-muted)'}">
-                      ${classRep || 'Not assigned'}
-                    </div>
-                    ${repIndex ? `<div style="font-size:10px;color:var(--text-muted);margin-top:1px">${repIndex}</div>` : ''}
-                  </div>
-                  <div style="background:var(--card);padding:10px 0 10px 12px">
-                    <div style="font-size:9px;font-weight:800;text-transform:uppercase;letter-spacing:.8px;color:var(--text-muted);margin-bottom:4px">Class / Group</div>
-                    <div style="font-size:13px;font-weight:600;color:${grp ? 'var(--text-primary)' : 'var(--text-muted)'}">${grp || '—'}</div>
-                  </div>
-                  ${dept ? `
-                  <div style="background:var(--card);padding:10px 0 10px 2px">
-                    <div style="font-size:9px;font-weight:800;text-transform:uppercase;letter-spacing:.8px;color:var(--text-muted);margin-bottom:4px">Department</div>
-                    <div style="font-size:13px;font-weight:600">${dept}</div>
-                  </div>` : ''}
-                  <div style="background:var(--card);padding:10px 0 10px ${dept ? '12px' : '2px'}">
-                    <div style="font-size:9px;font-weight:800;text-transform:uppercase;letter-spacing:.8px;color:var(--text-muted);margin-bottom:4px">Last Seen</div>
-                    <div style="font-size:13px;color:var(--text-muted)">${lastSeen}</div>
-                  </div>
-                  ${ip ? `
-                  <div style="background:var(--card);padding:10px 0 10px 2px;grid-column:1/-1">
-                    <div style="font-size:9px;font-weight:800;text-transform:uppercase;letter-spacing:.8px;color:var(--text-muted);margin-bottom:4px">Network</div>
-                    <div style="font-size:11px;font-family:monospace;color:var(--text-muted)">IP ${ip}${fw ? ` · fw ${fw}` : ''}</div>
-                  </div>` : ''}
-                </div>
-              </div>
-
-              <!-- Lecturers section -->
-              <div style="padding:10px 16px 12px;border-top:1px solid var(--border)">
-                <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
-                  <div style="font-size:9px;font-weight:800;text-transform:uppercase;letter-spacing:.8px;color:var(--text-muted)">Assigned Lecturers</div>
-                  <button onclick="adminAssignLecturer('${did}','${dname}')"
-                    style="font-size:11px;font-weight:700;padding:3px 10px;border-radius:7px;border:1.5px solid var(--accent,#4f6ef7);background:transparent;color:var(--accent,#4f6ef7);cursor:pointer">
-                    + Assign
-                  </button>
-                </div>
-                ${lecturers.length === 0
-                  ? `<div style="font-size:12px;color:var(--text-muted);padding:6px 0">No lecturers assigned yet</div>`
-                  : lecturers.map(a => {
-                      const lname = esc(a.lecturerId?.name || 'Unknown');
-                      const cname = esc(a.courseId?.title || '');
-                      const ccode = esc(a.courseId?.code || '');
-                      const lid   = esc(a.lecturerId?._id || a.lecturerId);
-                      const cid   = esc(a.courseId?._id  || a.courseId);
-                      return `
-                      <div style="display:flex;align-items:center;justify-content:space-between;padding:7px 10px;background:var(--bg);border-radius:8px;margin-bottom:5px;gap:8px;border:1px solid var(--border)">
-                        <div style="min-width:0;display:flex;align-items:center;gap:8px">
-                          <div style="width:28px;height:28px;border-radius:50%;background:rgba(79,110,247,.1);display:flex;align-items:center;justify-content:center;flex-shrink:0;font-size:11px;font-weight:700;color:#4f6ef7">
-                            ${lname[0]?.toUpperCase() || '?'}
-                          </div>
-                          <div style="min-width:0">
-                            <div style="font-size:12px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${lname}</div>
-                            ${cname ? `<div style="font-size:10px;color:var(--text-muted)">${ccode ? ccode+' · ' : ''}${cname}</div>` : ''}
-                          </div>
-                        </div>
-                        <button onclick="adminRemoveLecturer('${did}','${lid}','${cid}','${lname}')"
-                          style="font-size:10px;font-weight:700;padding:3px 8px;border-radius:6px;border:1px solid rgba(239,68,68,.2);background:rgba(239,68,68,.05);color:#ef4444;cursor:pointer;white-space:nowrap;flex-shrink:0">
-                          Remove
-                        </button>
-                      </div>`;
-                    }).join('')
-                }
-              </div>
-
-              <!-- Action bar -->
-              <div style="padding:10px 16px;border-top:1px solid var(--border);display:flex;flex-wrap:wrap;gap:7px;background:var(--bg)">
-                <button class="btn btn-secondary btn-sm" onclick="adminAssignClassRep('${did}','${dname}')" style="font-size:11px;display:flex;align-items:center;gap:4px">
-                  <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
-                  Assign Rep
-                </button>
-                <button class="btn btn-secondary btn-sm" onclick="adminRenameDevice('${did}','${dname}')" style="font-size:11px;display:flex;align-items:center;gap:4px">
-                  <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
-                  Rename
-                </button>
-                <button class="btn btn-secondary btn-sm" onclick="adminFactoryReset('${did}','${dname}',${isOnline})" style="font-size:11px;display:flex;align-items:center;gap:4px">
-                  <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>
-                  Factory Reset
-                </button>
-                <button onclick="adminRemoveDevice('${did}','${dname}')" style="font-size:11px;font-weight:600;padding:5px 12px;border-radius:8px;border:1px solid rgba(239,68,68,.25);background:rgba(239,68,68,.06);color:#ef4444;cursor:pointer;display:flex;align-items:center;gap:4px">
-                  <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg>
-                  Remove
-                </button>
-              </div>
-            </div>`;
-          }).join('')}
-        </div>
-      `}
-    `;
-  } catch(e) {
-    content.innerHTML = `<div class="card" style="color:#ef4444;padding:20px">Failed to load devices: ${esc(e.message)}</div>`;
+    content.innerHTML = `<div style="color:#dc2626;padding:20px">Error loading audit logs: ${esc(e.message)}</div>`;
   }
 }
 
-window.adminGeneratePairingCode = async () => {
-  try {
-    const data = await api('/api/devices/pairing-code', { method: 'POST' });
-    const code = data.pairingCode || data.code || '—';
-    openModal(`
-      <div style="text-align:center;padding:12px 0 4px">
-        <div style="width:52px;height:52px;border-radius:14px;background:#ede9fe;display:flex;align-items:center;justify-content:center;margin:0 auto 16px">
-          <svg viewBox="0 0 24 24" fill="none" stroke="#7c3aed" stroke-width="2" width="24" height="24"><rect x="5" y="2" width="14" height="20" rx="2" ry="2"/><line x1="12" y1="18" x2="12.01" y2="18"/></svg>
-        </div>
-        <div style="font-size:12px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;color:var(--text-muted);margin-bottom:10px">New Pairing Code</div>
-        <div style="font-size:52px;font-weight:900;letter-spacing:12px;font-family:monospace;color:#7c3aed;margin-bottom:14px;padding:0 8px">${code}</div>
-        <p style="font-size:13px;color:var(--text-muted);margin-bottom:20px;line-height:1.5">Share this one-time code with the Class Rep along with the institution code. Expires in <strong>10 minutes</strong>.</p>
-        <button class="btn btn-primary" style="width:100%" onclick="navigator.clipboard.writeText('${code}').then(()=>showToastNotif('Code copied!','success'))">Copy Code</button>
-      </div>
-    `);
-  } catch(e) { showToastNotif('❌ ' + (e.message || 'Failed to generate code'), 'error'); }
-};
-
-window.adminAssignLecturer = async (deviceId, deviceName) => {
-  const isHod = currentUser?.role === 'hod';
-  const hodDept = isHod ? (currentUser?.department || '') : '';
-  const selStyle = 'width:100%;padding:9px 12px;border:1.5px solid var(--border);border-radius:8px;background:var(--bg);color:var(--text-primary);font-size:13px;margin-top:4px';
-  const labelStyle = 'font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--text-muted)';
-
-  openModal(`
-    <div>
-      <div style="display:flex;align-items:center;gap:9px;margin-bottom:4px">
-        <div style="width:34px;height:34px;border-radius:9px;background:rgba(79,110,247,.1);display:flex;align-items:center;justify-content:center;flex-shrink:0">
-          <svg viewBox="0 0 24 24" fill="none" stroke="#4f6ef7" stroke-width="2" width="16" height="16"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
-        </div>
-        <div>
-          <h3 style="font-size:15px;font-weight:700;margin:0">Assign Lecturer</h3>
-          <p style="font-size:11px;color:var(--text-muted);margin:2px 0 0">Device: <strong>${deviceName}</strong></p>
-        </div>
-      </div>
-      ${isHod ? `<div style="margin:10px 0 14px;padding:8px 12px;background:rgba(79,110,247,.06);border-radius:8px;border-left:3px solid #4f6ef7;font-size:11px;color:var(--text-muted)">Showing lecturers in your department: <strong style="color:var(--text-primary)">${hodDept}</strong></div>` : ''}
-      <div id="admin-lec-loading" style="text-align:center;padding:24px;color:var(--text-muted);font-size:13px">Loading lecturers…</div>
-      <div id="admin-lec-body" style="display:none">
-        ${!isHod ? `
-        <div class="form-group" style="margin-bottom:12px">
-          <label style="${labelStyle}">Department</label>
-          <select id="admin-dept-select" onchange="adminDeptChanged(this.value)" style="${selStyle}">
-            <option value="">— All Departments —</option>
-          </select>
-        </div>` : ''}
-        <div class="form-group" style="margin-bottom:12px">
-          <label style="${labelStyle}">Lecturer</label>
-          <select id="admin-lec-select" onchange="adminLecturerChanged(this.value)" style="${selStyle}">
-            <option value="">— Select lecturer —</option>
-          </select>
-        </div>
-        <div class="form-group" style="margin-bottom:16px">
-          <label style="${labelStyle}">Course</label>
-          <select id="admin-course-select" style="${selStyle}">
-            <option value="">— Select lecturer first —</option>
-          </select>
-        </div>
-        <button class="btn btn-primary" style="width:100%" onclick="adminDoAssignLecturer('${deviceId}')">Assign to Device</button>
-      </div>
-    </div>
-  `);
-  try {
-    const { lecturers } = await api('/api/devices/lecturers-for-assignment');
-    window._adminLecturers = lecturers;
-
-    // Populate department dropdown (admin only — HOD is pre-filtered by backend)
-    if (!isHod) {
-      const depts = [...new Set(lecturers.map(l => l.department).filter(Boolean))].sort();
-      const deptSel = document.getElementById('admin-dept-select');
-      if (deptSel) {
-        depts.forEach(d => {
-          const opt = document.createElement('option');
-          opt.value = d;
-          opt.textContent = d;
-          deptSel.appendChild(opt);
-        });
-      }
-    }
-
-    // Populate lecturer dropdown (all by default, or filtered if dept already chosen)
-    window._adminFillLecturers(null);
-
-    document.getElementById('admin-lec-loading').style.display = 'none';
-    document.getElementById('admin-lec-body').style.display = 'block';
-  } catch(e) {
-    const el = document.getElementById('admin-lec-loading');
-    if (el) el.innerHTML = `<span style="color:#ef4444">${e.message}</span>`;
-  }
-};
-
-window._adminFillLecturers = (deptFilter) => {
-  const sel = document.getElementById('admin-lec-select');
-  if (!sel) return;
-  const list = (window._adminLecturers || []).filter(l => !deptFilter || l.department === deptFilter);
-  sel.innerHTML = `<option value="">— Select lecturer${deptFilter ? ' in ' + deptFilter : ''} —</option>`;
-  list.forEach(l => {
-    const opt = document.createElement('option');
-    opt.value = l._id;
-    opt.textContent = l.name + (l.department && !deptFilter ? ` · ${l.department}` : '');
-    sel.appendChild(opt);
-  });
-  // Reset course dropdown when lecturer list resets
-  const cSel = document.getElementById('admin-course-select');
-  if (cSel) cSel.innerHTML = '<option value="">— Select lecturer first —</option>';
-};
-
-window.adminDeptChanged = (dept) => {
-  window._adminFillLecturers(dept || null);
-};
-
-window.adminLecturerChanged = (lecturerId) => {
-  const courseSel = document.getElementById('admin-course-select');
-  if (!courseSel) return;
-  courseSel.innerHTML = '<option value="">— Select course —</option>';
-  const lec = (window._adminLecturers || []).find(l => l._id === lecturerId);
-  if (!lec || !lec.courses?.length) {
-    courseSel.innerHTML = '<option value="">No courses assigned to this lecturer</option>';
-    return;
-  }
-  lec.courses.forEach(c => {
-    const opt = document.createElement('option');
-    opt.value = c._id;
-    opt.textContent = (c.courseCode ? c.courseCode + ' · ' : '') + c.name;
-    courseSel.appendChild(opt);
-  });
-};
-
-window.adminDoAssignLecturer = async (deviceId) => {
-  const lecturerId = document.getElementById('admin-lec-select')?.value;
-  const courseId   = document.getElementById('admin-course-select')?.value;
-  if (!lecturerId || !courseId) { showToastNotif('Select a lecturer and course first.', 'error'); return; }
-  try {
-    await api(`/api/devices/${encodeURIComponent(deviceId)}/assign-lecturer`, {
-      method: 'POST',
-      body: JSON.stringify({ lecturerId, courseId }),
-    });
-    closeModal();
-    showToastNotif('✅ Lecturer assigned to device.', 'success');
-    renderAdminDevices();
-  } catch(e) { showToastNotif('❌ ' + (e.message || 'Failed to assign'), 'error'); }
-};
-
-window.adminRemoveLecturer = async (deviceId, lecturerId, courseId, lecturerName) => {
-  if (!confirm(`Remove ${lecturerName} from this device?`)) return;
-  try {
-    await api(`/api/devices/${encodeURIComponent(deviceId)}/remove-lecturer`, {
-      method: 'DELETE',
-      body: JSON.stringify({ lecturerId, courseId }),
-    });
-    showToastNotif('✅ Lecturer removed from device.', 'success');
-    renderAdminDevices();
-  } catch(e) { showToastNotif('❌ ' + (e.message || 'Failed to remove'), 'error'); }
-};
-
-window.adminAssignClassRep = async (deviceId, deviceName) => {
-  const isHod = currentUser?.role === 'hod';
-  const hodDept = isHod ? (currentUser?.department || '') : '';
-  const selStyle = 'width:100%;padding:8px 10px;border:1.5px solid var(--border);border-radius:8px;background:var(--bg);color:var(--text-primary);font-size:12px;margin-top:3px';
-  const labelStyle = 'font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--text-muted)';
-
-  openModal(`
-    <div>
-      <div style="display:flex;align-items:center;gap:9px;margin-bottom:14px">
-        <div style="width:34px;height:34px;border-radius:9px;background:rgba(124,58,237,.1);display:flex;align-items:center;justify-content:center;flex-shrink:0">
-          <svg viewBox="0 0 24 24" fill="none" stroke="#7c3aed" stroke-width="2" width="16" height="16"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
-        </div>
-        <div>
-          <h3 style="font-size:15px;font-weight:700;margin:0">Assign Class Rep</h3>
-          <p style="font-size:11px;color:var(--text-muted);margin:2px 0 0">Device: <strong>${deviceName}</strong></p>
-        </div>
-      </div>
-
-      <!-- Filter strip -->
-      <div style="background:var(--bg);border-radius:10px;padding:12px;border:1px solid var(--border);margin-bottom:12px">
-        <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.6px;color:var(--text-muted);margin-bottom:10px">Filter Students</div>
-        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px">
-          ${!isHod ? `
-          <div style="grid-column:1/-1">
-            <label style="${labelStyle}">Department</label>
-            <input type="text" id="admin-rep-dept" placeholder="e.g. Computer Science"
-              oninput="adminSearchRepStudents('${deviceId}')"
-              style="${selStyle}">
-          </div>` : `
-          <div style="grid-column:1/-1;padding:7px 10px;background:rgba(79,110,247,.06);border-radius:7px;border-left:3px solid #4f6ef7;font-size:11px;color:var(--text-muted)">
-            Showing students in your department: <strong style="color:var(--text-primary)">${hodDept}</strong>
-          </div>`}
-          <div>
-            <label style="${labelStyle}">Level / Year</label>
-            <select id="admin-rep-level" onchange="adminSearchRepStudents('${deviceId}')" style="${selStyle}">
-              <option value="">Any level</option>
-              <option value="100">Year 1 (100)</option>
-              <option value="200">Year 2 (200)</option>
-              <option value="300">Year 3 (300)</option>
-              <option value="400">Year 4 (400)</option>
-              <option value="500">Year 5 (500)</option>
-            </select>
-          </div>
-          <div>
-            <label style="${labelStyle}">Group</label>
-            <select id="admin-rep-group" onchange="adminSearchRepStudents('${deviceId}')" style="${selStyle}">
-              <option value="">Any group</option>
-              <option value="A">Group A</option>
-              <option value="B">Group B</option>
-              <option value="C">Group C</option>
-              <option value="D">Group D</option>
-            </select>
-          </div>
-        </div>
-        <div>
-          <label style="${labelStyle}">Name or Index Number</label>
-          <input type="text" id="admin-rep-search" placeholder="Search by name or index number…"
-            oninput="adminSearchRepStudents('${deviceId}')"
-            style="${selStyle}">
-        </div>
-      </div>
-
-      <div style="font-size:11px;color:var(--text-muted);margin-bottom:8px">Use the filters above to narrow down the list, then click <strong>Assign</strong> on the correct student.</div>
-      <div id="admin-rep-results" style="max-height:280px;overflow-y:auto"></div>
-    </div>
-  `, { maxWidth: '560px' });
-
-  // Auto-load for HOD (already dept-filtered) or show prompt
-  if (isHod) adminSearchRepStudents(deviceId);
-};
-
-let _adminRepTimer;
-window.adminSearchRepStudents = (deviceId) => {
-  clearTimeout(_adminRepTimer);
-  _adminRepTimer = setTimeout(async () => {
-    const box = document.getElementById('admin-rep-results');
-    if (!box) return;
-    const q     = (document.getElementById('admin-rep-search')?.value || '').trim();
-    const level = document.getElementById('admin-rep-level')?.value || '';
-    const group = document.getElementById('admin-rep-group')?.value || '';
-    const dept  = document.getElementById('admin-rep-dept')?.value?.trim() || '';
-
-    // Need at least one filter
-    if (!q && !level && !group && !dept) {
-      box.innerHTML = '<div style="color:var(--text-muted);font-size:12px;padding:10px 0;text-align:center">Enter a name, index number, or select a filter to search.</div>';
-      return;
-    }
-
-    box.innerHTML = '<div style="color:var(--text-muted);font-size:13px;padding:8px 0">Searching…</div>';
-    const esc2 = s => s == null ? '' : String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
-    try {
-      const params = new URLSearchParams();
-      if (q)     params.set('indexNumber', q);
-      if (level) params.set('level', level);
-      if (group) params.set('group', group);
-      if (dept)  params.set('department', dept);
-      const { students } = await api(`/api/class-rep-admin/students?${params.toString()}`);
-
-      if (!students.length) {
-        box.innerHTML = '<div style="color:var(--text-muted);font-size:13px;padding:10px 0;text-align:center">No students found matching these filters.</div>';
-        return;
-      }
-      box.innerHTML = students.slice(0, 15).map(s => {
-        const initials = (s.name || '?')[0].toUpperCase();
-        const alreadyRep = s.isClassRep;
-        return `
-        <div style="display:flex;align-items:center;gap:10px;padding:10px 12px;border-radius:10px;border:1.5px solid ${alreadyRep ? 'rgba(22,163,74,.2)' : 'var(--border)'};margin-bottom:7px;background:${alreadyRep ? 'rgba(22,163,74,.04)' : 'var(--bg)'};transition:border-color .15s">
-          <div style="width:36px;height:36px;border-radius:50%;background:rgba(124,58,237,.1);display:flex;align-items:center;justify-content:center;flex-shrink:0;font-size:13px;font-weight:800;color:#7c3aed">${initials}</div>
-          <div style="flex:1;min-width:0">
-            <div style="font-size:13px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc2(s.name)}</div>
-            <div style="display:flex;flex-wrap:wrap;gap:4px;margin-top:3px">
-              ${s.IndexNumber ? `<span style="font-size:10px;font-weight:600;padding:1px 6px;border-radius:5px;background:rgba(79,110,247,.08);color:#4f6ef7">${esc2(s.IndexNumber)}</span>` : ''}
-              ${s.studentLevel ? `<span style="font-size:10px;padding:1px 6px;border-radius:5px;background:var(--border);color:var(--text-muted)">Level ${esc2(s.studentLevel)}</span>` : ''}
-              ${s.studentGroup ? `<span style="font-size:10px;padding:1px 6px;border-radius:5px;background:var(--border);color:var(--text-muted)">Group ${esc2(s.studentGroup)}</span>` : ''}
-              ${s.department   ? `<span style="font-size:10px;padding:1px 6px;border-radius:5px;background:var(--border);color:var(--text-muted)">${esc2(s.department)}</span>` : ''}
-              ${s.programme    ? `<span style="font-size:10px;padding:1px 6px;border-radius:5px;background:var(--border);color:var(--text-muted)">${esc2(s.programme)}</span>` : ''}
-            </div>
-          </div>
-          <div style="flex-shrink:0">
-            ${alreadyRep
-              ? `<span style="display:inline-flex;align-items:center;gap:4px;font-size:11px;font-weight:600;padding:4px 9px;border-radius:20px;background:rgba(22,163,74,.1);color:#15803d">
-                  <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="20 6 9 17 4 12"/></svg>
-                  Rep
-                </span>`
-              : `<button class="btn btn-primary btn-sm" style="font-size:11px;padding:5px 12px" onclick="adminDoAssignRep('${deviceId}','${s._id}','${esc2(s.name)}')">Assign</button>`}
-          </div>
-        </div>`;
-      }).join('');
-    } catch(e) { box.innerHTML = `<div style="color:#ef4444;font-size:13px">${e.message}</div>`; }
-  }, 300);
-};
-
-window.adminDoAssignRep = async (deviceId, studentId, studentName) => {
-  try {
-    await api(`/api/devices/${encodeURIComponent(deviceId)}/assign-class-rep`, {
-      method: 'PATCH',
-      body: JSON.stringify({ classRepId: studentId }),
-    });
-    closeModal();
-    showToastNotif(`✅ ${studentName} assigned as Class Rep.`, 'success');
-    renderAdminDevices();
-  } catch(e) { showToastNotif('❌ ' + (e.message || 'Failed to assign'), 'error'); }
-};
-
-window.adminRenameDevice = (deviceId, currentName) => {
-  _openRenameModal(deviceId, currentName, renderAdminDevices);
-};
-
-window.adminFactoryReset = async (deviceId, deviceName, isOnline) => {
-  if (!isOnline) {
-    showToastNotif('⚠️ Device is offline — it must be online to receive a factory reset command.', 'error');
-    return;
-  }
-  if (!confirm(`Factory reset "${deviceName}"?\n\nThis will wipe all WiFi credentials and pairing data. The device will need to be re-paired.`)) return;
-  try {
-    showToastNotif('Sending factory reset…', 'info');
-    await api(`/api/devices/${encodeURIComponent(deviceId)}/factory-reset`, { method: 'POST' });
-    showToastNotif('✅ Factory reset command sent. Device will restart.', 'success');
-    setTimeout(renderAdminDevices, 3000);
-  } catch(e) { showToastNotif('❌ ' + (e.message || 'Failed to reset'), 'error'); }
-};
-
-window.adminRemoveDevice = async (deviceId, deviceName) => {
-  if (!confirm(`Remove "${deviceName}"?\n\nThis permanently unpairs the device from your institution.`)) return;
-  try {
-    await api(`/api/devices/${encodeURIComponent(deviceId)}/remove`, { method: 'DELETE' });
-    showToastNotif('✅ Device removed.', 'success');
-    renderAdminDevices();
-  } catch(e) { showToastNotif('❌ ' + (e.message || 'Failed to remove'), 'error'); }
-};
-
+// ══════════════════════════════════════════════════════════════
 // WHITE-LABEL BRANDING
 // ══════════════════════════════════════════════════════════════
 async function renderBranding() {
@@ -20644,9 +21423,9 @@ async function viewMeetingAttendance(meetingId, title) {
   container.innerHTML = '<div class="modal-overlay" onclick="closeModal(event)"><div class="modal" onclick="event.stopPropagation()" style="max-width:700px;width:95%"><div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px"><h3 style="margin:0">Meeting Attendance</h3><button onclick="closeModal()" style="background:none;border:none;font-size:20px;cursor:pointer">×</button></div><div id="meeting-attendance-body"><div class="loading">Loading...</div></div></div></div>';
 
   try {
-    const data = await api('/api/zoom/' + meetingId + '/attendance');
-    const attendance = data.attendance || [];
-    const total = data.total || 0;
+    const data = await api('/api/meetings/' + meetingId + '/attendance');
+    const attendance = (data.data || data.attendance || []);
+    const total = data.total || attendance.length;
     const statusColor = { present: '#22c55e', partial: '#f59e0b', absent: '#ef4444' };
 
     let rows = '';
@@ -20663,7 +21442,7 @@ async function viewMeetingAttendance(meetingId, title) {
     }
 
     const token = localStorage.getItem('token') || localStorage.getItem('dikly_token') || '';
-    const csvUrl = '/api/zoom/' + meetingId + '/attendance/csv?token=' + token;
+    const csvUrl = '/api/meetings/' + meetingId + '/attendance/pdf?token=' + token;
 
     let tableHtml = attendance.length
       ? '<table style="width:100%"><thead><tr><th>Name</th><th>Email / Index</th><th>Joined</th><th>Left</th><th>Duration</th><th>Status</th></tr></thead><tbody>' + rows + '</tbody></table>'
@@ -20685,8 +21464,8 @@ async function viewMeetingAttendance(meetingId, title) {
 
 async function printMeetingAttendance(meetingId, title) {
   try {
-    const data = await api('/api/zoom/' + meetingId + '/attendance');
-    const attendance = data.attendance || [];
+    const data = await api('/api/meetings/' + meetingId + '/attendance');
+    const attendance = (data.data || data.attendance || []);
     const statusColor = { present: '#22c55e', partial: '#f59e0b', absent: '#ef4444' };
 
     let rows = '';
@@ -21338,73 +22117,1066 @@ async function submitHodRequest() {
   }
 }
 
-// ══════════════════════════════════════════════════════════════
-// LIVE ATTENDANCE  (admin / manager view of active sessions)
-// ══════════════════════════════════════════════════════════════
-async function renderLiveAttendance() {
+// ── Course Videos ─────────────────────────────────────────────────────────────
+function renderCourseVideos() {
   const content = document.getElementById('main-content');
   if (!content) return;
-  content.innerHTML = '<div class="loading">Loading attendance sessions…</div>';
-  const esc = s => s == null ? '' : String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
-  const fmt = d => d ? new Date(d).toLocaleString('en-GB',{day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'}) : '—';
 
-  const load = async () => {
-    try {
-      const data = await api('/api/attendance-sessions');
-      const all = data.sessions || data || [];
-      const sessions = all.filter(s => s.status === 'active');
+  const isLecturer = ['lecturer','admin','superadmin','hod'].includes(currentUser?.role);
 
-      const statusBadge = s => {
-        if (s.status === 'active') return `<span style="display:inline-flex;align-items:center;gap:4px;background:#dcfce7;color:#166534;padding:2px 9px;border-radius:20px;font-size:11px;font-weight:700"><span style="width:6px;height:6px;border-radius:50%;background:#16a34a;animation:pulse 1.8s infinite"></span>Live</span>`;
-        return `<span style="background:#f1f5f9;color:#475569;padding:2px 9px;border-radius:20px;font-size:11px;font-weight:700">Ended</span>`;
-      };
-
-      content.innerHTML = `
-        <div class="page-header" style="display:flex;align-items:flex-start;justify-content:space-between;flex-wrap:wrap;gap:10px">
-          <div>
-            <h2>Live Attendance</h2>
-            <p>${sessions.length} active session${sessions.length !== 1 ? 's' : ''} right now</p>
-          </div>
-          <button class="btn btn-secondary btn-sm" onclick="renderLiveAttendance()">↻ Refresh</button>
+  if (isLecturer) {
+    content.innerHTML = `
+      <div class="page-header">
+        <div>
+          <h1 style="margin:0 0 .25rem">Course Videos</h1>
+          <p style="margin:0;color:var(--text-light);font-size:.9rem">Upload and manage video resources for your courses</p>
         </div>
-        ${sessions.length === 0 ? `
-          <div class="card" style="text-align:center;padding:56px 40px;color:var(--text-muted)">
-            <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="margin-bottom:16px;opacity:.4"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/></svg>
-            <div style="font-size:16px;font-weight:600;margin-bottom:8px">No active sessions</div>
-            <div style="font-size:13px">No attendance sessions are currently running.</div>
-          </div>` :
-          `<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:16px">
-            ${sessions.map(s => `
-            <div class="card" style="padding:16px">
-              <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px">
-                ${statusBadge(s)}
-                <span style="font-size:12px;color:var(--text-muted)">${esc(s.course?.code || s.courseCode || '')}</span>
-              </div>
-              <div style="font-size:15px;font-weight:700;margin-bottom:4px">${esc(s.course?.title || s.courseTitle || 'Unnamed Session')}</div>
-              <div style="font-size:12px;color:var(--text-muted);margin-bottom:12px">Lecturer: ${esc(s.lecturer?.name || s.lecturerName || '—')} · Started ${fmt(s.startTime)}</div>
-              <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
-                <div style="background:var(--bg);border-radius:8px;padding:10px;text-align:center">
-                  <div style="font-size:22px;font-weight:800;color:var(--accent)">${s.presentCount ?? s.attendance?.length ?? 0}</div>
-                  <div style="font-size:10px;font-weight:600;text-transform:uppercase;color:var(--text-muted)">Present</div>
-                </div>
-                <div style="background:var(--bg);border-radius:8px;padding:10px;text-align:center">
-                  <div style="font-size:22px;font-weight:800">${s.code || '—'}</div>
-                  <div style="font-size:10px;font-weight:600;text-transform:uppercase;color:var(--text-muted)">Code</div>
-                </div>
-              </div>
-            </div>`).join('')}
-          </div>`}
-      `;
-    } catch(e) {
-      content.innerHTML = `<div class="card"><p style="color:#ef4444">Error: ${e.message}</p></div>`;
-    }
-  };
-  await load();
+      </div>
+
+      <div class="cv-lecturer-grid" style="display:grid;grid-template-columns:340px 1fr;gap:1.5rem;align-items:start">
+        <div class="card" style="position:sticky;top:1.5rem">
+          <div style="display:flex;align-items:center;gap:.6rem;margin-bottom:1.25rem;padding-bottom:1rem;border-bottom:1px solid var(--border)">
+            <div style="width:36px;height:36px;border-radius:8px;background:var(--primary-ultra-light,#eff6ff);display:flex;align-items:center;justify-content:center;flex-shrink:0">
+              ${svgIcon('<polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2" ry="2"/>', 18, 'var(--primary)')}
+            </div>
+            <div>
+              <h3 style="margin:0;font-size:1rem;font-weight:600">Add New Video</h3>
+              <p style="margin:0;font-size:.78rem;color:var(--text-light)">YouTube · Vimeo · Drive · Loom</p>
+            </div>
+          </div>
+          <div class="form-group">
+            <label>Course</label>
+            <select id="cv-course-sel"><option value="">Loading courses…</option></select>
+          </div>
+          <div class="form-group">
+            <label>Video Title</label>
+            <input id="cv-title" placeholder="e.g. Introduction to Algebra">
+          </div>
+          <div class="form-group">
+            <label>Description <span style="color:var(--text-muted);font-weight:400">(optional)</span></label>
+            <input id="cv-desc" placeholder="Brief description of the video">
+          </div>
+          <div class="form-group" style="margin-bottom:1.25rem">
+            <label>Video URL</label>
+            <input id="cv-url" placeholder="Paste a YouTube, Vimeo, Drive or Loom link">
+          </div>
+          <button class="btn btn-primary" style="width:100%" onclick="cvAddVideo()">
+            ${svgIcon('<line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>', 15)}
+            Add Video
+          </button>
+        </div>
+
+        <div id="cv-list-area">
+          <div class="empty-state" style="padding:3rem 1rem">
+            ${svgIcon('<rect x="2" y="2" width="20" height="20" rx="2.18" ry="2.18"/><line x1="7" y1="2" x2="7" y2="22"/><line x1="17" y1="2" x2="17" y2="22"/><line x1="2" y1="12" x2="22" y2="12"/><line x1="2" y1="7" x2="7" y2="7"/><line x1="17" y1="7" x2="22" y2="7"/><line x1="17" y1="17" x2="22" y2="17"/><line x1="2" y1="17" x2="7" y2="17"/>', 40, 'var(--text-muted)')}
+            <p style="margin:.75rem 0 0;font-size:.9rem">Select a course to see its videos</p>
+          </div>
+        </div>
+      </div>`;
+
+    _cvLoadCourses();
+  } else {
+    content.innerHTML = `
+      <div class="page-header">
+        <div>
+          <h1 style="margin:0 0 .25rem">Course Videos</h1>
+          <p style="margin:0;color:var(--text-light);font-size:.9rem">Watch video resources shared by your lecturers</p>
+        </div>
+      </div>
+      <div id="cv-body">
+        <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:1rem">
+          ${Array(6).fill(0).map(() => `<div class="card" style="padding:0;overflow:hidden;">
+            <div style="aspect-ratio:16/9;background:var(--border);animation:pulse 1.5s ease-in-out infinite"></div>
+            <div style="padding:.75rem">
+              <div style="height:13px;background:var(--border);border-radius:4px;margin-bottom:.5rem;width:75%;animation:pulse 1.5s ease-in-out infinite"></div>
+              <div style="height:11px;background:var(--border);border-radius:4px;width:50%;animation:pulse 1.5s ease-in-out infinite"></div>
+            </div>
+          </div>`).join('')}
+        </div>
+      </div>`;
+    _renderStudentVideos();
+  }
 }
 
-// ══════════════════════════════════════════════════════════════
-// CALENDAR EVENTS
-// ══════════════════════════════════════════════════════════════
+async function _cvLoadCourses() {
+  const sel = document.getElementById('cv-course-sel');
+  if (!sel) return;
+  try {
+    const d = await api('/api/courses');
+    const courses = (d && d.courses) ? d.courses : [];
+    if (!courses.length) {
+      sel.innerHTML = '<option value="">No courses found — create a course first</option>';
+      return;
+    }
+    sel.innerHTML = courses.map(c =>
+      `<option value="${c._id}">${escHtml(c.title)}${c.code ? ' (' + escHtml(c.code) + ')' : ''}</option>`
+    ).join('');
+    sel.addEventListener('change', () => cvLoadList(sel.value));
+    cvLoadList(sel.value);
+  } catch(e) {
+    if (sel) sel.innerHTML = `<option value="">Error: ${escHtml(e.message)}</option>`;
+  }
+}
+
+async function cvLoadList(courseId) {
+  if (!courseId) return;
+  const area = document.getElementById('cv-list-area');
+  if (!area) return;
+  area.innerHTML = `<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:1rem">${
+    Array(3).fill(0).map(() => `<div class="card" style="padding:0;overflow:hidden;animation:pulse 1.5s ease-in-out infinite">
+      <div style="aspect-ratio:16/9;background:var(--border)"></div>
+      <div style="padding:.85rem">
+        <div style="height:14px;background:var(--border);border-radius:4px;margin-bottom:.5rem;width:75%"></div>
+        <div style="height:11px;background:var(--border);border-radius:4px;width:50%"></div>
+      </div>
+    </div>`).join('')
+  }</div>`;
+  try {
+    const d = await api(`/api/course-videos/${courseId}`);
+    const videos = d.videos || [];
+    if (!videos.length) {
+      area.innerHTML = `<div class="empty-state" style="padding:3rem 1rem">
+        ${svgIcon('<circle cx="12" cy="12" r="10"/><polygon points="10 8 16 12 10 16 10 8"/>', 40, 'var(--text-muted)')}
+        <p style="margin:.75rem 0 0;font-size:.9rem">No videos yet for this course</p>
+      </div>`;
+      return;
+    }
+    const platformColors = { youtube:'#ff0000', vimeo:'#1ab7ea', googledrive:'#34a853', loom:'#625df5' };
+    area.innerHTML = `<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:1rem">${
+      videos.map(v => {
+        const color = platformColors[(v.platform||'').toLowerCase()] || 'var(--primary)';
+        return `<div class="card" style="padding:0;overflow:hidden;cursor:pointer;transition:transform .15s,box-shadow .15s" onmouseover="this.style.transform='translateY(-3px)';this.style.boxShadow='var(--shadow-lg)'" onmouseout="this.style.transform='';this.style.boxShadow=''">
+          <div style="position:relative;aspect-ratio:16/9;background:#0d1117;overflow:hidden" onclick="cvWatchVideo(${JSON.stringify(v.embedUrl)},${JSON.stringify(v.title)})">
+            ${v.thumbnail
+              ? `<img src="${escHtml(v.thumbnail)}" style="width:100%;height:100%;object-fit:cover;display:block">`
+              : `<div style="width:100%;height:100%;display:flex;align-items:center;justify-content:center;background:linear-gradient(135deg,#1e293b,#334155)">${svgIcon('<circle cx="12" cy="12" r="10"/><polygon points="10 8 16 12 10 16 10 8"/>', 36, 'rgba(255,255,255,.4)')}</div>`}
+            <div style="position:absolute;inset:0;background:rgba(0,0,0,.35);display:flex;align-items:center;justify-content:center;opacity:0;transition:opacity .15s" onmouseover="this.style.opacity=1" onmouseout="this.style.opacity=0">
+              <div style="width:44px;height:44px;border-radius:50%;background:rgba(255,255,255,.95);display:flex;align-items:center;justify-content:center">
+                ${svgIcon('<polygon points="5 3 19 12 5 21 5 3"/>', 18, '#1e293b')}
+              </div>
+            </div>
+            <div style="position:absolute;top:.5rem;left:.5rem;background:${color};color:#fff;font-size:.65rem;font-weight:600;letter-spacing:.04em;text-transform:uppercase;padding:.2rem .45rem;border-radius:4px;line-height:1.4">${escHtml(v.platform||'video')}</div>
+          </div>
+          <div style="padding:.85rem">
+            <p style="margin:0 0 .25rem;font-weight:600;font-size:.88rem;line-height:1.4;overflow:hidden;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical">${escHtml(v.title)}</p>
+            ${v.description ? `<p style="margin:0 0 .75rem;font-size:.78rem;color:var(--text-light);overflow:hidden;display:-webkit-box;-webkit-line-clamp:1;-webkit-box-orient:vertical">${escHtml(v.description)}</p>` : '<div style="margin-bottom:.75rem"></div>'}
+            <div style="display:flex;gap:.5rem">
+              <button class="btn btn-sm btn-primary" style="flex:1;font-size:.78rem" onclick="cvWatchVideo(${JSON.stringify(v.embedUrl)},${JSON.stringify(v.title)})">
+                ${svgIcon('<polygon points="5 3 19 12 5 21 5 3"/>', 12)} Watch
+              </button>
+              <button class="btn btn-sm btn-ghost" style="padding:.35rem .55rem;color:var(--error);border-color:var(--border)" onclick="cvDeleteVideo('${v._id}','${escHtml(courseId)}')" title="Delete">
+                ${svgIcon('<polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4h6v2"/>', 14, 'var(--error)')}
+              </button>
+            </div>
+          </div>
+        </div>`;
+      }).join('')
+    }</div>`;
+  } catch(e) {
+    area.innerHTML = `<div class="empty-state"><p style="color:var(--error)">${escHtml(e.message)}</p></div>`;
+  }
+}
+
+window.cvAddVideo = async function() {
+  const courseId = document.getElementById('cv-course-sel')?.value;
+  const title    = document.getElementById('cv-title')?.value?.trim();
+  const desc     = document.getElementById('cv-desc')?.value?.trim();
+  const url      = document.getElementById('cv-url')?.value?.trim();
+  if (!courseId || !title || !url) { toastError('Course, title and URL are required'); return; }
+  try {
+    await api('/api/course-videos', { method: 'POST', body: JSON.stringify({ courseId, title, description: desc, url }) });
+    document.getElementById('cv-title').value = '';
+    document.getElementById('cv-desc').value  = '';
+    document.getElementById('cv-url').value   = '';
+    toastSuccess('Video added');
+    cvLoadList(courseId);
+  } catch(e) { toastError(e.message); }
+};
+
+window.cvDeleteVideo = async function(id, courseId) {
+  if (!confirm('Delete this video?')) return;
+  try {
+    await api(`/api/course-videos/${id}`, { method: 'DELETE' });
+    toastSuccess('Deleted');
+    cvLoadList(courseId);
+  } catch(e) { toastError(e.message); }
+};
+
+window.cvWatchVideo = function(embedUrl, title) {
+  const overlay = document.createElement('div');
+  overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.88);z-index:9999;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:1rem;backdrop-filter:blur(4px)';
+  overlay.innerHTML = `
+    <div style="width:100%;max-width:940px;animation:fadeIn .2s ease">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:.85rem">
+        <div style="display:flex;align-items:center;gap:.6rem;min-width:0">
+          <div style="width:32px;height:32px;border-radius:6px;background:rgba(255,255,255,.12);display:flex;align-items:center;justify-content:center;flex-shrink:0">
+            ${svgIcon('<polygon points="5 3 19 12 5 21 5 3"/>', 14, '#fff')}
+          </div>
+          <h3 style="color:#fff;margin:0;font-size:1rem;font-weight:600;overflow:hidden;white-space:nowrap;text-overflow:ellipsis">${escHtml(title)}</h3>
+        </div>
+        <button id="cv-close-btn" style="background:rgba(255,255,255,.12);border:none;color:#fff;width:34px;height:34px;border-radius:8px;cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0;margin-left:.75rem;transition:background .15s" onmouseover="this.style.background='rgba(255,255,255,.22)'" onmouseout="this.style.background='rgba(255,255,255,.12)'">
+          ${svgIcon('<line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>', 16, '#fff')}
+        </button>
+      </div>
+      <div style="position:relative;padding-bottom:56.25%;height:0;overflow:hidden;border-radius:12px;background:#000;box-shadow:0 24px 60px rgba(0,0,0,.6)">
+        <iframe src="${escHtml(embedUrl)}" style="position:absolute;top:0;left:0;width:100%;height:100%;border:0" allow="accelerometer;autoplay;clipboard-write;encrypted-media;gyroscope;picture-in-picture" allowfullscreen></iframe>
+      </div>
+      <p style="color:rgba(255,255,255,.45);text-align:center;font-size:.75rem;margin:.75rem 0 0">Click outside or press Esc to close</p>
+    </div>`;
+  document.body.appendChild(overlay);
+  const close = () => { overlay.style.opacity='0'; overlay.style.transition='opacity .15s'; setTimeout(() => overlay.remove(), 150); };
+  overlay.querySelector('#cv-close-btn').onclick = close;
+  overlay.addEventListener('click', e => { if (e.target === overlay) close(); });
+  const onKey = e => { if (e.key === 'Escape') { close(); document.removeEventListener('keydown', onKey); } };
+  document.addEventListener('keydown', onKey);
+};
+
+async function _renderStudentVideos() {
+  const body = document.getElementById('cv-body');
+  if (!body) return;
+  try {
+    const d = await api('/api/course-videos/my-courses');
+    const courses = d.courses || [];
+    if (!courses.length) {
+      body.innerHTML = `<div class="empty-state" style="padding:4rem 1rem">
+        ${svgIcon('<circle cx="12" cy="12" r="10"/><polygon points="10 8 16 12 10 16 10 8"/>', 48, 'var(--text-muted)')}
+        <p style="margin:.75rem 0 .25rem;font-size:1rem;font-weight:600">No videos yet</p>
+        <p style="margin:0;font-size:.85rem;color:var(--text-light)">Your lecturers haven't added any videos for your courses.</p>
+      </div>`;
+      return;
+    }
+    const platformColors = { youtube:'#ff0000', vimeo:'#1ab7ea', googledrive:'#34a853', loom:'#625df5' };
+    body.innerHTML = courses.map(({ course, videos }) => `
+      <div style="margin-bottom:2rem">
+        <div style="display:flex;align-items:center;gap:.6rem;margin-bottom:1rem;padding-bottom:.75rem;border-bottom:1px solid var(--border)">
+          <div style="width:32px;height:32px;border-radius:8px;background:var(--primary-ultra-light,#eff6ff);display:flex;align-items:center;justify-content:center;flex-shrink:0">
+            ${svgIcon('<path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/>', 16, 'var(--primary)')}
+          </div>
+          <div>
+            <h3 style="margin:0;font-size:.95rem;font-weight:600">${escHtml(course?.title||'Unknown Course')}</h3>
+            ${course?.code ? `<p style="margin:0;font-size:.75rem;color:var(--text-light)">${escHtml(course.code)}</p>` : ''}
+          </div>
+          <span style="margin-left:auto;font-size:.75rem;color:var(--text-muted);font-weight:500">${videos.length} video${videos.length!==1?'s':''}</span>
+        </div>
+        <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:1rem">
+          ${videos.map(v => {
+            const color = platformColors[(v.platform||'').toLowerCase()] || 'var(--primary)';
+            return `<div class="card" style="padding:0;overflow:hidden;cursor:pointer;transition:transform .15s,box-shadow .15s" onclick="cvWatchVideo(${JSON.stringify(v.embedUrl)},${JSON.stringify(v.title)})" onmouseover="this.style.transform='translateY(-3px)';this.style.boxShadow='var(--shadow-lg)'" onmouseout="this.style.transform='';this.style.boxShadow=''">
+              <div style="position:relative;aspect-ratio:16/9;background:#0d1117;overflow:hidden">
+                ${v.thumbnail
+                  ? `<img src="${escHtml(v.thumbnail)}" style="width:100%;height:100%;object-fit:cover;display:block">`
+                  : `<div style="width:100%;height:100%;display:flex;align-items:center;justify-content:center;background:linear-gradient(135deg,#1e293b,#334155)">${svgIcon('<circle cx="12" cy="12" r="10"/><polygon points="10 8 16 12 10 16 10 8"/>', 32, 'rgba(255,255,255,.35)')}</div>`}
+                <div style="position:absolute;inset:0;background:rgba(0,0,0,.3);display:flex;align-items:center;justify-content:center">
+                  <div style="width:40px;height:40px;border-radius:50%;background:rgba(255,255,255,.92);display:flex;align-items:center;justify-content:center">
+                    ${svgIcon('<polygon points="5 3 19 12 5 21 5 3"/>', 16, '#1e293b')}
+                  </div>
+                </div>
+                <div style="position:absolute;top:.5rem;left:.5rem;background:${color};color:#fff;font-size:.62rem;font-weight:700;letter-spacing:.05em;text-transform:uppercase;padding:.18rem .42rem;border-radius:4px">${escHtml(v.platform||'video')}</div>
+              </div>
+              <div style="padding:.75rem">
+                <p style="margin:0;font-weight:600;font-size:.85rem;line-height:1.4;overflow:hidden;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical">${escHtml(v.title)}</p>
+                ${v.description ? `<p style="margin:.25rem 0 0;font-size:.75rem;color:var(--text-light);overflow:hidden;display:-webkit-box;-webkit-line-clamp:1;-webkit-box-orient:vertical">${escHtml(v.description)}</p>` : ''}
+              </div>
+            </div>`;
+          }).join('')}
+        </div>
+      </div>`).join('');
+  } catch(e) {
+    body.innerHTML = `<div class="empty-state"><p style="color:var(--error)">${escHtml(e.message)}</p></div>`;
+  }
+}
+
+// ── Class Rep: Announcements ──────────────────────────────────────────────────
+async function renderClassAnnouncements() {
+  const content = document.getElementById('main-content');
+  if (!content) return;
+  if (!currentUser.isClassRep) {
+    content.innerHTML = `<div class="card" style="text-align:center;padding:40px 20px">
+      <div style="font-size:36px;margin-bottom:12px">🔒</div>
+      <h3 style="font-size:16px;font-weight:700;margin-bottom:6px">Class Representatives Only</h3>
+      <p style="color:var(--text-muted);font-size:13px">Only designated class representatives can post class announcements.</p>
+    </div>`;
+    return;
+  }
+  content.innerHTML = '<div class="loading">Loading…</div>';
+
+  try {
+    const [annData] = await Promise.all([api('/api/announcements')]);
+    const allAnns = annData.announcements || [];
+    // Show announcements for this class group (posted by any class rep of the same group)
+    const classAnns = allAnns.filter(a => {
+      if (String(a.author?._id || a.author) === String(currentUser._id)) return true;
+      if (a.audience === 'class_group' && a.classGroup) {
+        return (
+          String(a.classGroup.studentLevel || '') === String(currentUser.studentLevel || '') &&
+          String(a.classGroup.studentGroup  || '') === String(currentUser.studentGroup  || '') &&
+          String(a.classGroup.sessionType   || '') === String(currentUser.sessionType   || '') &&
+          String(a.classGroup.semester      || '') === String(currentUser.semester      || '') &&
+          String(a.classGroup.programme     || '') === String(currentUser.programme     || '')
+        );
+      }
+      if (a.audience === 'course' && String(a.targetCourse) === String(currentUser.classRepCourse)) return true;
+      return false;
+    });
+
+    content.innerHTML = `
+      <div class="page-header" style="margin-bottom:20px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px">
+        <div>
+          <h2 style="font-size:22px;font-weight:800;letter-spacing:-.5px;color:#0f172a;margin-bottom:2px">Class Announcements</h2>
+          <p style="color:#64748b;font-size:13px">Post announcements visible only to your class group</p>
+        </div>
+        <button onclick="openClassRepAnnouncementModal()" style="display:inline-flex;align-items:center;gap:8px;padding:10px 18px;background:linear-gradient(135deg,#6366f1,#8b5cf6);color:#fff;border:none;border-radius:10px;font-size:14px;font-weight:600;cursor:pointer;box-shadow:0 4px 12px rgba(99,102,241,.35)">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+          Post Announcement
+        </button>
+      </div>
+      <div id="class-ann-list">
+        ${classAnns.length === 0
+          ? `<div style="background:#fff;border:1px solid #e8eaed;border-radius:16px;padding:60px 20px;text-align:center">
+              <div style="font-size:40px;margin-bottom:12px">📢</div>
+              <h3 style="font-size:16px;font-weight:700;color:#0f172a;margin-bottom:6px">No announcements yet</h3>
+              <p style="color:#64748b;font-size:13px">Post your first announcement to your class group above.</p>
+            </div>`
+          : classAnns.map(a => `
+            <div style="background:#fff;border:1px solid #e8eaed;border-radius:14px;padding:20px 24px;margin-bottom:12px;box-shadow:0 1px 4px rgba(0,0,0,.05)">
+              <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:12px;margin-bottom:8px">
+                <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+                  <span style="font-size:18px">${ANN_ICONS[a.type]||'ℹ️'}</span>
+                  <span style="font-weight:700;font-size:15px;color:#0f172a">${esc(a.title)}</span>
+                  <span style="background:#ede9fe;color:#7c3aed;font-size:11px;font-weight:600;padding:2px 8px;border-radius:20px">Class Group</span>
+                </div>
+                ${String(a.author?._id||a.author)===String(currentUser._id)
+                  ? `<button onclick="annDelete('${a._id}')" style="background:#fff;border:1px solid #fca5a5;color:#ef4444;border-radius:8px;padding:4px 10px;font-size:12px;cursor:pointer">Delete</button>`
+                  : ''}
+              </div>
+              <p style="color:#374151;font-size:14px;line-height:1.6;margin:0 0 8px">${esc(a.body)}</p>
+              <span style="color:#94a3b8;font-size:11px">${new Date(a.createdAt).toLocaleString()}</span>
+            </div>`).join('')
+        }
+      </div>`;
+  } catch(e) {
+    content.innerHTML = `<div class="card"><p style="color:var(--danger)">${esc(e.message)}</p></div>`;
+  }
+}
+
+function openClassRepAnnouncementModal() {
+  const container = document.getElementById('modal-container');
+  container.classList.remove('hidden');
+  container.innerHTML = `
+    <div class="modal-overlay" onclick="closeModal(event)">
+      <div class="modal" onclick="event.stopPropagation()" style="max-width:480px">
+        <h3 style="margin:0 0 18px;font-size:18px;font-weight:800">Post Class Announcement</h3>
+        <p style="color:#64748b;font-size:13px;margin:-10px 0 18px">This announcement will only be visible to students in your class group.</p>
+        <div class="form-group" style="margin-bottom:14px">
+          <label style="font-size:13px;font-weight:600;color:#374151;display:block;margin-bottom:6px">Title <span style="color:red">*</span></label>
+          <input id="cr-ann-title" type="text" placeholder="Announcement title…" style="width:100%;padding:10px 12px;border:1.5px solid #e2e8f0;border-radius:8px;font-size:14px;font-family:inherit;outline:none">
+        </div>
+        <div class="form-group" style="margin-bottom:14px">
+          <label style="font-size:13px;font-weight:600;color:#374151;display:block;margin-bottom:6px">Message <span style="color:red">*</span></label>
+          <textarea id="cr-ann-body" rows="5" placeholder="Write your message…" style="width:100%;padding:10px 12px;border:1.5px solid #e2e8f0;border-radius:8px;font-size:14px;font-family:inherit;resize:vertical;outline:none"></textarea>
+        </div>
+        <div class="form-group" style="margin-bottom:20px">
+          <label style="font-size:13px;font-weight:600;color:#374151;display:block;margin-bottom:6px">Type</label>
+          <select id="cr-ann-type" style="width:100%;padding:10px 12px;border:1.5px solid #e2e8f0;border-radius:8px;font-size:14px;font-family:inherit">
+            <option value="info">ℹ️ Info</option>
+            <option value="warning">⚠️ Warning</option>
+            <option value="success">✅ Reminder</option>
+            <option value="urgent">🚨 Urgent</option>
+          </select>
+        </div>
+        <div style="display:flex;gap:10px;justify-content:flex-end">
+          <button onclick="closeModal()" style="padding:10px 18px;background:#f1f5f9;border:none;border-radius:8px;font-size:14px;font-weight:600;cursor:pointer;color:#64748b">Cancel</button>
+          <button onclick="submitClassRepAnnouncement()" style="padding:10px 20px;background:linear-gradient(135deg,#6366f1,#8b5cf6);color:#fff;border:none;border-radius:8px;font-size:14px;font-weight:600;cursor:pointer">Post</button>
+        </div>
+      </div>
+    </div>`;
+}
+
+async function submitClassRepAnnouncement() {
+  const title = document.getElementById('cr-ann-title')?.value?.trim();
+  const body  = document.getElementById('cr-ann-body')?.value?.trim();
+  const type  = document.getElementById('cr-ann-type')?.value || 'info';
+  if (!title || !body) return toastError('Title and message are required.');
+  try {
+    await api('/api/announcements', {
+      method: 'POST',
+      body: JSON.stringify({
+        title,
+        body,
+        type,
+        audience: 'class_group',
+        classGroup: {
+          studentLevel: currentUser.studentLevel,
+          studentGroup: currentUser.studentGroup,
+          sessionType:  currentUser.sessionType,
+          semester:     currentUser.semester,
+          programme:    currentUser.programme,
+        },
+      }),
+    });
+    closeModal();
+    toastSuccess('Announcement posted to your class group!');
+    renderClassAnnouncements();
+  } catch(e) {
+    toastError(e.message || 'Failed to post announcement.');
+  }
+}
+
+// ── Class Rep: Timetable (editable) ──────────────────────────────────────────
+async function renderClassTimetable() {
+  const content = document.getElementById('main-content');
+  if (!content) return;
+  content.innerHTML = '<div class="loading">Loading timetable…</div>';
+  try {
+    const [slotData, courseData] = await Promise.all([
+      api('/api/timetable'),
+      api('/api/courses'),
+    ]);
+    _timetableSlots   = slotData.slots || [];
+    _timetableCourses = (courseData.courses || courseData.data || []).filter(c =>
+      String(c._id) === String(currentUser.classRepCourse)
+    );
+
+    content.innerHTML = `
+      <div class="page-header" style="margin-bottom:20px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px">
+        <div>
+          <h2 style="font-size:22px;font-weight:800;letter-spacing:-.5px;color:#0f172a;margin-bottom:2px">Class Timetable</h2>
+          <p style="color:#64748b;font-size:13px">Manage the weekly schedule for your class group</p>
+        </div>
+        <button onclick="openAddSlotModal()" style="display:inline-flex;align-items:center;gap:8px;padding:10px 18px;background:linear-gradient(135deg,#6366f1,#8b5cf6);color:#fff;border:none;border-radius:10px;font-size:14px;font-weight:600;cursor:pointer;box-shadow:0 4px 12px rgba(99,102,241,.35)">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+          Add Slot
+        </button>
+      </div>
+      ${_timetableSlots.length === 0
+        ? `<div style="background:#fff;border:1px solid #e8eaed;border-radius:16px;padding:60px 20px;text-align:center">
+            <div style="font-size:40px;margin-bottom:12px">📅</div>
+            <h3 style="font-size:16px;font-weight:700;color:#0f172a;margin-bottom:6px">No timetable slots yet</h3>
+            <p style="color:#64748b;font-size:13px">Click "Add Slot" to create the first class entry.</p>
+          </div>`
+        : `<div style="background:#fff;border:1px solid #e8eaed;border-radius:14px;overflow-x:auto;box-shadow:0 1px 4px rgba(0,0,0,.05)">${_timetableGrid(_timetableSlots, true)}</div>`
+      }`;
+  } catch(e) {
+    content.innerHTML = `<div class="card"><p style="color:var(--danger)">${esc(e.message)}</p></div>`;
+  }
+}
+
+window._realSelectMode   = selectMode;
+window._realSelectPortal = selectPortal;
+window._appLoaded = true;
+// Execute any pending calls from before app.js loaded
+if (window._pendingMode)   { selectMode(window._pendingMode);     window._pendingMode = null; }
+if (window._pendingPortal) { selectPortal(window._pendingPortal); window._pendingPortal = null; }
+
+// ─── ADDITIONS SINCE ZIP BASELINE ───────────────────────────────────────────
+async function _confirmReject(userId) {
+  const reason = (document.getElementById('reject-reason')?.value || '').trim();
+  closeModal();
+  try {
+    await api(`/api/approvals/${userId}/reject`, { method: 'DELETE', body: JSON.stringify({ reason }) });
+    renderApprovals();
+  } catch (e) {
+    toastError(e.message);
+  }
+}
+
+async function _doAssignRepToDevice(deviceId, repId, repName, deviceName) {
+  try {
+    await api(`/api/devices/${encodeURIComponent(deviceId)}/assign-class-rep`, {
+      method: 'PATCH',
+      body: JSON.stringify({ classRepId: repId }),
+    });
+    closeModal();
+    toastSuccess(`${repName} assigned to ${deviceName}`);
+    renderClassReps();
+  } catch(e) {
+    toastError(e.message || 'Failed to assign rep to device');
+  }
+}
+
+async function _lcvDelete(videoId, courseId) {
+  if (!confirm('Delete this video?')) return;
+  try {
+    await api(`/api/course-videos/${videoId}`, { method: 'DELETE' });
+    document.getElementById(`lcv-row-${videoId}`)?.remove();
+    showToastNotif('Video deleted', 'success');
+  } catch (e) {
+    showToastNotif(e.message || 'Failed to delete', 'error');
+  }
+}
+
+async function _lcvSubmitAdd(courseId) {
+  const url   = document.getElementById('lcv-url')?.value.trim();
+  const title = document.getElementById('lcv-title')?.value.trim();
+  const desc  = document.getElementById('lcv-desc')?.value.trim();
+  if (!url || !title) return showToastNotif('URL and title are required', 'error');
+  try {
+    const data = await api('/api/course-videos', { method: 'POST', body: JSON.stringify({ courseId, url, title, description: desc }) });
+    closeModal();
+    showToastNotif('Video added', 'success');
+    const list = document.getElementById(`lcv-list-${courseId}`);
+    if (list) {
+      const placeholder = list.querySelector('p');
+      if (placeholder) placeholder.remove();
+      list.insertAdjacentHTML('beforeend', _lcvVideoRow(data.video));
+      const section = document.getElementById(`lcv-section-${courseId}`);
+      const countEl = section?.querySelector('span[style*="text-muted"]');
+      if (countEl) {
+        const cur = parseInt(countEl.textContent) || 0;
+        const nxt = cur + 1;
+        countEl.textContent = `${nxt} video${nxt !== 1 ? 's' : ''}`;
+      }
+    }
+  } catch (e) {
+    showToastNotif(e.message || 'Failed to add video', 'error');
+  }
+}
+
+async function _repConnect() {
+  const sel    = document.getElementById('rep-lec-select');
+  const errEl  = document.getElementById('rep-connect-err');
+  const lecturerId  = sel?.value;
+  const courseId    = sel?.selectedOptions[0]?.dataset?.course || '';
+  const lecturerPin = document.getElementById('rep-pin-input')?.value?.trim();
+  if (!lecturerId) { if (errEl) { errEl.textContent = 'Please select a lecturer.'; errEl.style.display = 'block'; } return; }
+  try {
+    if (errEl) errEl.style.display = 'none';
+    await api('/api/class-rep/connect', { method: 'POST', body: JSON.stringify({ lecturerId, courseId: courseId || undefined, lecturerPin: lecturerPin || undefined }) });
+    showToastNotif('Device connected successfully!', 'success');
+    _repDeviceRefresh();
+  } catch (e) {
+    if (errEl) { errEl.textContent = e.message; errEl.style.display = 'block'; }
+  }
+}
+
+async function _repDeviceRefresh() {
+  const body = document.getElementById('rep-device-body');
+  if (!body) return;
+  try {
+    const [devData, lecData] = await Promise.all([
+      api('/api/class-rep/device'),
+      api('/api/class-rep/lecturers'),
+    ]);
+    const device   = devData.device;
+    const lecturers = lecData.lecturers || [];
+
+    if (!device) {
+      body.innerHTML = `
+        <div class="card" style="text-align:center;padding:48px 24px">
+          <div style="font-size:40px;margin-bottom:12px">📡</div>
+          <h3 style="margin-bottom:8px">No Device Assigned</h3>
+          <p style="color:var(--text-muted)">No attendance device has been assigned to your class yet. Contact your admin or HOD.</p>
+        </div>`;
+      return;
+    }
+
+    const isOnlineDevice = device.lastHeartbeat && (Date.now() - new Date(device.lastHeartbeat).getTime()) < 45000;
+    const isConnected    = !!device.activeLecturerId;
+
+    const lecOptions = lecturers.length
+      ? lecturers.map(l => `<option value="${esc(l.lecturerId)}" data-course="${esc(l.courseId||'')}">${esc(l.lecturerName)} — ${esc(l.courseTitle)} (${esc(l.courseCode)})</option>`).join('')
+      : '<option value="">No lecturers found for your class</option>';
+
+    body.innerHTML = `
+      <div class="card" style="max-width:540px;margin-bottom:20px">
+        <div style="display:flex;align-items:center;gap:12px;margin-bottom:18px">
+          <div style="width:48px;height:48px;border-radius:12px;background:${isOnlineDevice ? '#dcfce7' : '#fee2e2'};display:flex;align-items:center;justify-content:center;font-size:22px">
+            ${isOnlineDevice ? '🟢' : '🔴'}
+          </div>
+          <div>
+            <div style="font-size:16px;font-weight:700;color:var(--text)">${esc(device.name || device.deviceId)}</div>
+            <div style="font-size:12px;color:var(--text-muted);margin-top:2px">${isOnlineDevice ? 'Online' : 'Offline'} · ID: ${esc(device.deviceId)}</div>
+          </div>
+        </div>
+
+        ${isConnected ? `
+          <div style="padding:14px 16px;background:#ede9fe;border-radius:10px;margin-bottom:16px">
+            <div style="font-size:12px;font-weight:700;color:#6d28d9;text-transform:uppercase;letter-spacing:.4px;margin-bottom:4px">Active Session</div>
+            <div style="font-size:14px;font-weight:600;color:var(--text)">${esc(device.activeLecturerId?.name || 'Lecturer')}</div>
+            ${device.connectedAt ? `<div style="font-size:12px;color:var(--text-muted);margin-top:2px">Started ${new Date(device.connectedAt).toLocaleTimeString()}</div>` : ''}
+          </div>
+          <button class="btn btn-danger" style="width:100%" onclick="_repDisconnect()">End Session &amp; Release Device</button>
+        ` : `
+          ${!isOnlineDevice ? `<div style="padding:12px 14px;background:#fef2f2;border:1px solid #fca5a5;border-radius:8px;margin-bottom:14px;font-size:13px;color:#dc2626">
+            Device is offline. Power it on and wait for the green indicator before connecting.
+          </div>` : ''}
+          <div class="form-group" style="margin-bottom:12px">
+            <label style="font-size:12px;font-weight:600;text-transform:uppercase;letter-spacing:.5px;color:var(--text-muted);display:block;margin-bottom:6px">Select Lecturer &amp; Course</label>
+            <select id="rep-lec-select" style="width:100%;padding:10px 12px;border:1.5px solid var(--border);border-radius:8px;font-size:13px;background:var(--bg);color:var(--text)">
+              <option value="">— Choose a lecturer —</option>
+              ${lecOptions}
+            </select>
+          </div>
+          <div class="form-group" id="rep-pin-wrap" style="margin-bottom:14px;display:none">
+            <label style="font-size:12px;font-weight:600;text-transform:uppercase;letter-spacing:.5px;color:var(--text-muted);display:block;margin-bottom:6px">Lecturer PIN</label>
+            <input type="password" id="rep-pin-input" maxlength="4" inputmode="numeric" placeholder="4-digit PIN"
+              style="width:100%;padding:10px 12px;border:1.5px solid var(--border);border-radius:8px;font-size:13px;background:var(--bg);color:var(--text)"
+              onkeydown="if(event.key==='Enter')_repConnect()">
+          </div>
+          <div id="rep-connect-err" style="display:none;color:var(--danger);font-size:13px;margin-bottom:10px"></div>
+          <button class="btn btn-primary" style="width:100%" onclick="_repConnect()" ${!isOnlineDevice ? 'disabled' : ''}>Connect Device to Lecturer</button>
+        `}
+      </div>
+      <div style="font-size:12px;color:var(--text-muted);max-width:540px">
+        💡 Tip: Connect the device before the lecturer arrives. The session starts as soon as students begin scanning.
+        When class is over, tap <strong>End Session</strong> to release the device.
+      </div>`;
+
+    document.getElementById('rep-lec-select')?.addEventListener('change', function() {
+      const pinWrap = document.getElementById('rep-pin-wrap');
+      if (pinWrap) pinWrap.style.display = this.value ? 'block' : 'none';
+    });
+  } catch (e) {
+    body.innerHTML = `<div class="card"><p style="color:var(--danger)">Error: ${esc(e.message)}</p></div>`;
+  }
+}
+
+async function _repDisconnect() {
+  if (!confirm('End the active session and release the device?')) return;
+  try {
+    await api('/api/class-rep/disconnect', { method: 'POST', body: JSON.stringify({}) });
+    showToastNotif('Session ended.', 'success');
+    _repDeviceRefresh();
+  } catch (e) {
+    toastError(e.message);
+  }
+}
+
+async function _updateHodQuizBadge() {
+  try {
+    const data = await api('/api/lecturer/snap-quizzes/department-overview').catch(() => api('/api/lecturer/snap-quizzes').catch(() => ({ quizzes: [] })));
+    const active = (data.quizzes || []).filter(q => q.status === 'open' || q.status === 'active');
+    _applyQuizBadge('nav-hod-quiz-monitor', active.length);
+  } catch { /* silent */ }
+}
+
+async function _updateLecturerQuizBadge() {
+  try {
+    const data = await api('/api/lecturer/snap-quizzes').catch(() => ({ quizzes: [] }));
+    const active = (data.quizzes || []).filter(q => q.status === 'open' || q.status === 'active');
+    _applyQuizBadge('nav-snap-quiz', active.length);
+  } catch { /* silent */ }
+}
+
+async function doAssignRep(studentId, name) {
+  try {
+    await api('/api/class-rep-admin/assign', { method: 'POST', body: JSON.stringify({ studentId }) });
+    closeModal();
+    toastSuccess(`${name} assigned as class representative`);
+    renderClassReps();
+  } catch(e) { toastError(e.message || 'Failed to assign'); }
+}
+
+async function exportAttendanceCSV() {
+  try {
+    const res = await fetch(`${API}/api/reports/attendance/csv`, {
+      headers: { 'Authorization': `Bearer ${token}` },
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      toastError(err.error || 'Failed to export CSV');
+      return;
+    }
+    const blob = await res.blob();
+    const filename = 'attendance-' + new Date().toISOString().slice(0, 10) + '.csv';
+    await downloadBlob(blob, filename);
+    toastSuccess('Attendance CSV downloaded');
+  } catch (e) {
+    toastError('Export failed: ' + e.message);
+  }
+}
+
+async function hodConfirmAssignLecturer(courseId) {
+  const lecturerId = document.getElementById('assign-lect-id')?.value;
+  const msg = document.getElementById('assign-lect-msg');
+  const show = (text, ok) => {
+    msg.textContent = text; msg.style.display = 'block';
+    msg.style.background = ok ? 'rgba(34,197,94,0.1)' : 'rgba(239,68,68,0.1)';
+    msg.style.color = ok ? '#16a34a' : '#ef4444';
+    msg.style.border = `1px solid ${ok ? '#bbf7d0' : '#fecaca'}`;
+  };
+  if (!lecturerId) return show('Please select a lecturer first.', false);
+  try {
+    await api(`/api/courses/${courseId}/assign-lecturer`, { method: 'PUT', body: JSON.stringify({ lecturerId }) });
+    show('Lecturer assigned successfully!', true);
+    setTimeout(() => { closeModal(); renderHodCourses(); }, 1200);
+  } catch(e) { show(e.message || 'Failed to assign lecturer.', false); }
+}
+
+async function hodSearchLecturers(q) {
+  const box = document.getElementById('assign-lect-results');
+  if (!box) return;
+  if (q.trim().length < 2) { box.innerHTML = ''; return; }
+  try {
+    const data = await api(`/api/class-rep/search-lecturers?q=${encodeURIComponent(q.trim())}`);
+    const lecturers = data.users || [];
+    if (!lecturers.length) { box.innerHTML = '<div style="font-size:13px;color:var(--text-muted);padding:8px 4px">No lecturers found</div>'; return; }
+    box.innerHTML = lecturers.map(l => `
+      <div onclick="hodSelectLecturer('${l._id}','${esc(l.name)}')"
+        style="padding:10px 12px;border-radius:8px;cursor:pointer;font-size:13px;border:1.5px solid var(--border);margin-bottom:6px;display:flex;align-items:center;gap:10px;background:var(--bg)">
+        <div style="width:32px;height:32px;border-radius:50%;background:linear-gradient(135deg,var(--primary),#6366f1);display:flex;align-items:center;justify-content:center;font-weight:700;color:#fff;font-size:13px;flex-shrink:0">${esc(l.name[0].toUpperCase())}</div>
+        <div><div style="font-weight:600">${esc(l.name)}</div><div style="font-size:11px;color:var(--text-muted)">${esc(l.email||'')}</div></div>
+      </div>`).join('');
+  } catch(e) { box.innerHTML = `<div style="font-size:13px;color:#ef4444">${e.message}</div>`; }
+}
+
+async function removeClassRep(userId, name) {
+  if (!confirm(`Remove ${name} as class representative?`)) return;
+  try {
+    await api(`/api/class-rep-admin/remove/${userId}`, { method: 'DELETE' });
+    toastSuccess(`${name} removed as class rep`);
+    renderClassReps();
+  } catch(e) { toastError(e.message || 'Failed to remove'); }
+}
+
+async function renderAdminDevices() {
+  const content = document.getElementById('main-content');
+  if (!content) return;
+  content.innerHTML = '<div class="loading">Loading devices…</div>';
+
+  const esc = s => s == null ? '' : String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  const timeAgo = d => {
+    if (!d) return 'Never';
+    const m = Math.floor((Date.now() - new Date(d)) / 60000);
+    if (m < 1) return 'Just now';
+    if (m < 60) return `${m}m ago`;
+    if (m < 1440) return `${Math.floor(m/60)}h ${Math.floor(m%60)}m ago`;
+    return `${Math.floor(m/1440)}d ago`;
+  };
+
+  try {
+    const { devices } = await api('/api/devices/all');
+    const online  = devices.filter(d => d.online).length;
+    const offline = devices.length - online;
+    const now     = new Date().toLocaleTimeString([], { hour:'2-digit', minute:'2-digit' });
+    const instCode = currentUser?.company?.institutionCode || currentUser?.company?.code || currentUser?.institutionCode || '—';
+
+    content.innerHTML = `
+      <!-- Page header -->
+      <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;margin-bottom:18px">
+        <div>
+          <h2 style="font-size:20px;font-weight:800;margin:0 0 3px">Attendance Devices</h2>
+          <p style="font-size:13px;color:var(--text-muted);margin:0">Manage all ESP32 devices paired to your institution</p>
+        </div>
+        <button class="btn btn-primary" onclick="adminGeneratePairingCode()" style="display:flex;align-items:center;gap:7px;font-size:13px;padding:9px 18px;border-radius:10px;font-weight:600">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+          Generate Pairing Code
+        </button>
+      </div>
+
+      <!-- Compact summary bar -->
+      <div class="card" style="padding:14px 18px;margin-bottom:18px;display:flex;align-items:center;flex-wrap:wrap;gap:0">
+        <div style="display:flex;align-items:center;gap:10px;padding-right:20px;margin-right:20px;border-right:1px solid var(--border)">
+          <div style="width:34px;height:34px;border-radius:9px;background:rgba(79,110,247,.1);display:flex;align-items:center;justify-content:center;flex-shrink:0">
+            <svg viewBox="0 0 24 24" fill="none" stroke="#4f6ef7" stroke-width="2" width="15" height="15"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/></svg>
+          </div>
+          <div>
+            <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.7px;color:var(--text-muted)">Total</div>
+            <div style="font-size:20px;font-weight:800;line-height:1">${devices.length}</div>
+          </div>
+        </div>
+        <div style="display:flex;align-items:center;gap:10px;padding-right:20px;margin-right:20px;border-right:1px solid var(--border)">
+          <span style="width:10px;height:10px;border-radius:50%;background:#16a34a;flex-shrink:0;box-shadow:0 0 0 3px rgba(22,163,74,.18)"></span>
+          <div>
+            <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.7px;color:var(--text-muted)">Online</div>
+            <div style="font-size:20px;font-weight:800;color:#16a34a;line-height:1">${online}</div>
+          </div>
+        </div>
+        <div style="display:flex;align-items:center;gap:10px;padding-right:20px;margin-right:20px;border-right:1px solid var(--border)">
+          <span style="width:10px;height:10px;border-radius:50%;background:#9ca3af;flex-shrink:0"></span>
+          <div>
+            <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.7px;color:var(--text-muted)">Offline</div>
+            <div style="font-size:20px;font-weight:800;color:var(--text-muted);line-height:1">${offline}</div>
+          </div>
+        </div>
+        <div style="flex:1;display:flex;align-items:center;justify-content:space-between;gap:10px;min-width:160px;margin-top:0">
+          <div>
+            <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.7px;color:var(--text-muted)">Institution Code</div>
+            <div style="font-size:18px;font-weight:900;letter-spacing:4px;font-family:monospace;line-height:1.2">${esc(instCode)}</div>
+          </div>
+          <button onclick="navigator.clipboard.writeText('${esc(instCode)}').then(()=>showToastNotif('Copied!','success'))"
+            style="font-size:12px;font-weight:600;padding:5px 12px;border-radius:8px;border:1.5px solid var(--border);background:var(--bg);color:var(--text-muted);cursor:pointer;white-space:nowrap;flex-shrink:0">
+            Copy
+          </button>
+        </div>
+      </div>
+
+      <!-- Connection guide -->
+      <details style="margin-bottom:16px" id="dev-guide-details">
+        <summary style="display:flex;align-items:center;gap:8px;cursor:pointer;list-style:none;padding:12px 16px;background:var(--card);border-radius:12px;border:1px solid var(--border);font-size:13px;font-weight:600;user-select:none">
+          <svg viewBox="0 0 24 24" fill="none" stroke="#4f6ef7" stroke-width="2" width="15" height="15"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+          <span style="flex:1">How to connect &amp; assign a device</span>
+          <svg class="dev-guide-arrow" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="13" height="13" style="color:var(--text-muted);transition:transform .2s"><polyline points="6 9 12 15 18 9"/></svg>
+        </summary>
+        <div style="padding:16px;background:var(--card);border:1px solid var(--border);border-top:none;border-radius:0 0 12px 12px">
+          <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:12px;margin-bottom:14px">
+            <div style="background:var(--bg);border-radius:10px;padding:13px 14px;border:1px solid var(--border)">
+              <div style="display:flex;align-items:center;gap:8px;margin-bottom:7px">
+                <div style="width:24px;height:24px;border-radius:7px;background:rgba(79,110,247,.1);display:flex;align-items:center;justify-content:center;flex-shrink:0;font-size:11px;font-weight:800;color:#4f6ef7">1</div>
+                <div style="font-size:12px;font-weight:700">Generate a Code</div>
+              </div>
+              <div style="font-size:11px;color:var(--text-muted);line-height:1.5">Click <strong>Generate Pairing Code</strong> above. You'll get a 6-digit one-time code (valid for 10 minutes) and your Institution Code.</div>
+            </div>
+            <div style="background:var(--bg);border-radius:10px;padding:13px 14px;border:1px solid var(--border)">
+              <div style="display:flex;align-items:center;gap:8px;margin-bottom:7px">
+                <div style="width:24px;height:24px;border-radius:7px;background:rgba(79,110,247,.1);display:flex;align-items:center;justify-content:center;flex-shrink:0;font-size:11px;font-weight:800;color:#4f6ef7">2</div>
+                <div style="font-size:12px;font-weight:700">Share with Class Rep</div>
+              </div>
+              <div style="font-size:11px;color:var(--text-muted);line-height:1.5">Give the Class Rep both codes. They power on the ESP32 device, connect it to WiFi via the hotspot, then enter the codes on the device.</div>
+            </div>
+            <div style="background:var(--bg);border-radius:10px;padding:13px 14px;border:1px solid var(--border)">
+              <div style="display:flex;align-items:center;gap:8px;margin-bottom:7px">
+                <div style="width:24px;height:24px;border-radius:7px;background:rgba(79,110,247,.1);display:flex;align-items:center;justify-content:center;flex-shrink:0;font-size:11px;font-weight:800;color:#4f6ef7">3</div>
+                <div style="font-size:12px;font-weight:700">Assign &amp; Configure</div>
+              </div>
+              <div style="font-size:11px;color:var(--text-muted);line-height:1.5">Once paired, the device appears here. Assign the <strong>Class Rep</strong> (so attendance is linked to their group) and add <strong>Lecturers + Courses</strong> the device will handle.</div>
+            </div>
+          </div>
+          <div style="background:rgba(79,110,247,.06);border-radius:8px;padding:10px 13px;border-left:3px solid #4f6ef7">
+            <div style="font-size:11px;color:var(--text-muted);line-height:1.5"><strong style="color:var(--text-primary)">Tip:</strong> Each device can have up to 2 class reps and multiple lecturers. The device uses BLE + WiFi proximity — students must be within range when the attendance session is live.</div>
+          </div>
+        </div>
+      </details>
+
+      <!-- Section header -->
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
+        <div style="font-size:14px;font-weight:700;display:flex;align-items:center;gap:8px">
+          Paired Devices
+          <span style="font-size:12px;font-weight:600;padding:2px 9px;border-radius:20px;background:rgba(79,110,247,.1);color:#4f6ef7">${devices.length}</span>
+        </div>
+        <div style="display:flex;align-items:center;gap:8px">
+          <span style="font-size:11px;color:var(--text-muted)">Updated ${now}</span>
+          <button onclick="renderAdminDevices()"
+            style="display:flex;align-items:center;gap:5px;font-size:12px;font-weight:600;padding:5px 11px;border-radius:8px;border:1.5px solid var(--border);background:var(--bg);color:var(--text-muted);cursor:pointer">
+            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>
+            Refresh
+          </button>
+        </div>
+      </div>
+
+      ${devices.length === 0 ? `
+        <div class="card" style="text-align:center;padding:56px 24px">
+          <div style="width:52px;height:52px;border-radius:14px;background:rgba(79,110,247,.08);display:flex;align-items:center;justify-content:center;margin:0 auto 14px">
+            <svg viewBox="0 0 24 24" fill="none" stroke="#4f6ef7" stroke-width="1.5" width="24" height="24"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/></svg>
+          </div>
+          <div style="font-size:16px;font-weight:700;margin-bottom:6px">No Devices Paired Yet</div>
+          <div style="font-size:13px;color:var(--text-muted);max-width:300px;margin:0 auto 20px;line-height:1.5">Generate a pairing code and share it with a Class Rep to set up a device.</div>
+          <button class="btn btn-primary" onclick="adminGeneratePairingCode()">+ Generate Pairing Code</button>
+        </div>
+      ` : `
+        <div style="display:flex;flex-direction:column;gap:12px">
+          ${devices.map(d => {
+            const did      = esc(d.deviceId || d._id);
+            const dname    = esc(d.deviceName || d.deviceId || 'Unknown');
+            const isOnline = d.online;
+            const chipId   = esc(d.chipId || d.deviceId || '');
+            const classRep = d.classRepId ? esc(d.classRepId.name) : null;
+            const repIndex = d.classRepId?.IndexNumber ? esc(d.classRepId.IndexNumber) : null;
+            const grp      = d.assignedGroup ? `L${esc(d.assignedLevel||'?')} · Gr ${esc(d.assignedGroup)}` : null;
+            const dept     = esc(d.assignedDepartment || '');
+            const ip       = esc(d.localIp || '');
+            const fw       = esc(d.firmwareVersion || '');
+            const lastSeen = timeAgo(d.lastHeartbeat);
+            const lecturers = (d.assignedLecturers || []).filter(a => a.lecturerId);
+
+            return `
+            <div class="card" style="padding:0;overflow:hidden;border-radius:14px">
+
+              <!-- Device header strip -->
+              <div style="padding:13px 16px;display:flex;align-items:center;gap:11px">
+                <div style="width:38px;height:38px;border-radius:10px;background:${isOnline ? 'rgba(22,163,74,.1)' : 'rgba(107,114,128,.08)'};display:flex;align-items:center;justify-content:center;flex-shrink:0">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="${isOnline ? '#16a34a' : '#9ca3af'}" stroke-width="2" width="17" height="17"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/></svg>
+                </div>
+                <div style="flex:1;min-width:0">
+                  <div style="font-size:14px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${dname}</div>
+                  ${chipId ? `<div style="font-size:10px;color:var(--text-muted);font-family:monospace;margin-top:1px">${chipId}</div>` : ''}
+                </div>
+                <span style="display:inline-flex;align-items:center;gap:4px;font-size:11px;font-weight:700;padding:3px 9px;border-radius:20px;background:${isOnline ? 'rgba(22,163,74,.1)' : 'rgba(107,114,128,.1)'};color:${isOnline ? '#15803d' : '#6b7280'};flex-shrink:0">
+                  <span style="width:5px;height:5px;border-radius:50%;background:${isOnline ? '#16a34a' : '#9ca3af'}"></span>
+                  ${isOnline ? 'Online' : 'Offline'}
+                </span>
+              </div>
+
+              <!-- Info rows -->
+              <div style="padding:0 16px 4px;border-top:1px solid var(--border)">
+                <div style="display:grid;grid-template-columns:1fr 1fr;gap:1px;background:var(--border)">
+                  <div style="background:var(--card);padding:10px 0 10px 2px">
+                    <div style="font-size:9px;font-weight:800;text-transform:uppercase;letter-spacing:.8px;color:var(--text-muted);margin-bottom:4px">Class Rep</div>
+                    <div style="font-size:13px;font-weight:600;color:${classRep ? 'var(--text-primary)' : 'var(--text-muted)'}">
+                      ${classRep || 'Not assigned'}
+                    </div>
+                    ${repIndex ? `<div style="font-size:10px;color:var(--text-muted);margin-top:1px">${repIndex}</div>` : ''}
+                  </div>
+                  <div style="background:var(--card);padding:10px 0 10px 12px">
+                    <div style="font-size:9px;font-weight:800;text-transform:uppercase;letter-spacing:.8px;color:var(--text-muted);margin-bottom:4px">Class / Group</div>
+                    <div style="font-size:13px;font-weight:600;color:${grp ? 'var(--text-primary)' : 'var(--text-muted)'}">${grp || '—'}</div>
+                  </div>
+                  ${dept ? `
+                  <div style="background:var(--card);padding:10px 0 10px 2px">
+                    <div style="font-size:9px;font-weight:800;text-transform:uppercase;letter-spacing:.8px;color:var(--text-muted);margin-bottom:4px">Department</div>
+                    <div style="font-size:13px;font-weight:600">${dept}</div>
+                  </div>` : ''}
+                  <div style="background:var(--card);padding:10px 0 10px ${dept ? '12px' : '2px'}">
+                    <div style="font-size:9px;font-weight:800;text-transform:uppercase;letter-spacing:.8px;color:var(--text-muted);margin-bottom:4px">Last Seen</div>
+                    <div style="font-size:13px;color:var(--text-muted)">${lastSeen}</div>
+                  </div>
+                  ${ip ? `
+                  <div style="background:var(--card);padding:10px 0 10px 2px;grid-column:1/-1">
+                    <div style="font-size:9px;font-weight:800;text-transform:uppercase;letter-spacing:.8px;color:var(--text-muted);margin-bottom:4px">Network</div>
+                    <div style="font-size:11px;font-family:monospace;color:var(--text-muted)">IP ${ip}${fw ? ` · fw ${fw}` : ''}</div>
+                  </div>` : ''}
+                </div>
+              </div>
+
+              <!-- Lecturers section -->
+              <div style="padding:10px 16px 12px;border-top:1px solid var(--border)">
+                <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
+                  <div style="font-size:9px;font-weight:800;text-transform:uppercase;letter-spacing:.8px;color:var(--text-muted)">Assigned Lecturers</div>
+                  <button onclick="adminAssignLecturer('${did}','${dname}')"
+                    style="font-size:11px;font-weight:700;padding:3px 10px;border-radius:7px;border:1.5px solid var(--accent,#4f6ef7);background:transparent;color:var(--accent,#4f6ef7);cursor:pointer">
+                    + Assign
+                  </button>
+                </div>
+                ${lecturers.length === 0
+                  ? `<div style="font-size:12px;color:var(--text-muted);padding:6px 0">No lecturers assigned yet</div>`
+                  : lecturers.map(a => {
+                      const lname = esc(a.lecturerId?.name || 'Unknown');
+                      const cname = esc(a.courseId?.title || '');
+                      const ccode = esc(a.courseId?.code || '');
+                      const lid   = esc(a.lecturerId?._id || a.lecturerId);
+                      const cid   = esc(a.courseId?._id  || a.courseId);
+                      return `
+                      <div style="display:flex;align-items:center;justify-content:space-between;padding:7px 10px;background:var(--bg);border-radius:8px;margin-bottom:5px;gap:8px;border:1px solid var(--border)">
+                        <div style="min-width:0;display:flex;align-items:center;gap:8px">
+                          <div style="width:28px;height:28px;border-radius:50%;background:rgba(79,110,247,.1);display:flex;align-items:center;justify-content:center;flex-shrink:0;font-size:11px;font-weight:700;color:#4f6ef7">
+                            ${lname[0]?.toUpperCase() || '?'}
+                          </div>
+                          <div style="min-width:0">
+                            <div style="font-size:12px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${lname}</div>
+                            ${cname ? `<div style="font-size:10px;color:var(--text-muted)">${ccode ? ccode+' · ' : ''}${cname}</div>` : ''}
+                          </div>
+                        </div>
+                        <button onclick="adminRemoveLecturer('${did}','${lid}','${cid}','${lname}')"
+                          style="font-size:10px;font-weight:700;padding:3px 8px;border-radius:6px;border:1px solid rgba(239,68,68,.2);background:rgba(239,68,68,.05);color:#ef4444;cursor:pointer;white-space:nowrap;flex-shrink:0">
+                          Remove
+                        </button>
+                      </div>`;
+                    }).join('')
+                }
+              </div>
+
+              <!-- Action bar -->
+              <div style="padding:10px 16px;border-top:1px solid var(--border);display:flex;flex-wrap:wrap;gap:7px;background:var(--bg)">
+                <button class="btn btn-secondary btn-sm" onclick="adminAssignClassRep('${did}','${dname}')" style="font-size:11px;display:flex;align-items:center;gap:4px">
+                  <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+                  Assign Rep
+                </button>
+                <button class="btn btn-secondary btn-sm" onclick="adminRenameDevice('${did}','${dname}')" style="font-size:11px;display:flex;align-items:center;gap:4px">
+                  <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+                  Rename
+                </button>
+                <button class="btn btn-secondary btn-sm" onclick="adminFactoryReset('${did}','${dname}',${isOnline})" style="font-size:11px;display:flex;align-items:center;gap:4px">
+                  <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>
+                  Factory Reset
+                </button>
+                <button onclick="adminRemoveDevice('${did}','${dname}')" style="font-size:11px;font-weight:600;padding:5px 12px;border-radius:8px;border:1px solid rgba(239,68,68,.25);background:rgba(239,68,68,.06);color:#ef4444;cursor:pointer;display:flex;align-items:center;gap:4px">
+                  <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg>
+                  Remove
+                </button>
+              </div>
+            </div>`;
+          }).join('')}
+        </div>
+      `}
+    `;
+  } catch(e) {
+    content.innerHTML = `<div class="card" style="color:#ef4444;padding:20px">Failed to load devices: ${esc(e.message)}</div>`;
+  }
+}
+
+async function renderBadges() {
+  const content = document.getElementById('main-content');
+  if (!content) return;
+  content.innerHTML = '<div class="loading">Loading badges…</div>';
+  const esc = s => s == null ? '' : String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  const fmt = d => d ? new Date(d).toLocaleDateString('en-GB',{day:'numeric',month:'short',year:'numeric'}) : '';
+  const isStudent = currentUser?.role === 'student';
+  const isStaff = ['lecturer','hod','admin','superadmin','manager'].includes(currentUser?.role);
+
+  try {
+    const requests = [api('/api/badges/catalog'), api('/api/badges/leaderboard')];
+    if (isStudent) requests.push(api('/api/badges/my'));
+    const [catalogData, lbData, myData] = await Promise.all(requests);
+
+    const catalog = catalogData.badges || [];
+    const leaderboard = lbData.leaderboard || [];
+    const myAwards = myData?.awards || [];
+    const myBadgeIds = new Set(myAwards.map(a => a.badge?._id?.toString()));
+
+    content.innerHTML = `
+      <div class="page-header" style="display:flex;align-items:flex-start;justify-content:space-between;flex-wrap:wrap;gap:10px">
+        <div>
+          <h2>Badges &amp; Achievements</h2>
+          <p>${isStudent ? `${myAwards.length} badge${myAwards.length !== 1 ? 's' : ''} earned` : 'Badge catalog and leaderboard'}</p>
+        </div>
+        ${isStaff ? `<button class="btn btn-primary" onclick="openAwardBadgeModal()">+ Award Badge</button>` : ''}
+      </div>
+
+      ${isStudent && myAwards.length > 0 ? `
+      <div style="margin-bottom:20px">
+        <div style="font-size:14px;font-weight:700;margin-bottom:12px">Your Badges</div>
+        <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:12px">
+          ${myAwards.map(a => `
+          <div class="card" style="padding:16px;text-align:center;border-top:3px solid ${a.badge?.color||'#6366f1'}">
+            <div style="font-size:36px;margin-bottom:8px">${esc(a.badge?.icon||'🏅')}</div>
+            <div style="font-size:14px;font-weight:700;margin-bottom:4px">${esc(a.badge?.name||'Badge')}</div>
+            <div style="font-size:12px;color:var(--text-muted);margin-bottom:6px">${esc(a.badge?.description||'')}</div>
+            <div style="font-size:11px;color:var(--text-muted)">Earned ${fmt(a.awardedAt)}</div>
+          </div>`).join('')}
+        </div>
+      </div>` : isStudent ? `
+      <div class="card" style="padding:20px;margin-bottom:20px;text-align:center;color:var(--text-muted)">
+        <div style="font-size:32px;margin-bottom:8px">🏅</div>
+        <div style="font-size:14px;font-weight:600">No badges yet</div>
+        <div style="font-size:12px;margin-top:4px">Complete courses and activities to earn badges.</div>
+      </div>` : ''}
+
+      ${leaderboard.length > 0 ? `
+      <div style="margin-bottom:20px">
+        <div style="font-size:14px;font-weight:700;margin-bottom:12px">🏆 Leaderboard</div>
+        <div class="card" style="padding:0;overflow:hidden">
+          ${leaderboard.map((r,i) => `
+          <div style="display:flex;align-items:center;gap:12px;padding:12px 16px;border-bottom:1px solid var(--border);${i===0?'background:linear-gradient(135deg,#fffbeb,var(--card))':''}">
+            <div style="width:28px;height:28px;border-radius:50%;background:${i===0?'#f59e0b':i===1?'#9ca3af':i===2?'#b45309':'var(--bg)'};display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:800;color:${i<3?'#fff':'var(--text-muted)'}">${i+1}</div>
+            <div style="flex:1">
+              <div style="font-size:13px;font-weight:600">${esc(r.name||'User')}</div>
+              <div style="font-size:11px;color:var(--text-muted)">${esc(r.role||'')}</div>
+            </div>
+            <div style="font-size:15px;font-weight:800;color:var(--accent)">${r.badgeCount}</div>
+            <div style="font-size:11px;color:var(--text-muted)">badge${r.badgeCount!==1?'s':''}</div>
+          </div>`).join('')}
+        </div>
+      </div>` : ''}
+
+      <div>
+        <div style="font-size:14px;font-weight:700;margin-bottom:12px">Badge Catalog</div>
+        ${catalog.length === 0 ? `<div class="card" style="padding:20px;text-align:center;color:var(--text-muted)">No badges defined yet.</div>` :
+          `<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:12px">
+            ${catalog.map(b => `
+            <div class="card" style="padding:16px;text-align:center;border-top:3px solid ${b.color||'#6366f1'}">
+              <div style="font-size:36px;margin-bottom:8px">${esc(b.icon||'🏅')}</div>
+              <div style="font-size:14px;font-weight:700;margin-bottom:4px">${esc(b.name)}</div>
+              <div style="font-size:12px;color:var(--text-muted)">${esc(b.description||'')}</div>
+              ${isStudent && myBadgeIds.has(b._id?.toString()) ? `<div style="margin-top:8px;font-size:11px;color:#16a34a;font-weight:700">✓ Earned</div>` : ''}
+            </div>`).join('')}
+          </div>`}
+      </div>
+    `;
+  } catch(e) {
+    content.innerHTML = `<div class="card"><p style="color:#ef4444">Error: ${e.message}</p></div>`;
+  }
+}
+
 async function renderCalendarEvents() {
   const content = document.getElementById('main-content');
   if (!content) return;
@@ -21466,6 +23238,1854 @@ async function renderCalendarEvents() {
     content.innerHTML = `<div class="card"><p style="color:#ef4444">Error: ${e.message}</p></div>`;
   }
 }
+
+async function renderClassReps() {
+  const content = document.getElementById('main-content');
+  content.innerHTML = '<div class="loading">Loading…</div>';
+  const esc = s => s == null ? '' : String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+
+  async function load() {
+    const { reps } = await api('/api/class-rep-admin/list');
+    content.innerHTML = `
+      <div class="page-header" style="display:flex;align-items:flex-start;justify-content:space-between;flex-wrap:wrap;gap:10px">
+        <div>
+          <h2>Class Representatives</h2>
+          <p>Assign or remove class rep roles for students</p>
+        </div>
+        <button class="btn btn-primary btn-sm" onclick="showAssignRepModal()">+ Assign Rep</button>
+      </div>
+
+      <div class="card" style="margin-bottom:20px;padding:14px 18px">
+        <div style="font-size:15px;font-weight:700">${reps.length} Class Representative${reps.length !== 1 ? 's' : ''}</div>
+        <div style="font-size:12px;color:var(--text-muted);margin-top:2px">Max 2 per class group</div>
+      </div>
+
+      ${reps.length === 0 ? `
+        <div class="card" style="text-align:center;padding:48px;color:var(--text-muted)">
+          <div style="font-size:36px;margin-bottom:12px">👥</div>
+          <div style="font-size:16px;font-weight:600;margin-bottom:6px">No class representatives assigned yet</div>
+          <div style="font-size:13px;margin-bottom:16px">Use "Assign Rep" to search for a student and appoint them.</div>
+          <button class="btn btn-primary btn-sm" onclick="showAssignRepModal()">+ Assign Rep</button>
+        </div>
+      ` : `
+        <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:14px">
+          ${reps.map(r => {
+            const initials = (r.name||'?')[0].toUpperCase();
+            const level = r.studentLevel ? `L${esc(r.studentLevel)}` : '';
+            const grp   = r.studentGroup ? `Gr ${esc(r.studentGroup)}` : '';
+            const badge = [level, grp].filter(Boolean).join(' · ');
+            return `
+            <div class="card" style="padding:0;overflow:hidden">
+              <div style="padding:14px 16px;display:flex;align-items:center;gap:12px;border-bottom:1px solid var(--border)">
+                <div style="width:40px;height:40px;border-radius:50%;background:rgba(79,110,247,.15);display:flex;align-items:center;justify-content:center;font-size:16px;font-weight:800;color:var(--accent);flex-shrink:0">${initials}</div>
+                <div style="flex:1;min-width:0">
+                  <div style="font-size:14px;font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(r.name)}</div>
+                  <div style="font-size:11px;color:var(--text-muted)">${esc(r.IndexNumber||'—')}</div>
+                </div>
+                <span style="font-size:10px;font-weight:700;padding:3px 9px;border-radius:20px;background:rgba(22,163,74,.12);color:#16a34a;white-space:nowrap">Class Rep</span>
+              </div>
+              <div style="padding:12px 16px;display:grid;gap:6px">
+                ${r.programme ? `<div style="font-size:12px"><span style="color:var(--text-muted)">Programme:</span> <strong>${esc(r.programme)}</strong></div>` : ''}
+                ${badge ? `<div style="font-size:12px"><span style="color:var(--text-muted)">Class:</span> <strong>${badge}</strong></div>` : ''}
+                ${r.sessionType ? `<div style="font-size:12px"><span style="color:var(--text-muted)">Session:</span> <strong>${esc(r.sessionType)}</strong></div>` : ''}
+                ${r.department ? `<div style="font-size:12px"><span style="color:var(--text-muted)">Dept:</span> <strong>${esc(r.department)}</strong></div>` : ''}
+              </div>
+              <div style="padding:10px 16px;border-top:1px solid var(--border);display:flex;gap:8px">
+                <button class="btn btn-sm" style="flex:1;background:rgba(79,110,247,.1);color:#4f6ef7;border:1px solid rgba(79,110,247,.2)"
+                  onclick="showAssignRepToDeviceModal('${r._id}','${esc(r.name)}')">Assign to Device</button>
+                <button class="btn btn-sm" style="flex:1;background:rgba(239,68,68,.1);color:#ef4444;border:1px solid rgba(239,68,68,.2)"
+                  onclick="removeClassRep('${r._id}','${esc(r.name)}')">Remove as Class Rep</button>
+              </div>
+            </div>`;
+          }).join('')}
+        </div>
+      `}
+    `;
+  }
+
+  try { await load(); } catch(e) {
+    content.innerHTML = `<div class="card" style="color:#ef4444">Failed to load class reps: ${e.message}</div>`;
+  }
+}
+
+async function renderEvaluations() {
+  const content = document.getElementById('main-content');
+  if (!content) return;
+  content.innerHTML = '<div class="loading">Loading evaluations…</div>';
+  const esc = s => s == null ? '' : String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  const isStudent = currentUser?.role === 'student';
+  const isStaff = ['lecturer','hod','admin','superadmin'].includes(currentUser?.role);
+
+  let courses = [];
+  try {
+    const endpoint = isStudent ? '/api/courses/my' : '/api/courses';
+    const d = await api(endpoint).catch(() => api('/api/courses'));
+    courses = d.courses || d || [];
+  } catch(e) { courses = []; }
+
+  if (isStudent) {
+    // For each course, check submission status
+    let statusMap = {};
+    if (courses.length > 0) {
+      await Promise.all(courses.map(async c => {
+        try {
+          const d = await api(`/api/evaluations/my/${c._id}`);
+          statusMap[c._id] = d;
+        } catch(e) { statusMap[c._id] = null; }
+      }));
+    }
+
+    content.innerHTML = `
+      <div class="page-header"><h2>Course Evaluations</h2><p>Rate your courses anonymously</p></div>
+      ${courses.length === 0 ? `<div class="card" style="padding:20px;text-align:center;color:var(--text-muted)">You are not enrolled in any courses.</div>` :
+        `<div style="display:flex;flex-direction:column;gap:12px">
+          ${courses.map(c => {
+            const st = statusMap[c._id];
+            const submitted = st?.submitted;
+            const hasDraft = st?.hasDraft;
+            const windowIsOpen = st?.windowOpen;
+            return `
+            <div class="card" style="padding:16px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px">
+              <div>
+                <div style="font-size:14px;font-weight:700">${esc(c.title||c.code||'Course')}</div>
+                <div style="font-size:12px;color:var(--text-muted)">${esc(c.code||'')}${c.level?' · L'+c.level:''}</div>
+                ${st?.overallRating ? `<div style="font-size:12px;color:var(--text-muted);margin-top:2px">Your rating: ${'★'.repeat(st.overallRating)}${'☆'.repeat(5-st.overallRating)}</div>` : ''}
+              </div>
+              <div>
+                ${submitted ? `<span style="background:#d1fae5;color:#065f46;padding:4px 12px;border-radius:20px;font-size:12px;font-weight:700">✓ Submitted</span>` :
+                  windowIsOpen ? `<button class="btn btn-primary btn-sm" onclick="openEvaluationModal('${c._id}','${esc(c.title||c.code||'Course')}')">Fill Evaluation</button>` :
+                  hasDraft ? `<button class="btn btn-secondary btn-sm" onclick="openEvaluationModal('${c._id}','${esc(c.title||c.code||'Course')}')">Continue Draft</button>` :
+                  `<span style="background:#f1f5f9;color:#475569;padding:4px 12px;border-radius:20px;font-size:12px;font-weight:600">Evaluation Closed</span>`}
+              </div>
+            </div>`;
+          }).join('')}
+        </div>`}
+    `;
+    return;
+  }
+
+  // Staff view: course selector → aggregate results
+  const renderStaffView = async (courseId, courseTitle) => {
+    try {
+      const data = await api(`/api/evaluations/results/${courseId}`);
+      const starBar = avg => {
+        const filled = Math.round(avg||0);
+        return '★'.repeat(filled) + '☆'.repeat(5-filled) + ` <span style="font-size:12px;color:var(--text-muted)">(${avg?.toFixed?.(1)||'—'})</span>`;
+      };
+
+      content.innerHTML = `
+        <div class="page-header" style="display:flex;align-items:flex-start;justify-content:space-between;flex-wrap:wrap;gap:10px">
+          <div>
+            <button class="btn btn-secondary btn-sm" onclick="renderEvaluations()" style="margin-bottom:8px">← Back to Courses</button>
+            <h2>Evaluation Results</h2>
+            <p>${esc(data.courseName||courseTitle)} · ${data.totalResponses} response${data.totalResponses!==1?'s':''}</p>
+          </div>
+        </div>
+        <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:12px;margin-bottom:20px">
+          <div class="card" style="padding:16px;text-align:center">
+            <div style="font-size:28px;font-weight:800;color:var(--accent)">${data.overall?.avg?.toFixed(1)||'—'}</div>
+            <div style="font-size:11px;font-weight:700;color:var(--text-muted);text-transform:uppercase">Overall Avg</div>
+          </div>
+          <div class="card" style="padding:16px;text-align:center">
+            <div style="font-size:28px;font-weight:800">${data.totalResponses}</div>
+            <div style="font-size:11px;font-weight:700;color:var(--text-muted);text-transform:uppercase">Responses</div>
+          </div>
+          <div class="card" style="padding:16px;text-align:center">
+            <div style="font-size:28px;font-weight:800;color:#16a34a">${data.responseRate??'—'}${data.responseRate!=null?'%':''}</div>
+            <div style="font-size:11px;font-weight:700;color:var(--text-muted);text-transform:uppercase">Response Rate</div>
+          </div>
+          <div class="card" style="padding:16px;text-align:center">
+            <div style="font-size:28px;font-weight:800">${data.totalEnrolled}</div>
+            <div style="font-size:11px;font-weight:700;color:var(--text-muted);text-transform:uppercase">Enrolled</div>
+          </div>
+        </div>
+        <div style="display:flex;flex-direction:column;gap:12px">
+          ${(data.criteria||[]).map(c => `
+          <div class="card" style="padding:16px">
+            <div style="font-size:13px;font-weight:700;margin-bottom:10px">${esc(c.label)}</div>
+            ${c.type==='rating' ? `
+              <div style="display:flex;align-items:center;gap:10px">
+                <span style="font-size:20px;color:#f59e0b">${starBar(c.avg)}</span>
+                <span style="font-size:12px;color:var(--text-muted)">${c.count} responses</span>
+              </div>` :
+            c.type==='yesno' ? `
+              <div style="font-size:13px">Yes: <strong>${c.yesCount}</strong> (${c.yesPct??'—'}%) · No: <strong>${c.noCount}</strong></div>` :
+            `<div style="font-size:13px;color:var(--text-muted)">${c.count} text responses</div>
+              ${c.comments?.slice(0,5).map(t=>`<div style="padding:8px 12px;background:var(--bg);border-radius:6px;font-size:12px;margin-top:4px">${esc(t)}</div>`).join('')||''}`}
+          </div>`).join('')}
+        </div>
+      `;
+    } catch(e) {
+      content.innerHTML = `<div class="card"><p style="color:#ef4444">Error: ${e.message}</p></div>`;
+    }
+  };
+
+  content.innerHTML = `
+    <div class="page-header"><h2>Course Evaluations</h2><p>View aggregated student feedback</p></div>
+    ${courses.length === 0 ? `<div class="card" style="padding:20px;text-align:center;color:var(--text-muted)">No courses found.</div>` :
+      `<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:14px">
+        ${courses.map(c => `
+        <div class="card" style="padding:16px;cursor:pointer" onclick="renderEvaluationResults('${c._id}','${esc(c.title||c.code||'Course')}')">
+          <div style="font-size:14px;font-weight:700;margin-bottom:4px">${esc(c.title||c.code||'')}</div>
+          <div style="font-size:12px;color:var(--text-muted)">${esc(c.code||'')}${c.level?' · L'+c.level:''}</div>
+          <div style="margin-top:10px;font-size:12px;color:var(--accent);font-weight:600">View results →</div>
+        </div>`).join('')}
+      </div>`}
+  `;
+
+  window.renderEvaluationResults = renderStaffView;
+}
+
+async function renderForums() {
+  const content = document.getElementById('main-content');
+  if (!content) return;
+  content.innerHTML = '<div class="loading">Loading forums…</div>';
+  const esc = s => s == null ? '' : String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+
+  let courses = [];
+  try {
+    const isStudent = currentUser?.role === 'student';
+    const endpoint = isStudent ? '/api/courses/my' : '/api/courses';
+    const d = await api(endpoint).catch(() => api('/api/courses'));
+    courses = d.courses || d || [];
+  } catch(e) { courses = []; }
+
+  if (courses.length === 0) {
+    content.innerHTML = `
+      <div class="page-header"><h2>Discussion Forums</h2><p>Course discussion threads</p></div>
+      <div class="card" style="text-align:center;padding:56px 40px;color:var(--text-muted)">
+        <div style="font-size:16px;font-weight:600;margin-bottom:8px">No courses found</div>
+        <div style="font-size:13px">You need to be enrolled in a course to access its forum.</div>
+      </div>`;
+    return;
+  }
+
+  content.innerHTML = `
+    <div class="page-header"><h2>Discussion Forums</h2><p>Select a course to view its threads</p></div>
+    <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:14px">
+      ${courses.map(c => `
+      <div class="card" style="padding:16px;cursor:pointer" onclick="renderForumThreads('${c._id}','${esc(c.title||c.code||'Course')}')">
+        <div style="font-size:14px;font-weight:700;margin-bottom:4px">${esc(c.title||c.code||'')}</div>
+        <div style="font-size:12px;color:var(--text-muted)">${esc(c.code||'')}${c.level ? ' · L'+c.level : ''}${c.group ? ' · Grp '+c.group : ''}</div>
+        <div style="margin-top:10px;font-size:12px;color:var(--accent);font-weight:600">View threads →</div>
+      </div>`).join('')}
+    </div>
+  `;
+}
+
+async function renderHodDevices() {
+  const content = document.getElementById('main-content');
+  if (!content) return;
+  content.innerHTML = '<div class="loading">Loading devices…</div>';
+
+  const esc = s => s == null ? '' : String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  const timeAgo = d => {
+    if (!d) return 'Never';
+    const m = Math.floor((Date.now() - new Date(d)) / 60000);
+    if (m < 1) return 'Just now';
+    if (m < 60) return `${m}m ago`;
+    if (m < 1440) return `${Math.floor(m/60)}h ${Math.floor(m%60)}m ago`;
+    return `${Math.floor(m/1440)}d ago`;
+  };
+
+  const render = async () => {
+    try {
+      const { devices } = await api('/api/devices/all');
+      const online  = devices.filter(d => d.online).length;
+      const offline = devices.length - online;
+      const now     = new Date().toLocaleTimeString([], { hour:'2-digit', minute:'2-digit' });
+      const instCode = currentUser?.company?.institutionCode || currentUser?.company?.code || currentUser?.institutionCode || '—';
+
+      content.innerHTML = `
+        <div class="page-header" style="display:flex;align-items:flex-start;justify-content:space-between;flex-wrap:wrap;gap:10px">
+          <div>
+            <h2>Classroom Devices</h2>
+            <p>Manage and provision ESP32 attendance devices</p>
+          </div>
+          <button class="btn btn-primary btn-sm" onclick="hodGeneratePairingCode()">+ Generate Pairing Code</button>
+        </div>
+
+        <!-- Institution code + security info cards -->
+        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px;margin-bottom:20px">
+          <div class="card" style="padding:18px 20px">
+            <div style="font-size:10px;font-weight:700;letter-spacing:.8px;text-transform:uppercase;color:var(--text-muted);margin-bottom:8px">Institution Code</div>
+            <div style="font-size:28px;font-weight:900;letter-spacing:6px;font-family:monospace;margin-bottom:10px">${esc(instCode)}</div>
+            <div style="font-size:12px;color:var(--text-muted);margin-bottom:10px">Class Rep needs this + a pairing code to set up a device. Keep it confidential.</div>
+            <button class="btn btn-secondary btn-sm" onclick="navigator.clipboard.writeText('${esc(instCode)}').then(()=>showToastNotif('Code copied!','success'))">Copy</button>
+          </div>
+          <div class="card" style="padding:18px 20px;display:flex;align-items:flex-start;gap:14px">
+            <div style="width:40px;height:40px;border-radius:10px;background:#ede9fe;display:flex;align-items:center;justify-content:center;flex-shrink:0">
+              <svg viewBox="0 0 24 24" fill="none" stroke="#7c3aed" stroke-width="2" width="20" height="20"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+            </div>
+            <div>
+              <div style="font-weight:700;font-size:14px;margin-bottom:4px">Device pairing is secure</div>
+              <div style="font-size:12px;color:var(--text-muted)">JWT-authenticated · Company-isolated</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Paired devices header -->
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
+          <div style="font-size:13px;font-weight:600">
+            Paired Devices <span style="color:var(--text-muted);font-weight:400">${devices.length}</span>
+          </div>
+          <div style="display:flex;align-items:center;gap:8px">
+            <span style="font-size:12px;color:var(--text-muted)">Updated ${now}</span>
+            <button class="btn btn-secondary btn-sm" onclick="renderHodDevices()">↻ Refresh</button>
+          </div>
+        </div>
+
+        ${devices.length === 0 ? `
+          <div class="card" style="text-align:center;padding:48px;color:var(--text-muted)">
+            <div style="font-size:36px;margin-bottom:12px">📡</div>
+            <div style="font-size:16px;font-weight:600;margin-bottom:6px">No Devices Paired</div>
+            <div style="font-size:13px">Lecturers can pair an ESP32 device from their Attendance Device page.</div>
+          </div>
+        ` : `
+          <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(320px,1fr));gap:16px">
+            ${devices.map(d => {
+              const devId   = esc(d.deviceId);
+              const devName = esc(d.deviceName || d.deviceId);
+              const isOnline = d.online;
+              const lecturer = d.pairedBy?.name || d.lecturerName || null;
+              const dept     = d.pairedBy?.department || null;
+              const group    = d.assignedGroup ? `Gr ${esc(d.assignedGroup)} · L${esc(d.assignedLevel||'?')}` : null;
+              const classRep = d.classRepId?.name || null;
+              const ip       = d.localIp || null;
+              const fw       = d.firmwareVersion || null;
+              const chipId   = d.chipId || d.deviceId;
+
+              return `
+              <div class="card" style="padding:0;overflow:hidden" id="hod-dev-card-${devId}">
+                <!-- Card header -->
+                <div style="padding:14px 16px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;gap:8px">
+                  <div style="display:flex;align-items:center;gap:10px;min-width:0">
+                    <div style="width:38px;height:38px;border-radius:10px;background:${isOnline ? '#dcfce7' : 'var(--bg)'};display:flex;align-items:center;justify-content:center;flex-shrink:0">
+                      <svg viewBox="0 0 24 24" fill="none" stroke="${isOnline ? '#16a34a' : '#9ca3af'}" stroke-width="2" width="18" height="18"><rect x="5" y="2" width="14" height="20" rx="2" ry="2"/><line x1="12" y1="18" x2="12.01" y2="18"/></svg>
+                    </div>
+                    <div style="min-width:0">
+                      <div style="font-weight:700;font-size:14px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="${devName}">${devName}</div>
+                      <div style="font-size:11px;color:var(--text-muted);font-family:monospace">${esc(chipId)}</div>
+                    </div>
+                  </div>
+                  <span style="flex-shrink:0;display:inline-flex;align-items:center;gap:5px;font-size:11px;font-weight:700;padding:3px 8px;border-radius:20px;background:${isOnline ? '#dcfce7' : 'var(--bg)'};color:${isOnline ? '#16a34a' : '#9ca3af'}">
+                    <span style="width:6px;height:6px;border-radius:50%;background:${isOnline ? '#16a34a' : '#9ca3af'}"></span>
+                    ${isOnline ? 'Online' : 'Offline'}
+                  </span>
+                </div>
+
+                <!-- Details -->
+                <div style="padding:12px 16px;display:grid;gap:8px;font-size:13px">
+                  ${lecturer ? `
+                  <div style="display:flex;justify-content:space-between;align-items:center">
+                    <span style="color:var(--text-muted)">Paired By</span>
+                    <span style="font-weight:500;text-align:right">
+                      ${esc(lecturer)}
+                      ${dept ? `<span style="margin-left:4px;font-size:11px;padding:2px 6px;border-radius:10px;background:#ede9fe;color:#7c3aed;font-weight:600">${esc(dept)}</span>` : ''}
+                    </span>
+                  </div>` : ''}
+                  ${group ? `
+                  <div style="display:flex;justify-content:space-between;align-items:center">
+                    <span style="color:var(--text-muted)">Class / Level</span>
+                    <span style="font-weight:500">${group}</span>
+                  </div>` : ''}
+                  ${classRep ? `
+                  <div style="display:flex;justify-content:space-between;align-items:center">
+                    <span style="color:var(--text-muted)">Class Rep</span>
+                    <span style="font-weight:500">${esc(classRep)}</span>
+                  </div>` : ''}
+                  ${ip ? `
+                  <div style="display:flex;justify-content:space-between;align-items:center">
+                    <span style="color:var(--text-muted)">IP Address</span>
+                    <span style="font-family:monospace;font-size:12px">${esc(ip)}</span>
+                  </div>` : ''}
+                  ${fw ? `
+                  <div style="display:flex;justify-content:space-between;align-items:center">
+                    <span style="color:var(--text-muted)">Firmware</span>
+                    <span style="font-size:12px;color:var(--text-muted)">${esc(fw)}</span>
+                  </div>` : ''}
+                  <div style="display:flex;justify-content:space-between;align-items:center">
+                    <span style="color:var(--text-muted)">Last Seen</span>
+                    <span style="color:var(--text-muted)">${timeAgo(d.lastHeartbeat)}</span>
+                  </div>
+                </div>
+
+                <!-- Action buttons -->
+                <div style="padding:10px 16px 14px;display:flex;gap:8px;flex-wrap:wrap;border-top:1px solid var(--border)">
+                  <button class="btn btn-primary btn-sm" onclick="hodAssignClassRep('${devId}', '${devName.replace(/'/g,'\\&#39;')}')">👤 Assign Class Rep</button>
+                  <button class="btn btn-secondary btn-sm" onclick="hodRenameDevice('${devId}', '${devName.replace(/'/g,'\\&#39;')}')">✏ Rename</button>
+                  <button class="btn btn-secondary btn-sm" onclick="hodSetupDevice('${devId}')">⚙ Setup</button>
+                  <button class="btn btn-sm" style="background:#fff7ed;color:#c2410c;border:1px solid #fed7aa" onclick="hodFactoryReset('${devId}', '${devName.replace(/'/g,'\\&#39;')}')">↺ Factory Reset</button>
+                  <button class="btn btn-danger btn-sm" onclick="hodRemoveDevice('${devId}', '${devName.replace(/'/g,'\\&#39;')}')">✕ Remove</button>
+                </div>
+              </div>`;
+            }).join('')}
+          </div>
+        `}
+      `;
+    } catch (e) {
+      content.innerHTML = `<div class="card" style="color:#ef4444;padding:20px">Failed to load devices: ${esc(e.message)}</div>`;
+    }
+  };
+
+  await render();
+}
+
+async function renderHodQuizMonitor() {
+  const content = document.getElementById('main-content');
+  if (!content) return;
+  content.innerHTML = '<div class="loading">Loading quiz monitor…</div>';
+  try {
+    // Fetch all quizzes visible to HOD (department-overview) and filter to open/active ones
+    const data = await api('/api/lecturer/snap-quizzes/department-overview').catch(() => api('/api/lecturer/snap-quizzes').catch(() => ({ quizzes: [] })));
+    const allQuizzes = data.quizzes || data.data || [];
+    const sessions = allQuizzes.filter(q => q.status === 'open' || q.status === 'active');
+    const esc = s => s == null ? '' : String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+
+    _applyQuizBadge('nav-hod-quiz-monitor', sessions.length);
+
+    if (sessions.length === 0) {
+      content.innerHTML = `
+        <div class="page-header"><h2>Quiz Monitor</h2><p>Live student quiz activity for your department</p></div>
+        <div class="card" style="text-align:center;padding:56px 40px;color:var(--text-muted)">
+          <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="margin-bottom:16px;opacity:.4"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
+          <div style="font-size:16px;font-weight:600;margin-bottom:8px">No open quizzes right now</div>
+          <div style="font-size:13px">Open a quiz from the <a onclick="navigateTo('quizzes')" style="color:var(--accent);cursor:pointer;text-decoration:underline">Quizzes</a> page to see live student status here.</div>
+        </div>`;
+      return;
+    }
+
+    content.innerHTML = `
+      <div class="page-header" style="display:flex;align-items:flex-start;justify-content:space-between;flex-wrap:wrap;gap:10px">
+        <div>
+          <h2>Quiz Monitor</h2>
+          <p>${sessions.length} open quiz${sessions.length !== 1 ? 'zes' : ''} in progress</p>
+        </div>
+        <button class="btn btn-secondary btn-sm" onclick="renderHodQuizMonitor()">↻ Refresh</button>
+      </div>
+      <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:16px">
+        ${sessions.map(s => `
+        <div class="card" style="padding:16px">
+          <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px">
+            <span style="display:inline-flex;align-items:center;gap:5px;font-size:11px;font-weight:700;padding:3px 8px;border-radius:20px;background:#dcfce7;color:#16a34a">
+              <span style="width:6px;height:6px;border-radius:50%;background:#16a34a"></span>Open
+            </span>
+            <span style="font-size:12px;color:var(--text-muted)">${esc(s.course?.title || s.course?.code || s.courseName || '')}</span>
+          </div>
+          <div style="font-size:15px;font-weight:700;margin-bottom:6px">${esc(s.title || 'Quiz')}</div>
+          <div style="font-size:12px;color:var(--text-muted);margin-bottom:12px">Lecturer: ${esc(s.lecturer?.name || s.lecturerName || '—')}</div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;font-size:13px">
+            <div style="background:var(--bg);border-radius:8px;padding:10px;text-align:center">
+              <div style="font-size:20px;font-weight:800;color:var(--accent)">${s.attemptCount ?? s.participantCount ?? 0}</div>
+              <div style="font-size:10px;font-weight:600;text-transform:uppercase;color:var(--text-muted)">Attempts</div>
+            </div>
+            <div style="background:var(--bg);border-radius:8px;padding:10px;text-align:center">
+              <div style="font-size:20px;font-weight:800">${s.questionCount ?? (s.questions?.length ?? 0)}</div>
+              <div style="font-size:10px;font-weight:600;text-transform:uppercase;color:var(--text-muted)">Questions</div>
+            </div>
+          </div>
+        </div>`).join('')}
+      </div>`;
+  } catch(e) {
+    content.innerHTML = `<div class="card" style="color:#ef4444">Failed to load quiz monitor: ${e.message}</div>`;
+  }
+}
+
+async function renderLecturerAttendance() {
+  const content = document.getElementById('main-content');
+  if (!content) return;
+  try {
+    const data = await api('/api/attendance-sessions');
+    const sessions = data.sessions || data || [];
+    const fmt = d => new Date(d).toLocaleString('en-GB',{day:'numeric',month:'short',year:'numeric',hour:'2-digit',minute:'2-digit'});
+    const statusBadge = s => {
+      if (s.status === 'active') return `<span style="background:#dcfce7;color:#166534;padding:2px 9px;border-radius:20px;font-size:11px;font-weight:700;display:inline-flex;align-items:center;gap:4px"><span style="width:6px;height:6px;border-radius:50%;background:#16a34a;animation:pulse 1.8s infinite"></span>Live</span>`;
+      if (s.status === 'stopped') return `<span style="background:#f1f5f9;color:#475569;padding:2px 9px;border-radius:20px;font-size:11px;font-weight:700">Ended</span>`;
+      return `<span style="background:#fef3c7;color:#92400e;padding:2px 9px;border-radius:20px;font-size:11px;font-weight:700">Scheduled</span>`;
+    };
+    content.innerHTML = `
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:10px;margin-bottom:20px">
+        <div>
+          <h2 style="font-size:22px;font-weight:800;color:#0f172a;margin-bottom:2px">Attendance Sessions</h2>
+          <p style="color:#64748b;font-size:13px">Manage and review attendance for your classes</p>
+        </div>
+        <button class="btn btn-primary" onclick="navigateTo('attendance-device')" style="display:flex;align-items:center;gap:6px">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+          New Session
+        </button>
+      </div>
+      ${!sessions.length ? `
+        <div style="text-align:center;padding:60px 20px;background:#fff;border:1px solid #e8eaed;border-radius:16px">
+          <div style="width:56px;height:56px;border-radius:16px;background:#eff6ff;display:flex;align-items:center;justify-content:center;margin:0 auto 16px">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#2563eb" stroke-width="1.8"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+          </div>
+          <h3 style="font-size:17px;font-weight:700;color:#0f172a;margin-bottom:6px">No attendance sessions yet</h3>
+          <p style="color:#64748b;font-size:13px;margin-bottom:20px">Start a session from your Attendance Device page</p>
+          <button class="btn btn-primary" onclick="navigateTo('attendance-device')">Go to Attendance Device</button>
+        </div>` :
+        sessions.map(s => `
+          <div style="background:#fff;border:1px solid #e8eaed;border-radius:14px;padding:16px 20px;margin-bottom:12px;box-shadow:0 1px 4px rgba(0,0,0,.04)">
+            <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:12px;flex-wrap:wrap">
+              <div>
+                <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px">
+                  <span style="font-size:14px;font-weight:700;color:#0f172a">${esc(s.course?.code || s.courseCode || 'Session')}</span>
+                  ${statusBadge(s)}
+                </div>
+                <div style="font-size:12px;color:#64748b">${esc(s.course?.title || '')}${s.startTime ? ' · Started ' + fmt(s.startTime) : ''}</div>
+              </div>
+              <div style="display:flex;gap:6px;flex-wrap:wrap;flex-shrink:0">
+                <a href="/api/attendance-sessions/${s._id}/records" target="_blank" class="btn btn-sm" style="background:#eff6ff;color:#2563eb;border:1px solid #bfdbfe;font-weight:600">View Records</a>
+              </div>
+            </div>
+            <div style="display:flex;gap:16px;margin-top:12px;padding:10px 12px;background:#f8fafc;border-radius:8px;flex-wrap:wrap">
+              <span style="font-size:12px;color:#64748b"><strong style="color:#0f172a">${s.presentCount ?? s.attendance?.length ?? '—'}</strong> present</span>
+              ${s.absentCount != null ? `<span style="font-size:12px;color:#64748b"><strong style="color:#0f172a">${s.absentCount}</strong> absent</span>` : ''}
+              ${s.code ? `<span style="font-size:12px;color:#64748b">Code: <strong style="color:#0f172a;font-family:monospace">${s.code}</strong></span>` : ''}
+            </div>
+          </div>`).join('')}
+    `;
+  } catch (e) {
+    content.innerHTML = `<div class="card"><p style="color:#dc2626">Error: ${e.message}</p></div>`;
+  }
+}
+
+async function renderLecturerCourseVideos() {
+  const content = document.getElementById('main-content');
+  if (!content) return;
+  content.innerHTML = `
+    <div class="page-header">
+      <h2>Course Videos</h2>
+      <p>Manage video lectures for your courses</p>
+    </div>
+    <div id="lcv-body"><div class="loading-spinner" style="margin:60px auto"></div></div>`;
+
+  const body = document.getElementById('lcv-body');
+  try {
+    const [coursesData, videosData] = await Promise.all([
+      api('/api/courses'),
+      api('/api/course-videos/my-courses'),
+    ]);
+
+    const allCourses = (coursesData.courses || []).filter(c => {
+      const lid = c.lecturerId?._id || c.lecturerId;
+      return lid && lid.toString() === currentUser._id.toString();
+    });
+
+    if (!allCourses.length) {
+      body.innerHTML = `<div class="card" style="text-align:center;padding:48px 24px">
+        <div style="font-size:40px;margin-bottom:12px">🎬</div>
+        <h3>No Courses Assigned</h3>
+        <p style="color:var(--text-muted)">You have no courses assigned yet. Contact your admin.</p>
+      </div>`;
+      return;
+    }
+
+    const videosByCourse = {};
+    for (const v of (videosData.courses || [])) {
+      videosByCourse[v.course._id.toString()] = v.videos || [];
+    }
+
+    const platformIcon = p => ({ youtube:'▶️', vimeo:'🎥', googledrive:'📁', loom:'🔴' }[p] || '🎬');
+
+    body.innerHTML = allCourses.map(c => {
+      const cid = c._id.toString();
+      const vids = videosByCourse[cid] || [];
+      return `
+        <div class="card" style="margin-bottom:24px;padding:20px" id="lcv-section-${cid}">
+          <div style="display:flex;align-items:center;gap:10px;margin-bottom:16px">
+            <div style="width:4px;height:22px;background:var(--primary);border-radius:2px"></div>
+            <h3 style="margin:0;font-size:15px;flex:1">${esc(c.title)} <span style="font-size:12px;color:var(--text-muted);font-weight:400">${esc(c.code || '')}</span></h3>
+            <span style="font-size:12px;color:var(--text-muted)">${vids.length} video${vids.length !== 1 ? 's' : ''}</span>
+            <button onclick="_lcvOpenAdd('${cid}')" style="background:var(--primary);color:#fff;border:none;border-radius:8px;padding:6px 14px;font-size:12px;font-weight:600;cursor:pointer">+ Add Video</button>
+          </div>
+          <div id="lcv-list-${cid}">
+            ${vids.length ? vids.map(v => _lcvVideoRow(v)).join('') : `<p style="color:var(--text-muted);font-size:13px">No videos yet. Add your first video above.</p>`}
+          </div>
+        </div>`;
+    }).join('');
+
+  } catch (e) {
+    body.innerHTML = `<div class="card"><p style="color:var(--danger)">Error: ${e.message}</p></div>`;
+  }
+}
+
+async function renderLecturerNotifications() {
+  const content = document.getElementById('main-content');
+  if (!content) return;
+  content.innerHTML = `
+    <div class="page-header">
+      <h2>Notifications</h2>
+      <p>Alerts, submissions, and attendance flags</p>
+    </div>
+    <div id="lec-notif-body"><div class="loading-spinner" style="margin:60px auto"></div></div>`;
+
+  const body = document.getElementById('lec-notif-body');
+  try {
+    const [assignData, flagData, sessData] = await Promise.all([
+      api('/api/assignments/lecturer').catch(() => ({ assignments: [] })),
+      api('/api/attendance-sessions/flagged/new-devices').catch(() => ({ records: [] })),
+      api('/api/attendance-sessions?limit=10').catch(() => ({ sessions: [] })),
+    ]);
+
+    const assignments = assignData.assignments || [];
+    const flags       = flagData.records || [];
+    const sessions    = sessData.sessions || [];
+
+    const notifs = [];
+
+    // Ungraded submissions
+    const ungraded = assignments.filter(a => (a.submissionCount || 0) > (a.gradedCount || 0));
+    if (ungraded.length) {
+      ungraded.forEach(a => {
+        const pending = (a.submissionCount || 0) - (a.gradedCount || 0);
+        notifs.push({ icon: '📝', type: 'warn', title: `${pending} ungraded submission${pending > 1 ? 's' : ''}`, body: `Assignment: ${a.title}`, action: { label: 'Grade Now', fn: "navigateTo('assignments')" } });
+      });
+    }
+
+    // Flagged devices
+    if (flags.length) {
+      notifs.push({ icon: '🚨', type: 'warn', title: `${flags.length} flagged new device${flags.length > 1 ? 's' : ''}`, body: 'Students with unrecognised devices in recent attendance sessions', action: { label: 'Review', fn: "navigateTo('live-attendance')" } });
+    }
+
+    // Active sessions
+    const active = sessions.filter(s => s.status === 'active');
+    if (active.length) {
+      active.forEach(s => {
+        notifs.push({ icon: '●', type: 'ok', title: 'Active session', body: `${s.courseName || s.courseId} — started ${new Date(s.createdAt).toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'})}`, action: { label: 'View', fn: "navigateTo('live-attendance')" } });
+      });
+    }
+
+    // No notifications
+    if (!notifs.length) {
+      body.innerHTML = `<div class="card" style="text-align:center;padding:48px 24px">
+        <div style="font-size:36px;margin-bottom:12px">✅</div>
+        <h3>All clear</h3>
+        <p style="color:var(--text-muted)">No pending submissions, flags, or alerts.</p>
+      </div>`;
+      return;
+    }
+
+    const typeStyle = { ok: '#16a34a', warn: '#d97706', info: '#2563eb' };
+    const typeBg    = { ok: 'rgba(22,163,74,.08)', warn: 'rgba(217,119,6,.08)', info: 'rgba(37,99,235,.08)' };
+
+    body.innerHTML = notifs.map(n => `
+      <div class="card" style="display:flex;gap:14px;align-items:flex-start;padding:16px;margin-bottom:10px;border-left:3px solid ${typeStyle[n.type] || '#888'}">
+        <div style="font-size:22px;line-height:1;flex-shrink:0">${n.icon}</div>
+        <div style="flex:1;min-width:0">
+          <div style="font-size:14px;font-weight:600;color:var(--text);margin-bottom:2px">${esc(n.title)}</div>
+          <div style="font-size:12px;color:var(--text-muted)">${esc(n.body)}</div>
+        </div>
+        ${n.action ? `<button onclick="${n.action.fn}" style="flex-shrink:0;padding:6px 14px;background:var(--primary);color:#fff;border:none;border-radius:8px;font-size:12px;font-weight:600;cursor:pointer">${esc(n.action.label)}</button>` : ''}
+      </div>`).join('');
+
+  } catch (e) {
+    body.innerHTML = `<div class="card"><p style="color:var(--danger)">Error: ${e.message}</p></div>`;
+  }
+}
+
+async function renderLiveAttendance() {
+  const content = document.getElementById('main-content');
+  if (!content) return;
+  content.innerHTML = '<div class="loading">Loading attendance sessions…</div>';
+  const esc = s => s == null ? '' : String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  const fmt = d => d ? new Date(d).toLocaleString('en-GB',{day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'}) : '—';
+
+  const load = async () => {
+    try {
+      const data = await api('/api/attendance-sessions');
+      const all = data.sessions || data || [];
+      const sessions = all.filter(s => s.status === 'active');
+
+      const statusBadge = s => {
+        if (s.status === 'active') return `<span style="display:inline-flex;align-items:center;gap:4px;background:#dcfce7;color:#166534;padding:2px 9px;border-radius:20px;font-size:11px;font-weight:700"><span style="width:6px;height:6px;border-radius:50%;background:#16a34a;animation:pulse 1.8s infinite"></span>Live</span>`;
+        return `<span style="background:#f1f5f9;color:#475569;padding:2px 9px;border-radius:20px;font-size:11px;font-weight:700">Ended</span>`;
+      };
+
+      content.innerHTML = `
+        <div class="page-header" style="display:flex;align-items:flex-start;justify-content:space-between;flex-wrap:wrap;gap:10px">
+          <div>
+            <h2>Live Attendance</h2>
+            <p>${sessions.length} active session${sessions.length !== 1 ? 's' : ''} right now</p>
+          </div>
+          <button class="btn btn-secondary btn-sm" onclick="renderLiveAttendance()">↻ Refresh</button>
+        </div>
+        ${sessions.length === 0 ? `
+          <div class="card" style="text-align:center;padding:56px 40px;color:var(--text-muted)">
+            <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="margin-bottom:16px;opacity:.4"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/></svg>
+            <div style="font-size:16px;font-weight:600;margin-bottom:8px">No active sessions</div>
+            <div style="font-size:13px">No attendance sessions are currently running.</div>
+          </div>` :
+          `<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:16px">
+            ${sessions.map(s => `
+            <div class="card" style="padding:16px">
+              <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px">
+                ${statusBadge(s)}
+                <span style="font-size:12px;color:var(--text-muted)">${esc(s.course?.code || s.courseCode || '')}</span>
+              </div>
+              <div style="font-size:15px;font-weight:700;margin-bottom:4px">${esc(s.course?.title || s.courseTitle || 'Unnamed Session')}</div>
+              <div style="font-size:12px;color:var(--text-muted);margin-bottom:12px">Lecturer: ${esc(s.lecturer?.name || s.lecturerName || '—')} · Started ${fmt(s.startTime)}</div>
+              <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+                <div style="background:var(--bg);border-radius:8px;padding:10px;text-align:center">
+                  <div style="font-size:22px;font-weight:800;color:var(--accent)">${s.presentCount ?? s.attendance?.length ?? 0}</div>
+                  <div style="font-size:10px;font-weight:600;text-transform:uppercase;color:var(--text-muted)">Present</div>
+                </div>
+                <div style="background:var(--bg);border-radius:8px;padding:10px;text-align:center">
+                  <div style="font-size:22px;font-weight:800">${s.code || '—'}</div>
+                  <div style="font-size:10px;font-weight:600;text-transform:uppercase;color:var(--text-muted)">Code</div>
+                </div>
+              </div>
+            </div>`).join('')}
+          </div>`}
+      `;
+    } catch(e) {
+      content.innerHTML = `<div class="card"><p style="color:#ef4444">Error: ${e.message}</p></div>`;
+    }
+  };
+  await load();
+}
+
+async function renderRepDevice() {
+  const content = document.getElementById('main-content');
+  if (!content) return;
+  content.innerHTML = `
+    <div class="page-header">
+      <h2>My Device</h2>
+      <p>Connect the attendance device to a lecturer to start a session</p>
+    </div>
+    <div id="rep-device-body"><div class="loading-spinner" style="margin:60px auto"></div></div>`;
+  await _repDeviceRefresh();
+}
+
+async function renderTranscripts() {
+  const content = document.getElementById('main-content');
+  if (!content) return;
+  content.innerHTML = '<div class="loading">Loading transcript…</div>';
+  const esc = s => s == null ? '' : String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  const fmt = d => d ? new Date(d).toLocaleDateString('en-GB',{day:'numeric',month:'short',year:'numeric'}) : '—';
+  const isStudent = currentUser?.role === 'student';
+  const isStaff = ['lecturer','hod','admin','superadmin'].includes(currentUser?.role);
+
+  if (!isStudent && !isStaff) {
+    content.innerHTML = `<div class="card" style="padding:20px;text-align:center;color:var(--text-muted)">Transcripts are not available for your role.</div>`;
+    return;
+  }
+
+  const renderTranscriptData = (transcript, certs) => {
+    const s = transcript.student;
+    const summary = transcript.summary;
+    const courses = transcript.courses || [];
+
+    const gradeColor = g => g >= 70 ? '#16a34a' : g >= 50 ? '#f59e0b' : '#ef4444';
+    const statusBadge = status => {
+      const map = { active:'#3b82f6', completed:'#16a34a', dropped:'#6b7280', suspended:'#ef4444' };
+      const c = map[status] || '#6b7280';
+      return `<span style="background:${c}22;color:${c};padding:1px 7px;border-radius:20px;font-size:11px;font-weight:700">${status}</span>`;
+    };
+
+    content.innerHTML = `
+      <div class="page-header" style="display:flex;align-items:flex-start;justify-content:space-between;flex-wrap:wrap;gap:10px">
+        <div>
+          <h2>Academic Transcript</h2>
+          <p>${esc(s?.name||'')}${s?.indexNumber ? ' · '+s.indexNumber : ''}</p>
+        </div>
+        ${isStaff ? `<button class="btn btn-secondary btn-sm" onclick="renderTranscripts()">← Back to Search</button>` : ''}
+      </div>
+
+      <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:12px;margin-bottom:20px">
+        <div class="card" style="padding:16px;text-align:center">
+          <div style="font-size:28px;font-weight:800;color:var(--accent)">${summary?.gpa ?? '—'}</div>
+          <div style="font-size:11px;font-weight:700;color:var(--text-muted);text-transform:uppercase">GPA (4.3 scale)</div>
+        </div>
+        <div class="card" style="padding:16px;text-align:center">
+          <div style="font-size:28px;font-weight:800">${summary?.totalCourses ?? 0}</div>
+          <div style="font-size:11px;font-weight:700;color:var(--text-muted);text-transform:uppercase">Total Courses</div>
+        </div>
+        <div class="card" style="padding:16px;text-align:center">
+          <div style="font-size:28px;font-weight:800;color:#16a34a">${summary?.completedCourses ?? 0}</div>
+          <div style="font-size:11px;font-weight:700;color:var(--text-muted);text-transform:uppercase">Completed</div>
+        </div>
+        <div class="card" style="padding:16px;text-align:center">
+          <div style="font-size:28px;font-weight:800;color:#f59e0b">${summary?.averageScore ?? '—'}${summary?.averageScore != null ? '%' : ''}</div>
+          <div style="font-size:11px;font-weight:700;color:var(--text-muted);text-transform:uppercase">Avg Score</div>
+        </div>
+      </div>
+
+      ${courses.length > 0 ? `
+      <div class="card" style="padding:0;overflow:hidden;margin-bottom:20px">
+        <div style="padding:14px 16px;border-bottom:1px solid var(--border);font-size:14px;font-weight:700">Course Records</div>
+        <div style="overflow-x:auto">
+          <table style="width:100%;border-collapse:collapse;font-size:13px">
+            <thead>
+              <tr style="background:var(--bg)">
+                <th style="padding:10px 14px;text-align:left;font-size:11px;font-weight:700;color:var(--text-muted);text-transform:uppercase">Course</th>
+                <th style="padding:10px 14px;text-align:left;font-size:11px;font-weight:700;color:var(--text-muted);text-transform:uppercase">Semester</th>
+                <th style="padding:10px 14px;text-align:center;font-size:11px;font-weight:700;color:var(--text-muted);text-transform:uppercase">Score</th>
+                <th style="padding:10px 14px;text-align:center;font-size:11px;font-weight:700;color:var(--text-muted);text-transform:uppercase">Grade</th>
+                <th style="padding:10px 14px;text-align:center;font-size:11px;font-weight:700;color:var(--text-muted);text-transform:uppercase">Attendance</th>
+                <th style="padding:10px 14px;text-align:center;font-size:11px;font-weight:700;color:var(--text-muted);text-transform:uppercase">Status</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${courses.map((r,i) => `
+              <tr style="${i%2===0?'':'background:var(--bg)'}">
+                <td style="padding:10px 14px">
+                  <div style="font-weight:600">${esc(r.course?.title||'—')}</div>
+                  <div style="font-size:11px;color:var(--text-muted)">${esc(r.course?.code||'')}${r.course?.level?' · L'+r.course.level:''}</div>
+                </td>
+                <td style="padding:10px 14px;color:var(--text-muted)">${esc(r.course?.semester||'—')}</td>
+                <td style="padding:10px 14px;text-align:center;font-weight:700;color:${r.finalGrade?.score!=null?gradeColor(r.finalGrade.score):'var(--text-muted)'}">${r.finalGrade?.score!=null?r.finalGrade.score+'%':'—'}</td>
+                <td style="padding:10px 14px;text-align:center;font-weight:700">${esc(r.finalGrade?.grade||'—')}</td>
+                <td style="padding:10px 14px;text-align:center;color:var(--text-muted)">${r.attendance?.pct!=null?r.attendance.pct+'%':'—'}</td>
+                <td style="padding:10px 14px;text-align:center">${statusBadge(r.enrollment?.status||'active')}</td>
+              </tr>`).join('')}
+            </tbody>
+          </table>
+        </div>
+      </div>` : ''}
+
+      ${certs && certs.length > 0 ? `
+      <div>
+        <div style="font-size:14px;font-weight:700;margin-bottom:12px">Certificates</div>
+        <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:12px">
+          ${certs.map(c => `
+          <div class="card" style="padding:16px;border-left:4px solid #10b981">
+            <div style="font-size:14px;font-weight:700;margin-bottom:4px">${esc(c.courseName||'Certificate')}</div>
+            <div style="font-size:12px;color:var(--text-muted);margin-bottom:10px">Issued ${fmt(c.issuedAt)}</div>
+            <div style="display:flex;gap:8px">
+              <a href="/api/transcripts/verify/${esc(c.verificationCode)}" target="_blank" class="btn btn-secondary btn-sm">🔍 Verify</a>
+              <span style="font-size:11px;font-family:monospace;color:var(--text-muted);align-self:center">${esc(c.verificationCode||'')}</span>
+            </div>
+          </div>`).join('')}
+        </div>
+      </div>` : ''}
+    `;
+  };
+
+  if (isStudent) {
+    try {
+      const [transcriptData, certData] = await Promise.all([
+        api('/api/transcripts/me'),
+        api('/api/transcripts/certificates/me').catch(() => ({ certificates: [] })),
+      ]);
+      renderTranscriptData(transcriptData.transcript, certData.certificates || []);
+    } catch(e) {
+      content.innerHTML = `<div class="card"><p style="color:#ef4444">Error: ${e.message}</p></div>`;
+    }
+    return;
+  }
+
+  // Staff view: search by student ID
+  content.innerHTML = `
+    <div class="page-header"><h2>Academic Transcript</h2><p>Look up any student's transcript</p></div>
+    <div class="card" style="padding:20px;max-width:480px">
+      <label style="font-size:12px;font-weight:600;color:var(--text-muted);display:block;margin-bottom:6px">STUDENT ID</label>
+      <div style="display:flex;gap:8px">
+        <input id="transcript-studentId" class="form-control" placeholder="Paste student ID…" style="flex:1" />
+        <button class="btn btn-primary" onclick="loadStudentTranscript()">Load</button>
+      </div>
+    </div>
+    <div id="transcript-result"></div>
+  `;
+
+  window.loadStudentTranscript = async function() {
+    const studentId = document.getElementById('transcript-studentId')?.value?.trim();
+    if (!studentId) return showToastNotif('Enter a student ID', 'error');
+    const resultDiv = document.getElementById('transcript-result');
+    if (resultDiv) resultDiv.innerHTML = '<div class="loading" style="margin-top:16px">Loading…</div>';
+    try {
+      const [transcriptData, certData] = await Promise.all([
+        api(`/api/transcripts/${studentId}`),
+        api(`/api/transcripts/certificates/${studentId}`).catch(() => ({ certificates: [] })),
+      ]);
+      renderTranscriptData(transcriptData.transcript, certData.certificates || []);
+    } catch(e) {
+      if (resultDiv) resultDiv.innerHTML = `<div class="card" style="margin-top:16px"><p style="color:#ef4444">Error: ${e.message}</p></div>`;
+    }
+  };
+}
+
+async function saveAttendancePin() {
+  const pin     = (document.getElementById('att-pin')?.value || '').trim();
+  const confirm = (document.getElementById('att-pin-confirm')?.value || '').trim();
+  const msg     = document.getElementById('pin-msg');
+  const show = (text, ok) => {
+    msg.textContent = text;
+    msg.style.display = 'block';
+    msg.style.background = ok ? 'rgba(34,197,94,0.1)' : 'rgba(239,68,68,0.1)';
+    msg.style.color = ok ? '#16a34a' : '#ef4444';
+    msg.style.border = `1px solid ${ok ? '#bbf7d0' : '#fecaca'}`;
+  };
+  if (!/^\d{4}$/.test(pin)) return show('PIN must be exactly 4 digits.', false);
+  if (pin !== confirm)       return show('PINs do not match.', false);
+  try {
+    await api('/api/class-rep/set-pin', { method: 'POST', body: JSON.stringify({ pin }) });
+    show('PIN set successfully. You can now use it on the classroom device.', true);
+    document.getElementById('att-pin').value = '';
+    document.getElementById('att-pin-confirm').value = '';
+  } catch (e) { show(e.message || 'Failed to set PIN.', false); }
+}
+
+async function searchRepStudents() {
+  clearTimeout(_repSearchTimer);
+  _repSearchTimer = setTimeout(async () => {
+    const box = document.getElementById('rep-modal-results');
+    if (!box) return;
+    const q     = (document.getElementById('rep-modal-search')?.value || '').trim();
+    const level = document.getElementById('rep-modal-level')?.value || '';
+    const group = document.getElementById('rep-modal-group')?.value || '';
+    const dept  = document.getElementById('rep-modal-dept')?.value?.trim() || '';
+    const isHod = currentUser?.role === 'hod';
+    if (!q && !level && !group && !dept && !isHod) {
+      box.innerHTML = '<div style="color:var(--text-muted);font-size:13px;padding:10px 0;text-align:center">Enter a name, index number, or select a filter to search.</div>';
+      return;
+    }
+    box.innerHTML = '<div style="color:var(--text-muted);font-size:13px;padding:8px 0">Searching…</div>';
+    try {
+      const params = new URLSearchParams();
+      if (q)     params.set('indexNumber', q);
+      if (level) params.set('level', level);
+      if (group) params.set('group', group);
+      if (dept)  params.set('department', dept);
+      const { students } = await api(`/api/class-rep-admin/students?${params.toString()}`);
+      _renderRepStudentResults(students, 'doAssignRep');
+    } catch(e) { box.innerHTML = `<div style="color:#ef4444;font-size:13px">${e.message}</div>`; }
+  }, 300);
+}
+
+async function showAssignLecturerModal(courseId, courseTitle, currentLecturerId) {
+  showModal(`
+    <div style="padding:4px 0 8px">
+      <h3 style="font-size:16px;font-weight:700;margin-bottom:4px">Assign Lecturer</h3>
+      <p style="font-size:13px;color:var(--text-muted);margin-bottom:18px">${esc(courseTitle)}</p>
+      <div id="assign-lect-msg" style="display:none;padding:10px 14px;border-radius:8px;font-size:13px;margin-bottom:14px"></div>
+      <div class="form-group">
+        <label>Search Lecturer</label>
+        <input type="text" id="assign-lect-search" placeholder="Type a name…" oninput="hodSearchLecturers(this.value)" autocomplete="off">
+      </div>
+      <div id="assign-lect-results" style="max-height:220px;overflow-y:auto;margin-bottom:16px"></div>
+      <input type="hidden" id="assign-lect-id" value="${currentLecturerId || ''}">
+      <div id="assign-lect-selected" style="display:${currentLecturerId ? 'flex' : 'none'};align-items:center;gap:8px;padding:10px 12px;background:rgba(79,110,247,0.1);border-radius:8px;border:1.5px solid var(--primary);margin-bottom:16px;font-size:13px;font-weight:600;color:var(--text-primary)">
+        <span id="assign-lect-name" style="flex:1"></span>
+        <button onclick="hodClearLecturerSelection()" style="background:none;border:none;color:var(--text-muted);cursor:pointer;font-size:16px;line-height:1">×</button>
+      </div>
+      <div style="display:flex;gap:8px">
+        <button class="btn btn-secondary" style="flex:1" onclick="closeModal()">Cancel</button>
+        <button class="btn btn-primary" style="flex:1" onclick="hodConfirmAssignLecturer('${courseId}')">Assign</button>
+      </div>
+    </div>
+  `);
+  window._hodAssignCourseId = courseId;
+}
+
+async function showAssignRepModal() {
+  const isHod = currentUser?.role === 'hod';
+  _buildAssignRepModal({ title: 'Assign Class Representative', isHod, onSearch: 'searchRepStudents()' });
+  if (isHod) searchRepStudents();
+}
+
+async function showAssignRepToDeviceModal(repId, repName) {
+  openModal(`<div style="text-align:center;padding:16px 0"><div class="loading" style="margin:0 auto"></div><p style="color:var(--text-muted);font-size:13px;margin-top:10px">Loading devices…</p></div>`);
+  let devices = [];
+  try {
+    const data = await api('/api/devices/all');
+    devices = data.devices || [];
+  } catch(e) {
+    openModal(`<div style="padding:8px 0"><p style="color:#ef4444">Failed to load devices: ${e.message}</p><button class="btn btn-sm" onclick="closeModal()" style="margin-top:12px;width:100%">Close</button></div>`);
+    return;
+  }
+
+  const esc = s => s == null ? '' : String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  const dotColor = d => d.online ? '#16a34a' : '#9ca3af';
+
+  const deviceRows = devices.length === 0
+    ? `<p style="color:var(--text-muted);font-size:13px;text-align:center;padding:18px 0">No devices registered yet.</p>`
+    : devices.map(d => `
+      <div style="display:flex;align-items:center;gap:10px;padding:10px 12px;border-radius:9px;border:1.5px solid var(--border);margin-bottom:8px;cursor:pointer;transition:border-color .15s"
+        onmouseover="this.style.borderColor='#4f6ef7'" onmouseout="this.style.borderColor='var(--border)'"
+        onclick="_doAssignRepToDevice('${esc(d._id || d.deviceId)}','${esc(repId)}','${esc(repName)}','${esc(d.deviceName || d.name || 'Device')}')">
+        <span style="width:9px;height:9px;border-radius:50%;background:${dotColor(d)};flex-shrink:0;box-shadow:0 0 0 3px ${d.online ? 'rgba(22,163,74,.18)' : 'transparent'}"></span>
+        <div style="flex:1;min-width:0">
+          <div style="font-size:13px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(d.deviceName || d.name || 'Unnamed Device')}</div>
+          <div style="font-size:11px;color:var(--text-muted)">${esc(d.deviceId || d._id)} · ${d.online ? 'Online' : 'Offline'}</div>
+          ${d.classRep ? `<div style="font-size:10px;color:#f59e0b;margin-top:1px">Currently: ${esc(d.classRep?.name || 'another rep')}</div>` : ''}
+        </div>
+        <svg viewBox="0 0 24 24" fill="none" stroke="#4f6ef7" stroke-width="2" width="14" height="14"><polyline points="9 18 15 12 9 6"/></svg>
+      </div>`).join('');
+
+  openModal(`
+    <div>
+      <div style="display:flex;align-items:center;gap:9px;margin-bottom:14px">
+        <div style="width:34px;height:34px;border-radius:9px;background:rgba(79,110,247,.1);display:flex;align-items:center;justify-content:center;flex-shrink:0">
+          <svg viewBox="0 0 24 24" fill="none" stroke="#4f6ef7" stroke-width="2" width="16" height="16"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/></svg>
+        </div>
+        <div>
+          <h3 style="font-size:15px;font-weight:700;margin:0">Assign to Device</h3>
+          <p style="font-size:11px;color:var(--text-muted);margin:2px 0 0">Pick a device for <strong>${esc(repName)}</strong></p>
+        </div>
+      </div>
+      <div style="max-height:340px;overflow-y:auto">${deviceRows}</div>
+      <button onclick="closeModal()" style="margin-top:10px;width:100%;padding:10px;border-radius:9px;border:1.5px solid var(--border);background:transparent;color:var(--text-muted);font-size:13px;font-weight:600;cursor:pointer">Cancel</button>
+    </div>
+  `);
+}
+
+async function toggleSelfReg() {
+  const toggle = document.getElementById('self-reg-toggle');
+  if (!toggle) return;
+  const newVal = toggle.dataset.on !== '1';
+  try {
+    await api('/api/approvals/self-registration', { method: 'PATCH', body: JSON.stringify({ enabled: newVal }) });
+    renderApprovals();
+  } catch (e) {
+    toastError(e.message);
+  }
+}
+
+function _applyQuizBadge(navId, count) {
+  const el = document.getElementById(navId);
+  if (!el) return;
+  el.style.position = 'relative';
+  let badge = el.querySelector('.qm-badge');
+  if (count > 0) {
+    if (!badge) {
+      badge = document.createElement('span');
+      badge.className = 'qm-badge';
+      badge.style.cssText = 'position:absolute;top:4px;right:4px;background:#ef4444;color:#fff;font-size:9px;font-weight:700;padding:1px 5px;border-radius:20px;min-width:14px;text-align:center;line-height:14px;pointer-events:none';
+      el.appendChild(badge);
+    }
+    badge.textContent = count;
+  } else if (badge) {
+    badge.remove();
+  }
+}
+
+function _buildAssignRepModal({ title, subtitle, onSearch, isHod }) {
+  const hodDept = isHod ? (currentUser?.department || '') : '';
+  const selStyle = 'width:100%;padding:8px 10px;border:1.5px solid var(--border);border-radius:8px;background:var(--bg);color:var(--text-primary);font-size:12px;margin-top:3px';
+  const labelStyle = 'font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--text-muted)';
+  openModal(`
+    <div>
+      <div style="display:flex;align-items:center;gap:9px;margin-bottom:14px">
+        <div style="width:34px;height:34px;border-radius:9px;background:rgba(124,58,237,.1);display:flex;align-items:center;justify-content:center;flex-shrink:0">
+          <svg viewBox="0 0 24 24" fill="none" stroke="#7c3aed" stroke-width="2" width="16" height="16"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+        </div>
+        <div>
+          <h3 style="font-size:15px;font-weight:700;margin:0">${title}</h3>
+          ${subtitle ? `<p style="font-size:11px;color:var(--text-muted);margin:2px 0 0">${subtitle}</p>` : ''}
+        </div>
+      </div>
+      <div style="background:var(--bg);border-radius:10px;padding:12px;border:1px solid var(--border);margin-bottom:12px">
+        <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.6px;color:var(--text-muted);margin-bottom:10px">Filter Students</div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px">
+          ${!isHod ? `
+          <div style="grid-column:1/-1">
+            <label style="${labelStyle}">Department</label>
+            <input type="text" id="rep-modal-dept" placeholder="e.g. Computer Science" oninput="${onSearch}" style="${selStyle}">
+          </div>` : `
+          <div style="grid-column:1/-1;padding:7px 10px;background:rgba(79,110,247,.06);border-radius:7px;border-left:3px solid #4f6ef7;font-size:11px;color:var(--text-muted)">
+            Showing students in your department: <strong style="color:var(--text-primary)">${hodDept}</strong>
+          </div>`}
+          <div>
+            <label style="${labelStyle}">Level / Year</label>
+            <select id="rep-modal-level" onchange="${onSearch}" style="${selStyle}">
+              <option value="">Any level</option>
+              <option value="100">Year 1 (100)</option>
+              <option value="200">Year 2 (200)</option>
+              <option value="300">Year 3 (300)</option>
+              <option value="400">Year 4 (400)</option>
+              <option value="500">Year 5 (500)</option>
+            </select>
+          </div>
+          <div>
+            <label style="${labelStyle}">Group</label>
+            <select id="rep-modal-group" onchange="${onSearch}" style="${selStyle}">
+              <option value="">Any group</option>
+              <option value="A">Group A</option>
+              <option value="B">Group B</option>
+              <option value="C">Group C</option>
+              <option value="D">Group D</option>
+            </select>
+          </div>
+        </div>
+        <div>
+          <label style="${labelStyle}">Name or Index Number</label>
+          <input type="text" id="rep-modal-search" placeholder="Search by name or index number…" oninput="${onSearch}" style="${selStyle}">
+        </div>
+      </div>
+      <div style="font-size:11px;color:var(--text-muted);margin-bottom:8px">Use filters to narrow the list, then click <strong>Assign</strong> on the correct student.</div>
+      <div id="rep-modal-results" style="max-height:280px;overflow-y:auto"></div>
+    </div>
+  `, { maxWidth: '560px' });
+}
+
+function _caDetectLocation() {
+  const btn    = document.getElementById('cas-gps-btn');
+  const status = document.getElementById('cas-gps-status');
+  const latEl  = document.getElementById('cas-lat');
+  const lngEl  = document.getElementById('cas-lng');
+  if (!latEl || !lngEl) return;
+
+  if (!navigator.geolocation) {
+    if (status) { status.textContent = 'Geolocation is not supported by this browser.'; status.style.color = 'var(--danger)'; status.style.display = 'block'; }
+    return;
+  }
+
+  if (btn) { btn.disabled = true; btn.textContent = '⏳ Getting GPS…'; }
+  if (status) { status.textContent = 'Requesting precise location from device GPS…'; status.style.color = 'var(--text-muted)'; status.style.display = 'block'; }
+
+  navigator.geolocation.getCurrentPosition(
+    (pos) => {
+      const lat = pos.coords.latitude.toFixed(6);
+      const lng = pos.coords.longitude.toFixed(6);
+      const acc = Math.round(pos.coords.accuracy);
+      latEl.value = lat;
+      lngEl.value = lng;
+      if (status) {
+        status.textContent = `✓ Location set — accuracy ±${acc} m. Click Save Settings to apply.`;
+        status.style.color = 'var(--success,#22c55e)';
+      }
+      if (btn) { btn.disabled = false; btn.textContent = '📍 Detect My Location'; }
+    },
+    (err) => {
+      const msgs = {
+        1: 'Location permission denied. Please allow location access in your browser settings.',
+        2: 'Location unavailable. Make sure GPS is enabled on your device.',
+        3: 'Location request timed out. Try again.',
+      };
+      if (status) { status.textContent = msgs[err.code] || 'Could not get location.'; status.style.color = 'var(--danger)'; }
+      if (btn) { btn.disabled = false; btn.textContent = '📍 Detect My Location'; }
+    },
+    { enableHighAccuracy: true, timeout: 15000, maximumAge: 0 }
+  );
+}
+
+function _lcvOpenAdd(courseId) {
+  openModal(`
+    <h3 style="margin:0 0 16px">Add Video</h3>
+    <div style="display:flex;flex-direction:column;gap:12px">
+      <div>
+        <label style="font-size:12px;color:var(--text-muted);display:block;margin-bottom:4px">Video URL (YouTube, Vimeo, Drive, Loom)</label>
+        <input id="lcv-url" type="url" placeholder="https://youtu.be/..." style="width:100%;padding:10px;border:1px solid var(--border);border-radius:8px;background:var(--surface);color:var(--text);font-size:14px;box-sizing:border-box">
+      </div>
+      <div>
+        <label style="font-size:12px;color:var(--text-muted);display:block;margin-bottom:4px">Title</label>
+        <input id="lcv-title" type="text" placeholder="Lecture 1 – Introduction" style="width:100%;padding:10px;border:1px solid var(--border);border-radius:8px;background:var(--surface);color:var(--text);font-size:14px;box-sizing:border-box">
+      </div>
+      <div>
+        <label style="font-size:12px;color:var(--text-muted);display:block;margin-bottom:4px">Description (optional)</label>
+        <textarea id="lcv-desc" rows="2" placeholder="Brief description…" style="width:100%;padding:10px;border:1px solid var(--border);border-radius:8px;background:var(--surface);color:var(--text);font-size:14px;box-sizing:border-box;resize:vertical"></textarea>
+      </div>
+      <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:4px">
+        <button onclick="closeModal()" style="padding:8px 18px;border:1px solid var(--border);border-radius:8px;background:transparent;color:var(--text);cursor:pointer">Cancel</button>
+        <button onclick="_lcvSubmitAdd('${courseId}')" style="padding:8px 18px;background:var(--primary);color:#fff;border:none;border-radius:8px;font-weight:600;cursor:pointer">Add Video</button>
+      </div>
+    </div>`);
+}
+
+function _lcvVideoRow(v) {
+  const platformIcon = p => ({ youtube:'▶️', vimeo:'🎥', googledrive:'📁', loom:'🔴' }[p] || '🎬');
+  return `
+    <div style="display:flex;align-items:center;gap:12px;padding:10px 0;border-bottom:1px solid var(--border)" id="lcv-row-${v._id}">
+      ${v.thumbnail
+        ? `<img src="${esc(v.thumbnail)}" style="width:72px;height:48px;object-fit:cover;border-radius:6px;flex-shrink:0">`
+        : `<div style="width:72px;height:48px;background:var(--bg);border-radius:6px;display:flex;align-items:center;justify-content:center;font-size:22px;flex-shrink:0">${platformIcon(v.platform)}</div>`}
+      <div style="flex:1;min-width:0">
+        <div style="font-size:13px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(v.title)}</div>
+        ${v.description ? `<div style="font-size:12px;color:var(--text-muted);margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(v.description)}</div>` : ''}
+        <div style="font-size:11px;color:var(--text-muted);margin-top:2px;text-transform:uppercase;letter-spacing:.5px">${platformIcon(v.platform)} ${esc(v.platform || 'video')}</div>
+      </div>
+      <button onclick="openVideoPlayer('${esc(v.title)}','${esc(v.embedUrl || v.url || '')}','${esc(v.platform || '')}')" style="background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:6px 12px;font-size:12px;cursor:pointer;color:var(--text)">▶ Play</button>
+      <button onclick="_lcvDelete('${v._id}','${esc(v.courseId?._id || v.courseId || '')}')" style="background:transparent;border:1px solid var(--danger);border-radius:8px;padding:6px 12px;font-size:12px;cursor:pointer;color:var(--danger)">Delete</button>
+    </div>`;
+}
+
+function _openRenameModal(deviceId, currentName, onSuccess) {
+  openModal(`
+    <div style="padding:4px 0">
+      <h3 style="margin:0 0 6px;font-size:17px;font-weight:700">Rename Device</h3>
+      <p style="color:var(--muted);font-size:13px;margin:0 0 20px">
+        Current: <strong style="color:var(--text)">${esc(currentName)}</strong>
+      </p>
+      <label style="display:block;font-size:11px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px">New Name</label>
+      <input id="dev-rename-inp" type="text" value="${esc(currentName)}" maxlength="48"
+        placeholder="e.g. Lecture Hall A"
+        style="width:100%;padding:13px 14px;background:var(--surface,#1a2038);border:1.5px solid var(--border,#2d3a5c);border-radius:10px;color:var(--text,#fff);font-size:15px;outline:none;box-sizing:border-box;margin-bottom:20px"
+        onkeydown="if(event.key==='Enter')window._doDeviceRename('${esc(deviceId)}')">
+      <div style="display:flex;gap:10px">
+        <button onclick="closeModal()"
+          style="flex:1;padding:13px;background:transparent;border:1.5px solid var(--border,#2d3a5c);border-radius:10px;color:var(--muted,#94a3b8);font-size:14px;font-weight:600;cursor:pointer">
+          Cancel
+        </button>
+        <button id="dev-rename-save" onclick="window._doDeviceRename('${esc(deviceId)}')"
+          style="flex:1;padding:13px;background:var(--accent,#4f6ef7);border:none;border-radius:10px;color:#fff;font-size:14px;font-weight:700;cursor:pointer">
+          Save
+        </button>
+      </div>
+    </div>
+  `);
+  window._onRenameSuccess = onSuccess;
+  setTimeout(() => { const i = document.getElementById('dev-rename-inp'); if (i) { i.focus(); i.select(); } }, 60);
+}
+
+function _renderRepStudentResults(students, assignFn) {
+  const e2 = s => s == null ? '' : String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  const box = document.getElementById('rep-modal-results');
+  if (!box) return;
+  if (!students.length) { box.innerHTML = '<div style="color:var(--text-muted);font-size:13px;padding:10px 0;text-align:center">No students found matching these filters.</div>'; return; }
+  box.innerHTML = students.slice(0, 15).map(s => {
+    const initials = (s.name || '?')[0].toUpperCase();
+    const alreadyRep = s.isClassRep;
+    return `
+    <div style="display:flex;align-items:center;gap:10px;padding:10px 12px;border-radius:10px;border:1.5px solid ${alreadyRep ? 'rgba(22,163,74,.2)' : 'var(--border)'};margin-bottom:7px;background:${alreadyRep ? 'rgba(22,163,74,.04)' : 'var(--bg)'}">
+      <div style="width:36px;height:36px;border-radius:50%;background:rgba(124,58,237,.1);display:flex;align-items:center;justify-content:center;flex-shrink:0;font-size:13px;font-weight:800;color:#7c3aed">${initials}</div>
+      <div style="flex:1;min-width:0">
+        <div style="font-size:13px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${e2(s.name)}</div>
+        <div style="display:flex;flex-wrap:wrap;gap:4px;margin-top:3px">
+          ${s.IndexNumber ? `<span style="font-size:10px;font-weight:600;padding:1px 6px;border-radius:5px;background:rgba(79,110,247,.08);color:#4f6ef7">${e2(s.IndexNumber)}</span>` : ''}
+          ${s.studentLevel ? `<span style="font-size:10px;padding:1px 6px;border-radius:5px;background:var(--border);color:var(--text-muted)">Level ${e2(s.studentLevel)}</span>` : ''}
+          ${s.studentGroup ? `<span style="font-size:10px;padding:1px 6px;border-radius:5px;background:var(--border);color:var(--text-muted)">Group ${e2(s.studentGroup)}</span>` : ''}
+          ${s.department   ? `<span style="font-size:10px;padding:1px 6px;border-radius:5px;background:var(--border);color:var(--text-muted)">${e2(s.department)}</span>` : ''}
+          ${s.programme    ? `<span style="font-size:10px;padding:1px 6px;border-radius:5px;background:var(--border);color:var(--text-muted)">${e2(s.programme)}</span>` : ''}
+        </div>
+      </div>
+      <div style="flex-shrink:0">
+        ${alreadyRep
+          ? `<span style="display:inline-flex;align-items:center;gap:4px;font-size:11px;font-weight:600;padding:4px 9px;border-radius:20px;background:rgba(22,163,74,.1);color:#15803d"><svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="20 6 9 17 4 12"/></svg>Rep</span>`
+          : `<button class="btn btn-primary btn-sm" style="font-size:11px;padding:5px 12px" onclick="${assignFn}('${s._id}','${e2(s.name).replace(/'/g,"\\'")}')">Assign</button>`}
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function _sessionStatusLabel(status) {
+  return SESSION_STATUS_LABELS[status] || (status ? status.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase()) : '—');
+}
+
+function _startHodQuizBadge() {
+  _updateHodQuizBadge();
+  clearInterval(_hodQuizBadgeTimer);
+  _hodQuizBadgeTimer = setInterval(_updateHodQuizBadge, 60000);
+}
+
+function _startLecturerQuizBadge() {
+  _updateLecturerQuizBadge();
+  clearInterval(_lecturerQuizBadgeTimer);
+  _lecturerQuizBadgeTimer = setInterval(_updateLecturerQuizBadge, 60000);
+}
+
+function _userRowCard(u, canManage) {
+  const roleAvatarColor = {
+    admin: '#dc2626', superadmin: '#0d1117', hod: '#0891b2',
+    lecturer: '#a16207', student: '#7c3aed', manager: '#1d4ed8', employee: '#15803d'
+  };
+  const initials  = (u.name || '?').split(' ').map(w => w[0]).join('').slice(0,2).toUpperCase();
+  const avatarBg  = roleAvatarColor[u.role] || '#6b7280';
+  const identifier = u.indexNumber || u.IndexNumber || u.employeeId || '';
+  const emailOrId  = u.email ? u.email : identifier || 'N/A';
+  const tags = u.role === 'student' ? [
+    u.programme    ? `<span style="background:#ede9fe;color:#7c3aed;padding:2px 7px;border-radius:20px;font-size:10px;font-weight:700">${esc(u.programme)}</span>` : '',
+    u.studentLevel ? `<span style="background:#dbeafe;color:#1d4ed8;padding:2px 7px;border-radius:20px;font-size:10px;font-weight:700">L${esc(u.studentLevel)}</span>` : '',
+    u.studentGroup ? `<span style="background:#ecfdf5;color:#059669;padding:2px 7px;border-radius:20px;font-size:10px;font-weight:700">Grp ${esc(u.studentGroup)}</span>` : '',
+    u.sessionType  ? `<span style="background:#fff7ed;color:#c2410c;padding:2px 7px;border-radius:20px;font-size:10px;font-weight:600">${esc(u.sessionType)}</span>` : '',
+  ].filter(Boolean).join('') : '';
+  return `
+  <div id="user-row-${u._id}" style="padding:14px 16px;border-bottom:1px solid var(--border);transition:background .15s" onmouseover="this.style.background='var(--card-hover)'" onmouseout="this.style.background=''">
+    <div style="display:flex;align-items:center;gap:12px">
+      ${canManage ? `<input type="checkbox" class="user-checkbox" value="${u._id}" onchange="updateBulkActions()" style="flex-shrink:0;width:16px;height:16px;accent-color:var(--primary);cursor:pointer">` : ''}
+      <div style="width:40px;height:40px;border-radius:50%;background:${avatarBg};display:flex;align-items:center;justify-content:center;flex-shrink:0;font-weight:700;font-size:14px;color:#fff">${initials}</div>
+      <div style="flex:1;min-width:0">
+        <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">
+          <span style="font-weight:700;font-size:14px;color:var(--text)">${esc(u.name)}</span>
+          <span class="role-badge role-${u.role}" style="flex-shrink:0">${u.role}</span>
+          ${u.isClassRep ? `<span style="background:#7c3aed;color:#fff;font-size:9px;font-weight:700;padding:2px 6px;border-radius:20px;flex-shrink:0;letter-spacing:.4px">CLASS REP</span>` : ''}
+          ${u.isActive
+            ? `<span style="background:#dcfce7;color:#15803d;font-size:10px;font-weight:700;padding:2px 7px;border-radius:20px;flex-shrink:0">Active</span>`
+            : `<span style="background:#fee2e2;color:#dc2626;font-size:10px;font-weight:700;padding:2px 7px;border-radius:20px;flex-shrink:0">Inactive</span>`}
+        </div>
+        <div style="font-size:12px;color:var(--text-light);margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(emailOrId)}${identifier && u.email ? ` · ${esc(identifier)}` : ''}</div>
+      </div>
+    </div>
+    ${tags ? `<div style="display:flex;gap:4px;flex-wrap:wrap;margin-top:8px;padding-left:${canManage ? '68px' : '52px'}">${tags}</div>` : ''}
+    ${canManage ? `
+    <div style="display:flex;gap:6px;margin-top:10px;padding-left:28px">
+      ${u.isActive
+        ? `<button class="btn btn-sm" style="flex:1;background:#f59e0b;color:#fff;font-size:11px;padding:6px 4px" onclick="deactivateUser('${u._id}')">Deactivate</button>`
+        : `<button class="btn btn-sm" style="flex:1;background:#22c55e;color:#fff;font-size:11px;padding:6px 4px" onclick="activateUser('${u._id}')">Activate</button>`}
+      <button class="btn btn-sm" style="flex:1;background:#6366f1;color:#fff;font-size:11px;padding:6px 4px" onclick="adminResetStudentPassword('${u._id}', this)">🔑 Reset</button>
+      ${u.role === 'student' && u.deviceId ? `<button class="btn btn-sm" style="flex:1;background:#f97316;color:#fff;font-size:11px;padding:6px 4px" onclick="clearStudentDeviceLock('${u._id}', this)">🔓 Unlock</button>` : ''}
+      <button class="btn btn-danger btn-sm" style="flex:1;font-size:11px;padding:6px 4px" onclick="deleteUserPermanently('${u._id}', this)">Delete</button>
+    </div>` : ''}
+  </div>`;
+}
+
+function hodClearLecturerSelection() {
+  document.getElementById('assign-lect-id').value = '';
+  document.getElementById('assign-lect-name').textContent = '';
+  document.getElementById('assign-lect-selected').style.display = 'none';
+}
+
+function hodSelectLecturer(id, name) {
+  document.getElementById('assign-lect-id').value = id;
+  document.getElementById('assign-lect-name').textContent = name;
+  document.getElementById('assign-lect-selected').style.display = 'flex';
+  document.getElementById('assign-lect-results').innerHTML = '';
+  document.getElementById('assign-lect-search').value = '';
+}
+
+function openModal(html, opts = {}) {
+  const container = document.getElementById('modal-container');
+  if (!container) return;
+  const maxW = opts.maxWidth || '520px';
+  container.innerHTML = `
+    <div class="modal-overlay" onclick="closeModal(event)" style="padding:16px">
+      <div class="modal" style="max-width:${maxW};width:100%;position:relative">
+        <button onclick="closeModal()" style="position:absolute;top:12px;right:12px;background:none;border:none;cursor:pointer;color:var(--text-muted);font-size:18px;line-height:1;padding:4px 6px;border-radius:6px" title="Close">✕</button>
+        ${html}
+      </div>
+    </div>`;
+  container.classList.remove('hidden');
+}
+
+function renderDepartmentUsers(deptName, allUsers, filterRole = '') {
+  const content = document.getElementById('main-content');
+  if (!content) return;
+  const canManage = ['admin','superadmin'].includes(currentUser.role);
+
+  let deptUsers = deptName === '__none__'
+    ? allUsers.filter(u => !u.department)
+    : allUsers.filter(u => u.department === deptName);
+
+  if (filterRole) deptUsers = deptUsers.filter(u => u.role === filterRole);
+
+  const roleOrder = ['admin','hod','lecturer','student','employee','manager'];
+  const roleLabel = { admin:'Admins', hod:'Head of Department', lecturer:'Lecturers', student:'Students', employee:'Employees', manager:'Managers' };
+  const roleSectionColor = { hod:'#0891b2', lecturer:'#a16207', student:'#7c3aed', admin:'#dc2626', employee:'#15803d', manager:'#1d4ed8' };
+
+  const grouped = {};
+  for (const r of roleOrder) {
+    const members = deptUsers.filter(u => u.role === r);
+    if (members.length) grouped[r] = members;
+  }
+
+  const sections = Object.entries(grouped).map(([role, members]) => `
+    <div style="margin-bottom:20px">
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px">
+        <div style="width:4px;height:20px;border-radius:2px;background:${roleSectionColor[role]||'#6b7280'}"></div>
+        <span style="font-weight:700;font-size:14px;color:var(--text)">${roleLabel[role]||role}</span>
+        <span style="background:${roleSectionColor[role]||'#6b7280'}20;color:${roleSectionColor[role]||'#6b7280'};font-size:11px;font-weight:700;padding:2px 9px;border-radius:20px">${members.length}</span>
+      </div>
+      <div class="card" style="padding:0;overflow:hidden">
+        ${members.map(u => _userRowCard(u, canManage)).join('')}
+      </div>
+    </div>
+  `).join('');
+
+  const displayName = deptName === '__none__' ? 'Unassigned Users' : esc(deptName);
+  const roleTitle = filterRole ? ` — ${roleLabel[filterRole] || filterRole}` : '';
+  const safeDepId = JSON.stringify(deptName);
+
+  content.innerHTML = `
+    <div style="display:flex;align-items:center;gap:12px;margin-bottom:20px;flex-wrap:wrap">
+      <button onclick="renderUsers()" style="display:flex;align-items:center;gap:6px;background:none;border:1.5px solid var(--border);border-radius:10px;padding:8px 14px;font-size:13px;font-weight:600;color:var(--text);cursor:pointer">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M19 12H5M12 5l-7 7 7 7"/></svg>
+        Departments
+      </button>
+      ${filterRole ? `<button onclick="renderDepartmentUsers(${safeDepId},_cachedAllUsers)" style="display:flex;align-items:center;gap:6px;background:none;border:1.5px solid var(--border);border-radius:10px;padding:8px 14px;font-size:13px;font-weight:600;color:var(--text);cursor:pointer">All Members</button>` : ''}
+      <div>
+        <h2 style="margin:0;font-size:20px">${displayName}${roleTitle}</h2>
+        <p style="color:var(--text-light);font-size:13px;margin-top:2px">${deptUsers.length} member${deptUsers.length!==1?'s':''}</p>
+      </div>
+      ${canManage ? `<button class="btn btn-primary btn-sm" style="margin-left:auto" onclick="showCreateUserModal()">+ Add User</button>` : ''}
+    </div>
+    ${sections || `<div class="card" style="padding:48px;text-align:center">
+      <div style="font-size:36px;margin-bottom:10px">👥</div>
+      <div style="font-weight:600;color:var(--text)">No ${filterRole ? (roleLabel[filterRole]||filterRole).toLowerCase() : 'members'} in this department</div>
+    </div>`}
+  `;
+}
+
+function showCodeEntry() {
+  const area = document.getElementById('mark-input-area');
+  if (!area) return;
+  area.innerHTML = `
+    <div class="card">
+      <div class="card-title">Enter Attendance Code</div>
+      <div class="form-group">
+        <label>6-Digit Code</label>
+        <input type="text" id="mark-code-input" placeholder="Enter code" maxlength="4" style="font-size:24px;text-align:center;letter-spacing:8px;font-weight:700;text-transform:uppercase" autofocus>
+      </div>
+      <button class="btn btn-primary" onclick="submitCodeMark()" style="width:100%">Submit Code</button>
+    </div>
+  `;
+  document.getElementById('mark-code-input')?.focus();
+}
+
+window.openVideoPlayer = function(title, embedUrl, platform) {
+  let mediaHtml;
+  const safePlatforms = ['youtube', 'vimeo', 'googledrive', 'loom'];
+  if (embedUrl && safePlatforms.includes((platform || '').toLowerCase())) {
+    mediaHtml = `<iframe src="${esc(embedUrl)}" style="width:100%;height:400px;border:none;border-radius:10px"
+      allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+      allowfullscreen></iframe>`;
+  } else if (embedUrl) {
+    mediaHtml = `<video src="${esc(embedUrl)}" controls style="width:100%;border-radius:10px;max-height:400px">
+      Your browser does not support video playback.
+    </video>`;
+  } else {
+    mediaHtml = `<div style="padding:40px;text-align:center;color:var(--text-muted)">No playable source available for this video.</div>`;
+  }
+  openModal(`
+    <div style="min-width:min(680px,90vw)">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
+        <h3 style="margin:0;font-size:16px;color:var(--text)">${esc(title)}</h3>
+        <button onclick="closeModal()" style="background:none;border:none;color:var(--text-muted);cursor:pointer;font-size:20px;line-height:1">&times;</button>
+      </div>
+      ${mediaHtml}
+    </div>
+  `);
+};
+
+window.hodGeneratePairingCode = async () => {
+  try {
+    const data = await api('/api/devices/pairing-code', { method: 'POST' });
+    const code = data.pairingCode || data.code || '—';
+    openModal(`
+      <div style="text-align:center;padding:8px 0">
+        <div style="width:48px;height:48px;border-radius:12px;background:#ede9fe;display:flex;align-items:center;justify-content:center;margin:0 auto 16px">
+          <svg viewBox="0 0 24 24" fill="none" stroke="#7c3aed" stroke-width="2" width="24" height="24"><rect x="5" y="2" width="14" height="20" rx="2" ry="2"/><line x1="12" y1="18" x2="12.01" y2="18"/></svg>
+        </div>
+        <h3 style="font-size:17px;font-weight:700;margin-bottom:6px">Pairing Code</h3>
+        <p style="font-size:13px;color:var(--text-muted);margin-bottom:20px">Share this code with the Class Rep to set up a device. It expires in a few minutes.</p>
+        <div style="font-size:44px;font-weight:900;letter-spacing:10px;color:#4f46e5;font-family:monospace;margin-bottom:20px">${code}</div>
+        <p style="font-size:12px;color:var(--text-muted)">The Class Rep connects to the <strong>DIKLY-XXXXXX</strong> hotspot and enters this code + the institution code.</p>
+        <button class="btn btn-primary" style="margin-top:16px" onclick="navigator.clipboard.writeText('${code}').then(()=>showToastNotif('Code copied!','success'))">Copy Code</button>
+      </div>
+    `);
+  } catch (e) {
+    showToastNotif('❌ Failed to generate pairing code: ' + e.message, 'error');
+  }
+};
+
+window.hodAssignClassRep = async (deviceId, deviceName) => {
+  const e2 = s => s == null ? '' : String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  window._hodRepDeviceId = deviceId;
+  _buildAssignRepModal({
+    title: 'Assign Class Rep',
+    subtitle: `Device: <strong>${e2(deviceName)}</strong>`,
+    isHod: true,
+    onSearch: 'hodSearchRepStudents()',
+  });
+  hodSearchRepStudents();
+};
+
+window.hodSearchRepStudents = () => {
+  clearTimeout(_hodRepSearchTimer);
+  _hodRepSearchTimer = setTimeout(async () => {
+    const box = document.getElementById('rep-modal-results');
+    if (!box) return;
+    const q     = (document.getElementById('rep-modal-search')?.value || '').trim();
+    const level = document.getElementById('rep-modal-level')?.value || '';
+    const group = document.getElementById('rep-modal-group')?.value || '';
+    box.innerHTML = '<div style="color:var(--text-muted);font-size:13px;padding:8px 0">Searching…</div>';
+    try {
+      const params = new URLSearchParams();
+      if (q)     params.set('indexNumber', q);
+      if (level) params.set('level', level);
+      if (group) params.set('group', group);
+      const { students } = await api(`/api/class-rep-admin/students?${params.toString()}`);
+      _renderRepStudentResults(students, 'hodDoAssignRep');
+    } catch(e) {
+      box.innerHTML = `<div style="color:#ef4444;font-size:13px">${e.message}</div>`;
+    }
+  }, 300);
+};
+
+window.hodDoAssignRep = async (studentId, studentName) => {
+  const deviceId = window._hodRepDeviceId;
+  if (!deviceId) { showToastNotif('❌ Device reference lost — please close and try again.', 'error'); return; }
+  try {
+    await api(`/api/devices/${encodeURIComponent(deviceId)}/assign-class-rep`, {
+      method: 'PATCH',
+      body: JSON.stringify({ classRepId: studentId }),
+    });
+    closeModal();
+    showToastNotif(`✅ ${studentName} assigned as Class Rep for this device.`, 'success');
+    renderHodDevices();
+  } catch(e) {
+    showToastNotif('❌ Failed to assign: ' + e.message, 'error');
+  }
+};
+
+window._doDeviceRename = async (deviceId) => {
+  const inp = document.getElementById('dev-rename-inp');
+  const newName = (inp?.value || '').trim();
+  if (!newName) { inp?.focus(); return; }
+  const btn = document.getElementById('dev-rename-save');
+  if (btn) { btn.disabled = true; btn.textContent = 'Saving…'; }
+  try {
+    await api('/api/devices/my/rename', { method: 'PATCH', body: JSON.stringify({ deviceName: newName, deviceId }) });
+    closeModal();
+    showToastNotif('Device renamed successfully.', 'success');
+    if (typeof window._onRenameSuccess === 'function') window._onRenameSuccess();
+  } catch (e) {
+    if (btn) { btn.disabled = false; btn.textContent = 'Save'; }
+    showToastNotif('Failed to rename: ' + (e.message || 'Server error'), 'error');
+  }
+};
+
+window.hodRenameDevice = (deviceId, currentName) => {
+  _openRenameModal(deviceId, currentName, renderHodDevices);
+};
+
+window.hodSetupDevice = async (deviceId) => {
+  showToastNotif('Setup is done via the device\'s WiFi portal — power on the device and connect to the DIKLY-XXXXXX hotspot.', 'warn');
+};
+
+window.hodFactoryReset = async (deviceId, deviceName) => {
+  if (!confirm(`Factory reset "${deviceName}"?\n\nThis will clear all WiFi credentials and pairing data from the device firmware. It will need to be re-paired by a lecturer.`)) return;
+  try {
+    await api(`/api/devices/${encodeURIComponent(deviceId)}/factory-reset`, { method: 'POST' });
+    showToastNotif('✅ Factory reset command sent. Device will restart.', 'success');
+    setTimeout(renderHodDevices, 2000);
+  } catch (e) {
+    showToastNotif('❌ Failed to factory reset: ' + e.message, 'error');
+  }
+};
+
+window.hodRemoveDevice = async (deviceId, deviceName) => {
+  if (!confirm(`Remove "${deviceName}"?\n\nThis permanently unpairs the device from your institution. The physical device will need to be re-paired.`)) return;
+  try {
+    await api(`/api/devices/${encodeURIComponent(deviceId)}/remove`, { method: 'DELETE' });
+    showToastNotif('✅ Device removed.', 'success');
+    renderHodDevices();
+  } catch (e) {
+    showToastNotif('❌ Failed to remove device: ' + e.message, 'error');
+  }
+};
+
+window.adminGeneratePairingCode = async () => {
+  try {
+    const data = await api('/api/devices/pairing-code', { method: 'POST' });
+    const code = data.pairingCode || data.code || '—';
+    openModal(`
+      <div style="text-align:center;padding:12px 0 4px">
+        <div style="width:52px;height:52px;border-radius:14px;background:#ede9fe;display:flex;align-items:center;justify-content:center;margin:0 auto 16px">
+          <svg viewBox="0 0 24 24" fill="none" stroke="#7c3aed" stroke-width="2" width="24" height="24"><rect x="5" y="2" width="14" height="20" rx="2" ry="2"/><line x1="12" y1="18" x2="12.01" y2="18"/></svg>
+        </div>
+        <div style="font-size:12px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;color:var(--text-muted);margin-bottom:10px">New Pairing Code</div>
+        <div style="font-size:52px;font-weight:900;letter-spacing:12px;font-family:monospace;color:#7c3aed;margin-bottom:14px;padding:0 8px">${code}</div>
+        <p style="font-size:13px;color:var(--text-muted);margin-bottom:20px;line-height:1.5">Share this one-time code with the Class Rep along with the institution code. Expires in <strong>10 minutes</strong>.</p>
+        <button class="btn btn-primary" style="width:100%" onclick="navigator.clipboard.writeText('${code}').then(()=>showToastNotif('Code copied!','success'))">Copy Code</button>
+      </div>
+    `);
+  } catch(e) { showToastNotif('❌ ' + (e.message || 'Failed to generate code'), 'error'); }
+};
+
+window.adminAssignLecturer = async (deviceId, deviceName) => {
+  const isHod = currentUser?.role === 'hod';
+  const hodDept = isHod ? (currentUser?.department || '') : '';
+  const selStyle = 'width:100%;padding:9px 12px;border:1.5px solid var(--border);border-radius:8px;background:var(--bg);color:var(--text-primary);font-size:13px;margin-top:4px';
+  const labelStyle = 'font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--text-muted)';
+
+  openModal(`
+    <div>
+      <div style="display:flex;align-items:center;gap:9px;margin-bottom:4px">
+        <div style="width:34px;height:34px;border-radius:9px;background:rgba(79,110,247,.1);display:flex;align-items:center;justify-content:center;flex-shrink:0">
+          <svg viewBox="0 0 24 24" fill="none" stroke="#4f6ef7" stroke-width="2" width="16" height="16"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+        </div>
+        <div>
+          <h3 style="font-size:15px;font-weight:700;margin:0">Assign Lecturer</h3>
+          <p style="font-size:11px;color:var(--text-muted);margin:2px 0 0">Device: <strong>${deviceName}</strong></p>
+        </div>
+      </div>
+      ${isHod ? `<div style="margin:10px 0 14px;padding:8px 12px;background:rgba(79,110,247,.06);border-radius:8px;border-left:3px solid #4f6ef7;font-size:11px;color:var(--text-muted)">Showing lecturers in your department: <strong style="color:var(--text-primary)">${hodDept}</strong></div>` : ''}
+      <div id="admin-lec-loading" style="text-align:center;padding:24px;color:var(--text-muted);font-size:13px">Loading lecturers…</div>
+      <div id="admin-lec-body" style="display:none">
+        ${!isHod ? `
+        <div class="form-group" style="margin-bottom:12px">
+          <label style="${labelStyle}">Department</label>
+          <select id="admin-dept-select" onchange="adminDeptChanged(this.value)" style="${selStyle}">
+            <option value="">— All Departments —</option>
+          </select>
+        </div>` : ''}
+        <div class="form-group" style="margin-bottom:12px">
+          <label style="${labelStyle}">Lecturer</label>
+          <select id="admin-lec-select" onchange="adminLecturerChanged(this.value)" style="${selStyle}">
+            <option value="">— Select lecturer —</option>
+          </select>
+        </div>
+        <div class="form-group" style="margin-bottom:16px">
+          <label style="${labelStyle}">Course</label>
+          <select id="admin-course-select" style="${selStyle}">
+            <option value="">— Select lecturer first —</option>
+          </select>
+        </div>
+        <button class="btn btn-primary" style="width:100%" onclick="adminDoAssignLecturer('${deviceId}')">Assign to Device</button>
+      </div>
+    </div>
+  `);
+  try {
+    const { lecturers } = await api('/api/devices/lecturers-for-assignment');
+    window._adminLecturers = lecturers;
+
+    // Populate department dropdown (admin only — HOD is pre-filtered by backend)
+    if (!isHod) {
+      const depts = [...new Set(lecturers.map(l => l.department).filter(Boolean))].sort();
+      const deptSel = document.getElementById('admin-dept-select');
+      if (deptSel) {
+        depts.forEach(d => {
+          const opt = document.createElement('option');
+          opt.value = d;
+          opt.textContent = d;
+          deptSel.appendChild(opt);
+        });
+      }
+    }
+
+    // Populate lecturer dropdown (all by default, or filtered if dept already chosen)
+    window._adminFillLecturers(null);
+
+    document.getElementById('admin-lec-loading').style.display = 'none';
+    document.getElementById('admin-lec-body').style.display = 'block';
+  } catch(e) {
+    const el = document.getElementById('admin-lec-loading');
+    if (el) el.innerHTML = `<span style="color:#ef4444">${e.message}</span>`;
+  }
+};
+
+window._adminFillLecturers = (deptFilter) => {
+  const sel = document.getElementById('admin-lec-select');
+  if (!sel) return;
+  const list = (window._adminLecturers || []).filter(l => !deptFilter || l.department === deptFilter);
+  sel.innerHTML = `<option value="">— Select lecturer${deptFilter ? ' in ' + deptFilter : ''} —</option>`;
+  list.forEach(l => {
+    const opt = document.createElement('option');
+    opt.value = l._id;
+    opt.textContent = l.name + (l.department && !deptFilter ? ` · ${l.department}` : '');
+    sel.appendChild(opt);
+  });
+  // Reset course dropdown when lecturer list resets
+  const cSel = document.getElementById('admin-course-select');
+  if (cSel) cSel.innerHTML = '<option value="">— Select lecturer first —</option>';
+};
+
+window.adminDeptChanged = (dept) => {
+  window._adminFillLecturers(dept || null);
+};
+
+window.adminLecturerChanged = (lecturerId) => {
+  const courseSel = document.getElementById('admin-course-select');
+  if (!courseSel) return;
+  courseSel.innerHTML = '<option value="">— Select course —</option>';
+  const lec = (window._adminLecturers || []).find(l => l._id === lecturerId);
+  if (!lec || !lec.courses?.length) {
+    courseSel.innerHTML = '<option value="">No courses assigned to this lecturer</option>';
+    return;
+  }
+  lec.courses.forEach(c => {
+    const opt = document.createElement('option');
+    opt.value = c._id;
+    opt.textContent = (c.courseCode ? c.courseCode + ' · ' : '') + c.name;
+    courseSel.appendChild(opt);
+  });
+};
+
+window.adminDoAssignLecturer = async (deviceId) => {
+  const lecturerId = document.getElementById('admin-lec-select')?.value;
+  const courseId   = document.getElementById('admin-course-select')?.value;
+  if (!lecturerId || !courseId) { showToastNotif('Select a lecturer and course first.', 'error'); return; }
+  try {
+    await api(`/api/devices/${encodeURIComponent(deviceId)}/assign-lecturer`, {
+      method: 'POST',
+      body: JSON.stringify({ lecturerId, courseId }),
+    });
+    closeModal();
+    showToastNotif('✅ Lecturer assigned to device.', 'success');
+    renderAdminDevices();
+  } catch(e) { showToastNotif('❌ ' + (e.message || 'Failed to assign'), 'error'); }
+};
+
+window.adminRemoveLecturer = async (deviceId, lecturerId, courseId, lecturerName) => {
+  if (!confirm(`Remove ${lecturerName} from this device?`)) return;
+  try {
+    await api(`/api/devices/${encodeURIComponent(deviceId)}/remove-lecturer`, {
+      method: 'DELETE',
+      body: JSON.stringify({ lecturerId, courseId }),
+    });
+    showToastNotif('✅ Lecturer removed from device.', 'success');
+    renderAdminDevices();
+  } catch(e) { showToastNotif('❌ ' + (e.message || 'Failed to remove'), 'error'); }
+};
+
+window.adminAssignClassRep = async (deviceId, deviceName) => {
+  const isHod = currentUser?.role === 'hod';
+  const hodDept = isHod ? (currentUser?.department || '') : '';
+  const selStyle = 'width:100%;padding:8px 10px;border:1.5px solid var(--border);border-radius:8px;background:var(--bg);color:var(--text-primary);font-size:12px;margin-top:3px';
+  const labelStyle = 'font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--text-muted)';
+
+  openModal(`
+    <div>
+      <div style="display:flex;align-items:center;gap:9px;margin-bottom:14px">
+        <div style="width:34px;height:34px;border-radius:9px;background:rgba(124,58,237,.1);display:flex;align-items:center;justify-content:center;flex-shrink:0">
+          <svg viewBox="0 0 24 24" fill="none" stroke="#7c3aed" stroke-width="2" width="16" height="16"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+        </div>
+        <div>
+          <h3 style="font-size:15px;font-weight:700;margin:0">Assign Class Rep</h3>
+          <p style="font-size:11px;color:var(--text-muted);margin:2px 0 0">Device: <strong>${deviceName}</strong></p>
+        </div>
+      </div>
+
+      <!-- Filter strip -->
+      <div style="background:var(--bg);border-radius:10px;padding:12px;border:1px solid var(--border);margin-bottom:12px">
+        <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.6px;color:var(--text-muted);margin-bottom:10px">Filter Students</div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px">
+          ${!isHod ? `
+          <div style="grid-column:1/-1">
+            <label style="${labelStyle}">Department</label>
+            <input type="text" id="admin-rep-dept" placeholder="e.g. Computer Science"
+              oninput="adminSearchRepStudents('${deviceId}')"
+              style="${selStyle}">
+          </div>` : `
+          <div style="grid-column:1/-1;padding:7px 10px;background:rgba(79,110,247,.06);border-radius:7px;border-left:3px solid #4f6ef7;font-size:11px;color:var(--text-muted)">
+            Showing students in your department: <strong style="color:var(--text-primary)">${hodDept}</strong>
+          </div>`}
+          <div>
+            <label style="${labelStyle}">Level / Year</label>
+            <select id="admin-rep-level" onchange="adminSearchRepStudents('${deviceId}')" style="${selStyle}">
+              <option value="">Any level</option>
+              <option value="100">Year 1 (100)</option>
+              <option value="200">Year 2 (200)</option>
+              <option value="300">Year 3 (300)</option>
+              <option value="400">Year 4 (400)</option>
+              <option value="500">Year 5 (500)</option>
+            </select>
+          </div>
+          <div>
+            <label style="${labelStyle}">Group</label>
+            <select id="admin-rep-group" onchange="adminSearchRepStudents('${deviceId}')" style="${selStyle}">
+              <option value="">Any group</option>
+              <option value="A">Group A</option>
+              <option value="B">Group B</option>
+              <option value="C">Group C</option>
+              <option value="D">Group D</option>
+            </select>
+          </div>
+        </div>
+        <div>
+          <label style="${labelStyle}">Name or Index Number</label>
+          <input type="text" id="admin-rep-search" placeholder="Search by name or index number…"
+            oninput="adminSearchRepStudents('${deviceId}')"
+            style="${selStyle}">
+        </div>
+      </div>
+
+      <div style="font-size:11px;color:var(--text-muted);margin-bottom:8px">Use the filters above to narrow down the list, then click <strong>Assign</strong> on the correct student.</div>
+      <div id="admin-rep-results" style="max-height:280px;overflow-y:auto"></div>
+    </div>
+  `, { maxWidth: '560px' });
+
+  // Auto-load for HOD (already dept-filtered) or show prompt
+  if (isHod) adminSearchRepStudents(deviceId);
+};
+
+window.adminSearchRepStudents = (deviceId) => {
+  clearTimeout(_adminRepTimer);
+  _adminRepTimer = setTimeout(async () => {
+    const box = document.getElementById('admin-rep-results');
+    if (!box) return;
+    const q     = (document.getElementById('admin-rep-search')?.value || '').trim();
+    const level = document.getElementById('admin-rep-level')?.value || '';
+    const group = document.getElementById('admin-rep-group')?.value || '';
+    const dept  = document.getElementById('admin-rep-dept')?.value?.trim() || '';
+
+    // Need at least one filter
+    if (!q && !level && !group && !dept) {
+      box.innerHTML = '<div style="color:var(--text-muted);font-size:12px;padding:10px 0;text-align:center">Enter a name, index number, or select a filter to search.</div>';
+      return;
+    }
+
+    box.innerHTML = '<div style="color:var(--text-muted);font-size:13px;padding:8px 0">Searching…</div>';
+    const esc2 = s => s == null ? '' : String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+    try {
+      const params = new URLSearchParams();
+      if (q)     params.set('indexNumber', q);
+      if (level) params.set('level', level);
+      if (group) params.set('group', group);
+      if (dept)  params.set('department', dept);
+      const { students } = await api(`/api/class-rep-admin/students?${params.toString()}`);
+
+      if (!students.length) {
+        box.innerHTML = '<div style="color:var(--text-muted);font-size:13px;padding:10px 0;text-align:center">No students found matching these filters.</div>';
+        return;
+      }
+      box.innerHTML = students.slice(0, 15).map(s => {
+        const initials = (s.name || '?')[0].toUpperCase();
+        const alreadyRep = s.isClassRep;
+        return `
+        <div style="display:flex;align-items:center;gap:10px;padding:10px 12px;border-radius:10px;border:1.5px solid ${alreadyRep ? 'rgba(22,163,74,.2)' : 'var(--border)'};margin-bottom:7px;background:${alreadyRep ? 'rgba(22,163,74,.04)' : 'var(--bg)'};transition:border-color .15s">
+          <div style="width:36px;height:36px;border-radius:50%;background:rgba(124,58,237,.1);display:flex;align-items:center;justify-content:center;flex-shrink:0;font-size:13px;font-weight:800;color:#7c3aed">${initials}</div>
+          <div style="flex:1;min-width:0">
+            <div style="font-size:13px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc2(s.name)}</div>
+            <div style="display:flex;flex-wrap:wrap;gap:4px;margin-top:3px">
+              ${s.IndexNumber ? `<span style="font-size:10px;font-weight:600;padding:1px 6px;border-radius:5px;background:rgba(79,110,247,.08);color:#4f6ef7">${esc2(s.IndexNumber)}</span>` : ''}
+              ${s.studentLevel ? `<span style="font-size:10px;padding:1px 6px;border-radius:5px;background:var(--border);color:var(--text-muted)">Level ${esc2(s.studentLevel)}</span>` : ''}
+              ${s.studentGroup ? `<span style="font-size:10px;padding:1px 6px;border-radius:5px;background:var(--border);color:var(--text-muted)">Group ${esc2(s.studentGroup)}</span>` : ''}
+              ${s.department   ? `<span style="font-size:10px;padding:1px 6px;border-radius:5px;background:var(--border);color:var(--text-muted)">${esc2(s.department)}</span>` : ''}
+              ${s.programme    ? `<span style="font-size:10px;padding:1px 6px;border-radius:5px;background:var(--border);color:var(--text-muted)">${esc2(s.programme)}</span>` : ''}
+            </div>
+          </div>
+          <div style="flex-shrink:0">
+            ${alreadyRep
+              ? `<span style="display:inline-flex;align-items:center;gap:4px;font-size:11px;font-weight:600;padding:4px 9px;border-radius:20px;background:rgba(22,163,74,.1);color:#15803d">
+                  <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="20 6 9 17 4 12"/></svg>
+                  Rep
+                </span>`
+              : `<button class="btn btn-primary btn-sm" style="font-size:11px;padding:5px 12px" onclick="adminDoAssignRep('${deviceId}','${s._id}','${esc2(s.name)}')">Assign</button>`}
+          </div>
+        </div>`;
+      }).join('');
+    } catch(e) { box.innerHTML = `<div style="color:#ef4444;font-size:13px">${e.message}</div>`; }
+  }, 300);
+};
+
+window.adminDoAssignRep = async (deviceId, studentId, studentName) => {
+  try {
+    await api(`/api/devices/${encodeURIComponent(deviceId)}/assign-class-rep`, {
+      method: 'PATCH',
+      body: JSON.stringify({ classRepId: studentId }),
+    });
+    closeModal();
+    showToastNotif(`✅ ${studentName} assigned as Class Rep.`, 'success');
+    renderAdminDevices();
+  } catch(e) { showToastNotif('❌ ' + (e.message || 'Failed to assign'), 'error'); }
+};
+
+window.adminRenameDevice = (deviceId, currentName) => {
+  _openRenameModal(deviceId, currentName, renderAdminDevices);
+};
+
+window.adminFactoryReset = async (deviceId, deviceName, isOnline) => {
+  if (!isOnline) {
+    showToastNotif('⚠️ Device is offline — it must be online to receive a factory reset command.', 'error');
+    return;
+  }
+  if (!confirm(`Factory reset "${deviceName}"?\n\nThis will wipe all WiFi credentials and pairing data. The device will need to be re-paired.`)) return;
+  try {
+    showToastNotif('Sending factory reset…', 'info');
+    await api(`/api/devices/${encodeURIComponent(deviceId)}/factory-reset`, { method: 'POST' });
+    showToastNotif('✅ Factory reset command sent. Device will restart.', 'success');
+    setTimeout(renderAdminDevices, 3000);
+  } catch(e) { showToastNotif('❌ ' + (e.message || 'Failed to reset'), 'error'); }
+};
+
+window.adminRemoveDevice = async (deviceId, deviceName) => {
+  if (!confirm(`Remove "${deviceName}"?\n\nThis permanently unpairs the device from your institution.`)) return;
+  try {
+    await api(`/api/devices/${encodeURIComponent(deviceId)}/remove`, { method: 'DELETE' });
+    showToastNotif('✅ Device removed.', 'success');
+    renderAdminDevices();
+  } catch(e) { showToastNotif('❌ ' + (e.message || 'Failed to remove'), 'error'); }
+};
 
 window.openCalendarEventModal = function() {
   const esc = s => s == null ? '' : String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
@@ -21535,46 +25155,6 @@ window.submitCalendarEvent = async function() {
     showToastNotif(e.message || 'Failed to create event', 'error');
   }
 };
-
-// ══════════════════════════════════════════════════════════════
-// FORUMS
-// ══════════════════════════════════════════════════════════════
-async function renderForums() {
-  const content = document.getElementById('main-content');
-  if (!content) return;
-  content.innerHTML = '<div class="loading">Loading forums…</div>';
-  const esc = s => s == null ? '' : String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
-
-  let courses = [];
-  try {
-    const isStudent = currentUser?.role === 'student';
-    const endpoint = isStudent ? '/api/courses/my' : '/api/courses';
-    const d = await api(endpoint).catch(() => api('/api/courses'));
-    courses = d.courses || d || [];
-  } catch(e) { courses = []; }
-
-  if (courses.length === 0) {
-    content.innerHTML = `
-      <div class="page-header"><h2>Discussion Forums</h2><p>Course discussion threads</p></div>
-      <div class="card" style="text-align:center;padding:56px 40px;color:var(--text-muted)">
-        <div style="font-size:16px;font-weight:600;margin-bottom:8px">No courses found</div>
-        <div style="font-size:13px">You need to be enrolled in a course to access its forum.</div>
-      </div>`;
-    return;
-  }
-
-  content.innerHTML = `
-    <div class="page-header"><h2>Discussion Forums</h2><p>Select a course to view its threads</p></div>
-    <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:14px">
-      ${courses.map(c => `
-      <div class="card" style="padding:16px;cursor:pointer" onclick="renderForumThreads('${c._id}','${esc(c.title||c.code||'Course')}')">
-        <div style="font-size:14px;font-weight:700;margin-bottom:4px">${esc(c.title||c.code||'')}</div>
-        <div style="font-size:12px;color:var(--text-muted)">${esc(c.code||'')}${c.level ? ' · L'+c.level : ''}${c.group ? ' · Grp '+c.group : ''}</div>
-        <div style="margin-top:10px;font-size:12px;color:var(--accent);font-weight:600">View threads →</div>
-      </div>`).join('')}
-    </div>
-  `;
-}
 
 window.renderForumThreads = async function(courseId, courseTitle) {
   const content = document.getElementById('main-content');
@@ -21736,551 +25316,3 @@ window.upvoteForumPost = async function(courseId, threadId, postId, btn) {
     }
   } catch(e) { showToastNotif(e.message || 'Failed to upvote', 'error'); }
 };
-
-window.submitForumReply = async function(courseId, threadId) {
-  const body = document.getElementById(`reply-body-${threadId}`)?.value?.trim();
-  if (!body) return showToastNotif('Reply cannot be empty', 'error');
-  try {
-    await api(`/api/forums/courses/${courseId}/threads/${threadId}/posts`, {
-      method: 'POST',
-      body: JSON.stringify({ body }),
-    });
-    toastSuccess('Reply posted');
-    renderForumThreadDetail(courseId, threadId, '');
-  } catch(e) {
-    showToastNotif(e.message || 'Failed to post reply', 'error');
-  }
-};
-
-// ══════════════════════════════════════════════════════════════
-// BADGES & ACHIEVEMENTS
-// ══════════════════════════════════════════════════════════════
-async function renderBadges() {
-  const content = document.getElementById('main-content');
-  if (!content) return;
-  content.innerHTML = '<div class="loading">Loading badges…</div>';
-  const esc = s => s == null ? '' : String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
-  const fmt = d => d ? new Date(d).toLocaleDateString('en-GB',{day:'numeric',month:'short',year:'numeric'}) : '';
-  const isStudent = currentUser?.role === 'student';
-  const isStaff = ['lecturer','hod','admin','superadmin','manager'].includes(currentUser?.role);
-
-  try {
-    const requests = [api('/api/badges/catalog'), api('/api/badges/leaderboard')];
-    if (isStudent) requests.push(api('/api/badges/my'));
-    const [catalogData, lbData, myData] = await Promise.all(requests);
-
-    const catalog = catalogData.badges || [];
-    const leaderboard = lbData.leaderboard || [];
-    const myAwards = myData?.awards || [];
-    const myBadgeIds = new Set(myAwards.map(a => a.badge?._id?.toString()));
-
-    content.innerHTML = `
-      <div class="page-header" style="display:flex;align-items:flex-start;justify-content:space-between;flex-wrap:wrap;gap:10px">
-        <div>
-          <h2>Badges &amp; Achievements</h2>
-          <p>${isStudent ? `${myAwards.length} badge${myAwards.length !== 1 ? 's' : ''} earned` : 'Badge catalog and leaderboard'}</p>
-        </div>
-        ${isStaff ? `<button class="btn btn-primary" onclick="openAwardBadgeModal()">+ Award Badge</button>` : ''}
-      </div>
-
-      ${isStudent && myAwards.length > 0 ? `
-      <div style="margin-bottom:20px">
-        <div style="font-size:14px;font-weight:700;margin-bottom:12px">Your Badges</div>
-        <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:12px">
-          ${myAwards.map(a => `
-          <div class="card" style="padding:16px;text-align:center;border-top:3px solid ${a.badge?.color||'#6366f1'}">
-            <div style="font-size:36px;margin-bottom:8px">${esc(a.badge?.icon||'🏅')}</div>
-            <div style="font-size:14px;font-weight:700;margin-bottom:4px">${esc(a.badge?.name||'Badge')}</div>
-            <div style="font-size:12px;color:var(--text-muted);margin-bottom:6px">${esc(a.badge?.description||'')}</div>
-            <div style="font-size:11px;color:var(--text-muted)">Earned ${fmt(a.awardedAt)}</div>
-          </div>`).join('')}
-        </div>
-      </div>` : isStudent ? `
-      <div class="card" style="padding:20px;margin-bottom:20px;text-align:center;color:var(--text-muted)">
-        <div style="font-size:32px;margin-bottom:8px">🏅</div>
-        <div style="font-size:14px;font-weight:600">No badges yet</div>
-        <div style="font-size:12px;margin-top:4px">Complete courses and activities to earn badges.</div>
-      </div>` : ''}
-
-      ${leaderboard.length > 0 ? `
-      <div style="margin-bottom:20px">
-        <div style="font-size:14px;font-weight:700;margin-bottom:12px">🏆 Leaderboard</div>
-        <div class="card" style="padding:0;overflow:hidden">
-          ${leaderboard.map((r,i) => `
-          <div style="display:flex;align-items:center;gap:12px;padding:12px 16px;border-bottom:1px solid var(--border);${i===0?'background:linear-gradient(135deg,#fffbeb,var(--card))':''}">
-            <div style="width:28px;height:28px;border-radius:50%;background:${i===0?'#f59e0b':i===1?'#9ca3af':i===2?'#b45309':'var(--bg)'};display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:800;color:${i<3?'#fff':'var(--text-muted)'}">${i+1}</div>
-            <div style="flex:1">
-              <div style="font-size:13px;font-weight:600">${esc(r.name||'User')}</div>
-              <div style="font-size:11px;color:var(--text-muted)">${esc(r.role||'')}</div>
-            </div>
-            <div style="font-size:15px;font-weight:800;color:var(--accent)">${r.badgeCount}</div>
-            <div style="font-size:11px;color:var(--text-muted)">badge${r.badgeCount!==1?'s':''}</div>
-          </div>`).join('')}
-        </div>
-      </div>` : ''}
-
-      <div>
-        <div style="font-size:14px;font-weight:700;margin-bottom:12px">Badge Catalog</div>
-        ${catalog.length === 0 ? `<div class="card" style="padding:20px;text-align:center;color:var(--text-muted)">No badges defined yet.</div>` :
-          `<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:12px">
-            ${catalog.map(b => `
-            <div class="card" style="padding:16px;text-align:center;border-top:3px solid ${b.color||'#6366f1'}">
-              <div style="font-size:36px;margin-bottom:8px">${esc(b.icon||'🏅')}</div>
-              <div style="font-size:14px;font-weight:700;margin-bottom:4px">${esc(b.name)}</div>
-              <div style="font-size:12px;color:var(--text-muted)">${esc(b.description||'')}</div>
-              ${isStudent && myBadgeIds.has(b._id?.toString()) ? `<div style="margin-top:8px;font-size:11px;color:#16a34a;font-weight:700">✓ Earned</div>` : ''}
-            </div>`).join('')}
-          </div>`}
-      </div>
-    `;
-  } catch(e) {
-    content.innerHTML = `<div class="card"><p style="color:#ef4444">Error: ${e.message}</p></div>`;
-  }
-}
-
-window.openAwardBadgeModal = async function() {
-  const esc = s => s == null ? '' : String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
-  let catalog = [];
-  try { const d = await api('/api/badges/catalog'); catalog = d.badges || []; } catch(e) { catalog = []; }
-
-  openModal(`
-    <h3 style="margin-bottom:18px;font-size:17px;font-weight:700">Award Badge</h3>
-    <div style="display:flex;flex-direction:column;gap:12px">
-      <div>
-        <label style="font-size:12px;font-weight:600;color:var(--text-muted);display:block;margin-bottom:4px">STUDENT ID *</label>
-        <input id="award-userId" class="form-control" placeholder="Student user ID" />
-      </div>
-      <div>
-        <label style="font-size:12px;font-weight:600;color:var(--text-muted);display:block;margin-bottom:4px">BADGE *</label>
-        <select id="award-badgeId" class="form-control">
-          <option value="">— Select badge —</option>
-          ${catalog.map(b => `<option value="${b._id}">${esc(b.icon||'🏅')} ${esc(b.name)}</option>`).join('')}
-        </select>
-      </div>
-      <div>
-        <label style="font-size:12px;font-weight:600;color:var(--text-muted);display:block;margin-bottom:4px">NOTE</label>
-        <input id="award-note" class="form-control" placeholder="Optional note" />
-      </div>
-      <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:4px">
-        <button class="btn btn-secondary" onclick="closeModal()">Cancel</button>
-        <button class="btn btn-primary" onclick="submitAwardBadge()">Award</button>
-      </div>
-    </div>
-  `);
-};
-
-window.submitAwardBadge = async function() {
-  const userId = document.getElementById('award-userId')?.value?.trim();
-  const badgeId = document.getElementById('award-badgeId')?.value;
-  const note = document.getElementById('award-note')?.value?.trim();
-  if (!userId) return showToastNotif('Student ID is required', 'error');
-  if (!badgeId) return showToastNotif('Please select a badge', 'error');
-  try {
-    await api('/api/badges/award', { method: 'POST', body: JSON.stringify({ userId, badgeId, note }) });
-    closeModal();
-    toastSuccess('Badge awarded');
-  } catch(e) {
-    showToastNotif(e.message || 'Failed to award badge', 'error');
-  }
-};
-
-// ══════════════════════════════════════════════════════════════
-// TRANSCRIPTS
-// ══════════════════════════════════════════════════════════════
-async function renderTranscripts() {
-  const content = document.getElementById('main-content');
-  if (!content) return;
-  content.innerHTML = '<div class="loading">Loading transcript…</div>';
-  const esc = s => s == null ? '' : String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
-  const fmt = d => d ? new Date(d).toLocaleDateString('en-GB',{day:'numeric',month:'short',year:'numeric'}) : '—';
-  const isStudent = currentUser?.role === 'student';
-  const isStaff = ['lecturer','hod','admin','superadmin'].includes(currentUser?.role);
-
-  if (!isStudent && !isStaff) {
-    content.innerHTML = `<div class="card" style="padding:20px;text-align:center;color:var(--text-muted)">Transcripts are not available for your role.</div>`;
-    return;
-  }
-
-  const renderTranscriptData = (transcript, certs) => {
-    const s = transcript.student;
-    const summary = transcript.summary;
-    const courses = transcript.courses || [];
-
-    const gradeColor = g => g >= 70 ? '#16a34a' : g >= 50 ? '#f59e0b' : '#ef4444';
-    const statusBadge = status => {
-      const map = { active:'#3b82f6', completed:'#16a34a', dropped:'#6b7280', suspended:'#ef4444' };
-      const c = map[status] || '#6b7280';
-      return `<span style="background:${c}22;color:${c};padding:1px 7px;border-radius:20px;font-size:11px;font-weight:700">${status}</span>`;
-    };
-
-    content.innerHTML = `
-      <div class="page-header" style="display:flex;align-items:flex-start;justify-content:space-between;flex-wrap:wrap;gap:10px">
-        <div>
-          <h2>Academic Transcript</h2>
-          <p>${esc(s?.name||'')}${s?.indexNumber ? ' · '+s.indexNumber : ''}</p>
-        </div>
-        ${isStaff ? `<button class="btn btn-secondary btn-sm" onclick="renderTranscripts()">← Back to Search</button>` : ''}
-      </div>
-
-      <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:12px;margin-bottom:20px">
-        <div class="card" style="padding:16px;text-align:center">
-          <div style="font-size:28px;font-weight:800;color:var(--accent)">${summary?.gpa ?? '—'}</div>
-          <div style="font-size:11px;font-weight:700;color:var(--text-muted);text-transform:uppercase">GPA (4.3 scale)</div>
-        </div>
-        <div class="card" style="padding:16px;text-align:center">
-          <div style="font-size:28px;font-weight:800">${summary?.totalCourses ?? 0}</div>
-          <div style="font-size:11px;font-weight:700;color:var(--text-muted);text-transform:uppercase">Total Courses</div>
-        </div>
-        <div class="card" style="padding:16px;text-align:center">
-          <div style="font-size:28px;font-weight:800;color:#16a34a">${summary?.completedCourses ?? 0}</div>
-          <div style="font-size:11px;font-weight:700;color:var(--text-muted);text-transform:uppercase">Completed</div>
-        </div>
-        <div class="card" style="padding:16px;text-align:center">
-          <div style="font-size:28px;font-weight:800;color:#f59e0b">${summary?.averageScore ?? '—'}${summary?.averageScore != null ? '%' : ''}</div>
-          <div style="font-size:11px;font-weight:700;color:var(--text-muted);text-transform:uppercase">Avg Score</div>
-        </div>
-      </div>
-
-      ${courses.length > 0 ? `
-      <div class="card" style="padding:0;overflow:hidden;margin-bottom:20px">
-        <div style="padding:14px 16px;border-bottom:1px solid var(--border);font-size:14px;font-weight:700">Course Records</div>
-        <div style="overflow-x:auto">
-          <table style="width:100%;border-collapse:collapse;font-size:13px">
-            <thead>
-              <tr style="background:var(--bg)">
-                <th style="padding:10px 14px;text-align:left;font-size:11px;font-weight:700;color:var(--text-muted);text-transform:uppercase">Course</th>
-                <th style="padding:10px 14px;text-align:left;font-size:11px;font-weight:700;color:var(--text-muted);text-transform:uppercase">Semester</th>
-                <th style="padding:10px 14px;text-align:center;font-size:11px;font-weight:700;color:var(--text-muted);text-transform:uppercase">Score</th>
-                <th style="padding:10px 14px;text-align:center;font-size:11px;font-weight:700;color:var(--text-muted);text-transform:uppercase">Grade</th>
-                <th style="padding:10px 14px;text-align:center;font-size:11px;font-weight:700;color:var(--text-muted);text-transform:uppercase">Attendance</th>
-                <th style="padding:10px 14px;text-align:center;font-size:11px;font-weight:700;color:var(--text-muted);text-transform:uppercase">Status</th>
-              </tr>
-            </thead>
-            <tbody>
-              ${courses.map((r,i) => `
-              <tr style="${i%2===0?'':'background:var(--bg)'}">
-                <td style="padding:10px 14px">
-                  <div style="font-weight:600">${esc(r.course?.title||'—')}</div>
-                  <div style="font-size:11px;color:var(--text-muted)">${esc(r.course?.code||'')}${r.course?.level?' · L'+r.course.level:''}</div>
-                </td>
-                <td style="padding:10px 14px;color:var(--text-muted)">${esc(r.course?.semester||'—')}</td>
-                <td style="padding:10px 14px;text-align:center;font-weight:700;color:${r.finalGrade?.score!=null?gradeColor(r.finalGrade.score):'var(--text-muted)'}">${r.finalGrade?.score!=null?r.finalGrade.score+'%':'—'}</td>
-                <td style="padding:10px 14px;text-align:center;font-weight:700">${esc(r.finalGrade?.grade||'—')}</td>
-                <td style="padding:10px 14px;text-align:center;color:var(--text-muted)">${r.attendance?.pct!=null?r.attendance.pct+'%':'—'}</td>
-                <td style="padding:10px 14px;text-align:center">${statusBadge(r.enrollment?.status||'active')}</td>
-              </tr>`).join('')}
-            </tbody>
-          </table>
-        </div>
-      </div>` : ''}
-
-      ${certs && certs.length > 0 ? `
-      <div>
-        <div style="font-size:14px;font-weight:700;margin-bottom:12px">Certificates</div>
-        <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:12px">
-          ${certs.map(c => `
-          <div class="card" style="padding:16px;border-left:4px solid #10b981">
-            <div style="font-size:14px;font-weight:700;margin-bottom:4px">${esc(c.courseName||'Certificate')}</div>
-            <div style="font-size:12px;color:var(--text-muted);margin-bottom:10px">Issued ${fmt(c.issuedAt)}</div>
-            <div style="display:flex;gap:8px">
-              <a href="/api/transcripts/verify/${esc(c.verificationCode)}" target="_blank" class="btn btn-secondary btn-sm">🔍 Verify</a>
-              <span style="font-size:11px;font-family:monospace;color:var(--text-muted);align-self:center">${esc(c.verificationCode||'')}</span>
-            </div>
-          </div>`).join('')}
-        </div>
-      </div>` : ''}
-    `;
-  };
-
-  if (isStudent) {
-    try {
-      const [transcriptData, certData] = await Promise.all([
-        api('/api/transcripts/me'),
-        api('/api/transcripts/certificates/me').catch(() => ({ certificates: [] })),
-      ]);
-      renderTranscriptData(transcriptData.transcript, certData.certificates || []);
-    } catch(e) {
-      content.innerHTML = `<div class="card"><p style="color:#ef4444">Error: ${e.message}</p></div>`;
-    }
-    return;
-  }
-
-  // Staff view: search by student ID
-  content.innerHTML = `
-    <div class="page-header"><h2>Academic Transcript</h2><p>Look up any student's transcript</p></div>
-    <div class="card" style="padding:20px;max-width:480px">
-      <label style="font-size:12px;font-weight:600;color:var(--text-muted);display:block;margin-bottom:6px">STUDENT ID</label>
-      <div style="display:flex;gap:8px">
-        <input id="transcript-studentId" class="form-control" placeholder="Paste student ID…" style="flex:1" />
-        <button class="btn btn-primary" onclick="loadStudentTranscript()">Load</button>
-      </div>
-    </div>
-    <div id="transcript-result"></div>
-  `;
-
-  window.loadStudentTranscript = async function() {
-    const studentId = document.getElementById('transcript-studentId')?.value?.trim();
-    if (!studentId) return showToastNotif('Enter a student ID', 'error');
-    const resultDiv = document.getElementById('transcript-result');
-    if (resultDiv) resultDiv.innerHTML = '<div class="loading" style="margin-top:16px">Loading…</div>';
-    try {
-      const [transcriptData, certData] = await Promise.all([
-        api(`/api/transcripts/${studentId}`),
-        api(`/api/transcripts/certificates/${studentId}`).catch(() => ({ certificates: [] })),
-      ]);
-      renderTranscriptData(transcriptData.transcript, certData.certificates || []);
-    } catch(e) {
-      if (resultDiv) resultDiv.innerHTML = `<div class="card" style="margin-top:16px"><p style="color:#ef4444">Error: ${e.message}</p></div>`;
-    }
-  };
-}
-
-// ══════════════════════════════════════════════════════════════
-// EVALUATIONS
-// ══════════════════════════════════════════════════════════════
-async function renderEvaluations() {
-  const content = document.getElementById('main-content');
-  if (!content) return;
-  content.innerHTML = '<div class="loading">Loading evaluations…</div>';
-  const esc = s => s == null ? '' : String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
-  const isStudent = currentUser?.role === 'student';
-  const isStaff = ['lecturer','hod','admin','superadmin'].includes(currentUser?.role);
-
-  let courses = [];
-  try {
-    const endpoint = isStudent ? '/api/courses/my' : '/api/courses';
-    const d = await api(endpoint).catch(() => api('/api/courses'));
-    courses = d.courses || d || [];
-  } catch(e) { courses = []; }
-
-  if (isStudent) {
-    // For each course, check submission status
-    let statusMap = {};
-    if (courses.length > 0) {
-      await Promise.all(courses.map(async c => {
-        try {
-          const d = await api(`/api/evaluations/my/${c._id}`);
-          statusMap[c._id] = d;
-        } catch(e) { statusMap[c._id] = null; }
-      }));
-    }
-
-    content.innerHTML = `
-      <div class="page-header"><h2>Course Evaluations</h2><p>Rate your courses anonymously</p></div>
-      ${courses.length === 0 ? `<div class="card" style="padding:20px;text-align:center;color:var(--text-muted)">You are not enrolled in any courses.</div>` :
-        `<div style="display:flex;flex-direction:column;gap:12px">
-          ${courses.map(c => {
-            const st = statusMap[c._id];
-            const submitted = st?.submitted;
-            const hasDraft = st?.hasDraft;
-            const windowIsOpen = st?.windowOpen;
-            return `
-            <div class="card" style="padding:16px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px">
-              <div>
-                <div style="font-size:14px;font-weight:700">${esc(c.title||c.code||'Course')}</div>
-                <div style="font-size:12px;color:var(--text-muted)">${esc(c.code||'')}${c.level?' · L'+c.level:''}</div>
-                ${st?.overallRating ? `<div style="font-size:12px;color:var(--text-muted);margin-top:2px">Your rating: ${'★'.repeat(st.overallRating)}${'☆'.repeat(5-st.overallRating)}</div>` : ''}
-              </div>
-              <div>
-                ${submitted ? `<span style="background:#d1fae5;color:#065f46;padding:4px 12px;border-radius:20px;font-size:12px;font-weight:700">✓ Submitted</span>` :
-                  windowIsOpen ? `<button class="btn btn-primary btn-sm" onclick="openEvaluationModal('${c._id}','${esc(c.title||c.code||'Course')}')">Fill Evaluation</button>` :
-                  hasDraft ? `<button class="btn btn-secondary btn-sm" onclick="openEvaluationModal('${c._id}','${esc(c.title||c.code||'Course')}')">Continue Draft</button>` :
-                  `<span style="background:#f1f5f9;color:#475569;padding:4px 12px;border-radius:20px;font-size:12px;font-weight:600">Evaluation Closed</span>`}
-              </div>
-            </div>`;
-          }).join('')}
-        </div>`}
-    `;
-    return;
-  }
-
-  // Staff view: course selector → aggregate results
-  const renderStaffView = async (courseId, courseTitle) => {
-    try {
-      const data = await api(`/api/evaluations/results/${courseId}`);
-      const starBar = avg => {
-        const filled = Math.round(avg||0);
-        return '★'.repeat(filled) + '☆'.repeat(5-filled) + ` <span style="font-size:12px;color:var(--text-muted)">(${avg?.toFixed?.(1)||'—'})</span>`;
-      };
-
-      content.innerHTML = `
-        <div class="page-header" style="display:flex;align-items:flex-start;justify-content:space-between;flex-wrap:wrap;gap:10px">
-          <div>
-            <button class="btn btn-secondary btn-sm" onclick="renderEvaluations()" style="margin-bottom:8px">← Back to Courses</button>
-            <h2>Evaluation Results</h2>
-            <p>${esc(data.courseName||courseTitle)} · ${data.totalResponses} response${data.totalResponses!==1?'s':''}</p>
-          </div>
-        </div>
-        <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:12px;margin-bottom:20px">
-          <div class="card" style="padding:16px;text-align:center">
-            <div style="font-size:28px;font-weight:800;color:var(--accent)">${data.overall?.avg?.toFixed(1)||'—'}</div>
-            <div style="font-size:11px;font-weight:700;color:var(--text-muted);text-transform:uppercase">Overall Avg</div>
-          </div>
-          <div class="card" style="padding:16px;text-align:center">
-            <div style="font-size:28px;font-weight:800">${data.totalResponses}</div>
-            <div style="font-size:11px;font-weight:700;color:var(--text-muted);text-transform:uppercase">Responses</div>
-          </div>
-          <div class="card" style="padding:16px;text-align:center">
-            <div style="font-size:28px;font-weight:800;color:#16a34a">${data.responseRate??'—'}${data.responseRate!=null?'%':''}</div>
-            <div style="font-size:11px;font-weight:700;color:var(--text-muted);text-transform:uppercase">Response Rate</div>
-          </div>
-          <div class="card" style="padding:16px;text-align:center">
-            <div style="font-size:28px;font-weight:800">${data.totalEnrolled}</div>
-            <div style="font-size:11px;font-weight:700;color:var(--text-muted);text-transform:uppercase">Enrolled</div>
-          </div>
-        </div>
-        <div style="display:flex;flex-direction:column;gap:12px">
-          ${(data.criteria||[]).map(c => `
-          <div class="card" style="padding:16px">
-            <div style="font-size:13px;font-weight:700;margin-bottom:10px">${esc(c.label)}</div>
-            ${c.type==='rating' ? `
-              <div style="display:flex;align-items:center;gap:10px">
-                <span style="font-size:20px;color:#f59e0b">${starBar(c.avg)}</span>
-                <span style="font-size:12px;color:var(--text-muted)">${c.count} responses</span>
-              </div>` :
-            c.type==='yesno' ? `
-              <div style="font-size:13px">Yes: <strong>${c.yesCount}</strong> (${c.yesPct??'—'}%) · No: <strong>${c.noCount}</strong></div>` :
-            `<div style="font-size:13px;color:var(--text-muted)">${c.count} text responses</div>
-              ${c.comments?.slice(0,5).map(t=>`<div style="padding:8px 12px;background:var(--bg);border-radius:6px;font-size:12px;margin-top:4px">${esc(t)}</div>`).join('')||''}`}
-          </div>`).join('')}
-        </div>
-      `;
-    } catch(e) {
-      content.innerHTML = `<div class="card"><p style="color:#ef4444">Error: ${e.message}</p></div>`;
-    }
-  };
-
-  content.innerHTML = `
-    <div class="page-header"><h2>Course Evaluations</h2><p>View aggregated student feedback</p></div>
-    ${courses.length === 0 ? `<div class="card" style="padding:20px;text-align:center;color:var(--text-muted)">No courses found.</div>` :
-      `<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:14px">
-        ${courses.map(c => `
-        <div class="card" style="padding:16px;cursor:pointer" onclick="renderEvaluationResults('${c._id}','${esc(c.title||c.code||'Course')}')">
-          <div style="font-size:14px;font-weight:700;margin-bottom:4px">${esc(c.title||c.code||'')}</div>
-          <div style="font-size:12px;color:var(--text-muted)">${esc(c.code||'')}${c.level?' · L'+c.level:''}</div>
-          <div style="margin-top:10px;font-size:12px;color:var(--accent);font-weight:600">View results →</div>
-        </div>`).join('')}
-      </div>`}
-  `;
-
-  window.renderEvaluationResults = renderStaffView;
-}
-
-window.openEvaluationModal = async function(courseId, courseTitle) {
-  const esc = s => s == null ? '' : String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
-  let criteria = [];
-  try {
-    const d = await api(`/api/evaluations/forms/${courseId}`).catch(() => null);
-    criteria = d?.criteria || [];
-  } catch(e) { criteria = []; }
-
-  const defaultCriteria = criteria.length > 0 ? criteria : [
-    { key:'teaching_quality', label:'Teaching Quality', type:'rating' },
-    { key:'course_content', label:'Course Content', type:'rating' },
-    { key:'communication', label:'Communication', type:'rating' },
-    { key:'feedback', label:'Feedback & Support', type:'rating' },
-    { key:'comments', label:'Additional Comments', type:'text' },
-  ];
-
-  const criteriaHTML = defaultCriteria.map(c => {
-    if (c.type === 'rating') {
-      return `<div>
-        <label style="font-size:12px;font-weight:600;color:var(--text-muted);display:block;margin-bottom:4px">${esc(c.label).toUpperCase()}</label>
-        <div style="display:flex;gap:6px">
-          ${[1,2,3,4,5].map(n=>`<span style="font-size:22px;cursor:pointer" id="star-${c.key}-${n}" onclick="evalHighlightStars('${c.key}',${n})">☆</span>`).join('')}
-        </div>
-        <input type="hidden" name="rating-${c.key}" id="rating-val-${c.key}" value="" />
-      </div>`;
-    }
-    if (c.type === 'yesno') {
-      return `<div>
-        <label style="font-size:12px;font-weight:600;color:var(--text-muted);display:block;margin-bottom:4px">${esc(c.label).toUpperCase()}</label>
-        <div style="display:flex;gap:8px">
-          <label><input type="radio" name="yesno-${c.key}" value="yes"> Yes</label>
-          <label><input type="radio" name="yesno-${c.key}" value="no"> No</label>
-        </div>
-      </div>`;
-    }
-    return `<div>
-      <label style="font-size:12px;font-weight:600;color:var(--text-muted);display:block;margin-bottom:4px">${esc(c.label).toUpperCase()}</label>
-      <textarea name="text-${c.key}" class="form-control" rows="2" placeholder="Your thoughts…"></textarea>
-    </div>`;
-  }).join('');
-
-  openModal(`
-    <h3 style="margin-bottom:4px;font-size:17px;font-weight:700">Course Evaluation</h3>
-    <p style="font-size:12px;color:var(--text-muted);margin-bottom:18px">Responses are anonymous · ${esc(courseTitle)}</p>
-    <div style="display:flex;flex-direction:column;gap:14px">
-      <div>
-        <label style="font-size:12px;font-weight:600;color:var(--text-muted);display:block;margin-bottom:4px">OVERALL RATING *</label>
-        <div style="display:flex;gap:6px">
-          ${[1,2,3,4,5].map(n=>`<span style="font-size:28px;cursor:pointer" id="overall-star-${n}" onclick="evalHighlightStars('overall',${n})">☆</span>`).join('')}
-        </div>
-        <input type="hidden" id="rating-val-overall" value="" />
-      </div>
-      <div id="eval-criteria-section" style="display:flex;flex-direction:column;gap:12px">${criteriaHTML}</div>
-      <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:4px">
-        <button class="btn btn-secondary" onclick="closeModal()">Cancel</button>
-        <button class="btn btn-primary" id="eval-submit-btn" onclick="submitEvaluation('${courseId}')">Submit Evaluation</button>
-      </div>
-    </div>
-  `);
-
-  // Store criteria for submission
-  window._evalCourseId = courseId;
-  window._evalCriteria = defaultCriteria;
-};
-
-window.evalHighlightStars = function(key, n) {
-  const prefix = key === 'overall' ? 'overall-star-' : `star-${key}-`;
-  for (let i = 1; i <= 5; i++) {
-    const el = document.getElementById(`${prefix}${i}`);
-    if (el) el.textContent = i <= n ? '★' : '☆';
-  }
-  const valInput = document.getElementById(key === 'overall' ? 'rating-val-overall' : `rating-val-${key}`);
-  if (valInput) valInput.value = n;
-};
-
-window.submitEvaluation = async function(courseId) {
-  const criteria = window._evalCriteria || [];
-  const overallInput = document.getElementById('rating-val-overall');
-  const overallRating = overallInput ? parseInt(overallInput.value) : 0;
-  if (!overallRating) return showToastNotif('Please select an overall rating', 'error');
-
-  const responses = criteria.map(c => {
-    if (c.type === 'rating') {
-      const valInput = document.getElementById(`rating-val-${c.key}`);
-      const rating = valInput ? parseInt(valInput.value) : null;
-      return rating ? { key: c.key, rating } : null;
-    }
-    if (c.type === 'yesno') {
-      const checked = document.querySelector(`input[name="yesno-${c.key}"]:checked`);
-      return checked ? { key: c.key, yesno: checked.value === 'yes' } : null;
-    }
-    const ta = document.querySelector(`textarea[name="text-${c.key}"]`);
-    return ta?.value?.trim() ? { key: c.key, text: ta.value.trim() } : null;
-  }).filter(Boolean);
-
-  const btn = document.getElementById('eval-submit-btn');
-  if (btn) { btn.disabled = true; btn.textContent = 'Submitting…'; }
-
-  try {
-    await api(`/api/evaluations/submit/${courseId}`, {
-      method: 'POST',
-      body: JSON.stringify({ overallRating, responses, submit: true }),
-    });
-    closeModal();
-    toastSuccess('Evaluation submitted. Thank you!');
-    renderEvaluations();
-  } catch(e) {
-    if (btn) { btn.disabled = false; btn.textContent = 'Submit Evaluation'; }
-    showToastNotif(e.message || 'Failed to submit evaluation', 'error');
-  }
-};
-
-window._realSelectMode   = selectMode;
-window._realSelectPortal = selectPortal;
-window._appLoaded = true;
-// Execute any pending calls from before app.js loaded
-if (window._pendingMode)   { selectMode(window._pendingMode);     window._pendingMode = null; }
-if (window._pendingPortal) { selectPortal(window._pendingPortal); window._pendingPortal = null; }
