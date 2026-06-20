@@ -18,6 +18,14 @@ function _invalidateDevCache(companyId) {
   if (companyId) _devListCache.delete(companyId.toString());
 }
 
+// In-memory cache for offline bundles — keyed by deviceId, 10-minute TTL.
+// Avoids recomputing on every 5-second heartbeat.
+const _bundleCache = new Map();
+const _BUNDLE_TTL  = 10 * 60 * 1000;
+function _invalidateBundleCache(deviceId) {
+  if (deviceId) _bundleCache.delete(deviceId);
+}
+
 // Fire-and-forget device audit helper (never throws).
 function _auditDevice(actor, action, device, meta = {}, req = null) {
   AuditLog.record({
@@ -256,12 +264,76 @@ exports.heartbeat = async (req, res) => {
       .select('offlineHmacKey').lean();
     const offlineKey = company?.offlineHmacKey || null;
 
+    // ── Offline bundle: lecturer courses + PIN hashes ─────────────────────────
+    // Sent every heartbeat but built at most once per 10 minutes (cached).
+    // The device stores this in NVS so it survives going offline.
+    let bundle = null;
+    const deviceIdStr = device.deviceId;
+    const cached = _bundleCache.get(deviceIdStr);
+    if (cached && Date.now() - cached.at < _BUNDLE_TTL) {
+      bundle = cached.bundle;
+    } else {
+      try {
+        const Course = require('../models/Course');
+        const assignments = device.assignedLecturers || [];
+
+        // Collect unique lecturerIds and courseIds
+        const courseMap    = new Map(); // courseId → { code, title, lecturerIds[] }
+        const lecturerIds  = new Set();
+
+        for (const a of assignments) {
+          const cid = a.courseId?.toString();
+          const lid = a.lecturerId?.toString();
+          if (!cid || !lid) continue;
+          if (!courseMap.has(cid)) courseMap.set(cid, { _id: cid, lecturerIds: [] });
+          const entry = courseMap.get(cid);
+          if (!entry.lecturerIds.includes(lid)) entry.lecturerIds.push(lid);
+          lecturerIds.add(lid);
+        }
+
+        if (courseMap.size > 0) {
+          const [courses, lecturers] = await Promise.all([
+            Course.find({ _id: { $in: [...courseMap.keys()] } })
+              .select('_id title code').lean(),
+            User.find({ _id: { $in: [...lecturerIds] }, role: 'lecturer' })
+              .select('+offlinePinHash name _id').lean(),
+          ]);
+
+          const lectMap = new Map(lecturers.map(l => [l._id.toString(), l]));
+          courses.forEach(c => {
+            const entry = courseMap.get(c._id.toString());
+            if (entry) { entry.code = c.code; entry.title = c.title; }
+          });
+
+          bundle = [...courseMap.values()]
+            .filter(c => c.code)
+            .map(c => ({
+              courseId:   c._id,
+              courseCode: c.code,
+              courseName: c.title,
+              lecturers: c.lecturerIds
+                .map(id => lectMap.get(id))
+                .filter(Boolean)
+                .map(l => ({
+                  id:             l._id,
+                  name:           l.name,
+                  offlinePinHash: l.offlinePinHash || null,
+                })),
+            }))
+            .filter(c => c.lecturers.length > 0);
+        }
+      } catch (_) { /* non-fatal — device will use cached bundle */ }
+
+      _bundleCache.set(deviceIdStr, { bundle, at: Date.now() });
+    }
+
     return res.json({
       ok:         true,
       success:    true,
       serverTime: new Date().toISOString(),
       lastSeenAt: device.lastHeartbeat,
       offlineKey,
+      bundle,
       activeSession: session ? {
         sessionId:       session._id,
         title:           session.title || '',
@@ -575,6 +647,10 @@ exports.getMyDevice = async (req, res) => {
       ? Math.floor((Date.now() - device.lastHeartbeat.getTime()) / 1000)
       : null;
 
+    // Check if this lecturer has set their offline PIN
+    const lecturerUser = await User.findById(req.user._id).select('+offlinePinHash').lean();
+    const hasOfflinePin = !!(lecturerUser?.offlinePinHash);
+
     res.json({
       success: true,
       data: {
@@ -594,6 +670,7 @@ exports.getMyDevice = async (req, res) => {
         activeSession:      activeSession ? { sessionId: activeSession._id, status: activeSession.status } : null,
         allowedNetworks:    device.allowedNetworks.map(n => ({ ssid: n.ssid, priority: n.priority })),
         pendingRecordsCount: device.pendingRecordsCount || 0,
+        hasOfflinePin,
       }
     });
   } catch (err) {
@@ -982,7 +1059,7 @@ exports.listAllDevices = async (req, res) => {
 
     const devices = await Device.find(filter)
       .populate('lecturerId', 'name email role')
-      .populate('assignedLecturers.lecturerId', 'name email')
+      .populate({ path: 'assignedLecturers.lecturerId', select: 'name email +offlinePinHash' })
       .populate('assignedLecturers.courseId',   'title code')
       .populate('classRepId', 'name email IndexNumber studentLevel studentGroup')
       .sort({ createdAt: -1 })
@@ -1005,7 +1082,12 @@ exports.listAllDevices = async (req, res) => {
       lastHeartbeat: d.lastHeartbeat,
       pairedBy:         d.lecturerId ? { name: d.lecturerId.name, role: d.lecturerId.role } : null,
       assignedLecturers: (d.assignedLecturers || []).map(a => ({
-        lecturerId: a.lecturerId,
+        lecturerId: a.lecturerId ? {
+          _id:          a.lecturerId._id,
+          name:         a.lecturerId.name,
+          email:        a.lecturerId.email,
+          hasOfflinePin: !!(a.lecturerId.offlinePinHash),
+        } : null,
         courseId:   a.courseId,
         assignedAt: a.assignedAt,
       })),
@@ -1200,6 +1282,7 @@ exports.assignLecturer = async (req, res) => {
     }, req);
 
     _invalidateDevCache(req.user.company);
+    _invalidateBundleCache(device.deviceId);
     res.json({ success: true, message: 'Lecturer assigned to device.', data: device.assignedLecturers });
   } catch (err) {
     console.error('[assignLecturer]', err);
@@ -1252,6 +1335,7 @@ exports.removeLecturer = async (req, res) => {
     }, req);
 
     _invalidateDevCache(req.user.company);
+    _invalidateBundleCache(device.deviceId);
     res.json({ success: true, message: 'Lecturer removed from device.', data: device.assignedLecturers });
   } catch (err) {
     console.error('[removeLecturer]', err);
