@@ -194,6 +194,40 @@
       .stat-val{font-size:17px}
       .inst-card-meta{grid-template-columns:1fr}
     }
+
+    /* ── Stats compact ── */
+    .stats{grid-template-columns:repeat(auto-fill,minmax(130px,1fr));gap:10px;margin-bottom:22px}
+    .stat{border-radius:12px;padding:14px 14px 12px;color:#fff;position:relative;overflow:hidden;box-shadow:0 3px 12px rgba(0,0,0,.15)}
+    .stat::after{content:'';position:absolute;top:-14px;right:-14px;width:64px;height:64px;border-radius:50%;background:rgba(255,255,255,.1);pointer-events:none}
+    .stat-icon{font-size:18px;margin-bottom:6px;opacity:.9;position:relative;z-index:1}
+    .stat-val{font-size:22px;font-weight:800;line-height:1;position:relative;z-index:1}
+    .stat-lbl{font-size:9.5px;font-weight:700;text-transform:uppercase;letter-spacing:.6px;opacity:.8;margin-top:4px;position:relative;z-index:1}
+
+    /* ── Institution card grid ── */
+    .inst-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(340px,1fr));gap:16px;margin-bottom:24px}
+    .inst-kard{background:#fff;border-radius:16px;box-shadow:0 2px 10px rgba(0,0,0,.07);overflow:hidden;display:flex;flex-direction:column;transition:box-shadow .15s,transform .15s}
+    .inst-kard:hover{box-shadow:0 6px 28px rgba(0,0,0,.12);transform:translateY(-1px)}
+    .inst-kard-header{padding:16px 18px 12px;display:flex;justify-content:space-between;align-items:flex-start;gap:10px}
+    .inst-kard-body{padding:4px 18px 12px;flex:1;border-top:1px solid #f1f5f9}
+    .inst-kard-footer{padding:10px 16px 12px;border-top:1px solid #f1f5f9;background:#f8fafc;display:flex;flex-wrap:wrap;gap:5px}
+    .inst-kard-name{font-size:15px;font-weight:800;color:#0f172a;line-height:1.2;margin-bottom:2px}
+    .inst-kard-code{font-size:10px;font-family:monospace;color:#94a3b8;font-weight:600;letter-spacing:.4px}
+    .inst-kard-row{display:flex;align-items:flex-start;gap:7px;font-size:12px;color:#64748b;margin-top:9px}
+    .inst-kard-row svg{flex-shrink:0;margin-top:1px}
+    .progress-track{height:5px;background:#e2e8f0;border-radius:999px;overflow:hidden;margin-top:6px}
+    .progress-fill{height:100%;border-radius:999px}
+
+    /* ── Payment adjuster ── */
+    .pay-plan-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin:10px 0}
+    .pay-plan-btn{padding:10px 6px;border:1.5px solid #e5e7eb;border-radius:9px;font-size:12px;font-weight:600;cursor:pointer;background:#f9fafb;font-family:inherit;transition:all .12s;text-align:center;line-height:1.3}
+    .pay-plan-btn:hover{border-color:#a5b4fc;background:#eef2ff}
+    .pay-plan-btn.selected{border-color:#4f46e5;background:#eef2ff;color:#4f46e5;box-shadow:0 0 0 2px #c7d2fe}
+    .pay-amount-display{font-size:28px;font-weight:800;color:#4f46e5;text-align:center;padding:10px 0 4px}
+
+    @media(max-width:640px){
+      .inst-grid{grid-template-columns:1fr}
+      .stats{grid-template-columns:repeat(3,1fr)}
+    }
   </style>
 </head>
 <body>
@@ -312,11 +346,46 @@
   </div>
 </div>
 
+<!-- PAYMENT ADJUSTER MODAL -->
+<div class="modal-overlay" id="pay-modal">
+  <div class="modal" style="max-width:460px">
+    <h3>💰 Record Payment</h3>
+    <p style="font-size:13px;color:#64748b;margin-bottom:16px" id="pay-modal-company"></p>
+
+    <div class="pay-plan-grid" id="pay-plan-grid">
+      <button class="pay-plan-btn selected" data-plan="semester" data-amount="300" onclick="selectPayPlan(this)">📚 Semester<br><span style="font-size:11px;color:#6b7280;font-weight:500">16 weeks</span></button>
+      <button class="pay-plan-btn" data-plan="monthly" data-amount="150" onclick="selectPayPlan(this)">📅 Monthly<br><span style="font-size:11px;color:#6b7280;font-weight:500">30 days</span></button>
+      <button class="pay-plan-btn" data-plan="yearly" data-amount="1200" onclick="selectPayPlan(this)">🏆 Annual<br><span style="font-size:11px;color:#6b7280;font-weight:500">365 days</span></button>
+    </div>
+
+    <div class="pay-amount-display" id="pay-amount-display">GHS 300</div>
+
+    <div class="modal-field">
+      <label>Amount (GHS)</label>
+      <input type="number" id="pay-amount" value="300" min="1" step="0.01" oninput="document.getElementById('pay-amount-display').textContent='GHS '+this.value">
+    </div>
+    <div class="modal-field">
+      <label>Reference <span style="font-size:10px;font-weight:500;color:#94a3b8">(leave blank to auto-generate)</span></label>
+      <input type="text" id="pay-reference" placeholder="e.g. PAY-2026-001">
+    </div>
+    <div style="display:flex;align-items:center;gap:8px;margin-bottom:14px;font-size:13px;color:#374151">
+      <input type="checkbox" id="pay-activate" checked style="width:auto;padding:0;border:none;accent-color:#4f46e5">
+      <label for="pay-activate" style="font-size:13px;font-weight:500;color:#374151;margin:0;text-transform:none;letter-spacing:0">Activate / extend subscription after recording</label>
+    </div>
+    <div class="modal-status" id="pay-status"></div>
+    <div class="modal-actions">
+      <button class="btn-cancel" onclick="closeModal('pay-modal')">Cancel</button>
+      <button class="btn-primary" id="pay-btn" onclick="submitPayment()" style="background:#4f46e5">💰 Record Payment</button>
+    </div>
+  </div>
+</div>
+
 <script>
 let SA_TOKEN = localStorage.getItem('sa_token') || '';
 let allCompanies = [];
 let currentEmailId = '';
 let currentNotesId = '';
+let currentPayId   = '';
 
 // ── Auth ──────────────────────────────────────────────────────────────────────
 async function doLogin(e) {
@@ -495,23 +564,24 @@ function renderInstitutions(cos, data) {
   // Count expired lecturers across all institutions
   const expiredLecturers = cos.filter(c=>!c.isTrialActive && c.subscriptionStatus!=='active').reduce((s,c)=>s+((c.roleCounts&&c.roleCounts.lecturer)||0),0);
 
-  const _sc = (val, lbl, grad) =>
+  const _sc = (icon, val, lbl, grad) =>
     `<div class="stat" style="background:${grad}">
+       <div class="stat-icon">${icon}</div>
        <div class="stat-val">${val}</div>
        <div class="stat-lbl">${lbl}</div>
      </div>`;
 
   document.getElementById('tab-institutions').innerHTML = `
     <div class="stats">
-      ${_sc(total,            'Institutions',   'linear-gradient(135deg,#4f46e5,#7c3aed)')}
-      ${_sc(active,           'Active',          'linear-gradient(135deg,#059669,#10b981)')}
-      ${_sc(trial,            'On Trial',        'linear-gradient(135deg,#d97706,#f59e0b)')}
-      ${_sc(expired,          'Expired',         'linear-gradient(135deg,#dc2626,#ef4444)')}
-      ${_sc(expiredLecturers, 'Exp. Lecturers',  'linear-gradient(135deg,#c2410c,#ea580c)')}
-      ${_sc(sub,              'Subscribed',      'linear-gradient(135deg,#1d4ed8,#3b82f6)')}
-      ${_sc('GHS&nbsp;'+rev.toLocaleString(), 'Revenue', 'linear-gradient(135deg,#047857,#059669)')}
-      ${_sc(acad,             'Academic',        'linear-gradient(135deg,#7c3aed,#a855f7)')}
-      ${_sc(corp,             'Corporate',       'linear-gradient(135deg,#0891b2,#06b6d4)')}
+      ${_sc('🏫', total,            'Institutions',  'linear-gradient(135deg,#4f46e5,#7c3aed)')}
+      ${_sc('✓',  active,           'Active',         'linear-gradient(135deg,#059669,#10b981)')}
+      ${_sc('⏳', trial,            'On Trial',       'linear-gradient(135deg,#d97706,#f59e0b)')}
+      ${_sc('✕',  expired,          'Expired',        'linear-gradient(135deg,#dc2626,#ef4444)')}
+      ${_sc('👨‍🏫', expiredLecturers,'Exp. Lect',     'linear-gradient(135deg,#c2410c,#ea580c)')}
+      ${_sc('💳', sub,              'Subscribed',     'linear-gradient(135deg,#1d4ed8,#3b82f6)')}
+      ${_sc('₵',  'GHS&nbsp;'+rev.toLocaleString(), 'Revenue', 'linear-gradient(135deg,#047857,#059669)')}
+      ${_sc('📚', acad,             'Academic',       'linear-gradient(135deg,#7c3aed,#a855f7)')}
+      ${_sc('🏢', corp,             'Corporate',      'linear-gradient(135deg,#0891b2,#06b6d4)')}
     </div>
 
     <div class="filters">
@@ -528,127 +598,168 @@ function renderInstitutions(cos, data) {
         <option value="trial">On Trial</option>
         <option value="subscribed">Subscribed</option>
       </select>
+      <div style="margin-left:auto;font-size:12px;color:#94a3b8;align-self:center">${cos.length} institutions</div>
+      <button onclick="loadInstitutions()" style="padding:7px 14px;border:1.5px solid #e2e8f0;border-radius:8px;background:#fff;font-size:12px;font-weight:600;cursor:pointer;color:#64748b;display:inline-flex;align-items:center;gap:5px"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>Refresh</button>
     </div>
 
-    <div class="table-card">
-      <div class="table-head">
-        <h3>All Institutions <span style="font-size:12px;font-weight:500;color:#94a3b8;margin-left:6px">${cos.length} total</span></h3>
-        <button onclick="loadInstitutions()" style="padding:6px 12px;border:1.5px solid #e2e8f0;border-radius:8px;background:#fff;font-size:12px;font-weight:600;cursor:pointer;color:#64748b;display:inline-flex;align-items:center;gap:5px"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>Refresh</button>
-      </div>
-      <div id="institutions-table-wrap">${buildInstitutionRows(cos)}</div>
-    </div>`;
+    <div id="institutions-table-wrap">${buildInstitutionCards(cos)}</div>`;
 }
 
-function buildInstitutionRows(cos) {
-  if (!cos.length) return '<div class="empty">No institutions found.</div>';
+function buildInstitutionCards(cos) {
+  if (!cos.length) return '<div class="empty" style="padding:60px;text-align:center;color:#94a3b8;background:#fff;border-radius:16px">No institutions found.</div>';
 
-  const rows = cos.map(c => {
+  return `<div class="inst-grid">${cos.map(c => {
     const rc = c.roleCounts || {};
+    const nameEsc = esc(c.name).replace(/'/g,"\\'");
+    const emailEsc = esc(c.adminEmail||'').replace(/'/g,"\\'");
+    const notesEsc = esc(c.superadminNotes||'').replace(/'/g,"\\'");
+
     const breakdown = c.mode === 'academic'
       ? `${rc.hod||0} HODs · ${rc.lecturer||0} lect · ${rc.student||0} students`
       : `${rc.manager||0} mgrs · ${rc.employee||0} employees`;
-    const trialClass = !c.isTrialActive && c.subscriptionStatus !== 'active' ? 'trial-exp'
-      : c.trialDaysRemaining <= 3 ? 'trial-warn' : 'trial-ok';
-    const trialText = c.subscriptionStatus === 'active' ? 'Subscribed ✓'
-      : c.isTrialActive ? `${c.trialDaysRemaining}d left`
-      : 'Expired';
-    const expDate = c.trialEndDate ? new Date(c.trialEndDate).toLocaleDateString('en-GB',{day:'numeric',month:'short',year:'numeric'}) : '—';
-    return { c, rc, breakdown, trialClass, trialText, expDate };
-  });
 
-  // ── Desktop table ────────────────────────────────────────────────────────────
-  const table = `<table>
-    <thead><tr>
-      <th>Institution</th><th>Admin</th><th>Users</th><th>Mode</th>
-      <th>Status</th><th>Trial / Subscription</th><th>Actions</th>
-    </tr></thead>
-    <tbody>
-      ${rows.map(({c, breakdown, trialClass, trialText, expDate}) => `
-        <tr class="clickable" onclick="showDetail('${c._id}')">
-          <td>
-            <div style="font-weight:700">${esc(c.name)}</div>
-            <div style="font-size:11px;color:#94a3b8;font-family:monospace">${c.institutionCode||'—'}</div>
-          </td>
-          <td>
-            <div style="font-size:13px">${esc(c.adminName||'—')}</div>
-            <div style="font-size:11px;color:#94a3b8">${esc(c.adminEmail||'—')}</div>
-          </td>
-          <td>
-            <div style="font-weight:600">${c.userCount||0}</div>
-            <div class="role-breakdown">${breakdown}</div>
-          </td>
-          <td><span class="tag ${c.mode==='academic'?'tag-blue':'tag-green'}">${c.mode}</span></td>
-          <td><span class="tag ${c.isActive?'tag-green':'tag-red'}">${c.isActive?'Active':'Inactive'}</span></td>
-          <td>
-            <span class="${trialClass}">${trialText}</span>
-            <div style="font-size:11px;color:#94a3b8">expires ${expDate}</div>
-          </td>
-          <td onclick="event.stopPropagation()">
-            <button class="action-btn ${c.isActive?'danger':'success'}" onclick="toggleCompany('${c._id}',${c.isActive},'${esc(c.name)}')">${c.isActive?'Deactivate':'Activate'}</button>
-            <button class="action-btn danger" onclick="deleteInstitution('${c._id}','${esc(c.name)}')" title="Permanently delete" style="border-color:#fca5a5;font-weight:700">🗑 Delete</button>
-            <button class="action-btn" onclick="extendTrial('${c._id}','${esc(c.name)}')">+Trial</button>
-            <button class="action-btn" onclick="openEmail('${c._id}','${esc(c.name)}','${esc(c.adminEmail||'')}')">✉️</button>
-            <button class="action-btn" onclick="openNotes('${c._id}','${esc(c.name)}','${esc(c.superadminNotes||'')}')">📝</button>
-            <button class="action-btn" onclick="impersonate('${c._id}','${esc(c.name)}')">🔑</button>
-          </td>
-        </tr>`).join('')}
-    </tbody>
-  </table>`;
+    const isSubscribed = c.subscriptionStatus === 'active';
+    const isExpired    = !c.isTrialActive && !isSubscribed;
+    const daysLeft     = c.trialDaysRemaining || 0;
+    const expDate      = c.trialEndDate ? new Date(c.trialEndDate).toLocaleDateString('en-GB',{day:'numeric',month:'short',year:'numeric'}) : '—';
+    const trialPct     = Math.min(100, Math.max(0, isSubscribed ? 100 : (daysLeft / 30) * 100));
+    const barColor     = isExpired ? '#dc2626' : daysLeft <= 3 ? '#f59e0b' : isSubscribed ? '#4f46e5' : '#16a34a';
 
-  // ── Mobile cards ──────────────────────────────────────────────────────────────
-  const cards = `<div class="inst-cards">
-    ${rows.map(({c, breakdown, trialClass, trialText, expDate}) => `
-      <div class="inst-card" onclick="showDetail('${c._id}')">
-        <div class="inst-card-top">
+    const trialBadge = isSubscribed
+      ? `<span style="background:#eef2ff;color:#4f46e5;padding:2px 9px;border-radius:20px;font-size:10px;font-weight:800">✓ Subscribed</span>`
+      : isExpired
+        ? `<span style="background:#fee2e2;color:#dc2626;padding:2px 9px;border-radius:20px;font-size:10px;font-weight:800">✕ Expired</span>`
+        : daysLeft <= 3
+          ? `<span style="background:#fef3c7;color:#b45309;padding:2px 9px;border-radius:20px;font-size:10px;font-weight:800">⚠ ${daysLeft}d left</span>`
+          : `<span style="background:#dcfce7;color:#166534;padding:2px 9px;border-radius:20px;font-size:10px;font-weight:800">⏱ ${daysLeft}d left</span>`;
+
+    const modeBadge  = `<span class="tag ${c.mode==='academic'?'tag-blue':'tag-green'}" style="font-size:10px">${c.mode}</span>`;
+    const activeBadge= `<span class="tag ${c.isActive?'tag-green':'tag-red'}" style="font-size:10px">${c.isActive?'● Active':'○ Inactive'}</span>`;
+
+    return `
+    <div class="inst-kard">
+      <div class="inst-kard-header" onclick="showDetail('${c._id}')" style="cursor:pointer">
+        <div style="min-width:0">
+          <div class="inst-kard-name">${esc(c.name)}</div>
+          <div class="inst-kard-code">${c.institutionCode||'—'}</div>
+          <div style="display:flex;gap:5px;flex-wrap:wrap;margin-top:8px">${modeBadge}${activeBadge}</div>
+        </div>
+        <div style="text-align:right;flex-shrink:0">
+          ${trialBadge}
+          <div style="font-size:10px;color:#94a3b8;margin-top:4px">exp ${expDate}</div>
+          <div class="progress-track" style="width:90px;margin-top:5px">
+            <div class="progress-fill" style="width:${trialPct}%;background:${barColor}"></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="inst-kard-body">
+        <div class="inst-kard-row">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#94a3b8" stroke-width="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
           <div>
-            <div class="inst-card-name">${esc(c.name)}</div>
-            <div class="inst-card-code">${c.institutionCode||'—'}</div>
-          </div>
-          <div class="inst-card-badges">
-            <span class="tag ${c.isActive?'tag-green':'tag-red'}">${c.isActive?'Active':'Inactive'}</span>
-            <span class="tag ${c.mode==='academic'?'tag-blue':'tag-green'}">${c.mode}</span>
+            <div style="font-weight:700;color:#0f172a;font-size:12px">${esc(c.adminName||'—')}</div>
+            <div style="color:#94a3b8;font-size:11px">${esc(c.adminEmail||'—')}</div>
           </div>
         </div>
-        <div class="inst-card-meta">
-          <div class="inst-card-meta-item">
-            <strong>${c.userCount||0} users</strong>${breakdown}
-          </div>
-          <div class="inst-card-meta-item">
-            <strong class="${trialClass}">${trialText}</strong>exp ${expDate}
-          </div>
-          <div class="inst-card-meta-item">
-            <strong>${esc(c.adminName||'—')}</strong>${esc(c.adminEmail||'')}
+        <div class="inst-kard-row">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#94a3b8" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+          <div>
+            <span style="font-weight:700;color:#0f172a;font-size:12px">${c.userCount||0} users</span>
+            <span style="color:#94a3b8;font-size:11px;margin-left:5px">${breakdown}</span>
           </div>
         </div>
-        <div class="inst-card-actions" onclick="event.stopPropagation()">
-          <button class="action-btn ${c.isActive?'danger':'success'}" onclick="toggleCompany('${c._id}',${c.isActive},'${esc(c.name)}')">${c.isActive?'Deactivate':'Activate'}</button>
-          <button class="action-btn" onclick="extendTrial('${c._id}','${esc(c.name)}')">+Trial</button>
-          <button class="action-btn" onclick="openEmail('${c._id}','${esc(c.name)}','${esc(c.adminEmail||'')}')">✉️ Email</button>
-          <button class="action-btn" onclick="openNotes('${c._id}','${esc(c.name)}','${esc(c.superadminNotes||'')}')">📝 Notes</button>
-          <button class="action-btn" onclick="impersonate('${c._id}','${esc(c.name)}')">🔑 Access</button>
-          <button class="action-btn danger" onclick="deleteInstitution('${c._id}','${esc(c.name)}')" style="border-color:#fca5a5;font-weight:700">🗑</button>
-        </div>
-      </div>`).join('')}
-  </div>`;
+        ${c.revenue ? `<div class="inst-kard-row">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#94a3b8" stroke-width="2"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
+          <span style="font-size:12px;font-weight:700;color:#059669">GHS ${(c.revenue||0).toLocaleString()} revenue</span>
+        </div>` : ''}
+      </div>
 
-  return table + cards;
+      <div class="inst-kard-footer" onclick="event.stopPropagation()">
+        <button class="action-btn ${c.isActive?'danger':'success'}" style="font-size:11px" onclick="toggleCompany('${c._id}',${c.isActive},'${nameEsc}')">${c.isActive?'⏸ Deactivate':'▶ Activate'}</button>
+        <button class="action-btn" style="font-size:11px" onclick="extendTrial('${c._id}','${nameEsc}')">⏱ +Trial</button>
+        <button class="action-btn" style="font-size:11px;border-color:#c7d2fe;color:#4f46e5;background:#eef2ff" onclick="openPaymentAdjuster('${c._id}','${nameEsc}','${c.mode}')">💰 Pay</button>
+        <button class="action-btn" style="font-size:11px" onclick="openEmail('${c._id}','${nameEsc}','${emailEsc}')">✉️ Email</button>
+        <button class="action-btn" style="font-size:11px" onclick="openNotes('${c._id}','${nameEsc}','${notesEsc}')">📝 Notes</button>
+        <button class="action-btn" style="font-size:11px" onclick="impersonate('${c._id}','${nameEsc}')">🔑 Access</button>
+        <button class="action-btn danger" style="font-size:11px" onclick="deleteInstitution('${c._id}','${nameEsc}')">🗑</button>
+      </div>
+    </div>`; }).join('')}</div>`;
 }
 
 function filterInstitutions() {
-  const q = document.getElementById('search-input').value.toLowerCase();
-  const mode = document.getElementById('filter-mode').value;
-  const status = document.getElementById('filter-status').value;
-  let filtered = allCompanies.filter(c => {
+  const q      = (document.getElementById('search-input')?.value || '').toLowerCase();
+  const mode   = document.getElementById('filter-mode')?.value || '';
+  const status = document.getElementById('filter-status')?.value || '';
+  const filtered = allCompanies.filter(c => {
     const matchQ = !q || c.name.toLowerCase().includes(q) || (c.institutionCode||'').toLowerCase().includes(q) || (c.adminEmail||'').toLowerCase().includes(q);
-    const matchMode = !mode || c.mode === mode;
+    const matchMode   = !mode   || c.mode === mode;
     const matchStatus = !status ||
-      (status === 'active' && c.isActive) ||
-      (status === 'inactive' && !c.isActive) ||
-      (status === 'trial' && c.isTrialActive) ||
+      (status === 'active'     && c.isActive) ||
+      (status === 'inactive'   && !c.isActive) ||
+      (status === 'trial'      && c.isTrialActive) ||
       (status === 'subscribed' && c.subscriptionStatus === 'active');
     return matchQ && matchMode && matchStatus;
   });
-  document.getElementById('institutions-table-wrap').innerHTML = buildInstitutionRows(filtered);
+  document.getElementById('institutions-table-wrap').innerHTML = buildInstitutionCards(filtered);
+}
+
+// ── Payment Adjuster ──────────────────────────────────────────────────────────
+function openPaymentAdjuster(id, name, mode) {
+  currentPayId = id;
+  document.getElementById('pay-modal-company').textContent = name;
+  document.getElementById('pay-status').textContent = '';
+  document.getElementById('pay-reference').value = '';
+  document.getElementById('pay-activate').checked = true;
+  document.getElementById('pay-btn').disabled = false;
+  document.getElementById('pay-btn').textContent = '💰 Record Payment';
+  // Default plan based on mode
+  const defaultPlan = mode === 'corporate' ? 'monthly' : 'semester';
+  document.querySelectorAll('.pay-plan-btn').forEach(b => {
+    b.classList.toggle('selected', b.dataset.plan === defaultPlan);
+  });
+  const defaultBtn = document.querySelector(`.pay-plan-btn[data-plan="${defaultPlan}"]`);
+  const defaultAmt = defaultBtn ? defaultBtn.dataset.amount : '300';
+  document.getElementById('pay-amount').value = defaultAmt;
+  document.getElementById('pay-amount-display').textContent = 'GHS ' + defaultAmt;
+  document.getElementById('pay-modal').classList.add('open');
+}
+
+function selectPayPlan(btn) {
+  document.querySelectorAll('.pay-plan-btn').forEach(b => b.classList.remove('selected'));
+  btn.classList.add('selected');
+  const amt = btn.dataset.amount;
+  document.getElementById('pay-amount').value = amt;
+  document.getElementById('pay-amount-display').textContent = 'GHS ' + amt;
+}
+
+async function submitPayment() {
+  const amount    = document.getElementById('pay-amount').value;
+  const plan      = document.querySelector('.pay-plan-btn.selected')?.dataset.plan || 'semester';
+  const reference = document.getElementById('pay-reference').value.trim();
+  const activate  = document.getElementById('pay-activate').checked;
+  const status    = document.getElementById('pay-status');
+  const btn       = document.getElementById('pay-btn');
+
+  if (!amount || Number(amount) <= 0) {
+    status.textContent = 'Please enter a valid amount.';
+    status.className   = 'modal-status status-err';
+    return;
+  }
+  btn.disabled = true; btn.textContent = 'Saving…';
+  try {
+    const result = await api(`/api/superadmin/companies/${currentPayId}/record-payment`, {
+      method: 'POST',
+      body: JSON.stringify({ amount: Number(amount), plan, reference: reference || undefined, activate })
+    });
+    status.textContent = `✓ ${result.message}`;
+    status.className   = 'modal-status status-ok';
+    btn.textContent = 'Done!';
+    setTimeout(() => { closeModal('pay-modal'); loadInstitutions(); }, 1800);
+  } catch(ex) {
+    status.textContent = 'Error: ' + ex.message;
+    status.className   = 'modal-status status-err';
+    btn.disabled = false; btn.textContent = '💰 Record Payment';
+  }
 }
 
 // ── Institution Detail ────────────────────────────────────────────────────────
