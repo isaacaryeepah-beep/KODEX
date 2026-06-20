@@ -35,10 +35,7 @@ async function renderAttendanceDevice() {
 
   let device = null;
   try {
-    const res = await fetch('/api/devices/my', {
-      headers: { 'Authorization': 'Bearer ' + (localStorage.getItem('token') || '') }
-    });
-    const json = await res.json();
+    const json = await api('/api/devices/my');
     device = json.data || null;
   } catch (e) {
     device = null;
