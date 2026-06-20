@@ -1259,7 +1259,24 @@ async function adLoadDevices() {
   const list = document.getElementById('ad-device-list');
   if (!list) return;
   try {
-    const data = await api('/api/devices/all');
+    const controller = new AbortController();
+    const _timeout   = setTimeout(() => controller.abort(), 12000);
+    let data;
+    try {
+      data = await fetch((window.API || '') + '/api/devices/all', {
+        signal:  controller.signal,
+        headers: { 'Authorization': 'Bearer ' + (localStorage.getItem('token') || ''), 'Content-Type': 'application/json' },
+      }).then(async r => {
+        clearTimeout(_timeout);
+        if (!r.ok) throw new Error('HTTP ' + r.status);
+        return r.json();
+      });
+    } catch (fe) {
+      clearTimeout(_timeout);
+      const msg = fe.name === 'AbortError' ? 'Request timed out — server took too long to respond.' : fe.message;
+      list.innerHTML = `<div class="dev-card" style="border-left:4px solid var(--danger,#ef4444);font-size:13px;color:var(--danger,#ef4444);padding:16px">${msg}<br><button onclick="adLoadDevices()" style="margin-top:10px;padding:6px 14px;border-radius:8px;border:1.5px solid #e2e8f0;background:#fff;cursor:pointer;font-size:12px;font-weight:600">Retry</button></div>`;
+      return;
+    }
     const stamp = document.getElementById('ad-last-updated');
     if (stamp) {
       const t = new Date();
