@@ -502,6 +502,80 @@ exports.syncOfflineRecords = async (req, res) => {
   }
 };
 
+// ─── ONLINE PROXY MARK ───────────────────────────────────────────────────────
+// Called by the ESP32 (device JWT) when a student submits their index number
+// via the captive portal and the device has school-WiFi internet (STA mode).
+// The device POSTs here immediately instead of storing offline; the student
+// gets a confirmed server-side record in real time.
+exports.markOnline = async (req, res) => {
+  try {
+    const device = req.device;
+    if (!device) return res.status(401).json({ error: 'Device authentication missing' });
+
+    const { sessionId, indexNumber, userId: rawUserId, timestamp } = req.body;
+
+    if (!sessionId) return res.status(400).json({ error: 'sessionId required' });
+    if (!indexNumber && !rawUserId) return res.status(400).json({ error: 'indexNumber or userId required' });
+
+    const session = await AttendanceSession.findOne({
+      _id:      sessionId,
+      company:  device.companyId,
+      deviceId: device.deviceId,
+      status:   { $in: ['active', 'live'] },
+    });
+    if (!session) return res.status(404).json({ error: 'No active session for this device' });
+
+    // Session window check
+    if (session.durationSeconds && session.startedAt) {
+      const windowEnd = new Date(session.startedAt).getTime() + (session.durationSeconds + 60) * 1000;
+      if (Date.now() > windowEnd) {
+        return res.status(403).json({ error: 'Attendance window has closed' });
+      }
+    }
+
+    // Resolve student
+    let studentId = rawUserId;
+    if (!studentId && indexNumber) {
+      const idx = String(indexNumber).trim().toUpperCase();
+      const user = await User.findOne({
+        company: device.companyId,
+        role: 'student',
+        $or: [{ IndexNumber: idx }, { indexNumber: idx }],
+      }).select('_id').lean();
+      if (!user) return res.status(404).json({ error: 'Student not found. Check your index number.' });
+      studentId = user._id;
+    }
+
+    // Dedup — already marked?
+    const existing = await AttendanceRecord.findOne({
+      session: session._id,
+      user:    studentId,
+    }).select('_id').lean();
+    if (existing) return res.status(409).json({ error: 'Attendance already marked for this session.' });
+
+    const markedAt = timestamp ? new Date(Number(timestamp) * 1000) : new Date();
+    const late = (markedAt.getTime() - new Date(session.startedAt).getTime()) > 15 * 60 * 1000;
+
+    await AttendanceRecord.create({
+      session:     session._id,
+      user:        studentId,
+      company:     device.companyId,
+      deviceId:    device.deviceId,
+      method:      'esp32_ap',
+      status:      late ? 'late' : 'present',
+      checkInTime: markedAt,
+      syncStatus:  'synced',
+      syncedAt:    new Date(),
+    });
+
+    res.json({ ok: true, late });
+  } catch (err) {
+    if (err.code === 11000) return res.status(409).json({ error: 'Attendance already marked for this session.' });
+    console.error('[device mark-online]', err);
+    res.status(500).json({ error: 'Server error' });
+  }
+};
+
 // ─── DEVICE ROSTER ───────────────────────────────────────────────────────────
 // Returns per-course enrollment data so the device can validate offline
 // credentials (only enrolled students for the active course can mark).

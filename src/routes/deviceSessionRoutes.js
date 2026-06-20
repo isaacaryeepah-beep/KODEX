@@ -12,8 +12,9 @@ const { requireRole }      = require('../middleware/role');
 // These are called by the ESP32 firmware using `Authorization: Bearer <token>`
 // where the token was issued by /api/devices/pair.
 router.post('/devices/heartbeat', deviceAuth, deviceCtrl.heartbeat);
-router.post('/devices/sync',      deviceAuth, deviceCtrl.syncOfflineRecords);
-router.get('/devices/roster',     deviceAuth, deviceCtrl.getRoster);
+router.post('/devices/sync',        deviceAuth, deviceCtrl.syncOfflineRecords);
+router.post('/devices/mark-online', deviceAuth, deviceCtrl.markOnline);
+router.get('/devices/roster',       deviceAuth, deviceCtrl.getRoster);
 
 // ─── PAIRING (no JWT — device uses pairingCode + institutionCode) ─────────────
 router.post('/devices/pair',          deviceCtrl.pairDevice);

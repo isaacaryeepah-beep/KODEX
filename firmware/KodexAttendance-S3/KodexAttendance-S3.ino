@@ -114,7 +114,10 @@ static const char ATTEND_HTML_2[] =
 "body:JSON.stringify({indexNumber:idx})})"
 ".then(function(r){return r.json().then(function(d){return{ok:r.ok,d:d};});})"
 ".then(function(r){"
-"if(r.ok){document.getElementById('main').style.display='none';document.getElementById('ok').style.display='block';}"
+"if(r.ok){"
+"var okDiv=document.getElementById('ok');"
+"if(r.d.online){okDiv.querySelector('h2').textContent='Attendance Marked!';okDiv.querySelector('p').textContent='Confirmed on server. You can now disconnect from Dikly WiFi.';}"
+"document.getElementById('main').style.display='none';okDiv.style.display='block';}"
 "else{err.textContent=r.d.error||'Something went wrong. Try again.';err.style.display='block';btn.textContent='Mark Attendance';btn.disabled=false;}"
 "}).catch(function(){"
 "err.textContent='Connection lost. Move closer to the device and try again.';"
@@ -3810,7 +3813,58 @@ static void registerLocalHttp() {
       return;
     }
 
-    // ── Write to SD card (primary) ────────────────────────────────────────────
+    // ── Try online proxy mark first (STA connected → forward to dikly.sbs) ──────
+    // The ESP32's STA interface stays on the school WiFi even while serving the
+    // AP. When internet is available we mark directly on the server so the record
+    // is confirmed immediately rather than waiting for the next offline sync.
+    bool markedOnline = false;
+    if (WiFi.status() == WL_CONNECTED) {
+      JsonDocument onlineReq;
+      if (indexNum.length()) onlineReq["indexNumber"] = indexNum;
+      if (userId.length())   onlineReq["userId"]      = userId;
+      onlineReq["sessionId"] = sessionId;
+      onlineReq["timestamp"] = (uint32_t)now;
+      String onlineBody; serializeJson(onlineReq, onlineBody);
+      String onlineResp;
+      int onlineCode = postJson("/api/devices/mark-online", onlineBody, onlineResp);
+      if (onlineCode == 200) {
+        markedOnline = true;
+        LOG("Online mark OK idx=" + indexNum);
+      } else if (onlineCode == 409) {
+        // Server says already marked — honour it (don't double-store offline)
+        if (indexNum.length()) dedupAdd(indexNum.c_str());
+        if (userId.length())   dedupAdd(userId.c_str());
+        if (gotMac) usedMacAdd(clientMac);
+        usedIpAdd(clientIp);
+        localHttp.send(409, "application/json",
+          "{\"error\":\"Attendance already marked for this session.\"}");
+        return;
+      }
+      // Any other error (5xx, timeout) → fall through to offline storage
+    }
+
+    if (markedOnline) {
+      // Server confirmed — update local state and respond to student
+      if (indexNum.length()) dedupAdd(indexNum.c_str());
+      if (userId.length())   dedupAdd(userId.c_str());
+      studentsMarked++;
+      if (gotMac) usedMacAdd(clientMac);
+      usedIpAdd(clientIp);
+      if (monPhase == MON_CHECKIN_OPEN && indexNum.length())
+        monAddStudent(indexNum.c_str(), gotMac ? clientMac : nullptr);
+      localHttp.send(200, "application/json",
+        "{\"ok\":true,\"online\":true,\"message\":\"Attendance marked!\"}");
+      delay(200);
+      if (gotMac) deauthStation(clientMac);
+      else {
+        wifi_sta_list_t sl;
+        if (esp_wifi_ap_get_sta_list(&sl) == ESP_OK)
+          for (int i = 0; i < sl.num; i++) deauthStation(sl.sta[i].mac);
+      }
+      return;
+    }
+
+    // ── Write to SD card (primary offline fallback) ───────────────────────────
     bool stored = false;
     if (sdAvailable) {
       File f = SD_MMC.open(SD_ATT_FILE, FILE_APPEND);
@@ -3850,22 +3904,20 @@ static void registerLocalHttp() {
     }
     if (indexNum.length()) dedupAdd(indexNum.c_str());
     if (userId.length())   dedupAdd(userId.c_str());
-    studentsMarked++;  // update count immediately — visible on screen without waiting for server heartbeat
+    studentsMarked++;
 
     // ── Record MAC + IP as used (anti-cheat: one device per submission) ────────
     if (gotMac) usedMacAdd(clientMac);
-    usedIpAdd(clientIp);  // always record IP — covers ARP-miss cases
+    usedIpAdd(clientIp);
 
     // ── Persistent presence monitor: record student + auto-disconnect ─────────
     if (monPhase == MON_CHECKIN_OPEN && indexNum.length()) {
       monAddStudent(indexNum.c_str(), gotMac ? clientMac : nullptr);
-      // Respond BEFORE deauth so the success message reaches the browser
       localHttp.send(200, "application/json",
         "{\"ok\":true,\"message\":\"Attendance recorded. You may disconnect.\"}");
-      delay(200);  // brief grace period for response to flush
+      delay(200);
       if (gotMac) deauthStation(clientMac);
       else {
-        // MAC unknown — kick all stations (blunt fallback)
         wifi_sta_list_t sl;
         if (esp_wifi_ap_get_sta_list(&sl) == ESP_OK)
           for (int i = 0; i < sl.num; i++) deauthStation(sl.sta[i].mac);
@@ -3873,8 +3925,7 @@ static void registerLocalHttp() {
       return;
     }
 
-    // Auto-disconnect outside monitor mode: send response FIRST so the browser
-    // receives the success message before the TCP socket is torn down.
+    // Auto-disconnect outside monitor mode
     localHttp.send(200, "application/json", "{\"ok\":true,\"message\":\"Attendance recorded.\"}");
     delay(200);
     if (gotMac) deauthStation(clientMac);
