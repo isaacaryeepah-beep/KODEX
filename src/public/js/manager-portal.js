@@ -255,6 +255,12 @@ async function renderManagerDashboard(content) {
 async function renderLiveAttendance() {
   const content = document.getElementById('main-content');
   if (!content) return;
+
+  // Academic companies use session-based attendance — show active sessions view
+  if ((currentUser?.company?.mode || currentUser?.mode) === 'academic') {
+    return _renderAcademicLiveAttendance(content);
+  }
+
   content.innerHTML = '<div class="loading">Loading live attendance…</div>';
 
   const doRender = async () => {
@@ -422,6 +428,118 @@ async function renderLiveAttendance() {
     }
   };
   await doRender();
+}
+
+// Academic live attendance — shows active sessions with student counts
+async function _renderAcademicLiveAttendance(content) {
+  content.innerHTML = '<div class="loading">Loading sessions…</div>';
+  const esc = s => s == null ? '' : String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  const fmt = d => d ? new Date(d).toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'}) : '—';
+
+  const reload = async () => {
+    try {
+      const data = await api('/api/attendance-sessions');
+      const all = data.sessions || [];
+      const active = all.filter(s => ['active','live','paused','locked'].includes(s.status));
+      const recent = all.filter(s => !['active','live','paused','locked'].includes(s.status)).slice(0,5);
+
+      content.innerHTML = `
+        <div style="display:flex;flex-direction:column;gap:16px">
+          <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px">
+            <div>
+              <h2>Live Attendance</h2>
+              <p style="font-size:13px;color:var(--text-muted)">${active.length} active session${active.length!==1?'s':''} right now · Auto-refreshes every 30s</p>
+            </div>
+            <div style="display:flex;gap:8px;flex-wrap:wrap">
+              <button class="btn btn-secondary btn-sm" onclick="_renderAcademicLiveAttendance(document.getElementById('main-content'))">↻ Refresh</button>
+              <button class="btn btn-primary btn-sm" onclick="showStartSessionModal()">+ New Session</button>
+            </div>
+          </div>
+
+          <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(110px,1fr));gap:12px">
+            <div class="card" style="text-align:center;padding:14px;border-top:3px solid #10b981">
+              <div style="font-size:28px;font-weight:800;color:#10b981">${active.length}</div>
+              <div style="font-size:11px;color:var(--text-muted);margin-top:2px">Active Sessions</div>
+            </div>
+            <div class="card" style="text-align:center;padding:14px;border-top:3px solid #4f6ef7">
+              <div style="font-size:28px;font-weight:800;color:#4f6ef7">${active.reduce((n,s)=>n+(s.attendeeCount||s.checkedIn||0),0)}</div>
+              <div style="font-size:11px;color:var(--text-muted);margin-top:2px">Students Present</div>
+            </div>
+            <div class="card" style="text-align:center;padding:14px;border-top:3px solid #f59e0b">
+              <div style="font-size:28px;font-weight:800;color:#f59e0b">${all.length}</div>
+              <div style="font-size:11px;color:var(--text-muted);margin-top:2px">Total Today</div>
+            </div>
+          </div>
+
+          ${active.length === 0 ? `
+            <div class="card" style="text-align:center;padding:48px;color:var(--text-muted)">
+              <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" style="margin-bottom:16px;opacity:.4"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+              <div style="font-size:16px;font-weight:600;margin-bottom:6px">No active sessions</div>
+              <div style="font-size:13px">No attendance sessions are running right now.</div>
+            </div>` :
+            `<div>
+              <div style="font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--text-muted);margin-bottom:8px">Active Now</div>
+              <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:12px">
+                ${active.map(s => `
+                <div class="card" style="padding:14px">
+                  <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">
+                    <span style="display:inline-flex;align-items:center;gap:4px;background:#dcfce7;color:#166534;padding:2px 9px;border-radius:20px;font-size:11px;font-weight:700">
+                      <span style="width:6px;height:6px;border-radius:50%;background:#16a34a;animation:pulse 1.8s infinite"></span>Live
+                    </span>
+                    <span style="font-size:11px;color:var(--text-muted)">${esc(s.course?.code||'')}</span>
+                  </div>
+                  <div style="font-size:14px;font-weight:700;margin-bottom:4px">${esc(s.title||s.course?.title||'Untitled')}</div>
+                  <div style="font-size:12px;color:var(--text-muted);margin-bottom:10px">
+                    ${esc(s.createdBy?.name||'—')} · Started ${fmt(s.startedAt)}
+                  </div>
+                  <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:10px">
+                    <div style="background:var(--bg);border-radius:8px;padding:8px;text-align:center">
+                      <div style="font-size:20px;font-weight:800;color:var(--accent)">${s.attendeeCount||s.checkedIn||0}</div>
+                      <div style="font-size:10px;font-weight:600;text-transform:uppercase;color:var(--text-muted)">Present</div>
+                    </div>
+                    <div style="background:var(--bg);border-radius:8px;padding:8px;text-align:center">
+                      <div style="font-size:20px;font-weight:800">${s.code||'—'}</div>
+                      <div style="font-size:10px;font-weight:600;text-transform:uppercase;color:var(--text-muted)">Code</div>
+                    </div>
+                  </div>
+                  <div style="display:flex;gap:6px">
+                    <button class="btn btn-sm" style="flex:1;background:var(--bg);border:1px solid var(--border);font-size:11px" onclick="viewAttendees('${s._id}','${esc((s.title||'Session').replace(/'/g,''))}')">Attendees</button>
+                    <button class="btn btn-danger btn-sm" style="flex:1;font-size:11px" onclick="stopSession('${s._id}')">Stop</button>
+                  </div>
+                </div>`).join('')}
+              </div>
+            </div>`}
+
+          ${recent.length > 0 ? `
+            <div>
+              <div style="font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--text-muted);margin-bottom:8px">Recent Sessions</div>
+              <div class="card" style="padding:0;overflow:hidden">
+                ${recent.map((s,i) => `
+                <div style="padding:12px 16px;${i>0?'border-top:1px solid var(--border)':''};display:flex;align-items:center;gap:10px">
+                  <span style="width:8px;height:8px;border-radius:50%;background:#94a3b8;flex-shrink:0"></span>
+                  <div style="flex:1;min-width:0">
+                    <div style="font-size:13px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(s.title||s.course?.title||'Untitled')}</div>
+                    <div style="font-size:11px;color:var(--text-muted)">${esc(s.createdBy?.name||'—')} · ${esc(s.course?.code||'')} · ${fmt(s.startedAt)}</div>
+                  </div>
+                  <span class="status-badge status-${s.status}" style="flex-shrink:0;font-size:11px">${_sessionStatusLabel?.(s.status)||s.status}</span>
+                </div>`).join('')}
+              </div>
+            </div>` : ''}
+
+          <div style="font-size:11px;color:var(--text-muted);text-align:right">Auto-refreshes every 30s · Last updated: ${new Date().toLocaleTimeString()}</div>
+        </div>`;
+
+      clearTimeout(window._acadLiveTimer);
+      window._acadLiveTimer = setTimeout(() => {
+        if (document.getElementById('main-content') && typeof currentView !== 'undefined' && currentView === 'live-attendance') {
+          _renderAcademicLiveAttendance(document.getElementById('main-content'));
+        }
+      }, 30000);
+    } catch(e) {
+      content.innerHTML = `<div class="card"><p style="color:#ef4444">Error: ${e.message}</p></div>`;
+    }
+  };
+  await reload();
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
