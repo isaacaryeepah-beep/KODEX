@@ -641,6 +641,47 @@ router.patch("/companies/:id/subscription", async (req, res) => {
   }
 });
 
+// ── POST /api/superadmin/companies/:id/record-payment ────────────────────────
+// Manually record a payment and optionally activate the institution's subscription.
+router.post("/companies/:id/record-payment", async (req, res) => {
+  try {
+    const { amount, plan, reference, activate = true } = req.body;
+    if (!amount || !plan) return res.status(400).json({ error: "amount and plan are required" });
+
+    const company = await Company.findById(req.params.id);
+    if (!company) return res.status(404).json({ error: "Company not found" });
+
+    const ref = (reference || '').trim() ||
+      `MANUAL-${Date.now()}-${Math.random().toString(36).substr(2,6).toUpperCase()}`;
+
+    await PaymentLog.create({
+      company:  company._id,
+      reference: ref,
+      amount:   Number(amount),
+      currency: "GHS",
+      plan:     ['monthly','yearly'].includes(plan) ? plan : 'unknown',
+      event:    "manual.payment",
+      paidAt:   new Date(),
+    });
+
+    if (activate) {
+      const days = plan === 'monthly' ? 30 : plan === 'yearly' ? 365 : 112;
+      const base = company.subscriptionEndDate && new Date(company.subscriptionEndDate) > new Date()
+        ? new Date(company.subscriptionEndDate) : new Date();
+      company.subscriptionActive  = true;
+      company.subscriptionStatus  = 'active';
+      company.subscriptionEndDate = new Date(base.getTime() + days * 86400000);
+      company.hasAccess = true;
+      await company.save();
+    }
+
+    res.json({ ok: true, reference: ref, message: `GHS ${amount} payment recorded for ${company.name}.` });
+  } catch (err) {
+    if (err.code === 11000) return res.status(409).json({ error: "A payment with that reference already exists." });
+    res.status(500).json({ error: "Failed to record payment: " + err.message });
+  }
+});
+
 // ── GET /api/superadmin/devices ───────────────────────────────────────────────
 // Lists all registered devices across all institutions.
 // Orphaned devices (pointing to a deleted company) are surfaced at the top.
