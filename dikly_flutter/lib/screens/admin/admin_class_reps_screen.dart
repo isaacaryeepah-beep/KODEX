@@ -22,34 +22,82 @@ class AdminClassRepsScreen extends ConsumerWidget {
         elevation: 0,
         surfaceTintColor: Colors.transparent,
         leading: const BackButton(),
-        title: const Text('Class Reps', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: Color(0xFF111827))),
+        title: const Text(
+          'Class Reps',
+          style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: Color(0xFF111827)),
+        ),
+        actions: [
+          Padding(
+            padding: const EdgeInsets.only(right: 12),
+            child: ElevatedButton.icon(
+              onPressed: () => ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(content: Text('Assign New Rep — coming soon')),
+              ),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFF2563EB),
+                foregroundColor: Colors.white,
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                elevation: 0,
+              ),
+              icon: const Icon(Icons.person_add_outlined, size: 15),
+              label: const Text('Assign', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600)),
+            ),
+          ),
+        ],
       ),
       body: asyncData.when(
         loading: () => const Center(child: CircularProgressIndicator()),
-        error: (e, _) => DiklyErrorView(message: e.toString(), onRetry: () => ref.invalidate(_classRepsProvider)),
+        error: (e, _) => DiklyErrorView(
+          message: e.toString(),
+          onRetry: () => ref.invalidate(_classRepsProvider),
+        ),
         data: (reps) => RefreshIndicator(
           onRefresh: () async => ref.invalidate(_classRepsProvider),
           child: ListView(
-            padding: const EdgeInsets.all(16),
+            padding: const EdgeInsets.fromLTRB(16, 16, 16, 32),
             children: [
-              DiklyScreenHeader(
-                title: 'Class Representatives',
-                subtitle: '${reps.length} active rep${reps.length == 1 ? '' : 's'} · Max 2 per class group',
-                action: ElevatedButton.icon(
-                  onPressed: () => ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('Assign New Rep — coming soon')),
-                  ),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFF2563EB),
-                    foregroundColor: Colors.white,
-                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                    elevation: 0,
-                  ),
-                  icon: const Icon(Icons.person_add_outlined, size: 16),
-                  label: const Text('Assign New Rep', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
+              // Summary banner
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF2563EB).withOpacity(0.08),
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: const Color(0xFF2563EB).withOpacity(0.15)),
+                ),
+                child: Row(
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.all(8),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF2563EB).withOpacity(0.12),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: const Icon(Icons.groups_outlined, color: Color(0xFF2563EB), size: 18),
+                    ),
+                    const SizedBox(width: 12),
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          '${reps.length} Active Rep${reps.length == 1 ? '' : 's'}',
+                          style: const TextStyle(
+                            fontSize: 14,
+                            fontWeight: FontWeight.w700,
+                            color: Color(0xFF1E40AF),
+                          ),
+                        ),
+                        const Text(
+                          'Max 2 representatives per class group',
+                          style: TextStyle(fontSize: 11, color: Color(0xFF3B82F6)),
+                        ),
+                      ],
+                    ),
+                  ],
                 ),
               ),
+              const SizedBox(height: 16),
+
               if (reps.isEmpty)
                 DiklyEmptyState(
                   icon: Icons.people_outline,
@@ -61,37 +109,10 @@ class AdminClassRepsScreen extends ConsumerWidget {
                   ),
                 )
               else
-                DiklyCard(
-                  padding: EdgeInsets.zero,
-                  child: SingleChildScrollView(
-                    scrollDirection: Axis.horizontal,
-                    child: IntrinsicWidth(
-                      child: Column(
-                        children: [
-                          Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-                            decoration: const BoxDecoration(
-                              color: Color(0xFFF9FAFB),
-                              border: Border(bottom: BorderSide(color: Color(0xFFE5E7EB))),
-                            ),
-                            child: const Row(
-                              children: [
-                                SizedBox(width: 180, child: Text('NAME', style: TextStyle(fontSize: 10, fontWeight: FontWeight.w700, color: Color(0xFF9CA3AF), letterSpacing: 0.5))),
-                                SizedBox(width: 90, child: Text('INDEX NO.', style: TextStyle(fontSize: 10, fontWeight: FontWeight.w700, color: Color(0xFF9CA3AF), letterSpacing: 0.5))),
-                                SizedBox(width: 80, child: Text('PROGRAMME', style: TextStyle(fontSize: 10, fontWeight: FontWeight.w700, color: Color(0xFF9CA3AF), letterSpacing: 0.5))),
-                                SizedBox(width: 90, child: Text('LEVEL / GROUP', style: TextStyle(fontSize: 10, fontWeight: FontWeight.w700, color: Color(0xFF9CA3AF), letterSpacing: 0.5))),
-                                SizedBox(width: 100, child: Text('SESSION', style: TextStyle(fontSize: 10, fontWeight: FontWeight.w700, color: Color(0xFF9CA3AF), letterSpacing: 0.5))),
-                                SizedBox(width: 120, child: Text('DEPARTMENT', style: TextStyle(fontSize: 10, fontWeight: FontWeight.w700, color: Color(0xFF9CA3AF), letterSpacing: 0.5))),
-                                SizedBox(width: 120, child: Text('DEVICE', style: TextStyle(fontSize: 10, fontWeight: FontWeight.w700, color: Color(0xFF9CA3AF), letterSpacing: 0.5))),
-                              ],
-                            ),
-                          ),
-                          ...reps.map((r) => _RepRow(rep: r)),
-                        ],
-                      ),
-                    ),
-                  ),
-                ),
+                ...reps.map((r) => Padding(
+                  padding: const EdgeInsets.only(bottom: 12),
+                  child: _RepCard(rep: r),
+                )),
             ],
           ),
         ),
@@ -100,9 +121,9 @@ class AdminClassRepsScreen extends ConsumerWidget {
   }
 }
 
-class _RepRow extends StatelessWidget {
+class _RepCard extends StatelessWidget {
   final Map<String, dynamic> rep;
-  const _RepRow({required this.rep});
+  const _RepCard({required this.rep});
 
   @override
   Widget build(BuildContext context) {
@@ -115,51 +136,248 @@ class _RepRow extends StatelessWidget {
     final group = rep['group']?.toString() ?? '—';
     final session = rep['session']?.toString() ?? user['session']?.toString() ?? '—';
     final dept = user['department']?.toString() ?? rep['department']?.toString() ?? '—';
-    final deviceId = rep['deviceId']?.toString() ?? rep['device']?.toString() ?? '—';
-    final initials = name.isNotEmpty ? name[0].toUpperCase() : '?';
+    final deviceId = rep['deviceId']?.toString() ?? rep['device']?.toString();
+    final hasDevice = deviceId != null && deviceId.isNotEmpty && deviceId != 'null';
+    final initials = name.split(' ').where((p) => p.isNotEmpty).take(2).map((p) => p[0].toUpperCase()).join();
+
+    // Deterministic avatar colour from name
+    final colours = [
+      const Color(0xFF2563EB),
+      const Color(0xFF7C3AED),
+      const Color(0xFF059669),
+      const Color(0xFFDC2626),
+      const Color(0xFFD97706),
+      const Color(0xFF0891B2),
+    ];
+    final avatarColour = colours[name.codeUnits.fold(0, (a, b) => a + b) % colours.length];
 
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-      decoration: const BoxDecoration(border: Border(bottom: BorderSide(color: Color(0xFFE5E7EB), width: 0.5))),
-      child: Row(
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(14),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.04),
+            blurRadius: 8,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          SizedBox(
-            width: 180,
+          // ── Top: avatar + name + badges ──────────────────────────────────
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 16, 16, 12),
             child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 CircleAvatar(
-                  radius: 16,
-                  backgroundColor: const Color(0xFF2563EB).withOpacity(0.1),
-                  child: Text(initials, style: const TextStyle(color: Color(0xFF2563EB), fontWeight: FontWeight.w700, fontSize: 12)),
+                  radius: 24,
+                  backgroundColor: avatarColour.withOpacity(0.12),
+                  child: Text(
+                    initials.isEmpty ? '?' : initials,
+                    style: TextStyle(
+                      color: avatarColour,
+                      fontWeight: FontWeight.w800,
+                      fontSize: 14,
+                    ),
+                  ),
                 ),
-                const SizedBox(width: 8),
+                const SizedBox(width: 12),
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(name, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: Color(0xFF111827)), overflow: TextOverflow.ellipsis),
-                      if (email.isNotEmpty) Text(email, style: const TextStyle(fontSize: 10, color: Color(0xFF6B7280)), overflow: TextOverflow.ellipsis),
+                      Text(
+                        name,
+                        style: const TextStyle(
+                          fontSize: 14,
+                          fontWeight: FontWeight.w700,
+                          color: Color(0xFF111827),
+                        ),
+                      ),
+                      if (email.isNotEmpty) ...[
+                        const SizedBox(height: 2),
+                        Text(
+                          email,
+                          style: const TextStyle(fontSize: 11, color: Color(0xFF6B7280)),
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ],
+                      const SizedBox(height: 8),
+                      // Index + Programme badges
+                      Wrap(
+                        spacing: 6,
+                        runSpacing: 6,
+                        children: [
+                          _Badge(label: index, icon: Icons.badge_outlined, colour: const Color(0xFF2563EB)),
+                          _Badge(label: programme, icon: Icons.school_outlined, colour: const Color(0xFF7C3AED)),
+                        ],
+                      ),
                     ],
+                  ),
+                ),
+                // CR badge
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF2563EB).withOpacity(0.1),
+                    borderRadius: BorderRadius.circular(6),
+                  ),
+                  child: const Text(
+                    'CR',
+                    style: TextStyle(
+                      fontSize: 10,
+                      fontWeight: FontWeight.w800,
+                      color: Color(0xFF2563EB),
+                      letterSpacing: 0.5,
+                    ),
                   ),
                 ),
               ],
             ),
           ),
-          SizedBox(width: 90, child: Text(index, style: const TextStyle(fontSize: 12, color: Color(0xFF374151)))),
-          SizedBox(width: 80, child: Text(programme, style: const TextStyle(fontSize: 12, color: Color(0xFF374151)), overflow: TextOverflow.ellipsis)),
-          SizedBox(
-            width: 90,
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
+
+          // ── Divider ───────────────────────────────────────────────────────
+          const Divider(height: 1, color: Color(0xFFF3F4F6)),
+
+          // ── Detail grid ───────────────────────────────────────────────────
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
+            child: Wrap(
+              spacing: 12,
+              runSpacing: 10,
               children: [
-                Text('L$level', style: const TextStyle(fontSize: 11, color: Color(0xFF374151))),
-                Text('Grp $group', style: const TextStyle(fontSize: 10, color: Color(0xFF9CA3AF))),
+                _InfoTile(label: 'Level', value: level == '—' ? '—' : 'Level $level'),
+                _InfoTile(label: 'Group', value: group == '—' ? '—' : 'Group $group'),
+                _InfoTile(label: 'Session', value: session),
+                _InfoTile(label: 'Department', value: dept),
               ],
             ),
           ),
-          SizedBox(width: 100, child: Text(session, style: const TextStyle(fontSize: 11, color: Color(0xFF374151)), overflow: TextOverflow.ellipsis)),
-          SizedBox(width: 120, child: Text(dept, style: const TextStyle(fontSize: 11, color: Color(0xFF374151)), overflow: TextOverflow.ellipsis)),
-          SizedBox(width: 120, child: Text(deviceId, style: const TextStyle(fontSize: 11, color: Color(0xFF374151)), overflow: TextOverflow.ellipsis)),
+
+          // ── Device row ────────────────────────────────────────────────────
+          Container(
+            padding: const EdgeInsets.fromLTRB(16, 10, 16, 14),
+            decoration: BoxDecoration(
+              color: hasDevice
+                  ? const Color(0xFF059669).withOpacity(0.05)
+                  : const Color(0xFF6B7280).withOpacity(0.05),
+              borderRadius: const BorderRadius.only(
+                bottomLeft: Radius.circular(14),
+                bottomRight: Radius.circular(14),
+              ),
+            ),
+            child: Row(
+              children: [
+                Icon(
+                  hasDevice ? Icons.devices_outlined : Icons.device_unknown_outlined,
+                  size: 14,
+                  color: hasDevice ? const Color(0xFF059669) : const Color(0xFF9CA3AF),
+                ),
+                const SizedBox(width: 6),
+                Text(
+                  'Device: ',
+                  style: TextStyle(
+                    fontSize: 11,
+                    fontWeight: FontWeight.w600,
+                    color: hasDevice ? const Color(0xFF059669) : const Color(0xFF9CA3AF),
+                  ),
+                ),
+                Expanded(
+                  child: Text(
+                    hasDevice ? deviceId! : 'No device assigned',
+                    style: TextStyle(
+                      fontSize: 11,
+                      color: hasDevice ? const Color(0xFF059669) : const Color(0xFF9CA3AF),
+                    ),
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+                if (hasDevice)
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF059669).withOpacity(0.12),
+                      borderRadius: BorderRadius.circular(4),
+                    ),
+                    child: const Text(
+                      'LINKED',
+                      style: TextStyle(
+                        fontSize: 9,
+                        fontWeight: FontWeight.w800,
+                        color: Color(0xFF059669),
+                        letterSpacing: 0.5,
+                      ),
+                    ),
+                  ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _Badge extends StatelessWidget {
+  final String label;
+  final IconData icon;
+  final Color colour;
+  const _Badge({required this.label, required this.icon, required this.colour});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      decoration: BoxDecoration(
+        color: colour.withOpacity(0.08),
+        borderRadius: BorderRadius.circular(6),
+        border: Border.all(color: colour.withOpacity(0.15)),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 11, color: colour),
+          const SizedBox(width: 4),
+          Text(
+            label,
+            style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: colour),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _InfoTile extends StatelessWidget {
+  final String label;
+  final String value;
+  const _InfoTile({required this.label, required this.value});
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      width: (MediaQuery.of(context).size.width - 56) / 2,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            label.toUpperCase(),
+            style: const TextStyle(
+              fontSize: 9,
+              fontWeight: FontWeight.w700,
+              color: Color(0xFF9CA3AF),
+              letterSpacing: 0.6,
+            ),
+          ),
+          const SizedBox(height: 2),
+          Text(
+            value,
+            style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: Color(0xFF1F2937)),
+            overflow: TextOverflow.ellipsis,
+          ),
         ],
       ),
     );
