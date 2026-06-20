@@ -206,6 +206,24 @@
     @media (max-width:480px){
       table.sa-tbl td:nth-child(5),table.sa-tbl th:nth-child(5){display:none}
     }
+    /* ── Mobile institution cards ── */
+    .inst-cards{display:none;flex-direction:column;gap:10px;padding:4px 0 4px}
+    .inst-card{background:#fff;border:1px solid #e8edf2;border-radius:14px;padding:14px;transition:box-shadow .15s}
+    .inst-card-top{display:flex;align-items:flex-start;justify-content:space-between;gap:8px;margin-bottom:10px}
+    .inst-card-name{font-size:15px;font-weight:700;color:#0f172a;line-height:1.3}
+    .inst-card-code{font-size:11px;font-family:monospace;color:#94a3b8;margin-top:2px}
+    .inst-card-badges{display:flex;gap:5px;flex-shrink:0;flex-wrap:wrap;justify-content:flex-end}
+    .inst-card-meta{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:10px;font-size:12px;color:#64748b}
+    .inst-card-meta strong{display:block;font-size:13px;font-weight:700;color:#0f172a}
+    .inst-card-actions{display:flex;gap:6px;flex-wrap:wrap;border-top:1px solid #f1f5f9;padding-top:10px}
+    .inst-card-actions button{flex:1;min-width:auto;padding:7px 6px;font-size:12px;font-weight:600;border-radius:8px;border:1.5px solid #e2e8f0;background:#fff;cursor:pointer;font-family:inherit;white-space:nowrap;transition:background .15s}
+    .inst-card-actions button:hover{background:#f8fafc}
+    .inst-card-actions button.danger{border-color:#fca5a5;color:#dc2626}
+    .inst-card-actions button.success{border-color:#bbf7d0;color:#16a34a}
+    @media (max-width:640px){
+      .sa-table-wrap table.sa-tbl{display:none}
+      .inst-cards{display:flex}
+    }
   </style>
 </head>
 <body>
@@ -551,12 +569,13 @@ async function loadInstitutions() {
 }
 
 function renderInstitutions(cos, data) {
-  const total   = cos.length;
-  const active  = cos.filter(c=>c.isActive).length;
-  const trial   = cos.filter(c=>c.isTrialActive).length;
-  const expired = cos.filter(c=>!c.isTrialActive && c.subscriptionStatus!=='active').length;
-  const sub     = cos.filter(c=>c.subscriptionStatus==='active').length;
-  const rev     = (data&&data.totalRevenue) ? data.totalRevenue : cos.reduce((s,c)=>s+(c.revenue||0),0);
+  const total             = cos.length;
+  const active            = cos.filter(c=>c.isActive).length;
+  const trial             = cos.filter(c=>c.isTrialActive).length;
+  const expired           = cos.filter(c=>!c.isTrialActive && c.subscriptionStatus!=='active').length;
+  const sub               = cos.filter(c=>c.subscriptionStatus==='active').length;
+  const rev               = (data&&data.totalRevenue) ? data.totalRevenue : cos.reduce((s,c)=>s+(c.revenue||0),0);
+  const expiredLecturers  = cos.filter(c=>!c.isTrialActive && c.subscriptionStatus!=='active').reduce((s,c)=>s+((c.roleCounts&&c.roleCounts.lecturer)||0),0);
 
   const stat = (cls, iconPath, val, lbl) => `
     <div class="sa-stat ${cls}">
@@ -571,6 +590,7 @@ function renderInstitutions(cos, data) {
   const iX        = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>`;
   const iCard     = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="1" y="4" width="22" height="16" rx="2"/><line x1="1" y1="10" x2="23" y2="10"/></svg>`;
   const iCoin     = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="16"/><line x1="8" y1="12" x2="16" y2="12"/></svg>`;
+  const iUsers    = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>`;
 
   document.getElementById('tab-institutions').innerHTML = `
     <div class="sa-stats">
@@ -578,6 +598,7 @@ function renderInstitutions(cos, data) {
       ${stat('c-green',  iCheck,    active,  'Active')}
       ${stat('c-amber',  iClock,    trial,   'On Trial')}
       ${stat('c-red',    iX,        expired, 'Expired')}
+      ${stat('c-red',    iUsers,    expiredLecturers, 'Expired Lecturers')}
       ${stat('c-blue',   iCard,     sub,     'Subscribed')}
       ${stat('c-teal',   iCoin,     'GHS&nbsp;'+rev.toLocaleString(), 'Revenue')}
     </div>
@@ -692,6 +713,47 @@ function buildInstitutionTable(cos) {
     </tr>`;
   }).join('');
 
+  const cards = cos.map(c => {
+    const rc = c.roleCounts || {};
+    const id = c._id;
+    const nameEsc  = esc(c.name).replace(/'/g,"\\'");
+    const emailEsc = esc(c.adminEmail||'').replace(/'/g,"\\'");
+    const notesEsc = esc(c.superadminNotes||'').replace(/'/g,"\\'");
+    const isSubscribed = c.subscriptionStatus === 'active';
+    const isExpired    = !c.isTrialActive && !isSubscribed;
+    const daysLeft     = c.trialDaysRemaining || 0;
+    const expDate      = c.trialEndDate ? new Date(c.trialEndDate).toLocaleDateString('en-GB',{day:'numeric',month:'short',year:'2-digit'}) : '—';
+    const subText      = isSubscribed ? '✅ Subscribed' : isExpired ? '❌ Expired' : `${daysLeft}d trial left`;
+    const userBreakdown = c.mode==='academic' ? `${rc.lecturer||0}L · ${rc.student||0}S` : `${rc.manager||0}M · ${rc.employee||0}E`;
+    return `
+      <div class="inst-card">
+        <div class="inst-card-top">
+          <div>
+            <div class="inst-card-name" onclick="showDetail('${id}')" style="cursor:pointer">${esc(c.name)}</div>
+            <div class="inst-card-code">${c.institutionCode||'—'} · ${c.mode}</div>
+          </div>
+          <div class="inst-card-badges">
+            <span class="badge ${c.isActive?'badge-green':'badge-gray'}">${c.isActive?'Active':'Inactive'}</span>
+            <span class="badge ${isSubscribed?'badge-indigo':isExpired?'badge-red':'badge-amber'}">${isSubscribed?'Sub':isExpired?'Exp':daysLeft+'d'}</span>
+          </div>
+        </div>
+        <div class="inst-card-meta">
+          <div><strong>${c.userCount||0} users</strong>${userBreakdown}</div>
+          <div><strong>${subText}</strong>exp ${expDate}</div>
+          <div><strong>${esc(c.adminName||'—')}</strong>${esc(c.adminEmail||'')}</div>
+        </div>
+        <div class="inst-card-actions" onclick="event.stopPropagation()">
+          <button class="${c.isActive?'danger':'success'}" onclick="toggleCompany('${id}',${c.isActive},'${nameEsc}')">${c.isActive?'Deactivate':'Activate'}</button>
+          <button onclick="openPaymentAdjuster('${id}','${nameEsc}','${c.mode}')">💳 Pay</button>
+          <button onclick="extendTrial('${id}','${nameEsc}')">+Trial</button>
+          <button onclick="openEmail('${id}','${nameEsc}','${emailEsc}')">✉️ Email</button>
+          <button onclick="openNotes('${id}','${nameEsc}','${notesEsc}')">📝 Notes</button>
+          <button onclick="impersonate('${id}','${nameEsc}')">🔑 Access</button>
+          <button class="danger" onclick="deleteInstitution('${id}','${nameEsc}')">🗑</button>
+        </div>
+      </div>`;
+  }).join('');
+
   return `<table class="sa-tbl">
     <thead><tr>
       <th>Institution</th>
@@ -703,7 +765,8 @@ function buildInstitutionTable(cos) {
       <th>Actions</th>
     </tr></thead>
     <tbody>${rows}</tbody>
-  </table>`;
+  </table>
+  <div class="inst-cards">${cards}</div>`;
 }
 
 function filterInstitutions() {
