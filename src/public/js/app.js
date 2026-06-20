@@ -2939,6 +2939,9 @@ function navigateTo(view) {
   if (!content) return;
   content.innerHTML = '<div class="loading">Loading...</div>';
 
+  // Close mobile sidebar automatically on every navigation
+  if (typeof closeMobileSidebar === 'function') closeMobileSidebar();
+
   // Hide employee assistant panel on every navigation except emp-home
   if (view !== 'emp-home') _hideEmpAssistantPanel();
 
