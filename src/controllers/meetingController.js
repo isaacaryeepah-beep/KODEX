@@ -5,7 +5,8 @@ const MeetingParticipant = require('../models/MeetingParticipant');
 const User               = require('../models/User');
 const { generateRoomName }                             = require('../utils/generateRoomName');
 const { generateMeetingToken, verifyMeetingToken }     = require('../utils/jwt');
-const { generateJitsiToken, isSelfHosted, JITSI_DOMAIN } = require('../services/jitsiTokenService');
+const { generateJitsiToken, isSelfHosted, JITSI_DOMAIN, JITSI_APP_ID } = require('../services/jitsiTokenService');
+const { configured: streamConfigured, muteAllInRoom, muteParticipantInRoom } = require('../services/livekitService');
 const { broadcastMonitor }                             = require('./meetingMonitorController');
 
 const APP_BASE_URL     = process.env.APP_BASE_URL     || 'https://dikly.live';
@@ -501,4 +502,70 @@ exports.myMeetings = async (req, res, next) => {
     }).sort({ scheduledStart: -1 }).limit(50).lean();
     res.json({ success: true, data: meetings });
   } catch (err) { next(err); }
+};
+
+// ─── JITSI HEALTH CHECK ───────────────────────────────────────────────────────
+exports.jitsiHealth = async (req, res) => {
+  const https = require('https');
+  const result = {
+    domain:    JITSI_DOMAIN,
+    app_id:    JITSI_APP_ID,
+    token_ok:  false,
+    jitsi_reachable: false,
+    xmpp_bosh_ok:    false,
+    token_payload: null,
+    error: null,
+  };
+
+  try {
+    const tok = generateJitsiToken(req.user, 'dikly_health_probe', false, 1);
+    const decoded = require('jsonwebtoken').decode(tok);
+    result.token_ok = true;
+    result.token_payload = {
+      iss:  decoded.iss,
+      sub:  decoded.sub,
+      aud:  decoded.aud,
+      room: decoded.room,
+      moderator: decoded.context?.user?.moderator,
+      exp: new Date(decoded.exp * 1000).toISOString(),
+    };
+  } catch (e) {
+    result.error = 'JWT generation failed: ' + e.message;
+    return res.status(500).json(result);
+  }
+
+  await new Promise(resolve => {
+    const req2 = https.get(`https://${JITSI_DOMAIN}/http-bind`, r => {
+      result.jitsi_reachable = true;
+      result.xmpp_bosh_ok    = r.statusCode < 500;
+      r.resume();
+      resolve();
+    });
+    req2.on('error', e => {
+      result.error = `Jitsi unreachable: ${e.message}`;
+      resolve();
+    });
+    req2.setTimeout(5000, () => { req2.destroy(); resolve(); });
+  });
+
+  const ok = result.token_ok && result.jitsi_reachable;
+  res.status(ok ? 200 : 502).json(result);
+};
+
+// ─── MUTE ALL (LiveKit) ───────────────────────────────────────────────────────
+exports.muteAll = async (req, res) => {
+  try {
+    if (!streamConfigured) return res.status(503).json({ error: 'LiveKit not configured' });
+    await muteAllInRoom(req.meeting.roomName);
+    res.json({ success: true, message: 'All participants muted' });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+};
+
+// ─── MUTE PARTICIPANT (LiveKit) ───────────────────────────────────────────────
+exports.muteParticipant = async (req, res) => {
+  try {
+    if (!streamConfigured) return res.status(503).json({ error: 'LiveKit not configured' });
+    await muteParticipantInRoom(req.meeting.roomName, req.params.uid);
+    res.json({ success: true, message: 'Participant muted' });
+  } catch (err) { res.status(500).json({ error: err.message }); }
 };
