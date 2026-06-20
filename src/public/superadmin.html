@@ -10,10 +10,6 @@
   <title>DIKLY — Platform Admin</title>
   <link rel="icon" type="image/svg+xml" href="/dikly-icon.svg">
   <link rel="manifest" href="/manifest.json">
-  <script src="https://cdn.tailwindcss.com"></script>
-  <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
-  <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
-  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
   <style>
     *{margin:0;padding:0;box-sizing:border-box}
     body{font-family:'DM Sans',system-ui,sans-serif;background:#0d1117;min-height:100vh;color:#111}
@@ -22,12 +18,11 @@
     #login-screen{display:flex;align-items:center;justify-content:center;min-height:100vh;padding:24px}
     .card{background:#fff;border-radius:16px;padding:36px 32px;width:100%;max-width:420px;box-shadow:0 24px 64px rgba(0,0,0,.5)}
     .brand{display:flex;align-items:center;gap:12px;margin-bottom:28px}
-    .brand-icon{width:44px;height:44px;border-radius:12px;background:#0d1117;display:flex;align-items:center;justify-content:center;color:#fff;flex-shrink:0}
     .brand h1{font-size:20px;font-weight:800;color:#0d1117}
     .brand p{font-size:12px;color:#6b7280;margin-top:2px}
-    .badge{display:inline-flex;align-items:center;gap:5px;background:#fef3c7;color:#92400e;border:1px solid #fde68a;border-radius:20px;padding:4px 12px;font-size:11px;font-weight:700;margin-bottom:24px}
+    .login-badge{display:inline-flex;align-items:center;gap:5px;background:#fef3c7;color:#92400e;border:1px solid #fde68a;border-radius:20px;padding:4px 12px;font-size:11px;font-weight:700;margin-bottom:24px}
     label{display:block;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:#6b7280;margin-bottom:6px}
-    input[type=email],input[type=password],input[type=text],textarea,select{width:100%;padding:11px 14px;border:1.5px solid #e5e7eb;border-radius:9px;font-size:14px;outline:none;font-family:inherit}
+    input[type=email],input[type=password],input[type=text],input[type=number],input[type=date],textarea,select{width:100%;padding:11px 14px;border:1.5px solid #e5e7eb;border-radius:9px;font-size:14px;outline:none;font-family:inherit}
     input:focus,textarea:focus,select:focus{border-color:#374151}
     .btn-login{width:100%;padding:13px;background:#0d1117;color:#fff;border:none;border-radius:9px;font-size:14px;font-weight:700;cursor:pointer;font-family:inherit;margin-top:8px}
     .btn-login:hover{background:#1f2937}
@@ -36,84 +31,119 @@
     .back-link{text-align:center;margin-top:20px;font-size:12px;color:#6b7280}
     .back-link a{color:#6b7280;text-decoration:none}
 
-    /* ── Dashboard ── */
-    #dashboard{display:none;background:#f0f4f8;min-height:100vh}
+    /* ── Dashboard shell ── */
+    #dashboard{display:none;min-height:100vh;flex-direction:row}
 
-    /* ── Topbar ── */
-    .topbar{background:linear-gradient(135deg,#0f1117 0%,#1a1f2e 100%);border-bottom:1px solid #2d3748;padding:0 24px;height:62px;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:10;gap:12px}
-    .topbar-left{display:flex;align-items:center;gap:14px;flex-shrink:0}
-    .topbar h2{font-size:16px;font-weight:700;color:#fff}
-    .topbar-right{display:flex;align-items:center;gap:8px}
-    .topbar-superadmin-badge{display:inline-flex;align-items:center;background:rgba(79,70,229,.25);color:#a5b4fc;border:1px solid rgba(99,102,241,.35);border-radius:20px;padding:2px 10px;font-size:10px;font-weight:800;letter-spacing:.7px;text-transform:uppercase;margin-left:8px;flex-shrink:0}
-    .user-chip{display:inline-flex;align-items:center;gap:8px;background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.12);border-radius:999px;padding:5px 12px 5px 5px;white-space:nowrap}
-    .user-chip-avatar{width:26px;height:26px;border-radius:50%;background:linear-gradient(135deg,#4f46e5,#7c3aed);display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:800;color:#fff;flex-shrink:0}
-    .user-chip-name{font-size:12px;font-weight:600;color:#e2e8f0}
-    .btn-sm{padding:7px 14px;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;border:1.5px solid rgba(255,255,255,.2);background:transparent;color:#e2e8f0;font-family:inherit;white-space:nowrap;transition:background .15s,border-color .15s}
-    .btn-sm:hover{background:rgba(255,255,255,.1);border-color:rgba(255,255,255,.35)}
-    .btn-sm.primary{background:#4f46e5;color:#fff;border-color:#4f46e5}
-    .btn-sm.primary:hover{background:#4338ca;border-color:#4338ca}
-    .btn-sm.danger{border-color:rgba(239,68,68,.4);color:#fca5a5}
-    .btn-sm.danger:hover{background:rgba(239,68,68,.15);border-color:rgba(239,68,68,.6)}
-    .content{padding:24px 28px;max-width:1400px}
+    /* ── Sidebar ── */
+    #sa-sidebar{width:224px;background:#0f1117;display:flex;flex-direction:column;flex-shrink:0;z-index:50;border-right:1px solid rgba(255,255,255,.06)}
+    .sa-logo{padding:20px 16px 18px;border-bottom:1px solid rgba(255,255,255,.07);display:flex;align-items:center;gap:10px;flex-shrink:0}
+    .sa-logo-icon{width:32px;height:32px;border-radius:9px;background:#4f46e5;display:flex;align-items:center;justify-content:center;flex-shrink:0}
+    .sa-logo-name{font-size:14px;font-weight:800;color:#fff;line-height:1.1}
+    .sa-logo-sub{font-size:10px;color:#64748b;margin-top:1px}
+    .sa-nav{flex:1;padding:10px 8px;display:flex;flex-direction:column;gap:2px;overflow-y:auto}
+    .sa-nav-section{font-size:9.5px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:#334155;padding:12px 8px 5px;margin-top:4px}
+    .sa-nav-section:first-child{margin-top:0}
+    .sa-nav-btn{display:flex;align-items:center;gap:9px;padding:8px 10px;border-radius:8px;font-size:13px;font-weight:500;color:#64748b;cursor:pointer;border:none;background:transparent;width:100%;text-align:left;font-family:inherit;transition:background .12s,color .12s}
+    .sa-nav-btn:hover{background:rgba(255,255,255,.06);color:#cbd5e1}
+    .sa-nav-btn.active{background:rgba(99,102,241,.18);color:#fff}
+    .sa-nav-btn.active .sa-nav-icon{color:#818cf8}
+    .sa-nav-icon{flex-shrink:0;color:#475569;width:16px;text-align:center}
+    .sa-sidebar-footer{padding:12px 10px;border-top:1px solid rgba(255,255,255,.07);flex-shrink:0}
+    .sa-user-row{display:flex;align-items:center;gap:8px;margin-bottom:10px}
+    .sa-avatar{width:30px;height:30px;border-radius:50%;background:linear-gradient(135deg,#4f46e5,#7c3aed);display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:800;color:#fff;flex-shrink:0}
+    .sa-user-name{font-size:12px;font-weight:600;color:#e2e8f0;flex:1;min-width:0;truncate:true;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+    .sa-sign-out{width:100%;padding:7px;font-size:12px;font-weight:600;color:#64748b;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.08);border-radius:7px;cursor:pointer;font-family:inherit;transition:background .12s,color .12s}
+    .sa-sign-out:hover{background:rgba(239,68,68,.12);color:#fca5a5;border-color:rgba(239,68,68,.25)}
 
-    /* ── Tabs ── */
-    .tabs{display:flex;gap:4px;margin-bottom:24px;background:#fff;border-radius:12px;padding:6px;box-shadow:0 1px 4px rgba(0,0,0,.08);width:fit-content}
-    .tab{padding:8px 18px;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;border:none;background:transparent;color:#64748b;font-family:inherit;transition:background .15s,color .15s}
-    .tab.active{background:#0f1117;color:#fff;box-shadow:0 2px 6px rgba(0,0,0,.25)}
-    .tab:hover:not(.active){background:#f1f5f9}
+    /* Mobile sidebar overlay */
+    #sidebar-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:49}
 
-    /* ── Stat cards ── */
-    .stats{display:grid;grid-template-columns:repeat(auto-fill,minmax(155px,1fr));gap:14px;margin-bottom:24px}
-    .stat{border-radius:14px;padding:18px 16px;color:#fff;position:relative;overflow:hidden;box-shadow:0 4px 16px rgba(0,0,0,.18)}
-    .stat::after{content:'';position:absolute;top:-16px;right:-16px;width:80px;height:80px;border-radius:50%;background:rgba(255,255,255,.08);pointer-events:none}
-    .stat-val{font-size:28px;font-weight:800;line-height:1;position:relative;z-index:1}
-    .stat-lbl{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.6px;opacity:.85;margin-top:6px;position:relative;z-index:1}
+    /* ── Main area ── */
+    #sa-main{flex:1;display:flex;flex-direction:column;min-width:0;background:#f1f5f9}
 
-    /* ── Filters ── */
-    .filters{display:flex;gap:10px;margin-bottom:16px;flex-wrap:wrap;align-items:center}
-    .filters input,.filters select{width:auto;padding:8px 12px;border-radius:8px;font-size:13px;border:1.5px solid #e2e8f0;background:#fff}
-    .filters input{min-width:220px}
+    /* ── Page topbar ── */
+    .sa-topbar{background:#fff;border-bottom:1px solid #e2e8f0;padding:0 22px;height:60px;display:flex;align-items:center;gap:12px;flex-shrink:0}
+    .sa-topbar-menu{display:none;background:none;border:none;cursor:pointer;padding:5px;color:#374151;border-radius:6px;flex-shrink:0}
+    .sa-topbar-title{flex:1;min-width:0}
+    .sa-topbar-title h2{font-size:15px;font-weight:700;color:#0f172a;line-height:1.2}
+    .sa-topbar-title p{font-size:11px;color:#94a3b8;margin-top:1px}
+    .sa-topbar-actions{display:flex;align-items:center;gap:7px;flex-shrink:0}
+    .sa-btn{padding:7px 14px;border-radius:8px;font-size:12px;font-weight:600;cursor:pointer;border:1.5px solid #e2e8f0;background:#fff;color:#374151;font-family:inherit;white-space:nowrap;display:inline-flex;align-items:center;gap:5px;transition:background .12s,border-color .12s}
+    .sa-btn:hover{background:#f8fafc;border-color:#cbd5e1}
+    .sa-btn.primary{background:#4f46e5;color:#fff;border-color:#4f46e5}
+    .sa-btn.primary:hover{background:#4338ca;border-color:#4338ca}
 
-    /* ── Table ── */
-    .table-card{background:#fff;border-radius:14px;box-shadow:0 2px 12px rgba(0,0,0,.07);overflow:hidden;margin-bottom:24px}
-    .table-head{padding:14px 20px;display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid #e2e8f0;gap:12px;flex-wrap:wrap}
-    .table-head h3{font-size:14px;font-weight:700}
-    table{width:100%;border-collapse:collapse;font-size:13px}
-    th{padding:9px 16px;text-align:left;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:#94a3b8;border-bottom:1px solid #e2e8f0;white-space:nowrap}
-    td{padding:11px 16px;border-bottom:1px solid #f1f5f9;vertical-align:middle}
-    tr:last-child td{border-bottom:none}
-    tr.clickable:hover{background:#f8fafc;cursor:pointer}
-    .tag{display:inline-block;padding:2px 10px;border-radius:20px;font-size:11px;font-weight:700;white-space:nowrap}
+    /* ── Page body ── */
+    .sa-page{padding:22px;overflow-y:auto;flex:1}
+
+    /* ── Stat row ── */
+    .sa-stats{display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:12px;margin-bottom:20px}
+    .sa-stat{background:#fff;border-radius:12px;padding:16px 16px 14px;box-shadow:0 1px 4px rgba(0,0,0,.06);border:1px solid #e8ecf0}
+    .sa-stat-icon{font-size:18px;margin-bottom:8px;line-height:1}
+    .sa-stat-val{font-size:22px;font-weight:800;color:#0f172a;line-height:1}
+    .sa-stat-lbl{font-size:10.5px;font-weight:600;color:#94a3b8;text-transform:uppercase;letter-spacing:.5px;margin-top:4px}
+    .sa-stat.accent-green .sa-stat-val{color:#059669}
+    .sa-stat.accent-amber .sa-stat-val{color:#d97706}
+    .sa-stat.accent-red   .sa-stat-val{color:#dc2626}
+    .sa-stat.accent-blue  .sa-stat-val{color:#2563eb}
+    .sa-stat.accent-purple.sa-stat-val{color:#7c3aed}
+
+    /* ── Table card ── */
+    .sa-table-card{background:#fff;border-radius:14px;box-shadow:0 1px 6px rgba(0,0,0,.07);border:1px solid #e8ecf0;overflow:hidden;margin-bottom:20px}
+    .sa-table-head{padding:14px 18px;display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;border-bottom:1px solid #f1f5f9}
+    .sa-table-head h3{font-size:14px;font-weight:700;color:#0f172a}
+    .sa-table-head .sa-count{font-size:12px;color:#94a3b8;background:#f1f5f9;padding:2px 9px;border-radius:20px;font-weight:600}
+    .sa-filters{display:flex;gap:8px;flex-wrap:wrap;align-items:center;padding:12px 18px;border-bottom:1px solid #f1f5f9}
+    .sa-filters input,.sa-filters select{padding:7px 11px;border:1.5px solid #e2e8f0;border-radius:8px;font-size:13px;background:#fff;font-family:inherit;outline:none;color:#374151}
+    .sa-filters input:focus,.sa-filters select:focus{border-color:#a5b4fc}
+    .sa-filters input.sa-search{min-width:220px;flex:1}
+    .sa-table-wrap{overflow-x:auto}
+    table.sa-tbl{width:100%;border-collapse:collapse;font-size:13px}
+    table.sa-tbl th{padding:9px 14px;text-align:left;font-size:10.5px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:#94a3b8;border-bottom:1px solid #f1f5f9;white-space:nowrap;background:#fafafa}
+    table.sa-tbl td{padding:11px 14px;border-bottom:1px solid #f8fafc;vertical-align:middle}
+    table.sa-tbl tr:last-child td{border-bottom:none}
+    table.sa-tbl tbody tr:hover{background:#fafbfc}
+    .sa-tbl-name{font-weight:700;color:#0f172a;font-size:13px;line-height:1.3}
+    .sa-tbl-sub{font-size:11px;color:#94a3b8;margin-top:1px;font-family:monospace}
+    .tag{display:inline-block;padding:2px 9px;border-radius:20px;font-size:11px;font-weight:700;white-space:nowrap}
     .tag-green{background:#dcfce7;color:#166534}
     .tag-red{background:#fee2e2;color:#991b1b}
     .tag-blue{background:#dbeafe;color:#1e40af}
     .tag-amber{background:#fef3c7;color:#92400e}
     .tag-gray{background:#f1f5f9;color:#475569}
-    .action-btn{padding:5px 10px;border-radius:6px;font-size:11px;font-weight:600;cursor:pointer;border:1.5px solid #e2e8f0;background:#fff;font-family:inherit;margin-right:3px;white-space:nowrap;transition:background .12s}
-    .action-btn:hover{background:#f8fafc}
-    .action-btn.danger{border-color:#fecaca;color:#dc2626}
-    .action-btn.danger:hover{background:#fef2f2}
-    .action-btn.success{border-color:#bbf7d0;color:#16a34a}
-    .action-btn.success:hover{background:#f0fdf4}
-    .role-breakdown{font-size:11px;color:#94a3b8;margin-top:2px}
-    .trial-warn{color:#d97706;font-weight:700}
-    .trial-ok{color:#16a34a}
-    .trial-exp{color:#dc2626;font-weight:700}
-    .empty{padding:40px;text-align:center;color:#94a3b8;font-size:14px}
-    .loading-msg{padding:40px;text-align:center;color:#94a3b8}
+    .tag-indigo{background:#eef2ff;color:#4338ca}
+    .tag-violet{background:#f5f3ff;color:#6d28d9}
+    .trial-bar-wrap{display:flex;align-items:center;gap:6px;margin-top:3px}
+    .trial-bar-track{flex:1;height:4px;background:#e2e8f0;border-radius:999px;overflow:hidden;min-width:50px}
+    .trial-bar-fill{height:100%;border-radius:999px}
+
+    /* ── Row action buttons ── */
+    .row-acts{display:flex;align-items:center;gap:3px;flex-wrap:nowrap}
+    .ra{width:28px;height:28px;display:inline-flex;align-items:center;justify-content:center;border-radius:6px;font-size:13px;cursor:pointer;border:1.5px solid #e2e8f0;background:#fff;transition:background .1s,border-color .1s;flex-shrink:0;font-family:inherit}
+    .ra:hover{background:#f1f5f9;border-color:#cbd5e1}
+    .ra.danger{border-color:#fecaca}
+    .ra.danger:hover{background:#fef2f2;border-color:#fca5a5}
+    .ra.pay{border-color:#c7d2fe}
+    .ra.pay:hover{background:#eef2ff;border-color:#a5b4fc}
+    .ra.success{border-color:#bbf7d0}
+    .ra.success:hover{background:#f0fdf4;border-color:#86efac}
+
+    /* ── Empty / loading ── */
+    .sa-empty{padding:52px;text-align:center;color:#94a3b8;font-size:14px}
+    .sa-loading{padding:44px;text-align:center;color:#94a3b8;font-size:14px}
 
     /* ── Modal ── */
     .modal-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:100;align-items:flex-start;justify-content:center;padding:40px 16px;overflow-y:auto}
     .modal-overlay.open{display:flex}
-    .modal{background:#fff;border-radius:16px;padding:32px;width:100%;max-width:560px;box-shadow:0 24px 64px rgba(0,0,0,.3);margin:auto}
-    .modal h3{font-size:17px;font-weight:700;margin-bottom:16px}
+    .modal{background:#fff;border-radius:16px;padding:30px;width:100%;max-width:540px;box-shadow:0 24px 64px rgba(0,0,0,.3);margin:auto}
+    .modal h3{font-size:16px;font-weight:700;margin-bottom:14px;color:#0f172a}
     .modal-field{margin-bottom:14px}
     .modal-field label{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:#6b7280;display:block;margin-bottom:5px}
     .modal-field input,.modal-field textarea,.modal-field select{margin-bottom:0;padding:10px 14px}
-    .modal-field textarea{min-height:120px;resize:vertical}
-    .modal-actions{display:flex;gap:10px;margin-top:20px;justify-content:flex-end}
-    .btn-primary{padding:10px 22px;background:#0d1117;color:#fff;border:none;border-radius:9px;font-size:14px;font-weight:700;cursor:pointer;font-family:inherit}
-    .btn-primary:hover{background:#1f2937}
+    .modal-field textarea{min-height:110px;resize:vertical}
+    .modal-actions{display:flex;gap:10px;margin-top:18px;justify-content:flex-end}
+    .btn-primary{padding:10px 22px;background:#4f46e5;color:#fff;border:none;border-radius:9px;font-size:14px;font-weight:700;cursor:pointer;font-family:inherit}
+    .btn-primary:hover{background:#4338ca}
     .btn-primary:disabled{opacity:.6;cursor:not-allowed}
     .btn-cancel{padding:10px 18px;background:#fff;color:#374151;border:1.5px solid #e5e7eb;border-radius:9px;font-size:14px;font-weight:600;cursor:pointer;font-family:inherit}
     .btn-cancel:hover{background:#f8fafc}
@@ -125,108 +155,34 @@
     .detail-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:16px}
     .detail-item label{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:#94a3b8;display:block;margin-bottom:3px}
     .detail-item span{font-size:14px;color:#0d1117;font-weight:500}
-    .detail-divider{border:none;border-top:1px solid #e2e8f0;margin:16px 0}
-    .impersonate-banner{background:#fef3c7;border:1px solid #fde68a;border-radius:8px;padding:10px 14px;font-size:13px;color:#92400e;margin-bottom:14px}
-
-    /* ── Payment table ── */
-    .pay-amount{font-weight:700;color:#16a34a}
-
-    /* ── Notes ── */
+    .detail-divider{border:none;border-top:1px solid #e2e8f0;margin:14px 0}
     .notes-area{width:100%;min-height:80px;resize:vertical;border:1.5px solid #e2e8f0;border-radius:8px;padding:10px;font-size:13px;font-family:inherit;color:#374151}
-    .notes-area:focus{outline:none;border-color:#374151}
-
-    /* ── Mobile institution cards (hidden on desktop) ── */
-    .inst-cards{display:none;flex-direction:column;gap:10px;padding:12px}
-    .inst-card{background:#fff;border:1px solid #e2e8f0;border-radius:12px;padding:14px;cursor:pointer;transition:box-shadow .15s}
-    .inst-card:active{box-shadow:0 0 0 3px #e0e7ff}
-    .inst-card-top{display:flex;align-items:flex-start;justify-content:space-between;gap:8px;margin-bottom:8px}
-    .inst-card-name{font-size:15px;font-weight:700;color:#0d1117;line-height:1.3}
-    .inst-card-code{font-size:11px;font-family:monospace;color:#94a3b8;margin-top:2px}
-    .inst-card-badges{display:flex;gap:5px;flex-shrink:0;flex-wrap:wrap;justify-content:flex-end}
-    .inst-card-meta{display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:10px}
-    .inst-card-meta-item{font-size:12px;color:#64748b}
-    .inst-card-meta-item strong{display:block;font-size:13px;font-weight:700;color:#0d1117}
-    .inst-card-actions{display:flex;gap:6px;flex-wrap:wrap;border-top:1px solid #f1f5f9;padding-top:10px;margin-top:2px}
-    .inst-card-actions .action-btn{flex:1;min-width:auto;text-align:center;padding:7px 6px;font-size:12px}
-
-    /* ── Responsive breakpoints ── */
-    @media (max-width:640px) {
-      /* Topbar */
-      .topbar{padding:0 12px;height:auto;min-height:56px;flex-wrap:wrap;gap:0}
-      .topbar-left{height:56px}
-      .topbar h2{font-size:14px}
-      .topbar-right{display:flex;align-items:center;gap:6px;height:56px}
-      .user-chip-name{display:none}
-      .topbar-superadmin-badge{display:none}
-      .btn-sm{padding:6px 10px;font-size:12px}
-
-      /* Content */
-      .content{padding:12px}
-
-      /* Tabs */
-      .tabs{width:100%;overflow-x:auto;-webkit-overflow-scrolling:touch;gap:2px}
-      .tab{padding:8px 12px;font-size:12px;white-space:nowrap}
-
-      /* Stats */
-      .stats{grid-template-columns:repeat(2,1fr);gap:8px;margin-bottom:16px}
-      .stat{padding:12px}
-      .stat-val{font-size:22px}
-
-      /* Filters */
-      .filters{flex-direction:column;gap:8px}
-      .filters input,.filters select{width:100%;min-width:unset}
-
-      /* Hide desktop table, show mobile cards */
-      .table-card table{display:none}
-      .inst-cards{display:flex}
-
-      /* Modals */
-      .modal-overlay{padding:0;align-items:flex-end}
-      .modal{border-radius:20px 20px 0 0;max-width:100% !important;max-height:90vh;overflow-y:auto;padding:24px 18px}
-      .detail-grid{grid-template-columns:1fr 1fr}
-
-      /* Table-head (All Institutions label) */
-      .table-head{padding:12px}
-    }
-
-    @media (max-width:380px) {
-      .stats{grid-template-columns:repeat(2,1fr)}
-      .stat-val{font-size:17px}
-      .inst-card-meta{grid-template-columns:1fr}
-    }
-
-    /* ── Stats compact ── */
-    .stats{grid-template-columns:repeat(auto-fill,minmax(130px,1fr));gap:10px;margin-bottom:22px}
-    .stat{border-radius:12px;padding:14px 14px 12px;color:#fff;position:relative;overflow:hidden;box-shadow:0 3px 12px rgba(0,0,0,.15)}
-    .stat::after{content:'';position:absolute;top:-14px;right:-14px;width:64px;height:64px;border-radius:50%;background:rgba(255,255,255,.1);pointer-events:none}
-    .stat-icon{font-size:18px;margin-bottom:6px;opacity:.9;position:relative;z-index:1}
-    .stat-val{font-size:22px;font-weight:800;line-height:1;position:relative;z-index:1}
-    .stat-lbl{font-size:9.5px;font-weight:700;text-transform:uppercase;letter-spacing:.6px;opacity:.8;margin-top:4px;position:relative;z-index:1}
-
-    /* ── Institution card grid ── */
-    .inst-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(340px,1fr));gap:16px;margin-bottom:24px}
-    .inst-kard{background:#fff;border-radius:16px;box-shadow:0 2px 10px rgba(0,0,0,.07);overflow:hidden;display:flex;flex-direction:column;transition:box-shadow .15s,transform .15s}
-    .inst-kard:hover{box-shadow:0 6px 28px rgba(0,0,0,.12);transform:translateY(-1px)}
-    .inst-kard-header{padding:16px 18px 12px;display:flex;justify-content:space-between;align-items:flex-start;gap:10px}
-    .inst-kard-body{padding:4px 18px 12px;flex:1;border-top:1px solid #f1f5f9}
-    .inst-kard-footer{padding:10px 16px 12px;border-top:1px solid #f1f5f9;background:#f8fafc;display:flex;flex-wrap:wrap;gap:5px}
-    .inst-kard-name{font-size:15px;font-weight:800;color:#0f172a;line-height:1.2;margin-bottom:2px}
-    .inst-kard-code{font-size:10px;font-family:monospace;color:#94a3b8;font-weight:600;letter-spacing:.4px}
-    .inst-kard-row{display:flex;align-items:flex-start;gap:7px;font-size:12px;color:#64748b;margin-top:9px}
-    .inst-kard-row svg{flex-shrink:0;margin-top:1px}
-    .progress-track{height:5px;background:#e2e8f0;border-radius:999px;overflow:hidden;margin-top:6px}
-    .progress-fill{height:100%;border-radius:999px}
-
-    /* ── Payment adjuster ── */
+    .notes-area:focus{outline:none;border-color:#a5b4fc}
+    .pay-amount{font-weight:700;color:#16a34a}
     .pay-plan-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin:10px 0}
     .pay-plan-btn{padding:10px 6px;border:1.5px solid #e5e7eb;border-radius:9px;font-size:12px;font-weight:600;cursor:pointer;background:#f9fafb;font-family:inherit;transition:all .12s;text-align:center;line-height:1.3}
     .pay-plan-btn:hover{border-color:#a5b4fc;background:#eef2ff}
     .pay-plan-btn.selected{border-color:#4f46e5;background:#eef2ff;color:#4f46e5;box-shadow:0 0 0 2px #c7d2fe}
-    .pay-amount-display{font-size:28px;font-weight:800;color:#4f46e5;text-align:center;padding:10px 0 4px}
+    .pay-amount-display{font-size:26px;font-weight:800;color:#4f46e5;text-align:center;padding:8px 0 4px}
 
-    @media(max-width:640px){
-      .inst-grid{grid-template-columns:1fr}
-      .stats{grid-template-columns:repeat(3,1fr)}
+    /* ── Responsive ── */
+    @media (max-width:768px) {
+      #sa-sidebar{position:fixed;top:0;left:0;height:100%;transform:translateX(-100%);transition:transform .22s ease-in-out}
+      #sa-sidebar.open{transform:translateX(0)}
+      #sidebar-overlay.show{display:block}
+      .sa-topbar-menu{display:flex}
+      .sa-page{padding:14px}
+      .sa-stats{grid-template-columns:repeat(3,1fr);gap:8px}
+      .sa-stat{padding:12px}
+      .sa-stat-val{font-size:18px}
+      .sa-filters input.sa-search{min-width:140px}
+      table.sa-tbl td:nth-child(6),table.sa-tbl th:nth-child(6){display:none}
+      .modal-overlay{padding:0;align-items:flex-end}
+      .modal{border-radius:20px 20px 0 0;max-width:100%!important;max-height:90vh;overflow-y:auto;padding:22px 16px}
+    }
+    @media (max-width:480px) {
+      .sa-stats{grid-template-columns:repeat(2,1fr)}
+      table.sa-tbl td:nth-child(5),table.sa-tbl th:nth-child(5){display:none}
     }
   </style>
 </head>
@@ -247,7 +203,7 @@
       </svg>
       <div><h1>DIKLY</h1><p>Platform Administration</p></div>
     </div>
-    <div class="badge">🔒 SUPERADMIN ACCESS</div>
+    <div class="login-badge">🔒 SUPERADMIN ACCESS</div>
     <form onsubmit="doLogin(event)">
       <label for="em">Email</label>
       <input type="email" id="em" placeholder="Enter your email" required style="margin-bottom:14px">
@@ -262,42 +218,85 @@
 
 <!-- DASHBOARD -->
 <div id="dashboard">
-  <div class="topbar">
-    <div class="topbar-left">
-      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" style="width:32px;height:32px;border-radius:9px;flex-shrink:0">
-        <rect x="0" y="0" width="128" height="128" rx="28" fill="#3730a3"/>
-        <rect x="6" y="6" width="116" height="116" rx="22" fill="#4f46e5"/>
-        <rect x="30" y="28" width="17" height="72" rx="4" fill="#ffffff"/>
-        <polygon points="47,64 90,28 108,28 66,64" fill="#ffffff"/>
-        <polygon points="47,64 90,100 108,100 66,64" fill="#ffffff"/>
-        <circle cx="108" cy="16" r="6" fill="#818cf8"/>
-        <circle cx="120" cy="16" r="4" fill="#c7d2fe"/>
-      </svg>
-      <h2>Platform Admin</h2>
-      <span class="topbar-superadmin-badge">Superadmin</span>
+
+  <!-- Sidebar -->
+  <aside id="sa-sidebar">
+    <div class="sa-logo">
+      <div class="sa-logo-icon">
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" style="width:20px;height:20px">
+          <rect x="30" y="28" width="17" height="72" rx="4" fill="#fff"/>
+          <polygon points="47,64 90,28 108,28 66,64" fill="#fff"/>
+          <polygon points="47,64 90,100 108,100 66,64" fill="#fff"/>
+        </svg>
+      </div>
+      <div>
+        <div class="sa-logo-name">DIKLY</div>
+        <div class="sa-logo-sub">Platform Admin</div>
+      </div>
     </div>
-    <div class="topbar-right">
-      <span class="user-chip" id="user-chip">
-        <span class="user-chip-avatar" id="user-chip-avatar"></span>
-        <span class="user-chip-name" id="user-chip-name"></span>
-      </span>
-      <button class="btn-sm" onclick="exportCSV()">⬇ CSV</button>
-      <button class="btn-sm danger" onclick="doLogout()">Sign Out</button>
+
+    <nav class="sa-nav">
+      <div class="sa-nav-section">Platform</div>
+      <button class="sa-nav-btn active" id="nav-institutions" onclick="switchTab('institutions',this)">
+        <span class="sa-nav-icon">🏫</span> Institutions
+      </button>
+      <button class="sa-nav-btn" id="nav-payments" onclick="switchTab('payments',this)">
+        <span class="sa-nav-icon">💳</span> Payments
+      </button>
+      <button class="sa-nav-btn" id="nav-devices" onclick="switchTab('devices',this)">
+        <span class="sa-nav-icon">📟</span> Devices
+      </button>
+    </nav>
+
+    <div class="sa-sidebar-footer">
+      <div class="sa-user-row">
+        <div class="sa-avatar" id="sidebar-avatar"></div>
+        <span class="sa-user-name" id="sidebar-name"></span>
+        <span style="background:rgba(99,102,241,.25);color:#a5b4fc;border:1px solid rgba(99,102,241,.35);border-radius:20px;padding:1px 7px;font-size:9px;font-weight:800;letter-spacing:.5px;flex-shrink:0">SA</span>
+      </div>
+      <button class="sa-sign-out" onclick="doLogout()">Sign Out</button>
+    </div>
+  </aside>
+
+  <!-- Mobile sidebar overlay -->
+  <div id="sidebar-overlay" onclick="closeSidebar()"></div>
+
+  <!-- Main -->
+  <div id="sa-main">
+    <!-- Topbar -->
+    <div class="sa-topbar">
+      <button class="sa-topbar-menu" onclick="openSidebar()" aria-label="Menu">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+          <line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/>
+        </svg>
+      </button>
+      <div class="sa-topbar-title">
+        <h2 id="page-title">Institutions</h2>
+        <p id="page-desc">All registered institutions and companies</p>
+      </div>
+      <div class="sa-topbar-actions">
+        <button class="sa-btn" onclick="exportCSV()">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+          Export CSV
+        </button>
+        <button class="sa-btn" onclick="refreshCurrentTab()">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>
+          Refresh
+        </button>
+      </div>
+    </div>
+
+    <!-- Content -->
+    <div class="sa-page">
+      <div id="tab-institutions"><div class="sa-loading">Loading…</div></div>
+      <div id="tab-payments" style="display:none"><div class="sa-loading">Loading…</div></div>
+      <div id="tab-devices" style="display:none"><div class="sa-loading">Loading…</div></div>
     </div>
   </div>
-  <div class="content">
-    <div class="tabs">
-      <button class="tab active" onclick="switchTab('institutions',this)">🏫 Institutions</button>
-      <button class="tab" onclick="switchTab('payments',this)">💳 Payments</button>
-      <button class="tab" onclick="switchTab('devices',this)">📟 Devices</button>
-    </div>
-    <div id="tab-institutions"><div class="loading-msg">Loading…</div></div>
-    <div id="tab-payments" style="display:none"><div class="loading-msg">Loading…</div></div>
-    <div id="tab-devices" style="display:none"><div class="loading-msg">Loading…</div></div>
-  </div>
+
 </div>
 
-<!-- EMAIL MODAL -->
+<!-- ── EMAIL MODAL ── -->
 <div class="modal-overlay" id="email-modal">
   <div class="modal">
     <h3>✉️ Email Institution Admin</h3>
@@ -321,7 +320,7 @@
   </div>
 </div>
 
-<!-- DETAIL MODAL -->
+<!-- ── DETAIL MODAL ── -->
 <div class="modal-overlay" id="detail-modal">
   <div class="modal" style="max-width:620px">
     <h3 id="detail-title">Institution Details</h3>
@@ -332,7 +331,7 @@
   </div>
 </div>
 
-<!-- NOTES MODAL -->
+<!-- ── NOTES MODAL ── -->
 <div class="modal-overlay" id="notes-modal">
   <div class="modal" style="max-width:460px">
     <h3>📝 Notes</h3>
@@ -346,20 +345,17 @@
   </div>
 </div>
 
-<!-- PAYMENT ADJUSTER MODAL -->
+<!-- ── PAYMENT ADJUSTER MODAL ── -->
 <div class="modal-overlay" id="pay-modal">
   <div class="modal" style="max-width:460px">
     <h3>💰 Record Payment</h3>
-    <p style="font-size:13px;color:#64748b;margin-bottom:16px" id="pay-modal-company"></p>
-
+    <p style="font-size:13px;color:#64748b;margin-bottom:14px" id="pay-modal-company"></p>
     <div class="pay-plan-grid" id="pay-plan-grid">
       <button class="pay-plan-btn selected" data-plan="semester" data-amount="300" onclick="selectPayPlan(this)">📚 Semester<br><span style="font-size:11px;color:#6b7280;font-weight:500">16 weeks</span></button>
       <button class="pay-plan-btn" data-plan="monthly" data-amount="150" onclick="selectPayPlan(this)">📅 Monthly<br><span style="font-size:11px;color:#6b7280;font-weight:500">30 days</span></button>
       <button class="pay-plan-btn" data-plan="yearly" data-amount="1200" onclick="selectPayPlan(this)">🏆 Annual<br><span style="font-size:11px;color:#6b7280;font-weight:500">365 days</span></button>
     </div>
-
     <div class="pay-amount-display" id="pay-amount-display">GHS 300</div>
-
     <div class="modal-field">
       <label>Amount (GHS)</label>
       <input type="number" id="pay-amount" value="300" min="1" step="0.01" oninput="document.getElementById('pay-amount-display').textContent='GHS '+this.value">
@@ -368,7 +364,7 @@
       <label>Reference <span style="font-size:10px;font-weight:500;color:#94a3b8">(leave blank to auto-generate)</span></label>
       <input type="text" id="pay-reference" placeholder="e.g. PAY-2026-001">
     </div>
-    <div style="display:flex;align-items:center;gap:8px;margin-bottom:14px;font-size:13px;color:#374151">
+    <div style="display:flex;align-items:center;gap:8px;margin-bottom:14px;font-size:13px">
       <input type="checkbox" id="pay-activate" checked style="width:auto;padding:0;border:none;accent-color:#4f46e5">
       <label for="pay-activate" style="font-size:13px;font-weight:500;color:#374151;margin:0;text-transform:none;letter-spacing:0">Activate / extend subscription after recording</label>
     </div>
@@ -386,6 +382,7 @@ let allCompanies = [];
 let currentEmailId = '';
 let currentNotesId = '';
 let currentPayId   = '';
+let currentTab     = 'institutions';
 
 // ── Auth ──────────────────────────────────────────────────────────────────────
 async function doLogin(e) {
@@ -403,16 +400,20 @@ async function doLogin(e) {
     if (!r.ok) throw new Error(d.error || 'Login failed');
     SA_TOKEN = d.token;
     localStorage.setItem('sa_token', SA_TOKEN);
-    const name = d.user.name || d.user.email || 'SA';
-    const avatarEl = document.getElementById('user-chip-avatar');
-    const nameEl   = document.getElementById('user-chip-name');
-    if (avatarEl) avatarEl.textContent = name[0].toUpperCase();
-    if (nameEl)   nameEl.textContent   = name;
+    setUserDisplay(d.user.name || d.user.email || 'SA');
     showDashboard();
   } catch(ex) {
     errEl.textContent = ex.message; errEl.style.display = 'block';
     btn.disabled = false; btn.textContent = 'Sign In';
   }
+}
+
+function setUserDisplay(name) {
+  const initial = name[0].toUpperCase();
+  const avatarEl = document.getElementById('sidebar-avatar');
+  const nameEl   = document.getElementById('sidebar-name');
+  if (avatarEl) avatarEl.textContent = initial;
+  if (nameEl)   nameEl.textContent   = name;
 }
 
 function doLogout() {
@@ -431,71 +432,308 @@ async function api(path, opts={}) {
 // ── Dashboard ─────────────────────────────────────────────────────────────────
 async function showDashboard() {
   document.getElementById('login-screen').style.display = 'none';
-  document.getElementById('dashboard').style.display = 'block';
+  document.getElementById('dashboard').style.display = 'flex';
   loadInstitutions();
 }
 
+const PAGE_META = {
+  institutions: { title:'Institutions', desc:'All registered academic and corporate institutions' },
+  payments:     { title:'Payments',     desc:'Revenue and payment transaction history' },
+  devices:      { title:'Devices',      desc:'ESP32 attendance hardware management' },
+};
+
 function switchTab(tab, btn) {
-  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
-  btn.classList.add('active');
-  document.getElementById('tab-institutions').style.display = tab === 'institutions' ? 'block' : 'none';
-  document.getElementById('tab-payments').style.display = tab === 'payments' ? 'block' : 'none';
-  document.getElementById('tab-devices').style.display = tab === 'devices' ? 'block' : 'none';
+  currentTab = tab;
+  document.querySelectorAll('.sa-nav-btn').forEach(b => b.classList.remove('active'));
+  if (btn) btn.classList.add('active');
+  ['institutions','payments','devices'].forEach(t => {
+    document.getElementById('tab-'+t).style.display = t === tab ? 'block' : 'none';
+  });
+  const meta = PAGE_META[tab] || {};
+  document.getElementById('page-title').textContent = meta.title || tab;
+  document.getElementById('page-desc').textContent  = meta.desc  || '';
   if (tab === 'payments') loadPayments();
-  if (tab === 'devices') loadDevices();
+  if (tab === 'devices')  loadDevices();
+}
+
+function refreshCurrentTab() {
+  if (currentTab === 'institutions') loadInstitutions();
+  else if (currentTab === 'payments') loadPayments();
+  else if (currentTab === 'devices')  loadDevices();
+}
+
+// ── Mobile sidebar ─────────────────────────────────────────────────────────────
+function openSidebar() {
+  document.getElementById('sa-sidebar').classList.add('open');
+  document.getElementById('sidebar-overlay').classList.add('show');
+}
+function closeSidebar() {
+  document.getElementById('sa-sidebar').classList.remove('open');
+  document.getElementById('sidebar-overlay').classList.remove('show');
+}
+
+// ── Institutions Tab ──────────────────────────────────────────────────────────
+async function loadInstitutions() {
+  document.getElementById('tab-institutions').innerHTML = '<div class="sa-loading">Loading platform data…</div>';
+  try {
+    const data = await api('/api/superadmin/overview');
+    allCompanies = data.companies || [];
+    renderInstitutions(allCompanies, data);
+  } catch(ex) {
+    document.getElementById('tab-institutions').innerHTML = `<div class="sa-empty" style="color:#dc2626">Error: ${ex.message}</div>`;
+  }
+}
+
+function renderInstitutions(cos, data) {
+  const total   = cos.length;
+  const active  = cos.filter(c=>c.isActive).length;
+  const trial   = cos.filter(c=>c.isTrialActive).length;
+  const expired = cos.filter(c=>!c.isTrialActive && c.subscriptionStatus!=='active').length;
+  const sub     = cos.filter(c=>c.subscriptionStatus==='active').length;
+  const rev     = (data && data.totalRevenue) ? data.totalRevenue : cos.reduce((s,c)=>s+(c.revenue||0),0);
+
+  const _stat = (icon, val, lbl, cls='') =>
+    `<div class="sa-stat ${cls}"><div class="sa-stat-icon">${icon}</div><div class="sa-stat-val">${val}</div><div class="sa-stat-lbl">${lbl}</div></div>`;
+
+  document.getElementById('tab-institutions').innerHTML = `
+    <div class="sa-stats">
+      ${_stat('🏫', total,   'Total')}
+      ${_stat('✓',  active,  'Active',   'accent-green')}
+      ${_stat('⏳', trial,   'On Trial', 'accent-amber')}
+      ${_stat('✕',  expired, 'Expired',  'accent-red')}
+      ${_stat('💳', sub,     'Subscribed','accent-blue')}
+      ${_stat('₵',  'GHS&nbsp;'+rev.toLocaleString(), 'Revenue', 'accent-green')}
+    </div>
+    <div class="sa-table-card">
+      <div class="sa-table-head">
+        <h3>All Institutions</h3>
+        <span class="sa-count">${total}</span>
+      </div>
+      <div class="sa-filters">
+        <input class="sa-search" type="text" id="search-input" placeholder="🔍 Search by name, code or admin email…" oninput="filterInstitutions()">
+        <select id="filter-mode" onchange="filterInstitutions()">
+          <option value="">All modes</option>
+          <option value="academic">Academic</option>
+          <option value="corporate">Corporate</option>
+        </select>
+        <select id="filter-status" onchange="filterInstitutions()">
+          <option value="">All statuses</option>
+          <option value="active">Active</option>
+          <option value="inactive">Inactive</option>
+          <option value="trial">On Trial</option>
+          <option value="subscribed">Subscribed</option>
+        </select>
+      </div>
+      <div class="sa-table-wrap" id="institutions-table-wrap">
+        ${buildInstitutionTable(cos)}
+      </div>
+    </div>`;
+}
+
+function buildInstitutionTable(cos) {
+  if (!cos.length) return '<div class="sa-empty">No institutions found.</div>';
+
+  const rows = cos.map(c => {
+    const rc = c.roleCounts || {};
+    const nameEsc  = esc(c.name).replace(/'/g,"\\'");
+    const emailEsc = esc(c.adminEmail||'').replace(/'/g,"\\'");
+    const notesEsc = esc(c.superadminNotes||'').replace(/'/g,"\\'");
+
+    const isSubscribed = c.subscriptionStatus === 'active';
+    const isExpired    = !c.isTrialActive && !isSubscribed;
+    const daysLeft     = c.trialDaysRemaining || 0;
+    const barPct       = Math.min(100,Math.max(0, isSubscribed ? 100 : (daysLeft/30)*100));
+    const barColor     = isExpired ? '#dc2626' : daysLeft<=3 ? '#f59e0b' : isSubscribed ? '#4f46e5' : '#16a34a';
+
+    const subBadge = isSubscribed
+      ? '<span class="tag tag-indigo">✓ Subscribed</span>'
+      : isExpired
+        ? '<span class="tag tag-red">✕ Expired</span>'
+        : daysLeft<=3
+          ? `<span class="tag tag-amber">⚠ ${daysLeft}d</span>`
+          : `<span class="tag tag-green">⏱ ${daysLeft}d</span>`;
+
+    const expDate = c.trialEndDate ? new Date(c.trialEndDate).toLocaleDateString('en-GB',{day:'numeric',month:'short',year:'2-digit'}) : '—';
+
+    const modeBadge   = `<span class="tag ${c.mode==='academic'?'tag-blue':'tag-violet'}">${c.mode==='academic'?'📚':'🏢'} ${c.mode}</span>`;
+    const activeBadge = `<span class="tag ${c.isActive?'tag-green':'tag-red'}">${c.isActive?'● Active':'○ Off'}</span>`;
+
+    const userBreakdown = c.mode==='academic'
+      ? `${rc.lecturer||0}L · ${rc.student||0}S`
+      : `${rc.manager||0}M · ${rc.employee||0}E`;
+
+    const toggleBtn = c.isActive
+      ? `<button class="ra danger" title="Deactivate" onclick="toggleCompany('${c._id}',true,'${nameEsc}')">⏸</button>`
+      : `<button class="ra success" title="Activate"   onclick="toggleCompany('${c._id}',false,'${nameEsc}')">▶</button>`;
+
+    return `<tr>
+      <td>
+        <div class="sa-tbl-name" style="cursor:pointer" onclick="showDetail('${c._id}')">${esc(c.name)}</div>
+        <div class="sa-tbl-sub">${c.institutionCode||'—'}</div>
+      </td>
+      <td>${modeBadge}</td>
+      <td>${activeBadge}</td>
+      <td>
+        ${subBadge}
+        <div class="trial-bar-wrap">
+          <div class="trial-bar-track"><div class="trial-bar-fill" style="width:${barPct}%;background:${barColor}"></div></div>
+          <span style="font-size:10px;color:#94a3b8;flex-shrink:0">${expDate}</span>
+        </div>
+      </td>
+      <td>
+        <span style="font-size:13px;font-weight:700;color:#0f172a">${c.userCount||0}</span>
+        <div style="font-size:10.5px;color:#94a3b8;margin-top:1px">${userBreakdown}</div>
+      </td>
+      <td>
+        <div style="font-size:12px;font-weight:600;color:#374151">${esc(c.adminName||'—')}</div>
+        <div style="font-size:11px;color:#94a3b8;margin-top:1px">${esc(c.adminEmail||'—')}</div>
+      </td>
+      <td>
+        <div class="row-acts">
+          ${toggleBtn}
+          <button class="ra" title="Extend Trial"   onclick="extendTrial('${c._id}','${nameEsc}')">⏱</button>
+          <button class="ra pay" title="Record Payment" onclick="openPaymentAdjuster('${c._id}','${nameEsc}','${c.mode}')">💰</button>
+          <button class="ra" title="Send Email"     onclick="openEmail('${c._id}','${nameEsc}','${emailEsc}')">✉️</button>
+          <button class="ra" title="Notes"          onclick="openNotes('${c._id}','${nameEsc}','${notesEsc}')">📝</button>
+          <button class="ra" title="Access as Admin" onclick="impersonate('${c._id}','${nameEsc}')">🔑</button>
+          <button class="ra danger" title="Delete"  onclick="deleteInstitution('${c._id}','${nameEsc}')">🗑</button>
+        </div>
+      </td>
+    </tr>`;
+  }).join('');
+
+  return `<table class="sa-tbl">
+    <thead><tr>
+      <th>Institution</th>
+      <th>Mode</th>
+      <th>Status</th>
+      <th>Subscription</th>
+      <th>Users</th>
+      <th>Admin</th>
+      <th>Actions</th>
+    </tr></thead>
+    <tbody>${rows}</tbody>
+  </table>`;
+}
+
+function filterInstitutions() {
+  const q      = (document.getElementById('search-input')?.value || '').toLowerCase();
+  const mode   = document.getElementById('filter-mode')?.value || '';
+  const status = document.getElementById('filter-status')?.value || '';
+  const filtered = allCompanies.filter(c => {
+    const matchQ = !q || c.name.toLowerCase().includes(q) || (c.institutionCode||'').toLowerCase().includes(q) || (c.adminEmail||'').toLowerCase().includes(q);
+    const matchMode = !mode || c.mode === mode;
+    const matchStatus = !status ||
+      (status==='active'     && c.isActive) ||
+      (status==='inactive'   && !c.isActive) ||
+      (status==='trial'      && c.isTrialActive) ||
+      (status==='subscribed' && c.subscriptionStatus==='active');
+    return matchQ && matchMode && matchStatus;
+  });
+  document.getElementById('institutions-table-wrap').innerHTML = buildInstitutionTable(filtered);
+}
+
+// ── Payments Tab ──────────────────────────────────────────────────────────────
+async function loadPayments() {
+  document.getElementById('tab-payments').innerHTML = '<div class="sa-loading">Loading payment history…</div>';
+  try {
+    const data = await api('/api/superadmin/payments');
+    const pays = data.payments || [];
+    const total = data.totalRevenue || 0;
+
+    const _stat = (icon, val, lbl, cls='') =>
+      `<div class="sa-stat ${cls}"><div class="sa-stat-icon">${icon}</div><div class="sa-stat-val">${val}</div><div class="sa-stat-lbl">${lbl}</div></div>`;
+
+    document.getElementById('tab-payments').innerHTML = `
+      <div class="sa-stats" style="grid-template-columns:repeat(2,minmax(140px,240px))">
+        ${_stat('₵', 'GHS&nbsp;'+total.toLocaleString(), 'Total Revenue', 'accent-green')}
+        ${_stat('📋', pays.length, 'Transactions')}
+      </div>
+      <div class="sa-table-card">
+        <div class="sa-table-head">
+          <h3>Payment History</h3>
+          <span class="sa-count">${pays.length}</span>
+        </div>
+        <div class="sa-table-wrap">
+          <table class="sa-tbl">
+            <thead><tr>
+              <th>Institution</th><th>Amount</th><th>Plan</th><th>Reference</th><th>Date</th>
+            </tr></thead>
+            <tbody>
+              ${pays.length===0
+                ? `<tr><td colspan="5" class="sa-empty">No payments yet.</td></tr>`
+                : pays.map(p => {
+                    const date = p.paidAt ? new Date(p.paidAt).toLocaleDateString('en-GB',{day:'numeric',month:'short',year:'numeric'}) : '—';
+                    return `<tr>
+                      <td>
+                        <div style="font-weight:600;color:#0f172a">${esc(p.company?.name||'Unknown')}</div>
+                        <div style="font-size:11px;color:#94a3b8">${p.company?.institutionCode||''}</div>
+                      </td>
+                      <td class="pay-amount">GHS ${(p.amount||0).toLocaleString()}</td>
+                      <td><span class="tag tag-blue">${p.plan||'—'}</span></td>
+                      <td style="font-family:monospace;font-size:12px;color:#64748b">${esc(p.reference||'—')}</td>
+                      <td style="font-size:12px;color:#64748b">${date}</td>
+                    </tr>`;
+                  }).join('')}
+            </tbody>
+          </table>
+        </div>
+      </div>`;
+  } catch(ex) {
+    document.getElementById('tab-payments').innerHTML = `<div class="sa-empty" style="color:#dc2626">Error: ${ex.message}</div>`;
+  }
 }
 
 // ── Devices Tab ───────────────────────────────────────────────────────────────
 async function loadDevices() {
   const wrap = document.getElementById('tab-devices');
-  wrap.innerHTML = '<div class="loading-msg">Loading devices…</div>';
+  wrap.innerHTML = '<div class="sa-loading">Loading devices…</div>';
   try {
     const data = await api('/api/superadmin/devices');
     const devices = data.devices || [];
-    const orphaned = devices.filter(d => d.isOrphaned);
+    const orphaned   = devices.filter(d => d.isOrphaned);
     const registered = devices.filter(d => !d.isOrphaned);
 
+    const _stat = (icon, val, lbl, cls='') =>
+      `<div class="sa-stat ${cls}"><div class="sa-stat-icon">${icon}</div><div class="sa-stat-val">${val}</div><div class="sa-stat-lbl">${lbl}</div></div>`;
+
     wrap.innerHTML = `
-      <div class="stats" style="margin-bottom:20px">
-        <div class="stat"><div class="stat-val">${devices.length}</div><div class="stat-lbl">Total Devices</div></div>
-        <div class="stat"><div class="stat-val" style="color:#16a34a">${registered.length}</div><div class="stat-lbl">Registered</div></div>
-        <div class="stat"><div class="stat-val" style="color:#dc2626">${orphaned.length}</div><div class="stat-lbl">Orphaned</div></div>
+      <div class="sa-stats" style="grid-template-columns:repeat(3,minmax(120px,180px))">
+        ${_stat('📟', devices.length, 'Total')}
+        ${_stat('✓', registered.length, 'Registered', 'accent-green')}
+        ${_stat('⚠', orphaned.length, 'Orphaned', 'accent-red')}
       </div>
       ${orphaned.length ? `
-      <div style="background:#fef2f2;border:1px solid #fca5a5;border-radius:10px;padding:12px 16px;margin-bottom:20px;font-size:13px;color:#991b1b">
-        <strong>⚠️ ${orphaned.length} orphaned device${orphaned.length !== 1 ? 's' : ''}</strong> — registered to institutions that no longer exist. Delete them to free the hardware for re-registration.
+      <div style="background:#fef2f2;border:1px solid #fca5a5;border-radius:10px;padding:12px 16px;margin-bottom:16px;font-size:13px;color:#991b1b">
+        <strong>⚠️ ${orphaned.length} orphaned device${orphaned.length!==1?'s':''}</strong> — registered to institutions that no longer exist. Delete them to free the hardware for re-registration.
       </div>` : ''}
-      <div class="table-card">
-        <div class="table-head">
+      <div class="sa-table-card">
+        <div class="sa-table-head">
           <h3>All Devices</h3>
-          <input type="text" id="device-search" placeholder="🔍 Search by device ID or name…" oninput="filterDevices()" style="padding:6px 10px;border:1px solid #e2e8f0;border-radius:6px;font-size:13px;width:240px">
+          <input type="text" id="device-search" placeholder="🔍 Search…" oninput="filterDevices()" style="padding:6px 10px;border:1px solid #e2e8f0;border-radius:6px;font-size:13px;width:200px">
         </div>
-        <div id="devices-list">
+        <div class="sa-table-wrap" id="devices-list">
           ${buildDeviceRows(devices)}
         </div>
       </div>`;
-
     window._allDevices = devices;
-  } catch (e) {
-    wrap.innerHTML = `<div class="empty" style="color:#dc2626">Error: ${e.message}</div>`;
+  } catch(e) {
+    wrap.innerHTML = `<div class="sa-empty" style="color:#dc2626">Error: ${e.message}</div>`;
   }
 }
 
 function filterDevices() {
   const q = (document.getElementById('device-search')?.value || '').toLowerCase();
   const filtered = (window._allDevices || []).filter(d =>
-    !q ||
-    (d.deviceId || '').toLowerCase().includes(q) ||
-    (d.deviceName || '').toLowerCase().includes(q) ||
-    (d.companyName || '').toLowerCase().includes(q)
+    !q || (d.deviceId||'').toLowerCase().includes(q) || (d.deviceName||'').toLowerCase().includes(q) || (d.companyName||'').toLowerCase().includes(q)
   );
   const el = document.getElementById('devices-list');
   if (el) el.innerHTML = buildDeviceRows(filtered);
 }
 
 function buildDeviceRows(devices) {
-  if (!devices.length) return '<div class="empty">No devices found.</div>';
-  return `<table>
+  if (!devices.length) return '<div class="sa-empty">No devices found.</div>';
+  return `<table class="sa-tbl">
     <thead><tr>
       <th>Device ID</th><th>Name</th><th>Institution</th><th>Status</th><th>Last Seen</th><th>Action</th>
     </tr></thead>
@@ -503,23 +741,22 @@ function buildDeviceRows(devices) {
       ${devices.map(d => {
         const isOrphaned = d.isOrphaned;
         const lastSeen = d.lastHeartbeat ? new Date(d.lastHeartbeat).toLocaleString() : 'Never';
-        const now = Date.now();
-        const online = d.lastHeartbeat && (now - new Date(d.lastHeartbeat).getTime()) < 30000;
-        const statusDot = online
-          ? '<span style="color:#16a34a;font-weight:600">● Online</span>'
-          : '<span style="color:#94a3b8">○ Offline</span>';
+        const online = d.lastHeartbeat && (Date.now() - new Date(d.lastHeartbeat).getTime()) < 30000;
+        const statusBadge = online
+          ? '<span class="tag tag-green">● Online</span>'
+          : '<span class="tag tag-gray">○ Offline</span>';
         const instCell = isOrphaned
           ? '<span style="color:#dc2626;font-weight:600">⚠️ Orphaned</span>'
-          : `<span style="font-weight:600">${d.companyName || '—'}</span>${d.companyCode ? `<br><span style="font-size:11px;color:#64748b">${d.companyCode}</span>` : ''}`;
-        return `<tr style="${isOrphaned ? 'background:#fef2f2' : ''}">
+          : `<span style="font-weight:600">${d.companyName||'—'}</span>${d.companyCode?`<div style="font-size:11px;color:#94a3b8">${d.companyCode}</div>`:''}`;
+        return `<tr style="${isOrphaned?'background:#fef9f9':''}">
           <td style="font-family:monospace;font-size:12px">${d.deviceId}</td>
-          <td>${d.deviceName || '<span style="color:#94a3b8">—</span>'}</td>
+          <td>${d.deviceName||'<span style="color:#94a3b8">—</span>'}</td>
           <td>${instCell}</td>
-          <td>${statusDot}</td>
+          <td>${statusBadge}</td>
           <td style="font-size:12px;color:#64748b">${lastSeen}</td>
           <td>
             <button onclick="forceDeleteDevice('${d._id}','${(d.deviceName||d.deviceId).replace(/'/g,'')}')"
-              style="background:#fee2e2;color:#dc2626;border:1px solid #fca5a5;border-radius:6px;padding:4px 10px;font-size:12px;font-weight:600;cursor:pointer">
+              class="ra danger" title="Remove device" style="width:auto;padding:5px 10px;font-size:12px;font-weight:600;border-radius:7px">
               🗑 Remove
             </button>
           </td>
@@ -530,177 +767,12 @@ function buildDeviceRows(devices) {
 }
 
 async function forceDeleteDevice(id, name) {
-  if (!confirm(`Remove device "${name}"?\n\nThe ESP32 will factory-reset on its next power-on. This frees it to be registered to a new institution.`)) return;
+  if (!confirm(`Remove device "${name}"?\n\nThe ESP32 will factory-reset on its next power-on.`)) return;
   try {
-    const result = await api(`/api/superadmin/devices/${id}`, { method: 'DELETE' });
+    const result = await api(`/api/superadmin/devices/${id}`, { method:'DELETE' });
     alert(result.message || 'Device removed.');
     loadDevices();
-  } catch (e) {
-    alert('Error: ' + e.message);
-  }
-}
-
-// ── Institutions Tab ──────────────────────────────────────────────────────────
-async function loadInstitutions() {
-  document.getElementById('tab-institutions').innerHTML = '<div class="loading-msg">Loading platform data…</div>';
-  try {
-    const data = await api('/api/superadmin/overview');
-    allCompanies = data.companies || [];
-    renderInstitutions(allCompanies, data);
-  } catch(ex) {
-    document.getElementById('tab-institutions').innerHTML = `<div class="empty" style="color:#dc2626">Error: ${ex.message}</div>`;
-  }
-}
-
-function renderInstitutions(cos, data) {
-  const total = cos.length;
-  const active = cos.filter(c=>c.isActive).length;
-  const trial = cos.filter(c=>c.isTrialActive).length;
-  const expired = cos.filter(c=>!c.isTrialActive && c.subscriptionStatus!=='active').length;
-  const sub = cos.filter(c=>c.subscriptionStatus==='active').length;
-  const acad = cos.filter(c=>c.mode==='academic').length;
-  const corp = cos.filter(c=>c.mode==='corporate').length;
-  const rev = (data && data.totalRevenue) ? data.totalRevenue : cos.reduce((s,c)=>s+(c.revenue||0),0);
-  // Count expired lecturers across all institutions
-  const expiredLecturers = cos.filter(c=>!c.isTrialActive && c.subscriptionStatus!=='active').reduce((s,c)=>s+((c.roleCounts&&c.roleCounts.lecturer)||0),0);
-
-  const _sc = (icon, val, lbl, grad) =>
-    `<div class="stat" style="background:${grad}">
-       <div class="stat-icon">${icon}</div>
-       <div class="stat-val">${val}</div>
-       <div class="stat-lbl">${lbl}</div>
-     </div>`;
-
-  document.getElementById('tab-institutions').innerHTML = `
-    <div class="stats">
-      ${_sc('🏫', total,            'Institutions',  'linear-gradient(135deg,#4f46e5,#7c3aed)')}
-      ${_sc('✓',  active,           'Active',         'linear-gradient(135deg,#059669,#10b981)')}
-      ${_sc('⏳', trial,            'On Trial',       'linear-gradient(135deg,#d97706,#f59e0b)')}
-      ${_sc('✕',  expired,          'Expired',        'linear-gradient(135deg,#dc2626,#ef4444)')}
-      ${_sc('👨‍🏫', expiredLecturers,'Exp. Lect',     'linear-gradient(135deg,#c2410c,#ea580c)')}
-      ${_sc('💳', sub,              'Subscribed',     'linear-gradient(135deg,#1d4ed8,#3b82f6)')}
-      ${_sc('₵',  'GHS&nbsp;'+rev.toLocaleString(), 'Revenue', 'linear-gradient(135deg,#047857,#059669)')}
-      ${_sc('📚', acad,             'Academic',       'linear-gradient(135deg,#7c3aed,#a855f7)')}
-      ${_sc('🏢', corp,             'Corporate',      'linear-gradient(135deg,#0891b2,#06b6d4)')}
-    </div>
-
-    <div class="filters">
-      <input type="text" id="search-input" placeholder="🔍 Search by name or code…" oninput="filterInstitutions()">
-      <select id="filter-mode" onchange="filterInstitutions()">
-        <option value="">All modes</option>
-        <option value="academic">Academic</option>
-        <option value="corporate">Corporate</option>
-      </select>
-      <select id="filter-status" onchange="filterInstitutions()">
-        <option value="">All statuses</option>
-        <option value="active">Active</option>
-        <option value="inactive">Inactive</option>
-        <option value="trial">On Trial</option>
-        <option value="subscribed">Subscribed</option>
-      </select>
-      <div style="margin-left:auto;font-size:12px;color:#94a3b8;align-self:center">${cos.length} institutions</div>
-      <button onclick="loadInstitutions()" style="padding:7px 14px;border:1.5px solid #e2e8f0;border-radius:8px;background:#fff;font-size:12px;font-weight:600;cursor:pointer;color:#64748b;display:inline-flex;align-items:center;gap:5px"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>Refresh</button>
-    </div>
-
-    <div id="institutions-table-wrap">${buildInstitutionCards(cos)}</div>`;
-}
-
-function buildInstitutionCards(cos) {
-  if (!cos.length) return '<div class="empty" style="padding:60px;text-align:center;color:#94a3b8;background:#fff;border-radius:16px">No institutions found.</div>';
-
-  return `<div class="inst-grid">${cos.map(c => {
-    const rc = c.roleCounts || {};
-    const nameEsc = esc(c.name).replace(/'/g,"\\'");
-    const emailEsc = esc(c.adminEmail||'').replace(/'/g,"\\'");
-    const notesEsc = esc(c.superadminNotes||'').replace(/'/g,"\\'");
-
-    const breakdown = c.mode === 'academic'
-      ? `${rc.hod||0} HODs · ${rc.lecturer||0} lect · ${rc.student||0} students`
-      : `${rc.manager||0} mgrs · ${rc.employee||0} employees`;
-
-    const isSubscribed = c.subscriptionStatus === 'active';
-    const isExpired    = !c.isTrialActive && !isSubscribed;
-    const daysLeft     = c.trialDaysRemaining || 0;
-    const expDate      = c.trialEndDate ? new Date(c.trialEndDate).toLocaleDateString('en-GB',{day:'numeric',month:'short',year:'numeric'}) : '—';
-    const trialPct     = Math.min(100, Math.max(0, isSubscribed ? 100 : (daysLeft / 30) * 100));
-    const barColor     = isExpired ? '#dc2626' : daysLeft <= 3 ? '#f59e0b' : isSubscribed ? '#4f46e5' : '#16a34a';
-
-    const trialBadge = isSubscribed
-      ? `<span style="background:#eef2ff;color:#4f46e5;padding:2px 9px;border-radius:20px;font-size:10px;font-weight:800">✓ Subscribed</span>`
-      : isExpired
-        ? `<span style="background:#fee2e2;color:#dc2626;padding:2px 9px;border-radius:20px;font-size:10px;font-weight:800">✕ Expired</span>`
-        : daysLeft <= 3
-          ? `<span style="background:#fef3c7;color:#b45309;padding:2px 9px;border-radius:20px;font-size:10px;font-weight:800">⚠ ${daysLeft}d left</span>`
-          : `<span style="background:#dcfce7;color:#166534;padding:2px 9px;border-radius:20px;font-size:10px;font-weight:800">⏱ ${daysLeft}d left</span>`;
-
-    const modeBadge  = `<span class="tag ${c.mode==='academic'?'tag-blue':'tag-green'}" style="font-size:10px">${c.mode}</span>`;
-    const activeBadge= `<span class="tag ${c.isActive?'tag-green':'tag-red'}" style="font-size:10px">${c.isActive?'● Active':'○ Inactive'}</span>`;
-
-    return `
-    <div class="inst-kard">
-      <div class="inst-kard-header" onclick="showDetail('${c._id}')" style="cursor:pointer">
-        <div style="min-width:0">
-          <div class="inst-kard-name">${esc(c.name)}</div>
-          <div class="inst-kard-code">${c.institutionCode||'—'}</div>
-          <div style="display:flex;gap:5px;flex-wrap:wrap;margin-top:8px">${modeBadge}${activeBadge}</div>
-        </div>
-        <div style="text-align:right;flex-shrink:0">
-          ${trialBadge}
-          <div style="font-size:10px;color:#94a3b8;margin-top:4px">exp ${expDate}</div>
-          <div class="progress-track" style="width:90px;margin-top:5px">
-            <div class="progress-fill" style="width:${trialPct}%;background:${barColor}"></div>
-          </div>
-        </div>
-      </div>
-
-      <div class="inst-kard-body">
-        <div class="inst-kard-row">
-          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#94a3b8" stroke-width="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
-          <div>
-            <div style="font-weight:700;color:#0f172a;font-size:12px">${esc(c.adminName||'—')}</div>
-            <div style="color:#94a3b8;font-size:11px">${esc(c.adminEmail||'—')}</div>
-          </div>
-        </div>
-        <div class="inst-kard-row">
-          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#94a3b8" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
-          <div>
-            <span style="font-weight:700;color:#0f172a;font-size:12px">${c.userCount||0} users</span>
-            <span style="color:#94a3b8;font-size:11px;margin-left:5px">${breakdown}</span>
-          </div>
-        </div>
-        ${c.revenue ? `<div class="inst-kard-row">
-          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#94a3b8" stroke-width="2"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
-          <span style="font-size:12px;font-weight:700;color:#059669">GHS ${(c.revenue||0).toLocaleString()} revenue</span>
-        </div>` : ''}
-      </div>
-
-      <div class="inst-kard-footer" onclick="event.stopPropagation()">
-        <button class="action-btn ${c.isActive?'danger':'success'}" style="font-size:11px" onclick="toggleCompany('${c._id}',${c.isActive},'${nameEsc}')">${c.isActive?'⏸ Deactivate':'▶ Activate'}</button>
-        <button class="action-btn" style="font-size:11px" onclick="extendTrial('${c._id}','${nameEsc}')">⏱ +Trial</button>
-        <button class="action-btn" style="font-size:11px;border-color:#c7d2fe;color:#4f46e5;background:#eef2ff" onclick="openPaymentAdjuster('${c._id}','${nameEsc}','${c.mode}')">💰 Pay</button>
-        <button class="action-btn" style="font-size:11px" onclick="openEmail('${c._id}','${nameEsc}','${emailEsc}')">✉️ Email</button>
-        <button class="action-btn" style="font-size:11px" onclick="openNotes('${c._id}','${nameEsc}','${notesEsc}')">📝 Notes</button>
-        <button class="action-btn" style="font-size:11px" onclick="impersonate('${c._id}','${nameEsc}')">🔑 Access</button>
-        <button class="action-btn danger" style="font-size:11px" onclick="deleteInstitution('${c._id}','${nameEsc}')">🗑</button>
-      </div>
-    </div>`; }).join('')}</div>`;
-}
-
-function filterInstitutions() {
-  const q      = (document.getElementById('search-input')?.value || '').toLowerCase();
-  const mode   = document.getElementById('filter-mode')?.value || '';
-  const status = document.getElementById('filter-status')?.value || '';
-  const filtered = allCompanies.filter(c => {
-    const matchQ = !q || c.name.toLowerCase().includes(q) || (c.institutionCode||'').toLowerCase().includes(q) || (c.adminEmail||'').toLowerCase().includes(q);
-    const matchMode   = !mode   || c.mode === mode;
-    const matchStatus = !status ||
-      (status === 'active'     && c.isActive) ||
-      (status === 'inactive'   && !c.isActive) ||
-      (status === 'trial'      && c.isTrialActive) ||
-      (status === 'subscribed' && c.subscriptionStatus === 'active');
-    return matchQ && matchMode && matchStatus;
-  });
-  document.getElementById('institutions-table-wrap').innerHTML = buildInstitutionCards(filtered);
+  } catch(e) { alert('Error: '+e.message); }
 }
 
 // ── Payment Adjuster ──────────────────────────────────────────────────────────
@@ -712,15 +784,12 @@ function openPaymentAdjuster(id, name, mode) {
   document.getElementById('pay-activate').checked = true;
   document.getElementById('pay-btn').disabled = false;
   document.getElementById('pay-btn').textContent = '💰 Record Payment';
-  // Default plan based on mode
   const defaultPlan = mode === 'corporate' ? 'monthly' : 'semester';
-  document.querySelectorAll('.pay-plan-btn').forEach(b => {
-    b.classList.toggle('selected', b.dataset.plan === defaultPlan);
-  });
+  document.querySelectorAll('.pay-plan-btn').forEach(b => b.classList.toggle('selected', b.dataset.plan===defaultPlan));
   const defaultBtn = document.querySelector(`.pay-plan-btn[data-plan="${defaultPlan}"]`);
   const defaultAmt = defaultBtn ? defaultBtn.dataset.amount : '300';
   document.getElementById('pay-amount').value = defaultAmt;
-  document.getElementById('pay-amount-display').textContent = 'GHS ' + defaultAmt;
+  document.getElementById('pay-amount-display').textContent = 'GHS '+defaultAmt;
   document.getElementById('pay-modal').classList.add('open');
 }
 
@@ -729,7 +798,7 @@ function selectPayPlan(btn) {
   btn.classList.add('selected');
   const amt = btn.dataset.amount;
   document.getElementById('pay-amount').value = amt;
-  document.getElementById('pay-amount-display').textContent = 'GHS ' + amt;
+  document.getElementById('pay-amount-display').textContent = 'GHS '+amt;
 }
 
 async function submitPayment() {
@@ -739,39 +808,32 @@ async function submitPayment() {
   const activate  = document.getElementById('pay-activate').checked;
   const status    = document.getElementById('pay-status');
   const btn       = document.getElementById('pay-btn');
-
-  if (!amount || Number(amount) <= 0) {
-    status.textContent = 'Please enter a valid amount.';
-    status.className   = 'modal-status status-err';
-    return;
+  if (!amount || Number(amount)<=0) {
+    status.textContent='Please enter a valid amount.'; status.className='modal-status status-err'; return;
   }
-  btn.disabled = true; btn.textContent = 'Saving…';
+  btn.disabled=true; btn.textContent='Saving…';
   try {
     const result = await api(`/api/superadmin/companies/${currentPayId}/record-payment`, {
-      method: 'POST',
-      body: JSON.stringify({ amount: Number(amount), plan, reference: reference || undefined, activate })
+      method:'POST', body:JSON.stringify({amount:Number(amount),plan,reference:reference||undefined,activate})
     });
-    status.textContent = `✓ ${result.message}`;
-    status.className   = 'modal-status status-ok';
-    btn.textContent = 'Done!';
+    status.textContent=`✓ ${result.message}`; status.className='modal-status status-ok';
+    btn.textContent='Done!';
     setTimeout(() => { closeModal('pay-modal'); loadInstitutions(); }, 1800);
   } catch(ex) {
-    status.textContent = 'Error: ' + ex.message;
-    status.className   = 'modal-status status-err';
-    btn.disabled = false; btn.textContent = '💰 Record Payment';
+    status.textContent='Error: '+ex.message; status.className='modal-status status-err';
+    btn.disabled=false; btn.textContent='💰 Record Payment';
   }
 }
 
 // ── Institution Detail ────────────────────────────────────────────────────────
 function showDetail(id) {
-  const c = allCompanies.find(x => x._id === id);
+  const c = allCompanies.find(x=>x._id===id);
   if (!c) return;
   const rc = c.roleCounts || {};
-  const created = c.createdAt ? new Date(c.createdAt).toLocaleDateString('en-GB',{day:'numeric',month:'long',year:'numeric'}) : '—';
+  const created   = c.createdAt ? new Date(c.createdAt).toLocaleDateString('en-GB',{day:'numeric',month:'long',year:'numeric'}) : '—';
   const lastLogin = c.lastLoginAt ? new Date(c.lastLoginAt).toLocaleString('en-GB',{day:'numeric',month:'short',year:'numeric',hour:'2-digit',minute:'2-digit'}) : 'Never';
-  const trialEnd = c.trialEndDate ? new Date(c.trialEndDate).toLocaleDateString('en-GB',{day:'numeric',month:'long',year:'numeric'}) : '—';
-  const subEnd = c.subscriptionEndDate ? new Date(c.subscriptionEndDate).toLocaleDateString('en-GB',{day:'numeric',month:'long',year:'numeric'}) : '—';
-
+  const trialEnd  = c.trialEndDate ? new Date(c.trialEndDate).toLocaleDateString('en-GB',{day:'numeric',month:'long',year:'numeric'}) : '—';
+  const subEnd    = c.subscriptionEndDate ? new Date(c.subscriptionEndDate).toLocaleDateString('en-GB',{day:'numeric',month:'long',year:'numeric'}) : '—';
   document.getElementById('detail-title').textContent = c.name;
   document.getElementById('detail-body').innerHTML = `
     <div class="detail-grid">
@@ -785,7 +847,7 @@ function showDetail(id) {
       <div class="detail-item"><label>Total Users</label><span>${c.userCount||0}</span></div>
     </div>
     <hr class="detail-divider">
-    <div style="font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:#94a3b8;margin-bottom:10px">User Breakdown</div>
+    <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:#94a3b8;margin-bottom:10px">User Breakdown</div>
     <div class="detail-grid">
       ${c.mode==='academic' ? `
         <div class="detail-item"><label>Admins</label><span>${rc.admin||0}</span></div>
@@ -799,7 +861,7 @@ function showDetail(id) {
       `}
     </div>
     <hr class="detail-divider">
-    <div style="font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:#94a3b8;margin-bottom:10px">Subscription</div>
+    <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:#94a3b8;margin-bottom:10px">Subscription</div>
     <div class="detail-grid">
       <div class="detail-item"><label>Status</label><span>${c.subscriptionStatus||'—'}</span></div>
       <div class="detail-item"><label>Plan</label><span>${c.subscriptionPlan||'none'}</span></div>
@@ -808,13 +870,12 @@ function showDetail(id) {
       <div class="detail-item"><label>Revenue</label><span style="color:#16a34a;font-weight:700">GHS ${(c.revenue||0).toLocaleString()}</span></div>
       <div class="detail-item"><label>Payments</label><span>${c.paymentCount||0}</span></div>
     </div>
-    ${c.superadminNotes ? `<hr class="detail-divider"><div style="font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:#94a3b8;margin-bottom:8px">Notes</div><div style="font-size:14px;color:#374151;white-space:pre-wrap">${esc(c.superadminNotes)}</div>` : ''}
+    ${c.superadminNotes ? `<hr class="detail-divider"><div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:#94a3b8;margin-bottom:8px">Notes</div><div style="font-size:14px;color:#374151;white-space:pre-wrap">${esc(c.superadminNotes)}</div>` : ''}
     <hr class="detail-divider">
-    <div style="font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:#94a3b8;margin-bottom:10px">User Subscriptions</div>
+    <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:#94a3b8;margin-bottom:10px">User Subscriptions</div>
     <div id="lecturer-subs-${c._id}">
       <button onclick="loadLecturerSubs('${c._id}','${c.mode}')" style="padding:8px 16px;background:#4f46e5;color:#fff;border:none;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer">View User Subscriptions</button>
-    </div>
-  `;
+    </div>`;
   document.getElementById('detail-modal').classList.add('open');
 }
 
@@ -822,8 +883,8 @@ function _buildUserSubTable(users, sectionTitle, badgeColor, companyMode) {
   if (!users.length) return '';
   const now = Date.now();
   const rows = users.map(l => {
-    const trialEnd = l.trialEndDate ? new Date(l.trialEndDate).toLocaleDateString('en-GB',{day:'numeric',month:'short',year:'numeric'}) : '—';
-    const subEnd   = l.subscriptionExpiry ? new Date(l.subscriptionExpiry).toLocaleDateString('en-GB',{day:'numeric',month:'short',year:'numeric'}) : '—';
+    const trialEnd  = l.trialEndDate ? new Date(l.trialEndDate).toLocaleDateString('en-GB',{day:'numeric',month:'short',year:'numeric'}) : '—';
+    const subEnd    = l.subscriptionExpiry ? new Date(l.subscriptionExpiry).toLocaleDateString('en-GB',{day:'numeric',month:'short',year:'numeric'}) : '—';
     const trialActive = l.trialEndDate && new Date(l.trialEndDate) > now;
     const subActive   = l.subscriptionExpiry && new Date(l.subscriptionExpiry) > now;
     const status = subActive ? '✅ Subscribed' : trialActive ? '🟡 Trial' : '🔴 Expired';
@@ -836,7 +897,7 @@ function _buildUserSubTable(users, sectionTitle, badgeColor, companyMode) {
       <td style="padding:8px;font-size:12px">${subEnd}</td>
       <td style="padding:8px;white-space:nowrap">
         <button onclick="extendUserTrial('${l._id}','${esc(l.name)}')" style="padding:4px 10px;background:#4f46e5;color:#fff;border:none;border-radius:6px;font-size:11px;font-weight:600;cursor:pointer">Set Trial</button>
-        <button onclick="activateSemester('${l._id}','${esc(l.name)}','${companyMode}')" style="padding:4px 10px;background:#16a34a;color:#fff;border:none;border-radius:6px;font-size:11px;font-weight:600;cursor:pointer;margin-left:4px">${companyMode === 'corporate' ? '+ Monthly' : '+ Semester'}</button>
+        <button onclick="activateSemester('${l._id}','${esc(l.name)}','${companyMode}')" style="padding:4px 10px;background:#16a34a;color:#fff;border:none;border-radius:6px;font-size:11px;font-weight:600;cursor:pointer;margin-left:4px">${companyMode==='corporate'?'+ Monthly':'+ Semester'}</button>
       </td>
     </tr>`;
   }).join('');
@@ -863,41 +924,37 @@ function _buildUserSubTable(users, sectionTitle, badgeColor, companyMode) {
 }
 
 async function loadLecturerSubs(companyId, companyMode) {
-  const container = document.getElementById('lecturer-subs-' + companyId);
+  const container = document.getElementById('lecturer-subs-'+companyId);
   container.innerHTML = '<div style="font-size:13px;color:#6b7280">Loading…</div>';
   try {
-    const data = await api('/api/superadmin/companies/' + companyId + '/lecturers');
+    const data = await api('/api/superadmin/companies/'+companyId+'/lecturers');
     if (!data.lecturers || !data.lecturers.length) {
-      container.innerHTML = '<div style="font-size:13px;color:#6b7280">No subscribable users found.</div>';
-      return;
+      container.innerHTML = '<div style="font-size:13px;color:#6b7280">No subscribable users found.</div>'; return;
     }
-
-    const hods      = data.lecturers.filter(l => l.role === 'hod');
-    const lecturers = data.lecturers.filter(l => l.role === 'lecturer');
-    const others    = data.lecturers.filter(l => !['hod','lecturer'].includes(l.role));
-
+    const hods      = data.lecturers.filter(l=>l.role==='hod');
+    const lecturers = data.lecturers.filter(l=>l.role==='lecturer');
+    const others    = data.lecturers.filter(l=>!['hod','lecturer'].includes(l.role));
     const html = [
       hods.length      ? _buildUserSubTable(hods,      'HODs',      '#0891b2', companyMode) : '',
       lecturers.length ? _buildUserSubTable(lecturers, 'Lecturers', '#7c3aed', companyMode) : '',
       others.length    ? _buildUserSubTable(others,    'Other',     '#6b7280', companyMode) : '',
     ].join('');
-
     container.innerHTML = html || '<div style="font-size:13px;color:#6b7280">No users found.</div>';
   } catch(ex) {
-    container.innerHTML = '<div style="font-size:13px;color:#dc2626">Error: ' + ex.message + '</div>';
+    container.innerHTML = '<div style="font-size:13px;color:#dc2626">Error: '+ex.message+'</div>';
   }
 }
 
 async function extendUserTrial(userId, name) {
-  const defaultDate = new Date(Date.now() + 30*24*60*60*1000).toISOString().split('T')[0];
+  const defaultDate = new Date(Date.now()+30*24*60*60*1000).toISOString().split('T')[0];
   const overlay = document.createElement('div');
   overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:99999;display:flex;align-items:center;justify-content:center;padding:20px';
   overlay.innerHTML = `
     <div style="background:#fff;border-radius:16px;padding:28px;width:100%;max-width:380px;box-shadow:0 20px 60px rgba(0,0,0,.2)">
       <h3 style="font-size:16px;font-weight:700;margin-bottom:4px;color:#0d1117">Set Trial — ${esc(name)}</h3>
-      <p style="font-size:13px;color:#6b7280;margin-bottom:16px">Pick the new expiry date for this lecturer.</p>
+      <p style="font-size:13px;color:#6b7280;margin-bottom:16px">Pick the new expiry date for this user.</p>
       <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:16px">
-        <button onclick="setUserTrialDate(7)" style="padding:8px;border:1.5px solid #e5e7eb;border-radius:8px;font-size:12px;font-weight:600;cursor:pointer;background:#f9fafb">7 days</button>
+        <button onclick="setUserTrialDate(7)"  style="padding:8px;border:1.5px solid #e5e7eb;border-radius:8px;font-size:12px;font-weight:600;cursor:pointer;background:#f9fafb">7 days</button>
         <button onclick="setUserTrialDate(30)" style="padding:8px;border:1.5px solid #4f46e5;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer;background:#eef2ff;color:#4f46e5">30 days</button>
         <button onclick="setUserTrialDate(90)" style="padding:8px;border:1.5px solid #e5e7eb;border-radius:8px;font-size:12px;font-weight:600;cursor:pointer;background:#f9fafb">90 days</button>
       </div>
@@ -912,7 +969,7 @@ async function extendUserTrial(userId, name) {
 }
 
 function setUserTrialDate(days) {
-  const d = new Date(Date.now() + days*24*60*60*1000).toISOString().split('T')[0];
+  const d = new Date(Date.now()+days*24*60*60*1000).toISOString().split('T')[0];
   document.getElementById('user-trial-date').value = d;
 }
 
@@ -923,54 +980,15 @@ async function confirmUserTrial(userId) {
   const btn = document.querySelector('[onclick*="confirmUserTrial"]');
   btn.textContent='Saving…'; btn.disabled=true;
   try {
-    const data = await api('/api/superadmin/users/' + userId + '/extend-trial', {
-      method: 'PATCH',
-      body: JSON.stringify({ expiryDate: dateVal })
-    });
-    msg.textContent = '✅ ' + data.message;
-    msg.style.cssText = 'display:block;color:#16a34a;font-size:13px;margin-bottom:12px';
-    btn.textContent = 'Done!';
+    const data = await api('/api/superadmin/users/'+userId+'/extend-trial', {method:'PATCH',body:JSON.stringify({expiryDate:dateVal})});
+    msg.textContent='✅ '+data.message;
+    msg.style.cssText='display:block;color:#16a34a;font-size:13px;margin-bottom:12px';
+    btn.textContent='Done!';
     setTimeout(() => document.querySelector('[style*="z-index:99999"]')?.remove(), 1500);
   } catch(ex) {
-    msg.textContent = 'Error: ' + ex.message;
-    msg.style.cssText = 'display:block;color:#dc2626;font-size:13px;margin-bottom:12px';
+    msg.textContent='Error: '+ex.message;
+    msg.style.cssText='display:block;color:#dc2626;font-size:13px;margin-bottom:12px';
     btn.textContent='Set Expiry'; btn.disabled=false;
-  }
-}
-
-// ── Payments Tab ──────────────────────────────────────────────────────────────
-async function loadPayments() {
-  document.getElementById('tab-payments').innerHTML = '<div class="loading-msg">Loading payment history…</div>';
-  try {
-    const data = await api('/api/superadmin/payments');
-    const pays = data.payments || [];
-    const total = data.totalRevenue || 0;
-    document.getElementById('tab-payments').innerHTML = `
-      <div class="stats" style="margin-bottom:20px">
-        <div class="stat"><div class="stat-val" style="color:#16a34a;font-size:20px">GHS ${total.toLocaleString()}</div><div class="stat-lbl">Total Revenue</div></div>
-        <div class="stat"><div class="stat-val">${pays.length}</div><div class="stat-lbl">Total Payments</div></div>
-      </div>
-      <div class="table-card">
-        <div class="table-head"><h3>Payment History</h3></div>
-        <table>
-          <thead><tr><th>Institution</th><th>Amount</th><th>Plan</th><th>Reference</th><th>Date</th></tr></thead>
-          <tbody>
-            ${pays.length===0 ? `<tr><td colspan="5" class="empty">No payments yet.</td></tr>` :
-              pays.map(p => {
-                const date = p.paidAt ? new Date(p.paidAt).toLocaleDateString('en-GB',{day:'numeric',month:'short',year:'numeric'}) : '—';
-                return `<tr>
-                  <td><div style="font-weight:600">${esc(p.company?.name||'Unknown')}</div><div style="font-size:11px;color:#94a3b8">${p.company?.institutionCode||''}</div></td>
-                  <td class="pay-amount">GHS ${(p.amount||0).toLocaleString()}</td>
-                  <td><span class="tag tag-blue">${p.plan||'—'}</span></td>
-                  <td style="font-family:monospace;font-size:12px;color:#64748b">${esc(p.reference||'—')}</td>
-                  <td>${date}</td>
-                </tr>`;
-              }).join('')}
-          </tbody>
-        </table>
-      </div>`;
-  } catch(ex) {
-    document.getElementById('tab-payments').innerHTML = `<div class="empty" style="color:#dc2626">Error: ${ex.message}</div>`;
   }
 }
 
@@ -984,33 +1002,26 @@ async function toggleCompany(id, isActive, name) {
 }
 
 async function extendTrial(id, name) {
-  // Default date = today + 30 days
-  const defaultDate = new Date(Date.now() + 30*24*60*60*1000).toISOString().split('T')[0];
-  const minDate = new Date().toISOString().split('T')[0];
+  const defaultDate = new Date(Date.now()+30*24*60*60*1000).toISOString().split('T')[0];
   const overlay = document.createElement('div');
   overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:9999;display:flex;align-items:center;justify-content:center;padding:20px';
   overlay.innerHTML = `
     <div style="background:#fff;border-radius:16px;padding:28px;width:100%;max-width:400px;box-shadow:0 20px 60px rgba(0,0,0,.2)">
       <h3 style="font-size:16px;font-weight:700;margin-bottom:4px;color:#0d1117">Set Trial Expiry</h3>
-      <p style="font-size:13px;color:#6b7280;margin-bottom:20px">${name}</p>
-
+      <p style="font-size:13px;color:#6b7280;margin-bottom:20px">${esc(name)}</p>
       <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:16px">
-        <button onclick="setTrialDate(7)" style="padding:10px;border:1.5px solid #e5e7eb;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;background:#f9fafb">7 days</button>
-        <button onclick="setTrialDate(14)" style="padding:10px;border:1.5px solid #e5e7eb;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;background:#f9fafb">14 days</button>
-        <button onclick="setTrialDate(30)" style="padding:10px;border:1.5px solid #4f46e5;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer;background:#eef2ff;color:#4f46e5">30 days</button>
-        <button onclick="setTrialDate(60)" style="padding:10px;border:1.5px solid #e5e7eb;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;background:#f9fafb">60 days</button>
-        <button onclick="setTrialDate(90)" style="padding:10px;border:1.5px solid #e5e7eb;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;background:#f9fafb">90 days</button>
+        <button onclick="setTrialDate(7)"   style="padding:10px;border:1.5px solid #e5e7eb;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;background:#f9fafb">7 days</button>
+        <button onclick="setTrialDate(14)"  style="padding:10px;border:1.5px solid #e5e7eb;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;background:#f9fafb">14 days</button>
+        <button onclick="setTrialDate(30)"  style="padding:10px;border:1.5px solid #4f46e5;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer;background:#eef2ff;color:#4f46e5">30 days</button>
+        <button onclick="setTrialDate(60)"  style="padding:10px;border:1.5px solid #e5e7eb;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;background:#f9fafb">60 days</button>
+        <button onclick="setTrialDate(90)"  style="padding:10px;border:1.5px solid #e5e7eb;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;background:#f9fafb">90 days</button>
         <button onclick="setTrialDate(365)" style="padding:10px;border:1.5px solid #e5e7eb;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;background:#f9fafb">1 year</button>
       </div>
-
       <div style="margin-bottom:16px">
-        <label style="font-size:11px;font-weight:700;text-transform:uppercase;color:#6b7280;display:block;margin-bottom:6px">Or pick exact expiry date</label>
-        <input id="trial-date-input" type="date" value="${defaultDate}"
-          style="width:100%;padding:10px 12px;border:1.5px solid #e5e7eb;border-radius:8px;font-size:15px;font-weight:600;text-align:center;outline:none;font-family:inherit;cursor:pointer">
+        <label style="font-size:11px;font-weight:700;text-transform:uppercase;color:#6b7280;display:block;margin-bottom:6px">Or pick exact date</label>
+        <input id="trial-date-input" type="date" value="${defaultDate}" style="width:100%;padding:10px 12px;border:1.5px solid #e5e7eb;border-radius:8px;font-size:15px;font-weight:600;text-align:center;outline:none;font-family:inherit;cursor:pointer">
       </div>
-
       <div id="trial-modal-msg" style="font-size:13px;margin-bottom:12px;display:none"></div>
-
       <div style="display:flex;gap:8px">
         <button onclick="this.closest('[style*=position]').remove()" style="flex:1;padding:10px;border:1.5px solid #e5e7eb;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;background:#fff">Cancel</button>
         <button onclick="confirmExtendTrial('${id}')" style="flex:2;padding:10px;background:#4f46e5;color:#fff;border:none;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer">Set Expiry Date</button>
@@ -1021,8 +1032,26 @@ async function extendTrial(id, name) {
 }
 
 function setTrialDate(days) {
-  const d = new Date(Date.now() + days*24*60*60*1000).toISOString().split('T')[0];
+  const d = new Date(Date.now()+days*24*60*60*1000).toISOString().split('T')[0];
   document.getElementById('trial-date-input').value = d;
+}
+
+async function confirmExtendTrial(id) {
+  const dateVal = document.getElementById('trial-date-input').value;
+  const msg     = document.getElementById('trial-modal-msg');
+  if (!dateVal) { msg.textContent='Please pick a date.'; msg.style.cssText='font-size:13px;margin-bottom:12px;display:block;color:#dc2626'; return; }
+  const btn = document.querySelector('[onclick*="confirmExtendTrial"]');
+  btn.textContent='Saving…'; btn.disabled=true;
+  try {
+    const data = await api(`/api/superadmin/companies/${id}/extend-trial`,{method:'PATCH',body:JSON.stringify({expiryDate:dateVal})});
+    msg.textContent=`✅ Trial expiry set to ${new Date(data.trialEndDate).toDateString()}`;
+    msg.style.cssText='font-size:13px;margin-bottom:12px;display:block;color:#16a34a';
+    btn.textContent='Done!';
+    setTimeout(() => { document.querySelector('[style*="position:fixed"][style*="z-index:9999"]')?.remove(); loadInstitutions(); }, 1800);
+  } catch(ex) {
+    msg.textContent='Error: '+ex.message; msg.style.cssText='font-size:13px;margin-bottom:12px;display:block;color:#dc2626';
+    btn.textContent='Set Expiry Date'; btn.disabled=false;
+  }
 }
 
 async function deleteInstitution(id, name) {
@@ -1032,10 +1061,10 @@ async function deleteInstitution(id, name) {
     <div style="background:#fff;border-radius:16px;padding:28px;width:100%;max-width:420px;box-shadow:0 20px 60px rgba(0,0,0,.3)">
       <div style="width:48px;height:48px;border-radius:12px;background:#fef2f2;display:flex;align-items:center;justify-content:center;font-size:22px;margin-bottom:16px">🗑</div>
       <h3 style="font-size:16px;font-weight:700;color:#0d1117;margin-bottom:6px">Delete Institution</h3>
-      <p style="font-size:13px;color:#6b7280;margin-bottom:16px">This will permanently delete <strong>${name}</strong> and <strong>all its data</strong> — users, courses, quizzes, attendance records, everything. This cannot be undone.</p>
+      <p style="font-size:13px;color:#6b7280;margin-bottom:16px">This will permanently delete <strong>${esc(name)}</strong> and <strong>all its data</strong>. This cannot be undone.</p>
       <div style="background:#fef2f2;border:1px solid #fecaca;border-radius:8px;padding:12px 14px;margin-bottom:20px">
         <p style="font-size:12px;color:#dc2626;font-weight:600;margin-bottom:8px">Type the institution name to confirm:</p>
-        <input id="delete-confirm-input" type="text" placeholder="${name}" style="width:100%;padding:8px 10px;border:1.5px solid #fca5a5;border-radius:6px;font-size:13px;outline:none;font-family:inherit">
+        <input id="delete-confirm-input" type="text" placeholder="${esc(name)}" style="width:100%;padding:8px 10px;border:1.5px solid #fca5a5;border-radius:6px;font-size:13px;outline:none;font-family:inherit">
       </div>
       <div id="delete-msg" style="font-size:13px;margin-bottom:12px;display:none"></div>
       <div style="display:flex;gap:8px">
@@ -1051,79 +1080,40 @@ async function confirmDeleteInstitution(id, name) {
   const typed = document.getElementById('delete-confirm-input')?.value?.trim();
   const msg   = document.getElementById('delete-msg');
   if (typed !== name) {
-    msg.textContent = 'Name does not match. Please type exactly: ' + name;
-    msg.style.cssText = 'font-size:13px;margin-bottom:12px;display:block;color:#dc2626';
-    return;
+    msg.textContent='Name does not match. Please type exactly: '+name;
+    msg.style.cssText='font-size:13px;margin-bottom:12px;display:block;color:#dc2626'; return;
   }
   const btn = document.querySelector('[onclick*="confirmDeleteInstitution"]');
-  btn.textContent = 'Deleting…'; btn.disabled = true;
+  btn.textContent='Deleting…'; btn.disabled=true;
   try {
-    await api(`/api/superadmin/companies/${id}`, { method: 'DELETE' });
-    msg.textContent = '✅ Institution deleted successfully.';
-    msg.style.cssText = 'font-size:13px;margin-bottom:12px;display:block;color:#16a34a';
-    btn.textContent = 'Done!';
-    setTimeout(() => {
-      document.querySelector('[style*="position:fixed"][style*="z-index:9999"]')?.remove();
-      loadInstitutions();
-    }, 1500);
+    await api(`/api/superadmin/companies/${id}`, {method:'DELETE'});
+    msg.textContent='✅ Institution deleted successfully.';
+    msg.style.cssText='font-size:13px;margin-bottom:12px;display:block;color:#16a34a';
+    btn.textContent='Done!';
+    setTimeout(() => { document.querySelector('[style*="position:fixed"][style*="z-index:9999"]')?.remove(); loadInstitutions(); }, 1500);
   } catch(ex) {
-    msg.textContent = 'Error: ' + ex.message;
-    msg.style.cssText = 'font-size:13px;margin-bottom:12px;display:block;color:#dc2626';
-    btn.textContent = 'Permanently Delete'; btn.disabled = false;
-  }
-}
-
-async function confirmExtendTrial(id) {
-  const dateVal = document.getElementById('trial-date-input').value;
-  const msg     = document.getElementById('trial-modal-msg');
-  if (!dateVal) {
-    msg.textContent = 'Please pick a date.';
-    msg.style.cssText = 'font-size:13px;margin-bottom:12px;display:block;color:#dc2626';
-    return;
-  }
-  const btn = document.querySelector('[onclick*="confirmExtendTrial"]');
-  btn.textContent = 'Saving…'; btn.disabled = true;
-  try {
-    const data = await api(`/api/superadmin/companies/${id}/extend-trial`, {
-      method: 'PATCH',
-      body: JSON.stringify({ expiryDate: dateVal })
-    });
-    msg.textContent = `✅ Trial expiry set to ${new Date(data.trialEndDate).toDateString()}`;
-    msg.style.cssText = 'font-size:13px;margin-bottom:12px;display:block;color:#16a34a';
-    btn.textContent = 'Done!';
-    setTimeout(() => {
-      document.querySelector('[style*="position:fixed"][style*="z-index:9999"]')?.remove();
-      loadInstitutions();
-    }, 1800);
-  } catch(ex) {
-    msg.textContent = 'Error: ' + ex.message;
-    msg.style.cssText = 'font-size:13px;margin-bottom:12px;display:block;color:#dc2626';
-    btn.textContent = 'Set Expiry Date'; btn.disabled = false;
+    msg.textContent='Error: '+ex.message;
+    msg.style.cssText='font-size:13px;margin-bottom:12px;display:block;color:#dc2626';
+    btn.textContent='Permanently Delete'; btn.disabled=false;
   }
 }
 
 async function activateSemester(userId, name, mode) {
-  const isCorp = mode === 'corporate';
+  const isCorp = mode==='corporate';
   const label  = isCorp ? '30 days (monthly plan)' : '1 semester (16 weeks / 112 days)';
   const price  = isCorp ? '₵150' : '₵300';
   if (!confirm(`Activate ${label} for ${name}?\n\nPrice: ${price}`)) return;
   try {
-    const data = await api('/api/superadmin/users/' + userId + '/extend-trial', {
-      method: 'PATCH',
-      body: JSON.stringify({ semester: true })
-    });
-    alert('✅ ' + data.message);
-  } catch(ex) {
-    alert('Error: ' + ex.message);
-  }
+    const data = await api('/api/superadmin/users/'+userId+'/extend-trial',{method:'PATCH',body:JSON.stringify({semester:true})});
+    alert('✅ '+data.message);
+  } catch(ex) { alert('Error: '+ex.message); }
 }
 
 async function impersonate(id, name) {
   if (!confirm(`Log in as admin of "${name}"? Opens in a new tab.`)) return;
   try {
-    const data = await api(`/api/superadmin/impersonate/${id}`, {method:'POST'});
-    const url = `/?impersonate=${data.token}`;
-    window.open(url, '_blank');
+    const data = await api(`/api/superadmin/impersonate/${id}`,{method:'POST'});
+    window.open('/?impersonate='+data.token, '_blank');
   } catch(ex) { alert('Error: '+ex.message); }
 }
 
@@ -1142,21 +1132,19 @@ function openEmail(id, name, email) {
 async function sendEmail() {
   const subject = document.getElementById('email-subject').value.trim();
   const message = document.getElementById('email-body').value.trim();
-  const status = document.getElementById('email-status');
-  const btn = document.getElementById('email-send-btn');
-  if (!subject) { status.textContent = 'Please enter a subject.'; status.className = 'modal-status status-err'; return; }
-  if (!message) { status.textContent = 'Please enter a message.'; status.className = 'modal-status status-err'; return; }
-  btn.disabled = true; btn.textContent = 'Sending…';
+  const status  = document.getElementById('email-status');
+  const btn     = document.getElementById('email-send-btn');
+  if (!subject) { status.textContent='Please enter a subject.'; status.className='modal-status status-err'; return; }
+  if (!message) { status.textContent='Please enter a message.'; status.className='modal-status status-err'; return; }
+  btn.disabled=true; btn.textContent='Sending…';
   try {
-    const r = await api(`/api/superadmin/email/${currentEmailId}`, {method:'POST', body:JSON.stringify({subject,message})});
-    status.textContent = `✓ Sent to ${r.sentTo}`;
-    status.className = 'modal-status status-ok';
-    btn.textContent = 'Sent!';
+    const r = await api(`/api/superadmin/email/${currentEmailId}`,{method:'POST',body:JSON.stringify({subject,message})});
+    status.textContent=`✓ Sent to ${r.sentTo}`; status.className='modal-status status-ok';
+    btn.textContent='Sent!';
     setTimeout(() => closeModal('email-modal'), 2000);
   } catch(ex) {
-    status.textContent = 'Failed: '+ex.message;
-    status.className = 'modal-status status-err';
-    btn.disabled = false; btn.textContent = 'Send Email';
+    status.textContent='Failed: '+ex.message; status.className='modal-status status-err';
+    btn.disabled=false; btn.textContent='Send Email';
   }
 }
 
@@ -1170,18 +1158,15 @@ function openNotes(id, name, existing) {
 }
 
 async function saveNotes() {
-  const notes = document.getElementById('notes-text').value;
+  const notes  = document.getElementById('notes-text').value;
   const status = document.getElementById('notes-status');
   try {
-    await api(`/api/superadmin/companies/${currentNotesId}/notes`, {method:'PATCH', body:JSON.stringify({notes})});
-    // Update local data
-    const c = allCompanies.find(x => x._id === currentNotesId);
+    await api(`/api/superadmin/companies/${currentNotesId}/notes`,{method:'PATCH',body:JSON.stringify({notes})});
+    const c = allCompanies.find(x=>x._id===currentNotesId);
     if (c) c.superadminNotes = notes;
-    status.textContent = '✓ Saved'; status.className = 'modal-status status-ok';
+    status.textContent='✓ Saved'; status.className='modal-status status-ok';
     setTimeout(() => closeModal('notes-modal'), 1200);
-  } catch(ex) {
-    status.textContent = 'Error: '+ex.message; status.className = 'modal-status status-err';
-  }
+  } catch(ex) { status.textContent='Error: '+ex.message; status.className='modal-status status-err'; }
 }
 
 // ── Export CSV ────────────────────────────────────────────────────────────────
@@ -1189,16 +1174,11 @@ function exportCSV() {
   const rows = [['Name','Code','Mode','Status','Subscription','Users','Admin Email','Trial Ends','Revenue','Notes']];
   allCompanies.forEach(c => {
     const trialEnd = c.trialEndDate ? new Date(c.trialEndDate).toLocaleDateString() : '';
-    rows.push([
-      c.name, c.institutionCode||'', c.mode,
-      c.isActive?'Active':'Inactive', c.subscriptionStatus||'',
-      c.userCount||0, c.adminEmail||'',
-      trialEnd, c.revenue||0, (c.superadminNotes||'').replace(/\n/g,' ')
-    ]);
+    rows.push([c.name, c.institutionCode||'', c.mode, c.isActive?'Active':'Inactive', c.subscriptionStatus||'', c.userCount||0, c.adminEmail||'', trialEnd, c.revenue||0, (c.superadminNotes||'').replace(/\n/g,' ')]);
   });
-  const csv = rows.map(r => r.map(v => `"${String(v).replace(/"/g,'""')}"`).join(',')).join('\n');
+  const csv = rows.map(r=>r.map(v=>`"${String(v).replace(/"/g,'""')}"`).join(',')).join('\n');
   const a = document.createElement('a');
-  a.href = 'data:text/csv;charset=utf-8,' + encodeURIComponent(csv);
+  a.href = 'data:text/csv;charset=utf-8,'+encodeURIComponent(csv);
   a.download = `dikly-institutions-${new Date().toISOString().slice(0,10)}.csv`;
   a.click();
 }
@@ -1211,1356 +1191,11 @@ function esc(s) { return (s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').repl
 if (SA_TOKEN) {
   api('/api/auth/me').then(d => {
     if (d.user?.role === 'superadmin') {
-      const _n2 = d.user.name || d.user.email || 'SA';
-      const _av = document.getElementById('user-chip-avatar');
-      const _nm = document.getElementById('user-chip-name');
-      if (_av) _av.textContent = _n2[0].toUpperCase();
-      if (_nm) _nm.textContent = _n2;
+      setUserDisplay(d.user.name || d.user.email || 'SA');
       showDashboard();
     } else { localStorage.removeItem('sa_token'); SA_TOKEN = ''; }
   }).catch(() => { localStorage.removeItem('sa_token'); SA_TOKEN = ''; });
 }
 </script>
-
-<!-- React root -->
-<div id="app"></div>
-<style>
-@keyframes sa-toast-in { from{opacity:0;transform:translateY(8px)} to{opacity:1;transform:translateY(0)} }
-
-/* Superadmin sidebar — desktop: sticky in-flow; mobile: fixed slide-in overlay */
-@media (min-width: 640px) {
-  .sa-sidebar-el {
-    position: sticky !important;
-    top: 0 !important;
-    height: 100vh !important;
-    transform: translateX(0) !important;
-    z-index: auto !important;
-  }
-}
-</style>
-
-<script type="text/babel">
-const { useState } = React;
-
-// ── Toast ─────────────────────────────────────────────────────────────────────
-function useToast() {
-  const [toast, setToast] = React.useState(null);
-  const show = (msg, type = 'success') => {
-    setToast({ msg, type });
-    setTimeout(() => setToast(null), 3200);
-  };
-  const ToastEl = toast ? (
-    <div style={{
-      position:'fixed', bottom:24, right:24, zIndex:9999,
-      background: toast.type === 'error' ? '#fee2e2' : '#dcfce7',
-      color: toast.type === 'error' ? '#dc2626' : '#16a34a',
-      border: `1px solid ${toast.type === 'error' ? '#fca5a5' : '#86efac'}`,
-      borderRadius:12, padding:'10px 18px', fontSize:13, fontWeight:600,
-      boxShadow:'0 4px 16px rgba(0,0,0,.1)',
-      animation:'sa-toast-in .2s ease',
-    }}>{toast.msg}</div>
-  ) : null;
-  return { show, ToastEl };
-}
-
-// ── ConfirmDialog ─────────────────────────────────────────────────────────────
-function useConfirm() {
-  const [state, setState] = React.useState(null);
-  const ask = (msg) => new Promise(resolve => setState({ msg, resolve }));
-  const Dialog = state ? (
-    <div style={{position:'fixed',inset:0,background:'rgba(0,0,0,.35)',display:'flex',alignItems:'center',justifyContent:'center',zIndex:9998}}>
-      <div style={{background:'#fff',borderRadius:16,padding:28,maxWidth:360,width:'90%',boxShadow:'0 20px 60px rgba(0,0,0,.18)'}}>
-        <p style={{fontSize:14,color:'#374151',margin:'0 0 20px',lineHeight:1.6}}>{state.msg}</p>
-        <div style={{display:'flex',gap:10,justifyContent:'flex-end'}}>
-          <button onClick={() => { state.resolve(false); setState(null); }}
-            style={{padding:'8px 18px',borderRadius:10,border:'1px solid #e2e8f0',background:'transparent',cursor:'pointer',fontSize:13,fontWeight:600,color:'#64748b'}}>
-            Cancel
-          </button>
-          <button onClick={() => { state.resolve(true); setState(null); }}
-            style={{padding:'8px 18px',borderRadius:10,border:'none',background:'#4f46e5',cursor:'pointer',fontSize:13,fontWeight:600,color:'#fff'}}>
-            Confirm
-          </button>
-        </div>
-      </div>
-    </div>
-  ) : null;
-  return { ask, Dialog };
-}
-
-// ── Sidebar ──────────────────────────────────────────────────────────────────
-const NAV_ITEMS = [
-  {
-    id: 'dashboard', label: 'Dashboard',
-    icon: <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>,
-  },
-  {
-    id: 'organizations', label: 'Organizations',
-    icon: <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>,
-  },
-  {
-    id: 'users', label: 'Users',
-    icon: <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>,
-  },
-  {
-    id: 'subscriptions', label: 'Subscriptions',
-    icon: <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="1" y="4" width="22" height="16" rx="2"/><line x1="1" y1="10" x2="23" y2="10"/></svg>,
-  },
-  {
-    id: 'payments', label: 'Payments',
-    icon: <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>,
-  },
-  {
-    id: 'approvals', label: 'Approvals',
-    icon: <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>,
-  },
-  {
-    id: 'reports', label: 'Reports',
-    icon: <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>,
-  },
-  {
-    id: 'roles', label: 'Roles',
-    icon: <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>,
-  },
-  {
-    id: 'settings', label: 'Settings',
-    icon: <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>,
-  },
-];
-
-function Sidebar({ active, onNav, isOpen, onClose }) {
-  return (
-    <>
-      {/* Mobile backdrop */}
-      {isOpen && (
-        <div
-          style={{position:'fixed',inset:0,background:'rgba(0,0,0,0.5)',zIndex:40}}
-          onClick={onClose}
-        />
-      )}
-      <aside style={{
-        position: 'fixed', top:0, left:0, height:'100%', zIndex:50,
-        transform: isOpen ? 'translateX(0)' : 'translateX(-100%)',
-        transition: 'transform 0.22s ease-in-out',
-      }}
-        className="sa-sidebar-el w-52 bg-gray-950 flex flex-col flex-shrink-0"
-      >
-        {/* Logo + mobile close */}
-        <div className="px-4 py-5 border-b border-white/10 flex-shrink-0 flex items-center justify-between">
-          <div className="flex items-center gap-2.5">
-            <div className="w-8 h-8 rounded-lg bg-indigo-600 flex items-center justify-center text-white font-bold text-sm flex-shrink-0">K</div>
-            <div>
-              <div className="text-white font-extrabold text-sm leading-none">DIKLY</div>
-              <div className="text-gray-500 text-[10px] mt-0.5">Platform Admin</div>
-            </div>
-          </div>
-          <button onClick={onClose} style={{color:'#6b7280',background:'none',border:'none',cursor:'pointer',padding:4,borderRadius:6,lineHeight:1}} className="sm:hidden">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
-          </button>
-        </div>
-
-        {/* Nav */}
-        <nav className="flex-1 p-2 flex flex-col gap-0.5 overflow-y-auto">
-          {NAV_ITEMS.map(item => {
-            const isActive = active === item.id;
-            return (
-              <button
-                key={item.id}
-                onClick={() => { onNav(item.id); onClose(); }}
-                className={`w-full text-left flex items-center gap-2.5 px-3 py-2 rounded-lg text-[13px] font-medium transition-colors relative ${
-                  isActive
-                    ? 'bg-indigo-500/20 text-white'
-                    : 'text-gray-400 hover:bg-white/5 hover:text-gray-200'
-                }`}
-              >
-                {isActive && (
-                  <span className="absolute left-0 top-1/2 -translate-y-1/2 w-0.5 h-5 bg-indigo-400 rounded-r-full" />
-                )}
-                <span className={isActive ? 'text-indigo-400' : 'text-gray-500'}>
-                  {item.icon}
-                </span>
-                {item.label}
-              </button>
-            );
-          })}
-        </nav>
-
-        {/* Footer */}
-        <div className="p-3 border-t border-white/10 flex-shrink-0">
-          <button
-            onClick={() => { localStorage.removeItem('sa_token'); location.reload(); }}
-            className="w-full py-2 text-xs font-semibold text-gray-400 hover:text-gray-200 bg-white/5 hover:bg-white/10 rounded-lg border border-white/10 transition-colors"
-          >
-            Sign Out
-          </button>
-        </div>
-      </aside>
-    </>
-  );
-}
-
-// ── Topbar ───────────────────────────────────────────────────────────────────
-function Topbar({ title, desc, onMenuToggle }) {
-  return (
-    <header className="bg-white border-b border-gray-200 flex items-center gap-3 px-4 sm:px-6 py-3 flex-shrink-0">
-      {/* Hamburger — mobile only */}
-      <button
-        onClick={onMenuToggle}
-        style={{background:'none',border:'none',cursor:'pointer',padding:4,color:'#374151',borderRadius:6,lineHeight:1,flexShrink:0}}
-        className="sm:hidden"
-      >
-        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
-          <line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/>
-        </svg>
-      </button>
-      <div className="flex-1 min-w-0">
-        <h1 className="text-[15px] font-bold text-gray-900 leading-tight truncate">{title}</h1>
-        {desc && <p className="hidden sm:block text-xs text-gray-400 mt-0.5 leading-none truncate">{desc}</p>}
-      </div>
-      <div className="flex items-center gap-2 flex-shrink-0">
-        <input
-          type="text"
-          placeholder="Search…"
-          className="hidden sm:block w-48 px-3 py-1.5 text-[13px] border border-gray-200 rounded-lg bg-gray-50 focus:outline-none focus:border-indigo-400"
-        />
-        <div className="w-8 h-8 rounded-full bg-indigo-600 flex items-center justify-center text-white text-xs font-bold flex-shrink-0">S</div>
-      </div>
-    </header>
-  );
-}
-
-// ── Page metadata ─────────────────────────────────────────────────────────────
-const PAGES = {
-  dashboard:     { title: 'Dashboard',     desc: 'Platform overview — organizations, users, revenue' },
-  organizations: { title: 'Organizations', desc: 'Academic institutions and corporate companies' },
-  users:         { title: 'Users',         desc: 'All platform users across organizations' },
-  subscriptions: { title: 'Subscriptions', desc: 'Trial and subscription status' },
-  payments:      { title: 'Payments',      desc: 'Revenue and payment history' },
-  approvals:     { title: 'Approvals',     desc: 'Locked accounts and subscription issues' },
-  reports:       { title: 'Reports',       desc: 'Export data for analysis' },
-  roles:         { title: 'Roles',         desc: 'Assign and manage user roles' },
-  settings:      { title: 'Settings',      desc: 'Platform configuration and pricing' },
-};
-
-// ── StatCard ──────────────────────────────────────────────────────────────────
-function StatCard({ label, value, sub, accent }) {
-  const colors = {
-    indigo:  { bg: 'bg-indigo-50',  text: 'text-indigo-600',  dot: 'bg-indigo-400'  },
-    violet:  { bg: 'bg-violet-50',  text: 'text-violet-600',  dot: 'bg-violet-400'  },
-    sky:     { bg: 'bg-sky-50',     text: 'text-sky-600',     dot: 'bg-sky-400'     },
-    emerald: { bg: 'bg-emerald-50', text: 'text-emerald-600', dot: 'bg-emerald-400' },
-    amber:   { bg: 'bg-amber-50',   text: 'text-amber-600',   dot: 'bg-amber-400'   },
-    rose:    { bg: 'bg-rose-50',    text: 'text-rose-600',    dot: 'bg-rose-400'    },
-  };
-  const c = colors[accent] || colors.indigo;
-  return (
-    <div className="bg-white rounded-2xl p-5 shadow-sm flex flex-col gap-3">
-      <div className={`w-9 h-9 rounded-xl ${c.bg} flex items-center justify-center`}>
-        <span className={`w-2.5 h-2.5 rounded-full ${c.dot} block`} />
-      </div>
-      <div>
-        <p className="text-2xl font-bold text-gray-800">{value}</p>
-        <p className="text-sm font-medium text-gray-500 mt-0.5">{label}</p>
-      </div>
-      {sub && <p className="text-xs text-gray-400 -mt-1">{sub}</p>}
-    </div>
-  );
-}
-
-// ── AlertsPanel ───────────────────────────────────────────────────────────────
-function AlertsPanel() {
-  const [issues,  setIssues]  = React.useState(null);
-  const [trialsOrgs, setTrials] = React.useState([]);
-
-  React.useEffect(() => {
-    api('/api/superadmin/issues').then(d => setIssues(d)).catch(() => setIssues({}));
-    api('/api/superadmin/overview').then(d => {
-      const ending = (d.companies || []).filter(c => c.isTrialActive && c.trialDaysRemaining <= 7);
-      setTrials(ending);
-    }).catch(() => {});
-  }, []);
-
-  const locked   = issues?.locked           || [];
-  const expired  = issues?.expiredCompanies || [];
-  const loading  = issues === null;
-
-  const COLORS = {
-    rose:   { dot: 'bg-rose-400',   badge: 'bg-rose-50 text-rose-600',   bar: 'bg-rose-400'   },
-    amber:  { dot: 'bg-amber-400',  badge: 'bg-amber-50 text-amber-600', bar: 'bg-amber-400'  },
-    sky:    { dot: 'bg-sky-400',    badge: 'bg-sky-50 text-sky-600',     bar: 'bg-sky-400'    },
-    orange: { dot: 'bg-orange-400', badge: 'bg-orange-50 text-orange-600', bar: 'bg-orange-400' },
-  };
-
-  const AlertRow = ({ color, label, count, items, urgent }) => {
-    const c = COLORS[color] || COLORS.sky;
-    return (
-      <div className="mb-3">
-        <div className="flex items-center justify-between mb-1.5">
-          <div className="flex items-center gap-2">
-            <span className={`w-2 h-2 rounded-full ${c.dot} ${urgent && count > 0 ? 'animate-pulse' : ''}`} />
-            <span className="text-xs font-semibold text-gray-600">{label}</span>
-          </div>
-          <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${c.badge} ${urgent && count > 0 ? 'ring-1 ring-current' : ''}`}>
-            {loading ? '…' : count}
-          </span>
-        </div>
-        {!loading && items.length > 0 && (
-          <ul className="space-y-1 pl-4">
-            {items.slice(0, 3).map((it, i) => (
-              <li key={i} className="text-xs text-gray-500 truncate flex items-center gap-1">
-                <span className={`w-1 h-1 rounded-full flex-shrink-0 ${c.dot}`} />
-                {it}
-              </li>
-            ))}
-            {items.length > 3 && <li className="text-xs text-gray-400 pl-2">+{items.length - 3} more</li>}
-          </ul>
-        )}
-        {!loading && items.length === 0 && (
-          <p className="pl-4 text-xs text-emerald-400 font-medium">All clear</p>
-        )}
-      </div>
-    );
-  };
-
-  const totalAlerts = locked.length + expired.length + trialsOrgs.length;
-
-  return (
-    <div className="w-full sm:w-64 flex-shrink-0 bg-white rounded-2xl p-5 shadow-sm">
-      <div className="flex items-center justify-between mb-4">
-        <h3 className="text-sm font-bold text-gray-700">Platform Alerts</h3>
-        {totalAlerts > 0 && (
-          <span className="bg-rose-500 text-white text-xs font-bold px-2 py-0.5 rounded-full">{totalAlerts}</span>
-        )}
-      </div>
-      <AlertRow color="rose"   label="Locked Accounts"     count={locked.length}      items={locked.map(u => u.name || u.email)} urgent />
-      <AlertRow color="orange" label="Trials Ending (≤7d)" count={trialsOrgs.length}  items={trialsOrgs.map(c => `${c.name} · ${c.trialDaysRemaining}d`)} urgent />
-      <AlertRow color="amber"  label="Expired Orgs"        count={expired.length}     items={expired.map(c => c.name)} />
-    </div>
-  );
-}
-
-// ── DashboardPage ─────────────────────────────────────────────────────────────
-function DashboardPage() {
-  const [stats, setStats] = React.useState(null);
-  const [loading, setLoading] = React.useState(true);
-  const [refreshing, setRefreshing] = React.useState(false);
-
-  const loadStats = () => {
-    setRefreshing(true);
-    return Promise.all([
-      api('/api/superadmin/overview'),
-      api('/api/superadmin/analytics'),
-      api('/api/superadmin/users?page=1'),
-    ]).then(([ov, an, us]) => {
-      const cos = ov.companies || [];
-      setStats({
-        institutions:  cos.filter(c => c.mode === 'academic').length,
-        companies:     cos.filter(c => c.mode === 'corporate').length,
-        totalUsers:    us.total || 0,
-        activeSubs:    cos.filter(c => c.subscriptionActive && !c.isTrialActive).length,
-        trialsEnding:  cos.filter(c => c.isTrialActive && c.trialDaysRemaining <= 7).length,
-        revenueMonth:  (an.revenue || []).slice(-1)[0] || 0,
-      });
-    }).catch(() => setStats({})).finally(() => { setLoading(false); setRefreshing(false); });
-  };
-
-  React.useEffect(() => { loadStats(); }, []);
-
-  const fmt = v => loading ? '…' : (v == null ? '—' : v.toLocaleString());
-  const fmtGhs = v => loading ? '…' : (v == null ? '—' : 'GHS ' + Number(v).toLocaleString());
-
-  return (
-    <div className="flex flex-col sm:flex-row gap-4 sm:gap-6 items-start">
-      {/* left: stat cards + recent users */}
-      <div className="flex-1 min-w-0 space-y-4">
-        <div className="flex items-center justify-between">
-          <span className="text-xs font-semibold text-slate-400 uppercase tracking-wide">Overview</span>
-          <button onClick={loadStats} disabled={refreshing}
-            className="text-xs text-indigo-500 hover:text-indigo-700 font-medium disabled:opacity-40 flex items-center gap-1 transition-colors">
-            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-              <path d="M23 4v6h-6M1 20v-6h6"/><path d="M3.51 9a9 9 0 0114.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0020.49 15"/>
-            </svg>
-            {refreshing ? 'Refreshing…' : 'Refresh'}
-          </button>
-        </div>
-        <div className="grid grid-cols-2 gap-4">
-          <StatCard label="Institutions"          value={fmt(stats?.institutions)}     sub="Academic orgs"        accent="indigo"  />
-          <StatCard label="Companies"             value={fmt(stats?.companies)}        sub="Corporate orgs"       accent="violet"  />
-          <StatCard label="Total Users"           value={fmt(stats?.totalUsers)}       sub="All roles incl. HOD"  accent="sky"     />
-          <StatCard label="Active Subscriptions"  value={fmt(stats?.activeSubs)}       sub="Excl. free trials"    accent="emerald" />
-          <StatCard label="Trials Ending Soon"    value={fmt(stats?.trialsEnding)}     sub="Within next 7 days"   accent="amber"   />
-          <StatCard label="Revenue (This Month)"  value={fmtGhs(stats?.revenueMonth)}  sub="Subscriptions only"   accent="rose"    />
-        </div>
-        <RecentUsersTable />
-      </div>
-      {/* right: alerts panel */}
-      <AlertsPanel />
-    </div>
-  );
-}
-
-// ── RecentUsersTable ──────────────────────────────────────────────────────────
-const ROLE_BADGE = {
-  admin:      'bg-indigo-50 text-indigo-600',
-  manager:    'bg-violet-50 text-violet-600',
-  hod:        'bg-sky-50 text-sky-600',
-  lecturer:   'bg-teal-50 text-teal-600',
-  student:    'bg-gray-100 text-gray-500',
-  employee:   'bg-orange-50 text-orange-600',
-  superadmin: 'bg-rose-50 text-rose-600',
-};
-function RecentUsersTable() {
-  const [rows, setRows] = React.useState(null);
-
-  React.useEffect(() => {
-    api('/api/superadmin/users?page=1').then(d => setRows((d.users || []).slice(0, 8))).catch(() => setRows([]));
-  }, []);
-
-  const cols = ['Name', 'Email', 'Role', 'Org', 'Joined'];
-
-  return (
-    <div className="bg-white rounded-2xl shadow-sm overflow-hidden">
-      <div className="flex items-center justify-between px-5 py-4 border-b border-gray-50">
-        <span className="text-sm font-bold text-gray-700">Recent Users</span>
-        <span className="text-xs text-gray-400">Latest 8</span>
-      </div>
-      <div className="overflow-x-auto">
-        <table className="w-full text-sm">
-          <thead>
-            <tr className="border-b border-gray-50">
-              {cols.map(c => (
-                <th key={c} className="px-5 py-3 text-left text-xs font-semibold text-gray-400 uppercase tracking-wide">{c}</th>
-              ))}
-            </tr>
-          </thead>
-          <tbody>
-            {rows === null && (
-              <tr><td colSpan={5} className="px-5 py-8 text-center text-sm text-gray-300">Loading…</td></tr>
-            )}
-            {rows !== null && rows.length === 0 && (
-              <tr><td colSpan={5} className="px-5 py-8 text-center text-sm text-gray-300">No users found</td></tr>
-            )}
-            {(rows || []).map(u => (
-              <tr key={u._id} className="border-b border-gray-50 hover:bg-gray-50 transition-colors">
-                <td className="px-5 py-3 font-medium text-gray-800 truncate max-w-[140px]">{u.name || '—'}</td>
-                <td className="px-5 py-3 text-gray-500 truncate max-w-[160px]">{u.email}</td>
-                <td className="px-5 py-3">
-                  <span className={`px-2 py-0.5 rounded-full text-xs font-semibold ${ROLE_BADGE[u.role] || 'bg-gray-100 text-gray-500'}`}>
-                    {u.role}
-                  </span>
-                </td>
-                <td className="px-5 py-3 text-gray-500 truncate max-w-[140px]">{u.company?.name || '—'}</td>
-                <td className="px-5 py-3 text-gray-400 whitespace-nowrap">
-                  {u.createdAt ? new Date(u.createdAt).toLocaleDateString() : '—'}
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-    </div>
-  );
-}
-
-// ── Page placeholder ──────────────────────────────────────────────────────────
-function PagePlaceholder({ id }) {
-  const page = PAGES[id] || { title: id, desc: '' };
-  return (
-    <div className="flex flex-col items-center justify-center py-24 text-center">
-      <div className="w-12 h-12 rounded-2xl bg-indigo-50 flex items-center justify-center mb-4">
-        <span className="text-indigo-400">
-          {NAV_ITEMS.find(n => n.id === id)?.icon}
-        </span>
-      </div>
-      <h2 className="text-lg font-bold text-gray-800 mb-1">{page.title}</h2>
-      <p className="text-sm text-gray-400 max-w-xs">{page.desc}</p>
-      <span className="mt-4 inline-block px-3 py-1 rounded-full bg-indigo-50 text-indigo-500 text-xs font-semibold">
-        Coming soon
-      </span>
-    </div>
-  );
-}
-
-// ── OrgCard ───────────────────────────────────────────────────────────────────
-function OrgCard({ org, onClick }) {
-  const active = org.subscriptionActive;
-  const trial  = org.isTrialActive;
-  const statusLabel = trial ? 'Trial' : active ? 'Active' : 'Expired';
-  const statusCls   = trial
-    ? 'bg-amber-50 text-amber-600'
-    : active
-    ? 'bg-emerald-50 text-emerald-600'
-    : 'bg-rose-50 text-rose-600';
-
-  const modeCls = org.mode === 'corporate' ? 'bg-violet-50 text-violet-500' : 'bg-sky-50 text-sky-500';
-
-  return (
-    <div onClick={onClick} className="bg-white rounded-2xl p-4 shadow-sm flex items-center gap-4 hover:shadow-md hover:bg-slate-50/60 transition-all cursor-pointer">
-      <div className="w-10 h-10 rounded-xl bg-indigo-50 flex items-center justify-center flex-shrink-0">
-        <span className="text-indigo-500 font-bold text-sm">{(org.name || '?')[0].toUpperCase()}</span>
-      </div>
-      <div className="flex-1 min-w-0">
-        <p className="font-semibold text-gray-800 truncate">{org.name}</p>
-        <p className="text-xs text-gray-400">{org.userCount || 0} users · {org.adminEmail || 'no admin'}</p>
-      </div>
-      <div className="flex items-center gap-2 flex-shrink-0">
-        <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${modeCls} hidden sm:inline`}>{org.mode}</span>
-        <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${statusCls}`}>{statusLabel}</span>
-      </div>
-    </div>
-  );
-}
-
-// ── OrganizationsPage ─────────────────────────────────────────────────────────
-function OrganizationsPage() {
-  const [tab, setTab]           = React.useState('academic');
-  const [orgs, setOrgs]         = React.useState(null);
-  const [selected, setSelected] = React.useState(null);
-
-  const reloadOrgs = () => api('/api/superadmin/overview')
-    .then(d => setOrgs(d.companies || [])).catch(() => setOrgs([]));
-
-  React.useEffect(() => { reloadOrgs(); }, []);
-
-  const goBack = () => { setSelected(null); reloadOrgs(); };
-
-  const list = (orgs || []).filter(c => c.mode === tab);
-
-  const TabBtn = ({ id, label }) => (
-    <button
-      onClick={() => setTab(id)}
-      className={`px-4 py-2 text-sm font-semibold rounded-xl transition-colors ${
-        tab === id ? 'bg-indigo-600 text-white' : 'text-gray-500 hover:text-gray-800'
-      }`}
-    >
-      {label} <span className="ml-1 text-xs opacity-70">({(orgs || []).filter(c => c.mode === id).length})</span>
-    </button>
-  );
-
-  if (selected) {
-    return <OrgDetailPage org={selected} onBack={goBack} />;
-  }
-
-  return (
-    <div className="space-y-4">
-      <div className="flex gap-2 bg-white rounded-2xl p-1.5 shadow-sm w-fit">
-        <TabBtn id="academic"  label="Academic" />
-        <TabBtn id="corporate" label="Corporate" />
-      </div>
-
-      {orgs === null && (
-        <p className="text-sm text-gray-400 text-center py-12">Loading…</p>
-      )}
-
-      {orgs !== null && list.length === 0 && (
-        <p className="text-sm text-gray-400 text-center py-12">No {tab} organizations found</p>
-      )}
-
-      <div className="grid grid-cols-1 gap-3">
-        {list.map(o => <OrgCard key={o._id} org={o} onClick={() => setSelected(o)} />)}
-      </div>
-    </div>
-  );
-}
-
-// ── UsersPage ─────────────────────────────────────────────────────────────────
-function UsersPage() {
-  const [users,   setUsers]   = React.useState(null);
-  const [search,  setSearch]  = React.useState('');
-  const [role,    setRole]    = React.useState('');
-  const [mode,    setMode]    = React.useState('');
-  const [page,    setPage]    = React.useState(1);
-  const [total,   setTotal]   = React.useState(0);
-
-  const load = (p = 1) => {
-    const qs = new URLSearchParams({ page: p, ...(search && { search }), ...(role && { role }), ...(mode && { mode }) });
-    api('/api/superadmin/users?' + qs)
-      .then(d => { setUsers(d.users || []); setTotal(d.total || 0); setPage(p); })
-      .catch(() => setUsers([]));
-  };
-
-  React.useEffect(() => { load(1); }, [search, role, mode]);
-
-  const ROLES = ['admin','manager','hod','lecturer','student','employee'];
-  const MODES = ['academic','corporate'];
-
-  return (
-    <div className="space-y-4">
-      {/* filter bar */}
-      <div className="bg-white rounded-2xl p-4 shadow-sm flex flex-wrap gap-3 items-center">
-        <input
-          value={search} onChange={e => setSearch(e.target.value)}
-          placeholder="Search name or email…"
-          className="flex-1 min-w-[180px] border border-gray-200 rounded-xl px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-indigo-200"
-        />
-        <select value={role} onChange={e => setRole(e.target.value)}
-          className="border border-gray-200 rounded-xl px-3 py-2 text-sm text-gray-600 outline-none focus:ring-2 focus:ring-indigo-200">
-          <option value="">All roles</option>
-          {ROLES.map(r => <option key={r} value={r}>{r}</option>)}
-        </select>
-        <select value={mode} onChange={e => setMode(e.target.value)}
-          className="border border-gray-200 rounded-xl px-3 py-2 text-sm text-gray-600 outline-none focus:ring-2 focus:ring-indigo-200">
-          <option value="">All modes</option>
-          {MODES.map(m => <option key={m} value={m}>{m}</option>)}
-        </select>
-        <span className="text-xs text-gray-400 ml-auto">{total} total</span>
-      </div>
-
-      {/* table */}
-      <div className="bg-white rounded-2xl shadow-sm overflow-hidden">
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="border-b border-gray-50">
-                {['Name','Email','Role','Mode','Org','Joined'].map(c => (
-                  <th key={c} className="px-5 py-3 text-left text-xs font-semibold text-gray-400 uppercase tracking-wide">{c}</th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {users === null && (
-                <tr><td colSpan={6} className="px-5 py-10 text-center text-sm text-gray-300">Loading…</td></tr>
-              )}
-              {users !== null && users.length === 0 && (
-                <tr><td colSpan={6} className="px-5 py-10 text-center text-sm text-gray-300">No users found</td></tr>
-              )}
-              {(users || []).map(u => (
-                <tr key={u._id} className="border-b border-gray-50 hover:bg-gray-50 transition-colors">
-                  <td className="px-5 py-3 font-medium text-gray-800 truncate max-w-[130px]">{u.name || '—'}</td>
-                  <td className="px-5 py-3 text-gray-500 truncate max-w-[160px]">{u.email}</td>
-                  <td className="px-5 py-3">
-                    <span className={`px-2 py-0.5 rounded-full text-xs font-semibold ${ROLE_BADGE[u.role] || 'bg-gray-100 text-gray-500'}`}>{u.role}</span>
-                  </td>
-                  <td className="px-5 py-3 text-gray-500 capitalize">{u.company?.mode || '—'}</td>
-                  <td className="px-5 py-3 text-gray-500 truncate max-w-[130px]">{u.company?.name || '—'}</td>
-                  <td className="px-5 py-3 text-gray-400 whitespace-nowrap">
-                    {u.createdAt ? new Date(u.createdAt).toLocaleDateString() : '—'}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-        {/* pagination */}
-        {total > 100 && (
-          <div className="flex items-center justify-between px-5 py-3 border-t border-gray-50 text-xs text-gray-400">
-            <button onClick={() => load(page - 1)} disabled={page <= 1}
-              className="px-3 py-1 rounded-lg border border-gray-200 disabled:opacity-40 hover:bg-gray-50">Prev</button>
-            <span>Page {page}</span>
-            <button onClick={() => load(page + 1)} disabled={users && users.length < 100}
-              className="px-3 py-1 rounded-lg border border-gray-200 disabled:opacity-40 hover:bg-gray-50">Next</button>
-          </div>
-        )}
-      </div>
-    </div>
-  );
-}
-
-// ── SubRow ────────────────────────────────────────────────────────────────────
-function SubRow({ org, pricing, onAction, busy }) {
-  const trial  = org.isTrialActive;
-  const active = org.subscriptionActive;
-  const statusLabel = trial ? `Trial · ${org.trialDaysRemaining}d left` : active ? 'Active' : 'Expired';
-  const statusCls   = trial ? 'bg-amber-50 text-amber-600' : active ? 'bg-emerald-50 text-emerald-600' : 'bg-rose-50 text-rose-600';
-  const endDate = org.subscriptionEndDate || org.trialEndDate;
-
-  const Btn = ({ label, action, cls }) => {
-    const key = `${org._id}-${action}`;
-    const isBusy = busy === key;
-    return (
-      <button
-        onClick={() => !isBusy && onAction && onAction(action, org)}
-        disabled={isBusy}
-        className={`px-2.5 py-1 rounded-lg text-xs font-semibold transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${cls}`}
-      >
-        {isBusy ? '…' : label}
-      </button>
-    );
-  };
-
-  return (
-    <tr className="border-b border-gray-50 hover:bg-gray-50 transition-colors">
-      <td className="px-5 py-3 font-medium text-gray-800 truncate max-w-[140px]">{org.name}</td>
-      <td className="px-5 py-3 text-gray-500">{org.userCount || 0}</td>
-      <td className="px-5 py-3 text-gray-500">{pricing}</td>
-      <td className="px-5 py-3 text-gray-400 whitespace-nowrap">{endDate ? new Date(endDate).toLocaleDateString() : '—'}</td>
-      <td className="px-5 py-3">
-        <span className={`px-2 py-0.5 rounded-full text-xs font-semibold ${statusCls}`}>{statusLabel}</span>
-      </td>
-      <td className="px-5 py-3">
-        <div className="flex gap-1.5 flex-wrap">
-          <Btn label="View"         action="view"    cls="bg-indigo-50 text-indigo-600 hover:bg-indigo-100" />
-          {trial  && <Btn label="Extend Trial" action="extend"  cls="bg-amber-50 text-amber-600 hover:bg-amber-100" />}
-          {!active && !trial && <Btn label="Activate" action="activate" cls="bg-emerald-50 text-emerald-600 hover:bg-emerald-100" />}
-          {active && !trial  && <Btn label="Suspend"  action="suspend"  cls="bg-rose-50 text-rose-600 hover:bg-rose-100" />}
-        </div>
-      </td>
-    </tr>
-  );
-}
-
-function SubSection({ title, accent, orgs, pricing, onAction, busy }) {
-  const bg = { amber: 'border-amber-300', emerald: 'border-emerald-300', rose: 'border-rose-300', indigo: 'border-indigo-300', violet: 'border-violet-300' }[accent] || 'border-gray-200';
-  return (
-    <div className={`bg-white rounded-2xl shadow-sm overflow-hidden border-t-4 ${bg}`}>
-      <div className="flex items-center justify-between px-5 py-4 border-b border-gray-50">
-        <span className="text-sm font-bold text-gray-700">{title}</span>
-        <span className="text-xs text-gray-400">{orgs.length} org{orgs.length !== 1 ? 's' : ''}</span>
-      </div>
-      {orgs.length === 0
-        ? <p className="px-5 py-8 text-sm text-gray-300 text-center">None</p>
-        : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b border-gray-50">
-                  {['Organization','Users','Pricing','Expires / Ends','Status','Actions'].map(c => (
-                    <th key={c} className="px-5 py-3 text-left text-xs font-semibold text-gray-400 uppercase tracking-wide">{c}</th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {orgs.map(o => <SubRow key={o._id} org={o} pricing={pricing(o)} onAction={onAction} busy={busy} />)}
-              </tbody>
-            </table>
-          </div>
-        )
-      }
-    </div>
-  );
-}
-
-// ── SubscriptionsPage ─────────────────────────────────────────────────────────
-function SubscriptionsPage() {
-  const [orgs, setOrgs]   = React.useState(null);
-  const [busy, setBusy]   = React.useState(null); // orgId + action key
-  const { show, ToastEl } = useToast();
-  const { ask, Dialog }   = useConfirm();
-
-  const reload = () => api('/api/superadmin/overview').then(d => setOrgs(d.companies || [])).catch(() => setOrgs([]));
-  React.useEffect(() => { reload(); }, []);
-
-  if (orgs === null) return <p className="text-center py-16 text-sm text-gray-300">Loading…</p>;
-
-  const academic  = orgs.filter(c => c.mode === 'academic'  && c.subscriptionActive && !c.isTrialActive);
-  const corporate = orgs.filter(c => c.mode === 'corporate' && c.subscriptionActive && !c.isTrialActive);
-  const trials    = orgs.filter(c => c.isTrialActive);
-  const expired   = orgs.filter(c => !c.subscriptionActive && !c.isTrialActive);
-
-  const acPricing    = () => '₵300 / semester';
-  const corpPricing  = () => '₵150 / month';
-  const trialPricing = o  => `Trial (30d) · ${o.trialDaysRemaining}d left`;
-  const expPricing   = () => '—';
-
-  const handleAction = async (action, org) => {
-    const key = `${org._id}-${action}`;
-    if (action === 'view') {
-      if (typeof openDetail === 'function') openDetail(org._id);
-      return;
-    }
-    if (action === 'extend') {
-      const rawDays = window.prompt(`Extend trial for "${org.name}" by how many days?`, '30');
-      if (!rawDays) return;
-      const days = parseInt(rawDays, 10);
-      if (!days || days < 1) { show('Enter a valid number of days.', 'error'); return; }
-      setBusy(key);
-      try {
-        await api(`/api/superadmin/companies/${org._id}/extend-trial`, { method: 'PATCH', body: JSON.stringify({ days }) });
-        show(`Trial extended by ${days} days for ${org.name}.`);
-        await reload();
-      } catch { show('Failed to extend trial.', 'error'); }
-      finally { setBusy(null); }
-      return;
-    }
-    if (action === 'activate' || action === 'suspend') {
-      const verb = action === 'activate' ? 'Activate subscription for' : 'Suspend subscription for';
-      const ok = await ask(`${verb} "${org.name}"?`);
-      if (!ok) return;
-      setBusy(key);
-      try {
-        await api(`/api/superadmin/companies/${org._id}/subscription`, { method: 'PATCH', body: JSON.stringify({ action }) });
-        show(`${org.name} ${action === 'activate' ? 'activated' : 'suspended'} successfully.`);
-        await reload();
-      } catch { show('Action failed.', 'error'); }
-      finally { setBusy(null); }
-    }
-  };
-
-  return (
-    <div className="space-y-5">
-      {ToastEl}{Dialog}
-      <SubSection title="Academic — Active"   accent="indigo" orgs={academic}  pricing={acPricing}    onAction={handleAction} busy={busy} />
-      <SubSection title="Corporate — Active"  accent="violet" orgs={corporate} pricing={corpPricing}  onAction={handleAction} busy={busy} />
-      <SubSection title="Trials Ending"       accent="amber"  orgs={trials}    pricing={trialPricing} onAction={handleAction} busy={busy} />
-      <SubSection title="Expired"             accent="rose"   orgs={expired}   pricing={expPricing}   onAction={handleAction} busy={busy} />
-    </div>
-  );
-}
-
-// ── PaymentsPage ──────────────────────────────────────────────────────────────
-function PaymentsPage() {
-  const [data, setData] = React.useState(null);
-
-  React.useEffect(() => {
-    Promise.all([
-      api('/api/superadmin/payments'),
-      api('/api/superadmin/analytics'),
-    ]).then(([pay, an]) => setData({ pay, an })).catch(() => setData({ pay: {}, an: {} }));
-  }, []);
-
-  const payments   = data?.pay?.payments || [];
-  const totalRev   = data?.pay?.totalRevenue || 0;
-  const revArr     = data?.an?.revenue || [];
-  const monthRev   = revArr.slice(-1)[0] || 0;
-  const acRev      = payments.filter(p => p.company?.mode === 'academic').reduce((s, p) => s + p.amount, 0);
-  const corpRev    = payments.filter(p => p.company?.mode === 'corporate').reduce((s, p) => s + p.amount, 0);
-  const loading    = data === null;
-  const ghs = v => loading ? '…' : `GHS ${Number(v).toLocaleString()}`;
-
-  return (
-    <div className="space-y-5">
-      {/* summary cards */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        <StatCard label="Total Revenue"       value={ghs(totalRev)}  sub="All time"          accent="emerald" />
-        <StatCard label="This Month"          value={ghs(monthRev)}  sub="From analytics"    accent="indigo"  />
-        <StatCard label="Academic Revenue"    value={ghs(acRev)}     sub="Institutions"      accent="sky"     />
-        <StatCard label="Corporate Revenue"   value={ghs(corpRev)}   sub="Companies"         accent="violet"  />
-      </div>
-
-      {/* payment history table */}
-      <div className="bg-white rounded-2xl shadow-sm overflow-hidden">
-        <div className="flex items-center justify-between px-5 py-4 border-b border-gray-50">
-          <span className="text-sm font-bold text-gray-700">Payment History</span>
-          <span className="text-xs text-gray-400">{loading ? '…' : `${payments.length} records`}</span>
-        </div>
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="border-b border-gray-50">
-                {['Organization','Mode','Amount','Type','Date'].map(c => (
-                  <th key={c} className="px-5 py-3 text-left text-xs font-semibold text-gray-400 uppercase tracking-wide">{c}</th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {loading && <tr><td colSpan={5} className="px-5 py-10 text-center text-sm text-gray-300">Loading…</td></tr>}
-              {!loading && payments.length === 0 && <tr><td colSpan={5} className="px-5 py-10 text-center text-sm text-gray-300">No payments found</td></tr>}
-              {payments.map((p, i) => (
-                <tr key={p._id || i} className="border-b border-gray-50 hover:bg-gray-50 transition-colors">
-                  <td className="px-5 py-3 font-medium text-gray-800 truncate max-w-[160px]">{p.company?.name || '—'}</td>
-                  <td className="px-5 py-3">
-                    <span className={`px-2 py-0.5 rounded-full text-xs font-semibold ${p.company?.mode === 'academic' ? 'bg-indigo-50 text-indigo-600' : 'bg-violet-50 text-violet-600'}`}>
-                      {p.company?.mode || '—'}
-                    </span>
-                  </td>
-                  <td className="px-5 py-3 font-semibold text-emerald-600">GHS {Number(p.amount || 0).toLocaleString()}</td>
-                  <td className="px-5 py-3 text-gray-500 capitalize">{p.type || p.plan || '—'}</td>
-                  <td className="px-5 py-3 text-gray-400 whitespace-nowrap">{p.paidAt ? new Date(p.paidAt).toLocaleDateString() : '—'}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-// ── ApprovalsPage ─────────────────────────────────────────────────────────────
-function ApprovalsPage() {
-  const [issues, setIssues]   = React.useState(null);
-  const [busyId, setBusyId]   = React.useState(null);
-  const { show, ToastEl }     = useToast();
-  const { ask, Dialog }       = useConfirm();
-
-  const reload = () => {
-    api('/api/superadmin/issues').then(d => setIssues(d)).catch(() => setIssues({}));
-  };
-  React.useEffect(reload, []);
-
-  const locked    = issues?.locked           || [];
-  const suspended = issues?.suspended        || [];
-  const expired   = issues?.expiredCompanies || [];
-  const loading   = issues === null;
-
-  const unlock = async (userId, name) => {
-    const ok = await ask(`Unlock account for "${name}"?`);
-    if (!ok) return;
-    setBusyId(userId);
-    try {
-      await api(`/api/superadmin/users/${userId}/unlock`, { method: 'PATCH' });
-      show(`${name} unlocked successfully.`);
-      reload();
-    } catch { show('Failed to unlock account.', 'error'); }
-    finally { setBusyId(null); }
-  };
-
-  const IssueSection = ({ title, accent, rows, emptyMsg, renderRow }) => {
-    const border = { rose: 'border-rose-300', amber: 'border-amber-300', sky: 'border-sky-300' }[accent] || 'border-gray-200';
-    return (
-      <div className={`bg-white rounded-2xl shadow-sm overflow-hidden border-t-4 ${border}`}>
-        <div className="flex items-center justify-between px-5 py-4 border-b border-gray-50">
-          <span className="text-sm font-bold text-gray-700">{title}</span>
-          <span className="text-xs text-gray-400">{loading ? '…' : rows.length}</span>
-        </div>
-        {loading && <p className="px-5 py-8 text-sm text-gray-300 text-center">Loading…</p>}
-        {!loading && rows.length === 0 && <p className="px-5 py-8 text-sm text-gray-300 text-center">{emptyMsg}</p>}
-        {!loading && rows.length > 0 && (
-          <ul className="divide-y divide-gray-50">
-            {rows.map(renderRow)}
-          </ul>
-        )}
-      </div>
-    );
-  };
-
-  return (
-    <div className="space-y-5">
-      {ToastEl}{Dialog}
-      <IssueSection
-        title="Locked Accounts" accent="rose" emptyMsg="No locked accounts"
-        rows={locked}
-        renderRow={u => (
-          <li key={u._id} className="flex items-center gap-4 px-5 py-3 hover:bg-gray-50">
-            <div className="flex-1 min-w-0">
-              <p className="font-medium text-gray-800 truncate">{u.name || u.email}</p>
-              <p className="text-xs text-gray-400">{u.email} · {u.role} · {u.company?.name || 'no org'}</p>
-              {u.lockReason && <p className="text-xs text-rose-400 mt-0.5">Reason: {u.lockReason}</p>}
-            </div>
-            <button onClick={() => unlock(u._id, u.name || u.email)} disabled={busyId === u._id}
-              className="px-3 py-1 rounded-lg bg-emerald-50 text-emerald-600 text-xs font-semibold hover:bg-emerald-100 transition-colors flex-shrink-0 disabled:opacity-50 disabled:cursor-not-allowed">
-              {busyId === u._id ? '…' : 'Unlock'}
-            </button>
-          </li>
-        )}
-      />
-
-      <IssueSection
-        title="Suspended Accounts" accent="amber" emptyMsg="No suspended accounts"
-        rows={suspended}
-        renderRow={u => (
-          <li key={u._id} className="flex items-center gap-4 px-5 py-3 hover:bg-gray-50">
-            <div className="flex-1 min-w-0">
-              <p className="font-medium text-gray-800 truncate">{u.name || u.email}</p>
-              <p className="text-xs text-gray-400">{u.email} · {u.role} · {u.company?.name || 'no org'}</p>
-              {u.suspendedReason && <p className="text-xs text-amber-400 mt-0.5">Reason: {u.suspendedReason}</p>}
-            </div>
-            <span className="px-2 py-0.5 rounded-full bg-amber-50 text-amber-600 text-xs font-semibold flex-shrink-0">Suspended</span>
-          </li>
-        )}
-      />
-
-      <IssueSection
-        title="Expired Organizations" accent="sky" emptyMsg="No expired organizations"
-        rows={expired}
-        renderRow={c => (
-          <li key={c._id} className="flex items-center gap-4 px-5 py-3 hover:bg-gray-50">
-            <div className="flex-1 min-w-0">
-              <p className="font-medium text-gray-800 truncate">{c.name}</p>
-              <p className="text-xs text-gray-400 capitalize">{c.mode} · status: {c.subscriptionStatus}</p>
-            </div>
-            <span className="px-2 py-0.5 rounded-full bg-rose-50 text-rose-600 text-xs font-semibold flex-shrink-0">Expired</span>
-          </li>
-        )}
-      />
-    </div>
-  );
-}
-
-// ── ReportsPage ───────────────────────────────────────────────────────────────
-const REPORT_CARDS = [
-  { id: 'users',         label: 'All Users',          desc: 'Export every user with role, org, and status',       accent: 'sky'     },
-  { id: 'organizations', label: 'Organizations',       desc: 'Export all orgs with mode, user count, and status',  accent: 'indigo'  },
-  { id: 'subscriptions', label: 'Subscriptions',       desc: 'Active, trial, and expired subscription details',    accent: 'emerald' },
-  { id: 'revenue',       label: 'Revenue / Payments',  desc: 'Full payment log with org, amount, and date',        accent: 'violet'  },
-];
-
-function ReportsPage() {
-  const [busy, setBusy] = React.useState(null);
-
-  const toCSV = (rows, cols) => {
-    const esc = v => `"${String(v ?? '').replace(/"/g, '""')}"`;
-    return [cols.join(','), ...rows.map(r => cols.map(c => esc(r[c])).join(','))].join('\n');
-  };
-
-  const download = (csv, name) => {
-    const blob = new Blob([csv], { type: 'text/csv' });
-    const url  = URL.createObjectURL(blob);
-    const a    = document.createElement('a');
-    a.href = url; a.download = name; a.click();
-    URL.revokeObjectURL(url);
-  };
-
-  const exportCSV = async (id) => {
-    setBusy(id);
-    try {
-      if (id === 'users') {
-        const d = await api('/api/superadmin/users?page=1');
-        const rows = (d.users || []).map(u => ({
-          name: u.name, email: u.email, role: u.role,
-          mode: u.company?.mode || '', org: u.company?.name || '',
-          joined: u.createdAt ? new Date(u.createdAt).toLocaleDateString() : '',
-        }));
-        download(toCSV(rows, ['name','email','role','mode','org','joined']), 'dikly-users.csv');
-      } else if (id === 'organizations') {
-        const d = await api('/api/superadmin/overview');
-        const rows = (d.companies || []).map(c => ({
-          name: c.name, mode: c.mode, users: c.userCount,
-          status: c.subscriptionActive ? 'active' : c.isTrialActive ? 'trial' : 'expired',
-          admin: c.adminEmail || '', revenue: c.revenue || 0,
-        }));
-        download(toCSV(rows, ['name','mode','users','status','admin','revenue']), 'dikly-orgs.csv');
-      } else if (id === 'subscriptions') {
-        const d = await api('/api/superadmin/overview');
-        const rows = (d.companies || []).map(c => ({
-          name: c.name, mode: c.mode,
-          subscriptionActive: c.subscriptionActive, trialActive: c.isTrialActive,
-          trialDaysLeft: c.trialDaysRemaining || 0,
-          endDate: c.subscriptionEndDate ? new Date(c.subscriptionEndDate).toLocaleDateString() : '',
-        }));
-        download(toCSV(rows, ['name','mode','subscriptionActive','trialActive','trialDaysLeft','endDate']), 'dikly-subscriptions.csv');
-      } else if (id === 'revenue') {
-        const d = await api('/api/superadmin/payments');
-        const rows = (d.payments || []).map(p => ({
-          org: p.company?.name || '', mode: p.company?.mode || '',
-          amount: p.amount, type: p.type || p.plan || '',
-          date: p.paidAt ? new Date(p.paidAt).toLocaleDateString() : '',
-        }));
-        download(toCSV(rows, ['org','mode','amount','type','date']), 'dikly-revenue.csv');
-      }
-    } catch { alert('Export failed'); }
-    finally { setBusy(null); }
-  };
-
-  const dot = { sky: 'bg-sky-400', indigo: 'bg-indigo-400', emerald: 'bg-emerald-400', violet: 'bg-violet-400' };
-  const ring = { sky: 'bg-sky-50', indigo: 'bg-indigo-50', emerald: 'bg-emerald-50', violet: 'bg-violet-50' };
-  const btn  = { sky: 'bg-sky-600 hover:bg-sky-700', indigo: 'bg-indigo-600 hover:bg-indigo-700', emerald: 'bg-emerald-600 hover:bg-emerald-700', violet: 'bg-violet-600 hover:bg-violet-700' };
-
-  return (
-    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-      {REPORT_CARDS.map(card => (
-        <div key={card.id} className="bg-white rounded-2xl p-6 shadow-sm flex flex-col gap-4">
-          <div className={`w-10 h-10 rounded-xl ${ring[card.accent]} flex items-center justify-center`}>
-            <span className={`w-3 h-3 rounded-full ${dot[card.accent]}`} />
-          </div>
-          <div>
-            <p className="font-bold text-gray-800">{card.label}</p>
-            <p className="text-sm text-gray-400 mt-1">{card.desc}</p>
-          </div>
-          <button
-            onClick={() => exportCSV(card.id)}
-            disabled={busy === card.id}
-            className={`mt-auto self-start px-4 py-2 rounded-xl text-white text-sm font-semibold transition-colors disabled:opacity-50 ${btn[card.accent]}`}
-          >
-            {busy === card.id ? 'Preparing…' : 'Export CSV'}
-          </button>
-        </div>
-      ))}
-    </div>
-  );
-}
-
-// ── RolesPage ─────────────────────────────────────────────────────────────────
-const ROLE_DEFS = [
-  { role: 'superadmin', label: 'Superadmin',  desc: 'Full platform access. Manages all institutions and companies.',  mode: 'both',       accent: 'rose'   },
-  { role: 'admin',      label: 'Admin',        desc: 'Manages one institution or company. Controls users and settings.', mode: 'both',    accent: 'indigo' },
-  { role: 'hod',        label: 'HOD',          desc: 'Head of Department. Oversees lecturers, courses, and students.',  mode: 'academic',   accent: 'sky'    },
-  { role: 'lecturer',   label: 'Lecturer',     desc: 'Runs courses, quizzes, and attendance sessions.',                 mode: 'academic',   accent: 'teal'   },
-  { role: 'student',    label: 'Student',      desc: 'Enrolled in courses. Marks attendance and takes quizzes.',        mode: 'academic',   accent: 'violet' },
-  { role: 'manager',    label: 'Manager',      desc: 'Oversees teams, shifts, and payroll for corporate orgs.',         mode: 'corporate',  accent: 'amber'  },
-  { role: 'employee',   label: 'Employee',     desc: 'Staff member. Clocks in/out, requests leave, tracks tasks.',      mode: 'corporate',  accent: 'orange' },
-];
-
-const MODE_BADGE = {
-  academic:  'bg-sky-50 text-sky-600',
-  corporate: 'bg-violet-50 text-violet-600',
-  both:      'bg-gray-100 text-gray-500',
-};
-const MODE_LABEL = { academic: 'Academic', corporate: 'Corporate', both: 'All modes' };
-
-function RolesPage() {
-  const [counts, setCounts] = React.useState(null);
-
-  React.useEffect(() => {
-    const roles = ROLE_DEFS.map(r => r.role);
-    Promise.all(
-      roles.map(role => api(`/api/superadmin/users?role=${role}&page=1`).then(d => [role, d.total || 0]))
-    ).then(pairs => {
-      const map = Object.fromEntries(pairs);
-      setCounts(map);
-    }).catch(() => setCounts({}));
-  }, []);
-
-  const DOT = { rose:'bg-rose-400', indigo:'bg-indigo-400', sky:'bg-sky-400', teal:'bg-teal-400', violet:'bg-violet-400', amber:'bg-amber-400', orange:'bg-orange-400' };
-  const RING = { rose:'bg-rose-50', indigo:'bg-indigo-50', sky:'bg-sky-50', teal:'bg-teal-50', violet:'bg-violet-50', amber:'bg-amber-50', orange:'bg-orange-50' };
-  const TEXT = { rose:'text-rose-600', indigo:'text-indigo-600', sky:'text-sky-600', teal:'text-teal-600', violet:'text-violet-600', amber:'text-amber-600', orange:'text-orange-600' };
-
-  return (
-    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-      {ROLE_DEFS.map(r => {
-        const count = counts?.[r.role];
-        return (
-          <div key={r.role} className="bg-white rounded-2xl p-5 shadow-sm flex flex-col gap-4">
-            <div className="flex items-start justify-between gap-3">
-              <div className={`w-10 h-10 rounded-xl ${RING[r.accent]} flex items-center justify-center flex-shrink-0`}>
-                <span className={`w-3 h-3 rounded-full ${DOT[r.accent]}`} />
-              </div>
-              <span className={`text-xs font-semibold px-2 py-0.5 rounded-full flex-shrink-0 ${MODE_BADGE[r.mode]}`}>
-                {MODE_LABEL[r.mode]}
-              </span>
-            </div>
-            <div className="flex-1">
-              <p className="font-bold text-gray-800">{r.label}</p>
-              <p className="text-sm text-gray-400 mt-1 leading-relaxed">{r.desc}</p>
-            </div>
-            <div className="flex items-center justify-between pt-2 border-t border-gray-50">
-              <span className="text-xs text-gray-400">Total users</span>
-              <span className={`text-lg font-bold ${TEXT[r.accent]}`}>
-                {counts === null ? '…' : (count ?? '—')}
-              </span>
-            </div>
-          </div>
-        );
-      })}
-    </div>
-  );
-}
-
-// ── SettingsPage ──────────────────────────────────────────────────────────────
-function SettingsPage() {
-  const defaultForm = { trialDays: 30, academicPrice: 300, corporatePrice: 150, currency: 'GHS', studentTrialDays: 45, studentSemesterPrice: 20, employeeMonthlyPrice: 15 };
-  const [form, setForm]   = React.useState(defaultForm);
-  const [saved, setSaved] = React.useState(false);
-  const [saving, setSaving] = React.useState(false);
-
-  React.useEffect(() => {
-    api('/api/superadmin/settings').then(d => {
-      setForm({
-        trialDays:            d.trialDays            ?? 30,
-        academicPrice:        d.academicPrice        ?? 300,
-        corporatePrice:       d.corporatePrice       ?? 150,
-        currency:             d.currency             ?? 'GHS',
-        studentTrialDays:     d.studentTrialDays     ?? 45,
-        studentSemesterPrice: d.studentSemesterPrice ?? 20,
-        employeeMonthlyPrice: d.employeeMonthlyPrice ?? 15,
-      });
-    }).catch(() => {});
-  }, []);
-
-  const set = (k, v) => { setForm(f => ({ ...f, [k]: v })); setSaved(false); };
-
-  const save = async () => {
-    setSaving(true);
-    try {
-      await api('/api/superadmin/settings', { method: 'POST', body: JSON.stringify(form) });
-      setSaved(true);
-    } catch { alert('Failed to save'); }
-    finally { setSaving(false); }
-  };
-
-  const Field = ({ label, hint, field, type = 'number', prefix, min = 0 }) => (
-    <div>
-      <label className="block text-xs font-semibold text-gray-500 mb-1">{label}</label>
-      <div className="flex items-center gap-2">
-        {prefix && <span className="text-sm font-semibold text-gray-500">{prefix}</span>}
-        <input
-          type={type} value={form[field]} min={min}
-          onChange={e => set(field, type === 'number' ? Number(e.target.value) : e.target.value)}
-          className="border border-gray-200 rounded-xl px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-indigo-200 w-36"
-        />
-      </div>
-      {hint && <p className="text-xs text-gray-400 mt-1">{hint}</p>}
-    </div>
-  );
-
-  const Section = ({ title, accent = 'indigo', icon, children }) => (
-    <div className="bg-white rounded-2xl p-6 shadow-sm space-y-5">
-      <div className="flex items-center gap-2 border-b border-gray-50 pb-3">
-        {icon && <span className="text-base">{icon}</span>}
-        <h3 className={`text-sm font-bold text-${accent}-700`}>{title}</h3>
-      </div>
-      {children}
-    </div>
-  );
-
-  return (
-    <div className="max-w-2xl space-y-5">
-      <div className="bg-amber-50 border border-amber-200 rounded-2xl px-5 py-3 text-sm text-amber-800 font-medium">
-        ⚠️ Changes here affect all new registrations and payment amounts platform-wide. Existing paid subscriptions are not modified.
-      </div>
-
-      <Section title="Institution Trial (Company-level)" accent="indigo" icon="🏛️">
-        <Field label="Trial Duration (days)" hint="Free trial period for new institutions from first sign-up" field="trialDays" min={1} />
-        <div className="grid grid-cols-2 gap-4">
-          <Field label="Academic Institution Price (per semester)" prefix="₵" hint="Lecturers/admins at academic institutions" field="academicPrice" />
-          <Field label="Corporate Institution Price (per month)"   prefix="₵" hint="Managers/admins at corporate companies"    field="corporatePrice" />
-        </div>
-        <Field label="Currency Code" type="text" hint="e.g. GHS, USD, EUR" field="currency" />
-      </Section>
-
-      <Section title="Student Pricing" accent="violet" icon="🎓">
-        <Field label="Student Free Trial (days)" hint="Personal trial from the day a student account is created" field="studentTrialDays" min={1} />
-        <Field label="Student Semester Price" prefix="₵" hint="Charged per semester after the student trial ends" field="studentSemesterPrice" />
-      </Section>
-
-      <Section title="Employee Pricing" accent="emerald" icon="💼">
-        <p className="text-xs text-gray-500">Employees are covered by the company trial while it is active. After the company trial ends, each employee must pay monthly.</p>
-        <Field label="Employee Monthly Price" prefix="₵" hint="Charged per month to each employee individually" field="employeeMonthlyPrice" />
-      </Section>
-
-      <div className="flex items-center gap-3">
-        <button onClick={save} disabled={saving}
-          className="px-6 py-2.5 rounded-xl bg-indigo-600 text-white text-sm font-semibold hover:bg-indigo-700 transition-colors disabled:opacity-50">
-          {saving ? 'Saving…' : 'Save All Settings'}
-        </button>
-        {saved && <span className="text-sm text-emerald-600 font-semibold">✓ Saved successfully</span>}
-      </div>
-    </div>
-  );
-}
-
-// ── OrgDetailPage ─────────────────────────────────────────────────────────────
-function OrgDetailPage({ org, onBack }) {
-  const [staff, setStaff] = React.useState(null);
-
-  React.useEffect(() => {
-    api(`/api/superadmin/companies/${org._id}/lecturers`)
-      .then(d => setStaff(d.lecturers || d))
-      .catch(() => setStaff([]));
-  }, [org._id]);
-
-  const rc = org.roleCounts || {};
-  const roleGroups = [
-    { label: 'Admins',    key: 'admin',    cls: 'bg-indigo-50 text-indigo-600' },
-    { label: 'Managers',  key: 'manager',  cls: 'bg-violet-50 text-violet-600' },
-    { label: 'HODs',      key: 'hod',      cls: 'bg-sky-50 text-sky-600' },
-    { label: 'Lecturers / Staff', key: 'lecturer', cls: 'bg-teal-50 text-teal-600' },
-    { label: 'Employees', key: 'employee', cls: 'bg-orange-50 text-orange-600' },
-    { label: 'Students',  key: 'student',  cls: 'bg-gray-100 text-gray-500' },
-  ];
-
-  const subStatus = org.isTrialActive ? `Trial · ${org.trialDaysRemaining}d left` : org.subscriptionActive ? 'Active' : 'Expired';
-  const subCls    = org.isTrialActive ? 'bg-amber-50 text-amber-600' : org.subscriptionActive ? 'bg-emerald-50 text-emerald-600' : 'bg-rose-50 text-rose-600';
-  const endDate   = org.subscriptionEndDate || org.trialEndDate;
-
-  return (
-    <div className="space-y-5">
-      {/* back */}
-      <button onClick={onBack} className="flex items-center gap-2 text-sm text-indigo-600 hover:text-indigo-800 font-medium">
-        ← Back to Organizations
-      </button>
-
-      {/* header */}
-      <div className="bg-white rounded-2xl p-6 shadow-sm flex items-center gap-5">
-        <div className="w-14 h-14 rounded-2xl bg-indigo-50 flex items-center justify-center flex-shrink-0">
-          <span className="text-indigo-500 font-bold text-xl">{(org.name || '?')[0].toUpperCase()}</span>
-        </div>
-        <div className="flex-1 min-w-0">
-          <h2 className="text-lg font-bold text-gray-800">{org.name}</h2>
-          <p className="text-sm text-gray-400 capitalize">{org.mode} · {org.adminEmail || 'no admin'}</p>
-        </div>
-        <span className={`px-3 py-1 rounded-full text-sm font-semibold flex-shrink-0 ${subCls}`}>{subStatus}</span>
-      </div>
-
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
-        {/* user breakdown */}
-        <div className="bg-white rounded-2xl p-5 shadow-sm space-y-3">
-          <h3 className="text-sm font-bold text-gray-700">User Breakdown</h3>
-          <div className="grid grid-cols-3 gap-3">
-            <div className="text-center">
-              <p className="text-2xl font-bold text-gray-800">{org.userCount || 0}</p>
-              <p className="text-xs text-gray-400">Total</p>
-            </div>
-            {roleGroups.filter(r => rc[r.key] > 0).map(r => (
-              <div key={r.key} className="text-center">
-                <p className="text-lg font-bold text-gray-800">{rc[r.key]}</p>
-                <p className="text-xs text-gray-400">{r.label}</p>
-              </div>
-            ))}
-          </div>
-        </div>
-
-        {/* subscription */}
-        <div className="bg-white rounded-2xl p-5 shadow-sm space-y-2">
-          <h3 className="text-sm font-bold text-gray-700">Subscription</h3>
-          <div className="space-y-1.5 text-sm">
-            <div className="flex justify-between"><span className="text-gray-400">Status</span><span className={`px-2 py-0.5 rounded-full text-xs font-semibold ${subCls}`}>{subStatus}</span></div>
-            <div className="flex justify-between"><span className="text-gray-400">Mode</span><span className="text-gray-700 capitalize">{org.mode}</span></div>
-            <div className="flex justify-between"><span className="text-gray-400">Pricing</span><span className="text-gray-700">{org.mode === 'academic' ? '₵300 / semester' : '₵150 / month'}</span></div>
-            <div className="flex justify-between"><span className="text-gray-400">Expires</span><span className="text-gray-700">{endDate ? new Date(endDate).toLocaleDateString() : '—'}</span></div>
-            <div className="flex justify-between"><span className="text-gray-400">Revenue</span><span className="text-emerald-600 font-semibold">GHS {Number(org.revenue || 0).toLocaleString()}</span></div>
-          </div>
-        </div>
-      </div>
-
-      {/* staff list */}
-      <div className="bg-white rounded-2xl shadow-sm overflow-hidden">
-        <div className="flex items-center justify-between px-5 py-4 border-b border-gray-50">
-          <span className="text-sm font-bold text-gray-700">Staff & Roles</span>
-          <span className="text-xs text-gray-400">{staff === null ? '…' : `${staff.length} non-student members`}</span>
-        </div>
-        {staff === null && <p className="px-5 py-8 text-center text-sm text-gray-300">Loading…</p>}
-        {staff !== null && staff.length === 0 && <p className="px-5 py-8 text-center text-sm text-gray-300">No staff found</p>}
-        {staff !== null && staff.length > 0 && (
-          <ul className="divide-y divide-gray-50">
-            {staff.map(u => (
-              <li key={u._id} className="flex items-center gap-3 px-5 py-3 hover:bg-gray-50">
-                <span className={`px-2 py-0.5 rounded-full text-xs font-semibold flex-shrink-0 ${ROLE_BADGE[u.role] || 'bg-gray-100 text-gray-500'}`}>{u.role}</span>
-                <span className="font-medium text-gray-800 truncate">{u.name || u.email}</span>
-                <span className="text-xs text-gray-400 truncate ml-auto">{u.email}</span>
-              </li>
-            ))}
-          </ul>
-        )}
-      </div>
-    </div>
-  );
-}
-
-// ── Layout ───────────────────────────────────────────────────────────────────
-function Layout() {
-  const [section, setSection] = useState('dashboard');
-  const [sidebarOpen, setSidebarOpen] = useState(false);
-  const page = PAGES[section] || {};
-
-  const handleNav = (id) => { setSection(id); setSidebarOpen(false); };
-
-  return (
-    <div className="flex min-h-screen bg-slate-100">
-      <Sidebar
-        active={section}
-        onNav={handleNav}
-        isOpen={sidebarOpen}
-        onClose={() => setSidebarOpen(false)}
-      />
-      <div className="flex-1 flex flex-col overflow-auto min-w-0">
-        <Topbar
-          title={page.title || section}
-          desc={page.desc}
-          onMenuToggle={() => setSidebarOpen(o => !o)}
-        />
-        <main className="flex-1 p-4 sm:p-6">
-          {section === 'dashboard'     ? <DashboardPage />     :
-           section === 'organizations' ? <OrganizationsPage /> :
-           section === 'users'         ? <UsersPage />         :
-           section === 'subscriptions' ? <SubscriptionsPage /> :
-           section === 'payments'      ? <PaymentsPage />      :
-           section === 'approvals'     ? <ApprovalsPage />     :
-           section === 'reports'       ? <ReportsPage />       :
-           section === 'settings'      ? <SettingsPage />      :
-           section === 'roles'         ? <RolesPage />         :
-           <PagePlaceholder id={section} />}
-        </main>
-      </div>
-    </div>
-  );
-}
-
-// ── Mount ────────────────────────────────────────────────────────────────────
-const _appEl = document.getElementById('app');
-if (_appEl) {
-  ReactDOM.createRoot(_appEl).render(<Layout />);
-}
-</script>
-
 </body>
 </html>
