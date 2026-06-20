@@ -4,6 +4,7 @@ const fs       = require("fs");
 const Assignment         = require("../models/Assignment");
 const AssignmentSubmission = require("../models/AssignmentSubmission");
 const Course   = require("../models/Course");
+const User     = require("../models/User");
 const { uploadBrief, uploadSubmission, BRIEF_DIR, SUBMISSION_DIR } = require("../config/uploadConfig");
 const notif    = require("../services/notificationService");
 const { validateObjectId, handleControllerError } = require("../utils/controllerHelpers");
@@ -177,7 +178,13 @@ exports.deleteAssignment = async (req, res) => {
   try {
     const { id } = req.params;
     const delFilter = { _id: id, company: req.user.company };
-    if (req.user.role === "lecturer") delFilter.createdBy = req.user._id;
+    if (req.user.role === "lecturer") {
+      delFilter.createdBy = req.user._id;
+    } else if (req.user.role === "admin") {
+      // Admin can delete any assignment within their department
+      const deptUsers = await User.find({ company: req.user.company, department: req.user.department }).select("_id");
+      delFilter.createdBy = { $in: deptUsers.map(u => u._id) };
+    }
     const assignment = await Assignment.findOneAndDelete(delFilter);
     if (!assignment) return res.status(404).json({ error: "Assignment not found" });
 
@@ -202,12 +209,20 @@ exports.listAssignments = async (req, res) => {
   try {
     const { courseId } = req.query;
     const filter = { company: req.user.company, isActive: true };
-    if (req.user.role === "lecturer") filter.createdBy = req.user._id;
+    if (req.user.role === "lecturer") {
+      filter.createdBy = req.user._id;
+    } else if (req.user.role === "admin") {
+      // Admins see only assignments created by staff in their department
+      const deptUsers = await User.find({ company: req.user.company, department: req.user.department }).select("_id");
+      filter.createdBy = { $in: deptUsers.map(u => u._id) };
+    }
+    // superadmin sees all in company (no extra filter)
     if (courseId && validateObjectId(res, courseId, "course ID")) filter.course = courseId;
 
     const assignments = await Assignment.find(filter)
       .select("-questions.correctAnswers -questions.explanation")
       .populate("course", "title code")
+      .populate("createdBy", "name department")
       .sort({ dueDate: 1 });
 
     // Attach submission counts

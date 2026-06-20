@@ -7923,7 +7923,17 @@ function _renderCoursesHTML(content, courses, isOffline) {
     return '<span style="background:#dcfce7;color:#166534;border:1px solid #bbf7d0;padding:2px 9px;border-radius:20px;font-size:10px;font-weight:700;">✓ Approved</span>';
   }
 
-  function courseCard(course) {
+  // Palette: cycle through accent colors for visual variety
+  const COURSE_PALETTES = [
+    { bg:'#4f6ef7', light:'#eef0fe', text:'#3b5bdb' },
+    { bg:'#7c3aed', light:'#f3eeff', text:'#6d28d9' },
+    { bg:'#0891b2', light:'#e0f7fa', text:'#0e7490' },
+    { bg:'#059669', light:'#d1fae5', text:'#047857' },
+    { bg:'#dc2626', light:'#fee2e2', text:'#b91c1c' },
+    { bg:'#d97706', light:'#fef3c7', text:'#b45309' },
+  ];
+
+  function courseCard(course, idx) {
     const approved   = !course.needsApproval || course.approvalStatus === 'approved';
     const titleEsc   = esc(course.title).replace(/'/g, "\\'");
     const codeEsc    = esc(course.code).replace(/'/g, "\\'");
@@ -7931,66 +7941,66 @@ function _renderCoursesHTML(content, courses, isOffline) {
     const lecInitial = lecturer[0].toUpperCase();
     const enrolled   = course.enrolledStudents?.length ?? course.enrolled ?? 0;
     const dept       = course.department || course.lecturerId?.department || '';
+    const palette    = COURSE_PALETTES[idx % COURSE_PALETTES.length];
 
-    const accentColor = course.approvalStatus === 'approved' ? '#4f6ef7'
-      : course.approvalStatus === 'pending'  ? '#f59e0b'
-      : course.approvalStatus === 'rejected' ? '#ef4444'
-      : '#94a3b8';
+    const statusPill = !course.needsApproval ? ''
+      : course.approvalStatus === 'pending'
+        ? `<span style="background:rgba(255,255,255,.25);color:#fff;padding:2px 9px;border-radius:20px;font-size:10px;font-weight:700;backdrop-filter:blur(4px)">⏳ Pending</span>`
+        : course.approvalStatus === 'rejected'
+          ? `<span style="background:rgba(255,255,255,.25);color:#fff;padding:2px 9px;border-radius:20px;font-size:10px;font-weight:700;backdrop-filter:blur(4px)">✕ Rejected</span>`
+          : `<span style="background:rgba(255,255,255,.25);color:#fff;padding:2px 9px;border-radius:20px;font-size:10px;font-weight:700;backdrop-filter:blur(4px)">✓ Approved</span>`;
 
     let actions = '';
     if (!isOffline && canManageRoster) {
       const uploadBtn = approved
-        ? `<button class="btn btn-primary btn-sm" style="display:inline-flex;align-items:center;gap:5px;font-size:12px" onclick="showUploadRosterModal('${course._id}','${codeEsc}')"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>Upload Students</button>`
-        : `<span style="font-size:11px;color:var(--text-muted);font-style:italic">${course.approvalStatus === 'pending' ? '⏳ Awaiting HOD approval' : '✕ Rejected — contact HOD'}</span>`;
+        ? `<button class="btn btn-sm" style="display:inline-flex;align-items:center;gap:5px;font-size:11px;background:${palette.bg};color:#fff;border:none;font-weight:600" onclick="showUploadRosterModal('${course._id}','${codeEsc}')"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>Upload</button>`
+        : `<span style="font-size:10px;color:var(--text-muted);font-style:italic">${course.approvalStatus === 'pending' ? '⏳ Awaiting approval' : '✕ Rejected'}</span>`;
       actions = `
         ${uploadBtn}
-        <button class="btn btn-sm" style="display:inline-flex;align-items:center;gap:5px;font-size:12px;background:var(--bg);border:1px solid var(--border)" onclick="viewRoster('${course._id}','${codeEsc}')"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/></svg>Roster</button>
-        <button class="btn btn-sm" style="display:inline-flex;align-items:center;gap:5px;font-size:12px;background:#ede9fe;color:#6d28d9;border:1px solid #ddd6fe" onclick="openBulkEmailModal('${course._id}','${titleEsc}')"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg>Email</button>
-        <button class="btn btn-sm" style="display:inline-flex;align-items:center;gap:5px;font-size:12px;background:#dcfce7;color:#166534;border:1px solid #bbf7d0" onclick="openBulkSmsModal('${course._id}','${titleEsc}')"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>SMS</button>`;
+        <button class="btn btn-sm" style="display:inline-flex;align-items:center;gap:4px;font-size:11px;background:var(--bg);border:1px solid var(--border);font-weight:500" onclick="viewRoster('${course._id}','${codeEsc}')"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/></svg>Roster</button>
+        <button class="btn btn-sm" style="display:inline-flex;align-items:center;gap:4px;font-size:11px;background:${palette.light};color:${palette.text};border:1px solid ${palette.bg}33;font-weight:500" onclick="openBulkEmailModal('${course._id}','${titleEsc}')"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg>Email</button>
+        <button class="btn btn-sm" style="display:inline-flex;align-items:center;gap:4px;font-size:11px;background:#dcfce7;color:#166534;border:1px solid #bbf7d0;font-weight:500" onclick="openBulkSmsModal('${course._id}','${titleEsc}')"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>SMS</button>`;
     } else if (!isOffline && isStudent) {
-      actions = `<button class="btn btn-sm" style="background:#f0fdf4;color:#16a34a;border:1px solid #bbf7d0;display:inline-flex;align-items:center;gap:5px;font-size:12px" onclick="generateCertificate('${course._id}','${titleEsc}')">🎓 Certificate</button>`;
+      actions = `<button class="btn btn-sm" style="background:#f0fdf4;color:#16a34a;border:1px solid #bbf7d0;display:inline-flex;align-items:center;gap:4px;font-size:11px;font-weight:500" onclick="generateCertificate('${course._id}','${titleEsc}')">🎓 Certificate</button>`;
     } else if (!isOffline) {
-      actions = `<button class="btn btn-sm" style="background:var(--bg);border:1px solid var(--border);display:inline-flex;align-items:center;gap:5px;font-size:12px" onclick="viewRoster('${course._id}','${codeEsc}')"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/></svg>View Roster</button>`;
+      actions = `<button class="btn btn-sm" style="background:var(--bg);border:1px solid var(--border);display:inline-flex;align-items:center;gap:4px;font-size:11px;font-weight:500" onclick="viewRoster('${course._id}','${codeEsc}')"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/></svg>View Roster</button>`;
     }
 
     return `
-      <div style="background:var(--card);border:1px solid var(--border);border-radius:14px;overflow:hidden;border-left:4px solid ${accentColor};margin-bottom:12px;transition:box-shadow .18s;box-shadow:0 1px 4px rgba(0,0,0,.05)" onmouseover="this.style.boxShadow='0 4px 20px rgba(0,0,0,.09)'" onmouseout="this.style.boxShadow='0 1px 4px rgba(0,0,0,.05)'">
+      <div style="background:var(--card);border:1px solid var(--border);border-radius:16px;overflow:hidden;display:flex;flex-direction:column;transition:transform .15s,box-shadow .15s;box-shadow:0 2px 8px rgba(0,0,0,.06)" onmouseover="this.style.transform='translateY(-2px)';this.style.boxShadow='0 8px 24px rgba(0,0,0,.12)'" onmouseout="this.style.transform='translateY(0)';this.style.boxShadow='0 2px 8px rgba(0,0,0,.06)'">
 
-        <div style="padding:16px 18px 12px">
-          <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:12px;flex-wrap:wrap;margin-bottom:12px">
-            <div style="display:flex;align-items:center;gap:11px;min-width:0">
-              <div style="width:42px;height:42px;border-radius:11px;background:${accentColor}18;display:flex;align-items:center;justify-content:center;flex-shrink:0;border:1.5px solid ${accentColor}33">
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="${accentColor}" stroke-width="2"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg>
-              </div>
-              <div style="min-width:0">
-                <div style="display:flex;align-items:center;gap:7px;flex-wrap:wrap;margin-bottom:3px">
-                  <span style="font-family:monospace;font-size:11px;font-weight:800;background:${accentColor}18;color:${accentColor};padding:2px 8px;border-radius:5px;letter-spacing:.5px">${esc(course.code)}</span>
-                  <span style="font-size:15px;font-weight:700;color:var(--text)">${esc(course.title)}</span>
-                </div>
-                <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;font-size:12px;color:var(--text-muted)">
-                  <div style="display:flex;align-items:center;gap:5px">
-                    <div style="width:20px;height:20px;border-radius:50%;background:linear-gradient(135deg,${accentColor},${accentColor}88);display:flex;align-items:center;justify-content:center;color:#fff;font-size:9px;font-weight:800;flex-shrink:0">${lecInitial}</div>
-                    <span style="font-weight:600;color:var(--text)">${esc(lecturer)}</span>
-                  </div>
-                  ${dept ? `<span style="font-size:10px;color:#fff;background:#0891b2;padding:1px 7px;border-radius:20px;font-weight:600">${esc(dept)}</span>` : ''}
-                </div>
-              </div>
+        <!-- Coloured header band -->
+        <div style="background:linear-gradient(135deg,${palette.bg} 0%,${palette.bg}cc 100%);padding:18px 18px 14px;position:relative;overflow:hidden">
+          <div style="position:absolute;top:-12px;right:-12px;width:80px;height:80px;border-radius:50%;background:rgba(255,255,255,.08)"></div>
+          <div style="position:absolute;bottom:-20px;right:16px;width:56px;height:56px;border-radius:50%;background:rgba(255,255,255,.06)"></div>
+          <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:8px;position:relative">
+            <div>
+              <span style="font-family:monospace;font-size:11px;font-weight:800;background:rgba(255,255,255,.22);color:#fff;padding:3px 10px;border-radius:20px;letter-spacing:.8px;display:inline-block;margin-bottom:8px">${esc(course.code)}</span>
+              <div style="font-size:15px;font-weight:700;color:#fff;line-height:1.3;max-width:180px">${esc(course.title)}</div>
             </div>
-            <div style="display:flex;flex-direction:column;align-items:flex-end;gap:6px;flex-shrink:0">
-              ${statusBadge(course)}
-              <div style="display:flex;align-items:center;gap:5px;font-size:12px;color:var(--text-muted)">
-                ${course.level  ? `<span style="background:#ede9fe;color:#7c3aed;padding:2px 8px;border-radius:20px;font-size:11px;font-weight:700">L${esc(String(course.level))}</span>` : ''}
-                ${course.group  ? `<span style="background:#ecfdf5;color:#059669;padding:2px 8px;border-radius:20px;font-size:11px;font-weight:600">Gr ${esc(course.group)}</span>` : ''}
-                <span style="background:var(--bg);border:1px solid var(--border);padding:2px 8px;border-radius:20px;font-size:11px;font-weight:600;display:inline-flex;align-items:center;gap:3px">
-                  <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/></svg>
-                  ${enrolled}
-                </span>
-              </div>
+            <div style="display:flex;flex-direction:column;align-items:flex-end;gap:5px;flex-shrink:0">
+              ${statusPill}
+              <div style="width:32px;height:32px;border-radius:50%;background:rgba(255,255,255,.2);display:flex;align-items:center;justify-content:center;color:#fff;font-size:13px;font-weight:800;margin-top:2px">${lecInitial}</div>
             </div>
           </div>
         </div>
 
-        <div style="padding:10px 18px;border-top:1px solid var(--border);background:var(--bg);display:flex;flex-wrap:wrap;gap:7px;align-items:center">
+        <!-- Body -->
+        <div style="padding:14px 16px 10px;flex:1">
+          <div style="font-size:12px;font-weight:600;color:var(--text);margin-bottom:10px;display:flex;align-items:center;gap:6px">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+            ${esc(lecturer)}
+          </div>
+          <div style="display:flex;flex-wrap:wrap;gap:5px">
+            ${dept ? `<span style="font-size:10px;color:#fff;background:#0891b2;padding:2px 9px;border-radius:20px;font-weight:600">${esc(dept)}</span>` : ''}
+            ${course.level ? `<span style="font-size:10px;background:#ede9fe;color:#7c3aed;padding:2px 9px;border-radius:20px;font-weight:700">Level ${esc(String(course.level))}</span>` : ''}
+            ${course.group ? `<span style="font-size:10px;background:#ecfdf5;color:#059669;padding:2px 9px;border-radius:20px;font-weight:600">Group ${esc(course.group)}</span>` : ''}
+            <span style="font-size:10px;background:var(--bg);border:1px solid var(--border);color:var(--text-muted);padding:2px 9px;border-radius:20px;font-weight:600;display:inline-flex;align-items:center;gap:3px"><svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/></svg>${enrolled} enrolled</span>
+          </div>
+        </div>
+
+        <!-- Action footer -->
+        <div style="padding:10px 16px;border-top:1px solid var(--border);background:var(--bg);display:flex;flex-wrap:wrap;gap:6px;align-items:center">
           ${actions}
         </div>
       </div>`;
@@ -7999,19 +8009,19 @@ function _renderCoursesHTML(content, courses, isOffline) {
   content.innerHTML = `
     <div style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:10px;margin-bottom:20px">
       <div>
-        <h2 style="font-size:22px;font-weight:800;letter-spacing:-.5px;color:#0f172a;margin-bottom:2px">${isStudent ? 'My Courses' : 'Courses'}</h2>
-        <p style="color:#64748b;font-size:13px">${isStudent ? 'Your enrolled academic courses' : 'Manage academic courses'}${isOffline ? ' · <span style="color:#f59e0b;font-weight:600">Offline — cached</span>' : ''}</p>
+        <h2 style="font-size:22px;font-weight:800;letter-spacing:-.5px;color:var(--text);margin-bottom:2px">${isStudent ? 'My Courses' : 'Courses'}</h2>
+        <p style="color:var(--text-muted);font-size:13px">${isStudent ? 'Your enrolled academic courses' : 'Manage academic courses'}${isOffline ? ' · <span style="color:#f59e0b;font-weight:600">Offline — cached</span>' : ''}</p>
       </div>
       ${canCreate && !isOffline ? `<button class="btn btn-primary" onclick="showCreateCourseModal()" style="display:flex;align-items:center;gap:6px"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>Create Course</button>` : ''}
     </div>
     ${courses.length
-      ? courses.map(courseCard).join('')
-      : `<div style="background:#fff;border:1px solid #e8eaed;border-radius:16px;padding:60px 20px;text-align:center;box-shadow:0 1px 4px rgba(0,0,0,.05)">
+      ? `<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:16px">${courses.map((c,i) => courseCard(c,i)).join('')}</div>`
+      : `<div style="background:var(--card);border:1px solid var(--border);border-radius:16px;padding:60px 20px;text-align:center;box-shadow:0 1px 4px rgba(0,0,0,.05)">
           <div style="width:56px;height:56px;border-radius:16px;background:#eff6ff;display:flex;align-items:center;justify-content:center;margin:0 auto 16px">
             <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#2563eb" stroke-width="1.8"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg>
           </div>
-          <h3 style="font-size:16px;font-weight:700;color:#0f172a;margin-bottom:6px">No courses yet</h3>
-          <p style="color:#64748b;font-size:13px;margin-bottom:20px">${canCreate ? 'Create your first course to get started' : 'No courses have been assigned to you yet'}</p>
+          <h3 style="font-size:16px;font-weight:700;color:var(--text);margin-bottom:6px">No courses yet</h3>
+          <p style="color:var(--text-muted);font-size:13px;margin-bottom:20px">${canCreate ? 'Create your first course to get started' : 'No courses have been assigned to you yet'}</p>
           ${canCreate && !isOffline ? '<button class="btn btn-primary" onclick="showCreateCourseModal()">+ Create Course</button>' : ''}
         </div>`}
   `;
