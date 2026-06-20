@@ -278,6 +278,11 @@
         <span class="sa-nav-icon"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="2" width="14" height="20" rx="2"/><line x1="12" y1="18" x2="12.01" y2="18"/></svg></span>
         Devices
       </button>
+      <div class="sa-nav-label">Configuration</div>
+      <button class="sa-nav-btn" id="nav-pricing" onclick="switchTab('pricing',this)">
+        <span class="sa-nav-icon"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg></span>
+        Pricing
+      </button>
     </nav>
 
     <div class="sa-sidebar-footer">
@@ -325,6 +330,7 @@
       <div id="tab-institutions"><div class="sa-loading"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#94a3b8" stroke-width="2"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg> Loading…</div></div>
       <div id="tab-payments"     style="display:none"><div class="sa-loading">Loading…</div></div>
       <div id="tab-devices"      style="display:none"><div class="sa-loading">Loading…</div></div>
+      <div id="tab-pricing"      style="display:none"><div class="sa-loading">Loading…</div></div>
     </div>
   </div>
 </div>
@@ -476,13 +482,14 @@ const PAGE_META = {
   institutions: { title:'Institutions', desc:'All registered academic and corporate institutions' },
   payments:     { title:'Payments',     desc:'Revenue and payment transaction history' },
   devices:      { title:'Devices',      desc:'ESP32 attendance hardware management' },
+  pricing:      { title:'Pricing',      desc:'Subscription amounts shown to students and employees' },
 };
 
 function switchTab(tab, btn) {
   currentTab = tab;
   document.querySelectorAll('.sa-nav-btn').forEach(b => b.classList.remove('active'));
   if (btn) btn.classList.add('active');
-  ['institutions','payments','devices'].forEach(t => {
+  ['institutions','payments','devices','pricing'].forEach(t => {
     document.getElementById('tab-'+t).style.display = t === tab ? 'block' : 'none';
   });
   const m = PAGE_META[tab] || {};
@@ -491,12 +498,14 @@ function switchTab(tab, btn) {
   closeAllDropdowns();
   if (tab === 'payments') loadPayments();
   if (tab === 'devices')  loadDevices();
+  if (tab === 'pricing')  loadPricing();
 }
 
 function refreshCurrentTab() {
   if (currentTab === 'institutions') loadInstitutions();
   else if (currentTab === 'payments') loadPayments();
   else if (currentTab === 'devices')  loadDevices();
+  else if (currentTab === 'pricing')  loadPricing();
 }
 
 function openSidebar()  { document.getElementById('sa-sidebar').classList.add('open'); document.getElementById('sidebar-overlay').classList.add('show'); }
@@ -1192,6 +1201,164 @@ async function saveNotes() {
     status.textContent='✓ Saved'; status.className='modal-status status-ok';
     setTimeout(()=>closeModal('notes-modal'), 1200);
   } catch(ex) { status.textContent='Error: '+ex.message; status.className='modal-status status-err'; }
+}
+
+// ── Pricing Tab ───────────────────────────────────────────────────────────────
+async function loadPricing() {
+  const wrap = document.getElementById('tab-pricing');
+  wrap.innerHTML = '<div class="sa-loading">Loading pricing…</div>';
+  try {
+    const s = await api('/api/superadmin/settings');
+    wrap.innerHTML = buildPricingPage(s);
+  } catch(ex) {
+    wrap.innerHTML = `<div class="sa-empty" style="color:#dc2626">Error: ${ex.message}</div>`;
+  }
+}
+
+function buildPricingPage(s) {
+  const field = (id, label, val, hint='') => `
+    <div class="pricing-field">
+      <label for="${id}">${label}</label>
+      ${hint ? `<div class="pricing-hint">${hint}</div>` : ''}
+      <div class="pricing-input-wrap">
+        <span class="pricing-prefix">${s.currency||'GHS'}</span>
+        <input type="number" id="${id}" value="${val??''}" min="0" step="0.01" class="pricing-input">
+      </div>
+    </div>`;
+
+  const trialField = (id, label, val, hint='') => `
+    <div class="pricing-field">
+      <label for="${id}">${label}</label>
+      ${hint ? `<div class="pricing-hint">${hint}</div>` : ''}
+      <div class="pricing-input-wrap">
+        <input type="number" id="${id}" value="${val??''}" min="1" step="1" class="pricing-input" style="border-radius:9px">
+        <span style="position:absolute;right:12px;top:50%;transform:translateY(-50%);font-size:12px;color:#94a3b8;pointer-events:none">days</span>
+      </div>
+    </div>`;
+
+  return `
+  <style>
+    .pricing-section{background:#fff;border:1px solid #e8edf2;border-radius:14px;padding:24px;margin-bottom:20px;box-shadow:0 1px 4px rgba(0,0,0,.05)}
+    .pricing-section-header{display:flex;align-items:center;gap:10px;margin-bottom:6px}
+    .pricing-section-icon{width:36px;height:36px;border-radius:9px;display:flex;align-items:center;justify-content:center;flex-shrink:0}
+    .pricing-section-title{font-size:14px;font-weight:700;color:#0f172a}
+    .pricing-section-desc{font-size:12.5px;color:#64748b;margin-bottom:20px;padding-left:46px;line-height:1.5}
+    .pricing-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:16px}
+    .pricing-field{}
+    .pricing-field label{display:block;font-size:11.5px;font-weight:700;color:#374151;margin-bottom:5px;text-transform:uppercase;letter-spacing:.4px}
+    .pricing-hint{font-size:11.5px;color:#94a3b8;margin-bottom:7px;line-height:1.4}
+    .pricing-input-wrap{position:relative;display:flex;align-items:center}
+    .pricing-prefix{position:absolute;left:12px;font-size:13px;font-weight:700;color:#64748b;pointer-events:none;z-index:1}
+    .pricing-input{width:100%;padding:10px 12px 10px 48px;border:1.5px solid #e2e8f0;border-radius:9px;font-size:15px;font-weight:700;color:#0f172a;outline:none;font-family:inherit;transition:border-color .15s;background:#fafafa}
+    .pricing-input:focus{border-color:#818cf8;background:#fff;box-shadow:0 0 0 3px rgba(129,140,248,.1)}
+    .pricing-save-row{display:flex;align-items:center;gap:12px;margin-top:4px}
+    .pricing-save-btn{padding:11px 24px;background:#4f46e5;color:#fff;border:none;border-radius:10px;font-size:13.5px;font-weight:700;cursor:pointer;font-family:inherit;transition:background .15s;display:inline-flex;align-items:center;gap:7px}
+    .pricing-save-btn:hover{background:#4338ca}
+    .pricing-save-btn:disabled{opacity:.55;cursor:not-allowed}
+    .pricing-save-status{font-size:13px;font-weight:600}
+    .pricing-notice{background:#eff6ff;border:1px solid #bfdbfe;border-radius:10px;padding:12px 16px;font-size:13px;color:#1e40af;display:flex;align-items:flex-start;gap:10px;margin-bottom:20px}
+  </style>
+
+  <div class="pricing-notice">
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="flex-shrink:0;margin-top:1px"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+    <div>Changes take effect immediately — the next time a student or employee opens their subscription page they will see the updated price. Existing active subscriptions are not affected.</div>
+  </div>
+
+  <!-- Student pricing -->
+  <div class="pricing-section">
+    <div class="pricing-section-header">
+      <div class="pricing-section-icon" style="background:#eff6ff;color:#2563eb">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M22 10v6M2 10l10-5 10 5-10 5z"/><path d="M6 12v5c3 3 9 3 12 0v-5"/></svg>
+      </div>
+      <div class="pricing-section-title">Student Pricing <span style="background:#dbeafe;color:#1d4ed8;border-radius:20px;padding:1px 9px;font-size:10.5px;font-weight:700;margin-left:6px">Academic</span></div>
+    </div>
+    <div class="pricing-section-desc">Amount charged per student per semester (16 weeks / 112 days). This is what students see when they open their Subscription page.</div>
+    <div class="pricing-grid" style="grid-template-columns:repeat(auto-fill,minmax(240px,1fr))">
+      ${field('p-student-semester', 'Semester Price', s.studentSemesterPrice??20, 'Charged once per semester (16 weeks)')}
+      ${trialField('p-student-trial', 'Student Trial Days', s.studentTrialDays??45, 'Free trial period before subscription is required')}
+    </div>
+  </div>
+
+  <!-- Employee pricing -->
+  <div class="pricing-section">
+    <div class="pricing-section-header">
+      <div class="pricing-section-icon" style="background:#f5f3ff;color:#6d28d9">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"/></svg>
+      </div>
+      <div class="pricing-section-title">Employee Pricing <span style="background:#f5f3ff;color:#6d28d9;border-radius:20px;padding:1px 9px;font-size:10.5px;font-weight:700;margin-left:6px">Corporate</span></div>
+    </div>
+    <div class="pricing-section-desc">Amount charged per employee per month (30 days). This is what employees see when they open their Subscription page.</div>
+    <div class="pricing-grid" style="grid-template-columns:repeat(auto-fill,minmax(240px,1fr))">
+      ${field('p-employee-monthly', 'Monthly Price', s.employeeMonthlyPrice??15, 'Charged once per month (30 days)')}
+    </div>
+  </div>
+
+  <!-- Institution plan pricing -->
+  <div class="pricing-section">
+    <div class="pricing-section-header">
+      <div class="pricing-section-icon" style="background:#ecfdf5;color:#059669">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
+      </div>
+      <div class="pricing-section-title">Institution Plan Pricing <span style="background:#ecfdf5;color:#065f46;border-radius:20px;padding:1px 9px;font-size:10.5px;font-weight:700;margin-left:6px">Admin / HOD / Lecturer</span></div>
+    </div>
+    <div class="pricing-section-desc">Prices for admin, HOD, and lecturer accounts. These are set manually via the payment adjuster — not Paystack. Used when recording payments in the Institutions tab.</div>
+    <div class="pricing-grid">
+      ${field('p-academic-price', 'Academic Semester Price', s.academicPrice??300, 'Default for lecturer/HOD/admin in academic institutions')}
+      ${field('p-corporate-price', 'Corporate Monthly Price', s.corporatePrice??150, 'Default for manager/admin in corporate institutions')}
+      ${trialField('p-trial-days', 'Institution Trial Days', s.trialDays??30, 'Default trial period for new institutions')}
+    </div>
+  </div>
+
+  <div class="pricing-save-row">
+    <button class="pricing-save-btn" id="pricing-save-btn" onclick="savePricing()">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>
+      Save All Prices
+    </button>
+    <span class="pricing-save-status" id="pricing-save-status"></span>
+  </div>`;
+}
+
+async function savePricing() {
+  const btn    = document.getElementById('pricing-save-btn');
+  const status = document.getElementById('pricing-save-status');
+  const get    = id => { const el = document.getElementById(id); return el ? Number(el.value) : null; };
+
+  const body = {
+    studentSemesterPrice: get('p-student-semester'),
+    studentTrialDays:     get('p-student-trial'),
+    employeeMonthlyPrice: get('p-employee-monthly'),
+    academicPrice:        get('p-academic-price'),
+    corporatePrice:       get('p-corporate-price'),
+    trialDays:            get('p-trial-days'),
+  };
+
+  // Validate
+  for (const [k,v] of Object.entries(body)) {
+    if (v === null || isNaN(v) || v < 0) {
+      status.textContent = 'All fields must be valid positive numbers.';
+      status.style.color = '#dc2626';
+      return;
+    }
+  }
+
+  btn.disabled = true; btn.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg> Saving…';
+  status.textContent = '';
+
+  try {
+    await api('/api/superadmin/settings', { method:'POST', body: JSON.stringify(body) });
+    status.textContent = '✓ Prices updated — changes are live immediately';
+    status.style.color = '#16a34a';
+    btn.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg> Saved!';
+    setTimeout(() => {
+      btn.disabled = false;
+      btn.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg> Save All Prices';
+    }, 2500);
+  } catch(ex) {
+    status.textContent = 'Error: ' + ex.message;
+    status.style.color = '#dc2626';
+    btn.disabled = false;
+    btn.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg> Save All Prices';
+  }
 }
 
 // ── Export CSV ────────────────────────────────────────────────────────────────
