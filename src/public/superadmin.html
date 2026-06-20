@@ -328,7 +328,16 @@ function doLogout() {
 }
 
 async function api(path, opts={}) {
-  const r = await fetch(path, { ...opts, headers:{'Content-Type':'application/json','Authorization':'Bearer '+SA_TOKEN,...(opts.headers||{})} });
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), 15000);
+  let r;
+  try {
+    r = await fetch(path, { signal: ctrl.signal, ...opts, headers:{'Content-Type':'application/json','Authorization':'Bearer '+SA_TOKEN,...(opts.headers||{})} });
+    clearTimeout(timer);
+  } catch(e) {
+    clearTimeout(timer);
+    throw new Error(e.name === 'AbortError' ? 'Request timed out. Check your connection.' : e.message);
+  }
   const d = await r.json();
   if (!r.ok) throw new Error(d.error || 'Request failed');
   return d;

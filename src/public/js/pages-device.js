@@ -1260,17 +1260,16 @@ async function adLoadDevices() {
   if (!list) return;
   try {
     const controller = new AbortController();
-    const _timeout   = setTimeout(() => controller.abort(), 12000);
+    const _timeout   = setTimeout(() => controller.abort(), 10000);
     let data;
     try {
-      data = await fetch((window.API || '') + '/api/devices/all', {
+      const r = await fetch((window.API || '') + '/api/devices/all', {
         signal:  controller.signal,
         headers: { 'Authorization': 'Bearer ' + (localStorage.getItem('token') || ''), 'Content-Type': 'application/json' },
-      }).then(async r => {
-        clearTimeout(_timeout);
-        if (!r.ok) throw new Error('HTTP ' + r.status);
-        return r.json();
       });
+      if (!r.ok) { clearTimeout(_timeout); throw new Error('HTTP ' + r.status); }
+      data = await r.json();
+      clearTimeout(_timeout);
     } catch (fe) {
       clearTimeout(_timeout);
       const msg = fe.name === 'AbortError' ? 'Request timed out — server took too long to respond.' : fe.message;
