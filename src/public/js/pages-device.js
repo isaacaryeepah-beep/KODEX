@@ -1057,7 +1057,6 @@ function _devCSS() {
 .dev-pairing-code { animation: dev-code-in .2s ease; }
 `;
 }
-}
 
 // ─── ADMIN / HOD — Devices Page ──────────────────────────────────────────────
 async function renderAdminDevices() {
