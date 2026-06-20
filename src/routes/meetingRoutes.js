@@ -47,6 +47,11 @@ router.delete('/:id/delete', loadMeeting, isOwner, meetCtrl.deleteMeeting);
 // ─── ROOM CONTROL (moderator) ─────────────────────────────────────────────────
 router.post('/:id/lock',   loadMeeting, isModerator, meetCtrl.lockRoom);
 router.post('/:id/unlock', loadMeeting, isModerator, meetCtrl.unlockRoom);
+router.post('/:id/mute-all',               loadMeeting, isModerator, meetCtrl.muteAll);
+router.post('/:id/participants/:uid/mute', loadMeeting, isModerator, meetCtrl.muteParticipant);
+
+// ─── JITSI HEALTH ─────────────────────────────────────────────────────────────
+router.get('/jitsi/health', meetCtrl.jitsiHealth);
 
 // ─── INVIGILATOR MANAGEMENT (owner only) ─────────────────────────────────────
 router.post('/:id/invigilators/add',    loadMeeting, isOwner, meetCtrl.addInvigilator);

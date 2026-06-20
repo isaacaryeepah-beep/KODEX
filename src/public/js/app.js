@@ -190,6 +190,64 @@ function stopNotifPolling() {
   if (_notifPollTimer) { clearInterval(_notifPollTimer); _notifPollTimer = null; }
 }
 
+// ── SSE real-time notifications ───────────────────────────────────────────────
+let _sseSource      = null;
+let _notifUnread    = 0;
+let _notifPanelOpen = false;
+let _sseFailures    = 0;
+let _sseRetryTimer  = null;
+
+function _updateNotifBadge(count) {
+  _notifUnread = count;
+  const badge = document.getElementById('notif-bell-badge');
+  if (!badge) return;
+  if (count > 0) {
+    badge.textContent   = count > 99 ? '99+' : count;
+    badge.style.display = 'inline-block';
+  } else {
+    badge.style.display = 'none';
+  }
+}
+
+function startSSE(isRetry = false) {
+  if (_sseRetryTimer) { clearTimeout(_sseRetryTimer); _sseRetryTimer = null; }
+  if (!isRetry) _sseFailures = 0;
+  if (_sseSource) { _sseSource.close(); _sseSource = null; }
+  const token = localStorage.getItem('token');
+  if (!token) return;
+
+  _sseSource = new EventSource(`/api/notifications/stream?token=${encodeURIComponent(token)}`);
+
+  _sseSource.onmessage = (e) => {
+    _sseFailures = 0;
+    try {
+      const msg = JSON.parse(e.data);
+      if (msg.event === 'unread_count') {
+        _updateNotifBadge(msg.count);
+      } else if (msg.event === 'notification') {
+        const n = msg.notification;
+        _updateNotifBadge(_notifUnread + 1);
+        _notifSound.playChime('announcement');
+        if (window.toast) window.toast(n.body || '', 'info', { title: n.title, duration: 6000 });
+        if (_notifPanelOpen) _loadNotifPanel();
+      }
+    } catch (_) {}
+  };
+
+  _sseSource.onerror = () => {
+    if (_sseSource) { _sseSource.close(); _sseSource = null; }
+    _sseFailures++;
+    if (_sseFailures > 5) return;
+    const delay = Math.min(5000 * Math.pow(2, _sseFailures - 1), 60000);
+    _sseRetryTimer = setTimeout(() => { if (currentUser) startSSE(true); }, delay);
+  };
+}
+
+function stopSSE() {
+  if (_sseRetryTimer) { clearTimeout(_sseRetryTimer); _sseRetryTimer = null; }
+  if (_sseSource) { _sseSource.close(); _sseSource = null; }
+}
+
 // ═══════════════════════════════════════════════════════
 // TOAST NOTIFICATION SYSTEM
 // Usage: toast('Message')           → info (default)
@@ -1955,6 +2013,7 @@ async function handleStudentForgotPassword() {
 }
 
 async function handleLogout() {
+  stopSSE();
   stopNotifPolling();
   try {
     if (isOnline()) await api('/api/auth/logout', { method: 'POST' });
@@ -2373,6 +2432,7 @@ function showDashboard(data) {
     buildSidebar();
     loadAnnBadge();
     startNotifPolling();
+    startSSE();
     if (currentUser?.role === 'lecturer') _startLecturerQuizBadge();
     if (currentUser?.role === 'hod') _startHodQuizBadge();
     _notifSound.updateBtn();
