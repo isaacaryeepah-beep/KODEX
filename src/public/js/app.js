@@ -7203,51 +7203,120 @@ function _renderSessionsHTML(content, sessions, isOffline, extras) {
       </div>`
     : '';
 
+  // ── Status colour map ─────────────────────────────────────────────────
+  const _statusMeta = {
+    active:              { color: '#10b981', bg: 'rgba(16,185,129,.12)',  label: 'Active'              },
+    live:                { color: '#10b981', bg: 'rgba(16,185,129,.12)',  label: 'Live'                },
+    paused:              { color: '#f59e0b', bg: 'rgba(245,158,11,.12)',  label: 'Paused'              },
+    locked:              { color: '#f59e0b', bg: 'rgba(245,158,11,.12)',  label: 'Locked'              },
+    stopped:             { color: '#ef4444', bg: 'rgba(239,68,68,.12)',   label: 'Stopped'             },
+    ended:               { color: '#6b7280', bg: 'rgba(107,114,128,.12)', label: 'Ended'               },
+    device_disconnected: { color: '#a855f7', bg: 'rgba(168,85,247,.12)',  label: 'Device Disconnected' },
+  };
+
+  // Stats summary for header
+  const activeSessions = sessions.filter(s => ['active','live'].includes(s.status)).length;
+  const totalSessions  = sessions.length;
+
   content.innerHTML = `
-    <div class="page-header">
-      <h2>Attendance Sessions</h2>
-      <p>Manage attendance sessions${isOffline ? ' <span style="color:#f59e0b;font-weight:600">(Offline — showing cached data)</span>' : ''}</p>
+    <div class="page-header" style="flex-wrap:wrap;gap:10px;">
+      <div>
+        <h2>Attendance Sessions</h2>
+        <p>${totalSessions} session${totalSessions !== 1 ? 's' : ''}${activeSessions > 0 ? ` · <span style="color:#10b981;font-weight:700">${activeSessions} live now</span>` : ''}${isOffline ? ' · <span style="color:#f59e0b;font-weight:600">Offline</span>' : ''}</p>
+      </div>
+      <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+        ${canStart ? `<button class="btn btn-primary btn-sm" onclick="showStartSessionModal()">${svgIcon('<path d="M12 5v14"/><path d="M5 12h14"/>', 14)} Start New Session</button>` : ''}
+        ${filterPill}
+        ${pendingCount > 0 ? `<span style="background:#fef3c7;color:#92400e;border:1px solid #fbbf24;border-radius:6px;padding:4px 12px;font-size:12px;font-weight:600">${pendingCount} pending sync</span>` : ''}
+      </div>
     </div>
     ${newDeviceBanner}
     ${pendingDeviceBanner}
-    <div class="actions-bar" style="margin-bottom:14px;">
-      ${canStart ? `<button class="btn btn-primary btn-sm" onclick="showStartSessionModal()">Start New Session</button>` : ''}
-      ${filterPill}
-      ${pendingCount > 0 ? `<span style="background:#fef3c7;color:#92400e;border:1px solid #fbbf24;border-radius:6px;padding:4px 12px;font-size:12px;font-weight:600">${pendingCount} action${pendingCount!==1?'s':''} pending sync</span>` : ''}
-    </div>
-    <div class="card">
-      ${sessions.length ? `
-        <table>
-          <thead><tr>
-            <th>Title</th>
-            ${isLecturer ? '<th>Course</th>' : ''}
-            <th>Status</th><th>Started</th><th>Stopped</th><th>Actions</th>
-          </tr></thead>
-          <tbody>${sessions.map((s, i) => {
+
+    ${sessions.length === 0
+      ? `<div class="card" style="text-align:center;padding:48px 20px;">
+          <div style="font-size:40px;margin-bottom:12px">📋</div>
+          <h3 style="font-size:15px;font-weight:700;margin-bottom:6px">No sessions found</h3>
+          <p style="color:var(--text-muted);font-size:13px;margin-bottom:${canStart ? '16px' : '0'}">${_sessionsFilterCourseId ? 'No sessions for this course yet.' : 'Sessions you start will appear here.'}</p>
+          ${canStart ? `<button class="btn btn-primary btn-sm" onclick="showStartSessionModal()">Start New Session</button>` : ''}
+        </div>`
+      : `<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:12px;">
+          ${sessions.map(s => {
             const flags = flaggedBySession[s._id] || 0;
-            const flagBadge = flags > 0
-              ? `<span onclick="showFlaggedDevicesModal('${s._id}')" title="${flags} new-device flag${flags !== 1 ? 's' : ''} — click to review" style="background:#fef3c7;color:#92400e;border:1px solid #fbbf24;border-radius:4px;padding:1px 6px;font-size:11px;font-weight:700;margin-left:6px;cursor:pointer;">⚠️ ${flags}</span>`
+            const sm    = _statusMeta[s.status] || { color:'#6b7280', bg:'rgba(107,114,128,.1)', label: s.status };
+            const isLive = ['active','live'].includes(s.status);
+            const isClosed = ['ended','stopped','device_disconnected'].includes(s.status);
+
+            // Duration
+            let duration = '';
+            if (s.startedAt && s.stoppedAt) {
+              const mins = Math.round((new Date(s.stoppedAt) - new Date(s.startedAt)) / 60000);
+              duration = mins >= 60 ? `${Math.floor(mins/60)}h ${mins%60}m` : `${mins}m`;
+            } else if (s.startedAt && isLive) {
+              const mins = Math.round((Date.now() - new Date(s.startedAt)) / 60000);
+              duration = mins >= 60 ? `${Math.floor(mins/60)}h ${mins%60}m` : `${mins}m`;
+            }
+
+            // Course / department label
+            const courseLabel = s.course ? esc(s.course.code || s.course.title || '') : '';
+            const deptLabel   = s.department ? esc(s.department) : '';
+
+            // Attendee count
+            const attendeeCount = s.attendeeCount != null ? s.attendeeCount : (Array.isArray(s.attendees) ? s.attendees.length : null);
+
+            const safeTitle = (s.title||'Session').replace(/['\''\'']/g,'');
+            const actionsHTML = ['active','live','paused','locked'].includes(s.status) && canStart
+              ? `<div style="display:flex;gap:6px;flex-wrap:wrap;">
+                  <button class="btn btn-danger btn-sm" onclick="stopSession('${s._id}')">Stop</button>
+                  ${!isOffline ? `<button class="btn btn-success btn-sm" onclick="generateQR('${s._id}')">QR Code</button>` : ''}
+                  ${!isOffline ? `<button class="btn btn-sm" style="background:#7c3aed;color:#fff;font-size:11px" onclick="generateVerbalCode('${s._id}')">Verbal</button>` : ''}
+                  <button class="btn btn-sm" style="font-size:11px;background:var(--bg);border:1px solid var(--border)" onclick="viewAttendees('${s._id}','${safeTitle}')">Attendees</button>
+                </div>`
+              : ['active','live','paused','locked'].includes(s.status)
+              ? `<button class="btn btn-sm" style="font-size:11px;background:var(--bg);border:1px solid var(--border)" onclick="viewAttendees('${s._id}','${safeTitle}')">Attendees</button>`
+              : isClosed
+              ? `<button class="btn btn-sm" style="font-size:11px;background:var(--bg);border:1px solid var(--border)" onclick="viewAttendees('${s._id}','${safeTitle}')">View Attendees</button>`
               : '';
+
             return `
-            <tr style="${flags > 0 ? 'background:#fffbeb;' : ''}">
-              <td>${s.title || 'Untitled'}${flagBadge}</td>
-              ${isLecturer ? `<td><span style="font-size:11px;font-weight:600;color:#6366f1;">${s.course ? esc(s.course.code || s.course.title || '') : '—'}</span></td>` : ''}
-              <td><span class="status-badge status-${s.status}">${s.status}</span></td>
-              <td>${new Date(s.startedAt).toLocaleString()}</td>
-              <td>${s.stoppedAt ? new Date(s.stoppedAt).toLocaleString() : '-'}</td>
-              <td>${['active','live','paused','locked'].includes(s.status) && canStart ? `
-                <button class="btn btn-danger btn-sm" onclick="stopSession('${s._id}')">Stop</button>
-                ${!isOffline ? `<button class="btn btn-success btn-sm" onclick="generateQR('${s._id}')">QR Code</button>` : ''}
-                ${!isOffline ? `<button class="btn btn-sm" style="background:#7c3aed;color:#fff;font-size:11px" onclick="generateVerbalCode('${s._id}')">Verbal Code</button>` : ''}
-                <button class="btn btn-sm" style="font-size:11px;background:var(--bg);border:1px solid var(--border)" onclick="viewAttendees('${s._id}', '${(s.title||'Session').replace(/['\''\'']/g,'')}')">Attendees</button>
-              ` : ['active','live','paused','locked'].includes(s.status) ? `
-                <button class="btn btn-sm" style="font-size:11px;background:var(--bg);border:1px solid var(--border)" onclick="viewAttendees('${s._id}', '${(s.title||'Session').replace(/['\''\'']/g,'')}')">Attendees</button>
-              ` : ''}</td>
-            </tr>`;
-          }).join('')}</tbody>
-        </table>
-      ` : `<div class="empty-state"><p>${_sessionsFilterCourseId ? 'No sessions for this course yet.' : 'No sessions found'}</p></div>`}
-    </div>
+            <div style="background:var(--card,#111827);border:1px solid var(--border);border-radius:14px;overflow:hidden;display:flex;flex-direction:column;${isLive ? `box-shadow:0 0 0 2px ${sm.color}40;` : ''}">
+              <!-- Status bar + title -->
+              <div style="padding:14px 16px 10px;border-bottom:1px solid var(--border);">
+                <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:8px;margin-bottom:8px;">
+                  <div style="font-size:15px;font-weight:700;color:var(--text);flex:1;line-height:1.3;">${esc(s.title||'Untitled')}${flags > 0 ? `<span onclick="showFlaggedDevicesModal('${s._id}')" title="${flags} new-device flag${flags!==1?'s':''}" style="background:#fef3c7;color:#92400e;border:1px solid #fbbf24;border-radius:4px;padding:1px 5px;font-size:10px;font-weight:700;margin-left:6px;cursor:pointer;">⚠️ ${flags}</span>` : ''}</div>
+                  <span style="flex-shrink:0;background:${sm.bg};color:${sm.color};border:1px solid ${sm.color}40;padding:3px 9px;border-radius:20px;font-size:11px;font-weight:700;white-space:nowrap;">${isLive ? '● ' : ''}${sm.label}</span>
+                </div>
+                <div style="display:flex;flex-wrap:wrap;gap:5px;">
+                  ${courseLabel ? `<span style="background:rgba(99,102,241,.12);color:#6366f1;padding:2px 8px;border-radius:20px;font-size:11px;font-weight:700">${courseLabel}</span>` : ''}
+                  ${deptLabel   ? `<span style="background:rgba(79,110,247,.08);color:#4f6ef7;padding:2px 8px;border-radius:20px;font-size:11px;font-weight:600">${deptLabel}</span>` : ''}
+                </div>
+              </div>
+
+              <!-- Stats row -->
+              <div style="display:grid;grid-template-columns:1fr 1fr${attendeeCount != null ? ' 1fr' : ''};border-bottom:1px solid var(--border);">
+                <div style="padding:10px 14px;${attendeeCount != null ? 'border-right:1px solid var(--border);' : 'border-right:1px solid var(--border);'}">
+                  <div style="font-size:9px;font-weight:700;color:var(--text-muted);letter-spacing:.6px;text-transform:uppercase;margin-bottom:3px">Started</div>
+                  <div style="font-size:12px;font-weight:600;color:var(--text);">${new Date(s.startedAt).toLocaleDateString(undefined,{day:'numeric',month:'short'})}</div>
+                  <div style="font-size:10px;color:var(--text-muted);">${new Date(s.startedAt).toLocaleTimeString(undefined,{hour:'2-digit',minute:'2-digit'})}</div>
+                </div>
+                <div style="padding:10px 14px;${attendeeCount != null ? 'border-right:1px solid var(--border);' : ''}">
+                  <div style="font-size:9px;font-weight:700;color:var(--text-muted);letter-spacing:.6px;text-transform:uppercase;margin-bottom:3px">Duration</div>
+                  <div style="font-size:12px;font-weight:600;color:var(--text);">${duration || '—'}</div>
+                  <div style="font-size:10px;color:var(--text-muted);">${isLive ? 'ongoing' : s.stoppedAt ? 'total' : ''}</div>
+                </div>
+                ${attendeeCount != null ? `
+                <div style="padding:10px 14px;">
+                  <div style="font-size:9px;font-weight:700;color:var(--text-muted);letter-spacing:.6px;text-transform:uppercase;margin-bottom:3px">Attendees</div>
+                  <div style="font-size:14px;font-weight:700;color:var(--text);">${attendeeCount}</div>
+                  <div style="font-size:10px;color:var(--text-muted);">marked</div>
+                </div>` : ''}
+              </div>
+
+              <!-- Actions -->
+              ${actionsHTML ? `<div style="padding:10px 14px 14px;">${actionsHTML}</div>` : ''}
+            </div>`;
+          }).join('')}
+        </div>`}
   `;
 }
 
