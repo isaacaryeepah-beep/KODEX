@@ -579,6 +579,39 @@ static void usedMacAdd(const uint8_t mac[6]) {
   memcpy(usedMacs[usedMacCount++], mac, 6);
 }
 
+// ── IP fallback lock — covers ARP-miss cases where MAC lookup fails ───────────
+// Stores packed IPv4 (uint32_t). On the device AP each phone keeps the same
+// DHCP lease for the whole session, so IP is a reliable per-device identifier.
+static uint32_t usedIps[300];
+static uint16_t usedIpCount   = 0;
+static String   usedIpSession = "";
+
+static void usedIpClear(const String& sid) {
+  usedIpCount = 0; usedIpSession = sid;
+}
+
+static uint32_t _packIp(const String& ip) {
+  unsigned int a = 0, b = 0, c = 0, d = 0;
+  if (sscanf(ip.c_str(), "%u.%u.%u.%u", &a, &b, &c, &d) != 4) return 0;
+  return ((uint32_t)a << 24) | ((uint32_t)b << 16) | ((uint32_t)c << 8) | d;
+}
+
+static bool usedIpCheck(const String& ip) {
+  uint32_t u = _packIp(ip);
+  if (u == 0) return false;
+  for (uint16_t i = 0; i < usedIpCount; i++)
+    if (usedIps[i] == u) return true;
+  return false;
+}
+
+static void usedIpAdd(const String& ip) {
+  if (usedIpCount >= 300) return;
+  uint32_t u = _packIp(ip);
+  if (u == 0) return;
+  if (usedIpSession != sessionId) return;
+  usedIps[usedIpCount++] = u;
+}
+
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 #define LOG(s) do { Serial.print("[Dikly] "); Serial.println(s); } while(0)
 
@@ -3232,6 +3265,7 @@ static void monStart(const String& course, const String& sid) {
   monCount        = 0;
   monPhase        = MON_CHECKIN_OPEN;
   usedMacClear(sid);
+  usedIpClear(sid);
   monCheckinEndMs = millis() + (uint32_t)(MON_CHECKIN_MIN * 60UL * 1000UL);
   monLastScanMs   = 0;
   monScrollOffset = 0;
@@ -3766,6 +3800,15 @@ static void registerLocalHttp() {
         return;
       }
     }
+    // IP fallback lock — blocks re-submission when MAC lookup failed (ARP miss).
+    // Checked unconditionally: even if gotMac is true, the IP check adds a second
+    // layer so a spoofed/rotated MAC cannot be used to submit a second time.
+    if (usedIpSession != sessionId) usedIpClear(sessionId);
+    if (usedIpCheck(clientIp)) {
+      localHttp.send(409, "application/json",
+        "{\"error\":\"Attendance already submitted from this device. Each phone can only mark one student.\"}");
+      return;
+    }
 
     // ── Write to SD card (primary) ────────────────────────────────────────────
     bool stored = false;
@@ -3809,8 +3852,9 @@ static void registerLocalHttp() {
     if (userId.length())   dedupAdd(userId.c_str());
     studentsMarked++;  // update count immediately — visible on screen without waiting for server heartbeat
 
-    // ── Record MAC as used (anti-cheat: one device per submission) ───────────
+    // ── Record MAC + IP as used (anti-cheat: one device per submission) ────────
     if (gotMac) usedMacAdd(clientMac);
+    usedIpAdd(clientIp);  // always record IP — covers ARP-miss cases
 
     // ── Persistent presence monitor: record student + auto-disconnect ─────────
     if (monPhase == MON_CHECKIN_OPEN && indexNum.length()) {
@@ -4067,6 +4111,8 @@ static void registerLocalHttp() {
     sessionStartedAt  = (uint32_t)now;
     studentsMarked    = 0;
     dedupClear(sessionId);
+    usedMacClear(sessionId);
+    usedIpClear(sessionId);
     timeSynced        = true;  // allow code display — time is good enough
 
     if (sdAvailable) {
