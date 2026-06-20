@@ -11,6 +11,13 @@ const jwt               = require('jsonwebtoken');
 // Device is considered offline if no heartbeat within this window.
 const HEARTBEAT_OFFLINE_MS = 45_000;  // 45s = 3 missed heartbeats before going offline
 
+// In-memory cache for listAllDevices — keyed by companyId string, 30s TTL.
+const _devListCache = new Map();
+const _DEV_CACHE_TTL = 30_000;
+function _invalidateDevCache(companyId) {
+  if (companyId) _devListCache.delete(companyId.toString());
+}
+
 // Fire-and-forget device audit helper (never throws).
 function _auditDevice(actor, action, device, meta = {}, req = null) {
   AuditLog.record({
@@ -119,6 +126,7 @@ exports.pairDevice = async (req, res) => {
     await User.findByIdAndUpdate(pairer._id, { devicePairingCode: null, devicePairingExpiry: null });
 
     _auditDevice(pairer, AUDIT_ACTIONS.CREATE, device, { action: 'device_paired_via_code', deviceId });
+    _invalidateDevCache(device.companyId);
     res.status(201).json({ success: true, message: 'Device paired successfully.', token, deviceId: device.deviceId });
   } catch (err) {
     if (err.code === 11000) return res.status(409).json({ message: 'Device already has a device registered.' });
@@ -662,6 +670,7 @@ exports.unlinkDevice = async (req, res) => {
 
     _auditDevice(req.user, AUDIT_ACTIONS.DELETE, device, { action: 'device_unlinked' }, req);
     await Device.deleteOne({ _id: device._id });
+    _invalidateDevCache(req.user.company);
     res.json({ success: true, message: 'Device unlinked successfully.' });
   } catch (err) {
     res.status(500).json({ message: 'Server error' });
@@ -708,6 +717,7 @@ exports.assignGroup = async (req, res) => {
       assignedDepartment: device.assignedDepartment,
     });
 
+    _invalidateDevCache(req.user.company);
     res.json({
       success: true,
       message: `Device assigned to Group ${device.assignedGroup}, Level ${device.assignedLevel}.`,
@@ -737,6 +747,7 @@ exports.renameDevice = async (req, res) => {
     const device = await Device.findOneAndUpdate(query, { deviceName: deviceName.trim() }, { new: true });
     if (!device) return res.status(404).json({ message: 'Device not found or not authorized.' });
 
+    _invalidateDevCache(req.user.company);
     res.json({ success: true, deviceName: device.deviceName });
   } catch (err) {
     res.status(500).json({ message: 'Server error' });
@@ -936,6 +947,7 @@ exports.assignClassRep = async (req, res) => {
       device.ownershipType = 'dedicated';
     }
     await device.save({ validateModifiedOnly: true });
+    _invalidateDevCache(req.user.company);
     res.json({ ok: true });
   } catch (e) { res.status(500).json({ error: 'Server error' }); }
 };
@@ -952,9 +964,19 @@ exports.listAllDevices = async (req, res) => {
       return res.status(403).json({ message: 'Not authorized.' });
     }
 
+    // Serve from cache for admin/superadmin (HOD has department-scoped filter, skip cache).
+    const isHod = req.user.role === 'hod';
+    const cacheKey = companyId.toString();
+    if (!isHod) {
+      const cached = _devListCache.get(cacheKey);
+      if (cached && Date.now() - cached.ts < _DEV_CACHE_TTL) {
+        return res.json({ success: true, devices: cached.data });
+      }
+    }
+
     // HOD: only devices explicitly assigned to their department.
     // Admin/superadmin: everything (including unassigned).
-    const filter = req.user.role === 'hod'
+    const filter = isHod
       ? { companyId, assignedDepartment: req.user.department }
       : { companyId };
 
@@ -991,6 +1013,7 @@ exports.listAllDevices = async (req, res) => {
       createdAt:     d.createdAt,
     }));
 
+    if (!isHod) _devListCache.set(cacheKey, { data: result, ts: Date.now() });
     res.json({ success: true, devices: result });
   } catch (err) {
     console.error('[listAllDevices]', err);
@@ -1176,6 +1199,7 @@ exports.assignLecturer = async (req, res) => {
       courseId,
     }, req);
 
+    _invalidateDevCache(req.user.company);
     res.json({ success: true, message: 'Lecturer assigned to device.', data: device.assignedLecturers });
   } catch (err) {
     console.error('[assignLecturer]', err);
@@ -1227,6 +1251,7 @@ exports.removeLecturer = async (req, res) => {
       courseId,
     }, req);
 
+    _invalidateDevCache(req.user.company);
     res.json({ success: true, message: 'Lecturer removed from device.', data: device.assignedLecturers });
   } catch (err) {
     console.error('[removeLecturer]', err);
@@ -1251,6 +1276,7 @@ exports.removeDevice = async (req, res) => {
     }
 
     await Device.deleteOne({ _id: device._id });
+    _invalidateDevCache(req.user.company);
     res.json({ message: 'Device removed' });
   } catch (err) {
     console.error('[removeDevice]', err);
@@ -1289,6 +1315,7 @@ exports.factoryResetDevice = async (req, res) => {
     await Device.deleteOne({ _id: device._id });
 
     _auditDevice(req.user, AUDIT_ACTIONS.DELETE, device, { action: 'factory_reset', deviceName: device.deviceName });
+    _invalidateDevCache(req.user.company);
     res.json({ success: true, message: 'Factory reset initiated. The device will wipe itself on next heartbeat.' });
   } catch (err) {
     console.error('[factoryResetDevice]', err);
@@ -1414,6 +1441,7 @@ exports.transferDevice = async (req, res) => {
     );
     if (!device) return res.status(404).json({ message: 'Device not found' });
 
+    _invalidateDevCache(req.user.company);
     res.json({ success: true, message: 'Device ownership transferred', data: device });
   } catch (err) {
     res.status(500).json({ message: 'Server error' });
