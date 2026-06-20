@@ -1209,7 +1209,20 @@ async function renderAdminDevices() {
       <div id="ad-device-list"><div class="loading">Loading devices…</div></div>
     </div>`;
 
+  // DOM-level failsafe: if the list still shows the initial loading text after 8s,
+  // force an error + retry regardless of what happened inside the fetch/AbortController.
+  const _domGuard = setTimeout(() => {
+    const el = document.getElementById('ad-device-list');
+    if (el && el.querySelector('.loading')) {
+      el.innerHTML = `<div style="border-left:4px solid #ef4444;font-size:13px;color:#ef4444;padding:16px;border-radius:8px;background:rgba(239,68,68,.07)">
+        Could not load devices — server took too long to respond.
+        <br><button onclick="adLoadDevices()" style="margin-top:10px;padding:6px 14px;border-radius:8px;border:1.5px solid #e2e8f0;background:#fff;color:#1e293b;cursor:pointer;font-size:12px;font-weight:600">Retry</button>
+      </div>`;
+    }
+  }, 8000);
+
   await adLoadDevices();
+  clearTimeout(_domGuard);
 
   // Auto-refresh every 10 s so the HOD sees the device come online without reloading
   if (window._adRefreshTimer) clearInterval(window._adRefreshTimer);
