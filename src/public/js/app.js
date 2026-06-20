@@ -1016,7 +1016,17 @@ function assignmentsIcon() {
 async function _doFetch(path, options, tok) {
   const headers = { 'Content-Type': 'application/json' };
   if (tok) headers['Authorization'] = `Bearer ${tok}`;
-  return fetch(`${API}${path}`, { ...options, headers: { ...headers, ...options.headers } });
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), 15000);
+  try {
+    const res = await fetch(`${API}${path}`, { signal: ctrl.signal, ...options, headers: { ...headers, ...options.headers } });
+    clearTimeout(timer);
+    return res;
+  } catch (e) {
+    clearTimeout(timer);
+    if (e.name === 'AbortError') throw new Error('Request timed out. Check your connection and try again.');
+    throw e;
+  }
 }
 
 // ── Session expiry warning ────────────────────────────────────────────────────
