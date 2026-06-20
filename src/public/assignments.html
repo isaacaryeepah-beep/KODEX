@@ -449,11 +449,12 @@ async function init(){
     const d=await api('GET','/api/auth/me');
     S.user=d.user||d; S.role=S.user.role;
     $('u-name').textContent=S.user.name||S.user.email||'User';
-    const isLecturer=['lecturer','admin','superadmin'].includes(S.role);
+    const isLecturer=['lecturer','superadmin'].includes(S.role);
+    const isAdmin=S.role==='admin';
 
     // Set portal theme
     const dp=$('dashboard-page');
-    dp.setAttribute('data-portal', isLecturer ? 'lecturer' : 'student');
+    dp.setAttribute('data-portal', (isLecturer||isAdmin) ? 'lecturer' : 'student');
 
     // Update topbar
     const rb=$('u-role-badge');
@@ -510,6 +511,12 @@ async function init(){
         await renderLecturerPage();
         if(idParam) await openDetail(idParam, subParam || null);
       }
+    } else if(isAdmin){
+      if(tabParam === 'quizzes') await renderQuizzesPanel();
+      else {
+        await renderAdminAssignmentsPage();
+        if(idParam) await openDetail(idParam, subParam || null);
+      }
     } else {
       if(tabParam === 'quizzes') await renderQuizzesPanel();
       else {
@@ -550,6 +557,73 @@ async function renderLecturerPage(){
 async function loadLecturerAssignments(){
   try{ const d=await api('GET','/api/assignments/lecturer'); S.assignments=d.assignments||[]; renderLecturerList(); }
   catch(e){ toast('Failed to load: '+e.message,'err'); }
+}
+
+// ══════════════════════════════════════════════════════════════════════════
+//  ADMIN — READ-ONLY DEPARTMENT VIEW
+// ══════════════════════════════════════════════════════════════════════════
+async function renderAdminAssignmentsPage(){
+  const dept=S.user.department||'your department';
+  $('page-root').innerHTML=`
+    <div class="page-header" style="display:flex;align-items:flex-start;justify-content:space-between;flex-wrap:wrap;gap:12px;margin-bottom:22px">
+      <div>
+        <h2 style="font-size:21px;font-weight:700;letter-spacing:-.4px;margin-bottom:2px">Assignments</h2>
+        <p style="color:var(--text-light);font-size:13px">Viewing assignments from lecturers in <strong>${dept}</strong></p>
+      </div>
+      <span style="font-size:11px;font-weight:600;background:#fef3c7;color:#92400e;border:1px solid #fbbf24;border-radius:6px;padding:4px 10px;align-self:center">Read-only · Dept: ${dept}</span>
+    </div>
+    <div id="lec-list"><div class="loading">Loading…</div></div>`;
+  try{
+    const d=await api('GET','/api/assignments/lecturer');
+    S.assignments=d.assignments||[];
+    renderAdminAssignmentList();
+  } catch(e){ toast('Failed to load: '+e.message,'err'); }
+}
+
+function renderAdminAssignmentList(){
+  const el=$('lec-list');
+  if(!S.assignments.length){
+    el.innerHTML=`<div class="empty-state">
+      <div style="width:56px;height:56px;border-radius:16px;background:var(--primary-ultra-light);display:flex;align-items:center;justify-content:center;margin:0 auto 16px">
+        <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="var(--primary)" stroke-width="1.8"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
+      </div>
+      <h3>No assignments in your department</h3>
+      <p>Lecturers in your department haven't posted any assignments yet</p>
+    </div>`;
+    return;
+  }
+  const now=new Date();
+  el.innerHTML=`<div class="assign-grid">${S.assignments.map(a=>{
+    const due=new Date(a.dueDate), rel=new Date(a.releaseDate);
+    const isDue=now>due, isLive=now>=rel&&now<=due;
+    const statusTag=isLive
+      ?`<span class="tag tag-green"><span style="display:inline-block;width:6px;height:6px;border-radius:50%;background:#16a34a;margin-right:4px;"></span>Live</span>`
+      :isDue
+        ?`<span class="tag tag-red">Closed</span>`
+        :`<span class="tag tag-gray">Scheduled</span>`;
+    const sub=a.submissionCount||0, grad=a.gradedCount||0;
+    return`<div class="acard" onclick="openDetail('${a._id}')">
+      <div class="acard-top">
+        <div style="flex:1;min-width:0">
+          <div class="acard-course">${a.course?.code||''} · ${a.course?.title||'Course'}</div>
+          <div class="acard-title">${a.title}</div>
+          ${a.createdBy?.name?`<div style="font-size:11px;color:var(--text-muted);margin-top:2px">👨‍🏫 ${a.createdBy.name}</div>`:''}
+        </div>
+        <div class="acard-stat">
+          <div class="acard-num">${sub}</div>
+          <div class="acard-lbl">${sub===1?'Submission':'Submissions'}</div>
+          ${grad?`<div style="font-size:10px;color:#16a34a;margin-top:3px;font-weight:600">${grad} graded</div>`:''}
+        </div>
+      </div>
+      ${a.description?`<div class="acard-desc">${a.description}</div>`:''}
+      <div class="acard-meta">
+        ${statusTag}
+        <span class="tag tag-amber">Due ${fmtDate(a.dueDate)}</span>
+        ${a.hasPdf?`<span class="tag tag-blue">Brief</span>`:''}
+        ${a.questionCount?`<span class="tag tag-purple">${a.questionCount} Q${a.questionCount!==1?'s':''} · ${a.totalMarks} pts</span>`:''}
+      </div>
+    </div>`;
+  }).join('')}</div>`;
 }
 
 function renderLecturerList(){
@@ -818,10 +892,10 @@ async function openDetail(id){
           ${a.questions?.length?`<span class="tag tag-purple">${a.questions.length} Q${a.questions.length!==1?'s':''} · ${a.totalMarks} pts</span>`:''}
         </div>
         <div style="display:flex;gap:8px;flex-wrap:wrap">
-          <button class="btn btn-secondary btn-sm" onclick="openEdit('${a._id}')">
+          ${S.role!=='admin'?`<button class="btn btn-secondary btn-sm" onclick="openEdit('${a._id}')">
             <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
             Edit
-          </button>
+          </button>`:''}
           ${a.questions?.length?`<button class="btn btn-secondary btn-sm" onclick="exportAssignmentPDF(${JSON.stringify(a).replace(/"/g,'&quot;')})">⬇ Export Questions PDF</button>`:''}
           ${a.hasPdf?`<button class="btn btn-secondary btn-sm" onclick="downloadPdf('${a._id}')">Download Brief</button>`:''}
           <button class="btn btn-sm" style="background:#fef2f2;color:#dc2626;border:1px solid #fecaca" onclick="deleteAssignment('${a._id}')">Delete</button>
@@ -849,7 +923,7 @@ async function openDetail(id){
               <td style="font-size:12px;color:var(--text-muted)">${fmtDate(s.submittedAt)}</td>
               <td style="display:flex;gap:5px;flex-wrap:wrap">
                 ${s.submittedFile?.originalName?`<button class="btn btn-secondary btn-xs" onclick="downloadSubFile('${s._id}')">Download</button>`:''}
-                <button class="btn btn-primary btn-xs" onclick="openGrade('${s._id}','${a._id}','${a.totalMarks}','${s.manualGrade||''}')">Grade</button>
+                ${S.role!=='admin'?`<button class="btn btn-primary btn-xs" onclick="openGrade('${s._id}','${a._id}','${a.totalMarks}','${s.manualGrade||''}')">Grade</button>`:''}
               </td>
             </tr>`;
           }).join('')}</tbody>
