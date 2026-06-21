@@ -24,55 +24,73 @@ const SEVERITY_MAP = {
 function riskFor(type)     { return RISK_WEIGHTS[type]   ?? 0; }
 function severityFor(type) { return SEVERITY_MAP[type]   ?? 'info'; }
 
-// Uses Claude Haiku for cost-efficient snapshot analysis.
-async function analyzeSnapshot(imageBase64) {
+// Uses Claude Opus 4.8 for strict, comprehensive snapshot analysis.
+async function analyzeSnapshot(imageBase64, mimeType) {
   if (!process.env.ANTHROPIC_API_KEY) {
     return {
       facePresent: true, faceCount: 1, lookingAway: false,
       phoneVisible: false, suspiciousActivity: false,
-      notes: 'AI key not configured',
+      suspiciousActivityType: 'none', notes: 'AI key not configured',
     };
   }
 
   const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
+  const mediaType = (mimeType || 'image/jpeg');
+
+  const STRICT_PROMPT = `You are a strict AI examination invigilator with zero tolerance for academic dishonesty. Analyze this live exam monitoring snapshot with maximum scrutiny.
+
+Examine for ALL of the following:
+1. Face presence — is exactly one face clearly visible and centered?
+2. Face count — any additional person is an immediate violation
+3. Gaze direction — eyes looking away from screen, to the side, or downward is suspicious
+4. Mobile phone, tablet, or secondary screen visible anywhere in frame
+5. Written notes, textbooks, printed pages, or any reference material
+6. Another person entering or visible in background
+7. Earpiece, earbud, or wired device in ear that could provide audio cues
+8. Student looking down repeatedly (could be reading notes below camera view)
+9. Unusual hand movements suggesting writing notes or using a hidden device
+10. Face partially obscured — covering mouth, turning profile, blocking camera
+11. Poor or suspicious lighting that prevents clear facial identification
+12. Student whispering, mouthing words, or appears to be communicating
+
+Be very strict — flag ANY ambiguity. False positives are acceptable; missed violations are not.
+
+Respond ONLY with valid JSON, no markdown fences, no extra text:
+{"facePresent":boolean,"faceCount":number,"lookingAway":boolean,"phoneVisible":boolean,"suspiciousActivity":boolean,"suspiciousActivityType":"none|notes_visible|extra_person|earpiece|writing|obstructed|bad_lighting|looking_down|communication|other","notes":"concise max-80-char description"}`;
 
   try {
     const response = await client.messages.create({
-      model:      'claude-haiku-4-5',
-      max_tokens: 250,
+      model:      'claude-opus-4-8',
+      max_tokens: 400,
       messages: [{
         role: 'user',
         content: [
-          {
-            type: 'image',
-            source: { type: 'base64', media_type: 'image/jpeg', data: imageBase64 },
-          },
-          {
-            type: 'text',
-            text: 'Analyze this exam monitoring snapshot. Respond ONLY with valid JSON, no markdown fences: { "facePresent": boolean, "faceCount": number, "lookingAway": boolean, "phoneVisible": boolean, "suspiciousActivity": boolean, "notes": "brief" }',
-          },
+          { type: 'image', source: { type: 'base64', media_type: mediaType, data: imageBase64 } },
+          { type: 'text',  text: STRICT_PROMPT },
         ],
       }],
     });
 
-    const rawText = response.content[0]?.text?.trim() || '{}';
+    // Extract text block (skip any thinking blocks)
+    const textBlock = response.content.find(function(b) { return b.type === 'text'; });
+    const rawText = (textBlock && textBlock.text ? textBlock.text : '{}').trim();
     const raw = rawText.replace(/^```json?\s*/i, '').replace(/```\s*$/i, '').trim();
     const result = JSON.parse(raw);
-    // Validate expected shape; fall back to safe defaults for any missing booleans
     return {
-      facePresent:        typeof result.facePresent        === 'boolean' ? result.facePresent        : true,
-      faceCount:          typeof result.faceCount          === 'number'  ? result.faceCount          : 1,
-      lookingAway:        typeof result.lookingAway        === 'boolean' ? result.lookingAway        : false,
-      phoneVisible:       typeof result.phoneVisible       === 'boolean' ? result.phoneVisible       : false,
-      suspiciousActivity: typeof result.suspiciousActivity === 'boolean' ? result.suspiciousActivity : false,
-      notes:              result.notes || '',
+      facePresent:            typeof result.facePresent        === 'boolean' ? result.facePresent        : true,
+      faceCount:              typeof result.faceCount          === 'number'  ? result.faceCount          : 1,
+      lookingAway:            typeof result.lookingAway        === 'boolean' ? result.lookingAway        : false,
+      phoneVisible:           typeof result.phoneVisible       === 'boolean' ? result.phoneVisible       : false,
+      suspiciousActivity:     typeof result.suspiciousActivity === 'boolean' ? result.suspiciousActivity : false,
+      suspiciousActivityType: result.suspiciousActivityType || 'none',
+      notes:                  result.notes || '',
     };
   } catch (err) {
     console.error('[AIProctoringService] analyzeSnapshot error:', err.message);
     return {
       facePresent: true, faceCount: 1, lookingAway: false,
       phoneVisible: false, suspiciousActivity: false,
-      notes: 'analysis_failed',
+      suspiciousActivityType: 'none', notes: 'analysis_failed',
     };
   }
 }

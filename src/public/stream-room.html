@@ -229,6 +229,10 @@
   </div>
 
   <div id="handToast">✋ <span id="handToastName"></span> raised their hand</div>
+  <div id="procToast" style="position:fixed;top:calc(var(--sat) + 100px);left:50%;transform:translateX(-50%);
+    background:#1e0a0a;border:1px solid rgba(239,68,68,.5);border-radius:12px;
+    padding:10px 16px;font-size:13px;font-weight:600;color:#f87171;
+    display:none;z-index:102;max-width:300px;text-align:center;line-height:1.4"></div>
 
   <div id="controlBar">
     <button class="ctrl" id="btnMic"   onclick="toggleMic()">  <span class="ci" id="micIcon">🎤</span><span class="cl">Mic</span></button>
@@ -348,70 +352,187 @@ function postProcEvent(type, meta) {
 }
 
 if (isProctored) {
-  // Monitoring badge in top bar
-  var badge = document.createElement('span');
-  badge.className = 'proctor-badge';
-  badge.innerHTML = '<span class="proctor-dot"></span>Monitored';
-  document.querySelector('.top-right').prepend(badge);
+  // ── Violation counter + badge ──────────────────────────────────────────────
+  var _violationCount = 0;
+  var _badge = document.createElement('span');
+  _badge.className = 'proctor-badge';
+  _badge.innerHTML = '<span class="proctor-dot"></span><span id="procBadgeText">Monitored · AI Active</span>';
+  document.querySelector('.top-right').prepend(_badge);
 
-  // Hide screen share — not allowed during oral exams
+  function _bumpViolation(label) {
+    _violationCount++;
+    var el = document.getElementById('procBadgeText');
+    if (el) el.textContent = 'Monitored · ' + _violationCount + ' violation' + (_violationCount > 1 ? 's' : '');
+    // Alert lecturer via LiveKit data channel at thresholds
+    if (_violationCount === 3 || _violationCount === 5 || (_violationCount > 5 && _violationCount % 5 === 0)) {
+      try {
+        room.localParticipant.publishData(
+          encoder.encode(JSON.stringify({
+            type: 'proctor_alert', userId: userId, userName: userName,
+            count: _violationCount, label: label || 'violation',
+          })),
+          { reliable: true }
+        );
+      } catch(_) {}
+    }
+  }
+
+  // ── Hide screen share ──────────────────────────────────────────────────────
   document.getElementById('btnShare').style.display = 'none';
 
-  // Fullscreen helpers
-  function reqFs() {
+  // ── Fullscreen enforcement ─────────────────────────────────────────────────
+  function _reqFs() {
     var el = document.documentElement;
-    (el.requestFullscreen || el.webkitRequestFullscreen || function(){}).call(el);
+    var fn = el.requestFullscreen || el.webkitRequestFullscreen;
+    if (fn) fn.call(el).catch(function(){});
   }
-  reqFs();
+  _reqFs();
 
-  // Fullscreen-violation overlay with 10-s auto-return
   var _fsTimer = null;
-  function showFsOverlay() {
+  function _showFsOverlay() {
     document.getElementById('fsViolation').classList.add('show');
     var n = 10; document.getElementById('fsCountdown').textContent = n;
     clearInterval(_fsTimer);
     _fsTimer = setInterval(function() {
-      n--;
-      document.getElementById('fsCountdown').textContent = n;
-      if (n <= 0) { clearInterval(_fsTimer); reqFs(); }
+      n--; document.getElementById('fsCountdown').textContent = n;
+      if (n <= 0) { clearInterval(_fsTimer); _reqFs(); }
     }, 1000);
   }
-
-  document.addEventListener('fullscreenchange', function() {
+  function _onFsChange() {
     var inFs = !!(document.fullscreenElement || document.webkitFullscreenElement);
-    if (inFs) {
-      clearInterval(_fsTimer);
-      document.getElementById('fsViolation').classList.remove('show');
-    } else {
-      postProcEvent('fullscreen_exit', null);
-      showFsOverlay();
-    }
-  });
-  document.addEventListener('webkitfullscreenchange', function() {
-    var inFs = !!(document.fullscreenElement || document.webkitFullscreenElement);
-    if (inFs) {
-      clearInterval(_fsTimer);
-      document.getElementById('fsViolation').classList.remove('show');
-    } else {
-      postProcEvent('fullscreen_exit', null);
-      showFsOverlay();
-    }
-  });
+    if (inFs) { clearInterval(_fsTimer); document.getElementById('fsViolation').classList.remove('show'); }
+    else { postProcEvent('fullscreen_exit', null); _bumpViolation('fullscreen_exit'); _showFsOverlay(); }
+  }
+  document.addEventListener('fullscreenchange', _onFsChange);
+  document.addEventListener('webkitfullscreenchange', _onFsChange);
 
-  // Tab-switch logging
+  // ── Tab switch — visibilitychange + window.blur ───────────────────────────
   document.addEventListener('visibilitychange', function() {
-    if (document.hidden) postProcEvent('tab_switch', null);
+    if (document.hidden) { postProcEvent('tab_switch', { method: 'visibility' }); _bumpViolation('tab_switch'); }
+  });
+  window.addEventListener('blur', function() {
+    if (!document.hidden) { postProcEvent('tab_switch', { method: 'window_blur' }); _bumpViolation('tab_switch'); }
   });
 
-  // Block DevTools shortcuts + right-click
+  // ── DevTools size-delta detection ─────────────────────────────────────────
+  var _dtW = window.outerWidth - window.innerWidth;
+  var _dtH = window.outerHeight - window.innerHeight;
+  setInterval(function() {
+    var dw = window.outerWidth - window.innerWidth;
+    var dh = window.outerHeight - window.innerHeight;
+    if (Math.abs(dw - _dtW) > 160 || Math.abs(dh - _dtH) > 160) {
+      postProcEvent('devtools_open', { widthDelta: dw, heightDelta: dh });
+      _bumpViolation('devtools_open');
+      _dtW = dw; _dtH = dh;
+    }
+  }, 2000);
+
+  // ── Key blocking — DevTools, view-source, print, copy, cut, paste ─────────
   document.addEventListener('keydown', function(e) {
     if (e.key === 'F12' ||
         (e.ctrlKey && e.shiftKey && 'ijcIJC'.indexOf(e.key) !== -1) ||
-        (e.ctrlKey && 'uUpP'.indexOf(e.key) !== -1)) {
+        (e.ctrlKey && 'uUpP'.indexOf(e.key) !== -1) ||
+        (e.metaKey && e.altKey && 'ijIJ'.indexOf(e.key) !== -1)) {
       e.preventDefault(); e.stopPropagation();
     }
   }, true);
   document.addEventListener('contextmenu', function(e) { e.preventDefault(); });
+  document.addEventListener('copy',  function(e) { e.preventDefault(); });
+  document.addEventListener('cut',   function(e) { e.preventDefault(); });
+  document.addEventListener('paste', function(e) { e.preventDefault(); });
+
+  // ── Camera / Mic off logging via LiveKit ──────────────────────────────────
+  room.on(RoomEvent.TrackMuted, function(pub, participant) {
+    if (participant !== room.localParticipant) return;
+    if (pub.source === Track.Source.Camera)     { postProcEvent('camera_off', null); _bumpViolation('camera_off'); }
+    if (pub.source === Track.Source.Microphone) { postProcEvent('mic_off', null); }
+  });
+
+  // ── Network drop logging ──────────────────────────────────────────────────
+  room.on(RoomEvent.Disconnected, function() {
+    postProcEvent('network_drop', null);
+  });
+
+  // ── TF.js BlazeFace — local real-time face detection every 3s ────────────
+  var _faceCanvas = document.createElement('canvas');
+  _faceCanvas.width = 320; _faceCanvas.height = 180;
+  var _faceCtx = _faceCanvas.getContext('2d');
+  var _blazeModel = null;
+  var _noFaceStreak = 0;
+
+  function _runFaceDetection() {
+    if (!_blazeModel || !camOn) return;
+    var vid = document.getElementById('vid-' + room.localParticipant.sid);
+    if (!vid || vid.readyState < 2 || !vid.videoWidth) return;
+    try {
+      _faceCtx.drawImage(vid, 0, 0, 320, 180);
+      _blazeModel.estimateFaces(_faceCanvas, false).then(function(preds) {
+        if (preds.length === 0) {
+          _noFaceStreak++;
+          if (_noFaceStreak >= 2) {
+            postProcEvent('face_not_detected', null);
+            _bumpViolation('face_not_detected');
+            _noFaceStreak = 0;
+          }
+        } else {
+          _noFaceStreak = 0;
+          if (preds.length > 1) {
+            postProcEvent('multiple_faces', { count: preds.length });
+            _bumpViolation('multiple_faces');
+          }
+        }
+      }).catch(function(){});
+    } catch(e) { console.warn('[BlazeFace]', e.message); }
+  }
+
+  (function _loadBlazeFace() {
+    var s1 = document.createElement('script');
+    s1.src = 'https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@3.21.0/dist/tf.min.js';
+    s1.onload = function() {
+      var s2 = document.createElement('script');
+      s2.src = 'https://cdn.jsdelivr.net/npm/@tensorflow-models/blazeface@0.0.7/dist/blazeface.min.js';
+      s2.onload = function() {
+        window.blazeface.load().then(function(m) {
+          _blazeModel = m;
+          setInterval(_runFaceDetection, 3000);
+        }).catch(function(e) { console.warn('[BlazeFace load]', e.message); });
+      };
+      document.head.appendChild(s2);
+    };
+    document.head.appendChild(s1);
+  })();
+
+  // ── AI Snapshot — Claude Opus 4.8 every 20s ───────────────────────────────
+  var _snapCanvas = document.createElement('canvas');
+  _snapCanvas.width = 640; _snapCanvas.height = 360;
+  var _snapCtx = _snapCanvas.getContext('2d');
+  var _snapBusy = false;
+
+  function _sendAiSnapshot() {
+    if (_snapBusy || !camOn || !meetingId || !kodexToken) return;
+    var vid = document.getElementById('vid-' + room.localParticipant.sid);
+    if (!vid || vid.readyState < 2 || !vid.videoWidth) return;
+    _snapBusy = true;
+    try {
+      _snapCtx.drawImage(vid, 0, 0, 640, 360);
+      var dataUrl = _snapCanvas.toDataURL('image/jpeg', 0.75);
+      var base64 = dataUrl.split(',')[1];
+      fetch(BASE_URL + '/api/meetings/' + meetingId + '/proctoring/snapshot', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + kodexToken },
+        body: JSON.stringify({ imageBase64: base64, mimeType: 'image/jpeg' }),
+      }).then(function(r) { return r.json(); }).then(function(data) {
+        if (data.violations && data.violations.length) {
+          for (var i = 0; i < data.violations.length; i++) {
+            _bumpViolation(data.violations[i].type);
+          }
+        }
+      }).catch(function(){}).finally(function() { _snapBusy = false; });
+    } catch(e) { console.warn('[AISnapshot]', e.message); _snapBusy = false; }
+  }
+
+  setTimeout(_sendAiSnapshot, 8000);        // first snapshot after 8s
+  setInterval(_sendAiSnapshot, 20000);      // then every 20s
 
   postProcEvent('session_start', { meetingType: meetingType });
 }
@@ -435,6 +556,7 @@ room
       var msg = JSON.parse(decoder.decode(data));
       if (msg.type === 'chat') addChatMessage(msg.name || (participant && participant.name) || 'Participant', msg.text, false);
       if (msg.type === 'hand') showHandToast(msg.name || 'Someone');
+      if (msg.type === 'proctor_alert' && isMod) showProctoringAlert(msg);
     } catch(_) {}
   })
   .on(RoomEvent.Disconnected, function() { showError('You were disconnected from the room.'); });
@@ -636,6 +758,14 @@ function showHandToast(name) {
   document.getElementById('handToastName').textContent = name;
   el.style.display = 'flex'; clearTimeout(el._t);
   el._t = setTimeout(function() { el.style.display = 'none'; }, 4000);
+}
+
+function showProctoringAlert(msg) {
+  var el = document.getElementById('procToast');
+  if (!el) return;
+  el.textContent = '⚠️ ' + (msg.userName || 'A student') + ' — ' + (msg.count || 1) + ' violation' + ((msg.count || 1) > 1 ? 's' : '') + (msg.label && msg.label !== 'violation' ? ' (' + msg.label.replace(/_/g, ' ') + ')' : '');
+  el.style.display = 'block'; clearTimeout(el._t);
+  el._t = setTimeout(function() { el.style.display = 'none'; }, 6000);
 }
 
 var timerInt;

@@ -15,6 +15,7 @@ const RISK_WEIGHTS = {
   network_drop:        3,
   reconnect:           2,
   suspicious_activity: 20,
+  devtools_open:       12,
   // Zero-weight events (informational only)
   session_start:       0,
   fullscreen_enter:    0,
@@ -24,9 +25,9 @@ const RISK_WEIGHTS = {
 };
 
 function severityFor(type) {
-  if (['multiple_faces','suspicious_activity'].includes(type))           return 'high';
-  if (['face_not_detected','fullscreen_exit','camera_off'].includes(type)) return 'medium';
-  if (['tab_switch','mic_off','network_drop'].includes(type))            return 'low';
+  if (['multiple_faces','suspicious_activity','devtools_open'].includes(type)) return 'high';
+  if (['face_not_detected','fullscreen_exit','camera_off'].includes(type))     return 'medium';
+  if (['tab_switch','mic_off','network_drop'].includes(type))                  return 'low';
   return 'info';
 }
 
@@ -109,6 +110,64 @@ exports.getStudentDetail = async (req, res) => {
     }).sort({ timestamp: -1 }).limit(50).lean();
 
     res.json({ success: true, data: { participant: p, events } });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+};
+
+// ── POST /api/meetings/:id/proctoring/snapshot  (student AI analysis) ────────
+exports.postSnapshot = async (req, res) => {
+  try {
+    const { imageBase64, mimeType } = req.body;
+    if (!imageBase64) return res.status(400).json({ error: 'imageBase64 is required' });
+
+    const { analyzeSnapshot, detectViolations } = require('../services/aiProctoringService');
+    const analysis   = await analyzeSnapshot(imageBase64, mimeType || 'image/jpeg');
+    const violations = detectViolations(analysis);
+
+    const userId = req.user._id;
+    const mid    = req.params.id;
+
+    let totalRisk = 0;
+    for (const v of violations) {
+      await ProctoringEvent.create({
+        meeting:   mid,
+        company:   req.user.company,
+        user:      userId,
+        type:      v.type,
+        severity:  v.severity,
+        metadata:  { riskPoints: v.riskPoints, message: v.message, aiNotes: analysis.notes, suspiciousType: analysis.suspiciousActivityType },
+        timestamp: new Date(),
+      });
+      totalRisk += v.riskPoints || 0;
+    }
+
+    let currentRisk = 0;
+    const p = await MeetingParticipant.findOne({ meeting: mid, user: userId });
+    if (p) {
+      p.riskScore = Math.min(100, (p.riskScore || 0) + totalRisk);
+      if (analysis.facePresent === false)   p.faceDetectionStatus = 'no_face';
+      else if (analysis.faceCount > 1)      p.faceDetectionStatus = 'multiple_faces';
+      else                                  p.faceDetectionStatus = 'ok';
+      await p.save();
+      currentRisk = p.riskScore;
+
+      if (violations.length > 0) {
+        const payload = {
+          userId:              String(userId),
+          type:                'ai_snapshot',
+          severity:            violations[0].severity,
+          timestamp:           new Date(),
+          metadata:            { violations: violations.map(v => v.type), aiNotes: analysis.notes },
+          riskScore:           p.riskScore,
+          faceDetectionStatus: p.faceDetectionStatus,
+        };
+        broadcastMonitor(mid, 'proctoring_event', payload);
+        broadcastMonitorWs(mid, 'proctoring_event', payload);
+      }
+    }
+
+    res.json({ success: true, violations, riskScore: currentRisk, analysis });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
