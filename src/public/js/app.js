@@ -2715,6 +2715,7 @@ function buildSidebar() {
       links.push({ id: 'users', label: 'Users', icon: usersIcon() });
       if (currentUser.company?.mode === 'academic') {
         links.push({ id: 'sessions', label: 'Sessions', icon: sessionsIcon() });
+        links.push({ id: 'admin-lecturer-activity', label: 'Lecturer Activity', icon: svgIcon('<rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/>') });
         links.push({ sep: true, label: 'ACADEMIC' });
         links.push({ id: 'courses', label: 'Courses', icon: coursesIcon() });
         links.push({ id: 'hod-course-approvals', label: 'Course Approvals', icon: svgIcon('<path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/>') });
@@ -2793,6 +2794,7 @@ function buildSidebar() {
       links.push({ id: 'hod-performance',  label: 'Performance',    icon: svgIcon('<line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/>') });
       links.push({ id: 'quiz-monitor',     label: 'Quiz Monitor 🔴', icon: svgIcon('<path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7z"/><circle cx="12" cy="12" r="3"/>') });
       links.push({ id: 'hod-alerts',       label: 'Smart Alerts',   icon: svgIcon('<path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/>') });
+      links.push({ id: 'hod-lecturer-activity', label: 'Lecturer Activity', icon: svgIcon('<rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/>') });
       links.push({ id: 'hod-reports',      label: 'Reports',        icon: reportsIcon() });
       links.push({ sep: true, label: 'COMMUNICATE' });
       links.push({ id: 'hod-messaging',    label: 'Dept. Messaging', icon: svgIcon('<path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/><line x1="9" y1="10" x2="15" y2="10"/><line x1="12" y1="7" x2="12" y2="13"/>') });
@@ -3002,7 +3004,9 @@ function navigateTo(view) {
     case 'hod-unlock-students':  renderHodUnlockStudents(); break;
     case 'class-rep-mgmt':       renderClassRepMgmt(); break;
     case 'hod-performance':      renderHodPerformance(); break;
-    case 'hod-alerts':           renderHodAlerts(); break;
+    case 'hod-alerts':                renderHodAlerts(); break;
+    case 'hod-lecturer-activity':     renderLecturerActivity('hod'); break;
+    case 'admin-lecturer-activity':   renderLecturerActivity('admin'); break;
     case 'hod-messaging':        renderHodMessaging(); break;
     case 'announcements': renderAnnouncements(); break;
     case 'gradebook': renderGradeBook(); break;
@@ -3505,6 +3509,329 @@ async function renderHodSessions() {
         </table>
       </div>`+ (_isOff ? `<div style="display:inline-flex;align-items:center;gap:6px;background:#fef3c7;border:1px solid #fde68a;border-radius:20px;padding:3px 12px;font-size:11.5px;font-weight:600;color:#92400e;margin-bottom:10px">📡 Offline · Cached data</div>` : '');
   }
+}
+
+async function renderLecturerActivity(viewAs) {
+  const content = document.getElementById('main-content');
+  content.innerHTML = '<div class="loading">Loading lecturer activity…</div>';
+
+  // Default date range: last 6 months
+  const now  = new Date();
+  const sixMoAgo = new Date(now.getFullYear(), now.getMonth() - 6, now.getDate());
+  let fromDate = sixMoAgo.toISOString().slice(0, 10);
+  let toDate   = now.toISOString().slice(0, 10);
+  let deptFilter = '';
+
+  async function load() {
+    let url = `/api/hod/lecturer-activity?from=${fromDate}&to=${toDate}`;
+    if (deptFilter) url += `&department=${encodeURIComponent(deptFilter)}`;
+    try {
+      const data = await api(url);
+      render(data);
+    } catch(e) {
+      content.innerHTML = `<div class="card"><p style="color:#ef4444">${e.message || 'Failed to load'}</p></div>`;
+    }
+  }
+
+  function activityDot(lastActiveAt) {
+    if (!lastActiveAt) return '<span style="width:8px;height:8px;border-radius:50%;background:#94a3b8;display:inline-block;margin-right:5px;" title="Never active"></span>';
+    const days = Math.floor((Date.now() - new Date(lastActiveAt)) / 86400000);
+    if (days <= 7)  return '<span style="width:8px;height:8px;border-radius:50%;background:#22c55e;display:inline-block;margin-right:5px;" title="Active this week"></span>';
+    if (days <= 30) return '<span style="width:8px;height:8px;border-radius:50%;background:#f59e0b;display:inline-block;margin-right:5px;" title="Active this month"></span>';
+    return '<span style="width:8px;height:8px;border-radius:50%;background:#ef4444;display:inline-block;margin-right:5px;" title="Inactive 30+ days"></span>';
+  }
+
+  function lastActiveLabel(lastActiveAt) {
+    if (!lastActiveAt) return 'Never active';
+    const days = Math.floor((Date.now() - new Date(lastActiveAt)) / 86400000);
+    if (days === 0) return 'Active today';
+    if (days === 1) return 'Yesterday';
+    if (days < 7)  return `${days} days ago`;
+    if (days < 30) return `${Math.floor(days/7)} week${Math.floor(days/7)>1?'s':''} ago`;
+    return `${Math.floor(days/30)} month${Math.floor(days/30)>1?'s':''} ago`;
+  }
+
+  function render(data) {
+    const lecturers = data.lecturers || [];
+    const totalAtt  = lecturers.reduce((s, l) => s + l.attendanceSessions, 0);
+    const totalMeet = lecturers.reduce((s, l) => s + l.meetingSessions, 0);
+    const inactive  = lecturers.filter(l => !l.lastActiveAt || (Date.now() - new Date(l.lastActiveAt)) > 30*86400000).length;
+
+    const deptOptions = viewAs === 'admin'
+      ? `<select id="la-dept-filter" onchange="window._laSetDept(this.value)" style="padding:7px 10px;border:1.5px solid var(--border);border-radius:8px;font-size:13px;background:var(--card);color:var(--text-primary)"><option value="">All Departments</option></select>`
+      : '';
+
+    content.innerHTML = `
+      <div class="page-header" style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:10px;">
+        <div><h2>Lecturer Activity</h2><p>${lecturers.length} lecturer${lecturers.length!==1?'s':''} · ${fromDate} → ${toDate}</p></div>
+        <button class="btn btn-secondary btn-sm" onclick="window._laExportCSV()" style="white-space:nowrap">⬇ Export CSV</button>
+      </div>
+
+      <!-- Stats bar -->
+      <div style="display:flex;gap:12px;flex-wrap:wrap;margin-bottom:20px;">
+        <div style="flex:1;min-width:120px;background:var(--card);border:1px solid var(--border);border-radius:10px;padding:14px 18px;">
+          <div style="font-size:11px;color:var(--text-muted);font-weight:600;text-transform:uppercase;letter-spacing:.5px;margin-bottom:4px">Total Sessions</div>
+          <div style="font-size:26px;font-weight:800;color:var(--primary)">${totalAtt + totalMeet}</div>
+        </div>
+        <div style="flex:1;min-width:120px;background:var(--card);border:1px solid var(--border);border-radius:10px;padding:14px 18px;">
+          <div style="font-size:11px;color:var(--text-muted);font-weight:600;text-transform:uppercase;letter-spacing:.5px;margin-bottom:4px">Attendance</div>
+          <div style="font-size:26px;font-weight:800;color:#3b82f6">${totalAtt}</div>
+        </div>
+        <div style="flex:1;min-width:120px;background:var(--card);border:1px solid var(--border);border-radius:10px;padding:14px 18px;">
+          <div style="font-size:11px;color:var(--text-muted);font-weight:600;text-transform:uppercase;letter-spacing:.5px;margin-bottom:4px">Meetings</div>
+          <div style="font-size:26px;font-weight:800;color:#8b5cf6">${totalMeet}</div>
+        </div>
+        <div style="flex:1;min-width:120px;background:var(--card);border:1px solid var(--border);border-radius:10px;padding:14px 18px;">
+          <div style="font-size:11px;color:var(--text-muted);font-weight:600;text-transform:uppercase;letter-spacing:.5px;margin-bottom:4px">Inactive (30d)</div>
+          <div style="font-size:26px;font-weight:800;color:#ef4444">${inactive}</div>
+        </div>
+      </div>
+
+      <!-- Filters -->
+      <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-bottom:20px;">
+        <div style="display:flex;align-items:center;gap:6px;font-size:13px;">
+          <label style="color:var(--text-muted);font-weight:600;white-space:nowrap">From</label>
+          <input type="date" id="la-from" value="${fromDate}" onchange="window._laSetFrom(this.value)" style="padding:6px 10px;border:1.5px solid var(--border);border-radius:8px;font-size:13px;background:var(--card);color:var(--text-primary)">
+        </div>
+        <div style="display:flex;align-items:center;gap:6px;font-size:13px;">
+          <label style="color:var(--text-muted);font-weight:600;white-space:nowrap">To</label>
+          <input type="date" id="la-to" value="${toDate}" onchange="window._laSetTo(this.value)" style="padding:6px 10px;border:1.5px solid var(--border);border-radius:8px;font-size:13px;background:var(--card);color:var(--text-primary)">
+        </div>
+        ${deptOptions}
+        <select id="la-sort" onchange="window._laSort(this.value)" style="padding:7px 10px;border:1.5px solid var(--border);border-radius:8px;font-size:13px;background:var(--card);color:var(--text-primary)">
+          <option value="most">Most Sessions</option>
+          <option value="least">Least Sessions</option>
+          <option value="recent">Recently Active</option>
+          <option value="name">Name A–Z</option>
+        </select>
+      </div>
+
+      <!-- Cards -->
+      <div id="la-cards" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:14px;">
+        ${lecturers.length === 0 ? '<div class="empty-state"><p>No lecturers found for this period.</p></div>' :
+          lecturers.map(l => {
+            const initial = (l.name||'?')[0].toUpperCase();
+            const courseChips = (l.courses||[]).slice(0,3).map(c =>
+              `<span style="font-size:10px;padding:2px 7px;border-radius:20px;background:rgba(59,130,246,.12);color:#60a5fa;border:1px solid rgba(59,130,246,.25);font-weight:600;white-space:nowrap">${esc(c.code||c.title)}${c.group?' · Grp '+esc(c.group):''}</span>`
+            ).join('');
+            const moreCourses = l.courses.length > 3 ? `<span style="font-size:10px;color:var(--text-muted)">+${l.courses.length-3} more</span>` : '';
+            const isInactive = !l.lastActiveAt || (Date.now() - new Date(l.lastActiveAt)) > 30*86400000;
+            return `<div class="card" onclick="window._laOpenDetail('${l._id}','${esc(l.name)}','${fromDate}','${toDate}')" style="cursor:pointer;padding:16px;transition:border-color .15s,transform .15s;position:relative;" onmouseenter="this.style.borderColor='var(--primary)';this.style.transform='translateY(-1px)'" onmouseleave="this.style.borderColor='';this.style.transform=''">
+              ${isInactive ? `<span style="position:absolute;top:12px;right:12px;font-size:10px;font-weight:700;padding:2px 8px;border-radius:20px;background:#fef2f2;color:#ef4444;border:1px solid #fecaca">Inactive</span>` : ''}
+              <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px">
+                <div style="width:40px;height:40px;border-radius:50%;background:linear-gradient(135deg,#3b82f6,#8b5cf6);color:#fff;display:flex;align-items:center;justify-content:center;font-weight:800;font-size:16px;flex-shrink:0">${initial}</div>
+                <div style="min-width:0">
+                  <div style="font-weight:700;font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(l.name)}</div>
+                  <div style="font-size:11px;color:var(--text-muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(l.email||'')}</div>
+                </div>
+              </div>
+              ${viewAs==='admin' && l.department ? `<div style="margin-bottom:8px"><span style="font-size:10px;padding:2px 8px;border-radius:20px;background:rgba(139,92,246,.12);color:#a78bfa;border:1px solid rgba(139,92,246,.25);font-weight:600">${esc(l.department)}</span></div>` : ''}
+              <div style="display:flex;gap:8px;margin-bottom:10px">
+                <div style="flex:1;background:rgba(59,130,246,.08);border-radius:8px;padding:8px 10px;text-align:center">
+                  <div style="font-size:20px;font-weight:800;color:#3b82f6">${l.attendanceSessions}</div>
+                  <div style="font-size:10px;color:var(--text-muted);font-weight:600">Attendance</div>
+                </div>
+                <div style="flex:1;background:rgba(139,92,246,.08);border-radius:8px;padding:8px 10px;text-align:center">
+                  <div style="font-size:20px;font-weight:800;color:#8b5cf6">${l.meetingSessions}</div>
+                  <div style="font-size:10px;color:var(--text-muted);font-weight:600">Meetings</div>
+                </div>
+              </div>
+              ${l.courses.length ? `<div style="display:flex;gap:4px;flex-wrap:wrap;margin-bottom:8px">${courseChips}${moreCourses}</div>` : ''}
+              <div style="font-size:11px;color:var(--text-muted);display:flex;align-items:center">${activityDot(l.lastActiveAt)}${lastActiveLabel(l.lastActiveAt)}</div>
+            </div>`;
+          }).join('')}
+      </div>
+    `;
+
+    // Populate dept filter options for admin
+    if (viewAs === 'admin') {
+      const depts = [...new Set(lecturers.map(l => l.department).filter(Boolean))].sort();
+      const sel = document.getElementById('la-dept-filter');
+      if (sel) depts.forEach(d => { const o = document.createElement('option'); o.value = d; o.textContent = d; if (d === deptFilter) o.selected = true; sel.appendChild(o); });
+    }
+
+    // Wire up sort
+    window._laAllLecturers = lecturers;
+    window._laSort = function(val) {
+      const cards = document.getElementById('la-cards');
+      if (!cards) return;
+      const sorted = [...window._laAllLecturers].sort((a,b) => {
+        if (val === 'most')   return (b.attendanceSessions+b.meetingSessions)-(a.attendanceSessions+a.meetingSessions);
+        if (val === 'least')  return (a.attendanceSessions+a.meetingSessions)-(b.attendanceSessions+b.meetingSessions);
+        if (val === 'recent') return (b.lastActiveAt||0) > (a.lastActiveAt||0) ? 1 : -1;
+        return a.name.localeCompare(b.name);
+      });
+      // Re-render just the cards
+      window._laAllLecturers = sorted;
+      const tmp = data; tmp.lecturers = sorted;
+      // Simple re-render of cards grid only
+      cards.innerHTML = sorted.length === 0 ? '<div class="empty-state"><p>No lecturers found.</p></div>' :
+        sorted.map(l => {
+          const initial = (l.name||'?')[0].toUpperCase();
+          const courseChips = (l.courses||[]).slice(0,3).map(c =>
+            `<span style="font-size:10px;padding:2px 7px;border-radius:20px;background:rgba(59,130,246,.12);color:#60a5fa;border:1px solid rgba(59,130,246,.25);font-weight:600;white-space:nowrap">${esc(c.code||c.title)}${c.group?' · Grp '+esc(c.group):''}</span>`
+          ).join('');
+          const moreCourses = l.courses.length > 3 ? `<span style="font-size:10px;color:var(--text-muted)">+${l.courses.length-3} more</span>` : '';
+          const isInactive = !l.lastActiveAt || (Date.now() - new Date(l.lastActiveAt)) > 30*86400000;
+          return `<div class="card" onclick="window._laOpenDetail('${l._id}','${esc(l.name)}','${fromDate}','${toDate}')" style="cursor:pointer;padding:16px;transition:border-color .15s,transform .15s;position:relative;" onmouseenter="this.style.borderColor='var(--primary)';this.style.transform='translateY(-1px)'" onmouseleave="this.style.borderColor='';this.style.transform=''">
+            ${isInactive ? `<span style="position:absolute;top:12px;right:12px;font-size:10px;font-weight:700;padding:2px 8px;border-radius:20px;background:#fef2f2;color:#ef4444;border:1px solid #fecaca">Inactive</span>` : ''}
+            <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px">
+              <div style="width:40px;height:40px;border-radius:50%;background:linear-gradient(135deg,#3b82f6,#8b5cf6);color:#fff;display:flex;align-items:center;justify-content:center;font-weight:800;font-size:16px;flex-shrink:0">${initial}</div>
+              <div style="min-width:0">
+                <div style="font-weight:700;font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(l.name)}</div>
+                <div style="font-size:11px;color:var(--text-muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(l.email||'')}</div>
+              </div>
+            </div>
+            ${viewAs==='admin' && l.department ? `<div style="margin-bottom:8px"><span style="font-size:10px;padding:2px 8px;border-radius:20px;background:rgba(139,92,246,.12);color:#a78bfa;border:1px solid rgba(139,92,246,.25);font-weight:600">${esc(l.department)}</span></div>` : ''}
+            <div style="display:flex;gap:8px;margin-bottom:10px">
+              <div style="flex:1;background:rgba(59,130,246,.08);border-radius:8px;padding:8px 10px;text-align:center">
+                <div style="font-size:20px;font-weight:800;color:#3b82f6">${l.attendanceSessions}</div>
+                <div style="font-size:10px;color:var(--text-muted);font-weight:600">Attendance</div>
+              </div>
+              <div style="flex:1;background:rgba(139,92,246,.08);border-radius:8px;padding:8px 10px;text-align:center">
+                <div style="font-size:20px;font-weight:800;color:#8b5cf6">${l.meetingSessions}</div>
+                <div style="font-size:10px;color:var(--text-muted);font-weight:600">Meetings</div>
+              </div>
+            </div>
+            ${l.courses.length ? `<div style="display:flex;gap:4px;flex-wrap:wrap;margin-bottom:8px">${courseChips}${moreCourses}</div>` : ''}
+            <div style="font-size:11px;color:var(--text-muted);display:flex;align-items:center">${activityDot(l.lastActiveAt)}${lastActiveLabel(l.lastActiveAt)}</div>
+          </div>`;
+        }).join('');
+    };
+  }
+
+  // Wire up date/dept filter controls
+  window._laSetFrom = function(v) { fromDate = v; load(); };
+  window._laSetTo   = function(v) { toDate = v; load(); };
+  window._laSetDept = function(v) { deptFilter = v; load(); };
+
+  // CSV export
+  window._laExportCSV = function() {
+    const rows = [['Name','Email','Department','Attendance Sessions','Meetings','Last Active']];
+    (window._laAllLecturers || []).forEach(l => {
+      rows.push([l.name, l.email||'', l.department||'', l.attendanceSessions, l.meetingSessions, l.lastActiveAt ? new Date(l.lastActiveAt).toLocaleDateString() : 'Never']);
+    });
+    const csv = rows.map(r => r.map(v => `"${String(v).replace(/"/g,'""')}"`).join(',')).join('\n');
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(new Blob([csv], {type:'text/csv'}));
+    a.download = `lecturer-activity-${fromDate}-${toDate}.csv`;
+    a.click();
+  };
+
+  // Drill-down panel
+  window._laOpenDetail = async function(lecturerId, lecturerName, from, to) {
+    // Remove existing panel
+    const old = document.getElementById('la-detail-panel');
+    if (old) old.remove();
+
+    // Create slide-in panel
+    const panel = document.createElement('div');
+    panel.id = 'la-detail-panel';
+    panel.style.cssText = 'position:fixed;top:0;right:0;width:min(520px,100vw);height:100vh;background:var(--card);border-left:1px solid var(--border);z-index:9000;display:flex;flex-direction:column;box-shadow:-8px 0 32px rgba(0,0,0,.25);transform:translateX(100%);transition:transform .25s cubic-bezier(.22,1,.36,1)';
+    panel.innerHTML = `
+      <div style="display:flex;align-items:center;justify-content:space-between;padding:18px 20px;border-bottom:1px solid var(--border);flex-shrink:0">
+        <div>
+          <div style="font-weight:800;font-size:16px">${esc(lecturerName)}</div>
+          <div style="font-size:12px;color:var(--text-muted)">${from} → ${to}</div>
+        </div>
+        <button onclick="document.getElementById('la-detail-panel').remove();document.getElementById('la-backdrop').remove()" style="width:32px;height:32px;border-radius:8px;border:1px solid var(--border);background:transparent;cursor:pointer;color:var(--text-primary);font-size:18px;display:flex;align-items:center;justify-content:center">✕</button>
+      </div>
+      <!-- Tabs -->
+      <div style="display:flex;border-bottom:1px solid var(--border);flex-shrink:0">
+        <button id="la-tab-att" onclick="window._laShowTab('att')" style="flex:1;padding:12px;font-size:13px;font-weight:700;border:none;cursor:pointer;border-bottom:2px solid var(--primary);background:transparent;color:var(--primary)">📋 Attendance</button>
+        <button id="la-tab-meet" onclick="window._laShowTab('meet')" style="flex:1;padding:12px;font-size:13px;font-weight:600;border:none;cursor:pointer;border-bottom:2px solid transparent;background:transparent;color:var(--text-muted)">🎥 Meetings</button>
+      </div>
+      <div id="la-detail-body" style="flex:1;overflow-y:auto;padding:16px">
+        <div class="loading">Loading…</div>
+      </div>`;
+    document.body.appendChild(panel);
+    requestAnimationFrame(() => { panel.style.transform = 'translateX(0)'; });
+
+    // Backdrop
+    const bd = document.createElement('div');
+    bd.id = 'la-backdrop';
+    bd.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.4);z-index:8999';
+    bd.onclick = () => { panel.remove(); bd.remove(); };
+    document.body.appendChild(bd);
+
+    // Load detail
+    try {
+      const data = await api(`/api/hod/lecturer-activity/${lecturerId}?from=${from}&to=${to}`);
+      window._laDetailData = data;
+      window._laShowTab('att');
+    } catch(e) {
+      document.getElementById('la-detail-body').innerHTML = `<p style="color:#ef4444">${e.message||'Failed to load'}</p>`;
+    }
+  };
+
+  window._laShowTab = function(tab) {
+    const data = window._laDetailData;
+    if (!data) return;
+    const body = document.getElementById('la-detail-body');
+    const tabAtt  = document.getElementById('la-tab-att');
+    const tabMeet = document.getElementById('la-tab-meet');
+    if (!body) return;
+
+    if (tab === 'att') {
+      if (tabAtt)  { tabAtt.style.borderBottomColor='var(--primary)'; tabAtt.style.color='var(--primary)'; tabAtt.style.fontWeight='700'; }
+      if (tabMeet) { tabMeet.style.borderBottomColor='transparent'; tabMeet.style.color='var(--text-muted)'; tabMeet.style.fontWeight='600'; }
+      const sessions = data.attendanceSessions || [];
+      body.innerHTML = sessions.length === 0
+        ? '<div style="text-align:center;padding:40px;color:var(--text-muted)">No attendance sessions in this period.</div>'
+        : `<div style="font-size:12px;color:var(--text-muted);margin-bottom:12px;font-weight:600">${sessions.length} session${sessions.length!==1?'s':''}</div>`
+          + sessions.map(s => {
+            const course = s.course ? `${esc(s.course.code||'')} ${esc(s.course.title||'')}` : esc(s.title||'Session');
+            const grp    = s.targetGroup ? ` · Grp ${esc(s.targetGroup)}` : '';
+            const date   = s.startedAt || s.createdAt;
+            const mins   = s.durationSeconds ? Math.round(s.durationSeconds/60)+'min' : '—';
+            const ended  = ['stopped','ended','locked'].includes(s.status);
+            return `<div style="padding:12px;border:1px solid var(--border);border-radius:10px;margin-bottom:8px">
+              <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px">
+                <div>
+                  <div style="font-weight:700;font-size:13px">${course}${grp}</div>
+                  <div style="font-size:11px;color:var(--text-muted);margin-top:2px">${date ? new Date(date).toLocaleString() : '—'} · ${mins}</div>
+                </div>
+                <div style="text-align:right;flex-shrink:0">
+                  <div style="font-size:18px;font-weight:800;color:#3b82f6">${s.totalMarked||0}</div>
+                  <div style="font-size:10px;color:var(--text-muted)">marked</div>
+                </div>
+              </div>
+              <div style="margin-top:6px">
+                <span style="font-size:10px;padding:2px 7px;border-radius:20px;font-weight:600;${ended?'background:#f0fdf4;color:#166534;border:1px solid #bbf7d0':'background:#eff6ff;color:#1d4ed8;border:1px solid #bfdbfe'}">${s.status||'—'}</span>
+              </div>
+            </div>`;
+          }).join('');
+    } else {
+      if (tabMeet) { tabMeet.style.borderBottomColor='var(--primary)'; tabMeet.style.color='var(--primary)'; tabMeet.style.fontWeight='700'; }
+      if (tabAtt)  { tabAtt.style.borderBottomColor='transparent'; tabAtt.style.color='var(--text-muted)'; tabAtt.style.fontWeight='600'; }
+      const meetings = data.meetings || [];
+      body.innerHTML = meetings.length === 0
+        ? '<div style="text-align:center;padding:40px;color:var(--text-muted)">No meetings in this period.</div>'
+        : `<div style="font-size:12px;color:var(--text-muted);margin-bottom:12px;font-weight:600">${meetings.length} meeting${meetings.length!==1?'s':''}</div>`
+          + meetings.map(m => {
+            const title  = m.title || (m.linkedCourseId ? `${m.linkedCourseId.code||''} ${m.linkedCourseId.title||''}`.trim() : 'Meeting');
+            const date   = m.actualStart || m.scheduledStart || m.createdAt;
+            const typeLabel = (m.type||'meeting').replace(/_/g,' ').replace(/\b\w/g,c=>c.toUpperCase());
+            const ended  = m.status === 'ended';
+            const dur    = m.actualStart && m.actualEnd
+              ? Math.round((new Date(m.actualEnd)-new Date(m.actualStart))/60000)+'min' : '—';
+            return `<div style="padding:12px;border:1px solid var(--border);border-radius:10px;margin-bottom:8px">
+              <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px">
+                <div>
+                  <div style="font-weight:700;font-size:13px">${esc(title)}</div>
+                  <div style="font-size:11px;color:var(--text-muted);margin-top:2px">${date ? new Date(date).toLocaleString() : '—'} · ${dur}</div>
+                </div>
+                <span style="font-size:10px;padding:2px 7px;border-radius:20px;font-weight:600;white-space:nowrap;${ended?'background:#f0fdf4;color:#166534;border:1px solid #bbf7d0':'background:#eff6ff;color:#1d4ed8;border:1px solid #bfdbfe'}">${m.status||'—'}</span>
+              </div>
+              <div style="margin-top:6px">
+                <span style="font-size:10px;padding:2px 7px;border-radius:20px;background:rgba(139,92,246,.1);color:#8b5cf6;border:1px solid rgba(139,92,246,.25);font-weight:600">${esc(typeLabel)}</span>
+              </div>
+            </div>`;
+          }).join('');
+    }
+  };
+
+  await load();
 }
 
 async function renderHodLecturers() {
@@ -16365,7 +16692,7 @@ function buildBottomNav(role) {
       : ['dashboard', 'sessions', 'users', 'reports'],
     manager:    ['dashboard', 'sessions', 'reports', 'users'],
     lecturer:   ['dashboard', 'sessions', 'quizzes', 'assignments'],
-    hod:        ['hod-overview', 'hod-courses', 'hod-lecturers', 'hod-reports', 'meetings'],
+    hod:        ['hod-overview', 'hod-courses', 'hod-lecturers', 'hod-reports', 'meetings', 'hod-lecturer-activity'],
     employee:   ['dashboard', 'sign-in-out', 'my-attendance', 'reports'],
     student:    ['dashboard', 'mark-attendance', 'quizzes', 'assignments'],
     superadmin: currentUser?.company?.mode === 'academic'
@@ -16399,14 +16726,16 @@ function buildBottomNav(role) {
     'hod-students':        '<path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/>',
     'hod-reports':         '<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/>',
     'hod-performance':     '<line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/>',
-    'hod-alerts':          '<path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/>',
+    'hod-alerts':              '<path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/>',
+    'hod-lecturer-activity':   '<rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/>',
+    'admin-lecturer-activity': '<rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/>',
     'hod-messaging':       '<path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>',
     'hod-course-approvals':'<path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/>',
     'hod-unlock-students': '<rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/>',
   };
 
   const LABELS = {
-    'hod-overview': 'Overview', 'hod-sessions': 'Sessions', 'hod-courses': 'Courses', 'hod-lecturers': 'Lecturers',
+    'hod-overview': 'Overview', 'hod-sessions': 'Sessions', 'hod-courses': 'Courses', 'hod-lecturers': 'Lecturers', 'hod-lecturer-activity': 'Lecturer Activity', 'admin-lecturer-activity': 'Lecturer Activity',
     'hod-students': 'Students', 'hod-reports': 'Reports',
     'sign-in-out': 'Sign In/Out', 'my-attendance': 'Attendance',
     'mark-attendance': 'Attendance', subscription: 'Subscribe',
