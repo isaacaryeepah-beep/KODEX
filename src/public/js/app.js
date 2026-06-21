@@ -12481,7 +12481,7 @@ window.saveLecturerPin = async function() {
 };
 
 window.clearLecturerPin = async function() {
-  if (!confirm('Remove your Class Rep PIN? Class reps will be able to connect the device without entering a PIN.')) return;
+  if (!confirm('Remove your Offline Session PIN? Anyone will be able to start a session or connect the device without a PIN.')) return;
   try {
     await api('/api/class-rep/set-pin', { method: 'DELETE' });
     showToastNotif('PIN cleared — class reps can now connect freely', 'success');
@@ -14009,8 +14009,8 @@ async function renderProfile() {
 
       ${u.role === 'lecturer' ? `
       <div style="margin-top:28px;padding-top:24px;border-top:1px solid var(--border)">
-        <h3 style="font-size:14px;font-weight:700;margin-bottom:4px;color:var(--text-primary)">Class Rep PIN</h3>
-        <p style="font-size:12px;color:var(--text-muted);margin-bottom:14px">Set a 4-digit PIN that your class rep must enter to connect the attendance device to your session. Leave blank to allow connection without a PIN.</p>
+        <h3 style="font-size:14px;font-weight:700;margin-bottom:4px;color:var(--text-primary)">Offline Session PIN</h3>
+        <p style="font-size:12px;color:var(--text-muted);margin-bottom:14px">Your 4-digit PIN for the attendance device. You'll enter this on the device to start a fully offline session, and your class rep uses it to connect the device to your session online. Leave blank to allow connection without a PIN.</p>
         <div style="display:flex;gap:10px;align-items:flex-end">
           <div style="flex:1">
             <input type="password" id="lecturer-pin-input" inputmode="numeric" maxlength="4" placeholder="4-digit PIN" style="width:100%;padding:10px 12px;border:1.5px solid var(--border);border-radius:8px;font-size:18px;letter-spacing:6px;box-sizing:border-box">
