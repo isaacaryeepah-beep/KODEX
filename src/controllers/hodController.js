@@ -550,3 +550,117 @@ exports.getCourseOverview = async (req, res) => {
     res.status(500).json({ error: "Failed to fetch course overview" });
   }
 };
+
+// ─── GET /api/hod/lecturer-activity ──────────────────────────────────────────
+exports.getLecturerActivity = async (req, res) => {
+  if (!requireHodDept(req, res)) return;
+  try {
+    const company = req.user.company;
+    const companyOid = new mongoose.Types.ObjectId(company.toString());
+    // HOD is always scoped to their dept; admin can pass ?department=id to filter
+    const dept = req.user.role === 'hod' ? req.user.department
+                                         : (req.query.department || null);
+
+    const to   = req.query.to   ? new Date(req.query.to)   : new Date();
+    const from = req.query.from ? new Date(req.query.from) : new Date(Date.now() - 180 * 24 * 60 * 60 * 1000);
+
+    // Fetch lecturers in scope
+    const lecturerFilter = { company, role: 'lecturer' };
+    if (dept) lecturerFilter.department = dept;
+    const lecturers = await User.find(lecturerFilter)
+      .select('name email department')
+      .populate('department', 'name')
+      .lean();
+
+    const lecturerIds = lecturers.map(l => l._id);
+
+    // Aggregate attendance sessions
+    const attAgg = await AttendanceSession.aggregate([
+      { $match: { company: companyOid, createdBy: { $in: lecturerIds }, createdAt: { $gte: from, $lte: to } } },
+      { $group: { _id: '$createdBy', count: { $sum: 1 }, lastAt: { $max: '$createdAt' }, totalMarked: { $sum: { $ifNull: ['$totalMarked', 0] } } } },
+    ]);
+    const attMap = new Map(attAgg.map(a => [String(a._id), a]));
+
+    // Aggregate meetings
+    const Meeting = require('../models/Meeting');
+    const meetAgg = await Meeting.aggregate([
+      { $match: { company: companyOid, creatorId: { $in: lecturerIds }, createdAt: { $gte: from, $lte: to }, status: { $ne: 'cancelled' } } },
+      { $group: { _id: '$creatorId', count: { $sum: 1 }, lastAt: { $max: '$createdAt' } } },
+    ]);
+    const meetMap = new Map(meetAgg.map(m => [String(m._id), m]));
+
+    // Courses per lecturer
+    const courseFilter = { companyId: company, lecturerId: { $in: lecturerIds } };
+    if (dept) courseFilter.departmentId = dept;
+    const courses = await Course.find(courseFilter).select('title code lecturerId group').lean();
+    const coursesByLecturer = {};
+    for (const c of courses) {
+      const lid = String(c.lecturerId);
+      if (!coursesByLecturer[lid]) coursesByLecturer[lid] = [];
+      coursesByLecturer[lid].push({ _id: c._id, code: c.code, title: c.title, group: c.group || null });
+    }
+
+    const result = lecturers.map(l => {
+      const lid  = String(l._id);
+      const att  = attMap.get(lid);
+      const meet = meetMap.get(lid);
+      const lastAtt  = att?.lastAt  || null;
+      const lastMeet = meet?.lastAt || null;
+      const lastActiveAt = !lastAtt && !lastMeet ? null
+        : !lastAtt ? lastMeet : !lastMeet ? lastAtt
+        : (lastAtt > lastMeet ? lastAtt : lastMeet);
+      return {
+        _id: l._id, name: l.name, email: l.email,
+        department: l.department?.name || l.department || null,
+        attendanceSessions: att?.count || 0,
+        totalMarked: att?.totalMarked || 0,
+        meetingSessions: meet?.count || 0,
+        lastAttendanceAt: lastAtt,
+        lastMeetingAt: lastMeet,
+        lastActiveAt,
+        courses: coursesByLecturer[lid] || [],
+      };
+    }).sort((a, b) => (b.attendanceSessions + b.meetingSessions) - (a.attendanceSessions + a.meetingSessions));
+
+    res.json({ from, to, lecturers: result });
+  } catch (err) {
+    console.error('[HOD] getLecturerActivity:', err);
+    res.status(500).json({ error: 'Failed to fetch lecturer activity' });
+  }
+};
+
+// ─── GET /api/hod/lecturer-activity/:lecturerId ───────────────────────────────
+exports.getLecturerActivityDetail = async (req, res) => {
+  if (!requireHodDept(req, res)) return;
+  if (!mongoose.Types.ObjectId.isValid(req.params.lecturerId)) {
+    return res.status(400).json({ error: 'Invalid lecturerId' });
+  }
+  try {
+    const company    = req.user.company;
+    const lecturerId = new mongoose.Types.ObjectId(req.params.lecturerId);
+    const to   = req.query.to   ? new Date(req.query.to)   : new Date();
+    const from = req.query.from ? new Date(req.query.from) : new Date(Date.now() - 180 * 24 * 60 * 60 * 1000);
+
+    const scopeFilter = { _id: lecturerId, company, role: 'lecturer' };
+    if (req.user.role === 'hod' && req.user.department) scopeFilter.department = req.user.department;
+    const lecturer = await User.findOne(scopeFilter).select('name email department').populate('department', 'name').lean();
+    if (!lecturer) return res.status(404).json({ error: 'Lecturer not found in your scope' });
+
+    const Meeting = require('../models/Meeting');
+    const [attendanceSessions, meetings] = await Promise.all([
+      AttendanceSession.find({ company, createdBy: lecturerId, createdAt: { $gte: from, $lte: to } })
+        .populate('course', 'code title group')
+        .select('title course targetGroup status totalMarked startedAt stoppedAt createdAt durationSeconds')
+        .sort({ createdAt: -1 }).limit(200).lean(),
+      Meeting.find({ company, creatorId: lecturerId, createdAt: { $gte: from, $lte: to }, status: { $ne: 'cancelled' } })
+        .populate('linkedCourseId', 'code title')
+        .select('title type status scheduledStart actualStart actualEnd linkedCourseId createdAt')
+        .sort({ createdAt: -1 }).limit(200).lean(),
+    ]);
+
+    res.json({ lecturer, attendanceSessions, meetings });
+  } catch (err) {
+    console.error('[HOD] getLecturerActivityDetail:', err);
+    res.status(500).json({ error: 'Failed to fetch lecturer detail' });
+  }
+};

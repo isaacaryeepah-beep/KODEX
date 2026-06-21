@@ -42,4 +42,7 @@ router.get("/course-overview",   hodCtrl.getCourseOverview);
 // Messaging
 router.post("/send-group-message", uploadMessage, handleUploadError, hodCtrl.sendGroupMessage);
 
+router.get('/lecturer-activity',             hodCtrl.getLecturerActivity);
+router.get('/lecturer-activity/:lecturerId', hodCtrl.getLecturerActivityDetail);
+
 module.exports = router;
