@@ -234,6 +234,8 @@ public:
 #include <esp_wifi.h>      // esp_wifi_stop / esp_wifi_deinit for hard reset
 #include <ESPmDNS.h>       // dikly.local hostname on both AP and STA networks
 #include "lwip/etharp.h"   // ARP table for IP→MAC→RSSI mapping
+#include <ArduinoOTA.h>
+#include <Update.h>
 
 // lwIP's etharp.h does not always export ARP_TABLE_SIZE publicly.
 // Define a safe upper bound if not already provided by the SDK.
@@ -4399,6 +4401,46 @@ static void registerLocalHttp() {
   };
   localHttp.on("/", HTTP_GET, serveRoot);
   localHttp.onNotFound(serveRoot);
+
+  // ── OTA firmware update via browser (http://<device-ip>/update) ──────────
+  localHttp.on("/update", HTTP_GET, [](){
+    localHttp.send(200, "text/html",
+      "<!DOCTYPE html><html><head><title>KODEX OTA</title>"
+      "<style>body{font-family:sans-serif;background:#0a0d14;color:#f1f5f9;"
+      "display:flex;flex-direction:column;align-items:center;justify-content:center;"
+      "height:100vh;margin:0;gap:16px}"
+      "h2{margin:0}input[type=file]{padding:8px}"
+      "button{padding:12px 28px;background:#2563eb;color:#fff;border:none;"
+      "border-radius:8px;font-size:15px;cursor:pointer}"
+      "</style></head><body>"
+      "<h2>&#128290; KODEX Firmware Update</h2>"
+      "<p style='color:#64748b'>Select a compiled <b>.bin</b> file then click Flash.</p>"
+      "<form id='f' method='POST' action='/update' enctype='multipart/form-data'>"
+      "<input type='file' name='firmware' accept='.bin' required><br><br>"
+      "<button type='submit'>&#9889; Flash Firmware</button>"
+      "</form>"
+      "<p id='s' style='color:#64748b'></p>"
+      "<script>"
+      "document.getElementById('f').onsubmit=function(e){"
+      "e.preventDefault();"
+      "document.getElementById('s').textContent='Uploading...';"
+      "fetch('/update',{method:'POST',body:new FormData(this)}).then(function(r){return r.text();}).then(function(t){"
+      "document.getElementById('s').textContent=t;"
+      "}).catch(function(){document.getElementById('s').textContent='Upload failed';});"
+      "};"
+      "</script></body></html>"
+    );
+  });
+  localHttp.on("/update", HTTP_POST, [](){
+    localHttp.sendHeader("Connection", "close");
+    localHttp.send(200, "text/plain", !Update.hasError() ? "Update OK. Rebooting..." : "Update FAILED.");
+    delay(2000); ESP.restart();
+  }, [](){
+    HTTPUpload& upload = localHttp.upload();
+    if (upload.status == UPLOAD_FILE_START)       { Update.begin(UPDATE_SIZE_UNKNOWN); }
+    else if (upload.status == UPLOAD_FILE_WRITE)  { Update.write(upload.buf, upload.currentSize); }
+    else if (upload.status == UPLOAD_FILE_END)    { Update.end(true); }
+  });
 }
 
 // ─── Paired-screen touch dispatcher ──────────────────────────────────────────
@@ -4672,6 +4714,15 @@ void setup() {
 
   registerLocalHttp();
   localHttp.begin();
+
+  ArduinoOTA.setHostname(("dikly-" + macSuffix()).c_str());
+  ArduinoOTA.setPassword("dikly-ota");
+  ArduinoOTA.onStart([]()   { Serial.println("[OTA] Start"); });
+  ArduinoOTA.onEnd([]()     { Serial.println("[OTA] Done"); });
+  ArduinoOTA.onProgress([](unsigned int p, unsigned int t) { Serial.printf("[OTA] %u%%\n", p*100/t); });
+  ArduinoOTA.onError([](ota_error_t e) { Serial.printf("[OTA] Error %u\n", (uint32_t)e); });
+  ArduinoOTA.begin();
+
   curScreen = READY;
   digitalWrite(LED_PIN, HIGH);
 
@@ -4689,6 +4740,7 @@ void setup() {
 void loop() {
   dns.processNextRequest();
   localHttp.handleClient();
+  ArduinoOTA.handle();
 
   // WiFi scanner screen (paired device, no WiFi connection yet)
   if (curScreen == WIFI_SCAN) {
