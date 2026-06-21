@@ -9062,7 +9062,16 @@ async function renderMeetings() {
     content.innerHTML = `
       <div class="page-header" style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;">
         <div><h2>Meetings</h2><p>Secure video meetings</p></div>
-        ${canCreate ? `<button class="btn btn-primary btn-sm" onclick="showCreateMeetingModal()">+ Schedule Meeting</button>` : ''}
+        ${canCreate ? `<div style="display:flex;gap:8px;">
+          <button class="btn btn-primary btn-sm" onclick="showScheduleMeetingModal()" style="gap:6px;display:flex;align-items:center;">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+            Schedule
+          </button>
+          <button class="btn btn-success btn-sm" onclick="showInstantMeetingModal()" style="gap:6px;display:flex;align-items:center;">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+            Start Now
+          </button>
+        </div>` : ''}
       </div>
       ${lockBanner}
       ${meetings.length === 0 ? `<div class="card"><div class="empty-state"><p style="color:var(--text-muted);">No meetings scheduled yet.</p></div></div>` : ''}
@@ -9075,19 +9084,21 @@ async function renderMeetings() {
   }
 }
 
-async function showCreateMeetingModal() {
-  const container = document.getElementById('modal-container');
-  container.classList.remove('hidden');
-
+async function _loadMeetingCourseOptions() {
   let courses = [];
   try {
     const d = await api('/api/courses');
     courses = d.courses || d || [];
   } catch(e) { courses = []; }
-
-  const courseOptions = `<option value="">— Select a course —</option>` +
+  return `<option value="">— Select a course —</option>` +
     courses.map(c => `<option value="${c._id}">${esc(c.title)}${c.level?' · L'+c.level:''}${c.group?' · Grp '+c.group:''}</option>`).join('');
-  // default scheduled start = now+5min, end = now+65min
+}
+
+async function showScheduleMeetingModal() {
+  const container = document.getElementById('modal-container');
+  container.classList.remove('hidden');
+
+  const courseOptions = await _loadMeetingCourseOptions();
   const now = new Date();
   const pad = n => String(n).padStart(2,'0');
   const fmt = d => `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
@@ -9098,7 +9109,7 @@ async function showCreateMeetingModal() {
     <div class="modal-overlay" onclick="if(event.target===this)closeModal()">
       <div class="modal" onclick="event.stopPropagation()" style="max-width:460px;">
         <h3 style="margin:0 0 4px;">Schedule a Meeting</h3>
-        <p style="font-size:13px;color:var(--text-muted);margin-bottom:18px;">Fill in the details below. Start Now skips the schedule and opens immediately.</p>
+        <p style="font-size:13px;color:var(--text-muted);margin-bottom:18px;">Pick a date and time — participants will see this in their calendar.</p>
 
         <div class="form-group">
           <label>Meeting Title *</label>
@@ -9147,13 +9158,62 @@ async function showCreateMeetingModal() {
 
         <div class="modal-actions" style="gap:8px;margin-top:18px;">
           <button class="btn btn-secondary" onclick="closeModal()">Cancel</button>
+          <button class="btn btn-primary" onclick="createMeeting()" style="gap:6px;">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+            Schedule Meeting
+          </button>
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+async function showInstantMeetingModal() {
+  const container = document.getElementById('modal-container');
+  container.classList.remove('hidden');
+
+  const courseOptions = await _loadMeetingCourseOptions();
+
+  container.innerHTML = `
+    <div class="modal-overlay" onclick="if(event.target===this)closeModal()">
+      <div class="modal" onclick="event.stopPropagation()" style="max-width:420px;">
+        <h3 style="margin:0 0 4px;">Start an Instant Meeting</h3>
+        <p style="font-size:13px;color:var(--text-muted);margin-bottom:18px;">Opens immediately — no scheduling needed.</p>
+
+        <div class="form-group">
+          <label>Meeting Title *</label>
+          <input type="text" id="meeting-title" placeholder="e.g. Quick Sync" autofocus>
+        </div>
+
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+          <div class="form-group">
+            <label>Meeting Type</label>
+            <select id="meeting-type" style="width:100%;padding:9px 12px;border:1.5px solid var(--border);border-radius:8px;font-size:13px">
+              <option value="meeting">General Meeting</option>
+              ${currentUser?.company?.mode !== 'corporate' ? `
+              <option value="lecture">Lecture</option>
+              <option value="oral_exam">Oral Exam</option>
+              <option value="live_assessment">Live Assessment</option>
+              ` : ''}
+              <option value="staff_conference">Staff Conference</option>
+            </select>
+          </div>
+          ${currentUser?.company?.mode !== 'corporate' ? `
+          <div class="form-group">
+            <label>Course</label>
+            <select id="meeting-course" style="width:100%;padding:9px 12px;border:1.5px solid var(--border);border-radius:8px;font-size:13px">
+              ${courseOptions}
+            </select>
+          </div>` : ''}
+        </div>
+
+        <div id="meeting-error" style="color:#ef4444;margin:8px 0;display:none;font-size:13px;"></div>
+
+        <div class="modal-actions" style="gap:8px;margin-top:18px;">
+          <button class="btn btn-secondary" onclick="closeModal()">Cancel</button>
           <button class="btn btn-success" id="start-meeting-btn" onclick="createAndStartMeeting()" style="gap:6px;">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polygon points="5 3 19 12 5 21 5 3"/></svg>
             Start Now
-          </button>
-          <button class="btn btn-primary" onclick="createMeeting()" style="gap:6px;">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
-            Schedule
           </button>
         </div>
       </div>
