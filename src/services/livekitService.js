@@ -73,14 +73,15 @@ async function removeParticipantFromRoom(roomName, participantIdentity) {
 function buildLiveKitRoomUrl(meeting, user, token, isMod) {
   const base = process.env.MEET_BASE_URL || process.env.APP_BASE_URL || 'https://dikly.sbs';
   const qs = new URLSearchParams({
-    roomName:   meeting.roomName,
+    roomName:    meeting.roomName,
     token,
-    userId:     String(user._id),
-    userName:   user.name || user.email || 'Participant',
-    isMod:      isMod ? '1' : '0',
-    meetingId:  String(meeting._id),
-    title:      meeting.title || 'Class',
-    livekitUrl: LIVEKIT_URL || '',
+    userId:      String(user._id),
+    userName:    user.name || user.email || 'Participant',
+    isMod:       isMod ? '1' : '0',
+    meetingId:   String(meeting._id),
+    title:       meeting.title || 'Class',
+    livekitUrl:  LIVEKIT_URL || '',
+    meetingType: meeting.meetingType || 'meeting',
   });
   return `${base}/stream-room.html?${qs.toString()}`;
 }

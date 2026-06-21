@@ -155,6 +155,20 @@
       #videoGrid.n3 .tile:first-child{grid-column:span 1}
       .ctrl{width:48px;padding:8px 0}
     }
+    /* ── Proctoring ── */
+    .proctor-badge{display:inline-flex;align-items:center;gap:5px;
+      background:rgba(239,68,68,.15);border:1px solid rgba(239,68,68,.3);
+      color:#f87171;font-size:10px;font-weight:700;padding:2px 9px;border-radius:20px;letter-spacing:.3px}
+    .proctor-dot{width:5px;height:5px;border-radius:50%;background:#ef4444;animation:blink 1.4s ease-in-out infinite;flex-shrink:0}
+    #fsViolation{display:none;position:fixed;inset:0;z-index:9999;
+      background:rgba(100,0,0,.94);flex-direction:column;
+      align-items:center;justify-content:center;gap:14px;text-align:center;padding:24px}
+    #fsViolation.show{display:flex}
+    #fsViolation .fv-icon{font-size:52px}
+    #fsViolation .fv-title{font-size:22px;font-weight:800;color:#fff}
+    #fsViolation .fv-sub{font-size:14px;color:rgba(255,255,255,.7);line-height:1.6}
+    #fsViolation .fv-btn{margin-top:6px;padding:13px 32px;background:#fff;color:#7f0000;
+      border:none;border-radius:12px;font-weight:700;font-size:15px;cursor:pointer;font-family:inherit}
   </style>
 </head>
 <body>
@@ -228,6 +242,15 @@
   </div>
 </div>
 
+<div id="fsViolation">
+  <div class="fv-icon">⚠️</div>
+  <div class="fv-title">You exited fullscreen</div>
+  <div class="fv-sub">This has been logged.<br>Returning automatically in <strong id="fsCountdown">10</strong>s…</div>
+  <button class="fv-btn" onclick="(document.documentElement.requestFullscreen||document.documentElement.webkitRequestFullscreen||function(){}).call(document.documentElement)">
+    Return to Fullscreen Now
+  </button>
+</div>
+
 <!-- LiveKit SDK — served from the same origin to avoid iOS Safari cross-origin restrictions -->
 <script src="/js/livekit-client.umd.js"></script>
 
@@ -240,16 +263,19 @@ window.addEventListener('unhandledrejection', function(e) {
 (async function() {
 'use strict';
 
-var _p        = new URLSearchParams(location.search);
-var roomName  = _p.get('roomName')  || '';
-var token     = _p.get('token')     || '';
-var userId    = _p.get('userId')    || '';
-var userName  = _p.get('userName')  || 'Participant';
-var isMod     = _p.get('isMod')   === '1';
-var meetingId = _p.get('meetingId') || '';
-var title     = _p.get('title')     || 'Class';
-var livekitUrl= _p.get('livekitUrl')|| '';
-var BASE_URL  = location.origin;
+var _p          = new URLSearchParams(location.search);
+var roomName    = _p.get('roomName')    || '';
+var token       = _p.get('token')       || '';
+var userId      = _p.get('userId')      || '';
+var userName    = _p.get('userName')    || 'Participant';
+var isMod       = _p.get('isMod')      === '1';
+var meetingId   = _p.get('meetingId')   || '';
+var title       = _p.get('title')       || 'Class';
+var livekitUrl  = _p.get('livekitUrl')  || '';
+var meetingType = _p.get('meetingType') || 'meeting';
+var BASE_URL    = location.origin;
+var PROCTOR_TYPES = ['oral_exam', 'live_assessment'];
+var isProctored = !isMod && PROCTOR_TYPES.indexOf(meetingType) !== -1;
 
 if (!roomName || !token || !livekitUrl) {
   showError('Missing connection parameters. Please go back and try again.');
@@ -310,6 +336,85 @@ try {
 showCall();
 startTimer();
 rerender();
+
+// ── Proctoring (oral_exam / live_assessment — students only) ──────────────────
+function postProcEvent(type, meta) {
+  if (!meetingId || !kodexToken) return;
+  fetch(BASE_URL + '/api/meetings/' + meetingId + '/proctoring/event', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + kodexToken },
+    body: JSON.stringify({ type: type, metadata: meta || null }),
+  }).catch(function(){});
+}
+
+if (isProctored) {
+  // Monitoring badge in top bar
+  var badge = document.createElement('span');
+  badge.className = 'proctor-badge';
+  badge.innerHTML = '<span class="proctor-dot"></span>Monitored';
+  document.querySelector('.top-right').prepend(badge);
+
+  // Hide screen share — not allowed during oral exams
+  document.getElementById('btnShare').style.display = 'none';
+
+  // Fullscreen helpers
+  function reqFs() {
+    var el = document.documentElement;
+    (el.requestFullscreen || el.webkitRequestFullscreen || function(){}).call(el);
+  }
+  reqFs();
+
+  // Fullscreen-violation overlay with 10-s auto-return
+  var _fsTimer = null;
+  function showFsOverlay() {
+    document.getElementById('fsViolation').classList.add('show');
+    var n = 10; document.getElementById('fsCountdown').textContent = n;
+    clearInterval(_fsTimer);
+    _fsTimer = setInterval(function() {
+      n--;
+      document.getElementById('fsCountdown').textContent = n;
+      if (n <= 0) { clearInterval(_fsTimer); reqFs(); }
+    }, 1000);
+  }
+
+  document.addEventListener('fullscreenchange', function() {
+    var inFs = !!(document.fullscreenElement || document.webkitFullscreenElement);
+    if (inFs) {
+      clearInterval(_fsTimer);
+      document.getElementById('fsViolation').classList.remove('show');
+    } else {
+      postProcEvent('fullscreen_exit', null);
+      showFsOverlay();
+    }
+  });
+  document.addEventListener('webkitfullscreenchange', function() {
+    var inFs = !!(document.fullscreenElement || document.webkitFullscreenElement);
+    if (inFs) {
+      clearInterval(_fsTimer);
+      document.getElementById('fsViolation').classList.remove('show');
+    } else {
+      postProcEvent('fullscreen_exit', null);
+      showFsOverlay();
+    }
+  });
+
+  // Tab-switch logging
+  document.addEventListener('visibilitychange', function() {
+    if (document.hidden) postProcEvent('tab_switch', null);
+  });
+
+  // Block DevTools shortcuts + right-click
+  document.addEventListener('keydown', function(e) {
+    if (e.key === 'F12' ||
+        (e.ctrlKey && e.shiftKey && 'ijcIJC'.indexOf(e.key) !== -1) ||
+        (e.ctrlKey && 'uUpP'.indexOf(e.key) !== -1)) {
+      e.preventDefault(); e.stopPropagation();
+    }
+  }, true);
+  document.addEventListener('contextmenu', function(e) { e.preventDefault(); });
+
+  postProcEvent('session_start', { meetingType: meetingType });
+}
 
 // ── Events ────────────────────────────────────────────────────────────────────
 room
