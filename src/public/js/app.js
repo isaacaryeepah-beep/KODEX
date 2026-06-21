@@ -9084,31 +9084,45 @@ async function renderMeetings() {
   }
 }
 
-function _meetingAudienceSelect() {
+function _meetingAudienceHTML(courseOptions) {
   const isCorp = currentUser?.company?.mode === 'corporate';
   return `
     <div class="form-group" style="margin-top:4px;">
       <label>Who can join?</label>
-      <select id="meeting-audience" style="width:100%;padding:9px 12px;border:1.5px solid var(--border);border-radius:8px;font-size:13px">
+      <select id="meeting-audience" onchange="toggleMeetingCourseRow()" style="width:100%;padding:9px 12px;border:1.5px solid var(--border);border-radius:8px;font-size:13px">
         <option value="everyone">Everyone in organisation</option>
-        ${!isCorp ? '<option value="course">Course members only</option>' : ''}
-        <option value="department">My department only</option>
+        <option value="department">My department / team only</option>
+        ${!isCorp ? '<option value="course">Specific course or group</option>' : ''}
       </select>
-    </div>`;
+    </div>
+    ${!isCorp ? `
+    <div id="meeting-course-row" class="form-group" style="display:none;">
+      <label>Course / Group *</label>
+      <select id="meeting-course" style="width:100%;padding:9px 12px;border:1.5px solid var(--border);border-radius:8px;font-size:13px">
+        ${courseOptions}
+      </select>
+      <p style="font-size:11px;color:var(--text-muted);margin:4px 0 0;">Only students enrolled in this course (and group) will be able to join.</p>
+    </div>` : ''}`;
+}
+
+function toggleMeetingCourseRow() {
+  const audience = document.getElementById('meeting-audience')?.value;
+  const row = document.getElementById('meeting-course-row');
+  if (row) row.style.display = audience === 'course' ? '' : 'none';
 }
 
 function _resolveAudienceParams() {
-  const audience  = document.getElementById('meeting-audience')?.value || 'everyone';
-  const courseId  = document.getElementById('meeting-course')?.value  || '';
-  const errEl     = document.getElementById('meeting-error');
+  const audience = document.getElementById('meeting-audience')?.value || 'everyone';
+  const courseId = document.getElementById('meeting-course')?.value  || '';
+  const errEl    = document.getElementById('meeting-error');
   if (audience === 'course' && !courseId) {
-    errEl.textContent = 'Please select a course for "Course members only".';
+    errEl.textContent = 'Please select a course or group.';
     errEl.style.display = 'block';
     return null;
   }
   if (audience === 'everyone')   return { openToCompany: true };
-  if (audience === 'course')     return { openToCompany: false, linkedCourseId: courseId };
   if (audience === 'department') return { openToCompany: false, allowedDepartments: [currentUser?.department].filter(Boolean) };
+  if (audience === 'course')     return { openToCompany: false, linkedCourseId: courseId, allowedCourses: [courseId] };
   return { openToCompany: true };
 }
 
@@ -9118,7 +9132,7 @@ async function _loadMeetingCourseOptions() {
     const d = await api('/api/courses');
     courses = d.courses || d || [];
   } catch(e) { courses = []; }
-  return `<option value="">— Select a course —</option>` +
+  return `<option value="">— Select a course / group —</option>` +
     courses.map(c => `<option value="${c._id}">${esc(c.title)}${c.level?' · L'+c.level:''}${c.group?' · Grp '+c.group:''}</option>`).join('');
 }
 
@@ -9160,29 +9174,20 @@ async function showScheduleMeetingModal() {
           <textarea id="meeting-desc" rows="2" placeholder="What is this meeting about?" style="resize:vertical;"></textarea>
         </div>
 
-        <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
-          <div class="form-group">
-            <label>Meeting Type</label>
-            <select id="meeting-type" style="width:100%;padding:9px 12px;border:1.5px solid var(--border);border-radius:8px;font-size:13px">
-              <option value="meeting">General Meeting</option>
-              ${currentUser?.company?.mode !== 'corporate' ? `
-              <option value="lecture">Lecture</option>
-              <option value="oral_exam">Oral Exam</option>
-              <option value="live_assessment">Live Assessment</option>
-              ` : ''}
-              <option value="staff_conference">Staff Conference</option>
-            </select>
-          </div>
-          ${currentUser?.company?.mode !== 'corporate' ? `
-          <div class="form-group">
-            <label>Course</label>
-            <select id="meeting-course" style="width:100%;padding:9px 12px;border:1.5px solid var(--border);border-radius:8px;font-size:13px">
-              ${courseOptions}
-            </select>
-          </div>` : ''}
+        <div class="form-group">
+          <label>Meeting Type</label>
+          <select id="meeting-type" style="width:100%;padding:9px 12px;border:1.5px solid var(--border);border-radius:8px;font-size:13px">
+            <option value="meeting">General Meeting</option>
+            ${currentUser?.company?.mode !== 'corporate' ? `
+            <option value="lecture">Lecture</option>
+            <option value="oral_exam">Oral Exam</option>
+            <option value="live_assessment">Live Assessment</option>
+            ` : ''}
+            <option value="staff_conference">Staff Conference</option>
+          </select>
         </div>
 
-        ${_meetingAudienceSelect()}
+        ${_meetingAudienceHTML(courseOptions)}
 
         <div id="meeting-error" style="color:#ef4444;margin:8px 0;display:none;font-size:13px;"></div>
 
@@ -9215,29 +9220,20 @@ async function showInstantMeetingModal() {
           <input type="text" id="meeting-title" placeholder="e.g. Quick Sync" autofocus>
         </div>
 
-        <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
-          <div class="form-group">
-            <label>Meeting Type</label>
-            <select id="meeting-type" style="width:100%;padding:9px 12px;border:1.5px solid var(--border);border-radius:8px;font-size:13px">
-              <option value="meeting">General Meeting</option>
-              ${currentUser?.company?.mode !== 'corporate' ? `
-              <option value="lecture">Lecture</option>
-              <option value="oral_exam">Oral Exam</option>
-              <option value="live_assessment">Live Assessment</option>
-              ` : ''}
-              <option value="staff_conference">Staff Conference</option>
-            </select>
-          </div>
-          ${currentUser?.company?.mode !== 'corporate' ? `
-          <div class="form-group">
-            <label>Course</label>
-            <select id="meeting-course" style="width:100%;padding:9px 12px;border:1.5px solid var(--border);border-radius:8px;font-size:13px">
-              ${courseOptions}
-            </select>
-          </div>` : ''}
+        <div class="form-group">
+          <label>Meeting Type</label>
+          <select id="meeting-type" style="width:100%;padding:9px 12px;border:1.5px solid var(--border);border-radius:8px;font-size:13px">
+            <option value="meeting">General Meeting</option>
+            ${currentUser?.company?.mode !== 'corporate' ? `
+            <option value="lecture">Lecture</option>
+            <option value="oral_exam">Oral Exam</option>
+            <option value="live_assessment">Live Assessment</option>
+            ` : ''}
+            <option value="staff_conference">Staff Conference</option>
+          </select>
         </div>
 
-        ${_meetingAudienceSelect()}
+        ${_meetingAudienceHTML(courseOptions)}
 
         <div id="meeting-error" style="color:#ef4444;margin:8px 0;display:none;font-size:13px;"></div>
 
