@@ -9121,7 +9121,12 @@ function _resolveAudienceParams() {
     return null;
   }
   if (audience === 'everyone')   return { openToCompany: true };
-  if (audience === 'department') return { openToCompany: false, allowedDepartments: [currentUser?.department].filter(Boolean) };
+  if (audience === 'department') {
+    const isCorp = currentUser?.company?.mode === 'corporate';
+    return isCorp
+      ? { openToCompany: false, allowedTeams: [currentUser?.team].filter(Boolean) }
+      : { openToCompany: false, allowedDepartments: [currentUser?.department].filter(Boolean) };
+  }
   if (audience === 'course')     return { openToCompany: false, linkedCourseId: courseId, allowedCourses: [courseId] };
   return { openToCompany: true };
 }
