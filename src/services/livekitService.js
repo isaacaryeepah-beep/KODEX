@@ -19,8 +19,10 @@ function getRoomService() {
   return new RoomServiceClient(httpUrl, LIVEKIT_API_KEY, LIVEKIT_API_SECRET);
 }
 
-async function generateLiveKitToken(userId, userName, roomName, isMod) {
+async function generateLiveKitToken(userId, userName, roomName, isMod, canPublish) {
   if (!configured) throw new Error('LiveKit is not configured.');
+  // Moderators always publish; students default to true unless lecture mode passes false
+  const publish = isMod ? true : (canPublish !== undefined ? !!canPublish : true);
   const at = new AccessToken(LIVEKIT_API_KEY, LIVEKIT_API_SECRET, {
     identity: String(userId),
     name: userName || String(userId),
@@ -29,12 +31,12 @@ async function generateLiveKitToken(userId, userName, roomName, isMod) {
   at.addGrant({
     room: roomName,
     roomJoin: true,
-    canPublish: true,
+    canPublish: publish,
     canSubscribe: true,
     canPublishData: true,
     roomAdmin: !!isMod,
   });
-  return at.toJwt(); // Promise<string> in livekit-server-sdk v2
+  return at.toJwt();
 }
 
 async function muteAllInRoom(roomName) {

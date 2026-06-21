@@ -104,7 +104,7 @@ exports.loadMeeting = async (req, res, next) => {
       _id:      req.params.id,
       company:  req.user.company,
       isActive: true,
-    });
+    }).populate('creatorId', 'name email');
     if (!meeting) {
       // Always return 404 — do not reveal whether a meeting exists in another tenant
       return res.status(404).json({ message: 'Meeting not found' });

@@ -301,31 +301,29 @@ async function init() {
 
   try {
     await delay(400);
-    setProgress(2, 50, 'Setting up meeting room…');
+    setProgress(2, 40, 'Starting meeting room…');
 
-    const r = await fetch(`/api/meetings/${MEETING_ID}/join`, {
+    // Lecturers start the meeting (sets status → live), then join it
+    const startR = await fetch(`/api/meetings/${MEETING_ID}/start`, {
+      method: 'POST',
       headers: { Authorization: 'Bearer ' + AUTH_TOKEN },
     });
-    const body = await r.json().catch(() => ({}));
+    const startBody = await startR.json().catch(() => ({}));
 
-    if (!r.ok) {
-      if (r.status === 402 && body.subscriptionExpired) { _subBlock(body.message, body.isAdmin); return; }
-      if (body.status === 'scheduled') return showError('The meeting hasn\'t been activated yet. Please contact your administrator.');
-      if (body.status === 'ended' || body.status === 'cancelled') return showError('This meeting has ended or been cancelled.');
-      throw new Error(body.error || body.message || `Server error (${r.status})`);
+    if (!startR.ok) {
+      if (startR.status === 402 && startBody.subscriptionExpired) { _subBlock(startBody.message, startBody.isAdmin); return; }
+      if (startBody.status === 'ended' || startBody.status === 'cancelled') return showError('This meeting has ended or been cancelled.');
+      // 403 from isOwner means this user is not the host
+      if (startR.status === 403) return showError('This page is for class hosts only. Students should use the Join Class link.');
+      throw new Error(startBody.error || startBody.message || `Server error (${startR.status})`);
     }
 
-    const data = body.data || body;
-
-    if (!data.isModerator) return showError('This page is for class hosts only. Students should use the Join Class link.');
-
-    if (data.title) document.getElementById('meetingTitle').textContent = data.title;
-
-    const meetingUrl = data.meetingUrl;
-    if (!meetingUrl) return showError('No meeting room configured — ask your admin to set up Jitsi or LiveKit on the server.');
+    const startData = startBody.data || startBody;
+    const meetingUrl = startData.meetingUrl;
+    if (!meetingUrl) return showError('No meeting room configured — ask your admin to set LIVEKIT_URL, LIVEKIT_API_KEY and LIVEKIT_API_SECRET.');
 
     setProgress(3, 90, 'Launching meeting room…');
-    await delay(500);
+    await delay(400);
     setProgress(3, 100, 'Opening your class now…');
     await delay(300);
 
