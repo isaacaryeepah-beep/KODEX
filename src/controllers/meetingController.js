@@ -6,7 +6,14 @@ const User               = require('../models/User');
 const { generateRoomName }                             = require('../utils/generateRoomName');
 const { generateMeetingToken, verifyMeetingToken }     = require('../utils/jwt');
 const { generateJitsiToken, isSelfHosted, JITSI_DOMAIN, JITSI_APP_ID } = require('../services/jitsiTokenService');
-const { configured: streamConfigured, muteAllInRoom, muteParticipantInRoom } = require('../services/livekitService');
+const {
+  configured: streamConfigured,
+  generateLiveKitToken,
+  buildLiveKitRoomUrl,
+  muteAllInRoom,
+  muteParticipantInRoom,
+  removeParticipantFromRoom,
+} = require('../services/livekitService');
 const { broadcastMonitor }                             = require('./meetingMonitorController');
 
 const APP_BASE_URL     = process.env.APP_BASE_URL     || 'https://dikly.live';
@@ -172,7 +179,7 @@ exports.createMeeting = async (req, res, next) => {
     res.status(201).json({
       success: true,
       message: 'Meeting created',
-      data: { ...meeting.toObject(), joinUrl: `https://${JITSI_DOMAIN}/${meeting.roomName}` },
+      data: meeting.toObject(),
     });
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -262,21 +269,19 @@ exports.startMeeting = async (req, res, next) => {
     meeting.actualStart = new Date();
     await meeting.save();
 
-    const jitsiToken  = generateJitsiToken(req.user, meeting.roomName, true);
+    if (!streamConfigured) return res.status(503).json({ error: 'Video meetings are not configured. Set LIVEKIT_URL, LIVEKIT_API_KEY and LIVEKIT_API_SECRET.' });
+
     const meetingToken = generateMeetingToken(req.user._id.toString(), meeting._id.toString(), req.user.deviceId || null);
+    const livekitToken = await generateLiveKitToken(req.user._id, req.user.name || req.user.email, meeting.roomName, true);
+    const meetingUrl   = buildLiveKitRoomUrl(meeting, req.user, livekitToken, true);
 
     res.json({
       success: true, message: 'Meeting started',
       data: {
-        roomName:    meeting.roomName,
-        joinUrl:     `https://${JITSI_DOMAIN}/${meeting.roomName}`,
-        password:    meeting.roomPassword,
-        settings:    meeting.settings,
-        jitsiToken,
+        meetingUrl,
         meetingToken,
-        selfHosted:  isSelfHosted(),
-        jitsiConfig: buildJitsiConfig(meeting, req.user, true),
-        monitorUrl:  `${MONITOR_BASE_URL}/monitor?meeting=${meeting._id}`,
+        monitorUrl: `${MONITOR_BASE_URL}/monitor?meeting=${meeting._id}`,
+        isModerator: true,
       },
     });
   } catch (err) { next(err); }
@@ -409,21 +414,25 @@ exports.joinMeeting = async (req, res, next) => {
       return res.status(403).json({ error: 'The room is locked. No new participants can join at this time.' });
     }
 
-    const jitsiToken  = generateJitsiToken(user, meeting.roomName, isMod);
+    if (!streamConfigured) return res.status(503).json({ error: 'Video meetings are not configured. Set LIVEKIT_URL, LIVEKIT_API_KEY and LIVEKIT_API_SECRET.' });
+
+    // In lecture mode, students subscribe-only — saves server CPU/bandwidth for 200+ rooms
+    const isLecture  = meeting.meetingType === 'lecture';
+    const canPublish = isMod ? true : !isLecture;
+
     const meetingToken = generateMeetingToken(user._id.toString(), meeting._id.toString(), user.deviceId || null);
+    const livekitToken = await generateLiveKitToken(user._id, user.name || user.email, meeting.roomName, isMod, canPublish);
+    const meetingUrl   = buildLiveKitRoomUrl(meeting, user, livekitToken, isMod);
 
     res.json({
       success: true,
       data: {
-        meeting,
-        jitsiConfig:  buildJitsiConfig(meeting, user, isMod),
-        jitsiToken,
+        meetingUrl,
         meetingToken,
-        selfHosted:   isSelfHosted(),
-        isModerator:  isMod,
-        monitorUrl:   isMod
-          ? `${MONITOR_BASE_URL}/monitor?meeting=${meeting._id}`
-          : null,
+        isModerator: isMod,
+        hostName:    meeting.creatorId?.name || null,
+        title:       meeting.title,
+        monitorUrl:  isMod ? `${MONITOR_BASE_URL}/monitor?meeting=${meeting._id}` : null,
       },
     });
   } catch (err) { next(err); }
