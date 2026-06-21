@@ -299,17 +299,13 @@ function selectPortal(t){if(window._appLoaded)window._realSelectPortal(t);else w
   clip-path: none;
 }
 
-/* the "D" letter */
-.hx-letter {
+/* the Dikly logo icon */
+.hx-icon {
   position: relative; z-index: 1;
-  font-size: 78px; font-weight: 900; line-height: 1;
-  color: #fff;
-  text-shadow:
-    0 0 18px rgba(147,197,253,.9),
-    0 0 40px rgba(37,99,235,.7),
-    0 3px 12px rgba(0,0,0,.5);
-  letter-spacing: -2px;
-  user-select: none;
+  width: 80px; height: 80px;
+  filter:
+    drop-shadow(0 0 10px rgba(147,197,253,.85))
+    drop-shadow(0 0 26px rgba(37,99,235,.6));
 }
 
 /* ── Outer glow ring ── */
@@ -413,7 +409,23 @@ function selectPortal(t){if(window._appLoaded)window._realSelectPortal(t);else w
     <div class="hx hx-b2"></div>
     <div class="hx hx-b1"></div>
     <div class="hx hx-front">
-      <span class="hx-letter">D</span>
+      <svg class="hx-icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">
+        <defs>
+          <linearGradient id="sp-dg" x1="0%" y1="0%" x2="100%" y2="100%">
+            <stop offset="0%" stop-color="#bfdbfe"/>
+            <stop offset="45%" stop-color="#93c5fd"/>
+            <stop offset="100%" stop-color="#60a5fa"/>
+          </linearGradient>
+          <clipPath id="sp-dc">
+            <path d="M14,4 L14,96 L50,96 C97,93 97,7 50,4 Z"/>
+          </clipPath>
+        </defs>
+        <path d="M14,4 L14,96 L50,96 C97,93 97,7 50,4 Z" fill="url(#sp-dg)"/>
+        <g clip-path="url(#sp-dc)">
+          <polygon points="4,58 63,-2 89,-2 30,58" fill="white"/>
+          <polygon points="30,102 89,42 63,42 4,102" fill="white"/>
+        </g>
+      </svg>
     </div>
     <!-- edge SVG lines to simulate prism depth -->
     <div class="hx-edge">
