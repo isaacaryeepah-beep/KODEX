@@ -3212,14 +3212,43 @@ function exitImpersonation() {
   window.location.href = '/superadmin';
 }
 
+// ── Superadmin per-role rates (stored in localStorage) ───────────────────────
+const SA_ROLE_DEFS = [
+  { key:'admin',    label:'Admins',    color:'#0F1B33', rate:15, tier:'both' },
+  { key:'manager',  label:'Managers',  color:'#5B4B8A', rate:12, tier:'corporate' },
+  { key:'employee', label:'Employees', color:'#9A6A1E', rate:8,  tier:'corporate' },
+  { key:'hod',      label:'HODs',      color:'#2E7D5B', rate:10, tier:'academic' },
+  { key:'lecturer', label:'Lecturers', color:'#C9A24B', rate:8,  tier:'academic' },
+  { key:'student',  label:'Students',  color:'#B5453C', rate:3,  tier:'academic' },
+];
+function saGetRates() {
+  try { const s = localStorage.getItem('dikly_sa_rates'); if (s) return JSON.parse(s); } catch(e) {}
+  const d = {}; SA_ROLE_DEFS.forEach(r => d[r.key] = r.rate); return d;
+}
+function saSetRate(key, val) {
+  const r = saGetRates(); r[key] = val; localStorage.setItem('dikly_sa_rates', JSON.stringify(r));
+}
+function saRolesForTier(tier) { return SA_ROLE_DEFS.filter(r => r.tier === 'both' || r.tier === tier); }
+function saComputeFee(c, rates) {
+  return saRolesForTier(c.mode || 'academic').reduce((s,r) => s + (c.roleCounts?.[r.key]||0) * (rates[r.key]||0), 0);
+}
+function saFmt(n) { return 'GHS ' + Number(n).toLocaleString('en-GH', { maximumFractionDigits:0 }); }
+function saRoleBreakdown(c) {
+  return saRolesForTier(c.mode||'academic').filter(r => (c.roleCounts?.[r.key]||0) > 0)
+    .map(r => `${c.roleCounts[r.key]} ${r.label.toLowerCase()}`).join(' · ') || 'No members yet';
+}
+function saTotalUsers(c) {
+  return saRolesForTier(c.mode||'academic').reduce((s,r) => s + (c.roleCounts?.[r.key]||0), 0);
+}
+
 async function superadminToggleCompany(id, currentlyActive) {
   const action = currentlyActive ? 'deactivate' : 'activate';
   if (!confirm('Are you sure you want to ' + action + ' this institution?')) return;
   try {
     await api('/api/superadmin/companies/' + id + '/toggle', { method: 'PATCH' });
-    toastSuccess('Institution ' + (currentlyActive ? 'deactivated' : 'activated') + ' ✓');
+    saShowToast('Institution ' + (currentlyActive ? 'deactivated' : 'activated') + ' ✓');
     renderSuperadminDashboard(document.getElementById('main-content'));
-  } catch(e) { toastError(e.message); }
+  } catch(e) { saShowToast(e.message); }
 }
 
 async function superadminExtendTrial(id, name) {
@@ -3227,64 +3256,39 @@ async function superadminExtendTrial(id, name) {
   if (!days || isNaN(days) || parseInt(days) < 1) return;
   try {
     const data = await api('/api/superadmin/companies/' + id + '/extend-trial', {
-      method: 'PATCH',
-      body: JSON.stringify({ days: parseInt(days) })
+      method: 'PATCH', body: JSON.stringify({ days: parseInt(days) })
     });
-    toastSuccess(data.message || 'Trial extended ✓');
+    saShowToast(data.message || 'Trial extended ✓');
     renderSuperadminDashboard(document.getElementById('main-content'));
-  } catch(e) { toastError(e.message); }
+  } catch(e) { saShowToast(e.message); }
 }
 
 async function superadminImpersonate(companyId, name) {
   if (!confirm('Login as admin of "' + name + '"?\n\nThis gives you full admin access for 1 hour. A separate tab will open.')) return;
   try {
     const data = await api('/api/superadmin/impersonate/' + companyId, { method: 'POST' });
-    // Open a new tab with the impersonation token
-    const url = '/?impersonate=' + encodeURIComponent(data.token) + '&company=' + encodeURIComponent(name);
-    window.open(url, '_blank');
-    toastSuccess('Impersonation tab opened · expires in 1 hour');
-  } catch(e) { toastError(e.message); }
+    window.open('/?impersonate=' + encodeURIComponent(data.token) + '&company=' + encodeURIComponent(name), '_blank');
+    saShowToast('Impersonation tab opened · expires in 1 hour');
+  } catch(e) { saShowToast(e.message); }
 }
 
-async function superadminShowPayments() {
-  const content = document.getElementById('main-content');
-  content.innerHTML = '<div class="loading">Loading payment history…</div>';
-  try {
-    const data = await api('/api/superadmin/payments');
-    const payments = data.payments || [];
-    const total = data.totalRevenue || 0;
-    content.innerHTML = `
-      <div class="page-header">
-        <div><h2>Payment History</h2><p>GHS ${total.toLocaleString()} total revenue · ${payments.length} payments</p></div>
-        <button class="btn btn-secondary btn-sm" onclick="renderSuperadminDashboard(document.getElementById('main-content'))">← Back</button>
-      </div>
-      <div class="card">
-        ${payments.length === 0 ? '<div class="empty-state"><p>No payments recorded yet. Payments appear here after Paystack webhook fires.</p></div>' :
-          `<div style="overflow-x:auto;">
-            <table style="width:100%;border-collapse:collapse;font-size:13px;">
-              <thead><tr style="border-bottom:2px solid var(--border);">
-                <th style="text-align:left;padding:9px 12px;font-size:11px;font-weight:700;color:var(--text-muted);text-transform:uppercase;">Institution</th>
-                <th style="text-align:left;padding:9px 12px;font-size:11px;font-weight:700;color:var(--text-muted);text-transform:uppercase;">Amount</th>
-                <th style="text-align:left;padding:9px 12px;font-size:11px;font-weight:700;color:var(--text-muted);text-transform:uppercase;">Plan</th>
-                <th style="text-align:left;padding:9px 12px;font-size:11px;font-weight:700;color:var(--text-muted);text-transform:uppercase;">Reference</th>
-                <th style="text-align:left;padding:9px 12px;font-size:11px;font-weight:700;color:var(--text-muted);text-transform:uppercase;">Date</th>
-              </tr></thead>
-              <tbody>
-                ${payments.map(p => `
-                  <tr style="border-bottom:1px solid var(--border);">
-                    <td style="padding:10px 12px;font-weight:600;">${p.company?.name || '—'}<br><span style="font-size:11px;color:var(--text-muted);font-family:monospace;">${p.company?.institutionCode || ''}</span></td>
-                    <td style="padding:10px 12px;font-weight:700;color:#16a34a;">GHS ${(p.amount || 0).toLocaleString()}</td>
-                    <td style="padding:10px 12px;"><span class="tag ${p.plan === 'yearly' ? 'tag-blue' : 'tag-green'}">${p.plan || 'unknown'}</span></td>
-                    <td style="padding:10px 12px;font-size:11px;font-family:monospace;color:var(--text-muted);">${p.reference || '—'}</td>
-                    <td style="padding:10px 12px;color:var(--text-muted);font-size:12px;">${fmtDate(p.paidAt)}</td>
-                  </tr>`).join('')}
-              </tbody>
-            </table>
-          </div>`}
-      </div>`;
-  } catch(e) {
-    content.innerHTML = '<div class="card"><p style="color:#ef4444;">' + e.message + '</p></div>';
-  }
+async function superadminShowPayments() { /* now handled by tab */ }
+
+function saShowToast(msg) {
+  let t = document.getElementById('sa-toast');
+  if (!t) { t = document.createElement('div'); t.id = 'sa-toast'; document.body.appendChild(t); }
+  t.style.cssText = 'position:fixed;bottom:24px;left:50%;transform:translateX(-50%);background:#0F1B33;color:#F6F1E4;padding:11px 22px;border-radius:30px;font-size:13.5px;z-index:9999;box-shadow:0 6px 18px rgba(0,0,0,.28);font-family:Segoe UI,system-ui,sans-serif;';
+  t.textContent = msg;
+  t.style.display = 'block';
+  clearTimeout(t._tid);
+  t._tid = setTimeout(() => { t.style.display = 'none'; }, 2600);
+}
+
+function saExportCSV(companies, rates) {
+  const rows = [['Name','Code','Tier','Admins','Managers','Employees','HODs','Lecturers','Students','Computed Fee','Revenue','Expires']];
+  companies.forEach(c => rows.push([c.name, c.institutionCode||'', c.mode||'', c.roleCounts?.admin||0, c.roleCounts?.manager||0, c.roleCounts?.employee||0, c.roleCounts?.hod||0, c.roleCounts?.lecturer||0, c.roleCounts?.student||0, saComputeFee(c,rates), c.revenue||0, c.subscriptionEndDate ? new Date(c.subscriptionEndDate).toLocaleDateString() : '']));
+  const csv = rows.map(r => r.map(v => `"${String(v).replace(/"/g,'""')}"`).join(',')).join('\n');
+  const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([csv],{type:'text/csv'})); a.download = 'dikly_institutions.csv'; a.click();
 }
 
 // ════════════════════════════════════════════════════════════════════════════
@@ -5349,95 +5353,233 @@ async function hodSendGroupMessage() {
 async function renderSuperadminDashboard(content) {
   if (!content) content = document.getElementById('main-content');
   content.innerHTML = '<div class="loading">Loading platform overview…</div>';
-  try {
-    const data = await api('/api/superadmin/overview').catch(() => null);
-    const companies = data?.companies || [];
-    const totalCompanies = companies.length;
-    const academic   = companies.filter(c => c.mode === 'academic').length;
-    const corporate  = companies.filter(c => c.mode === 'corporate').length;
-    const active     = companies.filter(c => c.isActive).length;
-    const onTrial    = companies.filter(c => c.isTrialActive).length;
-    const subscribed = companies.filter(c => c.subscriptionStatus === 'active').length;
-    const totalRevenue = data?.totalRevenue || 0;
-    const totalPayments = data?.totalPayments || 0;
 
-    content.innerHTML = `
-      <div class="page-header">
-        <div><h2>Platform Overview</h2><p>DIKLY Superadmin · All institutions</p></div>
-        <div style="display:flex;gap:8px;">
-          <button class="btn btn-secondary btn-sm" onclick="superadminShowPayments()">💳 Payment History</button>
-        </div>
+  // Cream/navy/gold design tokens
+  const C = { navy:'#0F1B33', navy2:'#16264A', cream:'#F6F1E4', gold:'#C9A24B', green:'#2E7D5B', red:'#B5453C', ink:'#1B1F27', line:'#E4DCC6', muted:'#7C7666' };
+  const css = `sa-wrap{all:unset}`;
+
+  let overview = null, payments = null;
+  let currentTab = window._saTab || 'institutions';
+  let searchQ = '';
+
+  try { overview = await api('/api/superadmin/overview').catch(() => null); } catch(e) {}
+
+  const companies = overview?.companies || [];
+  const rates = saGetRates();
+
+  function cardStyle(extra) { return `background:#fff;border:1px solid ${C.line};border-radius:14px;padding:16px;margin-bottom:12px;${extra||''}`; }
+  function badge(label, bg, color) { return `<span style="font-size:11px;padding:3px 9px;border-radius:20px;font-weight:600;background:${bg};color:${color}">${label}</span>`; }
+
+  function renderInstTab() {
+    const filtered = companies.filter(c => !searchQ || c.name.toLowerCase().includes(searchQ) || (c.institutionCode||'').toLowerCase().includes(searchQ));
+    const active  = companies.filter(c => c.isActive).length;
+    const acad    = companies.filter(c => c.mode === 'academic').length;
+    const corp    = companies.filter(c => c.mode === 'corporate').length;
+    const rev     = companies.reduce((s,c) => s+c.revenue||0, 0);
+
+    return `
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:16px;">
+        <div style="${cardStyle()}"><div style="font-family:Georgia,serif;font-size:26px;font-weight:700;line-height:1;color:${C.ink}">${companies.length}</div><div style="font-size:11px;color:${C.muted};letter-spacing:1.2px;text-transform:uppercase;margin-top:4px">Institutions</div></div>
+        <div style="${cardStyle()}"><div style="font-family:Georgia,serif;font-size:26px;font-weight:700;line-height:1;color:${C.green}">${active}</div><div style="font-size:11px;color:${C.muted};letter-spacing:1.2px;text-transform:uppercase;margin-top:4px">Active</div></div>
+        <div style="${cardStyle()}"><div style="font-family:Georgia,serif;font-size:26px;font-weight:700;line-height:1;color:${C.gold}">${saFmt(rev)}</div><div style="font-size:11px;color:${C.muted};letter-spacing:1.2px;text-transform:uppercase;margin-top:4px">Revenue</div></div>
+        <div style="${cardStyle()}"><div style="font-family:Georgia,serif;font-size:26px;font-weight:700;line-height:1;color:${C.ink}">${acad}</div><div style="font-size:11px;color:${C.muted};letter-spacing:1.2px;text-transform:uppercase;margin-top:4px">Academic</div></div>
+        <div style="${cardStyle()}"><div style="font-family:Georgia,serif;font-size:26px;font-weight:700;line-height:1;color:${C.ink}">${corp}</div><div style="font-size:11px;color:${C.muted};letter-spacing:1.2px;text-transform:uppercase;margin-top:4px">Corporate</div></div>
       </div>
 
-      <div class="stats-grid" style="margin-bottom:20px;">
-        <div class="stat-card"><div class="stat-value">${totalCompanies}</div><div class="stat-label">INSTITUTIONS</div></div>
-        <div class="stat-card"><div class="stat-value" style="color:#16a34a">${active}</div><div class="stat-label">ACTIVE</div></div>
-        <div class="stat-card"><div class="stat-value" style="color:#d97706">${onTrial}</div><div class="stat-label">ON TRIAL</div></div>
-        <div class="stat-card"><div class="stat-value" style="color:#2563eb">${subscribed}</div><div class="stat-label">SUBSCRIBED</div></div>
-        <div class="stat-card"><div class="stat-value" style="color:#16a34a;font-size:20px;">GHS ${totalRevenue.toLocaleString()}</div><div class="stat-label">TOTAL REVENUE</div></div>
-        <div class="stat-card"><div class="stat-value">${totalPayments}</div><div class="stat-label">PAYMENTS</div></div>
+      <div style="display:flex;align-items:center;gap:8px;background:#fff;border:1px solid ${C.line};border-radius:10px;padding:10px 12px;margin-bottom:16px;">
+        <span style="color:${C.muted}">🔍</span>
+        <input id="sa-search" value="${esc(searchQ)}" placeholder="Search by name or code…" oninput="window._saSearch(this.value)" style="border:none;outline:none;width:100%;font-size:14px;background:transparent;color:${C.ink}">
       </div>
 
-      <div class="card">
-        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;flex-wrap:wrap;gap:8px;">
-          <div style="font-size:13px;font-weight:700;">All Institutions</div>
-          <div style="display:flex;gap:6px;">
-            <span class="tag tag-blue">Academic: ${academic}</span>
-            <span class="tag tag-green">Corporate: ${corporate}</span>
-          </div>
-        </div>
-        <div style="overflow-x:auto;">
-          <table style="width:100%;border-collapse:collapse;font-size:13px;">
-            <thead><tr style="border-bottom:2px solid var(--border);">
-              <th style="text-align:left;padding:9px 12px;font-size:11px;font-weight:700;color:var(--text-muted);text-transform:uppercase;">Institution</th>
-              <th style="text-align:left;padding:9px 12px;font-size:11px;font-weight:700;color:var(--text-muted);text-transform:uppercase;">Users</th>
-              <th style="text-align:left;padding:9px 12px;font-size:11px;font-weight:700;color:var(--text-muted);text-transform:uppercase;">Mode</th>
-              <th style="text-align:left;padding:9px 12px;font-size:11px;font-weight:700;color:var(--text-muted);text-transform:uppercase;">Status</th>
-              <th style="text-align:left;padding:9px 12px;font-size:11px;font-weight:700;color:var(--text-muted);text-transform:uppercase;">Subscription</th>
-              <th style="text-align:left;padding:9px 12px;font-size:11px;font-weight:700;color:var(--text-muted);text-transform:uppercase;">Revenue</th>
-              <th style="text-align:left;padding:9px 12px;font-size:11px;font-weight:700;color:var(--text-muted);text-transform:uppercase;">Actions</th>
-            </tr></thead>
-            <tbody>
-              ${companies.length === 0 ? '<tr><td colspan="7" style="padding:24px;text-align:center;color:var(--text-muted);">No institutions yet.</td></tr>' :
-                companies.map(c => `
-                <tr style="border-bottom:1px solid var(--border);">
-                  <td style="padding:10px 12px;">
-                    <div style="font-weight:700;">${c.name}</div>
-                    <div style="font-size:11px;color:var(--text-muted);font-family:monospace;">${c.institutionCode || '—'}</div>
-                  </td>
-                  <td style="padding:10px 12px;">
-                    <div style="font-weight:600;">${c.userCount || 0}</div>
-                    ${c.roleCounts && c.mode === 'academic'
-                      ? `<div style="font-size:10px;color:var(--text-muted);margin-top:2px;">${c.roleCounts.lecturer||0}L · ${c.roleCounts.hod||0}H · ${c.roleCounts.student||0}S</div>`
-                      : c.roleCounts
-                        ? `<div style="font-size:10px;color:var(--text-muted);margin-top:2px;">${c.roleCounts.manager||0}Mgr · ${c.roleCounts.employee||0}Emp</div>`
-                        : ''}
-                  </td>
-                  <td style="padding:10px 12px;"><span class="tag ${c.mode === 'academic' ? 'tag-blue' : 'tag-green'}">${c.mode}</span></td>
-                  <td style="padding:10px 12px;"><span class="tag ${c.isActive ? 'tag-green' : 'tag-red'}">${c.isActive ? 'Active' : 'Inactive'}</span></td>
-                  <td style="padding:10px 12px;">
-                    <span class="tag ${c.subscriptionStatus === 'active' ? 'tag-blue' : c.isTrialActive ? 'tag-amber' : 'tag-gray'}">
-                      ${c.subscriptionStatus === 'active' ? 'Subscribed' : c.isTrialActive ? 'Trial (' + (c.trialDaysRemaining || 0) + 'd)' : 'Expired'}
-                    </span>
-                  </td>
-                  <td style="padding:10px 12px;font-size:12px;font-weight:600;color:${c.revenue > 0 ? '#16a34a' : 'var(--text-muted)'};">
-                    ${c.revenue > 0 ? 'GHS ' + c.revenue.toLocaleString() : '—'}
-                  </td>
-                  <td style="padding:10px 12px;white-space:nowrap;display:flex;gap:4px;flex-wrap:wrap;">
-                    <button class="btn btn-xs" style="background:#6366f1;color:#fff;font-size:11px;" onclick="superadminImpersonate('${c._id}','${c.name.replace(/'/g,"\\'")}')" title="Login as admin">🔑 Login</button>
-                    <button class="btn btn-xs btn-secondary" style="font-size:11px;" onclick="superadminExtendTrial('${c._id}','${c.name.replace(/'/g,"\\'")}')">+Trial</button>
-                    <button class="btn btn-xs" style="${c.isActive ? 'background:#f59e0b' : 'background:#22c55e'};color:#fff;font-size:11px;" onclick="superadminToggleCompany('${c._id}',${c.isActive})">
-                      ${c.isActive ? 'Off' : 'On'}
-                    </button>
-                  </td>
-                </tr>`).join('')}
-            </tbody>
-          </table>
+      <div style="font-size:11px;letter-spacing:1.5px;text-transform:uppercase;color:${C.muted};margin:0 0 8px;font-weight:700;">All Institutions</div>
+
+      ${filtered.length === 0
+        ? `<div style="text-align:center;padding:50px 20px;color:${C.muted}"><div style="font-family:Georgia,serif;font-size:18px;color:${C.ink};margin-bottom:6px">No matches</div>Try a different name or code.</div>`
+        : filtered.map(c => {
+            const fee = saComputeFee(c, rates);
+            const exp = c.subscriptionEndDate ? new Date(c.subscriptionEndDate) : null;
+            const daysLeft = exp ? Math.max(0, Math.ceil((exp - Date.now()) / 86400000)) : 0;
+            const subLabel = c.subscriptionStatus === 'active' ? 'Subscribed'
+              : c.isTrialActive ? `Trial (${c.trialDaysRemaining||0}d)` : 'Expired';
+            const subBg = c.subscriptionStatus === 'active' ? '#E4F1EA' : c.isTrialActive ? '#FBEED9' : '#F5E4E4';
+            const subColor = c.subscriptionStatus === 'active' ? C.green : c.isTrialActive ? '#9A6A1E' : C.red;
+            const tierBg = c.mode === 'academic' ? '#E8E2F2' : '#E2EEF2';
+            const tierColor = c.mode === 'academic' ? '#5B4B8A' : '#1B5A6B';
+            const nm = c.name.replace(/'/g, "\\'");
+            return `
+            <div style="${cardStyle()}">
+              <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px;margin-bottom:10px">
+                <div>
+                  <div style="font-family:Georgia,serif;font-size:18px;font-weight:700;color:${C.ink}">${esc(c.name)}</div>
+                  <div style="font-size:11px;color:${C.muted};letter-spacing:1px;margin-top:2px">${esc(c.institutionCode||'')}</div>
+                </div>
+                <div style="display:flex;gap:6px;flex-shrink:0;flex-wrap:wrap;justify-content:flex-end">
+                  ${badge(c.isActive ? 'Active' : 'Inactive', c.isActive ? '#E4F1EA' : '#F5E4E4', c.isActive ? C.green : C.red)}
+                  ${badge(subLabel, subBg, subColor)}
+                  ${badge(c.mode||'academic', tierBg, tierColor)}
+                </div>
+              </div>
+              <div style="display:flex;justify-content:space-between;font-size:13.5px;margin-bottom:10px">
+                <div>
+                  <strong>${saTotalUsers(c)} users</strong>
+                  <div style="color:${C.muted};font-size:12px;margin-top:2px">${saRoleBreakdown(c)}</div>
+                </div>
+                ${exp ? `<div style="text-align:right"><strong>${daysLeft}d left</strong><div style="color:${C.muted};font-size:12px;margin-top:2px">exp ${exp.toLocaleDateString('en-GB',{day:'numeric',month:'short',year:'numeric'})}</div></div>` : ''}
+              </div>
+              ${c.adminName ? `<div style="font-size:13.5px;margin-bottom:10px"><strong>${esc(c.adminName)}</strong><div style="color:${C.muted};font-size:12.5px">${esc(c.adminEmail||'')}</div></div>` : ''}
+              <div style="padding-top:12px;border-top:1px dashed ${C.line};display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
+                <div>
+                  <div style="font-size:11px;color:${C.muted};text-transform:uppercase;letter-spacing:1px">Subscription fee</div>
+                  <div style="font-family:Georgia,serif;font-size:17px;font-weight:700;color:${C.navy}">${saFmt(fee)}</div>
+                </div>
+                <div style="text-align:right">
+                  <div style="font-size:11px;color:${C.muted};text-transform:uppercase;letter-spacing:1px">Revenue paid</div>
+                  <div style="font-family:Georgia,serif;font-size:17px;font-weight:700;color:${C.green}">${c.revenue > 0 ? saFmt(c.revenue) : '—'}</div>
+                </div>
+              </div>
+              <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+                <button onclick="superadminToggleCompany('${c._id}',${c.isActive})" style="border-radius:8px;padding:9px 0;font-size:13px;font-weight:600;cursor:pointer;border:1px solid ${C.red};background:#fff;color:${C.red}">${c.isActive ? 'Deactivate' : 'Activate'}</button>
+                <button onclick="superadminExtendTrial('${c._id}','${nm}')" style="border-radius:8px;padding:9px 0;font-size:13px;font-weight:600;cursor:pointer;border:1px solid ${C.line};background:#fff;color:${C.ink}">+Trial</button>
+                <button onclick="superadminImpersonate('${c._id}','${nm}')" style="border-radius:8px;padding:9px 0;font-size:13px;font-weight:600;cursor:pointer;background:${C.navy};color:${C.cream};border:none;grid-column:1/-1">🔑 Login as Admin</button>
+              </div>
+            </div>`;
+          }).join('')}
+    `;
+  }
+
+  async function renderPayTab() {
+    if (!payments) {
+      try { const d = await api('/api/superadmin/payments'); payments = d; } catch(e) { payments = { payments:[], totalRevenue:0 }; }
+    }
+    const list = payments.payments || [];
+    const total = payments.totalRevenue || 0;
+    return `
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:16px;">
+        <div style="${cardStyle()}"><div style="font-family:Georgia,serif;font-size:22px;font-weight:700;line-height:1;color:${C.green}">${saFmt(total)}</div><div style="font-size:11px;color:${C.muted};letter-spacing:1.2px;text-transform:uppercase;margin-top:4px">Total Revenue</div></div>
+        <div style="${cardStyle()}"><div style="font-family:Georgia,serif;font-size:26px;font-weight:700;line-height:1;color:${C.ink}">${list.length}</div><div style="font-size:11px;color:${C.muted};letter-spacing:1.2px;text-transform:uppercase;margin-top:4px">Payments</div></div>
+      </div>
+      <div style="font-size:11px;letter-spacing:1.5px;text-transform:uppercase;color:${C.muted};margin:0 0 8px;font-weight:700;">Payment History</div>
+      <div style="${cardStyle()}">
+        ${list.length === 0
+          ? `<div style="text-align:center;padding:40px 20px;color:${C.muted}"><div style="font-family:Georgia,serif;font-size:18px;color:${C.ink};margin-bottom:6px">No payments yet</div>Payments appear after Paystack webhook fires.</div>`
+          : list.slice().reverse().map(p => `
+              <div style="display:flex;justify-content:space-between;padding:10px 0;border-bottom:1px solid ${C.line};font-size:13px;">
+                <div>
+                  <div style="font-weight:600">${esc(p.company?.name||'—')}</div>
+                  <div style="color:${C.muted};font-size:11.5px">${esc(p.company?.institutionCode||'')} · ${esc(p.plan||'')}</div>
+                </div>
+                <div style="text-align:right">
+                  <div style="font-weight:700;color:${C.navy}">${saFmt(p.amount||0)}</div>
+                  <div style="color:${C.muted};font-size:11.5px">${p.paidAt ? new Date(p.paidAt).toLocaleDateString('en-GB',{day:'numeric',month:'short',year:'numeric'}) : '—'}</div>
+                </div>
+              </div>`).join('')}
+      </div>`;
+  }
+
+  function renderDevicesTab() {
+    const devTotal = 0; // devices come from device heartbeats
+    return `
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:16px;">
+        <div style="${cardStyle()}"><div style="font-family:Georgia,serif;font-size:26px;font-weight:700;line-height:1;color:${C.ink}">—</div><div style="font-size:11px;color:${C.muted};letter-spacing:1.2px;text-transform:uppercase;margin-top:4px">Total Devices</div></div>
+        <div style="${cardStyle()}"><div style="font-family:Georgia,serif;font-size:26px;font-weight:700;line-height:1;color:${C.green}">—</div><div style="font-size:11px;color:${C.muted};letter-spacing:1.2px;text-transform:uppercase;margin-top:4px">Registered</div></div>
+      </div>
+      <div style="${cardStyle()}">
+        <div style="text-align:center;padding:30px 20px;color:${C.muted}">
+          <div style="font-size:36px;margin-bottom:10px">📟</div>
+          <div style="font-family:Georgia,serif;font-size:18px;color:${C.ink};margin-bottom:6px">Devices register automatically</div>
+          <div style="font-size:13px">ESP32 devices appear here once they check in via heartbeat.</div>
         </div>
       </div>`;
-  } catch(e) {
-    await renderAdminDashboard(content);
   }
+
+  function renderAdjusterTab() {
+    const r = saGetRates();
+    return `
+      <div style="color:${C.muted};font-size:12.5px;margin-bottom:16px">
+        Set a monthly per-seat rate for each role. The computed fee on each institution card updates immediately.
+      </div>
+      ${SA_ROLE_DEFS.map(rd => `
+        <div style="background:#fff;border:1px solid ${C.line};border-radius:12px;padding:14px 16px;margin-bottom:10px;display:flex;align-items:center;justify-content:space-between;gap:12px">
+          <div>
+            <div style="display:flex;align-items:center;gap:8px;font-weight:700;font-size:14.5px;color:${C.ink}">
+              <span style="width:9px;height:9px;border-radius:50%;background:${rd.color};flex-shrink:0;display:inline-block"></span>
+              ${rd.label}
+            </div>
+            <div style="font-size:11px;color:${C.muted};margin-top:2px">${rd.tier==='both'?'All institutions':rd.tier==='academic'?'Academic only':'Corporate only'}</div>
+          </div>
+          <div style="display:flex;align-items:center;gap:8px">
+            <span style="font-size:12.5px;color:${C.muted}">GHS</span>
+            <input type="number" min="0" id="sa-rate-${rd.key}" value="${r[rd.key]||0}" style="width:90px;padding:9px 10px;border:1px solid ${C.line};border-radius:8px;font-size:14px;text-align:right;background:#FBFAF6;outline:none">
+            <button id="sa-save-${rd.key}" onclick="window._saSaveRate('${rd.key}')" style="background:${C.navy};color:${C.cream};border:none;border-radius:8px;padding:9px 14px;font-size:12.5px;font-weight:600;cursor:pointer">Save</button>
+          </div>
+        </div>`).join('')}`;
+  }
+
+  async function drawTab(tab) {
+    currentTab = tab;
+    window._saTab = tab;
+    // Update tab buttons
+    ['institutions','payments','devices','adjuster'].forEach(t => {
+      const btn = document.getElementById('sa-tab-' + t);
+      if (btn) { btn.style.background = t === tab ? C.gold : 'transparent'; btn.style.color = t === tab ? C.navy : 'rgba(246,241,228,.65)'; }
+    });
+    const body = document.getElementById('sa-body');
+    if (!body) return;
+    body.innerHTML = '<div style="padding:20px;text-align:center;color:' + C.muted + '">Loading…</div>';
+    if (tab === 'institutions') body.innerHTML = renderInstTab();
+    else if (tab === 'payments')  body.innerHTML = await renderPayTab();
+    else if (tab === 'devices')   body.innerHTML = renderDevicesTab();
+    else if (tab === 'adjuster')  body.innerHTML = renderAdjusterTab();
+  }
+
+  // Render shell
+  content.innerHTML = `
+    <style>
+      #sa-outer { font-family:'Segoe UI',system-ui,sans-serif; background:#F6F1E4; min-height:100vh; margin:-20px -16px; }
+      #sa-outer * { box-sizing:border-box; }
+    </style>
+    <div id="sa-outer">
+      <!-- Banner -->
+      <div style="background:${C.navy};color:${C.cream};padding:18px 20px 0;position:sticky;top:0;z-index:20;box-shadow:0 4px 14px rgba(0,0,0,.18)">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px">
+          <div style="display:flex;align-items:baseline;gap:8px">
+            <span style="font-family:Georgia,serif;font-size:21px;letter-spacing:.5px">DIKLY</span>
+            <span style="font-size:11px;color:${C.gold};letter-spacing:2px;text-transform:uppercase">Superadmin</span>
+          </div>
+          <div style="display:flex;gap:8px">
+            <button onclick="saExportCSV(window._saCompanies||[], saGetRates())" style="background:transparent;border:1px solid rgba(246,241,228,.35);color:${C.cream};font-size:13px;padding:7px 12px;border-radius:7px;cursor:pointer">CSV</button>
+            <button onclick="doLogout()" style="background:transparent;border:1px solid rgba(246,241,228,.35);color:${C.cream};font-size:13px;padding:7px 12px;border-radius:7px;cursor:pointer">Sign Out</button>
+          </div>
+        </div>
+        <!-- Tabs -->
+        <div style="display:flex;gap:6px;background:rgba(246,241,228,.08);border-radius:10px;padding:4px">
+          <button id="sa-tab-institutions" onclick="window._saDrawTab('institutions')" style="flex:1;border:none;padding:9px 4px;font-size:12px;border-radius:8px;cursor:pointer;font-weight:600;letter-spacing:.1px;transition:background .15s,color .15s">🏛 Institutions</button>
+          <button id="sa-tab-payments"     onclick="window._saDrawTab('payments')"     style="flex:1;border:none;padding:9px 4px;font-size:12px;border-radius:8px;cursor:pointer;font-weight:600;letter-spacing:.1px;transition:background .15s,color .15s">💳 Payments</button>
+          <button id="sa-tab-devices"      onclick="window._saDrawTab('devices')"      style="flex:1;border:none;padding:9px 4px;font-size:12px;border-radius:8px;cursor:pointer;font-weight:600;letter-spacing:.1px;transition:background .15s,color .15s">📟 Devices</button>
+          <button id="sa-tab-adjuster"     onclick="window._saDrawTab('adjuster')"     style="flex:1;border:none;padding:9px 4px;font-size:12px;border-radius:8px;cursor:pointer;font-weight:600;letter-spacing:.1px;transition:background .15s,color .15s">⚙ Fee Adjuster</button>
+        </div>
+      </div>
+      <!-- Body -->
+      <div id="sa-body" style="padding:16px;max-width:900px;margin:0 auto;padding-bottom:60px"></div>
+    </div>`;
+
+  // Wire globals
+  window._saCompanies = companies;
+  window._saDrawTab   = tab => drawTab(tab);
+  window._saSearch    = q => { searchQ = q.toLowerCase(); const body = document.getElementById('sa-body'); if (body && currentTab === 'institutions') body.innerHTML = renderInstTab(); };
+  window._saSaveRate  = key => {
+    const input = document.getElementById('sa-rate-' + key);
+    if (!input) return;
+    const val = Math.max(0, parseFloat(input.value) || 0);
+    saSetRate(key, val);
+    const btn = document.getElementById('sa-save-' + key);
+    if (btn) { btn.textContent = 'Saved ✓'; btn.style.background = C.green; setTimeout(() => { btn.textContent = 'Save'; btn.style.background = C.navy; }, 1600); }
+    saShowToast(`${SA_ROLE_DEFS.find(r=>r.key===key)?.label||key} rate → ${saFmt(val)} — applied to all institutions`);
+    // refresh inst tab fees if visible
+    if (currentTab === 'institutions') { const body = document.getElementById('sa-body'); if (body) body.innerHTML = renderInstTab(); }
+  };
+
+  drawTab(currentTab);
 }
 
 
