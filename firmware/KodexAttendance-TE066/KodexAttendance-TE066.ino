@@ -640,6 +640,7 @@ void startApPortal() {
     cfgSsid = ssid;
     cfgPass = pass;
     WiFi.mode(WIFI_AP_STA);
+    WiFi.setScanMethod(WIFI_FAST_SCAN);
     WiFi.begin(ssid.c_str(), pass.c_str());
 
     oledMsg("Connecting...", ssid.c_str());
@@ -930,6 +931,8 @@ void setup() {
   oledConnecting(cfgSsid.c_str());
   WiFi.mode(WIFI_STA);
   WiFi.setSleep(false);
+  WiFi.persistent(false);
+  WiFi.setScanMethod(WIFI_FAST_SCAN);
   WiFi.begin(cfgSsid.c_str(), cfgPass.c_str());
 
   uint32_t t0 = millis();
@@ -988,6 +991,7 @@ void loop() {
       oledMsg("WiFi lost...", "Reconnecting", cfgSsid.c_str());
       WiFi.disconnect(false);
       delay(300);
+      WiFi.setScanMethod(WIFI_FAST_SCAN);
       WiFi.begin(cfgSsid.c_str(), cfgPass.c_str());
     }
     delay(200);

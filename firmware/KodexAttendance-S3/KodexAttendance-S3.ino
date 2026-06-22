@@ -2027,6 +2027,7 @@ static void startWifiReconfigPortal() {
     }
     // Test the new credentials before saving
     WiFi.mode(WIFI_AP_STA);
+    WiFi.setScanMethod(WIFI_FAST_SCAN);
     WiFi.begin(ssid.c_str(), pass.c_str());
     uint32_t t0 = millis();
     while (WiFi.status() != WL_CONNECTED && millis() - t0 < WIFI_TIMEOUT_MS) {
@@ -4730,6 +4731,8 @@ void setup() {
   if (!wifiSSID.isEmpty()) {
     WiFi.mode(WIFI_AP_STA);
     WiFi.setSleep(false);
+    WiFi.persistent(false);        // skip flash write on every connect (~200 ms saved)
+    WiFi.setScanMethod(WIFI_FAST_SCAN);  // connect on first SSID match vs scanning all channels
     WiFi.setAutoReconnect(true);   // let the stack reconnect on its own after drops
     WiFi.setTxPower(WIFI_POWER_19_5dBm);  // max TX power — school WiFi is often far
     WiFi.begin(wifiSSID.c_str(), wifiPass.c_str());
@@ -4776,6 +4779,7 @@ void loop() {
     if (!wifiSSID.isEmpty()) {
       drawPairStatus("Connecting to WiFi…", wifiSSID.c_str(), "", 1);
       WiFi.mode(WIFI_AP_STA);
+      WiFi.setScanMethod(WIFI_FAST_SCAN);
       WiFi.begin(wifiSSID.c_str(), wifiPass.c_str());
       uint32_t t0 = millis();
       while (WiFi.status() != WL_CONNECTED && millis() - t0 < WIFI_TIMEOUT_MS) {
@@ -4847,14 +4851,16 @@ void loop() {
   bool staConnected = (WiFi.status() == WL_CONNECTED);
   if (!wifiSSID.isEmpty()) {
     static uint32_t lastReconn = 0;
-    if (!staConnected && millis() - lastReconn > 30000) {
+    if (!staConnected && millis() - lastReconn > 10000) {
       lastReconn = millis();
       if (WiFi.getMode() == WIFI_AP) WiFi.mode(WIFI_AP_STA);
+      WiFi.setScanMethod(WIFI_FAST_SCAN);
       WiFi.begin(wifiSSID.c_str(), wifiPass.c_str());
     }
     if (forceReconn) {
       forceReconn = false;
       WiFi.disconnect(false); delay(300);
+      WiFi.setScanMethod(WIFI_FAST_SCAN);
       WiFi.setAutoReconnect(true);
       WiFi.begin(wifiSSID.c_str(), wifiPass.c_str());
       LOG("forceReconn → reconnecting to " + wifiSSID);
