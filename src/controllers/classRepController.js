@@ -14,7 +14,11 @@ exports.getMyDevice = async (req, res, next) => {
     if (!req.user.isClassRep) return res.status(403).json({ error: 'Not a class rep' });
     const device = await Device.findOne({ classRepId: req.user._id, companyId: req.user.company, isActive: true })
       .populate('activeLecturerId', 'name email');
-    res.json({ device: device || null });
+    if (!device) return res.json({ device: null });
+    const secsSinceHeartbeat = device.lastHeartbeat
+      ? Math.floor((Date.now() - device.lastHeartbeat.getTime()) / 1000)
+      : null;
+    res.json({ device, secsSinceHeartbeat });
   } catch (e) { next(e); }
 };
 

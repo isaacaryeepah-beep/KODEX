@@ -12896,13 +12896,23 @@ async function renderClassDevice() {
     ]);
     const device = devRes.device;
     const lecturers = lecRes.lecturers || [];
-    const deviceOnline = device ? (Date.now() - new Date(device.lastHeartbeat || 0).getTime() < 20000) : false;
+    const secsSince = devRes.secsSinceHeartbeat != null
+      ? devRes.secsSinceHeartbeat
+      : (device && device.lastHeartbeat ? Math.floor((Date.now() - new Date(device.lastHeartbeat).getTime()) / 1000) : null);
+    const deviceOnline = device ? (secsSince != null && secsSince < 20) : false;
 
-    const deviceStatus = device
-      ? (deviceOnline
-        ? '<span style="color:#16a34a;font-weight:700">● Online</span>'
-        : '<span style="color:#dc2626;font-weight:700">● Offline</span>')
-      : null;
+    let deviceStatusHtml = '';
+    if (device) {
+      if (deviceOnline) {
+        deviceStatusHtml = '<span style="color:#16a34a;font-weight:700">● Online</span>';
+      } else if (secsSince != null) {
+        const ago = secsSince < 60 ? `${secsSince}s ago` : secsSince < 3600 ? `${Math.floor(secsSince/60)}m ago` : `${Math.floor(secsSince/3600)}h ago`;
+        deviceStatusHtml = `<span style="color:#dc2626;font-weight:700">● Offline</span> <span style="color:#94a3b8;font-size:11px">(last seen ${ago})</span>`;
+      } else {
+        deviceStatusHtml = '<span style="color:#dc2626;font-weight:700">● Offline</span>';
+      }
+    }
+    const deviceStatus = deviceStatusHtml || null;
 
     const activeInfo = device && device.activeLecturerId
       ? `<div style="margin-top:12px;padding:12px 16px;background:#f0fdf4;border:1.5px solid #86efac;border-radius:10px;font-size:13px">
