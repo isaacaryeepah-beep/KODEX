@@ -36,4 +36,11 @@ const reviewSchema = new mongoose.Schema(
   { timestamps: true }
 );
 
+// Compound indexes for company-scoped queries
+reviewSchema.index({ company: 1, createdAt: -1 }, { background: true });
+reviewSchema.index({ company: 1, employee: 1 }, { background: true });
+reviewSchema.index({ company: 1, status: 1 }, { background: true });
+reviewSchema.index({ employee: 1 }, { background: true });
+reviewSchema.index({ reviewer: 1 }, { background: true });
+
 module.exports = mongoose.model("Review", reviewSchema);

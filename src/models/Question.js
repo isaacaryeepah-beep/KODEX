@@ -68,4 +68,8 @@ const questionSchema = new mongoose.Schema(
   }
 );
 
+// Compound indexes for quiz-scoped queries
+questionSchema.index({ quiz: 1, createdAt: 1 }, { background: true });
+questionSchema.index({ quiz: 1, questionType: 1 }, { background: true });
+
 module.exports = mongoose.model("Question", questionSchema);

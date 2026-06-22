@@ -32,4 +32,10 @@ const trainingModuleSchema = new mongoose.Schema(
   { timestamps: true }
 );
 
+// Compound indexes for company-scoped queries
+trainingModuleSchema.index({ company: 1, createdAt: -1 }, { background: true });
+trainingModuleSchema.index({ company: 1, type: 1 }, { background: true });
+trainingModuleSchema.index({ company: 1, isActive: 1 }, { background: true });
+trainingModuleSchema.index({ createdBy: 1 }, { background: true });
+
 module.exports = mongoose.model("TrainingModule", trainingModuleSchema);

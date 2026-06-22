@@ -5,6 +5,8 @@ const cors = require("cors");
 const helmet = require("helmet");
 const compression = require("compression");
 const path = require("path");
+const morgan = require("morgan");
+const logger = require("./services/logger");
 const connectDB = require("./config/db");
 const authRoutes = require("./routes/auth");
 const userRoutes = require("./routes/users");
@@ -48,7 +50,7 @@ const assignmentStudentRoutes       = require("./routes/assignmentStudentRoutes"
 const aiGeneratorRoutes             = require("./routes/aiGeneratorRoutes");
 const hodRoutes = require("./routes/hod");
 let superadminRoutes = null;
-try { superadminRoutes = require("./routes/superadmin"); } catch(_) { console.warn('superadmin routes not found — skipping'); }
+try { superadminRoutes = require("./routes/superadmin"); } catch(_) { logger.warn('superadmin routes not found — skipping'); }
 
 const { loginLimiter, registerLimiter, passwordResetLimiter, apiLimiter } = require("./middleware/rateLimiter");
 const { sanitizeInputs } = require("./middleware/sanitize");
@@ -67,6 +69,10 @@ app.use((req, res, next) => {
   }
   next();
 });
+
+// HTTP request logging via morgan → winston
+const morganFormat = (process.env.NODE_ENV === 'production' || process.env.RENDER) ? 'combined' : 'dev';
+app.use(morgan(morganFormat, { stream: logger.stream }));
 
 app.use(helmet({
   contentSecurityPolicy: {
@@ -386,9 +392,9 @@ app.use((err, req, res, _next) => {
 
   // Log server errors (5xx) with full stack; client errors (4xx) with message only
   if (statusCode >= 500) {
-    console.error(`[ERROR] ${req.method} ${req.originalUrl}:`, err);
+    logger.error(`${req.method} ${req.originalUrl}`, { error: err.message, stack: err.stack });
   } else {
-    console.warn(`[WARN] ${req.method} ${req.originalUrl}: ${err.message}`);
+    logger.warn(`${req.method} ${req.originalUrl}: ${err.message}`);
   }
 
   // Mongoose validation errors → 400
@@ -440,11 +446,11 @@ const start = async () => {
     );
     if (oldIndex) {
       await usersCollection.dropIndex(oldIndex.name);
-      console.log("Dropped old sparse indexNumber_1_company_1 index");
+      logger.info("Dropped old sparse indexNumber_1_company_1 index");
     }
   } catch (e) {
     if (e.codeName !== "IndexNotFound") {
-      console.log("Index cleanup note:", e.message);
+      logger.info("Index cleanup note: " + e.message);
     }
   }
 
@@ -455,18 +461,18 @@ const start = async () => {
     const aIdxs = await assignmentsCol.indexes();
     for (const idx of aIdxs) {
       if (idx.unique && idx.key && idx.key.company !== undefined && Object.keys(idx.key).length <= 3) {
-        console.log(`Dropping stale unique assignment index: ${idx.name}`);
+        logger.info(`Dropping stale unique assignment index: ${idx.name}`);
         await assignmentsCol.dropIndex(idx.name);
       }
     }
   } catch (e) {
     if (e.codeName !== "IndexNotFound" && e.code !== 26) {
-      console.log("Assignment index cleanup note:", e.message);
+      logger.info("Assignment index cleanup note: " + e.message);
     }
   }
 
   server.listen(PORT, "0.0.0.0", () => {
-    console.log(`Server running on port ${PORT}`);
+    logger.info(`Server running on port ${PORT}`);
 
     try {
       const { startScheduler } = require("./services/emailScheduler");
@@ -474,9 +480,23 @@ const start = async () => {
       setInterval(runWatchdog, 5000);
       startScheduler();
     } catch (e) {
-      console.error("Scheduler failed to start:", e.message);
+      logger.error("Scheduler failed to start", { error: e.message });
     }
   });
 };
+
+// ── Process-level error handlers ─────────────────────────────────────────────
+
+process.on("unhandledRejection", (reason, promise) => {
+  logger.error("Unhandled Promise Rejection", {
+    reason: reason instanceof Error ? reason.message : String(reason),
+    stack: reason instanceof Error ? reason.stack : undefined,
+  });
+});
+
+process.on("uncaughtException", (err) => {
+  logger.error("Uncaught Exception — shutting down", { error: err.message, stack: err.stack });
+  process.exit(1);
+});
 
 start();

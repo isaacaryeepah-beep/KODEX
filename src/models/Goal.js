@@ -28,4 +28,11 @@ const goalSchema = new mongoose.Schema(
   { timestamps: true }
 );
 
+// Compound indexes for company-scoped queries
+goalSchema.index({ company: 1, createdAt: -1 }, { background: true });
+goalSchema.index({ company: 1, employee: 1 }, { background: true });
+goalSchema.index({ company: 1, status: 1 }, { background: true });
+goalSchema.index({ employee: 1 }, { background: true });
+goalSchema.index({ createdBy: 1 }, { background: true });
+
 module.exports = mongoose.model("Goal", goalSchema);

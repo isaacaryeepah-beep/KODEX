@@ -10,4 +10,9 @@ const paymentLogSchema = new mongoose.Schema({
   paidAt:      { type: Date, default: Date.now },
 }, { timestamps: true });
 
+// Compound indexes for company-scoped queries
+paymentLogSchema.index({ company: 1, createdAt: -1 }, { background: true });
+paymentLogSchema.index({ company: 1, paidAt: -1 }, { background: true });
+paymentLogSchema.index({ company: 1, plan: 1 }, { background: true });
+
 module.exports = mongoose.model("PaymentLog", paymentLogSchema);

@@ -19,4 +19,11 @@ const expenseSchema = new mongoose.Schema(
   { timestamps: true }
 );
 
+// Compound indexes for company-scoped queries
+expenseSchema.index({ company: 1, createdAt: -1 }, { background: true });
+expenseSchema.index({ company: 1, status: 1 }, { background: true });
+expenseSchema.index({ company: 1, employee: 1 }, { background: true });
+expenseSchema.index({ employee: 1 }, { background: true });
+expenseSchema.index({ reviewedBy: 1 }, { background: true });
+
 module.exports = mongoose.model("Expense", expenseSchema);

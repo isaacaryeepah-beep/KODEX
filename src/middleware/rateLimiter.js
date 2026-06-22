@@ -113,4 +113,50 @@ const beaconLimiter = createRateLimiter({
   message: 'Too many beacon requests.',
 });
 
-module.exports = { loginLimiter, registerLimiter, passwordResetLimiter, apiLimiter, beaconLimiter };
+// AI/proctoring snapshots: 30 req per 10 minutes per IP
+const snapshotLimiter = createRateLimiter({
+  windowMs: 10 * 60 * 1000,
+  max: 30,
+  message: 'Too many snapshot submissions. Please slow down.',
+});
+
+// Report/PDF generation: 20 req per hour per IP
+const reportLimiter = createRateLimiter({
+  windowMs: 60 * 60 * 1000,
+  max: 20,
+  message: 'Too many report requests. Please wait before generating more reports.',
+});
+
+// AI quiz generation: 15 req per hour per IP
+const aiGenerateLimiter = createRateLimiter({
+  windowMs: 60 * 60 * 1000,
+  max: 15,
+  message: 'Too many AI generation requests. Please wait before generating more quizzes.',
+});
+
+// Attendance mark: 60 req per 10 minutes per IP
+const attendanceMarkLimiter = createRateLimiter({
+  windowMs: 10 * 60 * 1000,
+  max: 60,
+  message: 'Too many attendance mark requests.',
+});
+
+// File uploads: 30 req per hour per IP
+const uploadLimiter = createRateLimiter({
+  windowMs: 60 * 60 * 1000,
+  max: 30,
+  message: 'Too many file uploads. Please wait before uploading more files.',
+});
+
+module.exports = {
+  loginLimiter,
+  registerLimiter,
+  passwordResetLimiter,
+  apiLimiter,
+  beaconLimiter,
+  snapshotLimiter,
+  reportLimiter,
+  aiGenerateLimiter,
+  attendanceMarkLimiter,
+  uploadLimiter,
+};

@@ -2,6 +2,7 @@ const express  = require("express");
 const authenticate              = require("../middleware/auth");
 const { requireRole, requireMode } = require("../middleware/role");
 const { requireActiveSubscription } = require("../middleware/subscription");
+const { uploadLimiter }         = require("../middleware/rateLimiter");
 const ctrl = require("../controllers/assignmentController");
 
 const router = express.Router();
@@ -30,7 +31,7 @@ router.put("/lecturer/:id",                                     ...lecturerMW, c
 router.delete("/lecturer/:id",                                  ...staffMW,    ctrl.deleteAssignment);   // admins can delete
 
 // PDF upload (multipart/form-data) and download
-router.post("/lecturer/:id/pdf",                                ...lecturerMW, ctrl.uploadPdf);          // admins cannot upload
+router.post("/lecturer/:id/pdf",                                uploadLimiter, ...lecturerMW, ctrl.uploadPdf);          // admins cannot upload
 router.get("/lecturer/:id/pdf",                                 ...staffMW,    ctrl.downloadPdf);
 
 // Questions
@@ -42,6 +43,6 @@ router.delete("/lecturer/:id/questions/:questionId",            ...lecturerMW, c
 router.get("/student",             ...studentMW, ctrl.studentList);
 router.get("/student/:id",         ...studentMW, ctrl.studentGet);
 router.get("/student/:id/pdf",     ...studentMW, ctrl.downloadPdf);        // students can download brief
-router.post("/student/:id/submit", ...studentMW, ctrl.studentSubmit);      // multipart
+router.post("/student/:id/submit", uploadLimiter, ...studentMW, ctrl.studentSubmit);      // multipart
 
 module.exports = router;

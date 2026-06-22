@@ -47,4 +47,9 @@ const shiftSchema = new mongoose.Schema(
   { timestamps: true }
 );
 
+// Compound indexes for company-scoped queries
+shiftSchema.index({ company: 1, createdAt: -1 }, { background: true });
+shiftSchema.index({ company: 1, isActive: 1 }, { background: true });
+shiftSchema.index({ createdBy: 1 }, { background: true });
+
 module.exports = mongoose.model("Shift", shiftSchema);

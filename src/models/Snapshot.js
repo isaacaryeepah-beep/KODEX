@@ -85,4 +85,10 @@ const snapshotSchema = new mongoose.Schema(
   { timestamps: true }
 );
 
+// Compound indexes for common proctoring queries
+snapshotSchema.index({ company: 1, createdAt: -1 }, { background: true });
+snapshotSchema.index({ session: 1, student: 1 }, { background: true });
+snapshotSchema.index({ session: 1, type: 1 }, { background: true });
+snapshotSchema.index({ quiz: 1, flagged: 1 }, { background: true });
+
 module.exports = mongoose.model("Snapshot", snapshotSchema);

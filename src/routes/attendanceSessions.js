@@ -5,6 +5,7 @@ const { companyIsolation } = require("../middleware/companyIsolation");
 const { requireActiveSubscription } = require("../middleware/subscription");
 const { enforceLogoutRestriction } = require("../middleware/deviceValidation");
 const requireNoDeviceLock = require("../middleware/requireNoDeviceLock");
+const { attendanceMarkLimiter } = require("../middleware/rateLimiter");
 const attendanceController = require("../controllers/attendanceController");
 const router = express.Router();
 
@@ -23,7 +24,7 @@ router.get("/my-attendance", attendanceController.getMyAttendance);
 router.get("/sign-in-status", attendanceController.getSignInStatus);
 router.post("/sign-in", requireRole("employee", "admin", "manager"), attendanceController.employeeSignIn);
 router.post("/sign-out", requireRole("employee", "admin", "manager"), attendanceController.employeeSignOut);
-router.post("/mark", requireRole("student", "employee"), requireNoDeviceLock, enforceLogoutRestriction, attendanceController.markAttendance);
+router.post("/mark", attendanceMarkLimiter, requireRole("student", "employee"), requireNoDeviceLock, enforceLogoutRestriction, attendanceController.markAttendance);
 router.get("/flagged/new-devices", requireRole("lecturer", "hod", "admin", "superadmin"), companyIsolation, attendanceController.getFlaggedNewDevices);
 router.post("/flagged/:recordId/resolve", requireRole("lecturer", "hod", "admin", "superadmin"), companyIsolation, attendanceController.resolveFlaggedRecord);
 router.post("/flagged/:recordId/trust", requireRole("lecturer", "hod", "admin", "superadmin"), companyIsolation, attendanceController.trustFlaggedDevice);
