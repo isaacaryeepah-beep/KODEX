@@ -19,4 +19,11 @@ const assetSchema = new mongoose.Schema(
   { timestamps: true }
 );
 
+// Compound indexes for company-scoped queries
+assetSchema.index({ company: 1, createdAt: -1 }, { background: true });
+assetSchema.index({ company: 1, category: 1 }, { background: true });
+assetSchema.index({ company: 1, isActive: 1 }, { background: true });
+assetSchema.index({ assignedTo: 1 }, { background: true });
+assetSchema.index({ createdBy: 1 }, { background: true });
+
 module.exports = mongoose.model("Asset", assetSchema);

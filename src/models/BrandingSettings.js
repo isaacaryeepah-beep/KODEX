@@ -277,6 +277,15 @@ brandingSettingsSchema.statics.applyUpdate = async function (
 };
 
 // ---------------------------------------------------------------------------
+// Indexes
+// ---------------------------------------------------------------------------
+
+// company already has unique:true (covers single-field lookups).
+// Add supporting indexes for admin queries.
+brandingSettingsSchema.index({ createdAt: -1 }, { background: true });
+brandingSettingsSchema.index({ lastUpdatedBy: 1 }, { background: true });
+
+// ---------------------------------------------------------------------------
 // Export
 // ---------------------------------------------------------------------------
 

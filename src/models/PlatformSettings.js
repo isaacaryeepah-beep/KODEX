@@ -11,4 +11,8 @@ const platformSettingsSchema = new mongoose.Schema({
   employeeMonthlyPrice: { type: Number, default: 15 },
 }, { timestamps: true });
 
+// PlatformSettings is a singleton collection (no company field).
+// Index by createdAt for admin dashboards.
+platformSettingsSchema.index({ createdAt: -1 }, { background: true });
+
 module.exports = mongoose.model('PlatformSettings', platformSettingsSchema);

@@ -3,6 +3,7 @@ const authenticate = require("../middleware/auth");
 const { requireRole } = require("../middleware/role");
 const { companyIsolation } = require("../middleware/companyIsolation");
 const { requireActiveSubscription } = require("../middleware/subscription");
+const { reportLimiter } = require("../middleware/rateLimiter");
 const reportController = require("../controllers/reportController");
 
 const router = express.Router();
@@ -12,6 +13,7 @@ router.get("/download/:uuid", reportController.downloadByToken);
 
 router.use(authenticate);
 router.use(requireActiveSubscription);
+router.use(reportLimiter);
 
 // Create a one-time download link (native app uses this to open PDF in external browser)
 router.get(

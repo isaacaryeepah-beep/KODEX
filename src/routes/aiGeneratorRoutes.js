@@ -38,6 +38,7 @@ const { requireCompanyScope }    = require("../middleware/requireCompanyScope");
 const { lecturerOrHod }          = require("../middleware/requireAcademicRole");
 const requireAssessmentOwnership = require("../middleware/requireAssessmentOwnership");
 const AIQuestionDraft            = require("../models/AIQuestionDraft");
+const { aiGenerateLimiter, uploadLimiter } = require("../middleware/rateLimiter");
 const ctrl                       = require("../controllers/aiGeneratorController");
 
 // Router-level middleware
@@ -51,8 +52,8 @@ const ownsDraft = requireAssessmentOwnership(AIQuestionDraft, {
   skipCourseCheck: true,
 });
 
-// Generation
-router.post("/generate", ctrl.generate);
+// Generation (rate-limited: 15 req/hour per IP; upload-limited for PDF uploads)
+router.post("/generate", aiGenerateLimiter, uploadLimiter, ctrl.generate);
 
 // Draft management
 router.get(   "/drafts",          ctrl.listDrafts);

@@ -44,6 +44,7 @@ const {
 } = require("../middleware/requireStudentCourseEnrollment");
 const requireNoDeviceLock        = require("../middleware/requireNoDeviceLock");
 const snapQuizSecurityValidator  = require("../middleware/snapQuizSecurityValidator");
+const { snapshotLimiter }        = require("../middleware/rateLimiter");
 const ctrl = require("../controllers/snapQuizStudentController");
 
 // ─── Router-level middleware ──────────────────────────────────────────────────
@@ -81,7 +82,7 @@ router.post("/quizzes/:quizId/attempts/:attemptId/violations",     snapQuizSecur
 
 // ─── Proctoring ───────────────────────────────────────────────────────────────
 
-router.post("/quizzes/:quizId/attempts/:attemptId/snapshots",      snapQuizSecurityValidator, ctrl.recordSnapshot);
+router.post("/quizzes/:quizId/attempts/:attemptId/snapshots",      snapshotLimiter, snapQuizSecurityValidator, ctrl.recordSnapshot);
 
 // ─── Results & review ─────────────────────────────────────────────────────────
 
