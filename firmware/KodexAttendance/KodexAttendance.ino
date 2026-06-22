@@ -870,6 +870,7 @@ static void startApPortal() {
     wifiPass = pass;
 
     WiFi.mode(WIFI_AP_STA);
+    WiFi.setScanMethod(WIFI_FAST_SCAN);
     WiFi.begin(ssid.c_str(), pass.c_str());
     uint32_t t0 = millis();
     while (WiFi.status() != WL_CONNECTED && millis() - t0 < WIFI_RETRY_TIMEOUT_MS) {
@@ -1846,6 +1847,8 @@ void setup() {
   oledShow("KODEX", "WiFi:", wifiSSID);
   WiFi.mode(WIFI_STA);
   WiFi.setSleep(false); // disable modem sleep — prevents multi-second TLS round-trip delays
+  WiFi.persistent(false);        // skip flash write on every connect (~200 ms saved)
+  WiFi.setScanMethod(WIFI_FAST_SCAN);  // connect on first SSID match vs scanning all channels
   WiFi.setAutoReconnect(true);   // let the stack reconnect on its own after drops
   WiFi.setTxPower(WIFI_POWER_19_5dBm);  // max TX power — school WiFi is often far
   WiFi.begin(wifiSSID.c_str(), wifiPass.c_str());
@@ -1937,6 +1940,7 @@ void loop() {
       log("WiFi lost — reconnecting");
       WiFi.disconnect(false);
       delay(200);
+      WiFi.setScanMethod(WIFI_FAST_SCAN);
       WiFi.begin(wifiSSID.c_str(), wifiPass.c_str());
     } else {
       delay(500);
@@ -1949,6 +1953,7 @@ void loop() {
     log("Forcing WiFi reconnect after repeated HB failures");
     WiFi.disconnect(false);
     delay(300);
+    WiFi.setScanMethod(WIFI_FAST_SCAN);
     WiFi.setAutoReconnect(true);
     WiFi.begin(wifiSSID.c_str(), wifiPass.c_str());
     return;
