@@ -1847,7 +1847,6 @@ void setup() {
   oledShow("KODEX", "WiFi:", wifiSSID);
   WiFi.mode(WIFI_STA);
   WiFi.setSleep(false); // disable modem sleep — prevents multi-second TLS round-trip delays
-  WiFi.persistent(false);        // skip flash write on every connect (~200 ms saved)
   WiFi.setScanMethod(WIFI_FAST_SCAN);  // connect on first SSID match vs scanning all channels
   WiFi.setAutoReconnect(true);   // let the stack reconnect on its own after drops
   WiFi.setTxPower(WIFI_POWER_19_5dBm);  // max TX power — school WiFi is often far

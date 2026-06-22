@@ -931,7 +931,6 @@ void setup() {
   oledConnecting(cfgSsid.c_str());
   WiFi.mode(WIFI_STA);
   WiFi.setSleep(false);
-  WiFi.persistent(false);
   WiFi.setScanMethod(WIFI_FAST_SCAN);
   WiFi.begin(cfgSsid.c_str(), cfgPass.c_str());
 
