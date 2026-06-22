@@ -71,6 +71,8 @@
 #include <ArduinoJson.h>
 #include <Adafruit_GFX.h>
 #include <Adafruit_SSD1306.h>
+#include <ArduinoOTA.h>
+#include <Update.h>
 
 // ─── Configuration ───────────────────────────────────────────────────────────
 static const char* FIRMWARE_VERSION = "kodex-1.0.0";
@@ -1764,6 +1766,58 @@ static void registerLocalHttp() {
     delay(300);
     ESP.restart();
   });
+
+  // ── OTA firmware update via browser (upload .bin at http://<device-ip>/update) ──
+  localHttp.on("/update", HTTP_GET, [](){
+    localHttp.send(200, "text/html",
+      "<!DOCTYPE html><html><head><title>KODEX OTA</title>"
+      "<style>body{font-family:sans-serif;background:#0a0d14;color:#f1f5f9;"
+      "display:flex;flex-direction:column;align-items:center;justify-content:center;"
+      "height:100vh;margin:0;gap:16px}"
+      "h2{margin:0}input[type=file]{padding:8px}"
+      "button{padding:12px 28px;background:#2563eb;color:#fff;border:none;"
+      "border-radius:8px;font-size:15px;cursor:pointer}"
+      "progress{width:280px;height:12px}"
+      "</style></head><body>"
+      "<h2>&#128290; KODEX Firmware Update</h2>"
+      "<p style='color:#64748b'>Select a compiled <b>.bin</b> file then click Flash.</p>"
+      "<form id='f' method='POST' action='/update' enctype='multipart/form-data'>"
+      "<input type='file' name='firmware' accept='.bin' required><br><br>"
+      "<button type='submit'>&#9889; Flash Firmware</button>"
+      "</form>"
+      "<p id='s' style='color:#64748b'></p>"
+      "<script>"
+      "document.getElementById('f').onsubmit=function(e){"
+      "e.preventDefault();"
+      "var fd=new FormData(this);"
+      "document.getElementById('s').textContent='Uploading...';"
+      "fetch('/update',{method:'POST',body:fd}).then(function(r){return r.text();}).then(function(t){"
+      "document.getElementById('s').textContent=t;"
+      "}).catch(function(){document.getElementById('s').textContent='Upload failed';});"
+      "};"
+      "</script></body></html>"
+    );
+  });
+  localHttp.on("/update", HTTP_POST, [](){
+    localHttp.sendHeader("Connection", "close");
+    bool ok = !Update.hasError();
+    localHttp.send(200, "text/plain", ok ? "Update OK. Rebooting in 2 seconds..." : "Update FAILED.");
+    delay(2000);
+    ESP.restart();
+  }, [](){
+    HTTPUpload& upload = localHttp.upload();
+    if (upload.status == UPLOAD_FILE_START) {
+      oledShow("OTA Update", "Receiving...", "");
+      Update.begin(UPDATE_SIZE_UNKNOWN);
+    } else if (upload.status == UPLOAD_FILE_WRITE) {
+      Update.write(upload.buf, upload.currentSize);
+      int pct = (Update.progress() * 100) / (Update.progress() + Update.remaining() + 1);
+      oledShow("OTA Update", String(pct) + "%", "Do not unplug");
+    } else if (upload.status == UPLOAD_FILE_END) {
+      Update.end(true);
+      oledShow("OTA Update", "Done!", "Rebooting...");
+    }
+  });
 }
 
 // ─── Setup / Loop ────────────────────────────────────────────────────────────
@@ -1811,11 +1865,26 @@ void setup() {
   configTime(0, 0, "pool.ntp.org", "time.google.com");
   registerLocalHttp();
   localHttp.begin();
+
+  // ── ArduinoOTA — flash wirelessly from Arduino IDE over WiFi ─────────────
+  ArduinoOTA.setHostname(("kodex-" + getMacSuffix()).c_str());
+  ArduinoOTA.setPassword("dikly-ota");
+  ArduinoOTA.onStart([]()   { oledShow("OTA Update", "Starting...", "Do not unplug"); });
+  ArduinoOTA.onEnd([]()     { oledShow("OTA Update", "Done!", "Rebooting..."); });
+  ArduinoOTA.onProgress([](unsigned int progress, unsigned int total) {
+    oledShow("OTA Update", String(progress / (total / 100)) + "%", "Do not unplug");
+  });
+  ArduinoOTA.onError([](ota_error_t err) {
+    oledShow("OTA Error", String((int)err), "");
+  });
+  ArduinoOTA.begin();
+  log("OTA ready — hostname: kodex-" + getMacSuffix() + ", web: http://" + WiFi.localIP().toString() + "/update");
 }
 
 void loop() {
   dns.processNextRequest();
   localHttp.handleClient();
+  ArduinoOTA.handle();
 
   // Pairing-portal path: nothing else to do.
   if (deviceJWT.length() == 0) { delay(20); return; }
