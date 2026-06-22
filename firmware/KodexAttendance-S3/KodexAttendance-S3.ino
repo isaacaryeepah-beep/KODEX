@@ -4873,13 +4873,11 @@ void loop() {
     if (!staConnected && millis() - lastReconn > 10000) {
       lastReconn = millis();
       if (WiFi.getMode() == WIFI_AP) WiFi.mode(WIFI_AP_STA);
-      WiFi.setScanMethod(WIFI_FAST_SCAN);
       WiFi.begin(wifiSSID.c_str(), wifiPass.c_str());
     }
     if (forceReconn) {
       forceReconn = false;
       WiFi.disconnect(false); delay(300);
-      WiFi.setScanMethod(WIFI_FAST_SCAN);
       WiFi.setAutoReconnect(true);
       WiFi.begin(wifiSSID.c_str(), wifiPass.c_str());
       LOG("forceReconn → reconnecting to " + wifiSSID);

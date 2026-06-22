@@ -990,7 +990,6 @@ void loop() {
       oledMsg("WiFi lost...", "Reconnecting", cfgSsid.c_str());
       WiFi.disconnect(false);
       delay(300);
-      WiFi.setScanMethod(WIFI_FAST_SCAN);
       WiFi.begin(cfgSsid.c_str(), cfgPass.c_str());
     }
     delay(200);

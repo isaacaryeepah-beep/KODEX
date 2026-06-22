@@ -1939,7 +1939,6 @@ void loop() {
       log("WiFi lost — reconnecting");
       WiFi.disconnect(false);
       delay(200);
-      WiFi.setScanMethod(WIFI_FAST_SCAN);
       WiFi.begin(wifiSSID.c_str(), wifiPass.c_str());
     } else {
       delay(500);
@@ -1952,7 +1951,6 @@ void loop() {
     log("Forcing WiFi reconnect after repeated HB failures");
     WiFi.disconnect(false);
     delay(300);
-    WiFi.setScanMethod(WIFI_FAST_SCAN);
     WiFi.setAutoReconnect(true);
     WiFi.begin(wifiSSID.c_str(), wifiPass.c_str());
     return;
