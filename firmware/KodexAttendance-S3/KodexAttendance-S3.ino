@@ -354,6 +354,7 @@ WebServer   localHttp(80);
 DNSServer   dns;
 
 String wifiSSID, wifiPass, deviceId, deviceJWT, apiBase, institutionCode;
+String displayName = "";     // admin-set device name, synced via heartbeat
 int8_t rssiThreshold = -70;  // dBm — students weaker than this are rejected
 
 // Active session (from heartbeat)
@@ -854,6 +855,8 @@ static void loadConfig() {
   // Load pre-auth bundle if previously saved
   bundleJson = prefs.getString("bundle", "");
   if (bundleJson.length() > 10) bundleLoaded = true;
+  // Admin-set display name (kept across reboots)
+  displayName = prefs.getString("dname", "");
   prefs.end();
   if (deviceId.isEmpty()) deviceId = "esp32s3-" + macSuffix();
 }
@@ -1217,6 +1220,16 @@ static void sendHeartbeat() {
       timeval tv = { mktime(&tm), 0 }; settimeofday(&tv, nullptr); timeSynced = true;
     }
   }
+  // Sync admin-set device name; persist so it survives reboots/offline periods.
+  if (doc["deviceName"].is<const char*>()) {
+    String n = doc["deviceName"].as<String>();
+    if (n.length() > 0 && n != displayName) {
+      displayName = n;
+      prefs.begin("kodex", false);
+      prefs.putString("dname", displayName);
+      prefs.end();
+    }
+  }
   JsonVariantConst sess = doc["activeSession"];
   if (sess.isNull()) {
     if (!sessionId.isEmpty()) {
@@ -1278,6 +1291,13 @@ static void drawHeader(LGFX_Sprite& s, bool online) {
   // "DIKLY" Orbitron cyan left-aligned
   s.setFont(F_LOGO); s.setTextSize(1); s.setTextColor(COL_CYAN, COL_CARD);
   s.setCursor(12, 8); s.print("DIKLY");
+  // Device name subtitle (admin-set), truncated to fit below "DIKLY"
+  if (displayName.length() > 0) {
+    s.setFont(F_TINY); s.setTextColor(COL_MUTED, COL_CARD);
+    String dn = displayName;
+    if (s.textWidth(dn) > 170) { dn = dn.substring(0, 18) + ".."; }
+    s.setCursor(12, 29); s.print(dn);
+  }
   // Online dot + label top-right
   uint16_t dotCol = online ? COL_SUCCESS : COL_MUTED;
   s.fillCircle(219, 14, 4, dotCol);

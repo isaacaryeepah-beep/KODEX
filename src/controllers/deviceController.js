@@ -332,6 +332,7 @@ exports.heartbeat = async (req, res) => {
       success:    true,
       serverTime: new Date().toISOString(),
       lastSeenAt: device.lastHeartbeat,
+      deviceName: device.deviceName,
       offlineKey,
       bundle,
       activeSession: session ? {
