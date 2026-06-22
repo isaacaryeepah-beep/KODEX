@@ -7130,7 +7130,7 @@ async function renderSessions(courseId, courseTitle) {
   // Auto-refresh every 30 s so the UI reflects watchdog-killed sessions
   if (_sessionsAutoRefreshTimer) clearInterval(_sessionsAutoRefreshTimer);
   _sessionsAutoRefreshTimer = setInterval(() => {
-    if (document.getElementById('main-content')) renderSessions();
+    if (currentView === 'sessions' && document.getElementById('main-content')) renderSessions();
     else { clearInterval(_sessionsAutoRefreshTimer); _sessionsAutoRefreshTimer = null; }
   }, 30_000);
 
