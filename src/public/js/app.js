@@ -12896,6 +12896,7 @@ async function renderClassDevice() {
     ]);
     const device = devRes.device;
     const lecturers = lecRes.lecturers || [];
+    const deviceOnline = device ? (Date.now() - new Date(device.lastHeartbeat || 0).getTime() < 20000) : false;
 
     const deviceStatus = device
       ? (deviceOnline
@@ -12913,7 +12914,6 @@ async function renderClassDevice() {
 
     const localIp = device && device.localIp ? device.localIp : null;
     const currentSsid = device && device.currentNetwork ? device.currentNetwork : null;
-    const deviceOnline = device ? (Date.now() - new Date(device.lastHeartbeat || 0).getTime() < 20000) : false;
 
     root.innerHTML = `
       <div style="max-width:560px;margin:0 auto">
