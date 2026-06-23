@@ -2940,6 +2940,8 @@ function navigateTo(view) {
   if (window._empClockTimer) { clearInterval(window._empClockTimer); window._empClockTimer = null; }
   // Stop thread poll when leaving messages
   if (view !== 'messages') _stopThreadPoll();
+  // Stop meetings auto-poll when leaving meetings tab
+  if (view !== 'meetings') _stopMeetingsPoll();
   // Stop QR camera stream if navigating away from mark-attendance
   if (view !== 'mark-attendance' && typeof _stopQrScanner === 'function') _stopQrScanner();
   currentView = view;
@@ -8934,6 +8936,54 @@ async function createInstantMeeting() {
   }
 }
 
+// ── Meetings auto-poll ────────────────────────────────────────────────────────
+let _meetingsPollTimer = null;
+let _meetingsKnownLiveIds = new Set();
+
+function _stopMeetingsPoll() {
+  if (_meetingsPollTimer) { clearInterval(_meetingsPollTimer); _meetingsPollTimer = null; }
+  _meetingsKnownLiveIds = new Set();
+}
+
+function _startMeetingsPoll() {
+  _stopMeetingsPoll();
+  _meetingsPollTimer = setInterval(() => {
+    if (document.getElementById('main-content') && currentView === 'meetings') {
+      _meetingsSilentRefresh();
+    } else {
+      _stopMeetingsPoll();
+    }
+  }, 30000);
+}
+
+async function _meetingsSilentRefresh() {
+  try {
+    const data = await api('/api/meetings');
+    offlineCache('meetings', data);
+    const meetings = data.data || data.meetings || [];
+
+    // Detect newly-live meetings and toast
+    meetings.forEach(m => {
+      if (m.status === 'live' && !_meetingsKnownLiveIds.has(String(m._id))) {
+        if (_meetingsKnownLiveIds.size > 0) { // skip first load
+          const role = currentUser?.role || '';
+          const isHost = ['lecturer','manager','admin','superadmin','hod'].includes(role);
+          const msg = isHost
+            ? `"${m.title}" is live — tap Rejoin`
+            : `"${m.title}" is now live — tap Join`;
+          toastSuccess(msg);
+        }
+        _meetingsKnownLiveIds.add(String(m._id));
+      }
+    });
+    // Prune ended meetings from known-live set
+    const liveNow = new Set(meetings.filter(m => m.status === 'live').map(m => String(m._id)));
+    _meetingsKnownLiveIds.forEach(id => { if (!liveNow.has(id)) _meetingsKnownLiveIds.delete(id); });
+
+    _renderMeetingsData(data);
+  } catch(_) { /* silent — don't disrupt UI on background poll error */ }
+}
+
 async function renderMeetings() {
   const content = document.getElementById('main-content');
   if (!content) return;
@@ -8954,6 +9004,16 @@ async function renderMeetings() {
       else { content.innerHTML = `<div class="card"><p style="color:#ef4444;">${e.message}</p></div>`; return; }
     }
   }
+  // Seed known-live set on first render (no toast on initial load)
+  const meetings0 = data.data || data.meetings || [];
+  meetings0.forEach(m => { if (m.status === 'live') _meetingsKnownLiveIds.add(String(m._id)); });
+  _renderMeetingsData(data);
+  _startMeetingsPoll();
+}
+
+function _renderMeetingsData(data) {
+  const content = document.getElementById('main-content');
+  if (!content) return;
   try {
     const canCreate = ['manager', 'lecturer'].includes(currentUser.role);
     const canManageExisting = ['manager', 'lecturer', 'admin', 'superadmin', 'hod'].includes(currentUser.role);
@@ -9006,6 +9066,13 @@ async function renderMeetings() {
       const statusText = isLive ? '● LIVE' : isScheduled ? 'Scheduled' : m.status === 'cancelled' ? 'Cancelled' : 'Ended';
       const typeLabel  = MEETING_TYPE_LABELS[m.meetingType] || '';
       const safeName   = (m.title || '').replace(/'/g, "\\'");
+      const pCount     = (isLive && m.participantCount != null) ? m.participantCount : null;
+      const pBadge     = pCount !== null
+        ? `<span style="display:inline-flex;align-items:center;gap:4px;background:#f0fdf4;border:1px solid #bbf7d0;color:#15803d;font-size:11px;font-weight:700;padding:2px 8px;border-radius:20px;margin-left:6px;">
+            <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+            ${pCount}
+          </span>`
+        : '';
 
       return `<div style="background:#fff;border-radius:14px;box-shadow:0 1px 6px rgba(0,0,0,0.07);padding:16px;border:1px solid #f1f5f9;border-left:4px solid ${borderColor};margin-bottom:0;">
         <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px;margin-bottom:10px;">
@@ -9013,7 +9080,10 @@ async function renderMeetings() {
             <div style="font-weight:700;font-size:15px;color:#0f172a;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${esc(m.title)}</div>
             ${typeLabel ? `<div style="font-size:10px;font-weight:700;color:#7c3aed;margin-top:2px;text-transform:uppercase;letter-spacing:.5px;">${typeLabel}</div>` : ''}
           </div>
-          <span style="${statusBadgeStyle}padding:3px 10px;border-radius:20px;font-size:11px;font-weight:700;flex-shrink:0;">${statusText}</span>
+          <div style="display:flex;align-items:center;flex-shrink:0;gap:0;">
+            <span style="${statusBadgeStyle}padding:3px 10px;border-radius:20px;font-size:11px;font-weight:700;">${statusText}</span>
+            ${pBadge}
+          </div>
         </div>
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:12px;font-size:12px;color:#64748b;">
           <div><div style="font-weight:600;color:#0f172a;">Host</div>${esc(hostName)}</div>

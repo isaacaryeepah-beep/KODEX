@@ -220,7 +220,24 @@ exports.listMeetings = async (req, res, next) => {
       Meeting.countDocuments(query),
     ]);
 
-    const safe = meetings.map(m => { const c = { ...m }; delete c.roomPassword; return c; });
+    // Attach live participant counts (connected only, last heartbeat ≤ 35s ago)
+    const liveIds = meetings.filter(m => m.status === 'live').map(m => m._id);
+    let countMap = {};
+    if (liveIds.length) {
+      const stale = new Date(Date.now() - 35000);
+      const rows = await MeetingParticipant.aggregate([
+        { $match: { meeting: { $in: liveIds }, status: 'connected', lastSeenAt: { $gte: stale } } },
+        { $group: { _id: '$meeting', count: { $sum: 1 } } },
+      ]);
+      rows.forEach(r => { countMap[String(r._id)] = r.count; });
+    }
+
+    const safe = meetings.map(m => {
+      const c = { ...m };
+      delete c.roomPassword;
+      if (m.status === 'live') c.participantCount = countMap[String(m._id)] ?? 0;
+      return c;
+    });
     res.json({
       success: true, data: safe,
       pagination: { page: Number(page), limit: Number(limit), total, pages: Math.ceil(total / Number(limit)) },
