@@ -43,30 +43,64 @@ jobs:
           python3 scripts/gen_icons.py
           python3 scripts/gen_splash.py
 
-      - name: Patch Android 12+ splash screen background
+      - name: Patch Android splash screen — dark background, no white flash
         run: |
-          # Android 12+ (API 31): use the SplashScreen API with dark background + DIKLY icon
+          mkdir -p android/app/src/main/res/drawable
+          mkdir -p android/app/src/main/res/values
           mkdir -p android/app/src/main/res/values-v31
-          cat > android/app/src/main/res/values-v31/styles.xml << 'EOF'
-          <?xml version="1.0" encoding="utf-8"?>
-          <resources>
-            <style name="AppTheme.NoActionBarLaunch" parent="Theme.SplashScreen">
-              <item name="windowSplashScreenBackground">#080F20</item>
-              <item name="windowSplashScreenAnimatedIcon">@drawable/ic_splash</item>
-              <item name="windowSplashScreenIconBackgroundColor">#080F20</item>
-              <item name="postSplashScreenTheme">@style/AppTheme.NoActionBar</item>
-            </style>
-          </resources>
-          EOF
 
-          # Android < 12: Theme.SplashScreen compat ignores android:background and shows
-          # white + launcher icon by default. Switch parent to AppTheme.NoActionBar so our
-          # full-screen splash.png is shown as the window background instead.
+          # Replace splash drawable with a plain dark colour layer-list.
+          # This removes the white background AND the default Capacitor icon
+          # for ALL Android versions (pre-12 and 12+).
+          cat > android/app/src/main/res/drawable/splash.xml << 'SPLASHEOF'
+<?xml version="1.0" encoding="utf-8"?>
+<layer-list xmlns:android="http://schemas.android.com/apk/res/android">
+    <item><color android:color="#080F20"/></item>
+</layer-list>
+SPLASHEOF
+          # Remove splash.png if gen_splash.py created it — same resource name
+          # would cause an ambiguous-resource build error.
+          rm -f android/app/src/main/res/drawable/splash.png
+          rm -f android/app/src/main/res/drawable-land/splash.png
+          echo "✓ splash.xml → plain #080F20 background (no icon)"
+
+          # Pre-Android 12: ensure the launch theme uses AppTheme.NoActionBar as
+          # parent and sets the window background to our dark colour explicitly.
           STYLES=android/app/src/main/res/values/styles.xml
           if [ -f "$STYLES" ]; then
+            # Change parent from Theme.SplashScreen → AppTheme.NoActionBar
             sed -i 's/parent="Theme\.SplashScreen"/parent="AppTheme.NoActionBar"/g' "$STYLES"
-            echo "Patched $STYLES: Theme.SplashScreen → AppTheme.NoActionBar"
+            # Inject explicit dark background into NoActionBarLaunch if not present
+            python3 - << 'PYEOF'
+import re
+with open('android/app/src/main/res/values/styles.xml') as f:
+    s = f.read()
+# If NoActionBarLaunch doesn't already have an explicit android:background item, add one
+if 'NoActionBarLaunch' in s and 'android:background' not in s:
+    s = re.sub(
+        r'(<style name="AppTheme\.NoActionBarLaunch"[^>]*>)',
+        r'\1\n        <item name="android:background">#080F20</item>',
+        s
+    )
+with open('android/app/src/main/res/values/styles.xml', 'w') as f:
+    f.write(s)
+print('✓ styles.xml → dark windowBackground for pre-Android 12')
+PYEOF
           fi
+
+          # Android 12+ (API 31): SplashScreen API — dark background, Dikly icon.
+          # ic_splash.png is written by gen_icons.py (288px transparent Dikly logo).
+          cat > android/app/src/main/res/values-v31/styles.xml << 'V31EOF'
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <style name="AppTheme.NoActionBarLaunch" parent="AppTheme.NoActionBar">
+        <item name="android:windowSplashScreenBackground">#080F20</item>
+        <item name="android:windowSplashScreenAnimatedIcon">@drawable/ic_splash</item>
+        <item name="android:windowSplashScreenIconBackgroundColor">#080F20</item>
+    </style>
+</resources>
+V31EOF
+          echo "✓ values-v31/styles.xml → dark Android 12+ splash"
 
       - name: Ensure strings.xml
         run: |
