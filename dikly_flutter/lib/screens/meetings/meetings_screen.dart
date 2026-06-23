@@ -7,8 +7,8 @@ import '../../core/auth.dart';
 import '../../core/theme.dart';
 import '../../models/meeting.dart';
 import '../../widgets/app_shell.dart';
-
 import '../../widgets/ds/dikly_ds.dart';
+import 'meeting_room_screen.dart';
 
 class MeetingsScreen extends ConsumerStatefulWidget {
   const MeetingsScreen({super.key});
@@ -174,20 +174,15 @@ class _MeetingsScreenState extends ConsumerState<MeetingsScreen> {
     );
   }
 
-  Future<void> _joinMeeting(Meeting meeting) async {
-    try {
-      final info = await apiService.joinMeeting(meeting.id);
-      final url = info['meetingUrl']?.toString() ?? '';
-      if (url.isNotEmpty && mounted) {
-        context.push('/video-player', extra: {'url': url, 'title': meeting.title});
-      }
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Could not join: $e'), backgroundColor: DiklyColors.error),
-        );
-      }
-    }
+  void _joinMeeting(Meeting meeting) {
+    final token = ref.read(authProvider).token ?? '';
+    Navigator.of(context).push(MaterialPageRoute(
+      builder: (_) => MeetingRoomScreen(
+        meetingId: meeting.id,
+        title: meeting.title,
+        token: token,
+      ),
+    ));
   }
 }
 
