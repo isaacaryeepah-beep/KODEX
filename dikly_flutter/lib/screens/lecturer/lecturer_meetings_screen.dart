@@ -1,12 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:url_launcher/url_launcher.dart';
 import 'package:intl/intl.dart';
 import '../../core/api.dart';
+import '../../core/auth.dart';
 import '../../core/theme.dart';
 import '../../models/meeting.dart';
 import '../../providers/meetings_provider.dart';
 import '../../widgets/ds/dikly_ds.dart';
+import '../meetings/meeting_room_screen.dart';
 
 
 class LecturerMeetingsScreen extends ConsumerStatefulWidget {
@@ -113,7 +114,7 @@ class _LecturerMeetingCard extends ConsumerWidget {
                 ))
               else
                 Expanded(child: ElevatedButton(
-                  onPressed: () => _openMeeting(context),
+                  onPressed: () => _openMeeting(context, ref),
                   style: ElevatedButton.styleFrom(backgroundColor: DiklyColors.success),
                   child: const Text('Open Class', style: TextStyle(fontSize: 13)),
                 )),
@@ -150,22 +151,28 @@ class _LecturerMeetingCard extends ConsumerWidget {
     try {
       await apiService.startMeeting(meeting.id);
       ref.invalidate(meetingsProvider);
-      if (context.mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Meeting started!')));
+      if (!context.mounted) return;
+      _openRoom(context, ref);
     } catch (e) {
-      if (context.mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.toString()), backgroundColor: DiklyColors.error));
+      if (context.mounted) ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(e.toString()), backgroundColor: DiklyColors.error),
+      );
     }
   }
 
-  Future<void> _openMeeting(BuildContext context) async {
-    try {
-      final data = await apiService.joinMeeting(meeting.id);
-      final url = data['meetingUrl']?.toString();
-      if (url != null && await canLaunchUrl(Uri.parse(url))) {
-        await launchUrl(Uri.parse(url), mode: LaunchMode.externalApplication);
-      }
-    } catch (e) {
-      if (context.mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.toString()), backgroundColor: DiklyColors.error));
-    }
+  Future<void> _openMeeting(BuildContext context, WidgetRef ref) async {
+    _openRoom(context, ref);
+  }
+
+  void _openRoom(BuildContext context, WidgetRef ref) {
+    final token = ref.read(authProvider).token ?? '';
+    Navigator.of(context).push(MaterialPageRoute(
+      builder: (_) => MeetingRoomScreen(
+        meetingId: meeting.id,
+        title: meeting.title,
+        token: token,
+      ),
+    ));
   }
 
   Future<void> _endMeeting(BuildContext context, WidgetRef ref) async {
