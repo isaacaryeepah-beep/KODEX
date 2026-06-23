@@ -706,7 +706,6 @@ function renderQueryTable(queries, total, page, pages) {
            (q.aiResponse ? '<div class="answer-preview">' + esc(q.aiResponse.slice(0,80)) + '…</div>' : '') +
       '</td>' +
       '<td style="white-space:nowrap">' +
-        (q.user ? '<div style="font-weight:500;font-size:12px">' + esc(q.user.name||'') + '</div>' : '') +
         '<div style="color:#94a3b8;font-size:11px">' + esc(q.userRole||'') + '</div>' +
       '</td>' +
       '<td>' + sourceTag + '</td>' +
@@ -735,7 +734,7 @@ function renderQueryTable(queries, total, page, pages) {
         '<table>' +
           '<thead><tr>' +
             '<th>Question / AI Response</th>' +
-            '<th>User</th>' +
+            '<th>Role</th>' +
             '<th>Source</th>' +
             '<th>Helpful</th>' +
             '<th>Escalated</th>' +
