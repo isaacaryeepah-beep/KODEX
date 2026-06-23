@@ -1,0 +1,57 @@
+name: One-time deploy-agent setup
+
+on:
+  workflow_dispatch:
+
+jobs:
+  setup:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup SSH key
+        run: |
+          mkdir -p ~/.ssh
+          printf '%s\n' "$VPS_SSH_KEY" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          ssh-keyscan -H 194.163.172.76 >> ~/.ssh/known_hosts 2>/dev/null || true
+        env:
+          VPS_SSH_KEY: ${{ secrets.VPS_SSH_KEY }}
+
+      - name: Install deploy-agent on VPS
+        run: |
+          DEPLOY_TOKEN=$(printf '%s' "${{ secrets.VPS_SSH_KEY }}" | sha256sum | awk '{print $1}')
+          echo "::add-mask::$DEPLOY_TOKEN"
+
+          ssh -i ~/.ssh/deploy_key \
+              -o StrictHostKeyChecking=no \
+              -o ConnectTimeout=30 \
+              root@194.163.172.76 bash -s "$DEPLOY_TOKEN" << 'ENDSSH'
+          set -e
+          DEPLOY_TOKEN="$1"
+          cd /root/KODEX
+
+          echo "==> Pulling latest code..."
+          git fetch origin main
+          git checkout jitsi-config/web/custom-config.js 2>/dev/null || true
+          git reset --hard origin/main
+
+          echo "==> Writing DEPLOY_TOKEN to .env..."
+          # Remove old entry if present, then append
+          sed -i '/^DEPLOY_TOKEN=/d' .env 2>/dev/null || true
+          echo "DEPLOY_TOKEN=$DEPLOY_TOKEN" >> .env
+
+          echo "==> Building deploy-agent..."
+          docker compose build deploy-agent
+
+          echo "==> Starting deploy-agent..."
+          docker compose up -d deploy-agent
+
+          echo "==> Reloading nginx..."
+          docker restart kodex-web-1 2>/dev/null || true
+
+          echo "==> Status:"
+          docker compose ps deploy-agent
+          echo "Setup complete!"
+          ENDSSH

@@ -11,22 +11,23 @@ jobs:
     steps:
       - name: Trigger deploy webhook
         run: |
+          DEPLOY_TOKEN=$(printf '%s' "${{ secrets.VPS_SSH_KEY }}" | sha256sum | awk '{print $1}')
           EXIT_CODE=1
           for attempt in 1 2 3 4; do
             echo "==> Deploy attempt $attempt / 4"
             set +e
             RESPONSE=$(curl -s -o /dev/null -w "%{http_code}" \
               -X POST https://dikly.live/deploy \
-              -H "X-Deploy-Token: ${{ secrets.DEPLOY_TOKEN }}" \
+              -H "X-Deploy-Token: $DEPLOY_TOKEN" \
               --max-time 20)
-            EXIT_CODE=$?
+            CURL_EXIT=$?
             set -e
             if [ "$RESPONSE" = "200" ]; then
               echo "==> Deploy triggered successfully (HTTP 200)"
               EXIT_CODE=0
               break
             fi
-            echo "==> Attempt $attempt failed (HTTP $RESPONSE, curl exit $EXIT_CODE)"
+            echo "==> Attempt $attempt failed (HTTP $RESPONSE, curl exit $CURL_EXIT)"
             if [ $attempt -lt 4 ]; then
               WAIT=$((attempt * 2))
               echo "==> Retrying in ${WAIT}s..."
