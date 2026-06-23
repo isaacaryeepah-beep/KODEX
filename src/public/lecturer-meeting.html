@@ -325,7 +325,12 @@ async function init() {
     setProgress(3, 100, 'Opening your class now…');
     await delay(300);
 
-    window.location.href = meetingUrl;
+    // Capacitor WebView blocks navigation to external domains; open in system browser
+    if (window.Capacitor?.isNativePlatform?.()) {
+      window.open(meetingUrl, '_system');
+    } else {
+      window.location.href = meetingUrl;
+    }
 
   } catch (err) {
     showError(err.message || 'Unexpected error. Please check your connection and try again.');
