@@ -9731,6 +9731,9 @@ async function viewMeetingDetail(id) {
     const isCreator = m.creatorId?._id?.toString() === currentUser._id || m.creatorId?.toString() === currentUser._id || m.createdBy?._id === currentUser._id;
     const isAdmin = ['admin', 'superadmin'].includes(currentUser.role);
     const canManage = ['manager', 'lecturer', 'admin', 'superadmin'].includes(currentUser.role) && (isCreator || isAdmin);
+    const detailDurationMin = m.scheduledStart && m.scheduledEnd
+      ? Math.round((new Date(m.scheduledEnd) - new Date(m.scheduledStart)) / 60000)
+      : '—';
 
     const statusStyle = (s) => {
       const map = { scheduled: 'background:#3b82f6;color:#fff;', active: 'background:#22c55e;color:#fff;', completed: 'background:#6b7280;color:#fff;', cancelled: 'background:#ef4444;color:#fff;' };
@@ -9750,7 +9753,7 @@ async function viewMeetingDetail(id) {
           <div class="card-title">Meeting Info</div>
           <p><strong>Start:</strong> ${new Date(m.scheduledStart).toLocaleString()}</p>
           <p><strong>End:</strong> ${new Date(m.scheduledEnd).toLocaleString()}</p>
-          <p><strong>Duration:</strong> ${m.duration} minutes</p>
+          <p><strong>Duration:</strong> ${detailDurationMin} minutes</p>
           ${m.course ? `<p><strong>Course:</strong> ${m.course.code} - ${m.course.title}</p>` : ''}
           <p><strong>Join Link:</strong> <a href="${canManage ? '/lecturer-meeting?meeting=' + m._id : '/session-preflight?meeting=' + m._id}" target="_blank" style="color:#3b82f6;word-break:break-all;">${window.location.origin}${canManage ? '/lecturer-meeting?meeting=' + m._id : '/session-preflight?meeting=' + m._id}</a></p>
           ${m.inviteLink ? `<p><strong>Invite Link:</strong> <a href="${m.inviteLink}" target="_blank" style="color:#16a34a;word-break:break-all;font-weight:600">▶ ${m.inviteLink}</a></p>` : ''}
