@@ -3,8 +3,10 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 import '../../core/api.dart';
+import '../../core/auth.dart';
 import '../../core/theme.dart';
 import '../../models/course.dart';
+import '../meetings/meeting_room_screen.dart';
 
 class CreateSessionScreen extends ConsumerStatefulWidget {
   const CreateSessionScreen({super.key});
@@ -133,21 +135,26 @@ class _CreateSessionScreenState extends ConsumerState<CreateSessionScreen> {
     }
     setState(() => _startingNow = true);
     try {
-      await apiService.createMeeting({
+      final now = DateTime.now();
+      final created = await apiService.createMeeting({
         'title': _titleController.text.trim(),
         'meetingType': _meetingType.toLowerCase().replaceAll(' ', '_'),
-        'scheduledStart': DateTime.now().toIso8601String(),
-        'scheduledEnd': DateTime.now().add(const Duration(hours: 1)).toIso8601String(),
+        'scheduledStart': now.toIso8601String(),
+        'scheduledEnd': now.add(const Duration(hours: 1)).toIso8601String(),
         if (_descController.text.trim().isNotEmpty) 'description': _descController.text.trim(),
         if (_linkedCourseId != null) 'linkedCourseId': _linkedCourseId,
-        'startNow': true,
       });
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Session started!'), backgroundColor: DiklyColors.success),
-        );
-        context.pop();
-      }
+      await apiService.startMeeting(created.id);
+      if (!mounted) return;
+      final token = ref.read(authProvider).token ?? '';
+      // Navigate to the live meeting room, replacing the create form
+      Navigator.of(context).pushReplacement(MaterialPageRoute(
+        builder: (_) => MeetingRoomScreen(
+          meetingId: created.id,
+          title: created.title,
+          token: token,
+        ),
+      ));
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(

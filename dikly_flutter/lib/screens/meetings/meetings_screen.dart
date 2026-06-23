@@ -44,6 +44,56 @@ class _MeetingsScreenState extends ConsumerState<MeetingsScreen> {
     }
   }
 
+  Future<void> _startNow() async {
+    final titleCtrl = TextEditingController(text: 'Instant Meeting');
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (_) => AlertDialog(
+        title: const Text('Start Meeting Now', style: TextStyle(fontWeight: FontWeight.w700)),
+        content: TextField(
+          controller: titleCtrl,
+          autofocus: true,
+          decoration: const InputDecoration(labelText: 'Meeting title'),
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Cancel')),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(context, true),
+            style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF16A34A)),
+            child: const Text('Start'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+
+    try {
+      final now = DateTime.now();
+      final created = await apiService.createMeeting({
+        'title': titleCtrl.text.trim().isEmpty ? 'Instant Meeting' : titleCtrl.text.trim(),
+        'scheduledStart': now.toIso8601String(),
+        'scheduledEnd': now.add(const Duration(hours: 1)).toIso8601String(),
+      });
+      await apiService.startMeeting(created.id);
+      if (!mounted) return;
+      final token = ref.read(authProvider).token ?? '';
+      Navigator.of(context).push(MaterialPageRoute(
+        builder: (_) => MeetingRoomScreen(
+          meetingId: created.id,
+          title: created.title,
+          token: token,
+        ),
+      ));
+      _loadData();
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Could not start meeting: $e'), backgroundColor: const Color(0xFFEF4444)),
+        );
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final user = ref.watch(currentUserProvider);
@@ -64,18 +114,37 @@ class _MeetingsScreenState extends ConsumerState<MeetingsScreen> {
               title: 'Meetings',
               subtitle: 'Secure video meetings',
               action: canCreate
-                  ? ElevatedButton.icon(
-                      onPressed: () => context.push('/sessions/create'),
-                      icon: const Icon(Icons.add, size: 16),
-                      label: const Text('+ Schedule Meeting'),
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: const Color(0xFF7C3AED),
-                        foregroundColor: Colors.white,
-                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                        textStyle: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
-                        elevation: 0,
-                      ),
+                  ? Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        ElevatedButton.icon(
+                          onPressed: () => context.push('/sessions/create'),
+                          icon: const Icon(Icons.calendar_today_rounded, size: 14),
+                          label: const Text('Schedule'),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: const Color(0xFF7C3AED),
+                            foregroundColor: Colors.white,
+                            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                            textStyle: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
+                            elevation: 0,
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        ElevatedButton.icon(
+                          onPressed: _startNow,
+                          icon: const Icon(Icons.play_arrow_rounded, size: 16),
+                          label: const Text('Start Now'),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: const Color(0xFF16A34A),
+                            foregroundColor: Colors.white,
+                            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                            textStyle: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
+                            elevation: 0,
+                          ),
+                        ),
+                      ],
                     )
                   : null,
             ),
