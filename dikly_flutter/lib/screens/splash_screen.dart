@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
@@ -12,45 +13,52 @@ class SplashScreen extends StatefulWidget {
 }
 
 class _SplashScreenState extends State<SplashScreen>
-    with SingleTickerProviderStateMixin {
-  late AnimationController _ctrl;
-  late Animation<double> _logoFade;
-  late Animation<double> _logoScale;
-  late Animation<double> _subtitleFade;
-  late Animation<double> _glowPulse;
+    with TickerProviderStateMixin {
+  // Hex prism rocks back and forth — 5.5 s cycle, mirrors hexRock CSS keyframe
+  late final AnimationController _rockCtrl = AnimationController(
+    vsync: this,
+    duration: const Duration(milliseconds: 5500),
+  )..repeat(reverse: true);
 
-  // Start update check immediately — runs in parallel with the animation.
+  // Reveal: hex fades + scales in (0–700 ms), wordmark slides up (750–1400 ms)
+  late final AnimationController _revealCtrl = AnimationController(
+    vsync: this,
+    duration: const Duration(milliseconds: 1400),
+  )..forward();
+
+  // Particles float continuously
+  late final AnimationController _particleCtrl = AnimationController(
+    vsync: this,
+    duration: const Duration(milliseconds: 3000),
+  )..repeat();
+
+  late final Animation<double> _hexReveal = CurvedAnimation(
+    parent: _revealCtrl,
+    curve: const Interval(0.0, 0.5, curve: Curves.easeOutBack),
+  );
+  late final Animation<double> _wmReveal = CurvedAnimation(
+    parent: _revealCtrl,
+    curve: const Interval(0.54, 1.0, curve: Curves.easeOut),
+  );
+
+  static const _taglines = ['Innovate •', 'Connect •', 'Empower •', 'Educate •', 'Attend •'];
+  int _taglineIdx = 0;
+  Timer? _taglineTimer;
+
   late final Future<UpdateInfo?> _updateFuture = UpdateChecker.check();
-
-  // null = not updating, 0.0–1.0 = download progress
   double? _downloadProgress;
+
+  // Pre-computed seeded particle layout (same seed each launch)
+  late final List<_Particle> _particles = _buildParticles();
 
   @override
   void initState() {
     super.initState();
-    _ctrl = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 2000),
-    );
 
-    _logoFade = CurvedAnimation(
-      parent: _ctrl,
-      curve: const Interval(0.0, 0.5, curve: Curves.easeOut),
-    );
-    _logoScale = CurvedAnimation(
-      parent: _ctrl,
-      curve: const Interval(0.0, 0.5, curve: Curves.easeOutBack),
-    );
-    _subtitleFade = CurvedAnimation(
-      parent: _ctrl,
-      curve: const Interval(0.45, 0.85, curve: Curves.easeIn),
-    );
-    _glowPulse = CurvedAnimation(
-      parent: _ctrl,
-      curve: const Interval(0.6, 1.0, curve: Curves.easeInOut),
-    );
-
-    _ctrl.forward();
+    // Cycle taglines every 520 ms (same cadence as web splash)
+    _taglineTimer = Timer.periodic(const Duration(milliseconds: 520), (_) {
+      if (mounted) setState(() => _taglineIdx = (_taglineIdx + 1) % _taglines.length);
+    });
 
     Future.delayed(const Duration(milliseconds: 3200), () async {
       if (!mounted) return;
@@ -67,7 +75,6 @@ class _SplashScreenState extends State<SplashScreen>
   Future<void> _downloadAndInstall(UpdateInfo update) async {
     if (!mounted) return;
     setState(() => _downloadProgress = 0.0);
-
     try {
       await UpdateChecker.downloadAndInstall(
         update,
@@ -75,19 +82,30 @@ class _SplashScreenState extends State<SplashScreen>
           if (mounted) setState(() => _downloadProgress = p);
         },
       );
-      // System installer has launched — navigate to portal so the app is
-      // ready when the user returns after installation.
       if (mounted) context.go('/portal');
     } catch (_) {
-      // Download failed — navigate silently and retry next launch.
       if (mounted) context.go('/portal');
     }
   }
 
   @override
   void dispose() {
-    _ctrl.dispose();
+    _rockCtrl.dispose();
+    _revealCtrl.dispose();
+    _particleCtrl.dispose();
+    _taglineTimer?.cancel();
     super.dispose();
+  }
+
+  static List<_Particle> _buildParticles() {
+    final rng = Random(42);
+    return List.generate(22, (i) => _Particle(
+      left:    rng.nextDouble(),
+      top:     rng.nextDouble(),
+      size:    1.5 + rng.nextDouble() * 3.0,
+      opacity: 0.2  + rng.nextDouble() * 0.5,
+      phase:   i / 22.0,
+    ));
   }
 
   @override
@@ -95,19 +113,16 @@ class _SplashScreenState extends State<SplashScreen>
     final size = MediaQuery.of(context).size;
 
     return Scaffold(
-      backgroundColor: const Color(0xFF07192E),
+      backgroundColor: const Color(0xFF050A14),
       body: Stack(
         children: [
-          // ── Tech background ──────────────────────────────────────
-          CustomPaint(
-            size: size,
-            painter: _TechBgPainter(),
-          ),
+          // Dark gradient background + dot grid
+          CustomPaint(size: size, painter: const _BgPainter()),
 
-          // ── Update download overlay ───────────────────────────────
+          // Update-download overlay
           if (_downloadProgress != null)
             Container(
-              color: const Color(0xDD07192E),
+              color: const Color(0xDD050A14),
               child: Center(
                 child: Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 40),
@@ -115,299 +130,519 @@ class _SplashScreenState extends State<SplashScreen>
                     mainAxisSize: MainAxisSize.min,
                     children: [
                       const Icon(Icons.system_update_rounded,
-                          color: Color(0xFF00E5FF), size: 36),
+                          color: Color(0xFF60A5FA), size: 36),
                       const SizedBox(height: 16),
-                      Text(
-                        'Updating DIKLY…',
-                        style: GoogleFonts.dmSans(
-                          color: Colors.white,
-                          fontSize: 16,
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
+                      Text('Updating DIKLY…',
+                          style: GoogleFonts.dmSans(
+                              color: Colors.white,
+                              fontSize: 16,
+                              fontWeight: FontWeight.w600)),
                       const SizedBox(height: 12),
                       ClipRRect(
                         borderRadius: BorderRadius.circular(4),
                         child: LinearProgressIndicator(
                           value: _downloadProgress,
                           backgroundColor: Colors.white12,
-                          valueColor: const AlwaysStoppedAnimation(Color(0xFF00E5FF)),
+                          valueColor: const AlwaysStoppedAnimation(Color(0xFF60A5FA)),
                           minHeight: 6,
                         ),
                       ),
                       const SizedBox(height: 8),
-                      Text(
-                        '${((_downloadProgress ?? 0) * 100).toInt()}%',
-                        style: GoogleFonts.dmSans(
-                          color: Colors.white54,
-                          fontSize: 12,
-                        ),
-                      ),
+                      Text('${((_downloadProgress ?? 0) * 100).toInt()}%',
+                          style: GoogleFonts.dmSans(
+                              color: Colors.white54, fontSize: 12)),
                     ],
                   ),
                 ),
               ),
             ),
 
-          // ── Animated content ─────────────────────────────────────
+          // Main animated content
           if (_downloadProgress == null)
-          AnimatedBuilder(
-            animation: _ctrl,
-            builder: (context, _) {
-              final glow = 20.0 + _glowPulse.value * 20.0;
-              return Center(
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 32),
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      // DIKLY wordmark
-                      Opacity(
-                        opacity: _logoFade.value,
-                        child: Transform.scale(
-                          scale: 0.75 + _logoScale.value * 0.25,
-                          child: ShaderMask(
-                            shaderCallback: (bounds) =>
-                                const LinearGradient(
-                              colors: [
-                                Color(0xFF00E5FF),
-                                Color(0xFF00BCD4),
-                                Color(0xFF80DEEA),
-                              ],
-                              stops: [0.0, 0.5, 1.0],
-                            ).createShader(bounds),
-                            child: Text(
-                              'DiKLY',
-                              style: GoogleFonts.dmSans(
-                                fontSize: 82,
-                                fontWeight: FontWeight.w900,
-                                color: Colors.white,
-                                letterSpacing: 6,
-                                height: 1.0,
-                                shadows: [
-                                  Shadow(
-                                      color: const Color(0xFF00E5FF),
-                                      blurRadius: glow),
-                                  Shadow(
-                                      color: const Color(0xFF00B4D8),
-                                      blurRadius: glow * 2),
-                                  Shadow(
-                                      color: const Color(0xFF00E5FF)
-                                          .withOpacity(0.4),
-                                      blurRadius: glow * 3),
-                                ],
+            AnimatedBuilder(
+              animation: Listenable.merge([_rockCtrl, _revealCtrl, _particleCtrl]),
+              builder: (context, _) {
+                // Rock: 0→1 (reverse-repeat) maps to CSS 0%→50%
+                //   rotateY: -28° → +28°   rotateX: 16° → -12°
+                final t   = _rockCtrl.value;
+                final rotY = (-28.0 + 56.0 * t) * pi / 180;
+                final rotX = (16.0  - 28.0 * t) * pi / 180;
+
+                return Stack(
+                  children: [
+                    // Floating particles
+                    ..._particles.map((p) {
+                      final ft = (_particleCtrl.value + p.phase) % 1.0;
+                      final dy = sin(ft * 2 * pi) * -22.0;
+                      final sc = 1.0 + sin(ft * 2 * pi) * 0.3;
+                      final op = (p.opacity * (0.7 + 0.3 * sin(ft * 2 * pi).abs()))
+                          .clamp(0.0, 1.0);
+                      return Positioned(
+                        left: p.left * size.width,
+                        top:  p.top  * size.height + dy,
+                        child: Opacity(
+                          opacity: op,
+                          child: Transform.scale(
+                            scale: sc,
+                            child: Container(
+                              width: p.size, height: p.size,
+                              decoration: BoxDecoration(
+                                // ignore: deprecated_member_use
+                                color: const Color(0xFF60A5FA).withOpacity(0.6),
+                                shape: BoxShape.circle,
                               ),
                             ),
                           ),
                         ),
+                      );
+                    }),
+
+                    // Vignette (edge darkening)
+                    Positioned.fill(
+                      child: IgnorePointer(
+                        child: CustomPaint(painter: const _VignettePainter()),
                       ),
-                      const SizedBox(height: 20),
-                      // Subtitle
-                      Opacity(
-                        opacity: _subtitleFade.value,
-                        child: Text(
-                          'Smart Attendance & Education Management',
-                          textAlign: TextAlign.center,
-                          style: GoogleFonts.dmSans(
-                            fontSize: 15,
-                            fontWeight: FontWeight.w500,
-                            color: Colors.white,
-                            letterSpacing: 0.3,
-                            height: 1.4,
-                            shadows: [
-                              Shadow(
-                                color: Colors.black.withOpacity(0.6),
-                                blurRadius: 8,
+                    ),
+
+                    // Hex prism + wordmark centred on screen
+                    Center(
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          // ── 3D hex prism ───────────────────────────
+                          Opacity(
+                            opacity: _hexReveal.value.clamp(0.0, 1.0),
+                            child: Transform.scale(
+                              scale: 0.65 + _hexReveal.value * 0.35,
+                              child: Transform(
+                                alignment: Alignment.center,
+                                transform: Matrix4.identity()
+                                  ..setEntry(3, 2, 0.002) // perspective
+                                  ..rotateY(rotY)
+                                  ..rotateX(rotX),
+                                child: const SizedBox(
+                                  width: 200,
+                                  height: 200,
+                                  child: CustomPaint(painter: _PrismPainter()),
+                                ),
                               ),
-                            ],
+                            ),
                           ),
-                        ),
+
+                          const SizedBox(height: 36),
+
+                          // ── Wordmark + subtitle + tagline ──────────
+                          Opacity(
+                            opacity: _wmReveal.value.clamp(0.0, 1.0),
+                            child: Transform.translate(
+                              offset: Offset(0, 14.0 * (1.0 - _wmReveal.value)),
+                              child: Column(
+                                children: [
+                                  Text(
+                                    'DIKLY',
+                                    style: GoogleFonts.dmSans(
+                                      fontSize: 38,
+                                      fontWeight: FontWeight.w900,
+                                      letterSpacing: 10,
+                                      color: Colors.white,
+                                      shadows: [
+                                        Shadow(
+                                          // ignore: deprecated_member_use
+                                          color: const Color(0xFF60A5FA).withOpacity(0.5),
+                                          blurRadius: 24,
+                                        ),
+                                        Shadow(
+                                          // ignore: deprecated_member_use
+                                          color: Colors.black.withOpacity(0.6),
+                                          blurRadius: 8,
+                                          offset: const Offset(0, 2),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                  const SizedBox(height: 8),
+                                  Text(
+                                    'Smart Attendance & Education Platform',
+                                    style: GoogleFonts.dmSans(
+                                      fontSize: 11,
+                                      letterSpacing: 2,
+                                      fontWeight: FontWeight.w500,
+                                      // ignore: deprecated_member_use
+                                      color: const Color(0xFF93C5FD).withOpacity(0.65),
+                                    ),
+                                  ),
+                                  const SizedBox(height: 5),
+                                  AnimatedSwitcher(
+                                    duration: const Duration(milliseconds: 200),
+                                    child: Text(
+                                      _taglines[_taglineIdx],
+                                      key: ValueKey(_taglineIdx),
+                                      style: GoogleFonts.dmSans(
+                                        fontSize: 11,
+                                        letterSpacing: 2,
+                                        // ignore: deprecated_member_use
+                                        color: const Color(0xFF93C5FD).withOpacity(0.38),
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                        ],
                       ),
-                    ],
-                  ),
-                ),
-              );
-            },
-          ),
+                    ),
+                  ],
+                );
+              },
+            ),
         ],
       ),
     );
   }
 }
 
+// ── Particle data ─────────────────────────────────────────────────────────────
 
-/// Paints the dark navy tech background:
-/// diagonal streaks · QR pattern · constellation dots · waveform.
-class _TechBgPainter extends CustomPainter {
+class _Particle {
+  final double left, top, size, opacity, phase;
+  const _Particle({
+    required this.left,
+    required this.top,
+    required this.size,
+    required this.opacity,
+    required this.phase,
+  });
+}
+
+// ── Background: dark gradient + dot grid ──────────────────────────────────────
+
+class _BgPainter extends CustomPainter {
+  const _BgPainter();
+
   @override
   void paint(Canvas canvas, Size size) {
-    // ── Background gradient ───────────────────────────────────────
-    final bgPaint = Paint()
-      ..shader = const RadialGradient(
-        center: Alignment(0, -0.2),
-        radius: 1.1,
-        colors: [Color(0xFF0E2440), Color(0xFF07192E)],
-      ).createShader(Rect.fromLTWH(0, 0, size.width, size.height));
-    canvas.drawRect(Rect.fromLTWH(0, 0, size.width, size.height), bgPaint);
+    final rect = Rect.fromLTWH(0, 0, size.width, size.height);
 
-    // ── Diagonal streak helper ────────────────────────────────────
-    void drawStreak(
-        double cx, double cy, double angle, double w, double h, double opacity) {
-      canvas.save();
-      canvas.translate(cx, cy);
-      canvas.rotate(angle);
-      final paint = Paint()
-        ..shader = LinearGradient(
-          begin: Alignment.centerLeft,
-          end: Alignment.centerRight,
+    canvas.drawRect(rect, Paint()..color = const Color(0xFF050A14));
+
+    // Blue radial glow near centre
+    canvas.drawRect(
+      rect,
+      Paint()
+        ..shader = RadialGradient(
+          center: const Alignment(0, -0.04),
+          radius: 0.7,
           colors: [
-            Colors.transparent,
-            const Color(0xFF00BCD4).withOpacity(opacity),
+            // ignore: deprecated_member_use
+            const Color(0xFF143CA0).withOpacity(0.35),
             Colors.transparent,
           ],
-        ).createShader(Rect.fromLTWH(-w / 2, -h / 2, w, h));
-      canvas.drawRect(Rect.fromLTWH(-w / 2, -h / 2, w, h), paint);
-      canvas.restore();
-    }
+        ).createShader(rect),
+    );
 
-    // Left streak
-    drawStreak(
-        size.width * 0.1, size.height * 0.35, -0.48,
-        size.width * 0.22, size.height * 1.1, 0.30);
-    // Right streak
-    drawStreak(
-        size.width * 0.85, size.height * 0.65, -0.48,
-        size.width * 0.18, size.height * 0.9, 0.22);
+    // Dark-blue glow at bottom
+    canvas.drawRect(
+      rect,
+      Paint()
+        ..shader = RadialGradient(
+          center: const Alignment(0, 1.0),
+          radius: 0.8,
+          colors: [
+            // ignore: deprecated_member_use
+            const Color(0xFF0A1946).withOpacity(0.6),
+            Colors.transparent,
+          ],
+        ).createShader(rect),
+    );
 
-    // ── QR code pattern (top-right) ───────────────────────────────
-    _drawQr(canvas, size);
-
-    // ── Constellation dots (lower half) ───────────────────────────
-    _drawConstellation(canvas, size);
-
-    // ── Waveform (bottom) ─────────────────────────────────────────
-    _drawWaveform(canvas, size);
-
-    // ── Scattered binary text ─────────────────────────────────────
-    _drawBinaryHints(canvas, size);
-  }
-
-  void _drawQr(Canvas canvas, Size size) {
-    final rng = Random(7);
-    const cell = 12.0;
-    const cols = 14;
-    const rows = 14;
-    final left = size.width - cols * cell - 18;
-    const top = 18.0;
-
-    final fillPaint = Paint()
-      ..color = const Color(0xFF00BCD4).withOpacity(0.18)
-      ..style = PaintingStyle.fill;
-
-    for (int r = 0; r < rows; r++) {
-      for (int c = 0; c < cols; c++) {
-        if (rng.nextBool()) {
-          canvas.drawRect(
-            Rect.fromLTWH(left + c * cell + 1, top + r * cell + 1, cell - 2, cell - 2),
-            fillPaint,
-          );
-        }
+    // Subtle dot grid (28 px spacing)
+    // ignore: deprecated_member_use
+    final dot = Paint()..color = const Color(0xFF3B82F6).withOpacity(0.12);
+    const sp = 28.0;
+    for (double x = 0; x < size.width; x += sp) {
+      for (double y = 0; y < size.height; y += sp) {
+        canvas.drawCircle(Offset(x, y), 1.0, dot);
       }
-    }
-
-    // Corner finder squares
-    final markerStroke = Paint()
-      ..color = const Color(0xFF00BCD4).withOpacity(0.35)
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 2;
-    final markerFill = Paint()
-      ..color = const Color(0xFF00BCD4).withOpacity(0.22)
-      ..style = PaintingStyle.fill;
-
-    for (final pos in [
-      Offset(left, top),
-      Offset(left + (cols - 3) * cell, top),
-      Offset(left, top + (rows - 3) * cell),
-    ]) {
-      canvas.drawRect(Rect.fromLTWH(pos.dx, pos.dy, cell * 3, cell * 3), markerStroke);
-      canvas.drawRect(Rect.fromLTWH(pos.dx + cell, pos.dy + cell, cell, cell), markerFill);
-    }
-  }
-
-  void _drawConstellation(Canvas canvas, Size size) {
-    final rng = Random(42);
-    final dotPaint = Paint()
-      ..color = const Color(0xFF00BCD4).withOpacity(0.55)
-      ..style = PaintingStyle.fill;
-    final linePaint = Paint()
-      ..color = const Color(0xFF00BCD4).withOpacity(0.10)
-      ..strokeWidth = 0.7;
-
-    final dots = List.generate(18, (_) => Offset(
-      20 + rng.nextDouble() * (size.width - 40),
-      size.height * 0.55 + rng.nextDouble() * size.height * 0.42,
-    ));
-
-    for (int i = 0; i < dots.length; i++) {
-      for (int j = i + 1; j < dots.length; j++) {
-        if ((dots[i] - dots[j]).distance < 130) {
-          canvas.drawLine(dots[i], dots[j], linePaint);
-        }
-      }
-    }
-    for (final d in dots) {
-      canvas.drawCircle(d, 2.2, dotPaint);
-    }
-  }
-
-  void _drawWaveform(Canvas canvas, Size size) {
-    final rng = Random(13);
-    final paint = Paint()
-      ..color = const Color(0xFF00BCD4).withOpacity(0.35)
-      ..style = PaintingStyle.fill;
-
-    const barW = 3.0;
-    const gap = 1.5;
-    final baseY = size.height - 20;
-    final count = (size.width / (barW + gap)).floor();
-
-    for (int i = 0; i < count; i++) {
-      final h = 4.0 + rng.nextDouble() * 28;
-      canvas.drawRRect(
-        RRect.fromRectAndRadius(
-          Rect.fromLTWH(i * (barW + gap), baseY - h, barW, h),
-          const Radius.circular(1),
-        ),
-        paint,
-      );
-    }
-  }
-
-  void _drawBinaryHints(Canvas canvas, Size size) {
-    final rng = Random(99);
-    final samples = ['1010', '0011', '1001', '0110', '101', '010', '1100', '0101'];
-
-    for (int i = 0; i < 12; i++) {
-      final x = 10.0 + rng.nextDouble() * (size.width - 60);
-      final y = 30.0 + rng.nextDouble() * (size.height - 80);
-      final label = samples[rng.nextInt(samples.length)];
-
-      final tp = TextPainter(
-        text: TextSpan(
-          text: label,
-          style: TextStyle(
-            fontSize: 9,
-            color: const Color(0xFF00BCD4).withOpacity(0.12 + rng.nextDouble() * 0.10),
-            fontFamily: 'monospace',
-            letterSpacing: 1,
-          ),
-        ),
-        textDirection: TextDirection.ltr,
-      )..layout();
-      tp.paint(canvas, Offset(x, y));
     }
   }
 
   @override
-  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
+  bool shouldRepaint(covariant CustomPainter old) => false;
+}
+
+// ── Hex prism with D icon ─────────────────────────────────────────────────────
+//
+// Mirrors the CSS 3D hex prism in index.html:
+//   clip-path: polygon(50% 0%, 100% 25%, 100% 75%, 50% 100%, 0% 75%, 0% 25%)
+// Layers drawn back → front to simulate depth (hx-aura → hx-b4…b1 → hx-front).
+// The 3D rock transform is applied outside this painter via a Matrix4 Transform
+// widget, so this painter is fully static (shouldRepaint = false).
+
+class _PrismPainter extends CustomPainter {
+  const _PrismPainter();
+
+  // Flat-top hexagon matching the CSS clip-path percentages.
+  // r = half the height (= half the width for this hex).
+  static Path _hex(double cx, double cy, double r) => Path()
+    ..moveTo(cx,     cy - r)
+    ..lineTo(cx + r, cy - r * 0.5)
+    ..lineTo(cx + r, cy + r * 0.5)
+    ..lineTo(cx,     cy + r)
+    ..lineTo(cx - r, cy + r * 0.5)
+    ..lineTo(cx - r, cy - r * 0.5)
+    ..close();
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final cx = size.width  / 2;
+    final cy = size.height / 2;
+
+    // ── Aura: blurred glow behind all layers ──────────────────────
+    canvas.drawPath(
+      _hex(cx, cy, 90),
+      Paint()
+        ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 14)
+        ..shader = RadialGradient(
+          colors: [
+            // ignore: deprecated_member_use
+            const Color(0xFF2563EB).withOpacity(0.55),
+            // ignore: deprecated_member_use
+            const Color(0xFF0E2878).withOpacity(0.20),
+            Colors.transparent,
+          ],
+          stops: const [0, 0.65, 1.0],
+        ).createShader(Rect.fromLTWH(cx - 90, cy - 90, 180, 180)),
+    );
+
+    // ── Depth layers: hx-b4 → hx-b1 (back to front) ──────────────
+    const layers = [
+      (65.0, Color(0xFF0A1A40), Color(0xFF061230)),
+      (70.0, Color(0xFF0E2258), Color(0xFF091840)),
+      (74.0, Color(0xFF142C72), Color(0xFF0D2060)),
+      (77.0, Color(0xFF1A3888), Color(0xFF122876)),
+    ];
+    for (final (r, c1, c2) in layers) {
+      canvas.drawPath(
+        _hex(cx, cy, r),
+        Paint()
+          ..shader = LinearGradient(
+            begin: const Alignment(-0.6, -1),
+            end:   const Alignment( 0.6,  1),
+            colors: [c1, c2],
+          ).createShader(Rect.fromLTWH(cx - r, cy - r, r * 2, r * 2)),
+      );
+    }
+
+    // ── Front face ─────────────────────────────────────────────────
+    const fr = 79.0;
+    final frontRect = Rect.fromLTWH(cx - fr, cy - fr, fr * 2, fr * 2);
+
+    // Outer glow (two passes: tight + wide)
+    for (final (blur, alpha) in [(20.0, 0.55), (40.0, 0.22)]) {
+      canvas.drawPath(
+        _hex(cx, cy, fr + 4),
+        Paint()
+          // ignore: deprecated_member_use
+          ..color = const Color(0xFF2563EB).withOpacity(alpha)
+          ..maskFilter = MaskFilter.blur(BlurStyle.normal, blur),
+      );
+    }
+
+    // Fill
+    canvas.drawPath(
+      _hex(cx, cy, fr),
+      Paint()
+        ..shader = const LinearGradient(
+          begin: Alignment(-0.7, -1),
+          end:   Alignment( 0.7,  1),
+          colors: [Color(0xFF2251B8), Color(0xFF1A3EA0), Color(0xFF0C1848)],
+          stops: [0, 0.5, 0.8],
+        ).createShader(frontRect),
+    );
+
+    // Gloss sheen (top-left highlight)
+    canvas.save();
+    canvas.clipPath(_hex(cx, cy, fr));
+    canvas.drawPath(
+      _hex(cx, cy, fr),
+      Paint()
+        ..shader = LinearGradient(
+          begin: const Alignment(-1, -1),
+          end:   const Alignment( 0, 0.2),
+          colors: [
+            Colors.white.withOpacity(0.18), // ignore: deprecated_member_use
+            Colors.white.withOpacity(0.06), // ignore: deprecated_member_use
+            Colors.transparent,
+          ],
+          stops: const [0, 0.45, 0.7],
+        ).createShader(frontRect),
+    );
+    canvas.restore();
+
+    // ── Dikly "D" icon ─────────────────────────────────────────────
+    _drawIcon(canvas, cx, cy, 40);
+
+    // ── Outer glow ring ────────────────────────────────────────────
+    canvas.drawPath(
+      _hex(cx, cy, 95),
+      Paint()
+        // ignore: deprecated_member_use
+        ..color = const Color(0xFF60A5FA).withOpacity(0.25)
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 2,
+    );
+
+    // ── Edge highlight lines ────────────────────────────────────────
+    canvas.drawPath(
+      _hex(cx, cy, 81),
+      Paint()
+        // ignore: deprecated_member_use
+        ..color = const Color(0xFF60A5FA).withOpacity(0.22)
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 1.2,
+    );
+    canvas.drawPath(
+      _hex(cx, cy, 77),
+      Paint()
+        // ignore: deprecated_member_use
+        ..color = const Color(0xFF60A5FA).withOpacity(0.10)
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 0.8,
+    );
+
+    // ── Drop shadow below prism ────────────────────────────────────
+    canvas.drawOval(
+      Rect.fromCenter(center: Offset(cx, cy + fr + 14), width: 100, height: 18),
+      Paint()
+        // ignore: deprecated_member_use
+        ..color = const Color(0xFF0A1E64).withOpacity(0.7)
+        ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 6),
+    );
+  }
+
+  // Dikly "D" icon — same SVG as hx-icon in index.html (viewBox 0 0 100 100)
+  static void _drawIcon(Canvas canvas, double cx, double cy, double r) {
+    final scale = (r * 2) / 100;
+    final ox = cx - 50 * scale;
+    final oy = cy - 50 * scale;
+    double px(double x) => ox + x * scale;
+    double py(double y) => oy + y * scale;
+
+    // D outer shape
+    final dPath = Path()
+      ..moveTo(px(14), py(4))
+      ..lineTo(px(14), py(96))
+      ..lineTo(px(50), py(96))
+      ..cubicTo(px(97), py(93), px(97), py(7), px(50), py(4))
+      ..close();
+
+    // Glow behind icon (drawn first)
+    canvas.drawPath(dPath, Paint()
+      // ignore: deprecated_member_use
+      ..color = const Color(0xFF93C5FD).withOpacity(0.85)
+      ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 10));
+    canvas.drawPath(dPath, Paint()
+      // ignore: deprecated_member_use
+      ..color = const Color(0xFF2563EB).withOpacity(0.6)
+      ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 26));
+
+    // Gradient fill
+    canvas.drawPath(
+      dPath,
+      Paint()
+        ..shader = LinearGradient(
+          begin: Alignment.topLeft,
+          end:   Alignment.bottomRight,
+          colors: const [Color(0xFFBFDBFE), Color(0xFF93C5FD), Color(0xFF60A5FA)],
+          stops: const [0, 0.45, 1.0],
+        ).createShader(Rect.fromLTWH(px(14), py(4), (50 - 14) * scale, (96 - 4) * scale)),
+    );
+
+    // White chevrons clipped to D shape
+    canvas.save();
+    canvas.clipPath(dPath);
+
+    final white = Paint()..color = Colors.white;
+
+    // Top chevron: SVG polygon points="4,58 63,-2 89,-2 30,58"
+    canvas.drawPath(
+      Path()
+        ..moveTo(px(4),  py(58))
+        ..lineTo(px(63), py(-2))
+        ..lineTo(px(89), py(-2))
+        ..lineTo(px(30), py(58))
+        ..close(),
+      white,
+    );
+
+    // Bottom chevron: SVG polygon points="30,102 89,42 63,42 4,102"
+    canvas.drawPath(
+      Path()
+        ..moveTo(px(30), py(102))
+        ..lineTo(px(89), py(42))
+        ..lineTo(px(63), py(42))
+        ..lineTo(px(4),  py(102))
+        ..close(),
+      white,
+    );
+
+    canvas.restore();
+  }
+
+  @override
+  bool shouldRepaint(covariant CustomPainter old) => false;
+}
+
+// ── Vignette: dark edges matching web splash ──────────────────────────────────
+
+class _VignettePainter extends CustomPainter {
+  const _VignettePainter();
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final rect = Rect.fromLTWH(0, 0, size.width, size.height);
+
+    // Radial — transparent centre, dark edges
+    canvas.drawRect(rect, Paint()
+      ..shader = RadialGradient(
+        center: Alignment.center,
+        radius: 0.9,
+        colors: [
+          Colors.transparent,
+          // ignore: deprecated_member_use
+          const Color(0xFF050A14).withOpacity(0.8),
+        ],
+        stops: const [0.4, 1.0],
+      ).createShader(rect));
+
+    // Bottom fade
+    canvas.drawRect(rect, Paint()
+      ..shader = LinearGradient(
+        begin: Alignment.bottomCenter,
+        end:   Alignment.topCenter,
+        colors: [
+          // ignore: deprecated_member_use
+          const Color(0xFF050A14).withOpacity(0.9),
+          Colors.transparent,
+        ],
+        stops: const [0, 0.22],
+      ).createShader(rect));
+
+    // Top fade
+    canvas.drawRect(rect, Paint()
+      ..shader = LinearGradient(
+        begin: Alignment.topCenter,
+        end:   Alignment.bottomCenter,
+        colors: [
+          // ignore: deprecated_member_use
+          const Color(0xFF050A14).withOpacity(0.8),
+          Colors.transparent,
+        ],
+        stops: const [0, 0.18],
+      ).createShader(rect));
+  }
+
+  @override
+  bool shouldRepaint(covariant CustomPainter old) => false;
 }
