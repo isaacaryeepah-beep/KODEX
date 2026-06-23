@@ -37,9 +37,9 @@ exports.broadcastParticipant  = broadcastParticipant;
 function isMeetingModerator(meeting, user) {
   const uid = user._id.toString();
   return (
-    meeting.creatorId.toString() === uid ||
+    (meeting.creatorId?._id || meeting.creatorId).toString() === uid ||
     ['admin', 'superadmin', 'hod'].includes(user.role) ||
-    (meeting.invigilators || []).some(i => i.toString() === uid)
+    (meeting.invigilators || []).some(i => (i?._id || i).toString() === uid)
   );
 }
 
