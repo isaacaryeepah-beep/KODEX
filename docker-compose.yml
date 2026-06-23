@@ -48,3 +48,19 @@ services:
     networks:
       - dikly-net
     # Port intentionally not exposed to host; app connects via dikly-net
+
+  deploy-agent:
+    build:
+      context: .
+      dockerfile: Dockerfile.deployer
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:9001:9001"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - /root/KODEX:/workspace
+      - /root/.ssh:/root/.ssh:ro
+    environment:
+      - DEPLOY_TOKEN=${DEPLOY_TOKEN}
+    networks:
+      - dikly-net

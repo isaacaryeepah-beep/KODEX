@@ -9,50 +9,28 @@ jobs:
   deploy:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Setup SSH key
+      - name: Trigger deploy webhook
         run: |
-          mkdir -p ~/.ssh
-          printf '%s\n' "$VPS_SSH_KEY" > ~/.ssh/deploy_key
-          chmod 600 ~/.ssh/deploy_key
-          ssh-keyscan -H 194.163.172.76 >> ~/.ssh/known_hosts 2>/dev/null || true
-        env:
-          VPS_SSH_KEY: ${{ secrets.VPS_SSH_KEY }}
-
-      - name: Deploy server code (with retries)
-        run: |
+          DEPLOY_TOKEN=$(printf '%s' "${{ secrets.VPS_SSH_KEY }}" | sha256sum | awk '{print $1}')
           EXIT_CODE=1
           for attempt in 1 2 3 4; do
             echo "==> Deploy attempt $attempt / 4"
             set +e
-            ssh -i ~/.ssh/deploy_key \
-                -o StrictHostKeyChecking=no \
-                -o ConnectTimeout=30 \
-                root@194.163.172.76 bash << 'ENDSSH'
-          set -e
-          cd /root/KODEX
-
-          git fetch origin main
-          git checkout jitsi-config/web/custom-config.js 2>/dev/null || true
-          git reset --hard origin/main
-
-          docker compose up -d --build --force-recreate --remove-orphans app
-          docker restart kodex-web-1 2>/dev/null || true
-
-          git diff HEAD~1 --name-only 2>/dev/null | grep -q docker-compose.jitsi.yml \
-            && docker compose -f docker-compose.jitsi.yml restart coturn \
-            || true
-
-          echo "Deploy complete"
-          ENDSSH
-            EXIT_CODE=$?
+            RESPONSE=$(curl -s -o /dev/null -w "%{http_code}" \
+              -X POST https://dikly.live/deploy \
+              -H "X-Deploy-Token: $DEPLOY_TOKEN" \
+              --max-time 20)
+            CURL_EXIT=$?
             set -e
-            [ $EXIT_CODE -eq 0 ] && break
+            if [ "$RESPONSE" = "200" ]; then
+              echo "==> Deploy triggered successfully (HTTP 200)"
+              EXIT_CODE=0
+              break
+            fi
+            echo "==> Attempt $attempt failed (HTTP $RESPONSE, curl exit $CURL_EXIT)"
             if [ $attempt -lt 4 ]; then
               WAIT=$((attempt * 2))
-              echo "==> Attempt $attempt failed (exit $EXIT_CODE) — retrying in ${WAIT}s..."
+              echo "==> Retrying in ${WAIT}s..."
               sleep $WAIT
             fi
           done
