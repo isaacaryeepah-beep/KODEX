@@ -255,8 +255,6 @@ const _p = new URLSearchParams(location.search);
 const MEETING_ID = _p.get('meeting') || _p.get('id') || '';
 
 function getAuthToken() {
-  const urlToken = _p.get('token');
-  if (urlToken) return urlToken;
   try {
     const s = JSON.parse(sessionStorage.getItem('dikly_jitsi_session') || 'null');
     if (s?.meetingId === MEETING_ID && s.authToken) return s.authToken;
