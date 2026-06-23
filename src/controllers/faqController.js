@@ -458,7 +458,7 @@ exports.getQueries = async (req, res) => {
 
     const [queries, total] = await Promise.all([
       FAQQuery.find(filter)
-        .populate("user",       "name role email")
+        .select("-user")
         .populate("matchedFAQ", "question category")
         .populate("ticketId",   "ticketNumber status")
         .sort({ createdAt: -1 })
