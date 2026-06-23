@@ -70,7 +70,18 @@ async function removeParticipantFromRoom(roomName, participantIdentity) {
   await svc.removeParticipant(roomName, participantIdentity);
 }
 
-function buildLiveKitRoomUrl(meeting, user, token, isMod) {
+// Clean URL for page navigation — no token exposed
+function buildLiveKitRoomUrl(meeting) {
+  const base = process.env.MEET_BASE_URL || process.env.APP_BASE_URL || 'https://dikly.sbs';
+  const qs = new URLSearchParams({
+    meetingId: String(meeting._id),
+    title:     meeting.title || 'Class',
+  });
+  return `${base}/stream-room.html?${qs.toString()}`;
+}
+
+// Full params URL returned inside JSON response only — never in a navigable link
+function buildLiveKitParamsUrl(meeting, user, token, isMod) {
   const base = process.env.MEET_BASE_URL || process.env.APP_BASE_URL || 'https://dikly.sbs';
   const qs = new URLSearchParams({
     roomName:    meeting.roomName,
@@ -93,4 +104,5 @@ module.exports = {
   muteParticipantInRoom,
   removeParticipantFromRoom,
   buildLiveKitRoomUrl,
+  buildLiveKitParamsUrl,
 };

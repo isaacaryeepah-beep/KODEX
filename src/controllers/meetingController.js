@@ -10,6 +10,7 @@ const {
   configured: streamConfigured,
   generateLiveKitToken,
   buildLiveKitRoomUrl,
+  buildLiveKitParamsUrl,
   muteAllInRoom,
   muteParticipantInRoom,
 } = require('../services/livekitService');
@@ -272,7 +273,7 @@ exports.startMeeting = async (req, res, next) => {
 
     const meetingToken = generateMeetingToken(req.user._id.toString(), meeting._id.toString(), req.user.deviceId || null);
     const livekitToken = await generateLiveKitToken(req.user._id, req.user.name || req.user.email, meeting.roomName, true);
-    const meetingUrl   = buildLiveKitRoomUrl(meeting, req.user, livekitToken, true);
+    const meetingUrl   = buildLiveKitParamsUrl(meeting, req.user, livekitToken, true);
 
     res.json({
       success: true, message: 'Meeting started',
@@ -421,7 +422,7 @@ exports.joinMeeting = async (req, res, next) => {
 
     const meetingToken = generateMeetingToken(user._id.toString(), meeting._id.toString(), user.deviceId || null);
     const livekitToken = await generateLiveKitToken(user._id, user.name || user.email, meeting.roomName, isMod, canPublish);
-    const meetingUrl   = buildLiveKitRoomUrl(meeting, user, livekitToken, isMod);
+    const meetingUrl   = buildLiveKitParamsUrl(meeting, user, livekitToken, isMod);
 
     res.json({
       success: true,
