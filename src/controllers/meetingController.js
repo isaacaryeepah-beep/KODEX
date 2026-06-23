@@ -26,8 +26,9 @@ function isModeratorRole(role) {
 
 function isMeetingModerator(meeting, user) {
   const uid = user._id.toString();
+  const creatorId = meeting.creatorId?._id ?? meeting.creatorId;
   return (
-    String(meeting.creatorId) === uid ||
+    String(creatorId) === uid ||
     isModeratorRole(user.role) ||
     (meeting.invigilators || []).some(i => String(i) === uid)
   );
