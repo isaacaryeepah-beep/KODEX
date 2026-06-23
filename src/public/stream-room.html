@@ -271,7 +271,7 @@ var _p        = new URLSearchParams(location.search);
 var meetingId = _p.get('meetingId') || '';
 var title     = _p.get('title')     || 'Class';
 var BASE_URL  = location.origin;
-var PROCTOR_TYPES = ['oral_exam', 'live_assessment'];
+var PROCTOR_TYPES = ['oral_exam', 'live_assessment', 'proctored_quiz', 'snap_quiz'];
 
 // Require Dikly login — redirect to login if no JWT found
 var kodexToken = localStorage.getItem('token') || localStorage.getItem('jwt_token') ||
@@ -384,7 +384,7 @@ showCall();
 startTimer();
 rerender();
 
-// ── Proctoring (oral_exam / live_assessment — students only) ──────────────────
+// ── Proctoring (oral_exam / live_assessment / proctored_quiz / snap_quiz — students only) ──
 function postProcEvent(type, meta) {
   if (!meetingId || !kodexToken) return;
   fetch(BASE_URL + '/api/meetings/' + meetingId + '/proctoring/event', {
