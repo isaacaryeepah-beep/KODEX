@@ -153,11 +153,7 @@ function selectPortal(t){if(window._appLoaded)window._realSelectPortal(t);else w
 </head>
 <body>
 
-<!-- ── Native app splash overlay (Capacitor only, hidden on web) ── -->
-<div id="native-splash" style="display:none;position:fixed;inset:0;z-index:99999;
-  background:#061528 url('/splash-screen.png') center/cover no-repeat;"></div>
-
-<!-- ── Web splash screen (3D hex prism) ───────────────────────────── -->
+<!-- ── Splash screen (3D hex prism — shown on web and Capacitor) ─── -->
 <div id="web-splash">
 <style>
 #web-splash {
@@ -452,10 +448,6 @@ function selectPortal(t){if(window._appLoaded)window._realSelectPortal(t);else w
 
 <script>
 (function() {
-  var isNative = navigator.userAgent.includes('DiklyApp/') ||
-    (typeof window.Capacitor !== 'undefined' && window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform());
-  if (isNative) { document.getElementById('web-splash').remove(); return; }
-
   /* spawn particles */
   var pc = document.getElementById('sp-particles');
   if (pc) {
@@ -500,22 +492,6 @@ function selectPortal(t){if(window._appLoaded)window._realSelectPortal(t);else w
 })();
 </script>
 
-<style>
-@keyframes splashFade{0%{opacity:1;pointer-events:auto}80%{opacity:1}100%{opacity:0;pointer-events:none}}
-</style>
-<script>
-(function(){
-  var el=document.getElementById('native-splash');
-  var isNative=navigator.userAgent.includes('DiklyApp/')||
-    (typeof window.Capacitor!=='undefined'&&window.Capacitor.isNativePlatform&&window.Capacitor.isNativePlatform());
-  if(!isNative){el.remove();return;}
-  el.style.display='block';
-  setTimeout(function(){
-    el.style.animation='splashFade 0.6s ease forwards';
-    setTimeout(function(){el.remove();},600);
-  },2400);
-})();
-</script>
 
   <div id="auth-page">
     <div class="auth-watermark">DIKLY</div>
