@@ -83,10 +83,11 @@ exports.attachMode = async (req, res, next) => {
 // ─── MEETING OWNERSHIP GUARD ─────────────────────────────────────────────────
 // Use after fetching meeting and attaching to req.meeting
 exports.isOwner = (req, res, next) => {
-  const meeting = req.meeting;
-  const role    = req.user.role?.toLowerCase();
-  const isAdmin = ['admin', 'superadmin'].includes(role);
-  const isOwner = meeting.creatorId.toString() === req.user._id.toString();
+  const meeting   = req.meeting;
+  const role      = req.user.role?.toLowerCase();
+  const isAdmin   = ['admin', 'superadmin'].includes(role);
+  const creatorId = meeting.creatorId?._id ?? meeting.creatorId;
+  const isOwner   = String(creatorId) === String(req.user._id);
 
   if (!isAdmin && !isOwner) {
     return res.status(403).json({ message: 'Only the meeting creator can perform this action.' });
@@ -128,7 +129,8 @@ exports.canJoin = async (req, res, next) => {
   }
 
   // Creator can always join
-  if (meeting.creatorId.toString() === user._id.toString()) return next();
+  const _creatorId = meeting.creatorId?._id ?? meeting.creatorId;
+  if (String(_creatorId) === String(user._id)) return next();
 
   // Open to whole company
   if (meeting.openToCompany) return next();
@@ -170,7 +172,8 @@ exports.isModerator = (req, res, next) => {
   const role    = (user.role || '').toLowerCase();
 
   const isAdmin       = ['admin', 'superadmin', 'hod'].includes(role);
-  const isCreator     = meeting.creatorId.toString() === user._id.toString();
+  const _modCreatorId = meeting.creatorId?._id ?? meeting.creatorId;
+  const isCreator     = String(_modCreatorId) === String(user._id);
   const isInvigilator = (meeting.invigilators || []).some(i => i.toString() === user._id.toString());
 
   if (!isAdmin && !isCreator && !isInvigilator) {
