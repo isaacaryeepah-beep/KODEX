@@ -21,12 +21,15 @@ jobs:
         env:
           VPS_SSH_KEY: ${{ secrets.VPS_SSH_KEY }}
 
-      - name: Deploy server code
+      - name: Deploy server code (with retries)
         run: |
-          ssh -i ~/.ssh/deploy_key \
-              -o StrictHostKeyChecking=no \
-              -o ConnectTimeout=15 \
-              root@194.163.172.76 bash << 'ENDSSH'
+          EXIT_CODE=1
+          for attempt in 1 2 3 4; do
+            echo "==> Deploy attempt $attempt / 4"
+            ssh -i ~/.ssh/deploy_key \
+                -o StrictHostKeyChecking=no \
+                -o ConnectTimeout=30 \
+                root@194.163.172.76 bash << 'ENDSSH'
           set -e
           cd /root/KODEX
 
@@ -43,3 +46,12 @@ jobs:
 
           echo "Deploy complete"
           ENDSSH
+            EXIT_CODE=$?
+            [ $EXIT_CODE -eq 0 ] && break
+            if [ $attempt -lt 4 ]; then
+              WAIT=$((attempt * 2))
+              echo "==> Attempt $attempt failed (exit $EXIT_CODE) — retrying in ${WAIT}s..."
+              sleep $WAIT
+            fi
+          done
+          exit $EXIT_CODE
