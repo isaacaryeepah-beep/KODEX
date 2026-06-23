@@ -30,7 +30,7 @@ function isMeetingModerator(meeting, user) {
   return (
     String(creatorId) === uid ||
     isModeratorRole(user.role) ||
-    (meeting.invigilators || []).some(i => String(i) === uid)
+    (meeting.invigilators || []).some(i => String(i?._id || i) === uid)
   );
 }
 
