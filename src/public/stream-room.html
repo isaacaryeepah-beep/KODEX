@@ -267,27 +267,70 @@ window.addEventListener('unhandledrejection', function(e) {
 (async function() {
 'use strict';
 
-var _p          = new URLSearchParams(location.search);
-var roomName    = _p.get('roomName')    || '';
-var token       = _p.get('token')       || '';
-var userId      = _p.get('userId')      || '';
-var userName    = _p.get('userName')    || 'Participant';
-var isMod       = _p.get('isMod')      === '1';
-var meetingId   = _p.get('meetingId')   || '';
-var title       = _p.get('title')       || 'Class';
-var livekitUrl  = _p.get('livekitUrl')  || '';
-var meetingType = _p.get('meetingType') || 'meeting';
-var BASE_URL    = location.origin;
+var _p        = new URLSearchParams(location.search);
+var meetingId = _p.get('meetingId') || '';
+var title     = _p.get('title')     || 'Class';
+var BASE_URL  = location.origin;
 var PROCTOR_TYPES = ['oral_exam', 'live_assessment'];
-var isProctored = !isMod && PROCTOR_TYPES.indexOf(meetingType) !== -1;
 
-if (!roomName || !token || !livekitUrl) {
-  showError('Missing connection parameters. Please go back and try again.');
+// Require Dikly login — redirect to login if no JWT found
+var kodexToken = localStorage.getItem('token') || localStorage.getItem('jwt_token') ||
+                 localStorage.getItem('auth_token') || sessionStorage.getItem('token') || '';
+if (!kodexToken) {
+  location.replace('/?redirect=' + encodeURIComponent(location.href));
+  return;
+}
+if (!meetingId) {
+  showError('No meeting ID. Please go back and try again.');
   return;
 }
 
-var kodexToken = localStorage.getItem('token') || localStorage.getItem('jwt_token') ||
-                 localStorage.getItem('auth_token') || sessionStorage.getItem('token') || '';
+// Fetch LiveKit token from server — verifies Dikly auth + join permission
+setMsg('Verifying access…');
+var joinData;
+try {
+  var joinRes = await fetch(BASE_URL + '/api/meetings/' + meetingId + '/join', {
+    headers: { Authorization: 'Bearer ' + kodexToken },
+  });
+  if (joinRes.status === 401) {
+    location.replace('/?redirect=' + encodeURIComponent(location.href));
+    return;
+  }
+  if (joinRes.status === 403) {
+    var e403 = await joinRes.json().catch(function(){ return {}; });
+    showError(e403.error || 'You are not authorised to join this meeting.');
+    return;
+  }
+  if (!joinRes.ok) {
+    var eBody = await joinRes.json().catch(function(){ return {}; });
+    showError(eBody.error || 'Could not join meeting (server error).');
+    return;
+  }
+  var body = await joinRes.json();
+  joinData  = body.data;
+} catch(e) {
+  showError('Network error — could not reach server. ' + e.message);
+  return;
+}
+
+// Extract connection params from server response
+var joinUrl     = new URL(joinData.meetingUrl);
+var jp          = joinUrl.searchParams;
+var roomName    = jp.get('roomName')    || '';
+var token       = jp.get('token')       || '';
+var livekitUrl  = jp.get('livekitUrl')  || '';
+var userId      = jp.get('userId')      || '';
+var userName    = jp.get('userName')    || 'Participant';
+var isMod       = jp.get('isMod')      === '1';
+var meetingType = jp.get('meetingType') || 'meeting';
+title           = jp.get('title')       || title;
+
+if (!roomName || !token || !livekitUrl) {
+  showError('Missing connection parameters from server. Please try again.');
+  return;
+}
+
+var isProctored = !isMod && PROCTOR_TYPES.indexOf(meetingType) !== -1;
 
 document.getElementById('callTitle').textContent = title;
 if (isMod) document.getElementById('callScreen').classList.add('is-mod');

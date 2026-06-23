@@ -132,6 +132,9 @@ exports.canJoin = async (req, res, next) => {
   const _creatorId = meeting.creatorId?._id ?? meeting.creatorId;
   if (String(_creatorId) === String(user._id)) return next();
 
+  // Lecturers and managers are always hosts — they can join any meeting in their company
+  if (['lecturer', 'manager'].includes(role)) return next();
+
   // Open to whole company
   if (meeting.openToCompany) return next();
 
@@ -165,18 +168,18 @@ exports.canJoin = async (req, res, next) => {
 };
 
 // ─── IS MODERATOR GUARD ───────────────────────────────────────────────────────
-// Passes for: meeting creator, invigilators, and admin/superadmin/hod
+// Passes for: meeting creator, invigilators, lecturer, manager, admin, superadmin, hod
 exports.isModerator = (req, res, next) => {
   const meeting = req.meeting;
   const user    = req.user;
   const role    = (user.role || '').toLowerCase();
 
-  const isAdmin       = ['admin', 'superadmin', 'hod'].includes(role);
+  const isModRole     = ['lecturer', 'manager', 'admin', 'superadmin', 'hod'].includes(role);
   const _modCreatorId = meeting.creatorId?._id ?? meeting.creatorId;
   const isCreator     = String(_modCreatorId) === String(user._id);
   const isInvigilator = (meeting.invigilators || []).some(i => i.toString() === user._id.toString());
 
-  if (!isAdmin && !isCreator && !isInvigilator) {
+  if (!isModRole && !isCreator && !isInvigilator) {
     return res.status(403).json({ message: 'Moderator or invigilator access required.' });
   }
   next();
