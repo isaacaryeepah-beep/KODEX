@@ -1,5 +1,7 @@
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:webview_flutter/webview_flutter.dart';
+import 'package:webview_flutter_android/webview_flutter_android.dart';
 
 class MeetingRoomScreen extends StatefulWidget {
   final String meetingId;
@@ -37,11 +39,6 @@ class _MeetingRoomScreenState extends State<MeetingRoomScreen> {
     _controller = WebViewController()
       ..setJavaScriptMode(JavaScriptMode.unrestricted)
       ..setBackgroundColor(const Color(0xFF080B12))
-      ..setOnPlatformPermissionRequest((request) async {
-        // Grant camera + mic so LiveKit can publish A/V
-        await request.grant();
-      })
-      ..setMediaPlaybackRequiresUserGesture(false)
       ..setNavigationDelegate(NavigationDelegate(
         onPageStarted: (_) async {
           // Inject Dikly JWT before the page's own scripts run
@@ -57,6 +54,12 @@ class _MeetingRoomScreenState extends State<MeetingRoomScreen> {
         },
       ))
       ..loadRequest(Uri.parse(url));
+
+    // Android: allow media autoplay and grant camera/mic permissions
+    if (Platform.isAndroid) {
+      final android = _controller.platform as AndroidWebViewController;
+      android.setMediaPlaybackRequiresUserGesture(false);
+    }
   }
 
   @override
@@ -64,7 +67,6 @@ class _MeetingRoomScreenState extends State<MeetingRoomScreen> {
     return PopScope(
       onPopInvokedWithResult: (didPop, _) async {
         if (!didPop) return;
-        // Disconnect from LiveKit before closing
         await _controller.runJavaScript(
           'if (typeof leaveCall === "function") leaveCall();',
         );
