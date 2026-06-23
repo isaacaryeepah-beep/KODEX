@@ -1,0 +1,6 @@
+FROM alpine:3.19
+RUN apk add --no-cache docker-cli git nodejs
+WORKDIR /app
+COPY scripts/deploy-webhook.js ./
+EXPOSE 9001
+CMD ["node", "deploy-webhook.js"]
