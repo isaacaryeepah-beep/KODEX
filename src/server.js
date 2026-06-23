@@ -173,9 +173,12 @@ app.get("/superadmin", (req, res) => {
   res.sendFile(path.join(__dirname, "public", "superadmin.html"));
 });
 
-app.get("/anticheat",      (req, res) => res.sendFile(path.join(__dirname, "public", "anticheat-dashboard.html")));
-app.get("/monitor",        (req, res) => res.sendFile(path.join(__dirname, "public", "monitor-standalone.html")));
-app.get("/meeting-join",   (req, res) => res.sendFile(path.join(__dirname, "public", "meeting-monitor.html")));
+app.get("/anticheat",           (req, res) => res.sendFile(path.join(__dirname, "public", "anticheat-dashboard.html")));
+app.get("/monitor",             (req, res) => res.sendFile(path.join(__dirname, "public", "monitor-standalone.html")));
+app.get("/meeting-join",        (req, res) => res.sendFile(path.join(__dirname, "public", "meeting-monitor.html")));
+app.get("/lecturer-meeting",    (req, res) => res.sendFile(path.join(__dirname, "public", "lecturer-meeting.html")));
+app.get("/student-meeting",     (req, res) => res.sendFile(path.join(__dirname, "public", "student-meeting.html")));
+app.get("/session-preflight",   (req, res) => res.sendFile(path.join(__dirname, "public", "session-preflight.html")));
 app.get("/about",          (req, res) => res.sendFile(path.join(__dirname, "public", "about.html")));
 app.get("/download",       (req, res) => res.sendFile(path.join(__dirname, "public", "download.html")));
 app.get("/founder",        (req, res) => res.sendFile(path.join(__dirname, "public", "founder.html")));
