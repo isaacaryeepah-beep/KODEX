@@ -228,9 +228,6 @@ public:
 #include <ArduinoJson.h>
 #include <SPI.h>
 #include <SD_MMC.h>   // SDIO driver — separate peripheral from SPI, no bus conflict
-#include <BLEDevice.h>
-#include <BLEAdvertising.h>
-#include <esp_bt.h>        // esp_bt_controller_mem_release
 #include <esp_wifi.h>      // esp_wifi_ap_get_sta_list, promiscuous, etc.
 #include <ESPmDNS.h>       // dikly.local hostname on both AP and STA networks
 #include "lwip/etharp.h"   // ARP table for IP→MAC→RSSI mapping
@@ -353,10 +350,6 @@ Preferences prefs;
 WebServer   localHttp(80);
 DNSServer   dns;
 
-// Survives deep sleep but resets on power-on.  Set before recovery sleep;
-// cleared on the subsequent wake so BLE inits with clean RF state.
-RTC_DATA_ATTR static uint8_t bleRecoveryPending = 0;
-
 String wifiSSID, wifiPass, deviceId, deviceJWT, apiBase, institutionCode;
 String displayName = "";     // admin-set device name, synced via heartbeat
 int8_t rssiThreshold = -70;  // dBm — students weaker than this are rejected
@@ -393,17 +386,12 @@ static bool     reMarkActive    = false;
 static uint32_t reMarkOpenedAt  = 0;
 static const uint32_t REMARK_WINDOW_SECS = 300; // 5-minute re-mark window
 
-// BLE beacon state
-static BLEAdvertising *bleAdv  = nullptr;
-static uint32_t        bleSlot = UINT32_MAX;   // slot currently on-air
-
-
 // Async pairing (avoids iOS captive-portal dropping the fetch before we respond)
 bool     pairPending     = false;
 String   pairPendingInst = "";
 String   pairPendingCode = "";
 
-// ── Live presence tracking (BPM — BLE Presence Monitoring) ───────────────────
+// ── Live presence tracking ────────────────────────────────────────────────────
 // Populated by POST /student/heartbeat from the Flutter app.
 // Stale entries (no heartbeat for >2 min) are pruned on each /students request.
 struct PresenceEntry { char userId[64]; uint32_t lastMs; };
@@ -642,72 +630,6 @@ static String deriveCode(const String& seed, uint32_t unixSec) {
                ((uint32_t)digest[2] <<  8) |  (uint32_t)digest[3];
   char buf[8]; snprintf(buf, sizeof(buf), "%06lu", (unsigned long)(n % 1000000UL));
   return String(buf);
-}
-
-// ── BLE BEACON ──────────────────────────────────────────────────────────────
-// Broadcasts a 30-second slot-bound HMAC token so student apps can verify
-// physical proximity. Payload (manufacturer data, 16 bytes):
-//   [0-1] company ID 0xFFFF (unregistered/test)
-//   [2-3] magic 'K' 'D'
-//   [4-7] slot (uint32, little-endian)  slot = floor(unixSeconds / 30)
-//   [8-15] HMAC-SHA256(sessionSeed, "ble:<slot>") first 8 bytes
-// Backend re-derives the HMAC using session.esp32Seed and rejects stale slots.
-
-static void initBle() {
-  // Called only on clean power-on (setup() guards the call site).
-  // A 200 ms yield lets WiFi's background tasks settle before NimBLE registers
-  // its HCI callbacks, eliminating an HCI init race on IDF 5.x.
-  delay(200);
-  BLEDevice::init(("Dikly-" + macSuffix()).c_str());
-  bleAdv = BLEDevice::getAdvertising();
-  if (!bleAdv) { LOG("BLE init: advertising handle null — BLE disabled"); return; }
-  LOG("BLE init OK");
-}
-
-static void bleUpdatePayload() {
-  if (!bleAdv || sessionId.isEmpty() || sessionSeed.isEmpty() || !timeSynced) return;
-
-  uint32_t slot = (uint32_t)(time(nullptr) / 30);
-  if (slot == bleSlot) return;   // slot unchanged — nothing to do
-  bleSlot = slot;
-
-  char slotMsg[20];
-  snprintf(slotMsg, sizeof(slotMsg), "ble:%lu", (unsigned long)slot);
-  uint8_t hmacOut[32];
-  hmacSha256((const uint8_t*)sessionSeed.c_str(), sessionSeed.length(),
-             (const uint8_t*)slotMsg, strlen(slotMsg), hmacOut);
-
-  uint8_t buf[16];
-  buf[0] = 0xFF; buf[1] = 0xFF;          // company ID (unregistered)
-  buf[2] = 0x4B; buf[3] = 0x44;          // magic 'K' 'D'
-  buf[4] = slot        & 0xFF;
-  buf[5] = (slot >> 8) & 0xFF;
-  buf[6] = (slot >>16) & 0xFF;
-  buf[7] = (slot >>24) & 0xFF;
-  memcpy(buf + 8, hmacOut, 8);
-
-  // Build Arduino String byte-by-byte so null bytes in the slot field are preserved
-  String mfg;
-  mfg.reserve(sizeof(buf));
-  for (size_t i = 0; i < sizeof(buf); i++) mfg += (char)buf[i];
-
-  bleAdv->stop();
-  BLEAdvertisementData adv;
-  adv.setFlags(0x06);                    // LE General Discoverable, no BR/EDR
-  adv.setManufacturerData(mfg);
-  bleAdv->setAdvertisementData(adv);
-  bleAdv->setMinInterval(320);           // ~200 ms  (units: 0.625 ms)
-  bleAdv->setMaxInterval(480);           // ~300 ms
-  bleAdv->start();
-  LOG("BLE slot=" + String(slot));
-}
-
-static void bleStop() {
-  if (bleAdv && bleSlot != UINT32_MAX) {
-    bleAdv->stop();
-    bleSlot = UINT32_MAX;
-    LOG("BLE stopped");
-  }
 }
 
 // ─── Touch (FT6X36 capacitive, I2C) ──────────────────────────────────────────
@@ -3704,9 +3626,6 @@ static void registerLocalHttp() {
     }
     String indexNum      = req["indexNumber"] | "";
     String userId        = req["userId"] | "";
-    String bleSlotStr    = req["bleSlot"] | "";
-    String bleHmacStr    = req["bleHmac"] | "";
-    bool usingBle = (!bleSlotStr.isEmpty() && !bleHmacStr.isEmpty());
     if (userId.isEmpty() && indexNum.isEmpty()) {
       localHttp.send(400, "application/json",
         "{\"error\":\"Login to the Dikly app to mark attendance\"}"); return;
@@ -3742,30 +3661,6 @@ static void registerLocalHttp() {
       }
     }
 
-    // Validate via BLE token (Flutter app) or hotspot connection (captive portal).
-    // Being connected to the device AP is proof of physical presence — no code needed.
-    if (usingBle) {
-      uint32_t bSlot   = (uint32_t)strtoul(bleSlotStr.c_str(), nullptr, 10);
-      uint32_t curSlot = (uint32_t)(now / 30);
-      bool valid = false;
-      if (bSlot == curSlot || bSlot == curSlot - 1) {
-        char msg[32];
-        snprintf(msg, sizeof(msg), "ble:%lu", (unsigned long)bSlot);
-        uint8_t expected[32];
-        hmacSha256((const uint8_t*)sessionSeed.c_str(), sessionSeed.length(),
-                   (const uint8_t*)msg, strlen(msg), expected);
-        char expectedHex[17];
-        for (int i = 0; i < 8; i++) sprintf(expectedHex + i * 2, "%02x", expected[i]);
-        expectedHex[16] = '\0';
-        bleHmacStr.toLowerCase();
-        valid = (bleHmacStr == String(expectedHex));
-      }
-      if (!valid) {
-        localHttp.send(403, "application/json",
-          "{\"error\":\"Invalid BLE token. Move closer to the classroom device.\"}"); return;
-      }
-    }
-    // Hotspot-only path (captive portal): no BLE, no code — connection to AP is the proof.
     // ── Re-mark path — end-of-class presence confirmation ────────────────────
     bool isRemark = req["remark"] | false;
     if (isRemark || reMarkActive) {
@@ -3801,7 +3696,7 @@ static void registerLocalHttp() {
         "{\"ok\":true,\"confirmed\":true,\"message\":\"Presence confirmed! You can now disconnect.\"}");
       return;
     }
-    // Hotspot-only path (captive portal): no BLE, no code — connection to AP is the proof.
+    // Hotspot path (captive portal): connection to the device AP is proof of proximity.
     // ── Duplicate guard — check both indexNumber AND userId to prevent double-marking ──
     if (dedupSession != sessionId) dedupClear(sessionId);
     if ((indexNum.length() && dedupCheck(indexNum.c_str())) ||
@@ -3967,7 +3862,7 @@ static void registerLocalHttp() {
     localHttp.send(200, "application/json", "{\"ok\":true}");
   });
 
-  // /student/left — Flutter app calls this when BLE signal is lost or app closes.
+  // /student/left — Flutter app calls this when the student leaves or the app closes.
   localHttp.on("/student/left", HTTP_POST, []() {
     localHttp.sendHeader("Access-Control-Allow-Origin", "*");
     JsonDocument req;
@@ -4204,7 +4099,6 @@ static void registerLocalHttp() {
         sf.print(sl); sf.close();
       }
     }
-    bleUpdatePayload();
     JsonDocument resp;
     resp["ok"] = true; resp["sessionId"] = sessionId;
     String s; serializeJson(resp, s);
@@ -4220,7 +4114,6 @@ static void registerLocalHttp() {
     LOG("Session stopped: " + sessionId);
     sessionId = ""; sessionSeed = "";     sessionTitle = ""; sessionCourse = ""; sessionLecturer = "";
     studentsMarked = 0; reMarkActive = false;
-    bleStop();
     presenceClear();
     localHttp.sendHeader("Access-Control-Allow-Origin", "*");
     localHttp.send(200, "application/json", "{\"ok\":true}");
@@ -4629,7 +4522,6 @@ static void handlePairedTap(uint16_t tx, uint16_t ty) {
       sessionId = ""; sessionSeed = "";       sessionTitle = ""; sessionCourse = ""; sessionLecturer = "";
       studentsMarked = 0; sessionTotalEnrolled = 0; reMarkActive = false;
       sessionLocallyStarted = false; clearLocalSession();
-      bleStop();
       if (monPhase == MON_CHECKIN_OPEN || monPhase == MON_MONITORING) {
         monStopSniffer();
         monScanPresence();
@@ -4731,9 +4623,8 @@ void setup() {
   usedMacs = (uint8_t (*)[6])heap_caps_calloc(MON_MAX_STUDENTS, 6, MALLOC_CAP_SPIRAM);
   if (!usedMacs) usedMacs = (uint8_t (*)[6])calloc(MON_MAX_STUDENTS, 6);
 
-  // Display + sprite BEFORE BLE/WiFi so the 150 KB sprite buffer is allocated
-  // from unfragmented PSRAM. BLE grabs large contiguous chunks; if it runs first
-  // createSprite() can fail even though total free PSRAM is sufficient.
+  // Display + sprite BEFORE WiFi so the 150 KB sprite buffer is allocated
+  // from unfragmented PSRAM.
   display.init();
   display.setBrightness(255);  // LovyanGFX PWM resets BL pin after init — force full brightness
   display.setRotation(0);  // 0 = portrait
@@ -4764,9 +4655,6 @@ void setup() {
   // Not yet paired — go to captive portal for setup
   if (deviceJWT.isEmpty()) {
     LOG("Entering setup AP mode");
-    LOG("DMA heap free:    " + String(heap_caps_get_free_size(MALLOC_CAP_DMA | MALLOC_CAP_INTERNAL)));
-    LOG("DMA largest block:" + String(heap_caps_get_largest_free_block(MALLOC_CAP_DMA | MALLOC_CAP_INTERNAL)));
-    esp_bt_controller_mem_release(ESP_BT_MODE_BLE);
     startApPortal();
     return;
   }
@@ -4774,44 +4662,6 @@ void setup() {
   // ── Paired operation — device is always the AP ────────────────────────────
   // Students connect directly to the device hotspot. No school WiFi needed for
   // attendance. School WiFi (if configured) is used only for background sync.
-
-  // Dirty RF state after any rst:0xc (panic/watchdog/soft-reset) causes
-  // BLEDevice::init() to null-deref and crash again (infinite loop).
-  // Fix: on any non-clean reset, store a flag in RTC memory and enter deep
-  // sleep for 100 ms.  Deep sleep fully resets the RF hardware.  On wake
-  // (ESP_RST_DEEPSLEEP) we clear the flag and proceed with a full BLE init.
-  // This gives BLE on every boot — not just power-on — without the crash loop.
-  esp_reset_reason_t rstReason = esp_reset_reason();
-
-  if (bleRecoveryPending) {
-    // Woke from recovery deep-sleep — RF hardware is clean.
-    bleRecoveryPending = 0;
-    LOG("Recovery wake after crash/reset — BLE OK");
-  } else if (rstReason == ESP_RST_POWERON || rstReason == ESP_RST_DEEPSLEEP) {
-    LOG("Reset reason: " + String((int)rstReason) + " (clean boot, BLE OK)");
-  } else {
-    // Soft reset / crash / watchdog — RF state dirty.  Sleep 100 ms to reset RF.
-    LOG("Reset reason: " + String((int)rstReason) + " (dirty RF, recovery sleep 100 ms...)");
-    bleRecoveryPending = 1;
-    esp_sleep_enable_timer_wakeup(100000ULL);  // 100 ms
-    esp_deep_sleep_start();
-    // Never returns — device wakes with clean RF, bleRecoveryPending=1
-  }
-
-  LOG("DMA heap free:    " + String(heap_caps_get_free_size(MALLOC_CAP_DMA | MALLOC_CAP_INTERNAL)));
-  LOG("DMA largest block:" + String(heap_caps_get_largest_free_block(MALLOC_CAP_DMA | MALLOC_CAP_INTERNAL)));
-
-  // WiFi init (reduced DMA) first, then BLE — matches original working firmware.
-  // WiFi claims ~10 KB DMA; BLE then gets the remaining large contiguous block.
-  {
-    wifi_init_config_t wcfg = WIFI_INIT_CONFIG_DEFAULT();
-    wcfg.static_rx_buf_num  = 4;
-    wcfg.static_tx_buf_num  = 0;
-    wcfg.tx_buf_type        = 1;  // WIFI_DYNAMIC_TX_BUFFER
-    wcfg.dynamic_tx_buf_num = 32;
-    esp_wifi_init(&wcfg);
-  }
-  initBle();
 
   String apName = "Dikly-" + macSuffix();
   WiFi.mode(WIFI_AP);
@@ -5093,9 +4943,8 @@ void loop() {
         sessionId = ""; sessionSeed = "";         sessionTitle = ""; sessionCourse = ""; sessionLecturer = "";
         studentsMarked = 0; sessionTotalEnrolled = 0; reMarkActive = false;
         sessionLocallyStarted = false; clearLocalSession();
-        bleStop(); curScreen = SUMMARY; drawSummary(); return;
+        curScreen = SUMMARY; drawSummary(); return;
       }
-      bleUpdatePayload();
       drawSession(code, (uint32_t)sessionSecsLeft, sessionDuration);
       break;
     }
@@ -5106,7 +4955,6 @@ void loop() {
     case CHECKIN_MONITOR:  drawCheckinMonitor();    break;
     case PRESENCE_MONITOR: drawPresenceMonitor();   break;
     default:
-      bleStop();
       curScreen = READY;
       drawReady();
       break;
