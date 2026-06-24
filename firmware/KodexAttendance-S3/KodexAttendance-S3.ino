@@ -231,6 +231,7 @@ public:
 #include <BLEDevice.h>
 #include <BLEAdvertising.h>
 #include <esp_bt.h>        // esp_bt_controller_mem_release
+#include <esp_phy_init.h>  // esp_phy_erase_cal_data_in_nvs
 #include <esp_wifi.h>      // esp_wifi_stop / esp_wifi_deinit for hard reset
 #include <ESPmDNS.h>       // dikly.local hostname on both AP and STA networks
 #include "lwip/etharp.h"   // ARP table for IP→MAC→RSSI mapping
