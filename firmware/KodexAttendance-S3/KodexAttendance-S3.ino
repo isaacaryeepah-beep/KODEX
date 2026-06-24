@@ -260,7 +260,7 @@ static const uint8_t SD_CLK = 38, SD_CMD = 40, SD_D0 = 39;
 static const uint8_t SD_D1  = 41, SD_D2  = 48, SD_D3 = 47;
 
 // ─── App Config ──────────────────────────────────────────────────────────────
-static const char*   FIRMWARE_VERSION     = "s3-2.1.2";
+static const char*   FIRMWARE_VERSION     = "s3-2.1.3";
 static const char*   DEFAULT_API_BASE     = "https://dikly.sbs";
 
 static const uint32_t HEARTBEAT_MS        = 5000;
@@ -2946,6 +2946,27 @@ static void drawPresenceMonitor() {
   spr.pushSprite(0, 0);
 }
 
+// ─── Chunked PROGMEM HTML sender ─────────────────────────────────────────────
+// send_P() buffers the entire string before transmitting. For large pages (>5 KB)
+// this overflows the lwIP TCP TX window and causes ERR_CONNECTION_TIMED_OUT on
+// iOS / Android CNA WebSheets. Chunked transfer lets the TCP stack send each
+// 256-byte piece independently — the browser renders as chunks arrive.
+static void sendHtmlChunked(const char* pgm) {
+  localHttp.sendHeader("Cache-Control", "no-store, no-cache, must-revalidate");
+  localHttp.sendHeader("Connection",    "close");
+  localHttp.setContentLength(CONTENT_LENGTH_UNKNOWN);
+  localHttp.send(200, "text/html", "");
+  char buf[256];
+  size_t rem = strlen_P(pgm);
+  while (rem > 0) {
+    size_t n = (rem > sizeof(buf)) ? sizeof(buf) : rem;
+    memcpy_P(buf, pgm, n);
+    localHttp.sendContent(buf, n);
+    pgm += n; rem -= n;
+  }
+  localHttp.sendContent(""); // terminate Transfer-Encoding: chunked
+}
+
 // ─── Captive-portal AP startup ────────────────────────────────────────────────
 static void startApPortal() {
   WiFi.mode(WIFI_AP);
@@ -2961,23 +2982,38 @@ static void startApPortal() {
 
   dns.start(53, "*", gw);           // wildcard: every DNS query → our IP
 
-  // Root URL serves the setup page directly
-  auto servePage    = []() { localHttp.send_P(200, "text/html", PAIR_HTML); };
-  // Captive-portal probe URLs get a 302 → / so the OS popup appears automatically.
-  // The redirect terminates at / which serves HTML (no loop).
-  auto probeRedir   = []() {
+  // Root URL: deliver setup page via chunked transfer (avoids lwIP TX-buffer
+  // overflow that caused ERR_CONNECTION_TIMED_OUT on iOS/Android for the
+  // previous send_P() single-shot delivery of the ~8 KB PAIR_HTML).
+  auto servePage  = []() { sendHtmlChunked(PAIR_HTML); };
+
+  // Standard 302 probe redirect for all OS captive-portal detectors.
+  auto probeRedir = []() {
     localHttp.sendHeader("Location", "http://192.168.4.1/", true);
     localHttp.send(302, "text/plain", "");
   };
-  localHttp.on("/",                        HTTP_GET, servePage);
-  localHttp.on("/generate_204",            HTTP_GET, probeRedir);   // Android
-  localHttp.on("/hotspot-detect.html",     HTTP_GET, probeRedir);   // iOS
-  localHttp.on("/connecttest.txt",         HTTP_GET, probeRedir);   // Windows
-  localHttp.on("/ncsi.txt",               HTTP_GET, probeRedir);   // Windows NCSI
-  localHttp.on("/success.txt",             HTTP_GET, probeRedir);   // Firefox
-  localHttp.on("/redirect",               HTTP_GET, probeRedir);   // Firefox
-  localHttp.on("/canonical.html",          HTTP_GET, probeRedir);   // Google
-  localHttp.on("/fwlink/",               HTTP_GET, probeRedir);   // Microsoft
+
+  localHttp.on("/",                    HTTP_GET, servePage);
+  localHttp.on("/generate_204",        HTTP_GET, probeRedir);  // Android
+  localHttp.on("/connecttest.txt",     HTTP_GET, probeRedir);  // Windows
+  localHttp.on("/ncsi.txt",           HTTP_GET, probeRedir);  // Windows NCSI
+  localHttp.on("/success.txt",         HTTP_GET, probeRedir);  // Firefox
+  localHttp.on("/redirect",           HTTP_GET, probeRedir);  // Firefox
+  localHttp.on("/canonical.html",      HTTP_GET, probeRedir);  // Google
+  localHttp.on("/fwlink/",           HTTP_GET, probeRedir);  // Microsoft
+
+  // iOS CNA (/hotspot-detect.html): serve a tiny 200 OK page instead of 302.
+  // A 302 from the probe URL is sometimes ignored by the iOS CNA WebSheet;
+  // a 200 with non-success content always triggers the WebSheet, and the
+  // meta-refresh navigates it to the full setup form in a second micro-request.
+  localHttp.on("/hotspot-detect.html", HTTP_GET, []() {
+    localHttp.sendHeader("Cache-Control", "no-store");
+    localHttp.send(200, "text/html",
+      "<!DOCTYPE html><html><head>"
+      "<meta http-equiv='refresh' content='0;url=http://192.168.4.1/'>"
+      "</head><body><a href='http://192.168.4.1/'>Open Dikly Setup</a></body></html>");
+  });
+
   localHttp.onNotFound(servePage);  // unknown paths → page directly (no redirect loop)
 
   localHttp.on("/wifi/scan", HTTP_GET, []() {
