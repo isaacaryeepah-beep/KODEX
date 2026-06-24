@@ -1927,6 +1927,8 @@ document.getElementById('f').onsubmit=async(e)=>{
 static void startWifiReconfigPortal() {
   WiFi.mode(WIFI_AP);
   delay(100);
+  esp_wifi_set_ps(WIFI_PS_NONE);
+  WiFi.softAPConfig(IPAddress(192,168,4,1), IPAddress(192,168,4,1), IPAddress(255,255,255,0));
   String ap = "Dikly-" + macSuffix();
   WiFi.softAP(ap.c_str());
   IPAddress gw;
@@ -2984,6 +2986,12 @@ static void drawPresenceMonitor() {
 static void startApPortal() {
   WiFi.mode(WIFI_AP);
   delay(100);
+  // Disable power-saving so the AP never sleeps through DHCP discovery packets.
+  // Without this, clients can take 10–30 s to get a DHCP lease (or fail entirely).
+  esp_wifi_set_ps(WIFI_PS_NONE);
+  // Explicitly set IP/gateway/subnet so the DHCP server hands the right
+  // default-gateway (192.168.4.1) to connecting clients.
+  WiFi.softAPConfig(IPAddress(192,168,4,1), IPAddress(192,168,4,1), IPAddress(255,255,255,0));
   String ap = "Dikly-" + macSuffix();
   WiFi.softAP(ap.c_str());
   // Wait until the AP has a real IP (0.0.0.0 means not ready yet)
