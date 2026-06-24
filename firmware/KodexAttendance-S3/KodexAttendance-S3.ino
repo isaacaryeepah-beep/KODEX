@@ -262,6 +262,7 @@ static const uint8_t SD_D1  = 41, SD_D2  = 48, SD_D3 = 47;
 // ─── App Config ──────────────────────────────────────────────────────────────
 static const char*   FIRMWARE_VERSION     = "s3-2.1.0";
 static const char*   DEFAULT_API_BASE     = "https://dikly.sbs";
+static const char*   SETUP_AP_PASS        = "01234000"; // WPA2 min 8 chars; shown on screen
 static const uint32_t HEARTBEAT_MS        = 5000;
 static const uint32_t WIFI_TIMEOUT_MS     = 30000;
 static const uint32_t WINDOW_SECONDS      = 120;  // code rotation period (2 minutes)
@@ -1445,47 +1446,57 @@ static void drawSetup(const String& apName) {
   const int32_t CX = 10, CW = SW - 20, CG = 6;
   int32_t cy = 70;
 
-  // Step card helper lambda
-  auto stepCard = [&](uint8_t num,
-                      const char* hint, const lgfx::IFont* vfont,
-                      const char* val1, const char* val2,
-                      const char* note, int32_t ch) {
+  // ── Step 1: Wi-Fi name + password badge ──────────────────────────────────────
+  {
+    const int32_t ch = 68, tx = CX + 36;
     spr.fillRoundRect(CX, cy, CW, ch, 6, COL_CARD);
     spr.drawRoundRect(CX, cy, CW, ch, 6, COL_BORDER);
+    spr.fillCircle(CX + 18, cy + ch / 2, 10, COL_PRIMARY);
+    spr.setFont(F_TINY); spr.setTextColor(COL_BG, COL_PRIMARY);
+    spr.setCursor(CX + 15, cy + ch / 2 - 4); spr.print("1");
+    spr.setFont(F_TINY); spr.setTextColor(COL_MUTED, COL_CARD);
+    spr.setCursor(tx, cy + 7); spr.print("Connect to Wi-Fi:");
+    spr.setFont(F_SMALL); spr.setTextColor(COL_CYAN, COL_CARD);
+    spr.setCursor(tx, cy + 18); spr.print(apName.c_str());
+    // Password row: label + amber badge
+    spr.setFont(F_TINY);
+    const int32_t pw_lw = (int32_t)spr.textWidth("Password:");
+    spr.setTextColor(COL_MUTED, COL_CARD);
+    spr.setCursor(tx, cy + 41); spr.print("Password:");
+    const int32_t bpx = tx + pw_lw + 5, bpy = cy + 37;
+    const int32_t bpw = (int32_t)spr.textWidth(SETUP_AP_PASS) + 12;
+    spr.fillRoundRect(bpx, bpy, bpw, 16, 4, COL_WARNING);
+    spr.setTextColor(COL_BG, COL_WARNING);
+    spr.setCursor(bpx + 6, bpy + 3); spr.print(SETUP_AP_PASS);
+    cy += ch + CG;
+  }
 
-    // Step number circle
+  // Generic step card helper for steps 2 & 3
+  auto stepCard = [&](uint8_t num, const char* hint, const lgfx::IFont* vfont,
+                      const char* val1, const char* val2, int32_t ch) {
+    spr.fillRoundRect(CX, cy, CW, ch, 6, COL_CARD);
+    spr.drawRoundRect(CX, cy, CW, ch, 6, COL_BORDER);
     const int32_t bx = CX + 18, by = cy + ch / 2;
     spr.fillCircle(bx, by, 10, COL_PRIMARY);
     spr.setFont(F_TINY); spr.setTextColor(COL_BG, COL_PRIMARY);
     char ns[2] = {(char)('0' + num), '\0'};
-    spr.setCursor(bx - (int32_t)spr.textWidth(ns) / 2, by - 4);
-    spr.print(ns);
-
-    // Text block
+    spr.setCursor(bx - (int32_t)spr.textWidth(ns) / 2, by - 4); spr.print(ns);
     const int32_t tx = CX + 36;
     spr.setFont(F_TINY); spr.setTextColor(COL_MUTED, COL_CARD);
     spr.setCursor(tx, cy + 7); spr.print(hint);
     spr.setFont(vfont); spr.setTextColor(COL_CYAN, COL_CARD);
     spr.setCursor(tx, cy + 18); spr.print(val1);
     if (val2) {
-      spr.setFont(F_TINY); spr.setTextColor(COL_CYAN, COL_CARD);
-      spr.setCursor(tx, cy + 30); spr.print(val2);
-    }
-    if (note) {
       spr.setFont(F_TINY); spr.setTextColor(COL_MUTED, COL_CARD);
-      spr.setCursor(tx, val2 ? cy + 42 : cy + 30); spr.print(note);
+      spr.setCursor(tx, cy + 30); spr.print(val2);
     }
     cy += ch + CG;
   };
 
-  stepCard(1, "Connect phone to Wi-Fi:", F_SMALL, apName.c_str(), nullptr, nullptr, 42);
-
-  stepCard(2, "Open in browser:", F_SMALL,
-           "dikly.local", "or  http://10.0.0.1", nullptr, 52);
+  stepCard(2, "Open in browser:", F_SMALL, "dikly.local", "or  http://10.0.0.1", 48);
 
   stepCard(3, "Enter your credentials:", F_TINY,
-           "Institution code + pairing code", "then your school Wi-Fi password",
-           nullptr, 52);
+           "Institution code + pairing code", "then school Wi-Fi password", 50);
 
   // ── Factory reset strip ───────────────────────────────────────────────────────
   cy += 4;
@@ -1865,7 +1876,7 @@ static void startWifiReconfigPortal() {
   esp_wifi_set_ps(WIFI_PS_NONE);
   WiFi.softAPConfig(IPAddress(10,0,0,1), IPAddress(10,0,0,1), IPAddress(255,255,255,0));
   String ap = "Dikly-" + macSuffix();
-  WiFi.softAP(ap.c_str());
+  WiFi.softAP(ap.c_str(), SETUP_AP_PASS);
   IPAddress gw;
   uint32_t t0 = millis();
   do { delay(100); gw = WiFi.softAPIP(); } while (gw == IPAddress(0,0,0,0) && millis()-t0 < 5000);
@@ -2917,14 +2928,10 @@ static void drawPresenceMonitor() {
 static void startApPortal() {
   WiFi.mode(WIFI_AP);
   delay(100);
-  // Disable power-saving so the AP never sleeps through DHCP discovery packets.
-  // Without this, clients can take 10–30 s to get a DHCP lease (or fail entirely).
   esp_wifi_set_ps(WIFI_PS_NONE);
-  // Explicitly set IP/gateway/subnet so the DHCP server hands the right
-  // default-gateway (10.0.0.1) to connecting clients.
   WiFi.softAPConfig(IPAddress(10,0,0,1), IPAddress(10,0,0,1), IPAddress(255,255,255,0));
   String ap = "Dikly-" + macSuffix();
-  WiFi.softAP(ap.c_str());
+  WiFi.softAP(ap.c_str(), SETUP_AP_PASS);
   // Wait until the AP has a real IP (0.0.0.0 means not ready yet)
   IPAddress gw;
   uint32_t t0 = millis();
