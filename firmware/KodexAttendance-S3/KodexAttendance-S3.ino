@@ -353,6 +353,10 @@ Preferences prefs;
 WebServer   localHttp(80);
 DNSServer   dns;
 
+// Survives deep sleep but resets on power-on.  Set before recovery sleep;
+// cleared on the subsequent wake so BLE inits with clean RF state.
+RTC_DATA_ATTR static uint8_t bleRecoveryPending = 0;
+
 String wifiSSID, wifiPass, deviceId, deviceJWT, apiBase, institutionCode;
 String displayName = "";     // admin-set device name, synced via heartbeat
 int8_t rssiThreshold = -70;  // dBm — students weaker than this are rejected
@@ -4771,31 +4775,43 @@ void setup() {
   // Students connect directly to the device hotspot. No school WiFi needed for
   // attendance. School WiFi (if configured) is used only for background sync.
 
-  // Detect reset reason before touching RF hardware.
-  // After a panic/watchdog/soft reset the BLE RF/EMI block is dirty and
-  // BLEDevice::init() will null-deref and crash again (infinite loop).
-  // In IDF 5.x a panic (rst:0xc) is reported as ESP_RST_SW, so we cannot
-  // check for specific crash reasons — ESP_RST_POWERON is the only safe sentinel.
+  // Dirty RF state after any rst:0xc (panic/watchdog/soft-reset) causes
+  // BLEDevice::init() to null-deref and crash again (infinite loop).
+  // Fix: on any non-clean reset, store a flag in RTC memory and enter deep
+  // sleep for 100 ms.  Deep sleep fully resets the RF hardware.  On wake
+  // (ESP_RST_DEEPSLEEP) we clear the flag and proceed with a full BLE init.
+  // This gives BLE on every boot — not just power-on — without the crash loop.
   esp_reset_reason_t rstReason = esp_reset_reason();
-  bool cleanBoot = (rstReason == ESP_RST_POWERON);
-  LOG("Reset reason: " + String((int)rstReason) + (cleanBoot ? " (power-on, BLE OK)" : " (soft/crash, BLE skipped)"));
+
+  if (bleRecoveryPending) {
+    // Woke from recovery deep-sleep — RF hardware is clean.
+    bleRecoveryPending = 0;
+    LOG("Recovery wake after crash/reset — BLE OK");
+  } else if (rstReason == ESP_RST_POWERON || rstReason == ESP_RST_DEEPSLEEP) {
+    LOG("Reset reason: " + String((int)rstReason) + " (clean boot, BLE OK)");
+  } else {
+    // Soft reset / crash / watchdog — RF state dirty.  Sleep 100 ms to reset RF.
+    LOG("Reset reason: " + String((int)rstReason) + " (dirty RF, recovery sleep 100 ms...)");
+    bleRecoveryPending = 1;
+    esp_sleep_enable_timer_wakeup(100000ULL);  // 100 ms
+    esp_deep_sleep_start();
+    // Never returns — device wakes with clean RF, bleRecoveryPending=1
+  }
 
   LOG("DMA heap free:    " + String(heap_caps_get_free_size(MALLOC_CAP_DMA | MALLOC_CAP_INTERNAL)));
   LOG("DMA largest block:" + String(heap_caps_get_largest_free_block(MALLOC_CAP_DMA | MALLOC_CAP_INTERNAL)));
 
-  // On clean power-on: explicit WiFi init (reduced DMA buffers) first, BLE second.
+  // WiFi init (reduced DMA) first, then BLE — matches original working firmware.
   // WiFi claims ~10 KB DMA; BLE then gets the remaining large contiguous block.
-  // This is the initialization order from the original working firmware.
-  // On rst:0xc we touch nothing here — WiFi.mode() below handles init from scratch.
-  if (cleanBoot) {
+  {
     wifi_init_config_t wcfg = WIFI_INIT_CONFIG_DEFAULT();
     wcfg.static_rx_buf_num  = 4;
     wcfg.static_tx_buf_num  = 0;
     wcfg.tx_buf_type        = 1;  // WIFI_DYNAMIC_TX_BUFFER
     wcfg.dynamic_tx_buf_num = 32;
     esp_wifi_init(&wcfg);
-    initBle();
   }
+  initBle();
 
   String apName = "Dikly-" + macSuffix();
   WiFi.mode(WIFI_AP);
