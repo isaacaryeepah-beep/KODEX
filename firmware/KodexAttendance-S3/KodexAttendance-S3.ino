@@ -260,7 +260,7 @@ static const uint8_t SD_CLK = 38, SD_CMD = 40, SD_D0 = 39;
 static const uint8_t SD_D1  = 41, SD_D2  = 48, SD_D3 = 47;
 
 // ─── App Config ──────────────────────────────────────────────────────────────
-static const char*   FIRMWARE_VERSION     = "s3-2.1.7";
+static const char*   FIRMWARE_VERSION     = "s3-2.1.8";
 static const char*   DEFAULT_API_BASE     = "https://dikly.sbs";
 
 static const uint32_t HEARTBEAT_MS        = 5000;
@@ -2610,103 +2610,112 @@ static void drawDeviceInfo() {
 }
 
 // ─── Captive-Portal Pairing HTML ─────────────────────────────────────────────
-// Kept lean (<4 KB) so it fits inside the ESP32 lwIP TCP TX window (~5.7 KB)
-// without stalling mid-transfer. ES5 only (XMLHttpRequest, no async/await,
-// no fetch, no arrow functions) for Samsung Internet compatibility.
+// Delivered via sendHtmlChunked() — no size limit. ES5 JS only (XMLHttpRequest,
+// no async/await, no fetch, no arrow functions) for Samsung Internet compat.
 static const char PAIR_HTML[] PROGMEM = R"HTML(<!doctype html>
 <html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Dikly Setup</title>
 <style>
-*{box-sizing:border-box}
-body{font-family:system-ui,sans-serif;background:#0f172a;color:#e2e8f0;margin:0;padding:20px;max-width:420px;margin:0 auto}
-h1{font-size:22px;font-weight:900;margin:8px 0 2px}
-h1 span{color:#6366f1}
-.sub{font-size:12px;color:#94a3b8;margin:0 0 18px}
-label{display:block;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:#94a3b8;margin:12px 0 4px}
-input{width:100%;padding:10px 12px;border-radius:8px;border:1px solid #334155;background:#1e293b;color:#e2e8f0;font-size:14px}
-input:focus{outline:none;border-color:#6366f1}
-.row{display:flex;gap:8px}
-.row input{flex:1}
-.sb{padding:10px 12px;border-radius:8px;border:1px solid #6366f1;background:transparent;color:#6366f1;font-size:13px;font-weight:700;cursor:pointer;white-space:nowrap}
-.sb:disabled{opacity:.4}
-.nl{margin:6px 0;border:1px solid #1e293b;border-radius:8px;overflow:hidden;max-height:180px;overflow-y:auto}
-.ni{padding:10px 12px;cursor:pointer;font-size:13px;display:flex;justify-content:space-between;border-bottom:1px solid #0f172a}
-.ni:last-child{border-bottom:0}
-.ni:hover,.ni.s{background:#1e3a5f}
-.nm{font-size:11px;color:#64748b}
-.btn{width:100%;padding:12px;border-radius:8px;border:0;background:#6366f1;color:#fff;font-weight:700;font-size:14px;margin-top:18px;cursor:pointer}
-.btn:disabled{opacity:.5}
-.ok{color:#22c55e;font-size:13px;margin-top:10px}
-.err{color:#ef4444;font-size:13px;margin-top:10px}
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{font-family:system-ui,sans-serif;background:#0f172a;color:#e2e8f0;padding:24px;max-width:440px;margin:0 auto}
+  .logo{font-size:28px;font-weight:900;color:#e2e8f0;margin:12px 0 2px}
+  .logo span{color:#6366f1}
+  .sub{font-size:13px;color:#64748b;margin-bottom:28px}
+  .card{background:#1e293b;border:1px solid #334155;border-radius:14px;padding:20px;margin-bottom:16px}
+  h3{font-size:13px;font-weight:700;text-transform:uppercase;letter-spacing:.6px;color:#6366f1;margin-bottom:14px}
+  label{display:block;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:#64748b;margin:12px 0 5px}
+  label:first-child{margin-top:0}
+  input{width:100%;padding:11px 13px;border-radius:9px;border:1.5px solid #334155;background:#0f172a;color:#e2e8f0;font-size:14px;transition:border-color .15s}
+  input:focus{outline:none;border-color:#6366f1}
+  .row{display:flex;gap:8px}
+  .row input{flex:1}
+  .scan-btn{padding:11px 14px;border-radius:9px;border:1.5px solid #6366f1;background:transparent;color:#6366f1;font-size:13px;font-weight:700;cursor:pointer;white-space:nowrap}
+  .scan-btn:disabled{opacity:.4;cursor:default}
+  .nets{margin-top:8px;border:1px solid #1e293b;border-radius:10px;overflow:hidden;max-height:180px;overflow-y:auto}
+  .net{padding:10px 14px;cursor:pointer;font-size:13px;display:flex;justify-content:space-between;border-bottom:1px solid #0f172a}
+  .net:last-child{border-bottom:0}
+  .net:hover,.net.sel{background:#1e3a5f}
+  .bars{font-size:11px;color:#64748b}
+  .submit{width:100%;padding:13px;border-radius:10px;border:0;background:#6366f1;color:#fff;font-weight:700;font-size:15px;cursor:pointer;margin-top:6px;transition:opacity .15s}
+  .submit:disabled{opacity:.5;cursor:default}
+  .ok{background:#052e16;border:1px solid #166534;color:#22c55e;padding:12px 14px;border-radius:10px;font-size:13px;margin-top:12px}
+  .err{background:#450a0a;border:1px solid #991b1b;color:#fca5a5;padding:12px 14px;border-radius:10px;font-size:13px;margin-top:12px}
 </style></head>
 <body>
-<h1>Di<span>kly</span></h1>
-<p class="sub">Attendance Device Setup</p>
-<form id="f" onsubmit="doPair(event);return false;">
-<label>Institution Code</label>
-<input id="ic" autocomplete="off" placeholder="e.g. ABCD23" style="text-transform:uppercase">
-<label>Pairing Code <span style="color:#475569;font-weight:400;text-transform:none">(from Admin Portal)</span></label>
-<input id="pc" autocomplete="off" placeholder="from admin portal" maxlength="8" style="text-transform:uppercase">
-<label>School WiFi <span style="color:#475569;font-weight:400;text-transform:none">(optional)</span></label>
-<div class="row">
-<input id="ss" autocomplete="off" placeholder="Select or type SSID">
-<button type="button" class="sb" id="sb" onclick="scan()">Scan</button>
-</div>
-<div id="nl" class="nl" style="display:none"></div>
-<label>WiFi Password</label>
-<input id="pw" type="password" autocomplete="new-password" placeholder="Leave blank if open">
-<button type="submit" class="btn" id="b">Pair Device</button>
-</form>
-<div id="msg"></div>
+  <div class="logo">Di<span>kly</span></div>
+  <p class="sub">Attendance Device Setup</p>
+  <form id="f" onsubmit="doPair(event);return false;">
+    <div class="card">
+      <h3>Institution</h3>
+      <label>Institution Code</label>
+      <input id="ic" autocomplete="off" placeholder="e.g. ABCD23" style="text-transform:uppercase">
+      <label>Pairing Code <span style="color:#334155;font-weight:400">(from Admin Portal)</span></label>
+      <input id="pc" autocomplete="off" placeholder="from admin portal" maxlength="8" style="text-transform:uppercase">
+    </div>
+    <div class="card">
+      <h3>School WiFi <span style="font-size:10px;font-weight:400;color:#475569;text-transform:none">(optional — for sync only)</span></h3>
+      <p style="font-size:11px;color:#64748b;margin-bottom:10px">Device works offline without this. Add WiFi to sync records automatically.</p>
+      <label>Network</label>
+      <div class="row">
+        <input id="ss" autocomplete="off" placeholder="Select or type SSID (optional)">
+        <button type="button" class="scan-btn" id="sb" onclick="scan()">Scan</button>
+      </div>
+      <div id="nl" class="nets" style="display:none"></div>
+      <label>Password</label>
+      <input id="pw" type="password" autocomplete="new-password" placeholder="Leave blank if open">
+    </div>
+    <button type="submit" class="submit" id="b">Pair Device</button>
+  </form>
+  <div id="msg"></div>
 <script>
 function scan(){
-var sb=document.getElementById('sb'),nl=document.getElementById('nl');
-sb.disabled=true;sb.textContent='…';nl.style.display='block';
-nl.innerHTML='<div style="padding:10px 12px;font-size:12px;color:#94a3b8">Scanning…</div>';
-var x=new XMLHttpRequest();x.open('GET','/wifi/scan');
-x.onload=function(){
-sb.disabled=false;sb.textContent='Scan';
-if(x.status!==200){nl.innerHTML='<div style="padding:10px 12px;color:#ef4444">Scan failed</div>';return;}
-var nets=JSON.parse(x.responseText);
-if(!nets.length){nl.innerHTML='<div style="padding:10px 12px;font-size:12px;color:#94a3b8">No networks found.</div>';return;}
-nets.sort(function(a,b){return(b.rssi||0)-(a.rssi||0);});
-nl.innerHTML=nets.map(function(n){
-var bars=n.rssi>-60?'▂▄▆█':n.rssi>-75?'▂▄▆':n.rssi>-85?'▂▄':'▂';
-var lock=n.open===false?'🔒 ':'';
-var s=(n.ssid||'').replace(/'/g,"\\'");
-return '<div class="ni" onclick="pick(this,\''+s+'\')"><span>'+(n.ssid||'(Hidden)')+'</span><span class="nm">'+lock+bars+'</span></div>';
-}).join('');
-};
-x.onerror=function(){sb.disabled=false;sb.textContent='Scan';nl.innerHTML='<div style="padding:10px 12px;color:#ef4444">Scan failed</div>';};
-x.send();
+  var sb=document.getElementById('sb'),nl=document.getElementById('nl');
+  sb.disabled=true;sb.textContent='…';nl.style.display='block';
+  nl.innerHTML='<div style="padding:10px 14px;font-size:12px;color:#64748b">Scanning…</div>';
+  var x=new XMLHttpRequest();x.open('GET','/wifi/scan');
+  x.onload=function(){
+    sb.disabled=false;sb.textContent='Scan';
+    if(x.status!==200){nl.innerHTML='<div style="padding:10px;color:#fca5a5">Scan failed</div>';return;}
+    var nets=JSON.parse(x.responseText);
+    if(!nets.length){nl.innerHTML='<div style="padding:10px 14px;font-size:12px;color:#64748b">No networks found.</div>';return;}
+    nets.sort(function(a,b){return(b.rssi||0)-(a.rssi||0);});
+    nl.innerHTML=nets.map(function(n){
+      var bars=n.rssi>-60?'&#x2582;&#x2584;&#x2586;&#x2588;':n.rssi>-75?'&#x2582;&#x2584;&#x2586;':n.rssi>-85?'&#x2582;&#x2584;':'&#x2582;';
+      var lock=n.open===false?'&#x1F512; ':'';
+      var s=(n.ssid||'').replace(/\\/g,'\\\\').replace(/'/g,"\\'");
+      return '<div class="net" onclick="pick(this,\''+s+'\')"><span>'+(n.ssid||'(Hidden)')+'</span><span class="bars">'+lock+bars+'</span></div>';
+    }).join('');
+  };
+  x.onerror=function(){sb.disabled=false;sb.textContent='Scan';nl.innerHTML='<div style="padding:10px;color:#fca5a5">Scan failed</div>';};
+  x.send();
 }
 function pick(el,ssid){
-document.getElementById('ss').value=ssid;
-var ns=document.querySelectorAll('.ni');
-for(var i=0;i<ns.length;i++)ns[i].classList.remove('s');
-el.classList.add('s');
+  document.getElementById('ss').value=ssid;
+  var ns=document.querySelectorAll('.net');
+  for(var i=0;i<ns.length;i++)ns[i].classList.remove('sel');
+  el.classList.add('sel');
 }
 function doPair(e){
-if(e&&e.preventDefault)e.preventDefault();
-var ic=(document.getElementById('ic').value||'').toUpperCase().trim();
-var pc=(document.getElementById('pc').value||'').toUpperCase().trim();
-var ss=(document.getElementById('ss').value||'').trim();
-var pw=(document.getElementById('pw').value||'');
-if(!ic||ic.length<4){msg('err','Enter a valid institution code.');return false;}
-if(!pc||pc.length<4){msg('err','Enter a valid pairing code.');return false;}
-var b=document.getElementById('b');
-b.disabled=true;msg('','Pairing… this may take 30 s.');
-var x=new XMLHttpRequest();x.open('POST','/pair');
-x.setRequestHeader('Content-Type','application/json');
-x.timeout=40000;
-x.onload=function(){
-if(x.status===200){msg('ok','✓ Paired! Device will reboot in ~30 s. You can close this.');}
-else{var t='Pairing failed';try{t=JSON.parse(x.responseText).error||t;}catch(ex){}msg('err','✗ '+t);b.disabled=false;}
-};
-x.onerror=function(){msg('err','Connection error — stay on Dikly WiFi and retry.');b.disabled=false;};
-x.ontimeout=function(){msg('err','Timed out — check device and retry.');b.disabled=false;};
-x.send(JSON.stringify({institutionCode:ic,pairingCode:pc,ssid:ss,password:pw,apiBase:'https://dikly.sbs'}));
-return false;
+  if(e&&e.preventDefault)e.preventDefault();
+  var ic=(document.getElementById('ic').value||'').toUpperCase().trim();
+  var pc=(document.getElementById('pc').value||'').toUpperCase().trim();
+  var ss=(document.getElementById('ss').value||'').trim();
+  var pw=(document.getElementById('pw').value||'');
+  if(!ic||ic.length<4){msg('err','Enter a valid institution code.');return false;}
+  if(!pc||pc.length<4){msg('err','Enter a valid pairing code.');return false;}
+  var b=document.getElementById('b');
+  b.disabled=true;msg('','Pairing — this may take 30 s…');
+  var x=new XMLHttpRequest();x.open('POST','/pair');
+  x.setRequestHeader('Content-Type','application/json');
+  x.timeout=40000;
+  x.onload=function(){
+    if(x.status===200){msg('ok','✓ Paired! Device will reboot in ~30 s. You can close this.');}
+    else{var t='Pairing failed';try{t=JSON.parse(x.responseText).error||t;}catch(ex){}msg('err','✗ '+t);b.disabled=false;}
+  };
+  x.onerror=function(){msg('err','Connection error — stay on Dikly WiFi and retry.');b.disabled=false;};
+  x.ontimeout=function(){msg('err','Timed out — check device and retry.');b.disabled=false;};
+  x.send(JSON.stringify({institutionCode:ic,pairingCode:pc,ssid:ss,password:pw,apiBase:'https://dikly.sbs'}));
+  return false;
 }
 function msg(cls,txt){var m=document.getElementById('msg');m.className=cls;m.textContent=txt;}
 </script></body></html>)HTML";
