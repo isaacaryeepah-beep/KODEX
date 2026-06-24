@@ -63,6 +63,9 @@ const deviceSchema = new mongoose.Schema({
   registeredAt: { type: Date, default: Date.now },
   token:       { type: String, default: null },
 
+  // BLE proximity rejection threshold in dBm (firmware ignores marks below this RSSI)
+  rssiThreshold: { type: Number, default: -70 },
+
   // Hardware status reported by firmware in heartbeats
   rtcValid:           { type: Boolean, default: null },
   sdOK:               { type: Boolean, default: null },

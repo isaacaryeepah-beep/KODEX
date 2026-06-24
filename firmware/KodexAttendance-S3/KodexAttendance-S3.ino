@@ -393,15 +393,6 @@ static const uint32_t REMARK_WINDOW_SECS = 300; // 5-minute re-mark window
 static BLEAdvertising *bleAdv  = nullptr;
 static uint32_t        bleSlot = UINT32_MAX;   // slot currently on-air
 
-// Session Code — 4-digit code shown on device screen; required to start an offline session.
-// Regenerated each time the device boots or a session ends. Prevents students accidentally
-// starting sessions by opening the portal before the lecturer does.
-static char  lecturerPin[5] = "0000";
-
-static void regenerateLecturerPin() {
-  uint16_t pin = (uint16_t)(esp_random() % 9000) + 1000;  // 1000..9999
-  snprintf(lecturerPin, sizeof(lecturerPin), "%04u", pin);
-}
 
 // Async pairing (avoids iOS captive-portal dropping the fetch before we respond)
 bool     pairPending     = false;
@@ -1230,11 +1221,21 @@ static void sendHeartbeat() {
       prefs.end();
     }
   }
+  // Sync admin-configured RSSI threshold; persist to NVS.
+  if (doc["rssiThreshold"].is<int>()) {
+    int8_t t = (int8_t)doc["rssiThreshold"].as<int>();
+    if (t >= -100 && t <= -20 && t != rssiThreshold) {
+      rssiThreshold = t;
+      prefs.begin("kodex", false);
+      prefs.putInt("rssi", (int)rssiThreshold);
+      prefs.end();
+      LOG("RSSI threshold updated: " + String(rssiThreshold) + " dBm");
+    }
+  }
   JsonVariantConst sess = doc["activeSession"];
   if (sess.isNull()) {
     if (!sessionId.isEmpty()) {
-      LOG("Session ended"); sessionId = ""; sessionSeed = ""; regenerateLecturerPin();
-      sessionTitle = ""; sessionCourse = ""; sessionLecturer = "";
+      LOG("Session ended"); sessionId = ""; sessionSeed = "";       sessionTitle = ""; sessionCourse = ""; sessionLecturer = "";
       studentsMarked = 0; sessionTotalEnrolled = 0; reMarkActive = false;
       dedupClear("");
     }
@@ -3351,7 +3352,7 @@ static void serveAttendPortal() {
 
 // ─── Local HTTP (WiFi proxy for Attendance Device page) ──────────────────────
 static void registerLocalHttp() {
-  localHttp.on("/status", HTTP_GET, []() {
+  localHttp.on("/api/status", HTTP_GET, []() {
     JsonDocument doc;
     doc["deviceId"]        = deviceId;
     doc["firmwareVersion"] = FIRMWARE_VERSION;
@@ -4215,8 +4216,7 @@ static void registerLocalHttp() {
       localHttp.send(409, "application/json", "{\"error\":\"No active session\"}"); return;
     }
     LOG("Session stopped: " + sessionId);
-    sessionId = ""; sessionSeed = ""; regenerateLecturerPin();
-    sessionTitle = ""; sessionCourse = ""; sessionLecturer = "";
+    sessionId = ""; sessionSeed = "";     sessionTitle = ""; sessionCourse = ""; sessionLecturer = "";
     studentsMarked = 0; reMarkActive = false;
     bleStop();
     presenceClear();
@@ -4380,8 +4380,7 @@ static void registerLocalHttp() {
       "lecturer:lect?lect.name:'',duration:parseInt(dur.value)})})"
       ".then(function(r){return r.json().then(function(d){return{ok:r.ok,d:d};});})"
       ".then(function(r){"
-      "if(r.ok){document.getElementById('main').style.display='none';"
-      "document.getElementById('ok').style.display='block';}"
+      "if(r.ok){window.location.href='/status';}"
       "else{err.textContent=r.d.error||'Failed.';err.style.display='block';"
       "btn.textContent='Start Session \xe2\x86\x92';btn.disabled=false;}"
       "}).catch(function(){"
@@ -4389,6 +4388,137 @@ static void registerLocalHttp() {
       "err.style.display='block';btn.textContent='Start Session \xe2\x86\x92';btn.disabled=false;"
       "});}"
       "</script></body></html>");
+    localHttp.send(200, "text/html", page);
+  });
+
+  // /records — JSON list of all index numbers / user IDs marked in current session
+  localHttp.on("/records", HTTP_GET, []() {
+    localHttp.sendHeader("Access-Control-Allow-Origin", "*");
+    JsonDocument doc;
+    doc["sessionId"]   = sessionId;
+    doc["course"]      = sessionCourse.isEmpty() ? sessionTitle : sessionCourse;
+    doc["lecturer"]    = sessionLecturer;
+    doc["marked"]      = studentsMarked;
+    JsonArray arr = doc["ids"].to<JsonArray>();
+    if (dedupIds) {
+      for (uint16_t i = 0; i < dedupCount; i++) arr.add(dedupIds[i]);
+    }
+    String s; serializeJson(doc, s);
+    localHttp.send(200, "application/json", s);
+  });
+
+  // /status — lecturer dashboard: session status + stop button (auto-refreshes every 10s)
+  localHttp.on("/status", HTTP_GET, []() {
+    if (sessionId.isEmpty()) {
+      localHttp.sendHeader("Location", "/start"); localHttp.send(302, "text/plain", ""); return;
+    }
+    time_t nowT = time(nullptr);
+    if (nowT < 1700000000UL) nowT = 1700000000UL + (millis() / 1000);
+    long secsLeft = (long)(sessionStartedAt + sessionDuration) - (long)nowT;
+    if (secsLeft < 0) secsLeft = 0;
+    uint32_t mLeft = (uint32_t)secsLeft / 60, sLeft = (uint32_t)secsLeft % 60;
+    char timeLeftBuf[12];
+    if (mLeft > 0) snprintf(timeLeftBuf, sizeof(timeLeftBuf), "%um %02us", mLeft, sLeft);
+    else           snprintf(timeLeftBuf, sizeof(timeLeftBuf), "%us", (uint32_t)secsLeft);
+    String course  = sessionCourse.isEmpty() ? sessionTitle : sessionCourse;
+    String lect    = sessionLecturer;
+    uint32_t pct   = sessionTotalEnrolled > 0 ? (studentsMarked * 100 / sessionTotalEnrolled) : 0;
+    String page = String(
+      "<!doctype html><html><head><meta charset='utf-8'>"
+      "<meta name='viewport' content='width=device-width,initial-scale=1,maximum-scale=1'>"
+      "<meta http-equiv='refresh' content='10'>"
+      "<title>Session Status</title>"
+      "<style>*{box-sizing:border-box;margin:0;padding:0}"
+      "body{min-height:100vh;background:#0a0f1e;color:#fff;"
+      "font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;"
+      "display:flex;align-items:center;justify-content:center;padding:20px}"
+      ".card{background:#111827;border-radius:20px;padding:28px 20px;"
+      "max-width:380px;width:100%;border:1px solid #1e2d45}"
+      ".logo{text-align:center;font-size:20px;font-weight:900;color:#fff;margin-bottom:16px}"
+      ".logo span{color:#4f6ef7}"
+      ".stat{background:#0f172a;border:1px solid #1e2d45;border-radius:12px;"
+      "padding:16px;margin-bottom:12px;text-align:center}"
+      ".stat-label{font-size:10px;font-weight:600;color:#64748b;"
+      "text-transform:uppercase;letter-spacing:.5px;margin-bottom:4px}"
+      ".stat-val{font-size:28px;font-weight:900;color:#fff}"
+      ".stat-val.green{color:#22c55e}"
+      ".stat-val.amber{color:#f59e0b}"
+      ".row{display:flex;gap:10px;margin-bottom:12px}"
+      ".row .stat{flex:1;margin:0}"
+      ".course{font-size:15px;font-weight:700;color:#e2e8f0;text-align:center;margin-bottom:4px}"
+      ".lect{font-size:12px;color:#64748b;text-align:center;margin-bottom:16px}"
+      ".btn-stop{width:100%;padding:14px;background:#dc2626;color:#fff;border:none;"
+      "border-radius:12px;font-size:15px;font-weight:700;cursor:pointer;margin-top:8px}"
+      ".btn-view{display:block;width:100%;padding:12px;background:#1e2d45;color:#94a3b8;"
+      "border:none;border-radius:12px;font-size:14px;font-weight:600;cursor:pointer;"
+      "text-align:center;text-decoration:none;margin-top:8px}"
+      ".refresh{text-align:center;font-size:11px;color:#334155;margin-top:14px}"
+      "</style></head><body><div class='card'>"
+      "<div class='logo'>Di<span>kly</span> \xe2\x80\x94 Session Live</div>") +
+      "<div class='course'>" + course + "</div>" +
+      "<div class='lect'>" + (lect.isEmpty() ? "" : lect) + "</div>" +
+      "<div class='row'>"
+        "<div class='stat'><div class='stat-label'>Present</div>"
+        "<div class='stat-val green'>" + String(studentsMarked) + "</div></div>" +
+        "<div class='stat'><div class='stat-label'>Enrolled</div>"
+        "<div class='stat-val'>" + (sessionTotalEnrolled > 0 ? String(sessionTotalEnrolled) : "\xe2\x80\x94") + "</div></div>"
+      "</div>"
+      "<div class='stat'><div class='stat-label'>Time Remaining</div>"
+      "<div class='stat-val " + String(secsLeft > 120 ? "green" : secsLeft > 0 ? "amber" : "") + "'>" +
+      String(secsLeft == 0 ? "Ended" : timeLeftBuf) + "</div></div>" +
+      String("<button class='btn-stop' onclick=\""
+      "if(confirm('Stop session?')){"
+      "fetch('/session/stop',{method:'POST'}).then(function(){window.location.href='/start';});"
+      "}\">Stop Session</button>"
+      "<a href='/view' class='btn-view'>View Attendance List \xe2\x86\x92</a>"
+      "<div class='refresh'>Auto-refreshes every 10 seconds</div>"
+      "</div></body></html>");
+    localHttp.send(200, "text/html", page);
+  });
+
+  // /view — attendance list for current session (lecturer only, on device WiFi)
+  localHttp.on("/view", HTTP_GET, []() {
+    if (sessionId.isEmpty()) {
+      localHttp.sendHeader("Location", "/start"); localHttp.send(302, "text/plain", ""); return;
+    }
+    String course = sessionCourse.isEmpty() ? sessionTitle : sessionCourse;
+    String rows = "";
+    if (dedupIds) {
+      for (uint16_t i = 0; i < dedupCount; i++) {
+        rows += String("<tr><td>") + String(i + 1) + "</td><td>" + String(dedupIds[i]) + "</td></tr>";
+      }
+    }
+    if (rows.isEmpty()) rows = "<tr><td colspan='2' style='color:#64748b;text-align:center'>No students marked yet</td></tr>";
+    String page = String(
+      "<!doctype html><html><head><meta charset='utf-8'>"
+      "<meta name='viewport' content='width=device-width,initial-scale=1,maximum-scale=1'>"
+      "<title>Attendance List</title>"
+      "<style>*{box-sizing:border-box;margin:0;padding:0}"
+      "body{background:#0a0f1e;color:#fff;"
+      "font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;padding:20px}"
+      ".logo{font-size:18px;font-weight:900;margin-bottom:4px}"
+      ".logo span{color:#4f6ef7}"
+      "h2{font-size:14px;color:#94a3b8;margin-bottom:16px}"
+      ".count{display:inline-block;background:#1e3a5f;color:#4f6ef7;"
+      "border-radius:8px;padding:2px 10px;font-size:13px;font-weight:700;margin-bottom:16px}"
+      "table{width:100%;border-collapse:collapse}"
+      "th{text-align:left;font-size:10px;font-weight:600;color:#64748b;"
+      "text-transform:uppercase;letter-spacing:.5px;padding:8px 10px;"
+      "border-bottom:1px solid #1e2d45}"
+      "td{padding:10px;font-size:14px;border-bottom:1px solid #0f172a}"
+      "td:first-child{color:#64748b;width:36px}"
+      "tr:last-child td{border-bottom:none}"
+      ".back{display:block;margin-top:20px;color:#4f6ef7;font-size:14px;"
+      "text-decoration:none;font-weight:600}"
+      "</style></head><body>"
+      "<div class='logo'>Di<span>kly</span></div>") +
+      "<h2>" + course + "</h2>" +
+      "<div class='count'>" + String(studentsMarked) + " marked</div>"
+      "<table><thead><tr><th>#</th><th>Student ID</th></tr></thead><tbody>" +
+      rows +
+      "</tbody></table>"
+      "<a href='/status' class='back'>\xe2\x86\x90 Back to Status</a>"
+      "</body></html>";
     localHttp.send(200, "text/html", page);
   });
 
@@ -4494,8 +4624,7 @@ static void handlePairedTap(uint16_t tx, uint16_t ty) {
       summaryPct     = (summaryTotal > 0) ?
                        (float)summaryPresent * 100.0f / (float)summaryTotal : 0.0f;
       summaryCourse  = sessionCourse.isEmpty() ? sessionTitle : sessionCourse;
-      sessionId = ""; sessionSeed = ""; regenerateLecturerPin();
-      sessionTitle = ""; sessionCourse = ""; sessionLecturer = "";
+      sessionId = ""; sessionSeed = "";       sessionTitle = ""; sessionCourse = ""; sessionLecturer = "";
       studentsMarked = 0; sessionTotalEnrolled = 0; reMarkActive = false;
       sessionLocallyStarted = false; clearLocalSession();
       bleStop();
@@ -4574,8 +4703,6 @@ void setup() {
 
   Serial.begin(115200); delay(150);
   pinMode(LED_PIN, OUTPUT);
-  regenerateLecturerPin();  // fresh PIN each boot
-
   // Redirect mbedTLS heap allocations to PSRAM so TLS handshakes never fail
   // due to internal SRAM fragmentation (maxBlock ~19KB when WiFi is active).
   // mbedTLS is pure-software crypto — it needs no DMA, so PSRAM is fine.
@@ -4952,8 +5079,7 @@ void loop() {
         summaryPct     = (summaryTotal > 0) ?
                          (float)summaryPresent * 100.0f / (float)summaryTotal : 0.0f;
         summaryCourse  = sessionCourse.isEmpty() ? sessionTitle : sessionCourse;
-        sessionId = ""; sessionSeed = ""; regenerateLecturerPin();
-        sessionTitle = ""; sessionCourse = ""; sessionLecturer = "";
+        sessionId = ""; sessionSeed = "";         sessionTitle = ""; sessionCourse = ""; sessionLecturer = "";
         studentsMarked = 0; sessionTotalEnrolled = 0; reMarkActive = false;
         sessionLocallyStarted = false; clearLocalSession();
         bleStop(); curScreen = SUMMARY; drawSummary(); return;
