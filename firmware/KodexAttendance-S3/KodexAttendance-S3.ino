@@ -4674,14 +4674,14 @@ void setup() {
   LOG("DMA heap free:    " + String(heap_caps_get_free_size(MALLOC_CAP_DMA | MALLOC_CAP_INTERNAL)));
   LOG("DMA largest block:" + String(heap_caps_get_largest_free_block(MALLOC_CAP_DMA | MALLOC_CAP_INTERNAL)));
 
-  // WiFi driver init FIRST with reduced DMA config.
-  // esp_wifi_init() claims WiFi's internal structures (pp_wdev, DMA rings) from
-  // the still-unfragmented heap (~10-15 KB DMA). WiFi.mode/softAP later reuse
-  // these already-allocated structures and do not allocate fresh DMA.
-  // BLE then gets the remaining heap (~45+ KB) with a large contiguous block,
-  // easily satisfying the 4 KB EMI allocation (emi.c:164).
-  // tx_buf_type=1 (WIFI_DYNAMIC_TX_BUFFER) moves TX buffers to 320 KB general
-  // heap; static_rx_buf_num=4 (was 10) saves ~10 KB DMA.
+  // BLE FIRST on ESP32-S3: the controller needs ~38 KB of contiguous internal
+  // DRAM (emi.c:164). Must claim this before esp_wifi_init() fragments the heap.
+  initBle();
+  LOG("Post-BLE DMA free:  " + String(heap_caps_get_free_size(MALLOC_CAP_DMA | MALLOC_CAP_INTERNAL)));
+  LOG("Post-BLE DMA block: " + String(heap_caps_get_largest_free_block(MALLOC_CAP_DMA | MALLOC_CAP_INTERNAL)));
+
+  // WiFi driver init AFTER BLE — reduced DMA config saves ~10 KB.
+  // tx_buf_type=1 moves TX buffers to general heap; static_rx_buf_num=4 reduces DMA usage.
   {
     wifi_init_config_t wcfg = WIFI_INIT_CONFIG_DEFAULT();
     wcfg.static_rx_buf_num  = 4;
@@ -4692,10 +4692,6 @@ void setup() {
   }
   LOG("Post-WiFi-drv DMA free:  " + String(heap_caps_get_free_size(MALLOC_CAP_DMA | MALLOC_CAP_INTERNAL)));
   LOG("Post-WiFi-drv DMA block: " + String(heap_caps_get_largest_free_block(MALLOC_CAP_DMA | MALLOC_CAP_INTERNAL)));
-
-  // BLE SECOND — after WiFi driver claimed its DMA, remaining heap still has a
-  // large contiguous block for BLE's 4 KB EMI controller buffer.
-  initBle();
 
   String apName = "Dikly-" + macSuffix();
   WiFi.mode(WIFI_AP);
