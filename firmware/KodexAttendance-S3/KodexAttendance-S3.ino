@@ -1480,8 +1480,8 @@ static void drawSetup(const String& apName) {
 
   stepCard(1, "Connect phone to Wi-Fi:", F_SMALL, apName.c_str(), nullptr, nullptr, 42);
 
-  stepCard(2, "Open in browser (type exactly):", F_TINY,
-           "http://10.0.0.1", "or  dikly.local", nullptr, 52);
+  stepCard(2, "Open in browser:", F_SMALL,
+           "dikly.local", "or  http://10.0.0.1", nullptr, 52);
 
   stepCard(3, "Enter your credentials:", F_TINY,
            "Institution code + pairing code", "then your school Wi-Fi password",
@@ -1870,6 +1870,7 @@ static void startWifiReconfigPortal() {
   uint32_t t0 = millis();
   do { delay(100); gw = WiFi.softAPIP(); } while (gw == IPAddress(0,0,0,0) && millis()-t0 < 5000);
   LOG("WiFi reconfig AP: " + ap + " @ " + gw.toString());
+  MDNS.begin("dikly");
 
   dns.start(53, "*", gw);
 
@@ -2141,8 +2142,8 @@ static void drawSessionStart() {
   spr.setTextColor(COL_TEXT, COL_CARD);
   spr.setCursor(20, 154); spr.print("Open in browser:");
   spr.setFont(F_SMALL); spr.setTextColor(COL_CYAN, COL_CARD);
-  tw = spr.textWidth("http://10.0.0.1/start");
-  spr.setCursor((SW - tw) / 2, 168); spr.print("http://10.0.0.1/start");
+  tw = spr.textWidth("dikly.local/start");
+  spr.setCursor((SW - tw) / 2, 168); spr.print("dikly.local/start");
 
   // Step 3 note
   spr.fillRoundRect(10, 204, SW - 20, 50, 8, COL_CARD);
@@ -2281,7 +2282,7 @@ static void drawPairScreen() {
   spr.setCursor(54, 78); spr.print(shortAp);
   spr.setFont(F_TINY); spr.setTextColor(COL_MUTED, COL_CARD);
   spr.setCursor(54, 98); spr.print("Open network — no password");
-  spr.setCursor(54, 112); spr.print("Then open http://10.0.0.1");
+  spr.setCursor(54, 112); spr.print("Then open dikly.local");
 
   // ── Device ID card ────────────────────────────────────────────────────────────
   spr.fillRoundRect(10, 144, SW - 20, 44, 6, COL_CARD);
@@ -2930,6 +2931,10 @@ static void startApPortal() {
   do { delay(100); gw = WiFi.softAPIP(); } while (gw == IPAddress(0,0,0,0) && millis()-t0 < 5000);
   LOG("AP: " + ap + " @ " + gw.toString());
 
+  // mDNS so browsers can reach the portal via dikly.local without knowing the IP.
+  // The DNS wildcard below also catches dikly.local on devices that use the
+  // DHCP-provided DNS server (older Android) instead of multicast mDNS.
+  MDNS.begin("dikly");
   dns.start(53, "*", gw);
 
   // Serve the setup page directly for all URLs — captive portal probe URLs,
