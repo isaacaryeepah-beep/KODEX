@@ -1874,16 +1874,20 @@ static void startWifiReconfigPortal() {
 
   dns.start(53, "*", gw);
 
-  auto serveRecfg = []() { localHttp.send_P(200, "text/html", WIFI_RECONFIG_HTML); };
-  localHttp.on("/", HTTP_GET, serveRecfg);
-  localHttp.on("/generate_204",              HTTP_GET, serveRecfg);
-  localHttp.on("/hotspot-detect.html",       HTTP_GET, serveRecfg);
-  localHttp.on("/connecttest.txt",           HTTP_GET, serveRecfg);
-  localHttp.on("/ncsi.txt",                  HTTP_GET, serveRecfg);
-  localHttp.on("/success.txt",               HTTP_GET, serveRecfg);
-  localHttp.on("/redirect",                  HTTP_GET, serveRecfg);
-  localHttp.on("/canonical.html",            HTTP_GET, serveRecfg);
-  localHttp.on("/fwlink/",                   HTTP_GET, serveRecfg);
+  auto serveRecfg  = []() { localHttp.send_P(200, "text/html", WIFI_RECONFIG_HTML); };
+  auto probeRedir2 = []() {
+    localHttp.sendHeader("Location", "http://192.168.4.1/", true);
+    localHttp.send(302, "text/plain", "");
+  };
+  localHttp.on("/",                        HTTP_GET, serveRecfg);
+  localHttp.on("/generate_204",            HTTP_GET, probeRedir2);
+  localHttp.on("/hotspot-detect.html",     HTTP_GET, probeRedir2);
+  localHttp.on("/connecttest.txt",         HTTP_GET, probeRedir2);
+  localHttp.on("/ncsi.txt",               HTTP_GET, probeRedir2);
+  localHttp.on("/success.txt",             HTTP_GET, probeRedir2);
+  localHttp.on("/redirect",               HTTP_GET, probeRedir2);
+  localHttp.on("/canonical.html",          HTTP_GET, probeRedir2);
+  localHttp.on("/fwlink/",               HTTP_GET, probeRedir2);
   localHttp.onNotFound(serveRecfg);
 
   localHttp.on("/wifi/scan", HTTP_GET, []() {
@@ -2928,20 +2932,24 @@ static void startApPortal() {
 
   dns.start(53, "*", gw);           // wildcard: every DNS query → our IP
 
-  // Serve the setup page directly for all URLs — captive portal probe URLs,
-  // unknown paths, and the root. Redirecting (302) breaks Samsung's captive
-  // portal mini-browser which does not follow redirects to private IPs.
-  auto servePage = []() { localHttp.send_P(200, "text/html", PAIR_HTML); };
-  localHttp.on("/", HTTP_GET, servePage);
-  localHttp.on("/generate_204",              HTTP_GET, servePage);
-  localHttp.on("/hotspot-detect.html",       HTTP_GET, servePage);
-  localHttp.on("/connecttest.txt",           HTTP_GET, servePage);
-  localHttp.on("/ncsi.txt",                  HTTP_GET, servePage);
-  localHttp.on("/success.txt",               HTTP_GET, servePage);
-  localHttp.on("/redirect",                  HTTP_GET, servePage);
-  localHttp.on("/canonical.html",            HTTP_GET, servePage);
-  localHttp.on("/fwlink/",                   HTTP_GET, servePage);
-  localHttp.onNotFound(servePage);
+  // Root URL serves the setup page directly
+  auto servePage    = []() { localHttp.send_P(200, "text/html", PAIR_HTML); };
+  // Captive-portal probe URLs get a 302 → / so the OS popup appears automatically.
+  // The redirect terminates at / which serves HTML (no loop).
+  auto probeRedir   = []() {
+    localHttp.sendHeader("Location", "http://192.168.4.1/", true);
+    localHttp.send(302, "text/plain", "");
+  };
+  localHttp.on("/",                        HTTP_GET, servePage);
+  localHttp.on("/generate_204",            HTTP_GET, probeRedir);   // Android
+  localHttp.on("/hotspot-detect.html",     HTTP_GET, probeRedir);   // iOS
+  localHttp.on("/connecttest.txt",         HTTP_GET, probeRedir);   // Windows
+  localHttp.on("/ncsi.txt",               HTTP_GET, probeRedir);   // Windows NCSI
+  localHttp.on("/success.txt",             HTTP_GET, probeRedir);   // Firefox
+  localHttp.on("/redirect",               HTTP_GET, probeRedir);   // Firefox
+  localHttp.on("/canonical.html",          HTTP_GET, probeRedir);   // Google
+  localHttp.on("/fwlink/",               HTTP_GET, probeRedir);   // Microsoft
+  localHttp.onNotFound(servePage);  // unknown paths → page directly (no redirect loop)
 
   localHttp.on("/wifi/scan", HTTP_GET, []() {
     int n = WiFi.scanNetworks();
