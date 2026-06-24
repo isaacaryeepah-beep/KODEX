@@ -393,13 +393,6 @@ static const uint32_t REMARK_WINDOW_SECS = 300; // 5-minute re-mark window
 static BLEAdvertising *bleAdv  = nullptr;
 static uint32_t        bleSlot = UINT32_MAX;   // slot currently on-air
 
-// BLE crash-loop watchdog — stored in RTC slow memory so it survives soft
-// resets (panics) atomically, without any flash write that could be lost.
-// Cleared only by a hard reset / power-on.
-RTC_DATA_ATTR static uint32_t bleWatchdog = 0;
-static const uint32_t BLE_WD_ARMED = 0xB1E01111U; // set before init; crash leaves it set
-static const uint32_t BLE_WD_SLEPT = 0xB1E02222U; // set before deep-sleep; wakeup detects it
-
 
 // Async pairing (avoids iOS captive-portal dropping the fetch before we respond)
 bool     pairPending     = false;
@@ -657,53 +650,10 @@ static String deriveCode(const String& seed, uint32_t unixSec) {
 // Backend re-derives the HMAC using session.esp32Seed and rejects stale slots.
 
 static void initBle() {
-  // ── BLE crash-loop guard (RTC memory watchdog) ───────────────────────────
-  // After any panic the BLE RF/EMI RAM block is left dirty. A plain software
-  // restart (rst:0xc) re-enters BLEDevice::init(), reads stale EMI data,
-  // null-deref crashes, and loops forever.
-  //
-  // Fix: deep-sleep for 1 s cuts power to the RF peripheral block and resets
-  // the EMI pool cleanly.  We use RTC_DATA_ATTR storage (survives soft resets
-  // atomically, no flash write needed) to detect crash vs normal boot.
-  //
-  // Two-phase protocol:
-  //   Boot  → bleWatchdog = BLE_WD_ARMED → call BLEDevice::init()
-  //   Crash → RTC value stays BLE_WD_ARMED across the soft reset
-  //   Next boot detects ARMED → set to BLE_WD_SLEPT → deep-sleep 1 s
-  //   Wakeup detects SLEPT → clear → arm → retry init (EMI pool now clean)
-
-  if (bleWatchdog == BLE_WD_ARMED) {
-    // Previous boot crashed inside BLEDevice::init() — EMI pool is dirty.
-    bleWatchdog = BLE_WD_SLEPT;            // mark so wakeup knows why we slept
-    LOG("BLE crash detected — deep-sleep 1 s to reset RF peripheral block");
-    delay(100);
-    esp_sleep_enable_timer_wakeup(1000000ULL);
-    esp_deep_sleep_start();                // does not return
-  }
-
-  if (bleWatchdog == BLE_WD_SLEPT) {
-    // Returning from recovery deep-sleep — EMI pool is now clean.
-    bleWatchdog = 0;
-    LOG("BLE recovery: woke from deep sleep, retrying init");
-  }
-
-  bleWatchdog = BLE_WD_ARMED;             // arm before potentially crashing init
-
   delay(200);
   BLEDevice::init(("Dikly-" + macSuffix()).c_str());
   bleAdv = BLEDevice::getAdvertising();
-
-  bleWatchdog = 0;                        // disarm — init completed without crash
-
-  if (!bleAdv) {
-    // Init returned but advertising handle is null — same root cause, same fix.
-    LOG("BLE init: advertising handle null — triggering recovery sleep");
-    delay(100);
-    bleWatchdog = BLE_WD_ARMED;
-    esp_sleep_enable_timer_wakeup(1000000ULL);
-    esp_deep_sleep_start();
-  }
-
+  if (!bleAdv) { LOG("BLE init: advertising handle null — BLE disabled"); return; }
   LOG("BLE init OK");
 }
 
@@ -4747,6 +4697,22 @@ void setup() {
   digitalWrite(45, HIGH);
 
   Serial.begin(115200); delay(150);
+
+  // If the previous run crashed (panic / watchdog), the BLE RF/EMI block is
+  // left dirty and BLEDevice::init() will null-deref and crash again.
+  // Deep-sleep for 1 s cuts power to the RF domain, resetting the EMI pool.
+  // On wakeup esp_reset_reason() returns ESP_RST_DEEPSLEEP, so we don't loop.
+  {
+    esp_reset_reason_t rst = esp_reset_reason();
+    if (rst == ESP_RST_PANIC   || rst == ESP_RST_INT_WDT ||
+        rst == ESP_RST_TASK_WDT || rst == ESP_RST_WDT) {
+      Serial.println("[BOOT] crash detected — deep-sleep 1s to reset RF block");
+      delay(100);
+      esp_sleep_enable_timer_wakeup(1000000ULL);
+      esp_deep_sleep_start();
+    }
+  }
+
   pinMode(LED_PIN, OUTPUT);
   // Redirect mbedTLS heap allocations to PSRAM so TLS handshakes never fail
   // due to internal SRAM fragmentation (maxBlock ~19KB when WiFi is active).
