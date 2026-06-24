@@ -260,7 +260,7 @@ static const uint8_t SD_CLK = 38, SD_CMD = 40, SD_D0 = 39;
 static const uint8_t SD_D1  = 41, SD_D2  = 48, SD_D3 = 47;
 
 // ─── App Config ──────────────────────────────────────────────────────────────
-static const char*   FIRMWARE_VERSION     = "s3-2.1.8";
+static const char*   FIRMWARE_VERSION     = "s3-2.1.9";
 static const char*   DEFAULT_API_BASE     = "https://dikly.sbs";
 
 static const uint32_t HEARTBEAT_MS        = 5000;
@@ -370,6 +370,8 @@ uint32_t sessionDuration  = 300;
 uint32_t studentsMarked       = 0;
 uint32_t sessionTotalEnrolled = 0;   // parsed from heartbeat totalEnrolled
 uint32_t lastSyncMs           = 0;   // millis() at last successful heartbeat
+static bool   serverReachable = false; // true after first successful heartbeat
+static int    lastHbCode      = 0;     // last heartbeat HTTP code (0=none yet, -1=conn fail)
 
 // ─── Session summary (saved on session end) ──────────────────────────────────
 uint32_t summaryTotal   = 0;
@@ -1122,12 +1124,15 @@ static void sendHeartbeat() {
   String resp; int code = postJson("/api/devices/heartbeat", body, resp);
   if (code == 401) { LOG("JWT revoked — factory reset"); factoryReset(); return; }
   if (code != 200) {
+    lastHbCode = code;
     LOG("HB fail " + String(code));
     if (++hbFails >= 2) { hbFails = 0; forceReconn = true; }  // reconnect after 2 consecutive fails (~16s)
     return;
   }
-  hbFails    = 0;
-  lastSyncMs = millis();
+  hbFails         = 0;
+  serverReachable = true;
+  lastHbCode      = 200;
+  lastSyncMs      = millis();
   // Flush any offline sessions + attendance records now that we have internet.
   syncOfflineAttendance();
   // Refresh roster + bundle every ~10 minutes (120 heartbeats × 5 s).
@@ -2029,21 +2034,26 @@ static void drawReady() {
   spr.fillSprite(COL_BG);
 
   bool online = (WiFi.status() == WL_CONNECTED);
+  // Server is considered "synced" when the last heartbeat succeeded within 60 s
+  bool synced = online && serverReachable && (millis() - lastSyncMs < 60000);
 
   // ── Header + accent line ──────────────────────────────────────────────────────
   drawHeader(spr, online);
-  spr.fillRect(0, 44, SW, 2, online ? COL_SUCCESS : COL_BORDER);
+  spr.fillRect(0, 44, SW, 2, synced ? COL_SUCCESS : (online ? COL_WARNING : COL_BORDER));
   drawTabBar(spr, 0);
 
   // ── READY label + subtitle ────────────────────────────────────────────────────
   spr.setFont(F_MED);
-  spr.setTextColor(online ? COL_SUCCESS : COL_MUTED, COL_BG);
+  spr.setTextColor(synced ? COL_SUCCESS : (online ? COL_WARNING : COL_MUTED), COL_BG);
   const char* rdyLbl = "READY";
   int32_t tw = spr.textWidth(rdyLbl);
   spr.setCursor((SW - tw) / 2, 50); spr.print(rdyLbl);
 
   spr.setFont(F_TINY); spr.setTextColor(COL_MUTED, COL_BG);
-  const char* subLbl = online ? "Online \xC2\xB7 Awaiting session" : "Waiting for session";
+  const char* subLbl;
+  if (!online)     subLbl = "Waiting for session";
+  else if (synced) subLbl = "Online \xC2\xB7 Awaiting session";
+  else             subLbl = "WiFi OK \xC2\xB7 No server";
   tw = spr.textWidth(subLbl);
   spr.setCursor((SW - tw) / 2, 72); spr.print(subLbl);
 
@@ -2052,7 +2062,7 @@ static void drawReady() {
   uint32_t ms  = millis();
   uint8_t  p   = (uint8_t)((ms / 600) % 4);
   int32_t  pcx = SW / 2, pcy = 162;
-  uint16_t ringCol = online ? COL_PRIMARY : COL_BORDER;
+  uint16_t ringCol = synced ? COL_PRIMARY : (online ? COL_WARNING : COL_BORDER);
 
   uint16_t rc4 = (p == 3) ? ringCol : COL_BORDER;
   uint16_t rc3 = (p >= 2) ? ringCol : COL_BORDER;
@@ -2061,15 +2071,19 @@ static void drawReady() {
     spr.drawCircle(pcx, pcy, 70 + d, rc4);
     spr.drawCircle(pcx, pcy, 52 + d, rc3);
     spr.drawCircle(pcx, pcy, 34 + d, rc2);
-    spr.drawCircle(pcx, pcy, 18 + d, online ? COL_PRIMARY : COL_MUTED);
+    spr.drawCircle(pcx, pcy, 18 + d, synced ? COL_PRIMARY : (online ? COL_WARNING : COL_MUTED));
   }
-  // Centre filled circle — WiFi icon (online) or "?" (offline)
-  uint16_t cFill = online ? COL_PRIMARY : COL_DIM_CARD;
-  uint16_t cBd   = online ? COL_SUCCESS  : COL_MUTED;
+  // Centre filled circle — WiFi icon (synced) or "!" (WiFi OK but no server) or "?" (offline)
+  uint16_t cFill = synced ? COL_PRIMARY : (online ? 0x4200 : COL_DIM_CARD);  // dark amber when WiFi-only
+  uint16_t cBd   = synced ? COL_SUCCESS  : (online ? COL_WARNING : COL_MUTED);
   spr.fillCircle(pcx, pcy, 15, cFill);
   spr.drawCircle(pcx, pcy, 17, cBd);
-  if (online) {
+  if (synced) {
     _wifiBars(spr, pcx + 4, pcy - 5, COL_BG);
+  } else if (online) {
+    spr.setFont(F_TINY); spr.setTextColor(COL_WARNING, cFill);
+    tw = spr.textWidth("!");
+    spr.setCursor(pcx - tw / 2, pcy - 4); spr.print("!");
   } else {
     spr.setFont(F_TINY); spr.setTextColor(COL_MUTED, cFill);
     tw = spr.textWidth("?");
@@ -2119,9 +2133,18 @@ static void drawReady() {
 
   // ── Bottom hint ───────────────────────────────────────────────────────────────
   spr.setFont(F_TINY); spr.setTextColor(0x4210, COL_BG);
-  const char* hint = online
-    ? "Sessions start from dikly.sbs"
-    : "Connect phone to Dikly \xE2\x86\x92 open /start";
+  static char hintBuf[44];
+  const char* hint;
+  if (!online) {
+    hint = "Connect phone to Dikly \xE2\x86\x92 open /start";
+  } else if (synced) {
+    hint = "Sessions start from dikly.sbs";
+  } else if (lastHbCode != 0) {
+    snprintf(hintBuf, sizeof(hintBuf), "Server err %d \xE2\x80\x94 check WiFi / network", lastHbCode);
+    hint = hintBuf;
+  } else {
+    hint = "Connecting to server\xE2\x80\xA6";
+  }
   tw = spr.textWidth(hint);
   spr.setCursor((SW - tw) / 2, 274); spr.print(hint);
 
@@ -2605,6 +2628,21 @@ static void drawDeviceInfo() {
     ("Present — " + String((uint32_t)(SD_MMC.cardSize() / (1024ULL * 1024ULL))) + " MB") :
     "Not found";
   infoRow(5, "SD Card", sdStr, sdAvailable ? COL_SUCCESS : COL_MUTED);
+
+  // Server connectivity row
+  String srvStr;
+  uint16_t srvCol;
+  if (lastHbCode == 200) {
+    uint32_t secAgo = (millis() - lastSyncMs) / 1000;
+    char srvBuf[32]; snprintf(srvBuf, sizeof(srvBuf), "OK \xE2\x80\x94 %us ago", secAgo);
+    srvStr = String(srvBuf); srvCol = COL_SUCCESS;
+  } else if (lastHbCode == 0) {
+    srvStr = "Waiting\xE2\x80\xA6"; srvCol = COL_MUTED;
+  } else {
+    char srvBuf[24]; snprintf(srvBuf, sizeof(srvBuf), "Fail (err %d)", lastHbCode);
+    srvStr = String(srvBuf); srvCol = COL_WARNING;
+  }
+  infoRow(6, "Server HB", srvStr, srvCol);
 
   spr.pushSprite(0, 0);
 }
