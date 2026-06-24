@@ -260,7 +260,7 @@ static const uint8_t SD_CLK = 38, SD_CMD = 40, SD_D0 = 39;
 static const uint8_t SD_D1  = 41, SD_D2  = 48, SD_D3 = 47;
 
 // ─── App Config ──────────────────────────────────────────────────────────────
-static const char*   FIRMWARE_VERSION     = "s3-2.1.1";
+static const char*   FIRMWARE_VERSION     = "s3-2.1.2";
 static const char*   DEFAULT_API_BASE     = "https://dikly.sbs";
 
 static const uint32_t HEARTBEAT_MS        = 5000;
@@ -989,9 +989,11 @@ static void syncOfflineAttendance() {
 static void downloadRoster() {
   if (!sdAvailable) return;
   String resp; int code = -1;
+  WiFiClientSecure client; client.setInsecure();
+  client.setTimeout(10);
   HTTPClient http;
   String url = String(apiBase) + "/api/devices/roster";
-  http.begin(url);
+  if (!http.begin(client, url)) return;
   http.addHeader("Authorization", "Bearer " + deviceJWT);
   http.addHeader("Content-Type",  "application/json");
   http.setTimeout(10000);
@@ -1027,9 +1029,11 @@ static void downloadRoster() {
 // Called after each successful heartbeat (throttled to once every ~10 min).
 // Stored in NVS so the /start page works fully offline.
 static void downloadBundle() {
+  WiFiClientSecure client; client.setInsecure();
+  client.setTimeout(12);
   HTTPClient http;
   String url = String(apiBase) + "/api/class-rep/bundle";
-  http.begin(url);
+  if (!http.begin(client, url)) return;
   http.addHeader("Authorization", "Bearer " + deviceJWT);
   http.setTimeout(12000);
   int code = http.GET();
@@ -1387,7 +1391,7 @@ static void drawSplash() {
 
   // ── Version string ───────────────────────────────────────────────────────
   spr.setFont(F_TINY); spr.setTextColor(0x4A69, COL_BG);
-  String verStr = "v2.1.0";
+  String verStr = String(FIRMWARE_VERSION);
   int32_t vw = spr.textWidth(verStr);
   spr.setCursor((SW - vw) / 2, lineY + 22); spr.print(verStr);
 
@@ -4551,13 +4555,10 @@ static void handlePairedTap(uint16_t tx, uint16_t ty) {
       // rowIdx == 5 (Factory Reset) requires long-press — handled in loop()
     }
   }
-  // CHECKIN_MONITOR — tap anywhere below header to jump to PRESENCE_MONITOR early
+  // CHECKIN_MONITOR — tap anywhere in content area to close check-in early
   else if (curScreen == CHECKIN_MONITOR) {
     if (ty > 46 && ty < SH - 40) {
-      // "End Check-In" tap in bottom area: close window and switch to sniffer mode
-      if (ty > SH - 40) {
-        monCheckinEndMs = millis();  // force-close check-in window now
-      }
+      monCheckinEndMs = millis();  // force-close check-in window now
     }
   }
   // PRESENCE_MONITOR — swipe/scroll (up = scroll down in list)
