@@ -650,15 +650,54 @@ static String deriveCode(const String& seed, uint32_t unixSec) {
 // Backend re-derives the HMAC using session.esp32Seed and rejects stale slots.
 
 static void initBle() {
-  // ESP32-S3 Arduino core 3.x (ESP-IDF 5.x) races the NimBLE HCI transport
-  // init against the WiFi driver's background tasks when both are started in
-  // rapid succession. The race logs "hci inits failed" / "nimble host init
-  // failed" and silently breaks BLE advertising. A 200 ms yield after
-  // esp_wifi_init() lets WiFi's tasks settle before NimBLE registers its
-  // HCI callbacks, eliminating the race.
-  delay(200);
+  // ── BLE crash-loop guard ──────────────────────────────────────────────────
+  // After any panic the BLE controller's EMI RAM pool is left in a dirty
+  // state.  A plain software restart re-enters here, BLEDevice::init() reads
+  // the stale EMI data, dereferences a null pointer (EXCVADDR 0x0000002c),
+  // and panics again — producing an infinite crash loop.
+  //
+  // We break the loop with a deep-sleep power cycle (1 s), which cuts power
+  // to the RF peripheral block and resets the EMI pool cleanly.
+  //
+  // Protocol:
+  //   1. Write ble_boot=true to NVS before calling BLEDevice::init().
+  //   2. Clear it immediately after a successful return.
+  //   3. On boot, if ble_boot=true (flag was never cleared → previous boot
+  //      crashed inside init()), go to deep sleep for 1 s instead of
+  //      crashing again.  The wakeup boot finds the flag clear and retries.
+  prefs.begin("kodex", false);
+  bool bleBootFlag = prefs.getBool("ble_boot", false);
+  if (bleBootFlag) {
+    // Previous boot crashed inside BLEDevice::init() — RF EMI pool is
+    // corrupt.  Clear the flag, then do a deep-sleep reset to fix it.
+    prefs.putBool("ble_boot", false);
+    prefs.end();
+    LOG("BLE EMI corrupt detected — deep-sleep 1 s to reset RF peripherals");
+    delay(100);                             // flush serial before sleep
+    esp_sleep_enable_timer_wakeup(1000000ULL); // 1 s in microseconds
+    esp_deep_sleep_start();                 // does not return
+  }
+  prefs.putBool("ble_boot", true);         // watchdog arm
+  prefs.end();
+
+  delay(200);                              // let boot tasks settle
   BLEDevice::init(("Dikly-" + macSuffix()).c_str());
   bleAdv = BLEDevice::getAdvertising();
+
+  // Disarm the watchdog — init completed without crashing
+  prefs.begin("kodex", false);
+  prefs.putBool("ble_boot", false);
+  prefs.end();
+
+  if (!bleAdv) {
+    // Init returned but advertising handle is null — silently broken.
+    // Deep-sleep reset is the same fix as the crash case.
+    LOG("BLE init: advertising handle null — deep-sleep reset");
+    delay(100);
+    esp_sleep_enable_timer_wakeup(1000000ULL);
+    esp_deep_sleep_start();
+  }
+
   LOG("BLE init OK");
 }
 
