@@ -260,7 +260,7 @@ static const uint8_t SD_CLK = 38, SD_CMD = 40, SD_D0 = 39;
 static const uint8_t SD_D1  = 41, SD_D2  = 48, SD_D3 = 47;
 
 // ─── App Config ──────────────────────────────────────────────────────────────
-static const char*   FIRMWARE_VERSION     = "s3-2.1.0";
+static const char*   FIRMWARE_VERSION     = "s3-2.1.1";
 static const char*   DEFAULT_API_BASE     = "https://dikly.sbs";
 
 static const uint32_t HEARTBEAT_MS        = 5000;
@@ -1462,8 +1462,10 @@ static void drawSetup(const String& apName) {
   }
 
   // Generic step card helper for steps 2 & 3
+  // val2col: optional override colour for val2 line (0 = default COL_MUTED)
   auto stepCard = [&](uint8_t num, const char* hint, const lgfx::IFont* vfont,
-                      const char* val1, const char* val2, int32_t ch) {
+                      const char* val1, const char* val2, int32_t ch,
+                      uint16_t val2col = 0) {
     spr.fillRoundRect(CX, cy, CW, ch, 6, COL_CARD);
     spr.drawRoundRect(CX, cy, CW, ch, 6, COL_BORDER);
     const int32_t bx = CX + 18, by = cy + ch / 2;
@@ -1477,13 +1479,16 @@ static void drawSetup(const String& apName) {
     spr.setFont(vfont); spr.setTextColor(COL_CYAN, COL_CARD);
     spr.setCursor(tx, cy + 18); spr.print(val1);
     if (val2) {
-      spr.setFont(F_TINY); spr.setTextColor(COL_MUTED, COL_CARD);
+      spr.setFont(F_TINY);
+      spr.setTextColor(val2col ? val2col : (uint16_t)COL_MUTED, COL_CARD);
       spr.setCursor(tx, cy + 30); spr.print(val2);
     }
     cy += ch + CG;
   };
 
-  stepCard(2, "Open in browser:", F_SMALL, "http://192.168.4.1", nullptr, 48);
+  // Amber note warns users not to type https:// — a common mistake on Windows/Chrome
+  stepCard(2, "Open in browser:", F_SMALL, "http://192.168.4.1",
+           "http only  (NOT https)", 48, (uint16_t)COL_WARNING);
 
   stepCard(3, "Enter your credentials:", F_TINY,
            "Institution code + pairing code", "then school Wi-Fi password", 50);
@@ -4812,8 +4817,14 @@ void loop() {
       if (!touchActive) { touchActive = true; touchDownMs = millis(); }
       else if (millis() - touchDownMs >= 3000) factoryReset();
     } else { touchActive = false; }
-    if (curScreen == SETUP)         drawSetup("Dikly-" + macSuffix());
-    if (curScreen == WIFI_RECONFIG) drawWifiReconfig("Dikly-" + macSuffix());
+    // Redraw at 2 fps — static screen needs no higher rate,
+    // and keeping the render interval long gives DNS/HTTP more CPU time.
+    static uint32_t lastSetupDraw = 0;
+    if (millis() - lastSetupDraw >= 500) {
+      lastSetupDraw = millis();
+      if (curScreen == SETUP)         drawSetup("Dikly-" + macSuffix());
+      if (curScreen == WIFI_RECONFIG) drawWifiReconfig("Dikly-" + macSuffix());
+    }
     delay(60);
     return;
   }
