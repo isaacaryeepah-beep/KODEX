@@ -1935,11 +1935,22 @@ static void startWifiReconfigPortal() {
 
   dns.start(53, "*", gw);
 
+  auto redir2 = []() {
+    localHttp.sendHeader("Location", "http://192.168.4.1/");
+    localHttp.sendHeader("Cache-Control", "no-cache");
+    localHttp.send(302, "text/plain", "");
+  };
   auto servePage = []() { localHttp.send_P(200, "text/html", WIFI_RECONFIG_HTML); };
   localHttp.on("/", HTTP_GET, servePage);
-  localHttp.on("/generate_204", HTTP_GET, servePage);
-  localHttp.on("/hotspot-detect.html", HTTP_GET, servePage);
-  localHttp.onNotFound(servePage);
+  localHttp.on("/generate_204",              HTTP_GET, redir2);
+  localHttp.on("/hotspot-detect.html",       HTTP_GET, redir2);
+  localHttp.on("/connecttest.txt",           HTTP_GET, redir2);
+  localHttp.on("/ncsi.txt",                  HTTP_GET, redir2);
+  localHttp.on("/success.txt",               HTTP_GET, redir2);
+  localHttp.on("/redirect",                  HTTP_GET, redir2);
+  localHttp.on("/canonical.html",            HTTP_GET, redir2);
+  localHttp.on("/fwlink/",                   HTTP_GET, redir2);
+  localHttp.onNotFound(redir2);
 
   localHttp.on("/wifi/scan", HTTP_GET, []() {
     int n = WiFi.scanNetworks();
@@ -2982,12 +2993,28 @@ static void startApPortal() {
 
   dns.start(53, "*", gw);
 
-  // Serve captive portal
+  // Captive portal detection endpoints.
+  // OS probes expect specific responses; wrong answer = no popup.
+  // Android (HTTP): /generate_204 expects 204. Getting 302 → popup.
+  // iOS: /hotspot-detect.html expects "Success". Getting HTML → popup.
+  // Windows: /connecttest.txt expects "Microsoft Connect Test". Getting 302 → popup.
+  // Strategy: all probe URLs → 302 to portal root. Root → serve full page.
+  auto redir = []() {
+    localHttp.sendHeader("Location", "http://192.168.4.1/");
+    localHttp.sendHeader("Cache-Control", "no-cache");
+    localHttp.send(302, "text/plain", "");
+  };
   auto servePage = []() { localHttp.send_P(200, "text/html", PAIR_HTML); };
   localHttp.on("/", HTTP_GET, servePage);
-  localHttp.on("/generate_204", HTTP_GET, servePage);
-  localHttp.on("/hotspot-detect.html", HTTP_GET, servePage);
-  localHttp.onNotFound(servePage);
+  localHttp.on("/generate_204",              HTTP_GET, redir);
+  localHttp.on("/hotspot-detect.html",       HTTP_GET, redir);
+  localHttp.on("/connecttest.txt",           HTTP_GET, redir);
+  localHttp.on("/ncsi.txt",                  HTTP_GET, redir);
+  localHttp.on("/success.txt",               HTTP_GET, redir);
+  localHttp.on("/redirect",                  HTTP_GET, redir);
+  localHttp.on("/canonical.html",            HTTP_GET, redir);
+  localHttp.on("/fwlink/",                   HTTP_GET, redir);
+  localHttp.onNotFound(redir);
 
   localHttp.on("/wifi/scan", HTTP_GET, []() {
     int n = WiFi.scanNetworks();
