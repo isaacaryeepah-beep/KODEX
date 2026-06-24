@@ -260,7 +260,7 @@ static const uint8_t SD_CLK = 38, SD_CMD = 40, SD_D0 = 39;
 static const uint8_t SD_D1  = 41, SD_D2  = 48, SD_D3 = 47;
 
 // ─── App Config ──────────────────────────────────────────────────────────────
-static const char*   FIRMWARE_VERSION     = "s3-2.1.3";
+static const char*   FIRMWARE_VERSION     = "s3-2.1.4";
 static const char*   DEFAULT_API_BASE     = "https://dikly.sbs";
 
 static const uint32_t HEARTBEAT_MS        = 5000;
@@ -2610,120 +2610,105 @@ static void drawDeviceInfo() {
 }
 
 // ─── Captive-Portal Pairing HTML ─────────────────────────────────────────────
+// Kept lean (<4 KB) so it fits inside the ESP32 lwIP TCP TX window (~5.7 KB)
+// without stalling mid-transfer. ES5 only (XMLHttpRequest, no async/await,
+// no fetch, no arrow functions) for Samsung Internet compatibility.
 static const char PAIR_HTML[] PROGMEM = R"HTML(<!doctype html>
 <html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Dikly Setup</title>
 <style>
-  *{box-sizing:border-box;margin:0;padding:0}
-  body{font-family:system-ui,sans-serif;background:#0f172a;color:#e2e8f0;padding:24px;max-width:440px;margin:0 auto}
-  .logo{font-size:28px;font-weight:900;color:#e2e8f0;margin:12px 0 2px}
-  .logo span{color:#6366f1}
-  .sub{font-size:13px;color:#64748b;margin-bottom:28px}
-  .card{background:#1e293b;border:1px solid #334155;border-radius:14px;padding:20px;margin-bottom:16px}
-  h3{font-size:13px;font-weight:700;text-transform:uppercase;letter-spacing:.6px;color:#6366f1;margin-bottom:14px}
-  label{display:block;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:#64748b;margin:12px 0 5px}
-  label:first-child{margin-top:0}
-  input{width:100%;padding:11px 13px;border-radius:9px;border:1.5px solid #334155;background:#0f172a;color:#e2e8f0;font-size:14px;transition:border-color .15s}
-  input:focus{outline:none;border-color:#6366f1}
-  .row{display:flex;gap:8px}
-  .row input{flex:1}
-  .scan-btn{padding:11px 14px;border-radius:9px;border:1.5px solid #6366f1;background:transparent;color:#6366f1;font-size:13px;font-weight:700;cursor:pointer;white-space:nowrap}
-  .scan-btn:disabled{opacity:.4;cursor:default}
-  .nets{margin-top:8px;border:1px solid #1e293b;border-radius:10px;overflow:hidden;max-height:180px;overflow-y:auto}
-  .net{padding:10px 14px;cursor:pointer;font-size:13px;display:flex;justify-content:space-between;border-bottom:1px solid #0f172a}
-  .net:last-child{border-bottom:0}
-  .net:hover,.net.sel{background:#1e3a5f}
-  .bars{font-size:11px;color:#64748b}
-  .submit{width:100%;padding:13px;border-radius:10px;border:0;background:#6366f1;color:#fff;font-weight:700;font-size:15px;cursor:pointer;margin-top:6px;transition:opacity .15s}
-  .submit:disabled{opacity:.5;cursor:default}
-  .ok{background:#052e16;border:1px solid #166534;color:#22c55e;padding:12px 14px;border-radius:10px;font-size:13px;margin-top:12px}
-  .err{background:#450a0a;border:1px solid #991b1b;color:#fca5a5;padding:12px 14px;border-radius:10px;font-size:13px;margin-top:12px}
+*{box-sizing:border-box}
+body{font-family:system-ui,sans-serif;background:#0f172a;color:#e2e8f0;margin:0;padding:20px;max-width:420px;margin:0 auto}
+h1{font-size:22px;font-weight:900;margin:8px 0 2px}
+h1 span{color:#6366f1}
+.sub{font-size:12px;color:#94a3b8;margin:0 0 18px}
+label{display:block;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:#94a3b8;margin:12px 0 4px}
+input{width:100%;padding:10px 12px;border-radius:8px;border:1px solid #334155;background:#1e293b;color:#e2e8f0;font-size:14px}
+input:focus{outline:none;border-color:#6366f1}
+.row{display:flex;gap:8px}
+.row input{flex:1}
+.sb{padding:10px 12px;border-radius:8px;border:1px solid #6366f1;background:transparent;color:#6366f1;font-size:13px;font-weight:700;cursor:pointer;white-space:nowrap}
+.sb:disabled{opacity:.4}
+.nl{margin:6px 0;border:1px solid #1e293b;border-radius:8px;overflow:hidden;max-height:180px;overflow-y:auto}
+.ni{padding:10px 12px;cursor:pointer;font-size:13px;display:flex;justify-content:space-between;border-bottom:1px solid #0f172a}
+.ni:last-child{border-bottom:0}
+.ni:hover,.ni.s{background:#1e3a5f}
+.nm{font-size:11px;color:#64748b}
+.btn{width:100%;padding:12px;border-radius:8px;border:0;background:#6366f1;color:#fff;font-weight:700;font-size:14px;margin-top:18px;cursor:pointer}
+.btn:disabled{opacity:.5}
+.ok{color:#22c55e;font-size:13px;margin-top:10px}
+.err{color:#ef4444;font-size:13px;margin-top:10px}
 </style></head>
 <body>
-  <div class="logo">Di<span>kly</span></div>
-  <p class="sub">Attendance Device Setup</p>
-  <form id="f" onsubmit="doPair(event);return false;">
-    <div class="card">
-      <h3>Institution</h3>
-      <label>Institution Code</label>
-      <input id="ic" name="institutionCode" required autocomplete="off" placeholder="e.g. ABCD23" style="text-transform:uppercase">
-      <label>Pairing Code <span style="color:#334155;font-weight:400">(from Admin Portal)</span></label>
-      <input id="pc" name="pairingCode" required autocomplete="off" placeholder="from admin portal" maxlength="8" style="text-transform:uppercase">
-    </div>
-    <div class="card">
-      <h3>School WiFi <span style="font-size:10px;font-weight:400;color:#475569;text-transform:none">(optional — for sync only)</span></h3>
-      <p style="font-size:11px;color:#64748b;margin-bottom:10px">Device works offline without this. Add WiFi only if you want records to sync automatically to the portal.</p>
-      <label>Network</label>
-      <div class="row">
-        <input id="ssid" name="ssid" autocomplete="off" placeholder="Select or type SSID (optional)">
-        <button type="button" class="scan-btn" id="sb" onclick="scan()">Scan</button>
-      </div>
-      <div id="nl" class="nets" style="display:none"></div>
-      <label>Password</label>
-      <input id="pw" type="password" autocomplete="new-password" placeholder="Leave blank if open">
-      <label style="margin-top:16px;font-size:10px;color:#475569">Server (advanced)</label>
-      <input id="api" value="https://dikly.sbs" style="font-size:12px;color:#475569">
-    </div>
-    <button type="submit" class="submit" id="b">Pair Device</button>
-  </form>
-  <div id="msg"></div>
+<h1>Di<span>kly</span></h1>
+<p class="sub">Attendance Device Setup</p>
+<form id="f" onsubmit="doPair(event);return false;">
+<label>Institution Code</label>
+<input id="ic" autocomplete="off" placeholder="e.g. ABCD23" style="text-transform:uppercase">
+<label>Pairing Code <span style="color:#475569;font-weight:400;text-transform:none">(from Admin Portal)</span></label>
+<input id="pc" autocomplete="off" placeholder="from admin portal" maxlength="8" style="text-transform:uppercase">
+<label>School WiFi <span style="color:#475569;font-weight:400;text-transform:none">(optional)</span></label>
+<div class="row">
+<input id="ss" autocomplete="off" placeholder="Select or type SSID">
+<button type="button" class="sb" id="sb" onclick="scan()">Scan</button>
+</div>
+<div id="nl" class="nl" style="display:none"></div>
+<label>WiFi Password</label>
+<input id="pw" type="password" autocomplete="new-password" placeholder="Leave blank if open">
+<button type="submit" class="btn" id="b">Pair Device</button>
+</form>
+<div id="msg"></div>
 <script>
 function scan(){
-  var sb=document.getElementById('sb'),nl=document.getElementById('nl');
-  sb.disabled=true;sb.textContent='…';nl.style.display='block';
-  nl.innerHTML='<div style="padding:10px 14px;font-size:12px;color:#64748b">Scanning…</div>';
-  var x=new XMLHttpRequest();
-  x.open('GET','/wifi/scan');
-  x.onload=function(){
-    sb.disabled=false;sb.textContent='Scan';
-    if(x.status!==200){nl.innerHTML='<div style="padding:10px;color:#fca5a5">Scan failed</div>';return;}
-    var nets=JSON.parse(x.responseText);
-    if(!nets.length){nl.innerHTML='<div style="padding:10px 14px;font-size:12px;color:#64748b">No networks found.</div>';return;}
-    nets.sort(function(a,b){return(b.rssi||0)-(a.rssi||0);});
-    nl.innerHTML=nets.map(function(n){
-      var bars=n.rssi>-60?'▂▄▆█':n.rssi>-75?'▂▄▆':n.rssi>-85?'▂▄':'▂';
-      var lock=n.open===false?'🔒 ':'';
-      var s=(n.ssid||'').replace(/\\/g,'\\\\').replace(/'/g,"\\'");
-      return '<div class="net" onclick="pick(this,\''+s+'\')"><span>'+(n.ssid||'(Hidden)')+'</span><span class="bars">'+lock+bars+'</span></div>';
-    }).join('');
-  };
-  x.onerror=function(){sb.disabled=false;sb.textContent='Scan';nl.innerHTML='<div style="padding:10px;color:#fca5a5">Scan failed</div>';};
-  x.send();
+var sb=document.getElementById('sb'),nl=document.getElementById('nl');
+sb.disabled=true;sb.textContent='…';nl.style.display='block';
+nl.innerHTML='<div style="padding:10px 12px;font-size:12px;color:#94a3b8">Scanning…</div>';
+var x=new XMLHttpRequest();x.open('GET','/wifi/scan');
+x.onload=function(){
+sb.disabled=false;sb.textContent='Scan';
+if(x.status!==200){nl.innerHTML='<div style="padding:10px 12px;color:#ef4444">Scan failed</div>';return;}
+var nets=JSON.parse(x.responseText);
+if(!nets.length){nl.innerHTML='<div style="padding:10px 12px;font-size:12px;color:#94a3b8">No networks found.</div>';return;}
+nets.sort(function(a,b){return(b.rssi||0)-(a.rssi||0);});
+nl.innerHTML=nets.map(function(n){
+var bars=n.rssi>-60?'▂▄▆█':n.rssi>-75?'▂▄▆':n.rssi>-85?'▂▄':'▂';
+var lock=n.open===false?'🔒 ':'';
+var s=(n.ssid||'').replace(/'/g,"\\'");
+return '<div class="ni" onclick="pick(this,\''+s+'\')"><span>'+(n.ssid||'(Hidden)')+'</span><span class="nm">'+lock+bars+'</span></div>';
+}).join('');
+};
+x.onerror=function(){sb.disabled=false;sb.textContent='Scan';nl.innerHTML='<div style="padding:10px 12px;color:#ef4444">Scan failed</div>';};
+x.send();
 }
 function pick(el,ssid){
-  document.getElementById('ssid').value=ssid;
-  var ns=document.querySelectorAll('.net');
-  for(var i=0;i<ns.length;i++)ns[i].classList.remove('sel');
-  el.classList.add('sel');
+document.getElementById('ss').value=ssid;
+var ns=document.querySelectorAll('.ni');
+for(var i=0;i<ns.length;i++)ns[i].classList.remove('s');
+el.classList.add('s');
 }
 function doPair(e){
-  if(e&&e.preventDefault)e.preventDefault();
-  var ic=(document.getElementById('ic').value||'').toUpperCase().trim();
-  var pc=(document.getElementById('pc').value||'').toUpperCase().trim();
-  var ssid=(document.getElementById('ssid').value||'').trim();
-  var pw=(document.getElementById('pw').value||'');
-  var api=(document.getElementById('api').value||'https://dikly.sbs').trim();
-  if(!ic||!pc){return false;}
-  var m=document.getElementById('msg'),b=document.getElementById('b');
-  b.disabled=true;m.className='';m.textContent='Pairing — this may take 30 s…';
-  var x=new XMLHttpRequest();
-  x.open('POST','/pair');
-  x.setRequestHeader('Content-Type','application/json');
-  x.timeout=40000;
-  x.onload=function(){
-    if(x.status===200){
-      m.className='ok';m.textContent='✓ Connecting & pairing… device will reboot in ~30 s. You can close this.';
-    } else {
-      var msg='Pairing failed';
-      try{msg=JSON.parse(x.responseText).error||msg;}catch(ex){}
-      m.className='err';m.textContent='✗ '+msg;b.disabled=false;
-    }
-  };
-  x.onerror=function(){m.className='err';m.textContent='✗ Connection error — try again';b.disabled=false;};
-  x.ontimeout=function(){m.className='err';m.textContent='✗ Timed out — check device and retry';b.disabled=false;};
-  x.send(JSON.stringify({institutionCode:ic,pairingCode:pc,ssid:ssid,password:pw,apiBase:api}));
-  return false;
+if(e&&e.preventDefault)e.preventDefault();
+var ic=(document.getElementById('ic').value||'').toUpperCase().trim();
+var pc=(document.getElementById('pc').value||'').toUpperCase().trim();
+var ss=(document.getElementById('ss').value||'').trim();
+var pw=(document.getElementById('pw').value||'');
+if(!ic||ic.length<4){msg('err','Enter a valid institution code.');return false;}
+if(!pc||pc.length<4){msg('err','Enter a valid pairing code.');return false;}
+var b=document.getElementById('b');
+b.disabled=true;msg('','Pairing… this may take 30 s.');
+var x=new XMLHttpRequest();x.open('POST','/pair');
+x.setRequestHeader('Content-Type','application/json');
+x.timeout=40000;
+x.onload=function(){
+if(x.status===200){msg('ok','✓ Paired! Device will reboot in ~30 s. You can close this.');}
+else{var t='Pairing failed';try{t=JSON.parse(x.responseText).error||t;}catch(ex){}msg('err','✗ '+t);b.disabled=false;}
+};
+x.onerror=function(){msg('err','Connection error — stay on Dikly WiFi and retry.');b.disabled=false;};
+x.ontimeout=function(){msg('err','Timed out — check device and retry.');b.disabled=false;};
+x.send(JSON.stringify({institutionCode:ic,pairingCode:pc,ssid:ss,password:pw,apiBase:'https://dikly.sbs'}));
+return false;
 }
+function msg(cls,txt){var m=document.getElementById('msg');m.className=cls;m.textContent=txt;}
 </script></body></html>)HTML";
 
 // ── PAIRING STATUS — step-by-step feedback during async pair ─────────────────
@@ -2982,39 +2967,23 @@ static void startApPortal() {
 
   dns.start(53, "*", gw);           // wildcard: every DNS query → our IP
 
-  // Root URL: deliver setup page via chunked transfer (avoids lwIP TX-buffer
-  // overflow that caused ERR_CONNECTION_TIMED_OUT on iOS/Android for the
-  // previous send_P() single-shot delivery of the ~8 KB PAIR_HTML).
-  auto servePage  = []() { sendHtmlChunked(PAIR_HTML); };
-
-  // Standard 302 probe redirect for all OS captive-portal detectors.
-  auto probeRedir = []() {
-    localHttp.sendHeader("Location", "http://192.168.4.1/", true);
-    localHttp.send(302, "text/plain", "");
-  };
+  // Serve the setup page directly at every OS captive-portal probe URL.
+  // No 302 redirect — the old KodexAttendance firmware used this same pattern
+  // and it works reliably on iOS, Android, Windows, and Samsung.
+  // A redirect adds an extra round-trip that the iOS CNA WebSheet sometimes
+  // drops, leaving the user with a blank page or timeout.
+  auto servePage = []() { sendHtmlChunked(PAIR_HTML); };
 
   localHttp.on("/",                    HTTP_GET, servePage);
-  localHttp.on("/generate_204",        HTTP_GET, probeRedir);  // Android
-  localHttp.on("/connecttest.txt",     HTTP_GET, probeRedir);  // Windows
-  localHttp.on("/ncsi.txt",           HTTP_GET, probeRedir);  // Windows NCSI
-  localHttp.on("/success.txt",         HTTP_GET, probeRedir);  // Firefox
-  localHttp.on("/redirect",           HTTP_GET, probeRedir);  // Firefox
-  localHttp.on("/canonical.html",      HTTP_GET, probeRedir);  // Google
-  localHttp.on("/fwlink/",           HTTP_GET, probeRedir);  // Microsoft
-
-  // iOS CNA (/hotspot-detect.html): serve a tiny 200 OK page instead of 302.
-  // A 302 from the probe URL is sometimes ignored by the iOS CNA WebSheet;
-  // a 200 with non-success content always triggers the WebSheet, and the
-  // meta-refresh navigates it to the full setup form in a second micro-request.
-  localHttp.on("/hotspot-detect.html", HTTP_GET, []() {
-    localHttp.sendHeader("Cache-Control", "no-store");
-    localHttp.send(200, "text/html",
-      "<!DOCTYPE html><html><head>"
-      "<meta http-equiv='refresh' content='0;url=http://192.168.4.1/'>"
-      "</head><body><a href='http://192.168.4.1/'>Open Dikly Setup</a></body></html>");
-  });
-
-  localHttp.onNotFound(servePage);  // unknown paths → page directly (no redirect loop)
+  localHttp.on("/generate_204",        HTTP_GET, servePage);  // Android
+  localHttp.on("/hotspot-detect.html", HTTP_GET, servePage);  // iOS
+  localHttp.on("/connecttest.txt",     HTTP_GET, servePage);  // Windows
+  localHttp.on("/ncsi.txt",           HTTP_GET, servePage);  // Windows NCSI
+  localHttp.on("/success.txt",         HTTP_GET, servePage);  // Firefox
+  localHttp.on("/redirect",           HTTP_GET, servePage);  // Firefox
+  localHttp.on("/canonical.html",      HTTP_GET, servePage);  // Google
+  localHttp.on("/fwlink/",           HTTP_GET, servePage);  // Microsoft
+  localHttp.onNotFound(servePage);
 
   localHttp.on("/wifi/scan", HTTP_GET, []() {
     int n = WiFi.scanNetworks();
