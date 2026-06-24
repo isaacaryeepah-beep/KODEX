@@ -4328,6 +4328,7 @@ static void registerLocalHttp() {
       "<input type='password' id='pin' placeholder='4-digit PIN' maxlength='4' inputmode='numeric' autocomplete='off' style='display:none'>"
       "<label>Duration</label>"
       "<div class='dur'>"
+      "<input type='radio' name='d' id='d5' value='300'><label for='d5'>5 min</label>"
       "<input type='radio' name='d' id='d30' value='1800'><label for='d30'>30 min</label>"
       "<input type='radio' name='d' id='d45' value='2700'><label for='d45'>45 min</label>"
       "<input type='radio' name='d' id='d60' value='3600' checked><label for='d60'>1 hr</label>"
