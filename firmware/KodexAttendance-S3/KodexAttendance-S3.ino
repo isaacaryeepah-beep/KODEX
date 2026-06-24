@@ -260,7 +260,7 @@ static const uint8_t SD_CLK = 38, SD_CMD = 40, SD_D0 = 39;
 static const uint8_t SD_D1  = 41, SD_D2  = 48, SD_D3 = 47;
 
 // ─── App Config ──────────────────────────────────────────────────────────────
-static const char*   FIRMWARE_VERSION     = "s3-2.1.6";
+static const char*   FIRMWARE_VERSION     = "s3-2.1.7";
 static const char*   DEFAULT_API_BASE     = "https://dikly.sbs";
 
 static const uint32_t HEARTBEAT_MS        = 5000;
@@ -4588,7 +4588,9 @@ void setup() {
   pinMode(45, OUTPUT);
   digitalWrite(45, HIGH);
 
-  Serial.begin(115200); delay(150);
+  Serial.begin(115200);
+  // Wait for USB CDC to enumerate on ESP32-S3 native USB before first print.
+  delay(500);
 
   pinMode(LED_PIN, OUTPUT);
   // Redirect mbedTLS heap allocations to PSRAM so TLS handshakes never fail
