@@ -231,7 +231,7 @@ public:
 #include <BLEDevice.h>
 #include <BLEAdvertising.h>
 #include <esp_bt.h>        // esp_bt_controller_mem_release
-#include <esp_wifi.h>      // esp_wifi_stop / esp_wifi_deinit for hard reset
+#include <esp_wifi.h>      // esp_wifi_ap_get_sta_list, promiscuous, etc.
 #include <ESPmDNS.h>       // dikly.local hostname on both AP and STA networks
 #include "lwip/etharp.h"   // ARP table for IP→MAC→RSSI mapping
 #include <ArduinoOTA.h>
@@ -4715,14 +4715,6 @@ void setup() {
   );
 
 
-  // Soft resets leave WiFi DMA rx-buffer pool partially allocated in internal
-  // DRAM. Arduino WiFi.disconnect/mode(OFF) is not sufficient to free them —
-  // call the raw ESP-IDF teardown so fresh init always gets a clean heap.
-  // These return ESP_ERR_WIFI_NOT_INIT on a true cold boot; that is fine.
-  esp_wifi_stop();
-  esp_wifi_deinit();
-  delay(200);
-
   // Move large arrays to PSRAM to free ~38 KB of internal DRAM for WiFi init.
   // EXT_RAM_BSS_ATTR is ineffective without .ext_ram.bss in the linker script,
   // so we allocate explicitly. Fall back to internal heap only if PSRAM is full.
@@ -4791,23 +4783,17 @@ void setup() {
   LOG("DMA heap free:    " + String(heap_caps_get_free_size(MALLOC_CAP_DMA | MALLOC_CAP_INTERNAL)));
   LOG("DMA largest block:" + String(heap_caps_get_largest_free_block(MALLOC_CAP_DMA | MALLOC_CAP_INTERNAL)));
 
-  // WiFi driver init FIRST — reduced DMA config saves ~10 KB.
-  // esp_wifi_init() claims WiFi's DMA structures (~10-15 KB) from the
-  // still-unfragmented heap. WiFi.mode/softAP reuse these without re-allocating.
-  // BLE then gets the remaining heap (~45+ KB), easily satisfying its 4 KB EMI block.
-  {
+  // On clean power-on: explicit WiFi init (reduced DMA buffers) first, BLE second.
+  // WiFi claims ~10 KB DMA; BLE then gets the remaining large contiguous block.
+  // This is the initialization order from the original working firmware.
+  // On rst:0xc we touch nothing here — WiFi.mode() below handles init from scratch.
+  if (cleanBoot) {
     wifi_init_config_t wcfg = WIFI_INIT_CONFIG_DEFAULT();
     wcfg.static_rx_buf_num  = 4;
     wcfg.static_tx_buf_num  = 0;
     wcfg.tx_buf_type        = 1;  // WIFI_DYNAMIC_TX_BUFFER
     wcfg.dynamic_tx_buf_num = 32;
     esp_wifi_init(&wcfg);
-  }
-  LOG("Post-WiFi-drv DMA free:  " + String(heap_caps_get_free_size(MALLOC_CAP_DMA | MALLOC_CAP_INTERNAL)));
-  LOG("Post-WiFi-drv DMA block: " + String(heap_caps_get_largest_free_block(MALLOC_CAP_DMA | MALLOC_CAP_INTERNAL)));
-
-  // BLE SECOND — only on clean power-on (dirty RF state after any reset = crash loop)
-  if (cleanBoot) {
     initBle();
   }
 
