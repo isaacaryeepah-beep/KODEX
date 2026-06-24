@@ -2633,7 +2633,7 @@ static const char PAIR_HTML[] PROGMEM = R"HTML(<!doctype html>
 <body>
   <div class="logo">Di<span>kly</span></div>
   <p class="sub">Attendance Device Setup</p>
-  <form id="f">
+  <form id="f" onsubmit="doPair(event);return false;">
     <div class="card">
       <h3>Institution</h3>
       <label>Institution Code</label>
@@ -2651,50 +2651,70 @@ static const char PAIR_HTML[] PROGMEM = R"HTML(<!doctype html>
       </div>
       <div id="nl" class="nets" style="display:none"></div>
       <label>Password</label>
-      <input name="password" type="password" autocomplete="new-password" placeholder="Leave blank if open">
+      <input id="pw" type="password" autocomplete="new-password" placeholder="Leave blank if open">
       <label style="margin-top:16px;font-size:10px;color:#475569">Server (advanced)</label>
-      <input name="apiBase" value="https://dikly.sbs" style="font-size:12px;color:#475569">
+      <input id="api" value="https://dikly.sbs" style="font-size:12px;color:#475569">
     </div>
     <button type="submit" class="submit" id="b">Pair Device</button>
   </form>
   <div id="msg"></div>
 <script>
-async function scan(){
-  const sb=document.getElementById('sb'),nl=document.getElementById('nl');
+function scan(){
+  var sb=document.getElementById('sb'),nl=document.getElementById('nl');
   sb.disabled=true;sb.textContent='…';nl.style.display='block';
   nl.innerHTML='<div style="padding:10px 14px;font-size:12px;color:#64748b">Scanning…</div>';
-  try{
-    const r=await fetch('/wifi/scan');const nets=await r.json();
+  var x=new XMLHttpRequest();
+  x.open('GET','/wifi/scan');
+  x.onload=function(){
+    sb.disabled=false;sb.textContent='Scan';
+    if(x.status!==200){nl.innerHTML='<div style="padding:10px;color:#fca5a5">Scan failed</div>';return;}
+    var nets=JSON.parse(x.responseText);
     if(!nets.length){nl.innerHTML='<div style="padding:10px 14px;font-size:12px;color:#64748b">No networks found.</div>';return;}
-    nets.sort((a,b)=>(b.rssi||0)-(a.rssi||0));
-    nl.innerHTML=nets.map(n=>{
-      const bars=n.rssi>-60?'▂▄▆█':n.rssi>-75?'▂▄▆':n.rssi>-85?'▂▄':'▂';
-      const lock=n.open===false?'🔒 ':'';
-      const s=(n.ssid||'').replace(/'/g,"\\'");
-      return `<div class="net" onclick="pick(this,'${s}')"><span>${n.ssid||'(Hidden)'}</span><span class="bars">${lock}${bars}</span></div>`;
+    nets.sort(function(a,b){return(b.rssi||0)-(a.rssi||0);});
+    nl.innerHTML=nets.map(function(n){
+      var bars=n.rssi>-60?'▂▄▆█':n.rssi>-75?'▂▄▆':n.rssi>-85?'▂▄':'▂';
+      var lock=n.open===false?'🔒 ':'';
+      var s=(n.ssid||'').replace(/\\/g,'\\\\').replace(/'/g,"\\'");
+      return '<div class="net" onclick="pick(this,\''+s+'\')"><span>'+(n.ssid||'(Hidden)')+'</span><span class="bars">'+lock+bars+'</span></div>';
     }).join('');
-  }catch(e){nl.innerHTML='<div style="padding:10px;color:#fca5a5">Scan failed</div>';}
-  finally{sb.disabled=false;sb.textContent='Scan';}
+  };
+  x.onerror=function(){sb.disabled=false;sb.textContent='Scan';nl.innerHTML='<div style="padding:10px;color:#fca5a5">Scan failed</div>';};
+  x.send();
 }
 function pick(el,ssid){
   document.getElementById('ssid').value=ssid;
-  document.querySelectorAll('.net').forEach(i=>i.classList.remove('sel'));
+  var ns=document.querySelectorAll('.net');
+  for(var i=0;i<ns.length;i++)ns[i].classList.remove('sel');
   el.classList.add('sel');
 }
-document.getElementById('f').onsubmit=async(e)=>{
-  e.preventDefault();
-  const d=Object.fromEntries(new FormData(e.target));
-  d.institutionCode=d.institutionCode.toUpperCase().trim();
-  d.pairingCode=d.pairingCode.toUpperCase().trim();
-  const m=document.getElementById('msg'),b=document.getElementById('b');
+function doPair(e){
+  if(e&&e.preventDefault)e.preventDefault();
+  var ic=(document.getElementById('ic').value||'').toUpperCase().trim();
+  var pc=(document.getElementById('pc').value||'').toUpperCase().trim();
+  var ssid=(document.getElementById('ssid').value||'').trim();
+  var pw=(document.getElementById('pw').value||'');
+  var api=(document.getElementById('api').value||'https://dikly.sbs').trim();
+  if(!ic||!pc){return false;}
+  var m=document.getElementById('msg'),b=document.getElementById('b');
   b.disabled=true;m.className='';m.textContent='Pairing — this may take 30 s…';
-  try{
-    const r=await fetch('/pair',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(d)});
-    const j=await r.json();
-    if(!r.ok)throw new Error(j.error||'Pairing failed');
-    m.className='ok';m.textContent='✓ Connecting to WiFi & pairing… device will reboot in ~30 s. You can close this.';
-  }catch(err){m.className='err';m.textContent='✗ '+err.message;b.disabled=false;}
-};
+  var x=new XMLHttpRequest();
+  x.open('POST','/pair');
+  x.setRequestHeader('Content-Type','application/json');
+  x.timeout=40000;
+  x.onload=function(){
+    if(x.status===200){
+      m.className='ok';m.textContent='✓ Connecting & pairing… device will reboot in ~30 s. You can close this.';
+    } else {
+      var msg='Pairing failed';
+      try{msg=JSON.parse(x.responseText).error||msg;}catch(ex){}
+      m.className='err';m.textContent='✗ '+msg;b.disabled=false;
+    }
+  };
+  x.onerror=function(){m.className='err';m.textContent='✗ Connection error — try again';b.disabled=false;};
+  x.ontimeout=function(){m.className='err';m.textContent='✗ Timed out — check device and retry';b.disabled=false;};
+  x.send(JSON.stringify({institutionCode:ic,pairingCode:pc,ssid:ssid,password:pw,apiBase:api}));
+  return false;
+}
 </script></body></html>)HTML";
 
 // ── PAIRING STATUS — step-by-step feedback during async pair ─────────────────
