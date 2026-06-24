@@ -260,11 +260,11 @@ static const uint8_t SD_CLK = 38, SD_CMD = 40, SD_D0 = 39;
 static const uint8_t SD_D1  = 41, SD_D2  = 48, SD_D3 = 47;
 
 // ─── App Config ──────────────────────────────────────────────────────────────
-static const char*   FIRMWARE_VERSION     = "s3-2.1.5";
+static const char*   FIRMWARE_VERSION     = "s3-2.1.6";
 static const char*   DEFAULT_API_BASE     = "https://dikly.sbs";
 
 static const uint32_t HEARTBEAT_MS        = 5000;
-static const uint32_t WIFI_TIMEOUT_MS     = 12000;  // 12 s: enough for any healthy AP; fail fast on wrong creds
+static const uint32_t WIFI_TIMEOUT_MS     = 8000;   // 8 s: typical connect is 3-5 s; fail fast on wrong creds
 static const uint32_t WINDOW_SECONDS      = 120;  // code rotation period (2 minutes)
 
 // ─── Theme selector ──────────────────────────────────────────────────────────
