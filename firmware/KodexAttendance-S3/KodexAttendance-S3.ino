@@ -229,6 +229,7 @@ public:
 #include <SPI.h>
 #include <SD_MMC.h>   // SDIO driver — separate peripheral from SPI, no bus conflict
 #include <esp_wifi.h>      // esp_wifi_ap_get_sta_list, promiscuous, etc.
+#include <esp_bt.h>        // esp_bt_controller_mem_release — frees BLE DMA pool even when BLE unused
 #include <ESPmDNS.h>       // dikly.local hostname on both AP and STA networks
 #include "lwip/etharp.h"   // ARP table for IP→MAC→RSSI mapping
 #include <ArduinoOTA.h>
@@ -4682,6 +4683,10 @@ void setup() {
   // Not yet paired — go to captive portal for setup
   if (deviceJWT.isEmpty()) {
     LOG("Entering setup AP mode");
+    // Release the ~38 KB BLE DMA pool the hardware reserves at startup
+    // regardless of whether BLE is used. Without this the WebServer may not
+    // have enough internal DRAM to accept incoming TCP connections.
+    esp_bt_controller_mem_release(ESP_BT_MODE_BLE);
     startApPortal();
     return;
   }
