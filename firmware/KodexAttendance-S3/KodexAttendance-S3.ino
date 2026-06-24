@@ -651,29 +651,9 @@ static String deriveCode(const String& seed, uint32_t unixSec) {
 // Backend re-derives the HMAC using session.esp32Seed and rejects stale slots.
 
 static void initBle() {
-  // BLE RF/EMI state is NOT reset by a software reset (rst:0xc).  Any non-
-  // power-on boot (panic, SW, watchdog, brownout) leaves the controller in a
-  // dirty state; BLEDevice::init() null-derefs and crashes again, producing
-  // an infinite loop.
-  //
-  // FIX: only run BLE on a clean power-on (ESP_RST_POWERON).  For every other
-  // reset type we:
-  //   1. Release the ~38 KB DMA-DRAM block so phy_init can find contiguous
-  //      memory when WiFi starts (without this, phy_init aborts and we loop).
-  //   2. Erase NVS PHY calibration data so a corrupted cal record can't cause
-  //      phy_init to abort on the NEXT clean boot either.
-  // BLE resumes automatically on the next physical power cycle (unplug/replug).
-  //
-  // NOTE: In Arduino ESP32 3.x / IDF 5.x, a panic (rst:0xc) may be reported
-  // as ESP_RST_SW rather than ESP_RST_PANIC, so checking individual crash
-  // reasons is not reliable — the only safe sentinel is ESP_RST_POWERON.
-  esp_reset_reason_t rst = esp_reset_reason();
-  if (rst != ESP_RST_POWERON) {
-    Serial.printf("[BLE] skipped — non-power-on boot (reason=%d), releasing DMA block\r\n", (int)rst);
-    esp_bt_controller_mem_release(ESP_BT_MODE_BLE);  // return DMA-DRAM to heap for phy_init
-    esp_phy_erase_cal_data_in_nvs();                 // clear any corrupted PHY cal data
-    return;  // bleAdv stays nullptr; all callers guard against null
-  }
+  // Called only on clean power-on (setup() guards the call site).
+  // A 200 ms yield lets WiFi's background tasks settle before NimBLE registers
+  // its HCI callbacks, eliminating an HCI init race on IDF 5.x.
   delay(200);
   BLEDevice::init(("Dikly-" + macSuffix()).c_str());
   bleAdv = BLEDevice::getAdvertising();
@@ -4800,17 +4780,29 @@ void setup() {
   // Students connect directly to the device hotspot. No school WiFi needed for
   // attendance. School WiFi (if configured) is used only for background sync.
 
+  // Detect reset reason before touching RF hardware.
+  // After a panic/watchdog/soft reset the BLE RF/EMI block is dirty and
+  // BLEDevice::init() will null-deref and crash again (infinite loop).
+  // In IDF 5.x a panic (rst:0xc) is reported as ESP_RST_SW, so we cannot
+  // check for specific crash reasons — ESP_RST_POWERON is the only safe sentinel.
+  esp_reset_reason_t rstReason = esp_reset_reason();
+  bool cleanBoot = (rstReason == ESP_RST_POWERON);
+  LOG("Reset reason: " + String((int)rstReason) + (cleanBoot ? " (power-on, BLE OK)" : " (soft/crash, BLE skipped)"));
+
+  // On any non-power-on reset, release the BLE DMA block and erase corrupted
+  // PHY calibration data BEFORE esp_wifi_init() so phy_init has contiguous memory.
+  if (!cleanBoot) {
+    esp_bt_controller_mem_release(ESP_BT_MODE_BLE);
+    esp_phy_erase_cal_data_in_nvs();
+  }
+
   LOG("DMA heap free:    " + String(heap_caps_get_free_size(MALLOC_CAP_DMA | MALLOC_CAP_INTERNAL)));
   LOG("DMA largest block:" + String(heap_caps_get_largest_free_block(MALLOC_CAP_DMA | MALLOC_CAP_INTERNAL)));
 
-  // BLE FIRST on ESP32-S3: the controller needs ~38 KB of contiguous internal
-  // DRAM (emi.c:164). Must claim this before esp_wifi_init() fragments the heap.
-  initBle();
-  LOG("Post-BLE DMA free:  " + String(heap_caps_get_free_size(MALLOC_CAP_DMA | MALLOC_CAP_INTERNAL)));
-  LOG("Post-BLE DMA block: " + String(heap_caps_get_largest_free_block(MALLOC_CAP_DMA | MALLOC_CAP_INTERNAL)));
-
-  // WiFi driver init AFTER BLE — reduced DMA config saves ~10 KB.
-  // tx_buf_type=1 moves TX buffers to general heap; static_rx_buf_num=4 reduces DMA usage.
+  // WiFi driver init FIRST — reduced DMA config saves ~10 KB.
+  // esp_wifi_init() claims WiFi's DMA structures (~10-15 KB) from the
+  // still-unfragmented heap. WiFi.mode/softAP reuse these without re-allocating.
+  // BLE then gets the remaining heap (~45+ KB), easily satisfying its 4 KB EMI block.
   {
     wifi_init_config_t wcfg = WIFI_INIT_CONFIG_DEFAULT();
     wcfg.static_rx_buf_num  = 4;
@@ -4821,6 +4813,11 @@ void setup() {
   }
   LOG("Post-WiFi-drv DMA free:  " + String(heap_caps_get_free_size(MALLOC_CAP_DMA | MALLOC_CAP_INTERNAL)));
   LOG("Post-WiFi-drv DMA block: " + String(heap_caps_get_largest_free_block(MALLOC_CAP_DMA | MALLOC_CAP_INTERNAL)));
+
+  // BLE SECOND — only on clean power-on (dirty RF state after any reset = crash loop)
+  if (cleanBoot) {
+    initBle();
+  }
 
   String apName = "Dikly-" + macSuffix();
   WiFi.mode(WIFI_AP);
