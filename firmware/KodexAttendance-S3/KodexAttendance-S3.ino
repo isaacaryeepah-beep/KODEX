@@ -2250,45 +2250,39 @@ static void drawSessionStart() {
   spr.fillSprite(COL_BG);
   bool online = (WiFi.status() == WL_CONNECTED);
   _drawSubHeader(spr, "Start Session", online);
-  drawTabBar(spr, 1);  // Session tab active
+  drawTabBar(spr, 1);
 
-  spr.setFont(F_TINY); spr.setTextColor(COL_MUTED, COL_BG);
-  int32_t tw = spr.textWidth("Select session duration:");
-  spr.setCursor((SW - tw) / 2, 58); spr.print("Select session duration:");
+  // Step 1 card
+  spr.fillRoundRect(10, 60, SW - 20, 62, 8, COL_CARD);
+  spr.drawRoundRect(10, 60, SW - 20, 62, 8, COL_BORDER);
+  spr.setFont(F_TINY); spr.setTextColor(COL_PRIMARY, COL_CARD);
+  spr.setCursor(20, 68); spr.print("Step 1");
+  spr.setTextColor(COL_TEXT, COL_CARD);
+  spr.setCursor(20, 82); spr.print("Connect your phone to:");
+  spr.setFont(F_SMALL); spr.setTextColor(COL_CYAN, COL_CARD);
+  String apLbl = "Dikly-" + macSuffix();
+  int32_t tw = spr.textWidth(apLbl);
+  spr.setCursor((SW - tw) / 2, 96); spr.print(apLbl);
 
-  // 2x2 duration button grid
-  // bw=107, bh=76. Columns at x=8 and x=8+107+10=125. Rows at y=72 and y=156.
-  const int32_t bw = 107, bh = 76, gap = 10;
-  const int32_t x0 = 8, x1 = x0 + bw + gap;
-  const int32_t y0 = 72, y1 = y0 + bh + gap;
+  // Step 2 card
+  spr.fillRoundRect(10, 132, SW - 20, 62, 8, COL_CARD);
+  spr.drawRoundRect(10, 132, SW - 20, 62, 8, COL_BORDER);
+  spr.setFont(F_TINY); spr.setTextColor(COL_PRIMARY, COL_CARD);
+  spr.setCursor(20, 140); spr.print("Step 2");
+  spr.setTextColor(COL_TEXT, COL_CARD);
+  spr.setCursor(20, 154); spr.print("Open in browser:");
+  spr.setFont(F_SMALL); spr.setTextColor(COL_CYAN, COL_CARD);
+  tw = spr.textWidth("192.168.4.1/start");
+  spr.setCursor((SW - tw) / 2, 168); spr.print("192.168.4.1/start");
 
-  struct { int32_t x, y; const char* label; const char* sub; } btns[4] = {
-    { x0, y0, "30 min", "" },
-    { x1, y0, "45 min", "" },
-    { x0, y1, "1 hour", "" },
-    { x1, y1, "2 hours", "" },
-  };
-
-  for (int i = 0; i < 4; i++) {
-    spr.fillRoundRect(btns[i].x, btns[i].y, bw, bh, 8, COL_DIM_CARD);
-    spr.drawRoundRect(btns[i].x, btns[i].y, bw, bh, 8, COL_PRIMARY);
-
-    spr.setFont(F_SMALL); spr.setTextColor(COL_TEXT, COL_DIM_CARD);
-    tw = spr.textWidth(btns[i].label);
-    spr.setCursor(btns[i].x + (bw - tw) / 2, btns[i].y + bh/2 - 8);
-    spr.print(btns[i].label);
-  }
-
-  // Offline note
-  spr.setFont(F_TINY); spr.setTextColor(COL_MUTED, COL_BG);
-  tw = spr.textWidth("Students connect to hotspot — no internet needed");
-  if (tw > SW - 8) {
-    spr.setCursor(4, 242); spr.print("Students connect to hotspot");
-    tw = spr.textWidth("— no internet needed");
-    spr.setCursor((SW - tw) / 2, 256); spr.print("— no internet needed");
-  } else {
-    spr.setCursor((SW - tw) / 2, 248); spr.print("Students connect to hotspot — no internet needed");
-  }
+  // Step 3 note
+  spr.fillRoundRect(10, 204, SW - 20, 50, 8, COL_CARD);
+  spr.drawRoundRect(10, 204, SW - 20, 50, 8, COL_BORDER);
+  spr.setFont(F_TINY); spr.setTextColor(COL_PRIMARY, COL_CARD);
+  spr.setCursor(20, 212); spr.print("Step 3");
+  spr.setTextColor(COL_MUTED, COL_CARD);
+  spr.setCursor(20, 226); spr.print("Select course, enter your PIN");
+  spr.setCursor(20, 240); spr.print("and choose duration.");
 
   spr.pushSprite(0, 0);
 }
@@ -4490,20 +4484,7 @@ static void handlePairedTap(uint16_t tx, uint16_t ty) {
     if      (ty >= 138 && ty <= 168) curScreen = PAIR_SCREEN;  // Pair Lecturer button
     else if (ty >= 250)              curScreen = DEVICE_INFO;  // Device ID row
   }
-  // SESSION_START — 2×2 duration grid
-  else if (curScreen == SESSION_START) {
-    const int32_t bw = 107, bh = 76, gap = 10;
-    const int32_t x0 = 8, x1 = x0 + bw + gap;
-    const int32_t y0 = 72, y1 = y0 + bh + gap;
-    // Top-left: 30 min
-    if      (tx >= x0 && tx < x0+bw && ty >= y0 && ty < y0+bh) startLocalSession(30*60);
-    // Top-right: 45 min
-    else if (tx >= x1 && tx < x1+bw && ty >= y0 && ty < y0+bh) startLocalSession(45*60);
-    // Bottom-left: 1 hour
-    else if (tx >= x0 && tx < x0+bw && ty >= y1 && ty < y1+bh) startLocalSession(60*60);
-    // Bottom-right: 2 hours
-    else if (tx >= x1 && tx < x1+bw && ty >= y1 && ty < y1+bh) startLocalSession(120*60);
-  }
+  // SESSION_START — info screen only, no touch actions (session starts via browser /start)
   // SESSION screen
   else if (curScreen == SESSION) {
     if (ty >= 262 && ty <= 278) {   // End Session button
