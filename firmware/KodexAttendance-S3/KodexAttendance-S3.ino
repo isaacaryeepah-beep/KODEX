@@ -7,7 +7,7 @@
  *  WHAT THIS DOES
  *  ─────────────
  *  • On first boot, runs a captive-portal AP "Dikly-XXXXXX". Open
- *    192.168.4.1 on your phone, enter institution code + pairing code
+ *    http://10.0.0.1 on your phone, enter institution code + pairing code
  *    from the admin portal, and your school WiFi credentials.
  *  • Calls POST /api/devices/pair → saves a long-lived device JWT in NVS.
  *  • Sends heartbeats every 5 s → receives active session info.
@@ -1411,35 +1411,6 @@ static void drawSplash() {
   spr.pushSprite(0, 0);
 }
 
-// ── QR code bitmap for http://192.168.4.1 (25×25 modules) ───────────────────
-static const uint8_t QR_IP_SIZE = 25;
-static const uint8_t QR_IP[25][25] = {
-  {1,1,1,1,1,1,1,0,0,1,1,1,0,1,0,0,1,0,1,1,1,1,1,1,1},
-  {1,0,0,0,0,0,1,0,0,0,0,1,1,0,0,0,0,0,1,0,0,0,0,0,1},
-  {1,0,1,1,1,0,1,0,0,1,1,1,0,0,1,0,1,0,1,0,1,1,1,0,1},
-  {1,0,1,1,1,0,1,0,1,0,1,1,0,0,1,1,1,0,1,0,1,1,1,0,1},
-  {1,0,1,1,1,0,1,0,1,0,1,0,1,1,0,0,0,0,1,0,1,1,1,0,1},
-  {1,0,0,0,0,0,1,0,0,1,1,0,0,1,1,0,0,0,1,0,0,0,0,0,1},
-  {1,1,1,1,1,1,1,0,1,0,1,0,1,0,1,0,1,0,1,1,1,1,1,1,1},
-  {0,0,0,0,0,0,0,0,0,1,0,0,1,1,0,0,1,0,0,0,0,0,0,0,0},
-  {1,1,0,0,0,1,1,1,0,1,1,0,1,0,1,1,1,0,0,0,1,1,0,0,0},
-  {0,0,1,0,0,0,0,1,1,0,1,0,0,0,1,1,1,1,0,0,1,1,1,1,0},
-  {0,1,0,0,0,1,1,0,1,1,0,1,1,0,0,1,0,0,1,1,0,1,0,1,1},
-  {0,1,1,0,1,0,0,0,1,0,1,1,0,0,1,1,1,0,0,0,1,1,0,0,1},
-  {1,1,1,0,0,1,1,0,0,1,1,0,0,1,1,0,1,1,1,0,0,0,0,0,1},
-  {1,0,1,0,0,0,0,0,0,0,1,0,1,1,1,1,0,0,0,0,0,0,0,1,0},
-  {1,0,0,1,1,1,1,0,0,1,1,0,0,1,1,1,0,1,0,1,0,1,0,1,1},
-  {1,0,0,1,1,1,0,1,1,0,0,0,1,1,1,0,1,0,0,0,1,0,1,0,1},
-  {1,0,1,0,1,1,1,1,0,0,1,0,1,0,1,0,1,1,1,1,1,0,1,0,0},
-  {0,0,0,0,0,0,0,0,1,1,1,0,0,0,0,1,1,0,0,0,1,0,1,0,0},
-  {1,1,1,1,1,1,1,0,1,1,1,0,1,1,1,0,1,0,1,0,1,1,0,0,1},
-  {1,0,0,0,0,0,1,0,1,1,1,1,0,0,1,0,1,0,0,0,1,0,0,0,0},
-  {1,0,1,1,1,0,1,0,0,1,0,1,0,0,0,1,1,1,1,1,1,1,1,0,1},
-  {1,0,1,1,1,0,1,0,0,0,1,0,1,1,0,0,0,0,1,1,0,1,0,1,1},
-  {1,0,1,1,1,0,1,0,0,0,1,0,0,1,1,0,0,1,0,0,0,0,1,0,1},
-  {1,0,0,0,0,0,1,0,1,0,1,0,1,1,0,1,1,0,1,1,1,0,0,0,1},
-  {1,1,1,1,1,1,1,0,1,0,0,1,1,1,0,1,1,0,1,0,0,1,0,0,1},
-};
 
 // ── SETUP (captive portal) ────────────────────────────────────────────────────
 static void drawSetup(const String& apName) {
@@ -1509,44 +1480,8 @@ static void drawSetup(const String& apName) {
 
   stepCard(1, "Connect phone to Wi-Fi:", F_SMALL, apName.c_str(), nullptr, nullptr, 42);
 
-  // ── Step 2 — card with QR on the right ───────────────────────────────────────
-  {
-    const int32_t card2H   = 88;
-    const int32_t card2Top = cy;
-    spr.fillRoundRect(CX, cy, CW, card2H, 6, COL_CARD);
-    spr.drawRoundRect(CX, cy, CW, card2H, 6, COL_BORDER);
-
-    // Step circle
-    const int32_t bx = CX + 18, by = cy + card2H / 2;
-    spr.fillCircle(bx, by, 10, COL_PRIMARY);
-    spr.setFont(F_TINY); spr.setTextColor(COL_BG, COL_PRIMARY);
-    spr.setCursor(bx - 3, by - 4); spr.print("2");
-
-    // Text (left of QR)
-    const int32_t tx = CX + 36;
-    spr.setFont(F_TINY); spr.setTextColor(COL_MUTED, COL_CARD);
-    spr.setCursor(tx, cy + 8); spr.print("Scan QR or open:");
-    spr.setFont(F_TINY); spr.setTextColor(COL_CYAN, COL_CARD);
-    spr.setCursor(tx, cy + 21); spr.print("dikly.local");
-    spr.setFont(F_TINY); spr.setTextColor(COL_MUTED, COL_CARD);
-    spr.setCursor(tx, cy + 34); spr.print("or 192.168.4.1");
-
-    // QR code — right side, white border+black modules
-    const int32_t QR_SCALE = 3;
-    const int32_t QR_PX    = QR_IP_SIZE * QR_SCALE;  // 75px
-    const int32_t qrX      = CX + CW - QR_PX - 6;
-    const int32_t qrY      = card2Top + (card2H - QR_PX) / 2;
-    spr.fillRect(qrX - 2, qrY - 2, QR_PX + 4, QR_PX + 4, 0xFFFF);
-    for (int qy = 0; qy < QR_IP_SIZE; qy++) {
-      for (int qx = 0; qx < QR_IP_SIZE; qx++) {
-        if (QR_IP[qy][qx]) {
-          spr.fillRect(qrX + qx * QR_SCALE, qrY + qy * QR_SCALE,
-                       QR_SCALE, QR_SCALE, 0x0000);
-        }
-      }
-    }
-    cy += card2H + CG;
-  }
+  stepCard(2, "Open in browser (type exactly):", F_TINY,
+           "http://10.0.0.1", "or  dikly.local", nullptr, 52);
 
   stepCard(3, "Enter your credentials:", F_TINY,
            "Institution code + pairing code", "then your school Wi-Fi password",
@@ -1639,7 +1574,7 @@ static void drawWifiReconfig(const String& apName) {
   spr.setFont(F_SMALL); spr.setTextColor(COL_WARNING, COL_CARD);
   spr.setCursor(46, cy + 22); spr.print("dikly.local");
   spr.setFont(F_TINY); spr.setTextColor(COL_MUTED, COL_CARD);
-  spr.setCursor(46, cy + 38); spr.print("or 192.168.4.1");
+  spr.setCursor(46, cy + 38); spr.print("or http://10.0.0.1");
 
   // ── Info card: pairing preserved ─────────────────────────────────────────────
   cy += 60;
@@ -1928,7 +1863,7 @@ static void startWifiReconfigPortal() {
   WiFi.mode(WIFI_AP);
   delay(100);
   esp_wifi_set_ps(WIFI_PS_NONE);
-  WiFi.softAPConfig(IPAddress(192,168,4,1), IPAddress(192,168,4,1), IPAddress(255,255,255,0));
+  WiFi.softAPConfig(IPAddress(10,0,0,1), IPAddress(10,0,0,1), IPAddress(255,255,255,0));
   String ap = "Dikly-" + macSuffix();
   WiFi.softAP(ap.c_str());
   IPAddress gw;
@@ -2206,8 +2141,8 @@ static void drawSessionStart() {
   spr.setTextColor(COL_TEXT, COL_CARD);
   spr.setCursor(20, 154); spr.print("Open in browser:");
   spr.setFont(F_SMALL); spr.setTextColor(COL_CYAN, COL_CARD);
-  tw = spr.textWidth("192.168.4.1/start");
-  spr.setCursor((SW - tw) / 2, 168); spr.print("192.168.4.1/start");
+  tw = spr.textWidth("http://10.0.0.1/start");
+  spr.setCursor((SW - tw) / 2, 168); spr.print("http://10.0.0.1/start");
 
   // Step 3 note
   spr.fillRoundRect(10, 204, SW - 20, 50, 8, COL_CARD);
@@ -2346,7 +2281,7 @@ static void drawPairScreen() {
   spr.setCursor(54, 78); spr.print(shortAp);
   spr.setFont(F_TINY); spr.setTextColor(COL_MUTED, COL_CARD);
   spr.setCursor(54, 98); spr.print("Open network — no password");
-  spr.setCursor(54, 112); spr.print("Then open 192.168.4.1");
+  spr.setCursor(54, 112); spr.print("Then open http://10.0.0.1");
 
   // ── Device ID card ────────────────────────────────────────────────────────────
   spr.fillRoundRect(10, 144, SW - 20, 44, 6, COL_CARD);
@@ -2985,8 +2920,8 @@ static void startApPortal() {
   // Without this, clients can take 10–30 s to get a DHCP lease (or fail entirely).
   esp_wifi_set_ps(WIFI_PS_NONE);
   // Explicitly set IP/gateway/subnet so the DHCP server hands the right
-  // default-gateway (192.168.4.1) to connecting clients.
-  WiFi.softAPConfig(IPAddress(192,168,4,1), IPAddress(192,168,4,1), IPAddress(255,255,255,0));
+  // default-gateway (10.0.0.1) to connecting clients.
+  WiFi.softAPConfig(IPAddress(10,0,0,1), IPAddress(10,0,0,1), IPAddress(255,255,255,0));
   String ap = "Dikly-" + macSuffix();
   WiFi.softAP(ap.c_str());
   // Wait until the AP has a real IP (0.0.0.0 means not ready yet)
