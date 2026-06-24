@@ -7,7 +7,7 @@
  *  WHAT THIS DOES
  *  ─────────────
  *  • On first boot, runs a captive-portal AP "Dikly-XXXXXX". Open
- *    http://10.0.0.1 on your phone, enter institution code + pairing code
+ *    http://192.168.4.1 on your phone, enter institution code + pairing code
  *    from the admin portal, and your school WiFi credentials.
  *  • Calls POST /api/devices/pair → saves a long-lived device JWT in NVS.
  *  • Sends heartbeats every 5 s → receives active session info.
@@ -1483,7 +1483,7 @@ static void drawSetup(const String& apName) {
     cy += ch + CG;
   };
 
-  stepCard(2, "Open in browser:", F_SMALL, "dikly.local", "or  http://10.0.0.1", 48);
+  stepCard(2, "Open in browser:", F_SMALL, "http://192.168.4.1", nullptr, 48);
 
   stepCard(3, "Enter your credentials:", F_TINY,
            "Institution code + pairing code", "then school Wi-Fi password", 50);
@@ -1573,9 +1573,9 @@ static void drawWifiReconfig(const String& apName) {
   spr.setFont(F_TINY); spr.setTextColor(COL_MUTED, COL_CARD);
   spr.setCursor(46, cy + 8); spr.print("Open browser and go to:");
   spr.setFont(F_SMALL); spr.setTextColor(COL_WARNING, COL_CARD);
-  spr.setCursor(46, cy + 22); spr.print("dikly.local");
+  spr.setCursor(46, cy + 22); spr.print("http://192.168.4.1");
   spr.setFont(F_TINY); spr.setTextColor(COL_MUTED, COL_CARD);
-  spr.setCursor(46, cy + 38); spr.print("or http://10.0.0.1");
+  spr.setCursor(46, cy + 38); spr.print("if portal doesn't pop up");
 
   // ── Info card: pairing preserved ─────────────────────────────────────────────
   cy += 60;
@@ -1862,16 +1862,15 @@ document.getElementById('f').onsubmit=async(e)=>{
 
 static void startWifiReconfigPortal() {
   WiFi.mode(WIFI_AP);
-  delay(100);
-  esp_wifi_set_ps(WIFI_PS_NONE);
-  WiFi.softAPConfig(IPAddress(10,0,0,1), IPAddress(10,0,0,1), IPAddress(255,255,255,0));
+  delay(200);
+
   String ap = "Dikly-" + macSuffix();
-  WiFi.softAP(ap.c_str());
-  IPAddress gw;
-  uint32_t t0 = millis();
-  do { delay(100); gw = WiFi.softAPIP(); } while (gw == IPAddress(0,0,0,0) && millis()-t0 < 5000);
+  WiFi.softAP(ap.c_str());          // open, default 192.168.4.1
+  delay(500);                        // wait for lwIP DHCP server to fully start
+  esp_wifi_set_ps(WIFI_PS_NONE);    // disable AP power-saving (must be after softAP)
+
+  IPAddress gw = WiFi.softAPIP();   // 192.168.4.1
   LOG("WiFi reconfig AP: " + ap + " @ " + gw.toString());
-  MDNS.begin("dikly");
 
   dns.start(53, "*", gw);
 
@@ -2917,22 +2916,17 @@ static void drawPresenceMonitor() {
 // ─── Captive-portal AP startup ────────────────────────────────────────────────
 static void startApPortal() {
   WiFi.mode(WIFI_AP);
-  delay(100);
-  esp_wifi_set_ps(WIFI_PS_NONE);
-  WiFi.softAPConfig(IPAddress(10,0,0,1), IPAddress(10,0,0,1), IPAddress(255,255,255,0));
+  delay(200);
+
   String ap = "Dikly-" + macSuffix();
-  WiFi.softAP(ap.c_str());
-  // Wait until the AP has a real IP (0.0.0.0 means not ready yet)
-  IPAddress gw;
-  uint32_t t0 = millis();
-  do { delay(100); gw = WiFi.softAPIP(); } while (gw == IPAddress(0,0,0,0) && millis()-t0 < 5000);
+  WiFi.softAP(ap.c_str());          // open, default 192.168.4.1
+  delay(500);                        // wait for lwIP DHCP server to fully start
+  esp_wifi_set_ps(WIFI_PS_NONE);    // disable AP power-saving (must be after softAP)
+
+  IPAddress gw = WiFi.softAPIP();   // 192.168.4.1
   LOG("AP: " + ap + " @ " + gw.toString());
 
-  // mDNS so browsers can reach the portal via dikly.local without knowing the IP.
-  // The DNS wildcard below also catches dikly.local on devices that use the
-  // DHCP-provided DNS server (older Android) instead of multicast mDNS.
-  MDNS.begin("dikly");
-  dns.start(53, "*", gw);
+  dns.start(53, "*", gw);           // wildcard: every DNS query → our IP
 
   // Serve the setup page directly for all URLs — captive portal probe URLs,
   // unknown paths, and the root. Redirecting (302) breaks Samsung's captive
