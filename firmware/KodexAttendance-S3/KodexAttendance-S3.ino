@@ -650,22 +650,27 @@ static String deriveCode(const String& seed, uint32_t unixSec) {
 // Backend re-derives the HMAC using session.esp32Seed and rejects stale slots.
 
 static void initBle() {
-  // After a panic or watchdog reset the BLE RF/EMI block is dirty and
-  // BLEDevice::init() will null-deref and crash again, producing an infinite
-  // loop.  Skip BLE entirely on any crash-recovery boot; WiFi attendance still
-  // works.  BLE resumes automatically on the next clean power-on.
+  // BLE RF/EMI state is NOT reset by a software reset (rst:0xc).  Any non-
+  // power-on boot (panic, SW, watchdog, brownout) leaves the controller in a
+  // dirty state; BLEDevice::init() null-derefs and crashes again, producing
+  // an infinite loop.
   //
-  // IMPORTANT: when skipping BLE we must still call
-  // esp_bt_controller_mem_release() so the BLE controller's ~38 KB of
-  // contiguous DMA-DRAM is returned to the heap before esp_wifi_init() runs.
-  // Without it, phy_init cannot find a contiguous block and calls abort().
-  // (This mirrors what the not-paired path already does on line ~4781.)
+  // FIX: only run BLE on a clean power-on (ESP_RST_POWERON).  For every other
+  // reset type we:
+  //   1. Release the ~38 KB DMA-DRAM block so phy_init can find contiguous
+  //      memory when WiFi starts (without this, phy_init aborts and we loop).
+  //   2. Erase NVS PHY calibration data so a corrupted cal record can't cause
+  //      phy_init to abort on the NEXT clean boot either.
+  // BLE resumes automatically on the next physical power cycle (unplug/replug).
+  //
+  // NOTE: In Arduino ESP32 3.x / IDF 5.x, a panic (rst:0xc) may be reported
+  // as ESP_RST_SW rather than ESP_RST_PANIC, so checking individual crash
+  // reasons is not reliable — the only safe sentinel is ESP_RST_POWERON.
   esp_reset_reason_t rst = esp_reset_reason();
-  if (rst == ESP_RST_PANIC    || rst == ESP_RST_INT_WDT  ||
-      rst == ESP_RST_TASK_WDT || rst == ESP_RST_WDT      ||
-      rst == ESP_RST_DEEPSLEEP) {
-    Serial.printf("[BLE] skipped — crash-recovery boot (reason=%d)\r\n", (int)rst);
+  if (rst != ESP_RST_POWERON) {
+    Serial.printf("[BLE] skipped — non-power-on boot (reason=%d), releasing DMA block\r\n", (int)rst);
     esp_bt_controller_mem_release(ESP_BT_MODE_BLE);  // return DMA-DRAM to heap for phy_init
+    esp_phy_erase_cal_data_in_nvs();                 // clear any corrupted PHY cal data
     return;  // bleAdv stays nullptr; all callers guard against null
   }
   delay(200);
