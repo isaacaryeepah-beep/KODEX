@@ -650,6 +650,17 @@ static String deriveCode(const String& seed, uint32_t unixSec) {
 // Backend re-derives the HMAC using session.esp32Seed and rejects stale slots.
 
 static void initBle() {
+  // After a panic or watchdog reset the BLE RF/EMI block is dirty and
+  // BLEDevice::init() will null-deref and crash again, producing an infinite
+  // loop.  Skip BLE entirely on any crash-recovery boot; WiFi attendance still
+  // works.  BLE resumes automatically on the next clean power-on.
+  esp_reset_reason_t rst = esp_reset_reason();
+  if (rst == ESP_RST_PANIC    || rst == ESP_RST_INT_WDT  ||
+      rst == ESP_RST_TASK_WDT || rst == ESP_RST_WDT      ||
+      rst == ESP_RST_DEEPSLEEP) {
+    Serial.printf("[BLE] skipped — crash-recovery boot (reason=%d)\r\n", (int)rst);
+    return;  // bleAdv stays nullptr; all callers guard against null
+  }
   delay(200);
   BLEDevice::init(("Dikly-" + macSuffix()).c_str());
   bleAdv = BLEDevice::getAdvertising();
@@ -4697,21 +4708,6 @@ void setup() {
   digitalWrite(45, HIGH);
 
   Serial.begin(115200); delay(150);
-
-  // If the previous run crashed (panic / watchdog), the BLE RF/EMI block is
-  // left dirty and BLEDevice::init() will null-deref and crash again.
-  // Deep-sleep for 1 s cuts power to the RF domain, resetting the EMI pool.
-  // On wakeup esp_reset_reason() returns ESP_RST_DEEPSLEEP, so we don't loop.
-  {
-    esp_reset_reason_t rst = esp_reset_reason();
-    if (rst == ESP_RST_PANIC   || rst == ESP_RST_INT_WDT ||
-        rst == ESP_RST_TASK_WDT || rst == ESP_RST_WDT) {
-      Serial.println("[BOOT] crash detected — deep-sleep 1s to reset RF block");
-      delay(100);
-      esp_sleep_enable_timer_wakeup(1000000ULL);
-      esp_deep_sleep_start();
-    }
-  }
 
   pinMode(LED_PIN, OUTPUT);
   // Redirect mbedTLS heap allocations to PSRAM so TLS handshakes never fail
