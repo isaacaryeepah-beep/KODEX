@@ -654,11 +654,18 @@ static void initBle() {
   // BLEDevice::init() will null-deref and crash again, producing an infinite
   // loop.  Skip BLE entirely on any crash-recovery boot; WiFi attendance still
   // works.  BLE resumes automatically on the next clean power-on.
+  //
+  // IMPORTANT: when skipping BLE we must still call
+  // esp_bt_controller_mem_release() so the BLE controller's ~38 KB of
+  // contiguous DMA-DRAM is returned to the heap before esp_wifi_init() runs.
+  // Without it, phy_init cannot find a contiguous block and calls abort().
+  // (This mirrors what the not-paired path already does on line ~4781.)
   esp_reset_reason_t rst = esp_reset_reason();
   if (rst == ESP_RST_PANIC    || rst == ESP_RST_INT_WDT  ||
       rst == ESP_RST_TASK_WDT || rst == ESP_RST_WDT      ||
       rst == ESP_RST_DEEPSLEEP) {
     Serial.printf("[BLE] skipped — crash-recovery boot (reason=%d)\r\n", (int)rst);
+    esp_bt_controller_mem_release(ESP_BT_MODE_BLE);  // return DMA-DRAM to heap for phy_init
     return;  // bleAdv stays nullptr; all callers guard against null
   }
   delay(200);
