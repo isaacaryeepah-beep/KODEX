@@ -650,7 +650,9 @@ static String deriveCode(const String& seed, uint32_t unixSec) {
              (const uint8_t*)slotStr.c_str(), slotStr.length(), digest);
   uint32_t n = ((uint32_t)digest[0] << 24) | ((uint32_t)digest[1] << 16) |
                ((uint32_t)digest[2] <<  8) |  (uint32_t)digest[3];
-  char buf[8]; snprintf(buf, sizeof(buf), "%06lu", (unsigned long)(n % 1000000UL));
+  uint32_t digits = n % 1000;
+  char     letter = 'A' + (char)((n / 1000) % 26);
+  char buf[6]; snprintf(buf, sizeof(buf), "%03lu%c", (unsigned long)digits, letter);
   return String(buf);
 }
 
