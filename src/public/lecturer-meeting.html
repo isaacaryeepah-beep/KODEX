@@ -196,7 +196,7 @@
     </div>
 
     <div class="meeting-card">
-      <button onclick="history.back()" style="position:absolute;top:14px;left:14px;background:none;border:none;color:rgba(255,255,255,.5);font-size:13px;cursor:pointer;display:flex;align-items:center;gap:5px;padding:4px 6px;border-radius:8px;font-family:inherit;transition:color .15s" onmouseover="this.style.color='rgba(255,255,255,.9)'" onmouseout="this.style.color='rgba(255,255,255,.5)'">
+      <button onclick="location.href='/index.html'" style="position:absolute;top:14px;left:14px;background:none;border:none;color:rgba(255,255,255,.5);font-size:13px;cursor:pointer;display:flex;align-items:center;gap:5px;padding:4px 6px;border-radius:8px;font-family:inherit;transition:color .15s" onmouseover="this.style.color='rgba(255,255,255,.9)'" onmouseout="this.style.color='rgba(255,255,255,.5)'">
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="19" y1="12" x2="5" y2="12"/><polyline points="12 19 5 12 12 5"/></svg>
         Back
       </button>
@@ -241,7 +241,7 @@
       <div class="error-msg" id="errMsg">Something went wrong.</div>
       <div class="actions">
         <button class="btn btn-primary" onclick="init()">Try Again</button>
-        <button class="btn btn-ghost" onclick="history.back()">Go Back</button>
+        <button class="btn btn-ghost" onclick="location.href='/index.html'">Go Back</button>
       </div>
     </div>
   </div>
@@ -325,10 +325,13 @@ async function init() {
     setProgress(3, 100, 'Opening your class now…');
     await delay(300);
 
-    // Capacitor WebView blocks navigation to external domains; open in system browser
+    // Capacitor WebView blocks navigation to external domains; open in system browser.
+    // Replace this history entry with the portal so pressing Back from LiveKit
+    // returns to the meetings list instead of re-triggering another start.
     if (window.Capacitor?.isNativePlatform?.()) {
       window.open(meetingUrl, '_system');
     } else {
+      history.replaceState(null, '', '/index.html');
       window.location.href = meetingUrl;
     }
 
