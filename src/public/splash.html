@@ -1,0 +1,535 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="theme-color" content="#000000">
+<title>Dikly</title>
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+html,body{
+  width:100%;height:100%;background:#000;overflow:hidden;
+  font-family:'Segoe UI',system-ui,sans-serif;
+  user-select:none;-webkit-tap-highlight-color:transparent
+}
+canvas{position:fixed;top:0;left:0;width:100%;height:100%;display:block}
+#gl{z-index:1}
+#fx{z-index:3;pointer-events:none}
+
+/* ── Scene wrapper ── */
+#scene{
+  position:fixed;top:0;left:0;width:100%;height:100%;z-index:4;
+  display:flex;flex-direction:column;align-items:center;justify-content:center;
+  pointer-events:none
+}
+
+/* ── Animated D ── */
+#d-wrap{
+  width:clamp(110px,22vw,180px);height:clamp(110px,22vw,180px);
+  transform:translateY(-140vh);opacity:0;
+  will-change:transform,opacity,filter;
+  filter:drop-shadow(0 0 20px #3b82f6) drop-shadow(0 0 55px #1d4ed8)
+}
+#d-wrap svg{width:100%;height:100%}
+
+/* ── Text ── */
+#wordmark{text-align:center;margin-top:clamp(14px,3vw,26px)}
+#brand{
+  font-size:clamp(1.9rem,5vw,3.4rem);font-weight:900;letter-spacing:.2em;color:#fff;
+  text-shadow:0 0 20px rgba(59,130,246,.9),0 0 60px rgba(59,130,246,.3);
+  opacity:0;transform:translateY(16px);
+  transition:opacity .75s ease,transform .75s ease
+}
+#brand.show{opacity:1;transform:translateY(0)}
+#tagline{
+  font-size:clamp(.6rem,1.9vw,.8rem);letter-spacing:.38em;
+  color:rgba(255,255,255,.5);margin-top:10px;min-height:1.4em;
+  opacity:0;transition:opacity .5s ease
+}
+#tagline.show{opacity:1}
+
+/* ── Final state (after burst) ── */
+#final{
+  position:fixed;top:0;left:0;width:100%;height:100%;z-index:5;
+  display:flex;flex-direction:column;align-items:center;justify-content:center;
+  opacity:0;pointer-events:none;transition:opacity 1.3s ease
+}
+#final.show{opacity:1}
+#final .fi-d{
+  width:clamp(110px,22vw,180px);height:clamp(110px,22vw,180px);
+  filter:drop-shadow(0 0 14px rgba(59,130,246,.7))
+}
+#final .fi-d svg{width:100%;height:100%}
+#final .fi-brand{
+  font-size:clamp(1.9rem,5vw,3.4rem);font-weight:900;letter-spacing:.2em;color:#fff;
+  text-shadow:0 0 18px rgba(59,130,246,.65);
+  margin-top:clamp(14px,3vw,26px)
+}
+#final .fi-tag{
+  font-size:clamp(.6rem,1.9vw,.8rem);letter-spacing:.38em;
+  color:rgba(255,255,255,.45);margin-top:10px
+}
+
+/* ── Skip button ── */
+#skip{
+  position:fixed;bottom:24px;right:28px;z-index:10;
+  color:rgba(255,255,255,.28);font-size:.72rem;letter-spacing:.14em;
+  cursor:pointer;pointer-events:all;transition:color .3s;
+  padding:8px
+}
+#skip:hover{color:rgba(255,255,255,.65)}
+</style>
+</head>
+<body>
+
+<!-- Three.js globe + stars -->
+<canvas id="gl"></canvas>
+<!-- Particle burst canvas -->
+<canvas id="fx"></canvas>
+
+<!-- Animated elements -->
+<div id="scene">
+  <div id="d-wrap">
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" aria-hidden="true">
+      <defs>
+        <linearGradient id="dg1" x1="0%" y1="0%" x2="100%" y2="100%">
+          <stop offset="0%"   stop-color="#93c5fd"/>
+          <stop offset="42%"  stop-color="#2563eb"/>
+          <stop offset="100%" stop-color="#1e3a8a"/>
+        </linearGradient>
+        <filter id="gls">
+          <feGaussianBlur stdDeviation="1.5" result="b"/>
+          <feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge>
+        </filter>
+        <clipPath id="dc1"><path d="M14,4 L14,96 L50,96 C97,93 97,7 50,4 Z"/></clipPath>
+      </defs>
+      <path d="M14,4 L14,96 L50,96 C97,93 97,7 50,4 Z" fill="url(#dg1)" filter="url(#gls)"/>
+      <g clip-path="url(#dc1)">
+        <polygon points="4,58 63,-2 89,-2 30,58"   fill="white" opacity=".93"/>
+        <polygon points="30,102 89,42 63,42 4,102" fill="white" opacity=".76"/>
+      </g>
+    </svg>
+  </div>
+  <div id="wordmark">
+    <div id="brand">DIKLY</div>
+    <div id="tagline"></div>
+  </div>
+</div>
+
+<!-- Final logo shown after the burst -->
+<div id="final" aria-label="Dikly — Smarter. Faster. Together.">
+  <div class="fi-d">
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" aria-hidden="true">
+      <defs>
+        <linearGradient id="dg2" x1="0%" y1="0%" x2="100%" y2="100%">
+          <stop offset="0%"   stop-color="#93c5fd"/>
+          <stop offset="42%"  stop-color="#2563eb"/>
+          <stop offset="100%" stop-color="#1e3a8a"/>
+        </linearGradient>
+        <clipPath id="dc2"><path d="M14,4 L14,96 L50,96 C97,93 97,7 50,4 Z"/></clipPath>
+      </defs>
+      <path d="M14,4 L14,96 L50,96 C97,93 97,7 50,4 Z" fill="url(#dg2)"/>
+      <g clip-path="url(#dc2)">
+        <polygon points="4,58 63,-2 89,-2 30,58"   fill="white" opacity=".93"/>
+        <polygon points="30,102 89,42 63,42 4,102" fill="white" opacity=".76"/>
+      </g>
+    </svg>
+  </div>
+  <div class="fi-brand">DIKLY</div>
+  <div class="fi-tag">SMARTER &nbsp;·&nbsp; FASTER &nbsp;·&nbsp; TOGETHER</div>
+</div>
+
+<div id="skip" role="button" tabindex="0"
+     onclick="skipSplash()"
+     onkeydown="if(event.key==='Enter'||event.key===' ')skipSplash()">skip ›</div>
+
+<!-- Three.js r128 -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js" crossorigin="anonymous"></script>
+<script>
+'use strict';
+(function () {
+
+// ── Easing helpers ─────────────────────────────────────────────────────────────
+const easeOut3     = t => 1 - Math.pow(1 - t, 3);
+const easeIn3      = t => t * t * t;
+const easeOutElast = t => {
+  if (t === 0 || t === 1) return t;
+  return Math.pow(2, -10 * t) * Math.sin((t * 10 - 0.75) * (2 * Math.PI / 2.8)) + 1;
+};
+const lerp   = (a, b, t) => a + (b - a) * t;
+const clamp01 = t => Math.max(0, Math.min(1, t));
+
+// ── Three.js setup ─────────────────────────────────────────────────────────────
+const glCanvas = document.getElementById('gl');
+let renderer, scene, camera, starMat, globe;
+let globeScaleCur = 0;
+
+function initThree() {
+  renderer = new THREE.WebGLRenderer({ canvas: glCanvas, alpha: true, antialias: true });
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+  renderer.setSize(window.innerWidth, window.innerHeight);
+
+  scene  = new THREE.Scene();
+  camera = new THREE.PerspectiveCamera(48, window.innerWidth / window.innerHeight, 0.1, 600);
+  // Elevated camera looking down-forward so globe horizon sits at bottom of screen
+  camera.position.set(0, 1.5, 7);
+  camera.lookAt(0, -1.5, 0);
+
+  // ── Star field ────────────────────────────────────────────────────────────
+  const sv = [];
+  for (let i = 0; i < 4500; i++) {
+    const th = Math.random() * Math.PI * 2;
+    const ph = Math.acos(2 * Math.random() - 1);
+    const r  = 80 + Math.random() * 60;
+    sv.push(r * Math.sin(ph) * Math.cos(th), r * Math.sin(ph) * Math.sin(th), r * Math.cos(ph));
+  }
+  const sg = new THREE.BufferGeometry();
+  sg.setAttribute('position', new THREE.Float32BufferAttribute(sv, 3));
+  starMat = new THREE.PointsMaterial({ color: 0xffffff, size: 0.22, transparent: true, opacity: 0 });
+  scene.add(new THREE.Points(sg, starMat));
+
+  // ── Earth globe ───────────────────────────────────────────────────────────
+  const R = 5.5;
+  globe = new THREE.Mesh(
+    new THREE.SphereGeometry(R, 72, 72),
+    new THREE.MeshPhongMaterial({
+      color: 0x060c28, emissive: 0x0b1e70, emissiveIntensity: .28,
+      specular: 0x1640a0, shininess: 20
+    })
+  );
+  // Position it so only the curved top arc is visible at the bottom of the screen
+  globe.position.set(0, -8.5, 0);
+  globe.scale.set(0, 0, 0);
+  scene.add(globe);
+
+  // Outer atmosphere glow (BackSide)
+  globe.add(new THREE.Mesh(
+    new THREE.SphereGeometry(R + .22, 72, 72),
+    new THREE.MeshPhongMaterial({
+      color: 0x1a5cff, emissive: 0x0033cc,
+      transparent: true, opacity: .17, side: THREE.BackSide
+    })
+  ));
+
+  // Orange-tinted horizon haze (atmosphere city glow)
+  globe.add(new THREE.Mesh(
+    new THREE.SphereGeometry(R + .10, 72, 72),
+    new THREE.MeshBasicMaterial({ color: 0xff6600, transparent: true, opacity: .06, depthWrite: false })
+  ));
+
+  // City lights — warm dots scattered on surface
+  const lv = [];
+  for (let i = 0; i < 650; i++) {
+    const lat = (Math.random() - .5) * Math.PI * .82;
+    const lon = Math.random() * Math.PI * 2;
+    const r2  = R + .04;
+    lv.push(r2 * Math.cos(lat) * Math.cos(lon), r2 * Math.sin(lat), r2 * Math.cos(lat) * Math.sin(lon));
+  }
+  const lg = new THREE.BufferGeometry();
+  lg.setAttribute('position', new THREE.Float32BufferAttribute(lv, 3));
+  globe.add(new THREE.Points(lg,
+    new THREE.PointsMaterial({ color: 0xffcc55, size: .06, transparent: true, opacity: .8 })));
+
+  // Subtle wireframe grid overlay
+  globe.add(new THREE.Mesh(
+    new THREE.SphereGeometry(R + .01, 32, 32),
+    new THREE.MeshBasicMaterial({ color: 0x1a4aff, wireframe: true, transparent: true, opacity: .05 })
+  ));
+
+  // Thin blue horizon ring at equator
+  const ringGeo = new THREE.TorusGeometry(R, .055, 8, 140);
+  globe.add(new THREE.Mesh(ringGeo,
+    new THREE.MeshBasicMaterial({ color: 0x4488ff, transparent: true, opacity: .45 })));
+
+  // ── Lighting ──────────────────────────────────────────────────────────────
+  scene.add(new THREE.AmbientLight(0x0f1135, 1.4));
+  const sun = new THREE.DirectionalLight(0x4488ff, 3.5);
+  sun.position.set(7, 5, 6);
+  scene.add(sun);
+  const rim = new THREE.DirectionalLight(0x2244ff, 1.8);
+  rim.position.set(-6, 2, -4);
+  scene.add(rim);
+}
+
+window.addEventListener('resize', () => {
+  if (!renderer || !camera) return;
+  camera.aspect = window.innerWidth / window.innerHeight;
+  camera.updateProjectionMatrix();
+  renderer.setSize(window.innerWidth, window.innerHeight);
+  fxCanvas.width  = window.innerWidth;
+  fxCanvas.height = window.innerHeight;
+});
+
+// ── Particle burst system ──────────────────────────────────────────────────────
+const fxCanvas = document.getElementById('fx');
+const fxCtx    = fxCanvas.getContext('2d');
+fxCanvas.width  = window.innerWidth;
+fxCanvas.height = window.innerHeight;
+
+let particles = [];
+
+const BURST_COLORS = [
+  '#3b82f6','#7c3aed','#60a5fa','#ffffff',
+  '#a78bfa','#fbbf24','#f0f9ff','#818cf8',
+  '#38bdf8','#34d399','#c4b5fd'
+];
+
+function spawnBurst(cx, cy) {
+  // Main cloud — dots + 4-pointed stars
+  for (let i = 0; i < 340; i++) {
+    const ang  = Math.random() * Math.PI * 2;
+    const spd  = 1.5 + Math.random() * 16;
+    particles.push({
+      x: cx, y: cy,
+      vx: Math.cos(ang) * spd,
+      vy: Math.sin(ang) * spd - 1.5 - Math.random() * 5,
+      sz: 1.5 + Math.random() * 5.5,
+      alpha: 1,
+      color: BURST_COLORS[Math.floor(Math.random() * BURST_COLORS.length)],
+      decay: .012 + Math.random() * .018,
+      grav:  .10 + Math.random() * .13,
+      type:  Math.random() < .28 ? 'star' : 'dot',
+    });
+  }
+  // Fast streaks
+  for (let i = 0; i < 50; i++) {
+    const ang = Math.random() * Math.PI * 2;
+    const spd = 11 + Math.random() * 24;
+    const vx  = Math.cos(ang) * spd;
+    const vy  = Math.sin(ang) * spd - 4;
+    particles.push({
+      x: cx, y: cy, vx, vy, pvx: vx, pvy: vy,
+      sz: 2, alpha: 1, color: '#fff',
+      decay: .018, grav: .07, type: 'streak',
+    });
+  }
+  // Large slow diamond sparkles (luxurious effect)
+  for (let i = 0; i < 18; i++) {
+    const ang = Math.random() * Math.PI * 2;
+    const spd = 2 + Math.random() * 6;
+    particles.push({
+      x: cx, y: cy,
+      vx: Math.cos(ang) * spd,
+      vy: Math.sin(ang) * spd - 2,
+      sz: 6 + Math.random() * 8,
+      alpha: 1,
+      color: BURST_COLORS[Math.floor(Math.random() * 4)],
+      decay: .008, grav: .05, type: 'diamond',
+    });
+  }
+}
+
+function draw4Star(ctx, x, y, r, color) {
+  ctx.beginPath();
+  for (let i = 0; i < 8; i++) {
+    const a  = (i * Math.PI) / 4 - Math.PI / 2;
+    const ri = i % 2 === 0 ? r : r * .30;
+    if (i === 0) ctx.moveTo(x + ri * Math.cos(a), y + ri * Math.sin(a));
+    else         ctx.lineTo(x + ri * Math.cos(a), y + ri * Math.sin(a));
+  }
+  ctx.closePath();
+  ctx.fillStyle = color;
+  ctx.shadowBlur = 12; ctx.shadowColor = color;
+  ctx.fill();
+}
+
+function drawDiamond(ctx, x, y, r, color) {
+  ctx.beginPath();
+  ctx.moveTo(x,        y - r);
+  ctx.lineTo(x + r*.5, y);
+  ctx.lineTo(x,        y + r);
+  ctx.lineTo(x - r*.5, y);
+  ctx.closePath();
+  ctx.fillStyle = color;
+  ctx.shadowBlur = 16; ctx.shadowColor = color;
+  ctx.fill();
+}
+
+function tickParticles() {
+  fxCtx.clearRect(0, 0, fxCanvas.width, fxCanvas.height);
+  for (let i = particles.length - 1; i >= 0; i--) {
+    const p = particles[i];
+    if (p.alpha <= 0) { particles.splice(i, 1); continue; }
+    const px = p.x, py = p.y;
+    p.x += p.vx; p.y += p.vy;
+    p.vy += p.grav; p.vx *= .97;
+    p.alpha -= p.decay;
+    if (p.alpha < 0) p.alpha = 0;
+
+    fxCtx.save();
+    fxCtx.globalAlpha = Math.max(0, p.alpha);
+
+    if (p.type === 'star') {
+      draw4Star(fxCtx, p.x, p.y, p.sz * 1.6, p.color);
+    } else if (p.type === 'streak') {
+      fxCtx.strokeStyle = p.color; fxCtx.lineWidth = 2;
+      fxCtx.shadowBlur = 8; fxCtx.shadowColor = p.color;
+      fxCtx.beginPath();
+      fxCtx.moveTo(px - p.vx * 2.5, py - p.vy * 2.5);
+      fxCtx.lineTo(p.x, p.y);
+      fxCtx.stroke();
+    } else if (p.type === 'diamond') {
+      drawDiamond(fxCtx, p.x, p.y, p.sz, p.color);
+    } else {
+      fxCtx.beginPath();
+      fxCtx.arc(p.x, p.y, p.sz, 0, Math.PI * 2);
+      fxCtx.fillStyle = p.color;
+      fxCtx.shadowBlur = 7; fxCtx.shadowColor = p.color;
+      fxCtx.fill();
+    }
+    fxCtx.restore();
+  }
+}
+
+// ── DOM refs ──────────────────────────────────────────────────────────────────
+const dWrap   = document.getElementById('d-wrap');
+const brandEl = document.getElementById('brand');
+const tagEl   = document.getElementById('tagline');
+const finalEl = document.getElementById('final');
+
+const TAGLINE = 'SMARTER. FASTER. TOGETHER.';
+let tagIdx = 0, typeTimer = null;
+
+function startTyping() {
+  tagEl.classList.add('show');
+  typeTimer = setInterval(() => {
+    if (tagIdx < TAGLINE.length) tagEl.textContent = TAGLINE.slice(0, ++tagIdx);
+    else clearInterval(typeTimer);
+  }, 28);
+}
+
+// ── Animation state ───────────────────────────────────────────────────────────
+let t0         = null;   // rAF start timestamp
+let launchT0   = null;   // when launch phase started
+let phase      = 0;
+let burstFired = false;
+let redirected = false;
+
+function doRedirect() {
+  if (redirected) return;
+  redirected = true;
+  const dest = new URLSearchParams(location.search).get('r') || '/index.html';
+  window.location.href = dest;
+}
+
+window.skipSplash = function () {
+  if (!burstFired) {
+    burstFired = true;
+    clearInterval(typeTimer);
+    dWrap.style.transition  = 'opacity .25s'; dWrap.style.opacity  = '0';
+    brandEl.style.transition = 'opacity .3s'; brandEl.style.opacity = '0';
+    tagEl.style.transition   = 'opacity .3s'; tagEl.style.opacity   = '0';
+    finalEl.classList.add('show');
+  }
+  setTimeout(doRedirect, 900);
+};
+
+// ── Main render loop ──────────────────────────────────────────────────────────
+function frame(ts) {
+  requestAnimationFrame(frame);
+  if (!t0) t0 = ts;
+  const ms = ts - t0;
+
+  // Globe always rotates (once visible)
+  if (globe) globe.rotation.y += .0022;
+
+  // Stars fade in (0 → 500ms)
+  if (starMat) starMat.opacity = clamp01(ms / 500);
+
+  // Globe scales in (200ms → 1000ms)
+  if (globe) {
+    const gScale = easeOut3(clamp01((ms - 200) / 800));
+    globeScaleCur = lerp(globeScaleCur, gScale, .07);
+    globe.scale.set(globeScaleCur, globeScaleCur, globeScaleCur);
+  }
+
+  if (!burstFired) {
+    // ── Phase 1: D elastic drop-in (700ms → 1250ms) ──────────────────────
+    if (ms >= 700) {
+      const t = clamp01((ms - 700) / 550);
+      const y = lerp(-240, 0, easeOutElast(t));
+      dWrap.style.transform = `translateY(${y}px)`;
+      dWrap.style.opacity   = String(Math.min(1, (ms - 700) / 150));
+    }
+
+    // ── Phase 2: brand name (1300ms) ──────────────────────────────────────
+    if (ms >= 1300 && phase < 2) {
+      phase = 2;
+      brandEl.classList.add('show');
+    }
+
+    // ── Phase 3: tagline types out (1650ms) ───────────────────────────────
+    if (ms >= 1650 && phase < 3) {
+      phase = 3;
+      startTyping();
+    }
+
+    // ── Phase 4: glow pulse intensifies (2200ms → 3050ms) ────────────────
+    if (ms >= 2200 && ms < 3050) {
+      const p   = .5 + .5 * Math.sin((ms - 2200) / 155);
+      const g1  = 18 + p * 50;
+      const g2  = 45 + p * 80;
+      const g3  = g1 * .5;
+      dWrap.style.filter =
+        `drop-shadow(0 0 ${g1}px #3b82f6) drop-shadow(0 0 ${g2}px #7c3aed) drop-shadow(0 0 ${g3}px #fff)`;
+    }
+
+    // ── Phase 5: D vibrates before launch (2750ms → 3050ms) ──────────────
+    if (ms >= 2750 && ms < 3050) {
+      const v     = (ms - 2750) / 300;
+      const shake = 3.5 * v * Math.sin(ms / 26);
+      dWrap.style.transform = `translateY(${shake}px) translateX(${shake * .3}px)`;
+    }
+
+    // ── Phase 6: D launches upward (3050ms+) ─────────────────────────────
+    if (ms >= 3050) {
+      if (!launchT0) launchT0 = ts;
+      const lt  = (ts - launchT0) / 400;
+      const ly  = -easeIn3(Math.min(lt, 1)) * (window.innerHeight + 380);
+      const sc  = 1 + Math.min(lt, 1) * .5;
+      dWrap.style.transform = `translateY(${ly}px) scale(${sc})`;
+      const gl = 80 + lt * 140;
+      dWrap.style.filter =
+        `drop-shadow(0 0 ${gl}px #3b82f6) drop-shadow(0 0 ${gl * 1.7}px #7c3aed)`;
+
+      // Trigger burst when D is ~38% up its launch arc (~3200ms total)
+      if (lt >= 0.38 && !burstFired) {
+        burstFired = true;
+
+        // Burst from screen centre (where D was before launch)
+        spawnBurst(window.innerWidth / 2, window.innerHeight / 2 - 30);
+
+        // Fade out scene elements
+        setTimeout(() => {
+          dWrap.style.transition   = 'opacity .3s';  dWrap.style.opacity   = '0';
+          brandEl.style.transition = 'opacity .4s';  brandEl.style.opacity = '0';
+          tagEl.style.transition   = 'opacity .4s';  tagEl.style.opacity   = '0';
+        }, 100);
+
+        // Final logo fades in after particles peak
+        setTimeout(() => finalEl.classList.add('show'), 900);
+
+        // Auto-redirect at ~5s total
+        setTimeout(doRedirect, 1800);
+      }
+    }
+  }
+
+  tickParticles();
+  if (renderer) renderer.render(scene, camera);
+}
+
+// ── Boot ──────────────────────────────────────────────────────────────────────
+if (typeof THREE !== 'undefined') {
+  initThree();
+} else {
+  // CDN failed — simple dark space gradient fallback
+  glCanvas.style.background = 'radial-gradient(ellipse at 50% 110%, #0c1a4a 0%, #020810 55%)';
+}
+
+requestAnimationFrame(frame);
+
+})();
+</script>
+</body>
+</html>
