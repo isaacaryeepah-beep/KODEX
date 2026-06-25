@@ -11,7 +11,7 @@
  *    from the admin portal, and your school WiFi credentials.
  *  • Calls POST /api/devices/pair → saves a long-lived device JWT in NVS.
  *  • Sends heartbeats every 5 s → receives active session info.
- *  • Derives the rotating 6-digit attendance code locally using HMAC-SHA256
+ *  • Derives the rotating 4-digit attendance code locally using HMAC-SHA256
  *    (same formula as the backend). No per-rotation round-trip.
  *  • Shows a slick full-colour UI:
  *      SPLASH → SETUP → CONNECTING → READY (idle) → SESSION (code display)
@@ -273,7 +273,7 @@ static const uint8_t SD_CLK = 38, SD_CMD = 40, SD_D0 = 39;
 static const uint8_t SD_D1  = 41, SD_D2  = 48, SD_D3 = 47;
 
 // ─── App Config ──────────────────────────────────────────────────────────────
-static const char*   FIRMWARE_VERSION     = "s3-2.6.0";
+static const char*   FIRMWARE_VERSION     = "s3-2.7.0";
 static const char*   DEFAULT_API_BASE     = "https://dikly.sbs";
 
 static const uint32_t HEARTBEAT_MS        = 5000;
@@ -3689,15 +3689,15 @@ static void serveAttendPortal() {
     // phone countdown matches the TFT timer. Fall back to monCheckinEndMs only
     // if session timestamps are not yet populated.
     long secsLeft;
+    time_t nowT = time(nullptr);
+    if (nowT < 1700000000UL) nowT = (time_t)(1700000000UL + millis() / 1000);
     if (sessionStartedAt > 0 && sessionDuration > 0) {
-      time_t nowT = time(nullptr);
-      if (nowT < 1700000000UL) nowT = (time_t)(1700000000UL + millis() / 1000);
       secsLeft = (long)(sessionStartedAt + sessionDuration) - (long)nowT;
     } else {
       secsLeft = (long)((monCheckinEndMs - millis()) / 1000);
     }
     if (secsLeft < 0) secsLeft = 0;
-    endUnix = (uint32_t)(time(nullptr) + secsLeft);
+    endUnix = (uint32_t)(nowT + secsLeft);
   }
 
   auto htmlEsc = [](String& s) {
@@ -4953,6 +4953,18 @@ static void registerLocalHttp() {
         "</div></body></html>");
     }
   };
+  // Explicit captive-portal probe handlers — required for iOS/Android to
+  // reliably show the "sign in to network" popup. onNotFound alone is not
+  // triggered by OS captive-detection HTTP probes on all platforms.
+  localHttp.on("/generate_204",        HTTP_GET, serveRoot);  // Android
+  localHttp.on("/hotspot-detect.html", HTTP_GET, serveRoot);  // iOS / macOS
+  localHttp.on("/library/test/success.html", HTTP_GET, serveRoot);  // iOS alt
+  localHttp.on("/connecttest.txt",     HTTP_GET, serveRoot);  // Windows
+  localHttp.on("/ncsi.txt",            HTTP_GET, serveRoot);  // Windows NCSI
+  localHttp.on("/success.txt",         HTTP_GET, serveRoot);  // Firefox
+  localHttp.on("/redirect",            HTTP_GET, serveRoot);  // Firefox
+  localHttp.on("/canonical.html",      HTTP_GET, serveRoot);  // Google Chrome
+  localHttp.on("/fwlink/",             HTTP_GET, serveRoot);  // Microsoft
   localHttp.on("/", HTTP_GET, serveRoot);
   localHttp.onNotFound(serveRoot);
 
