@@ -27,61 +27,23 @@ exports.getCourseLecturers = async (req, res, next) => {
   try {
     if (!req.user.isClassRep) return res.status(403).json({ error: 'Not a class rep' });
 
-    // Primary source: device.assignedLecturers set by admin
+    // Only return lecturers explicitly assigned to this class rep's device by admin.
+    // No fallbacks — this prevents courses from other classes leaking into the list.
     const device = await Device.findOne({ classRepId: req.user._id, companyId: req.user.company, isActive: true })
       .populate('assignedLecturers.lecturerId', 'name email')
       .populate('assignedLecturers.courseId', 'title code')
       .lean();
 
-    if (device && device.assignedLecturers && device.assignedLecturers.length) {
-      const lecturers = device.assignedLecturers
-        .filter(a => a.lecturerId && a.courseId)
-        .map(a => ({
-          lecturerId:   a.lecturerId._id,
-          lecturerName: a.lecturerId.name,
-          lecturerEmail: a.lecturerId.email,
-          courseId:    a.courseId._id,
-          courseTitle: a.courseId.title,
-          courseCode:  a.courseId.code,
-        }));
-      if (lecturers.length) return res.json({ lecturers });
-    }
-
-    // Fallback: query courses matching the class rep's class-group profile
-    const user = await User.findById(req.user._id).select('classRepCourse programme studentLevel studentGroup sessionType semester department').lean();
-    const query = { companyId: req.user.company, isActive: true };
-    if (user.studentLevel) query.level = user.studentLevel;
-    if (user.studentGroup) query.group = user.studentGroup;
-    if (user.sessionType) query.sessionType = user.sessionType;
-    if (user.semester) query.semester = user.semester;
-    if (user.programme) query.qualificationType = user.programme;
-
-    const courses = await Course.find(query).populate('lecturerId', 'name email').lean();
-    let lecturers = courses
-      .filter(c => c.lecturerId)
-      .map(c => ({
-        lecturerId:   c.lecturerId._id,
-        lecturerName: c.lecturerId.name,
-        lecturerEmail: c.lecturerId.email,
-        courseId:    c._id,
-        courseTitle: c.title,
-        courseCode:  c.code,
+    const lecturers = (device?.assignedLecturers || [])
+      .filter(a => a.lecturerId && a.courseId)
+      .map(a => ({
+        lecturerId:   a.lecturerId._id,
+        lecturerName: a.lecturerId.name,
+        lecturerEmail: a.lecturerId.email,
+        courseId:    a.courseId._id,
+        courseTitle: a.courseId.title,
+        courseCode:  a.courseId.code,
       }));
-
-    // Last resort: all lecturers in the rep's department (no course association)
-    if (!lecturers.length) {
-      const fallbackFilter = { company: req.user.company, role: 'lecturer', isActive: true };
-      if (user.department) fallbackFilter.department = user.department;
-      const fallback = await User.find(fallbackFilter).select('_id name email').limit(50).lean();
-      lecturers = fallback.map(l => ({
-        lecturerId:   l._id,
-        lecturerName: l.name,
-        lecturerEmail: l.email,
-        courseId:    null,
-        courseTitle: null,
-        courseCode:  null,
-      }));
-    }
 
     res.json({ lecturers });
   } catch (e) { next(e); }
