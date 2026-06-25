@@ -7,7 +7,7 @@
  *  WHAT THIS DOES
  *  ─────────────
  *  • On first boot, runs a captive-portal AP "Dikly-XXXXXX". Open
- *    192.168.4.1 on your phone, enter institution code + pairing code
+ *    http://192.168.4.1 on your phone, enter institution code + pairing code
  *    from the admin portal, and your school WiFi credentials.
  *  • Calls POST /api/devices/pair → saves a long-lived device JWT in NVS.
  *  • Sends heartbeats every 5 s → receives active session info.
@@ -228,10 +228,8 @@ public:
 #include <ArduinoJson.h>
 #include <SPI.h>
 #include <SD_MMC.h>   // SDIO driver — separate peripheral from SPI, no bus conflict
-#include <BLEDevice.h>
-#include <BLEAdvertising.h>
-#include <esp_bt.h>        // esp_bt_controller_mem_release
-#include <esp_wifi.h>      // esp_wifi_stop / esp_wifi_deinit for hard reset
+#include <esp_wifi.h>      // esp_wifi_ap_get_sta_list, promiscuous, etc.
+#include <esp_bt.h>        // esp_bt_controller_mem_release — frees BLE DMA pool even when BLE unused
 #include <ESPmDNS.h>       // dikly.local hostname on both AP and STA networks
 #include "lwip/etharp.h"   // ARP table for IP→MAC→RSSI mapping
 #include <ArduinoOTA.h>
@@ -262,10 +260,11 @@ static const uint8_t SD_CLK = 38, SD_CMD = 40, SD_D0 = 39;
 static const uint8_t SD_D1  = 41, SD_D2  = 48, SD_D3 = 47;
 
 // ─── App Config ──────────────────────────────────────────────────────────────
-static const char*   FIRMWARE_VERSION     = "s3-2.1.0";
+static const char*   FIRMWARE_VERSION     = "s3-2.2.0";
 static const char*   DEFAULT_API_BASE     = "https://dikly.sbs";
+
 static const uint32_t HEARTBEAT_MS        = 5000;
-static const uint32_t WIFI_TIMEOUT_MS     = 30000;
+static const uint32_t WIFI_TIMEOUT_MS     = 8000;   // 8 s: typical connect is 3-5 s; fail fast on wrong creds
 static const uint32_t WINDOW_SECONDS      = 120;  // code rotation period (2 minutes)
 
 // ─── Theme selector ──────────────────────────────────────────────────────────
@@ -371,6 +370,8 @@ uint32_t sessionDuration  = 300;
 uint32_t studentsMarked       = 0;
 uint32_t sessionTotalEnrolled = 0;   // parsed from heartbeat totalEnrolled
 uint32_t lastSyncMs           = 0;   // millis() at last successful heartbeat
+static bool   serverReachable = false; // true after first successful heartbeat
+static int    lastHbCode      = 0;     // last heartbeat HTTP code (0=none yet, -1=conn fail)
 
 // ─── Session summary (saved on session end) ──────────────────────────────────
 uint32_t summaryTotal   = 0;
@@ -389,26 +390,12 @@ static bool     reMarkActive    = false;
 static uint32_t reMarkOpenedAt  = 0;
 static const uint32_t REMARK_WINDOW_SECS = 300; // 5-minute re-mark window
 
-// BLE beacon state
-static BLEAdvertising *bleAdv  = nullptr;
-static uint32_t        bleSlot = UINT32_MAX;   // slot currently on-air
-
-// Session Code — 4-digit code shown on device screen; required to start an offline session.
-// Regenerated each time the device boots or a session ends. Prevents students accidentally
-// starting sessions by opening the portal before the lecturer does.
-static char  lecturerPin[5] = "0000";
-
-static void regenerateLecturerPin() {
-  uint16_t pin = (uint16_t)(esp_random() % 9000) + 1000;  // 1000..9999
-  snprintf(lecturerPin, sizeof(lecturerPin), "%04u", pin);
-}
-
 // Async pairing (avoids iOS captive-portal dropping the fetch before we respond)
 bool     pairPending     = false;
 String   pairPendingInst = "";
 String   pairPendingCode = "";
 
-// ── Live presence tracking (BPM — BLE Presence Monitoring) ───────────────────
+// ── Live presence tracking ────────────────────────────────────────────────────
 // Populated by POST /student/heartbeat from the Flutter app.
 // Stale entries (no heartbeat for >2 min) are pruned on each /students request.
 struct PresenceEntry { char userId[64]; uint32_t lastMs; };
@@ -649,74 +636,6 @@ static String deriveCode(const String& seed, uint32_t unixSec) {
   return String(buf);
 }
 
-// ── BLE BEACON ──────────────────────────────────────────────────────────────
-// Broadcasts a 30-second slot-bound HMAC token so student apps can verify
-// physical proximity. Payload (manufacturer data, 16 bytes):
-//   [0-1] company ID 0xFFFF (unregistered/test)
-//   [2-3] magic 'K' 'D'
-//   [4-7] slot (uint32, little-endian)  slot = floor(unixSeconds / 30)
-//   [8-15] HMAC-SHA256(sessionSeed, "ble:<slot>") first 8 bytes
-// Backend re-derives the HMAC using session.esp32Seed and rejects stale slots.
-
-static void initBle() {
-  // ESP32-S3 Arduino core 3.x (ESP-IDF 5.x) races the NimBLE HCI transport
-  // init against the WiFi driver's background tasks when both are started in
-  // rapid succession. The race logs "hci inits failed" / "nimble host init
-  // failed" and silently breaks BLE advertising. A 200 ms yield after
-  // esp_wifi_init() lets WiFi's tasks settle before NimBLE registers its
-  // HCI callbacks, eliminating the race.
-  delay(200);
-  BLEDevice::init(("Dikly-" + macSuffix()).c_str());
-  bleAdv = BLEDevice::getAdvertising();
-  LOG("BLE init OK");
-}
-
-static void bleUpdatePayload() {
-  if (!bleAdv || sessionId.isEmpty() || sessionSeed.isEmpty() || !timeSynced) return;
-
-  uint32_t slot = (uint32_t)(time(nullptr) / 30);
-  if (slot == bleSlot) return;   // slot unchanged — nothing to do
-  bleSlot = slot;
-
-  char slotMsg[20];
-  snprintf(slotMsg, sizeof(slotMsg), "ble:%lu", (unsigned long)slot);
-  uint8_t hmacOut[32];
-  hmacSha256((const uint8_t*)sessionSeed.c_str(), sessionSeed.length(),
-             (const uint8_t*)slotMsg, strlen(slotMsg), hmacOut);
-
-  uint8_t buf[16];
-  buf[0] = 0xFF; buf[1] = 0xFF;          // company ID (unregistered)
-  buf[2] = 0x4B; buf[3] = 0x44;          // magic 'K' 'D'
-  buf[4] = slot        & 0xFF;
-  buf[5] = (slot >> 8) & 0xFF;
-  buf[6] = (slot >>16) & 0xFF;
-  buf[7] = (slot >>24) & 0xFF;
-  memcpy(buf + 8, hmacOut, 8);
-
-  // Build Arduino String byte-by-byte so null bytes in the slot field are preserved
-  String mfg;
-  mfg.reserve(sizeof(buf));
-  for (size_t i = 0; i < sizeof(buf); i++) mfg += (char)buf[i];
-
-  bleAdv->stop();
-  BLEAdvertisementData adv;
-  adv.setFlags(0x06);                    // LE General Discoverable, no BR/EDR
-  adv.setManufacturerData(mfg);
-  bleAdv->setAdvertisementData(adv);
-  bleAdv->setMinInterval(320);           // ~200 ms  (units: 0.625 ms)
-  bleAdv->setMaxInterval(480);           // ~300 ms
-  bleAdv->start();
-  LOG("BLE slot=" + String(slot));
-}
-
-static void bleStop() {
-  if (bleAdv && bleSlot != UINT32_MAX) {
-    bleAdv->stop();
-    bleSlot = UINT32_MAX;
-    LOG("BLE stopped");
-  }
-}
-
 // ─── Touch (FT6X36 capacitive, I2C) ──────────────────────────────────────────
 // Confirmed chip: FT6336G on ES3C28P board.
 // I2C: SDA=16, SCL=15. RST=18, INT=17.
@@ -793,15 +712,12 @@ static bool touchRead(uint16_t& tx, uint16_t& ty) {
 
   if ((td & 0x0F) == 0) return false;
 
-  // FT6336G on ES3C28P: chip reports X/Y in portrait panel orientation.
-  // The debug dot drawn by drawSetup() will show where the chip thinks you
-  // touched — use that to confirm axis direction and swap if needed.
-  // Current mapping: direct (no swap). If dot appears mirrored, swap rawX/rawY.
-  // If dot appears upside-down, change to:  tx=rawX; ty=(SH-1)-rawY;
+  // FT6336G on ES3C28P: chip reports X/Y already in portrait orientation
+  // (Y=0 at top, Y=319 at bottom). No axis swap or inversion needed.
   uint16_t rawX = ((xh & 0x0F) << 8) | xl;
   uint16_t rawY = ((yh & 0x0F) << 8) | yl;
   tx = rawX;
-  ty = (SH - 1) - rawY;  // invert Y — touch chip reports upside-down relative to display
+  ty = rawY;
   return true;
 }
 
@@ -1072,9 +988,11 @@ static void syncOfflineAttendance() {
 static void downloadRoster() {
   if (!sdAvailable) return;
   String resp; int code = -1;
+  WiFiClientSecure client; client.setInsecure();
+  client.setTimeout(10);
   HTTPClient http;
   String url = String(apiBase) + "/api/devices/roster";
-  http.begin(url);
+  if (!http.begin(client, url)) return;
   http.addHeader("Authorization", "Bearer " + deviceJWT);
   http.addHeader("Content-Type",  "application/json");
   http.setTimeout(10000);
@@ -1110,9 +1028,11 @@ static void downloadRoster() {
 // Called after each successful heartbeat (throttled to once every ~10 min).
 // Stored in NVS so the /start page works fully offline.
 static void downloadBundle() {
+  WiFiClientSecure client; client.setInsecure();
+  client.setTimeout(12);
   HTTPClient http;
   String url = String(apiBase) + "/api/class-rep/bundle";
-  http.begin(url);
+  if (!http.begin(client, url)) return;
   http.addHeader("Authorization", "Bearer " + deviceJWT);
   http.setTimeout(12000);
   int code = http.GET();
@@ -1201,12 +1121,15 @@ static void sendHeartbeat() {
   String resp; int code = postJson("/api/devices/heartbeat", body, resp);
   if (code == 401) { LOG("JWT revoked — factory reset"); factoryReset(); return; }
   if (code != 200) {
+    lastHbCode = code;
     LOG("HB fail " + String(code));
     if (++hbFails >= 2) { hbFails = 0; forceReconn = true; }  // reconnect after 2 consecutive fails (~16s)
     return;
   }
-  hbFails    = 0;
-  lastSyncMs = millis();
+  hbFails         = 0;
+  serverReachable = true;
+  lastHbCode      = 200;
+  lastSyncMs      = millis();
   // Flush any offline sessions + attendance records now that we have internet.
   syncOfflineAttendance();
   // Refresh roster + bundle every ~10 minutes (120 heartbeats × 5 s).
@@ -1230,11 +1153,21 @@ static void sendHeartbeat() {
       prefs.end();
     }
   }
+  // Sync admin-configured RSSI threshold; persist to NVS.
+  if (doc["rssiThreshold"].is<int>()) {
+    int8_t t = (int8_t)doc["rssiThreshold"].as<int>();
+    if (t >= -100 && t <= -20 && t != rssiThreshold) {
+      rssiThreshold = t;
+      prefs.begin("kodex", false);
+      prefs.putInt("rssi", (int)rssiThreshold);
+      prefs.end();
+      LOG("RSSI threshold updated: " + String(rssiThreshold) + " dBm");
+    }
+  }
   JsonVariantConst sess = doc["activeSession"];
   if (sess.isNull()) {
     if (!sessionId.isEmpty()) {
-      LOG("Session ended"); sessionId = ""; sessionSeed = ""; regenerateLecturerPin();
-      sessionTitle = ""; sessionCourse = ""; sessionLecturer = "";
+      LOG("Session ended"); sessionId = ""; sessionSeed = "";       sessionTitle = ""; sessionCourse = ""; sessionLecturer = "";
       studentsMarked = 0; sessionTotalEnrolled = 0; reMarkActive = false;
       dedupClear("");
     }
@@ -1460,7 +1393,7 @@ static void drawSplash() {
 
   // ── Version string ───────────────────────────────────────────────────────
   spr.setFont(F_TINY); spr.setTextColor(0x4A69, COL_BG);
-  String verStr = "v2.1.0";
+  String verStr = String(FIRMWARE_VERSION);
   int32_t vw = spr.textWidth(verStr);
   spr.setCursor((SW - vw) / 2, lineY + 22); spr.print(verStr);
 
@@ -1485,35 +1418,6 @@ static void drawSplash() {
   spr.pushSprite(0, 0);
 }
 
-// ── QR code bitmap for http://192.168.4.1 (25×25 modules) ───────────────────
-static const uint8_t QR_IP_SIZE = 25;
-static const uint8_t QR_IP[25][25] = {
-  {1,1,1,1,1,1,1,0,0,1,1,1,0,1,0,0,1,0,1,1,1,1,1,1,1},
-  {1,0,0,0,0,0,1,0,0,0,0,1,1,0,0,0,0,0,1,0,0,0,0,0,1},
-  {1,0,1,1,1,0,1,0,0,1,1,1,0,0,1,0,1,0,1,0,1,1,1,0,1},
-  {1,0,1,1,1,0,1,0,1,0,1,1,0,0,1,1,1,0,1,0,1,1,1,0,1},
-  {1,0,1,1,1,0,1,0,1,0,1,0,1,1,0,0,0,0,1,0,1,1,1,0,1},
-  {1,0,0,0,0,0,1,0,0,1,1,0,0,1,1,0,0,0,1,0,0,0,0,0,1},
-  {1,1,1,1,1,1,1,0,1,0,1,0,1,0,1,0,1,0,1,1,1,1,1,1,1},
-  {0,0,0,0,0,0,0,0,0,1,0,0,1,1,0,0,1,0,0,0,0,0,0,0,0},
-  {1,1,0,0,0,1,1,1,0,1,1,0,1,0,1,1,1,0,0,0,1,1,0,0,0},
-  {0,0,1,0,0,0,0,1,1,0,1,0,0,0,1,1,1,1,0,0,1,1,1,1,0},
-  {0,1,0,0,0,1,1,0,1,1,0,1,1,0,0,1,0,0,1,1,0,1,0,1,1},
-  {0,1,1,0,1,0,0,0,1,0,1,1,0,0,1,1,1,0,0,0,1,1,0,0,1},
-  {1,1,1,0,0,1,1,0,0,1,1,0,0,1,1,0,1,1,1,0,0,0,0,0,1},
-  {1,0,1,0,0,0,0,0,0,0,1,0,1,1,1,1,0,0,0,0,0,0,0,1,0},
-  {1,0,0,1,1,1,1,0,0,1,1,0,0,1,1,1,0,1,0,1,0,1,0,1,1},
-  {1,0,0,1,1,1,0,1,1,0,0,0,1,1,1,0,1,0,0,0,1,0,1,0,1},
-  {1,0,1,0,1,1,1,1,0,0,1,0,1,0,1,0,1,1,1,1,1,0,1,0,0},
-  {0,0,0,0,0,0,0,0,1,1,1,0,0,0,0,1,1,0,0,0,1,0,1,0,0},
-  {1,1,1,1,1,1,1,0,1,1,1,0,1,1,1,0,1,0,1,0,1,1,0,0,1},
-  {1,0,0,0,0,0,1,0,1,1,1,1,0,0,1,0,1,0,0,0,1,0,0,0,0},
-  {1,0,1,1,1,0,1,0,0,1,0,1,0,0,0,1,1,1,1,1,1,1,1,0,1},
-  {1,0,1,1,1,0,1,0,0,0,1,0,1,1,0,0,0,0,1,1,0,1,0,1,1},
-  {1,0,1,1,1,0,1,0,0,0,1,0,0,1,1,0,0,1,0,0,0,0,1,0,1},
-  {1,0,0,0,0,0,1,0,1,0,1,0,1,1,0,1,1,0,1,1,1,0,0,0,1},
-  {1,1,1,1,1,1,1,0,1,0,0,1,1,1,0,1,1,0,1,0,0,1,0,0,1},
-};
 
 // ── SETUP (captive portal) ────────────────────────────────────────────────────
 static void drawSetup(const String& apName) {
@@ -1548,83 +1452,52 @@ static void drawSetup(const String& apName) {
   const int32_t CX = 10, CW = SW - 20, CG = 6;
   int32_t cy = 70;
 
-  // Step card helper lambda
-  auto stepCard = [&](uint8_t num,
-                      const char* hint, const lgfx::IFont* vfont,
-                      const char* val1, const char* val2,
-                      const char* note, int32_t ch) {
+  // ── Step 1: Wi-Fi name ───────────────────────────────────────────────────────
+  {
+    const int32_t ch = 48, tx = CX + 36;
     spr.fillRoundRect(CX, cy, CW, ch, 6, COL_CARD);
     spr.drawRoundRect(CX, cy, CW, ch, 6, COL_BORDER);
+    spr.fillCircle(CX + 18, cy + ch / 2, 10, COL_PRIMARY);
+    spr.setFont(F_TINY); spr.setTextColor(COL_BG, COL_PRIMARY);
+    spr.setCursor(CX + 15, cy + ch / 2 - 4); spr.print("1");
+    spr.setFont(F_TINY); spr.setTextColor(COL_MUTED, COL_CARD);
+    spr.setCursor(tx, cy + 7); spr.print("Connect to Wi-Fi:");
+    spr.setFont(F_SMALL); spr.setTextColor(COL_CYAN, COL_CARD);
+    spr.setCursor(tx, cy + 18); spr.print(apName.c_str());
+    cy += ch + CG;
+  }
 
-    // Step number circle
+  // Generic step card helper for steps 2 & 3
+  // val2col: optional override colour for val2 line (0 = default COL_MUTED)
+  auto stepCard = [&](uint8_t num, const char* hint, const lgfx::IFont* vfont,
+                      const char* val1, const char* val2, int32_t ch,
+                      uint16_t val2col = 0) {
+    spr.fillRoundRect(CX, cy, CW, ch, 6, COL_CARD);
+    spr.drawRoundRect(CX, cy, CW, ch, 6, COL_BORDER);
     const int32_t bx = CX + 18, by = cy + ch / 2;
     spr.fillCircle(bx, by, 10, COL_PRIMARY);
     spr.setFont(F_TINY); spr.setTextColor(COL_BG, COL_PRIMARY);
     char ns[2] = {(char)('0' + num), '\0'};
-    spr.setCursor(bx - (int32_t)spr.textWidth(ns) / 2, by - 4);
-    spr.print(ns);
-
-    // Text block
+    spr.setCursor(bx - (int32_t)spr.textWidth(ns) / 2, by - 4); spr.print(ns);
     const int32_t tx = CX + 36;
     spr.setFont(F_TINY); spr.setTextColor(COL_MUTED, COL_CARD);
     spr.setCursor(tx, cy + 7); spr.print(hint);
     spr.setFont(vfont); spr.setTextColor(COL_CYAN, COL_CARD);
     spr.setCursor(tx, cy + 18); spr.print(val1);
     if (val2) {
-      spr.setFont(F_TINY); spr.setTextColor(COL_CYAN, COL_CARD);
+      spr.setFont(F_TINY);
+      spr.setTextColor(val2col ? val2col : (uint16_t)COL_MUTED, COL_CARD);
       spr.setCursor(tx, cy + 30); spr.print(val2);
-    }
-    if (note) {
-      spr.setFont(F_TINY); spr.setTextColor(COL_MUTED, COL_CARD);
-      spr.setCursor(tx, val2 ? cy + 42 : cy + 30); spr.print(note);
     }
     cy += ch + CG;
   };
 
-  stepCard(1, "Connect phone to Wi-Fi:", F_SMALL, apName.c_str(), nullptr, nullptr, 42);
-
-  // ── Step 2 — card with QR on the right ───────────────────────────────────────
-  {
-    const int32_t card2H   = 88;
-    const int32_t card2Top = cy;
-    spr.fillRoundRect(CX, cy, CW, card2H, 6, COL_CARD);
-    spr.drawRoundRect(CX, cy, CW, card2H, 6, COL_BORDER);
-
-    // Step circle
-    const int32_t bx = CX + 18, by = cy + card2H / 2;
-    spr.fillCircle(bx, by, 10, COL_PRIMARY);
-    spr.setFont(F_TINY); spr.setTextColor(COL_BG, COL_PRIMARY);
-    spr.setCursor(bx - 3, by - 4); spr.print("2");
-
-    // Text (left of QR)
-    const int32_t tx = CX + 36;
-    spr.setFont(F_TINY); spr.setTextColor(COL_MUTED, COL_CARD);
-    spr.setCursor(tx, cy + 8); spr.print("Scan QR or open:");
-    spr.setFont(F_TINY); spr.setTextColor(COL_CYAN, COL_CARD);
-    spr.setCursor(tx, cy + 21); spr.print("dikly.local");
-    spr.setFont(F_TINY); spr.setTextColor(COL_MUTED, COL_CARD);
-    spr.setCursor(tx, cy + 34); spr.print("or 192.168.4.1");
-
-    // QR code — right side, white border+black modules
-    const int32_t QR_SCALE = 3;
-    const int32_t QR_PX    = QR_IP_SIZE * QR_SCALE;  // 75px
-    const int32_t qrX      = CX + CW - QR_PX - 6;
-    const int32_t qrY      = card2Top + (card2H - QR_PX) / 2;
-    spr.fillRect(qrX - 2, qrY - 2, QR_PX + 4, QR_PX + 4, 0xFFFF);
-    for (int qy = 0; qy < QR_IP_SIZE; qy++) {
-      for (int qx = 0; qx < QR_IP_SIZE; qx++) {
-        if (QR_IP[qy][qx]) {
-          spr.fillRect(qrX + qx * QR_SCALE, qrY + qy * QR_SCALE,
-                       QR_SCALE, QR_SCALE, 0x0000);
-        }
-      }
-    }
-    cy += card2H + CG;
-  }
+  // Amber note warns users not to type https:// — a common mistake on Windows/Chrome
+  stepCard(2, "Open in browser:", F_SMALL, "http://192.168.4.1",
+           "http only  (NOT https)", 48, (uint16_t)COL_WARNING);
 
   stepCard(3, "Enter your credentials:", F_TINY,
-           "Institution code + pairing code", "then your school Wi-Fi password",
-           nullptr, 52);
+           "Institution code + pairing code", "then school Wi-Fi password", 50);
 
   // ── Factory reset strip ───────────────────────────────────────────────────────
   cy += 4;
@@ -1711,9 +1584,9 @@ static void drawWifiReconfig(const String& apName) {
   spr.setFont(F_TINY); spr.setTextColor(COL_MUTED, COL_CARD);
   spr.setCursor(46, cy + 8); spr.print("Open browser and go to:");
   spr.setFont(F_SMALL); spr.setTextColor(COL_WARNING, COL_CARD);
-  spr.setCursor(46, cy + 22); spr.print("dikly.local");
+  spr.setCursor(46, cy + 22); spr.print("http://192.168.4.1");
   spr.setFont(F_TINY); spr.setTextColor(COL_MUTED, COL_CARD);
-  spr.setCursor(46, cy + 38); spr.print("or 192.168.4.1");
+  spr.setCursor(46, cy + 38); spr.print("if portal doesn't pop up");
 
   // ── Info card: pairing preserved ─────────────────────────────────────────────
   cy += 60;
@@ -2000,21 +1873,33 @@ document.getElementById('f').onsubmit=async(e)=>{
 
 static void startWifiReconfigPortal() {
   WiFi.mode(WIFI_AP);
-  delay(100);
+  delay(200);
+
   String ap = "Dikly-" + macSuffix();
-  WiFi.softAP(ap.c_str());
-  IPAddress gw;
-  uint32_t t0 = millis();
-  do { delay(100); gw = WiFi.softAPIP(); } while (gw == IPAddress(0,0,0,0) && millis()-t0 < 5000);
+  WiFi.softAP(ap.c_str());          // open, default 192.168.4.1
+  delay(500);                        // wait for lwIP DHCP server to fully start
+  esp_wifi_set_ps(WIFI_PS_NONE);    // disable AP power-saving (must be after softAP)
+
+  IPAddress gw = WiFi.softAPIP();   // 192.168.4.1
   LOG("WiFi reconfig AP: " + ap + " @ " + gw.toString());
 
   dns.start(53, "*", gw);
 
-  auto servePage = []() { localHttp.send_P(200, "text/html", WIFI_RECONFIG_HTML); };
-  localHttp.on("/", HTTP_GET, servePage);
-  localHttp.on("/generate_204", HTTP_GET, servePage);
-  localHttp.on("/hotspot-detect.html", HTTP_GET, servePage);
-  localHttp.onNotFound(servePage);
+  auto serveRecfg  = []() { localHttp.send_P(200, "text/html", WIFI_RECONFIG_HTML); };
+  auto probeRedir2 = []() {
+    localHttp.sendHeader("Location", "http://192.168.4.1/", true);
+    localHttp.send(302, "text/plain", "");
+  };
+  localHttp.on("/",                        HTTP_GET, serveRecfg);
+  localHttp.on("/generate_204",            HTTP_GET, probeRedir2);
+  localHttp.on("/hotspot-detect.html",     HTTP_GET, probeRedir2);
+  localHttp.on("/connecttest.txt",         HTTP_GET, probeRedir2);
+  localHttp.on("/ncsi.txt",               HTTP_GET, probeRedir2);
+  localHttp.on("/success.txt",             HTTP_GET, probeRedir2);
+  localHttp.on("/redirect",               HTTP_GET, probeRedir2);
+  localHttp.on("/canonical.html",          HTTP_GET, probeRedir2);
+  localHttp.on("/fwlink/",               HTTP_GET, probeRedir2);
+  localHttp.onNotFound(serveRecfg);
 
   localHttp.on("/wifi/scan", HTTP_GET, []() {
     int n = WiFi.scanNetworks();
@@ -2146,21 +2031,26 @@ static void drawReady() {
   spr.fillSprite(COL_BG);
 
   bool online = (WiFi.status() == WL_CONNECTED);
+  // Server is considered "synced" when the last heartbeat succeeded within 60 s
+  bool synced = online && serverReachable && (millis() - lastSyncMs < 60000);
 
   // ── Header + accent line ──────────────────────────────────────────────────────
   drawHeader(spr, online);
-  spr.fillRect(0, 44, SW, 2, online ? COL_SUCCESS : COL_BORDER);
+  spr.fillRect(0, 44, SW, 2, synced ? COL_SUCCESS : (online ? COL_WARNING : COL_BORDER));
   drawTabBar(spr, 0);
 
   // ── READY label + subtitle ────────────────────────────────────────────────────
   spr.setFont(F_MED);
-  spr.setTextColor(online ? COL_SUCCESS : COL_MUTED, COL_BG);
+  spr.setTextColor(synced ? COL_SUCCESS : (online ? COL_WARNING : COL_MUTED), COL_BG);
   const char* rdyLbl = "READY";
   int32_t tw = spr.textWidth(rdyLbl);
   spr.setCursor((SW - tw) / 2, 50); spr.print(rdyLbl);
 
   spr.setFont(F_TINY); spr.setTextColor(COL_MUTED, COL_BG);
-  const char* subLbl = online ? "Online \xC2\xB7 Awaiting session" : "Waiting for session";
+  const char* subLbl;
+  if (!online)     subLbl = "Waiting for session";
+  else if (synced) subLbl = "Online \xC2\xB7 Awaiting session";
+  else             subLbl = "WiFi OK \xC2\xB7 No server";
   tw = spr.textWidth(subLbl);
   spr.setCursor((SW - tw) / 2, 72); spr.print(subLbl);
 
@@ -2169,7 +2059,7 @@ static void drawReady() {
   uint32_t ms  = millis();
   uint8_t  p   = (uint8_t)((ms / 600) % 4);
   int32_t  pcx = SW / 2, pcy = 162;
-  uint16_t ringCol = online ? COL_PRIMARY : COL_BORDER;
+  uint16_t ringCol = synced ? COL_PRIMARY : (online ? COL_WARNING : COL_BORDER);
 
   uint16_t rc4 = (p == 3) ? ringCol : COL_BORDER;
   uint16_t rc3 = (p >= 2) ? ringCol : COL_BORDER;
@@ -2178,15 +2068,19 @@ static void drawReady() {
     spr.drawCircle(pcx, pcy, 70 + d, rc4);
     spr.drawCircle(pcx, pcy, 52 + d, rc3);
     spr.drawCircle(pcx, pcy, 34 + d, rc2);
-    spr.drawCircle(pcx, pcy, 18 + d, online ? COL_PRIMARY : COL_MUTED);
+    spr.drawCircle(pcx, pcy, 18 + d, synced ? COL_PRIMARY : (online ? COL_WARNING : COL_MUTED));
   }
-  // Centre filled circle — WiFi icon (online) or "?" (offline)
-  uint16_t cFill = online ? COL_PRIMARY : COL_DIM_CARD;
-  uint16_t cBd   = online ? COL_SUCCESS  : COL_MUTED;
+  // Centre filled circle — WiFi icon (synced) or "!" (WiFi OK but no server) or "?" (offline)
+  uint16_t cFill = synced ? COL_PRIMARY : (online ? 0x4200 : COL_DIM_CARD);  // dark amber when WiFi-only
+  uint16_t cBd   = synced ? COL_SUCCESS  : (online ? COL_WARNING : COL_MUTED);
   spr.fillCircle(pcx, pcy, 15, cFill);
   spr.drawCircle(pcx, pcy, 17, cBd);
-  if (online) {
+  if (synced) {
     _wifiBars(spr, pcx + 4, pcy - 5, COL_BG);
+  } else if (online) {
+    spr.setFont(F_TINY); spr.setTextColor(COL_WARNING, cFill);
+    tw = spr.textWidth("!");
+    spr.setCursor(pcx - tw / 2, pcy - 4); spr.print("!");
   } else {
     spr.setFont(F_TINY); spr.setTextColor(COL_MUTED, cFill);
     tw = spr.textWidth("?");
@@ -2236,9 +2130,18 @@ static void drawReady() {
 
   // ── Bottom hint ───────────────────────────────────────────────────────────────
   spr.setFont(F_TINY); spr.setTextColor(0x4210, COL_BG);
-  const char* hint = online
-    ? "Sessions start from dikly.sbs"
-    : "Connect phone to Dikly \xE2\x86\x92 open /start";
+  static char hintBuf[44];
+  const char* hint;
+  if (!online) {
+    hint = "Connect phone to Dikly \xE2\x86\x92 open /start";
+  } else if (synced) {
+    hint = "Sessions start from dikly.sbs";
+  } else if (lastHbCode != 0) {
+    snprintf(hintBuf, sizeof(hintBuf), "Server err %d \xE2\x80\x94 check WiFi / network", lastHbCode);
+    hint = hintBuf;
+  } else {
+    hint = "Connecting to server\xE2\x80\xA6";
+  }
   tw = spr.textWidth(hint);
   spr.setCursor((SW - tw) / 2, 274); spr.print(hint);
 
@@ -2250,45 +2153,39 @@ static void drawSessionStart() {
   spr.fillSprite(COL_BG);
   bool online = (WiFi.status() == WL_CONNECTED);
   _drawSubHeader(spr, "Start Session", online);
-  drawTabBar(spr, 1);  // Session tab active
+  drawTabBar(spr, 1);
 
-  spr.setFont(F_TINY); spr.setTextColor(COL_MUTED, COL_BG);
-  int32_t tw = spr.textWidth("Select session duration:");
-  spr.setCursor((SW - tw) / 2, 58); spr.print("Select session duration:");
+  // Step 1 card
+  spr.fillRoundRect(10, 60, SW - 20, 62, 8, COL_CARD);
+  spr.drawRoundRect(10, 60, SW - 20, 62, 8, COL_BORDER);
+  spr.setFont(F_TINY); spr.setTextColor(COL_PRIMARY, COL_CARD);
+  spr.setCursor(20, 68); spr.print("Step 1");
+  spr.setTextColor(COL_TEXT, COL_CARD);
+  spr.setCursor(20, 82); spr.print("Connect your phone to:");
+  spr.setFont(F_SMALL); spr.setTextColor(COL_CYAN, COL_CARD);
+  String apLbl = "Dikly-" + macSuffix();
+  int32_t tw = spr.textWidth(apLbl);
+  spr.setCursor((SW - tw) / 2, 96); spr.print(apLbl);
 
-  // 2x2 duration button grid
-  // bw=107, bh=76. Columns at x=8 and x=8+107+10=125. Rows at y=72 and y=156.
-  const int32_t bw = 107, bh = 76, gap = 10;
-  const int32_t x0 = 8, x1 = x0 + bw + gap;
-  const int32_t y0 = 72, y1 = y0 + bh + gap;
+  // Step 2 card
+  spr.fillRoundRect(10, 132, SW - 20, 62, 8, COL_CARD);
+  spr.drawRoundRect(10, 132, SW - 20, 62, 8, COL_BORDER);
+  spr.setFont(F_TINY); spr.setTextColor(COL_PRIMARY, COL_CARD);
+  spr.setCursor(20, 140); spr.print("Step 2");
+  spr.setTextColor(COL_TEXT, COL_CARD);
+  spr.setCursor(20, 154); spr.print("Open in browser:");
+  spr.setFont(F_SMALL); spr.setTextColor(COL_CYAN, COL_CARD);
+  tw = spr.textWidth("dikly.local/start");
+  spr.setCursor((SW - tw) / 2, 168); spr.print("dikly.local/start");
 
-  struct { int32_t x, y; const char* label; const char* sub; } btns[4] = {
-    { x0, y0, "30 min", "" },
-    { x1, y0, "45 min", "" },
-    { x0, y1, "1 hour", "" },
-    { x1, y1, "2 hours", "" },
-  };
-
-  for (int i = 0; i < 4; i++) {
-    spr.fillRoundRect(btns[i].x, btns[i].y, bw, bh, 8, COL_DIM_CARD);
-    spr.drawRoundRect(btns[i].x, btns[i].y, bw, bh, 8, COL_PRIMARY);
-
-    spr.setFont(F_SMALL); spr.setTextColor(COL_TEXT, COL_DIM_CARD);
-    tw = spr.textWidth(btns[i].label);
-    spr.setCursor(btns[i].x + (bw - tw) / 2, btns[i].y + bh/2 - 8);
-    spr.print(btns[i].label);
-  }
-
-  // Offline note
-  spr.setFont(F_TINY); spr.setTextColor(COL_MUTED, COL_BG);
-  tw = spr.textWidth("Students connect to hotspot — no internet needed");
-  if (tw > SW - 8) {
-    spr.setCursor(4, 242); spr.print("Students connect to hotspot");
-    tw = spr.textWidth("— no internet needed");
-    spr.setCursor((SW - tw) / 2, 256); spr.print("— no internet needed");
-  } else {
-    spr.setCursor((SW - tw) / 2, 248); spr.print("Students connect to hotspot — no internet needed");
-  }
+  // Step 3 note
+  spr.fillRoundRect(10, 204, SW - 20, 50, 8, COL_CARD);
+  spr.drawRoundRect(10, 204, SW - 20, 50, 8, COL_BORDER);
+  spr.setFont(F_TINY); spr.setTextColor(COL_PRIMARY, COL_CARD);
+  spr.setCursor(20, 212); spr.print("Step 3");
+  spr.setTextColor(COL_MUTED, COL_CARD);
+  spr.setCursor(20, 226); spr.print("Select course, enter your PIN");
+  spr.setCursor(20, 240); spr.print("and choose duration.");
 
   spr.pushSprite(0, 0);
 }
@@ -2418,7 +2315,7 @@ static void drawPairScreen() {
   spr.setCursor(54, 78); spr.print(shortAp);
   spr.setFont(F_TINY); spr.setTextColor(COL_MUTED, COL_CARD);
   spr.setCursor(54, 98); spr.print("Open network — no password");
-  spr.setCursor(54, 112); spr.print("Then open 192.168.4.1");
+  spr.setCursor(54, 112); spr.print("Then open dikly.local");
 
   // ── Device ID card ────────────────────────────────────────────────────────────
   spr.fillRoundRect(10, 144, SW - 20, 44, 6, COL_CARD);
@@ -2729,10 +2626,27 @@ static void drawDeviceInfo() {
     "Not found";
   infoRow(5, "SD Card", sdStr, sdAvailable ? COL_SUCCESS : COL_MUTED);
 
+  // Server connectivity row
+  String srvStr;
+  uint16_t srvCol;
+  if (lastHbCode == 200) {
+    uint32_t secAgo = (millis() - lastSyncMs) / 1000;
+    char srvBuf[32]; snprintf(srvBuf, sizeof(srvBuf), "OK \xE2\x80\x94 %us ago", secAgo);
+    srvStr = String(srvBuf); srvCol = COL_SUCCESS;
+  } else if (lastHbCode == 0) {
+    srvStr = "Waiting\xE2\x80\xA6"; srvCol = COL_MUTED;
+  } else {
+    char srvBuf[24]; snprintf(srvBuf, sizeof(srvBuf), "Fail (err %d)", lastHbCode);
+    srvStr = String(srvBuf); srvCol = COL_WARNING;
+  }
+  infoRow(6, "Server HB", srvStr, srvCol);
+
   spr.pushSprite(0, 0);
 }
 
 // ─── Captive-Portal Pairing HTML ─────────────────────────────────────────────
+// Delivered via sendHtmlChunked() — no size limit. ES5 JS only (XMLHttpRequest,
+// no async/await, no fetch, no arrow functions) for Samsung Internet compat.
 static const char PAIR_HTML[] PROGMEM = R"HTML(<!doctype html>
 <html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Dikly Setup</title>
@@ -2765,68 +2679,80 @@ static const char PAIR_HTML[] PROGMEM = R"HTML(<!doctype html>
 <body>
   <div class="logo">Di<span>kly</span></div>
   <p class="sub">Attendance Device Setup</p>
-  <form id="f">
+  <form id="f" onsubmit="doPair(event);return false;">
     <div class="card">
       <h3>Institution</h3>
       <label>Institution Code</label>
-      <input id="ic" name="institutionCode" required autocomplete="off" placeholder="e.g. ABCD23" style="text-transform:uppercase">
+      <input id="ic" autocomplete="off" placeholder="e.g. ABCD23" style="text-transform:uppercase">
       <label>Pairing Code <span style="color:#334155;font-weight:400">(from Admin Portal)</span></label>
-      <input id="pc" name="pairingCode" required autocomplete="off" placeholder="from admin portal" maxlength="8" style="text-transform:uppercase">
+      <input id="pc" autocomplete="off" placeholder="from admin portal" maxlength="8" style="text-transform:uppercase">
     </div>
     <div class="card">
       <h3>School WiFi <span style="font-size:10px;font-weight:400;color:#475569;text-transform:none">(optional — for sync only)</span></h3>
-      <p style="font-size:11px;color:#64748b;margin-bottom:10px">Device works offline without this. Add WiFi only if you want records to sync automatically to the portal.</p>
+      <p style="font-size:11px;color:#64748b;margin-bottom:10px">Device works offline without this. Add WiFi to sync records automatically.</p>
       <label>Network</label>
       <div class="row">
-        <input id="ssid" name="ssid" autocomplete="off" placeholder="Select or type SSID (optional)">
+        <input id="ss" autocomplete="off" placeholder="Select or type SSID (optional)">
         <button type="button" class="scan-btn" id="sb" onclick="scan()">Scan</button>
       </div>
       <div id="nl" class="nets" style="display:none"></div>
       <label>Password</label>
-      <input name="password" type="password" autocomplete="new-password" placeholder="Leave blank if open">
-      <label style="margin-top:16px;font-size:10px;color:#475569">Server (advanced)</label>
-      <input name="apiBase" value="https://dikly.sbs" style="font-size:12px;color:#475569">
+      <input id="pw" type="password" autocomplete="new-password" placeholder="Leave blank if open">
     </div>
     <button type="submit" class="submit" id="b">Pair Device</button>
   </form>
   <div id="msg"></div>
 <script>
-async function scan(){
-  const sb=document.getElementById('sb'),nl=document.getElementById('nl');
+function scan(){
+  var sb=document.getElementById('sb'),nl=document.getElementById('nl');
   sb.disabled=true;sb.textContent='…';nl.style.display='block';
   nl.innerHTML='<div style="padding:10px 14px;font-size:12px;color:#64748b">Scanning…</div>';
-  try{
-    const r=await fetch('/wifi/scan');const nets=await r.json();
+  var x=new XMLHttpRequest();x.open('GET','/wifi/scan');
+  x.onload=function(){
+    sb.disabled=false;sb.textContent='Scan';
+    if(x.status!==200){nl.innerHTML='<div style="padding:10px;color:#fca5a5">Scan failed</div>';return;}
+    var nets=JSON.parse(x.responseText);
     if(!nets.length){nl.innerHTML='<div style="padding:10px 14px;font-size:12px;color:#64748b">No networks found.</div>';return;}
-    nets.sort((a,b)=>(b.rssi||0)-(a.rssi||0));
-    nl.innerHTML=nets.map(n=>{
-      const bars=n.rssi>-60?'▂▄▆█':n.rssi>-75?'▂▄▆':n.rssi>-85?'▂▄':'▂';
-      const lock=n.open===false?'🔒 ':'';
-      const s=(n.ssid||'').replace(/'/g,"\\'");
-      return `<div class="net" onclick="pick(this,'${s}')"><span>${n.ssid||'(Hidden)'}</span><span class="bars">${lock}${bars}</span></div>`;
+    nets.sort(function(a,b){return(b.rssi||0)-(a.rssi||0);});
+    nl.innerHTML=nets.map(function(n){
+      var bars=n.rssi>-60?'&#x2582;&#x2584;&#x2586;&#x2588;':n.rssi>-75?'&#x2582;&#x2584;&#x2586;':n.rssi>-85?'&#x2582;&#x2584;':'&#x2582;';
+      var lock=n.open===false?'&#x1F512; ':'';
+      var s=(n.ssid||'').replace(/\\/g,'\\\\').replace(/'/g,"\\'");
+      return '<div class="net" onclick="pick(this,\''+s+'\')"><span>'+(n.ssid||'(Hidden)')+'</span><span class="bars">'+lock+bars+'</span></div>';
     }).join('');
-  }catch(e){nl.innerHTML='<div style="padding:10px;color:#fca5a5">Scan failed</div>';}
-  finally{sb.disabled=false;sb.textContent='Scan';}
+  };
+  x.onerror=function(){sb.disabled=false;sb.textContent='Scan';nl.innerHTML='<div style="padding:10px;color:#fca5a5">Scan failed</div>';};
+  x.send();
 }
 function pick(el,ssid){
-  document.getElementById('ssid').value=ssid;
-  document.querySelectorAll('.net').forEach(i=>i.classList.remove('sel'));
+  document.getElementById('ss').value=ssid;
+  var ns=document.querySelectorAll('.net');
+  for(var i=0;i<ns.length;i++)ns[i].classList.remove('sel');
   el.classList.add('sel');
 }
-document.getElementById('f').onsubmit=async(e)=>{
-  e.preventDefault();
-  const d=Object.fromEntries(new FormData(e.target));
-  d.institutionCode=d.institutionCode.toUpperCase().trim();
-  d.pairingCode=d.pairingCode.toUpperCase().trim();
-  const m=document.getElementById('msg'),b=document.getElementById('b');
-  b.disabled=true;m.className='';m.textContent='Pairing — this may take 30 s…';
-  try{
-    const r=await fetch('/pair',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(d)});
-    const j=await r.json();
-    if(!r.ok)throw new Error(j.error||'Pairing failed');
-    m.className='ok';m.textContent='✓ Connecting to WiFi & pairing… device will reboot in ~30 s. You can close this.';
-  }catch(err){m.className='err';m.textContent='✗ '+err.message;b.disabled=false;}
-};
+function doPair(e){
+  if(e&&e.preventDefault)e.preventDefault();
+  var ic=(document.getElementById('ic').value||'').toUpperCase().trim();
+  var pc=(document.getElementById('pc').value||'').toUpperCase().trim();
+  var ss=(document.getElementById('ss').value||'').trim();
+  var pw=(document.getElementById('pw').value||'');
+  if(!ic||ic.length<4){msg('err','Enter a valid institution code.');return false;}
+  if(!pc||pc.length<4){msg('err','Enter a valid pairing code.');return false;}
+  var b=document.getElementById('b');
+  b.disabled=true;msg('','Pairing — this may take 30 s…');
+  var x=new XMLHttpRequest();x.open('POST','/pair');
+  x.setRequestHeader('Content-Type','application/json');
+  x.timeout=40000;
+  x.onload=function(){
+    if(x.status===200){msg('ok','✓ Paired! Device will reboot in ~30 s. You can close this.');}
+    else{var t='Pairing failed';try{t=JSON.parse(x.responseText).error||t;}catch(ex){}msg('err','✗ '+t);b.disabled=false;}
+  };
+  x.onerror=function(){msg('err','Connection error — stay on Dikly WiFi and retry.');b.disabled=false;};
+  x.ontimeout=function(){msg('err','Timed out — check device and retry.');b.disabled=false;};
+  x.send(JSON.stringify({institutionCode:ic,pairingCode:pc,ssid:ss,password:pw,apiBase:'https://dikly.sbs'}));
+  return false;
+}
+function msg(cls,txt){var m=document.getElementById('msg');m.className=cls;m.textContent=txt;}
 </script></body></html>)HTML";
 
 // ── PAIRING STATUS — step-by-step feedback during async pair ─────────────────
@@ -3049,25 +2975,58 @@ static void drawPresenceMonitor() {
   spr.pushSprite(0, 0);
 }
 
+// ─── Chunked PROGMEM HTML sender ─────────────────────────────────────────────
+// send_P() buffers the entire string before transmitting. For large pages (>5 KB)
+// this overflows the lwIP TCP TX window and causes ERR_CONNECTION_TIMED_OUT on
+// iOS / Android CNA WebSheets. Chunked transfer lets the TCP stack send each
+// 256-byte piece independently — the browser renders as chunks arrive.
+static void sendHtmlChunked(const char* pgm) {
+  localHttp.sendHeader("Cache-Control", "no-store, no-cache, must-revalidate");
+  localHttp.sendHeader("Connection",    "close");
+  localHttp.setContentLength(CONTENT_LENGTH_UNKNOWN);
+  localHttp.send(200, "text/html", "");
+  char buf[256];
+  size_t rem = strlen_P(pgm);
+  while (rem > 0) {
+    size_t n = (rem > sizeof(buf)) ? sizeof(buf) : rem;
+    memcpy_P(buf, pgm, n);
+    localHttp.sendContent(buf, n);
+    pgm += n; rem -= n;
+  }
+  localHttp.sendContent(""); // terminate Transfer-Encoding: chunked
+}
+
 // ─── Captive-portal AP startup ────────────────────────────────────────────────
 static void startApPortal() {
   WiFi.mode(WIFI_AP);
-  delay(100);
+  delay(200);
+
   String ap = "Dikly-" + macSuffix();
-  WiFi.softAP(ap.c_str());
-  // Wait until the AP has a real IP (0.0.0.0 means not ready yet)
-  IPAddress gw;
-  uint32_t t0 = millis();
-  do { delay(100); gw = WiFi.softAPIP(); } while (gw == IPAddress(0,0,0,0) && millis()-t0 < 5000);
+  WiFi.softAP(ap.c_str());          // open, default 192.168.4.1
+  delay(500);                        // wait for lwIP DHCP server to fully start
+  esp_wifi_set_ps(WIFI_PS_NONE);    // disable AP power-saving (must be after softAP)
+
+  IPAddress gw = WiFi.softAPIP();   // 192.168.4.1
   LOG("AP: " + ap + " @ " + gw.toString());
 
-  dns.start(53, "*", gw);
+  dns.start(53, "*", gw);           // wildcard: every DNS query → our IP
 
-  // Serve captive portal
-  auto servePage = []() { localHttp.send_P(200, "text/html", PAIR_HTML); };
-  localHttp.on("/", HTTP_GET, servePage);
-  localHttp.on("/generate_204", HTTP_GET, servePage);
-  localHttp.on("/hotspot-detect.html", HTTP_GET, servePage);
+  // Serve the setup page directly at every OS captive-portal probe URL.
+  // No 302 redirect — the old KodexAttendance firmware used this same pattern
+  // and it works reliably on iOS, Android, Windows, and Samsung.
+  // A redirect adds an extra round-trip that the iOS CNA WebSheet sometimes
+  // drops, leaving the user with a blank page or timeout.
+  auto servePage = []() { sendHtmlChunked(PAIR_HTML); };
+
+  localHttp.on("/",                    HTTP_GET, servePage);
+  localHttp.on("/generate_204",        HTTP_GET, servePage);  // Android
+  localHttp.on("/hotspot-detect.html", HTTP_GET, servePage);  // iOS
+  localHttp.on("/connecttest.txt",     HTTP_GET, servePage);  // Windows
+  localHttp.on("/ncsi.txt",           HTTP_GET, servePage);  // Windows NCSI
+  localHttp.on("/success.txt",         HTTP_GET, servePage);  // Firefox
+  localHttp.on("/redirect",           HTTP_GET, servePage);  // Firefox
+  localHttp.on("/canonical.html",      HTTP_GET, servePage);  // Google
+  localHttp.on("/fwlink/",           HTTP_GET, servePage);  // Microsoft
   localHttp.onNotFound(servePage);
 
   localHttp.on("/wifi/scan", HTTP_GET, []() {
@@ -3357,7 +3316,7 @@ static void serveAttendPortal() {
 
 // ─── Local HTTP (WiFi proxy for Attendance Device page) ──────────────────────
 static void registerLocalHttp() {
-  localHttp.on("/status", HTTP_GET, []() {
+  localHttp.on("/api/status", HTTP_GET, []() {
     JsonDocument doc;
     doc["deviceId"]        = deviceId;
     doc["firmwareVersion"] = FIRMWARE_VERSION;
@@ -3707,9 +3666,6 @@ static void registerLocalHttp() {
     }
     String indexNum      = req["indexNumber"] | "";
     String userId        = req["userId"] | "";
-    String bleSlotStr    = req["bleSlot"] | "";
-    String bleHmacStr    = req["bleHmac"] | "";
-    bool usingBle = (!bleSlotStr.isEmpty() && !bleHmacStr.isEmpty());
     if (userId.isEmpty() && indexNum.isEmpty()) {
       localHttp.send(400, "application/json",
         "{\"error\":\"Login to the Dikly app to mark attendance\"}"); return;
@@ -3745,30 +3701,6 @@ static void registerLocalHttp() {
       }
     }
 
-    // Validate via BLE token (Flutter app) or hotspot connection (captive portal).
-    // Being connected to the device AP is proof of physical presence — no code needed.
-    if (usingBle) {
-      uint32_t bSlot   = (uint32_t)strtoul(bleSlotStr.c_str(), nullptr, 10);
-      uint32_t curSlot = (uint32_t)(now / 30);
-      bool valid = false;
-      if (bSlot == curSlot || bSlot == curSlot - 1) {
-        char msg[32];
-        snprintf(msg, sizeof(msg), "ble:%lu", (unsigned long)bSlot);
-        uint8_t expected[32];
-        hmacSha256((const uint8_t*)sessionSeed.c_str(), sessionSeed.length(),
-                   (const uint8_t*)msg, strlen(msg), expected);
-        char expectedHex[17];
-        for (int i = 0; i < 8; i++) sprintf(expectedHex + i * 2, "%02x", expected[i]);
-        expectedHex[16] = '\0';
-        bleHmacStr.toLowerCase();
-        valid = (bleHmacStr == String(expectedHex));
-      }
-      if (!valid) {
-        localHttp.send(403, "application/json",
-          "{\"error\":\"Invalid BLE token. Move closer to the classroom device.\"}"); return;
-      }
-    }
-    // Hotspot-only path (captive portal): no BLE, no code — connection to AP is the proof.
     // ── Re-mark path — end-of-class presence confirmation ────────────────────
     bool isRemark = req["remark"] | false;
     if (isRemark || reMarkActive) {
@@ -3804,7 +3736,7 @@ static void registerLocalHttp() {
         "{\"ok\":true,\"confirmed\":true,\"message\":\"Presence confirmed! You can now disconnect.\"}");
       return;
     }
-    // Hotspot-only path (captive portal): no BLE, no code — connection to AP is the proof.
+    // Hotspot path (captive portal): connection to the device AP is proof of proximity.
     // ── Duplicate guard — check both indexNumber AND userId to prevent double-marking ──
     if (dedupSession != sessionId) dedupClear(sessionId);
     if ((indexNum.length() && dedupCheck(indexNum.c_str())) ||
@@ -3970,7 +3902,7 @@ static void registerLocalHttp() {
     localHttp.send(200, "application/json", "{\"ok\":true}");
   });
 
-  // /student/left — Flutter app calls this when BLE signal is lost or app closes.
+  // /student/left — Flutter app calls this when the student leaves or the app closes.
   localHttp.on("/student/left", HTTP_POST, []() {
     localHttp.sendHeader("Access-Control-Allow-Origin", "*");
     JsonDocument req;
@@ -4207,7 +4139,6 @@ static void registerLocalHttp() {
         sf.print(sl); sf.close();
       }
     }
-    bleUpdatePayload();
     JsonDocument resp;
     resp["ok"] = true; resp["sessionId"] = sessionId;
     String s; serializeJson(resp, s);
@@ -4221,10 +4152,8 @@ static void registerLocalHttp() {
       localHttp.send(409, "application/json", "{\"error\":\"No active session\"}"); return;
     }
     LOG("Session stopped: " + sessionId);
-    sessionId = ""; sessionSeed = ""; regenerateLecturerPin();
-    sessionTitle = ""; sessionCourse = ""; sessionLecturer = "";
+    sessionId = ""; sessionSeed = "";     sessionTitle = ""; sessionCourse = ""; sessionLecturer = "";
     studentsMarked = 0; reMarkActive = false;
-    bleStop();
     presenceClear();
     localHttp.sendHeader("Access-Control-Allow-Origin", "*");
     localHttp.send(200, "application/json", "{\"ok\":true}");
@@ -4334,6 +4263,7 @@ static void registerLocalHttp() {
       "<input type='password' id='pin' placeholder='4-digit PIN' maxlength='4' inputmode='numeric' autocomplete='off' style='display:none'>"
       "<label>Duration</label>"
       "<div class='dur'>"
+      "<input type='radio' name='d' id='d5' value='300'><label for='d5'>5 min</label>"
       "<input type='radio' name='d' id='d30' value='1800'><label for='d30'>30 min</label>"
       "<input type='radio' name='d' id='d45' value='2700'><label for='d45'>45 min</label>"
       "<input type='radio' name='d' id='d60' value='3600' checked><label for='d60'>1 hr</label>"
@@ -4385,8 +4315,7 @@ static void registerLocalHttp() {
       "lecturer:lect?lect.name:'',duration:parseInt(dur.value)})})"
       ".then(function(r){return r.json().then(function(d){return{ok:r.ok,d:d};});})"
       ".then(function(r){"
-      "if(r.ok){document.getElementById('main').style.display='none';"
-      "document.getElementById('ok').style.display='block';}"
+      "if(r.ok){window.location.href='/status';}"
       "else{err.textContent=r.d.error||'Failed.';err.style.display='block';"
       "btn.textContent='Start Session \xe2\x86\x92';btn.disabled=false;}"
       "}).catch(function(){"
@@ -4394,6 +4323,137 @@ static void registerLocalHttp() {
       "err.style.display='block';btn.textContent='Start Session \xe2\x86\x92';btn.disabled=false;"
       "});}"
       "</script></body></html>");
+    localHttp.send(200, "text/html", page);
+  });
+
+  // /records — JSON list of all index numbers / user IDs marked in current session
+  localHttp.on("/records", HTTP_GET, []() {
+    localHttp.sendHeader("Access-Control-Allow-Origin", "*");
+    JsonDocument doc;
+    doc["sessionId"]   = sessionId;
+    doc["course"]      = sessionCourse.isEmpty() ? sessionTitle : sessionCourse;
+    doc["lecturer"]    = sessionLecturer;
+    doc["marked"]      = studentsMarked;
+    JsonArray arr = doc["ids"].to<JsonArray>();
+    if (dedupIds) {
+      for (uint16_t i = 0; i < dedupCount; i++) arr.add(dedupIds[i]);
+    }
+    String s; serializeJson(doc, s);
+    localHttp.send(200, "application/json", s);
+  });
+
+  // /status — lecturer dashboard: session status + stop button (auto-refreshes every 10s)
+  localHttp.on("/status", HTTP_GET, []() {
+    if (sessionId.isEmpty()) {
+      localHttp.sendHeader("Location", "/start"); localHttp.send(302, "text/plain", ""); return;
+    }
+    time_t nowT = time(nullptr);
+    if (nowT < 1700000000UL) nowT = 1700000000UL + (millis() / 1000);
+    long secsLeft = (long)(sessionStartedAt + sessionDuration) - (long)nowT;
+    if (secsLeft < 0) secsLeft = 0;
+    uint32_t mLeft = (uint32_t)secsLeft / 60, sLeft = (uint32_t)secsLeft % 60;
+    char timeLeftBuf[12];
+    if (mLeft > 0) snprintf(timeLeftBuf, sizeof(timeLeftBuf), "%um %02us", mLeft, sLeft);
+    else           snprintf(timeLeftBuf, sizeof(timeLeftBuf), "%us", (uint32_t)secsLeft);
+    String course  = sessionCourse.isEmpty() ? sessionTitle : sessionCourse;
+    String lect    = sessionLecturer;
+    uint32_t pct   = sessionTotalEnrolled > 0 ? (studentsMarked * 100 / sessionTotalEnrolled) : 0;
+    String page = String(
+      "<!doctype html><html><head><meta charset='utf-8'>"
+      "<meta name='viewport' content='width=device-width,initial-scale=1,maximum-scale=1'>"
+      "<meta http-equiv='refresh' content='10'>"
+      "<title>Session Status</title>"
+      "<style>*{box-sizing:border-box;margin:0;padding:0}"
+      "body{min-height:100vh;background:#0a0f1e;color:#fff;"
+      "font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;"
+      "display:flex;align-items:center;justify-content:center;padding:20px}"
+      ".card{background:#111827;border-radius:20px;padding:28px 20px;"
+      "max-width:380px;width:100%;border:1px solid #1e2d45}"
+      ".logo{text-align:center;font-size:20px;font-weight:900;color:#fff;margin-bottom:16px}"
+      ".logo span{color:#4f6ef7}"
+      ".stat{background:#0f172a;border:1px solid #1e2d45;border-radius:12px;"
+      "padding:16px;margin-bottom:12px;text-align:center}"
+      ".stat-label{font-size:10px;font-weight:600;color:#64748b;"
+      "text-transform:uppercase;letter-spacing:.5px;margin-bottom:4px}"
+      ".stat-val{font-size:28px;font-weight:900;color:#fff}"
+      ".stat-val.green{color:#22c55e}"
+      ".stat-val.amber{color:#f59e0b}"
+      ".row{display:flex;gap:10px;margin-bottom:12px}"
+      ".row .stat{flex:1;margin:0}"
+      ".course{font-size:15px;font-weight:700;color:#e2e8f0;text-align:center;margin-bottom:4px}"
+      ".lect{font-size:12px;color:#64748b;text-align:center;margin-bottom:16px}"
+      ".btn-stop{width:100%;padding:14px;background:#dc2626;color:#fff;border:none;"
+      "border-radius:12px;font-size:15px;font-weight:700;cursor:pointer;margin-top:8px}"
+      ".btn-view{display:block;width:100%;padding:12px;background:#1e2d45;color:#94a3b8;"
+      "border:none;border-radius:12px;font-size:14px;font-weight:600;cursor:pointer;"
+      "text-align:center;text-decoration:none;margin-top:8px}"
+      ".refresh{text-align:center;font-size:11px;color:#334155;margin-top:14px}"
+      "</style></head><body><div class='card'>"
+      "<div class='logo'>Di<span>kly</span> \xe2\x80\x94 Session Live</div>") +
+      "<div class='course'>" + course + "</div>" +
+      "<div class='lect'>" + (lect.isEmpty() ? "" : lect) + "</div>" +
+      "<div class='row'>"
+        "<div class='stat'><div class='stat-label'>Present</div>"
+        "<div class='stat-val green'>" + String(studentsMarked) + "</div></div>" +
+        "<div class='stat'><div class='stat-label'>Enrolled</div>"
+        "<div class='stat-val'>" + (sessionTotalEnrolled > 0 ? String(sessionTotalEnrolled) : "\xe2\x80\x94") + "</div></div>"
+      "</div>"
+      "<div class='stat'><div class='stat-label'>Time Remaining</div>"
+      "<div class='stat-val " + String(secsLeft > 120 ? "green" : secsLeft > 0 ? "amber" : "") + "'>" +
+      String(secsLeft == 0 ? "Ended" : timeLeftBuf) + "</div></div>" +
+      String("<button class='btn-stop' onclick=\""
+      "if(confirm('Stop session?')){"
+      "fetch('/session/stop',{method:'POST'}).then(function(){window.location.href='/start';});"
+      "}\">Stop Session</button>"
+      "<a href='/view' class='btn-view'>View Attendance List \xe2\x86\x92</a>"
+      "<div class='refresh'>Auto-refreshes every 10 seconds</div>"
+      "</div></body></html>");
+    localHttp.send(200, "text/html", page);
+  });
+
+  // /view — attendance list for current session (lecturer only, on device WiFi)
+  localHttp.on("/view", HTTP_GET, []() {
+    if (sessionId.isEmpty()) {
+      localHttp.sendHeader("Location", "/start"); localHttp.send(302, "text/plain", ""); return;
+    }
+    String course = sessionCourse.isEmpty() ? sessionTitle : sessionCourse;
+    String rows = "";
+    if (dedupIds) {
+      for (uint16_t i = 0; i < dedupCount; i++) {
+        rows += String("<tr><td>") + String(i + 1) + "</td><td>" + String(dedupIds[i]) + "</td></tr>";
+      }
+    }
+    if (rows.isEmpty()) rows = "<tr><td colspan='2' style='color:#64748b;text-align:center'>No students marked yet</td></tr>";
+    String page = String(
+      "<!doctype html><html><head><meta charset='utf-8'>"
+      "<meta name='viewport' content='width=device-width,initial-scale=1,maximum-scale=1'>"
+      "<title>Attendance List</title>"
+      "<style>*{box-sizing:border-box;margin:0;padding:0}"
+      "body{background:#0a0f1e;color:#fff;"
+      "font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;padding:20px}"
+      ".logo{font-size:18px;font-weight:900;margin-bottom:4px}"
+      ".logo span{color:#4f6ef7}"
+      "h2{font-size:14px;color:#94a3b8;margin-bottom:16px}"
+      ".count{display:inline-block;background:#1e3a5f;color:#4f6ef7;"
+      "border-radius:8px;padding:2px 10px;font-size:13px;font-weight:700;margin-bottom:16px}"
+      "table{width:100%;border-collapse:collapse}"
+      "th{text-align:left;font-size:10px;font-weight:600;color:#64748b;"
+      "text-transform:uppercase;letter-spacing:.5px;padding:8px 10px;"
+      "border-bottom:1px solid #1e2d45}"
+      "td{padding:10px;font-size:14px;border-bottom:1px solid #0f172a}"
+      "td:first-child{color:#64748b;width:36px}"
+      "tr:last-child td{border-bottom:none}"
+      ".back{display:block;margin-top:20px;color:#4f6ef7;font-size:14px;"
+      "text-decoration:none;font-weight:600}"
+      "</style></head><body>"
+      "<div class='logo'>Di<span>kly</span></div>") +
+      "<h2>" + course + "</h2>" +
+      "<div class='count'>" + String(studentsMarked) + " marked</div>"
+      "<table><thead><tr><th>#</th><th>Student ID</th></tr></thead><tbody>" +
+      rows +
+      "</tbody></table>"
+      "<a href='/status' class='back'>\xe2\x86\x90 Back to Status</a>"
+      "</body></html>";
     localHttp.send(200, "text/html", page);
   });
 
@@ -4490,20 +4550,7 @@ static void handlePairedTap(uint16_t tx, uint16_t ty) {
     if      (ty >= 138 && ty <= 168) curScreen = PAIR_SCREEN;  // Pair Lecturer button
     else if (ty >= 250)              curScreen = DEVICE_INFO;  // Device ID row
   }
-  // SESSION_START — 2×2 duration grid
-  else if (curScreen == SESSION_START) {
-    const int32_t bw = 107, bh = 76, gap = 10;
-    const int32_t x0 = 8, x1 = x0 + bw + gap;
-    const int32_t y0 = 72, y1 = y0 + bh + gap;
-    // Top-left: 30 min
-    if      (tx >= x0 && tx < x0+bw && ty >= y0 && ty < y0+bh) startLocalSession(30*60);
-    // Top-right: 45 min
-    else if (tx >= x1 && tx < x1+bw && ty >= y0 && ty < y0+bh) startLocalSession(45*60);
-    // Bottom-left: 1 hour
-    else if (tx >= x0 && tx < x0+bw && ty >= y1 && ty < y1+bh) startLocalSession(60*60);
-    // Bottom-right: 2 hours
-    else if (tx >= x1 && tx < x1+bw && ty >= y1 && ty < y1+bh) startLocalSession(120*60);
-  }
+  // SESSION_START — info screen only, no touch actions (session starts via browser /start)
   // SESSION screen
   else if (curScreen == SESSION) {
     if (ty >= 262 && ty <= 278) {   // End Session button
@@ -4512,11 +4559,9 @@ static void handlePairedTap(uint16_t tx, uint16_t ty) {
       summaryPct     = (summaryTotal > 0) ?
                        (float)summaryPresent * 100.0f / (float)summaryTotal : 0.0f;
       summaryCourse  = sessionCourse.isEmpty() ? sessionTitle : sessionCourse;
-      sessionId = ""; sessionSeed = ""; regenerateLecturerPin();
-      sessionTitle = ""; sessionCourse = ""; sessionLecturer = "";
+      sessionId = ""; sessionSeed = "";       sessionTitle = ""; sessionCourse = ""; sessionLecturer = "";
       studentsMarked = 0; sessionTotalEnrolled = 0; reMarkActive = false;
       sessionLocallyStarted = false; clearLocalSession();
-      bleStop();
       if (monPhase == MON_CHECKIN_OPEN || monPhase == MON_MONITORING) {
         monStopSniffer();
         monScanPresence();
@@ -4559,13 +4604,10 @@ static void handlePairedTap(uint16_t tx, uint16_t ty) {
       // rowIdx == 5 (Factory Reset) requires long-press — handled in loop()
     }
   }
-  // CHECKIN_MONITOR — tap anywhere below header to jump to PRESENCE_MONITOR early
+  // CHECKIN_MONITOR — tap anywhere in content area to close check-in early
   else if (curScreen == CHECKIN_MONITOR) {
     if (ty > 46 && ty < SH - 40) {
-      // "End Check-In" tap in bottom area: close window and switch to sniffer mode
-      if (ty > SH - 40) {
-        monCheckinEndMs = millis();  // force-close check-in window now
-      }
+      monCheckinEndMs = millis();  // force-close check-in window now
     }
   }
   // PRESENCE_MONITOR — swipe/scroll (up = scroll down in list)
@@ -4590,10 +4632,11 @@ void setup() {
   pinMode(45, OUTPUT);
   digitalWrite(45, HIGH);
 
-  Serial.begin(115200); delay(150);
-  pinMode(LED_PIN, OUTPUT);
-  regenerateLecturerPin();  // fresh PIN each boot
+  Serial.begin(115200);
+  // Wait for USB CDC to enumerate on ESP32-S3 native USB before first print.
+  delay(500);
 
+  pinMode(LED_PIN, OUTPUT);
   // Redirect mbedTLS heap allocations to PSRAM so TLS handshakes never fail
   // due to internal SRAM fragmentation (maxBlock ~19KB when WiFi is active).
   // mbedTLS is pure-software crypto — it needs no DMA, so PSRAM is fine.
@@ -4607,14 +4650,6 @@ void setup() {
   );
 
 
-  // Soft resets leave WiFi DMA rx-buffer pool partially allocated in internal
-  // DRAM. Arduino WiFi.disconnect/mode(OFF) is not sufficient to free them —
-  // call the raw ESP-IDF teardown so fresh init always gets a clean heap.
-  // These return ESP_ERR_WIFI_NOT_INIT on a true cold boot; that is fine.
-  esp_wifi_stop();
-  esp_wifi_deinit();
-  delay(200);
-
   // Move large arrays to PSRAM to free ~38 KB of internal DRAM for WiFi init.
   // EXT_RAM_BSS_ATTR is ineffective without .ext_ram.bss in the linker script,
   // so we allocate explicitly. Fall back to internal heap only if PSRAM is full.
@@ -4627,9 +4662,8 @@ void setup() {
   usedMacs = (uint8_t (*)[6])heap_caps_calloc(MON_MAX_STUDENTS, 6, MALLOC_CAP_SPIRAM);
   if (!usedMacs) usedMacs = (uint8_t (*)[6])calloc(MON_MAX_STUDENTS, 6);
 
-  // Display + sprite BEFORE BLE/WiFi so the 150 KB sprite buffer is allocated
-  // from unfragmented PSRAM. BLE grabs large contiguous chunks; if it runs first
-  // createSprite() can fail even though total free PSRAM is sufficient.
+  // Display + sprite BEFORE WiFi so the 150 KB sprite buffer is allocated
+  // from unfragmented PSRAM.
   display.init();
   display.setBrightness(255);  // LovyanGFX PWM resets BL pin after init — force full brightness
   display.setRotation(0);  // 0 = portrait
@@ -4660,8 +4694,9 @@ void setup() {
   // Not yet paired — go to captive portal for setup
   if (deviceJWT.isEmpty()) {
     LOG("Entering setup AP mode");
-    LOG("DMA heap free:    " + String(heap_caps_get_free_size(MALLOC_CAP_DMA | MALLOC_CAP_INTERNAL)));
-    LOG("DMA largest block:" + String(heap_caps_get_largest_free_block(MALLOC_CAP_DMA | MALLOC_CAP_INTERNAL)));
+    // Release the ~38 KB BLE DMA pool the hardware reserves at startup
+    // regardless of whether BLE is used. Without this the WebServer may not
+    // have enough internal DRAM to accept incoming TCP connections.
     esp_bt_controller_mem_release(ESP_BT_MODE_BLE);
     startApPortal();
     return;
@@ -4670,32 +4705,6 @@ void setup() {
   // ── Paired operation — device is always the AP ────────────────────────────
   // Students connect directly to the device hotspot. No school WiFi needed for
   // attendance. School WiFi (if configured) is used only for background sync.
-
-  LOG("DMA heap free:    " + String(heap_caps_get_free_size(MALLOC_CAP_DMA | MALLOC_CAP_INTERNAL)));
-  LOG("DMA largest block:" + String(heap_caps_get_largest_free_block(MALLOC_CAP_DMA | MALLOC_CAP_INTERNAL)));
-
-  // WiFi driver init FIRST with reduced DMA config.
-  // esp_wifi_init() claims WiFi's internal structures (pp_wdev, DMA rings) from
-  // the still-unfragmented heap (~10-15 KB DMA). WiFi.mode/softAP later reuse
-  // these already-allocated structures and do not allocate fresh DMA.
-  // BLE then gets the remaining heap (~45+ KB) with a large contiguous block,
-  // easily satisfying the 4 KB EMI allocation (emi.c:164).
-  // tx_buf_type=1 (WIFI_DYNAMIC_TX_BUFFER) moves TX buffers to 320 KB general
-  // heap; static_rx_buf_num=4 (was 10) saves ~10 KB DMA.
-  {
-    wifi_init_config_t wcfg = WIFI_INIT_CONFIG_DEFAULT();
-    wcfg.static_rx_buf_num  = 4;
-    wcfg.static_tx_buf_num  = 0;
-    wcfg.tx_buf_type        = 1;  // WIFI_DYNAMIC_TX_BUFFER
-    wcfg.dynamic_tx_buf_num = 32;
-    esp_wifi_init(&wcfg);
-  }
-  LOG("Post-WiFi-drv DMA free:  " + String(heap_caps_get_free_size(MALLOC_CAP_DMA | MALLOC_CAP_INTERNAL)));
-  LOG("Post-WiFi-drv DMA block: " + String(heap_caps_get_largest_free_block(MALLOC_CAP_DMA | MALLOC_CAP_INTERNAL)));
-
-  // BLE SECOND — after WiFi driver claimed its DMA, remaining heap still has a
-  // large contiguous block for BLE's 4 KB EMI controller buffer.
-  initBle();
 
   String apName = "Dikly-" + macSuffix();
   WiFi.mode(WIFI_AP);
@@ -4800,6 +4809,7 @@ void loop() {
       drawPairStatus("Connecting to WiFi…", wifiSSID.c_str(), "", 1);
       WiFi.mode(WIFI_AP_STA);
       WiFi.setScanMethod(WIFI_FAST_SCAN);
+      WiFi.setTxPower(WIFI_POWER_19_5dBm);  // max TX — school routers are often far
       WiFi.begin(wifiSSID.c_str(), wifiPass.c_str());
       uint32_t t0 = millis();
       while (WiFi.status() != WL_CONNECTED && millis() - t0 < WIFI_TIMEOUT_MS) {
@@ -4860,8 +4870,14 @@ void loop() {
       if (!touchActive) { touchActive = true; touchDownMs = millis(); }
       else if (millis() - touchDownMs >= 3000) factoryReset();
     } else { touchActive = false; }
-    if (curScreen == SETUP)         drawSetup("Dikly-" + macSuffix());
-    if (curScreen == WIFI_RECONFIG) drawWifiReconfig("Dikly-" + macSuffix());
+    // Redraw at 2 fps — static screen needs no higher rate,
+    // and keeping the render interval long gives DNS/HTTP more CPU time.
+    static uint32_t lastSetupDraw = 0;
+    if (millis() - lastSetupDraw >= 500) {
+      lastSetupDraw = millis();
+      if (curScreen == SETUP)         drawSetup("Dikly-" + macSuffix());
+      if (curScreen == WIFI_RECONFIG) drawWifiReconfig("Dikly-" + macSuffix());
+    }
     delay(60);
     return;
   }
@@ -4974,13 +4990,11 @@ void loop() {
         summaryPct     = (summaryTotal > 0) ?
                          (float)summaryPresent * 100.0f / (float)summaryTotal : 0.0f;
         summaryCourse  = sessionCourse.isEmpty() ? sessionTitle : sessionCourse;
-        sessionId = ""; sessionSeed = ""; regenerateLecturerPin();
-        sessionTitle = ""; sessionCourse = ""; sessionLecturer = "";
+        sessionId = ""; sessionSeed = "";         sessionTitle = ""; sessionCourse = ""; sessionLecturer = "";
         studentsMarked = 0; sessionTotalEnrolled = 0; reMarkActive = false;
         sessionLocallyStarted = false; clearLocalSession();
-        bleStop(); curScreen = SUMMARY; drawSummary(); return;
+        curScreen = SUMMARY; drawSummary(); return;
       }
-      bleUpdatePayload();
       drawSession(code, (uint32_t)sessionSecsLeft, sessionDuration);
       break;
     }
@@ -4991,7 +5005,6 @@ void loop() {
     case CHECKIN_MONITOR:  drawCheckinMonitor();    break;
     case PRESENCE_MONITOR: drawPresenceMonitor();   break;
     default:
-      bleStop();
       curScreen = READY;
       drawReady();
       break;

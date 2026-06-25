@@ -1444,6 +1444,7 @@ async function adLoadDevices() {
           dept: d.assignedDepartment || '',
           level: d.assignedLevel || '',
           group: d.assignedGroup || '',
+          rssi: d.rssiThreshold ?? -70,
         }).replace(/'/g, '&#39;');
 
         return `
@@ -1775,7 +1776,7 @@ function adOpenSetupModal(deviceId, current) {
       <input id="ad-setup-dept" value="${(current?.dept || '').replace(/"/g,'&quot;')}" placeholder="e.g. Computer Science"
         style="width:100%;padding:8px 10px;border:1px solid #e2e8f0;border-radius:8px;font-size:13px;margin-bottom:14px;box-sizing:border-box;background:var(--surface,#fff);color:var(--text-primary)">
 
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:20px">
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:14px">
         <div>
           <label style="display:block;font-size:12px;font-weight:600;color:var(--text-secondary);margin-bottom:4px">Level</label>
           <input id="ad-setup-level" value="${(current?.level || '').replace(/"/g,'&quot;')}" placeholder="e.g. 100"
@@ -1786,6 +1787,17 @@ function adOpenSetupModal(deviceId, current) {
           <input id="ad-setup-group" value="${(current?.group || '').replace(/"/g,'&quot;')}" placeholder="e.g. A"
             style="width:100%;padding:8px 10px;border:1px solid #e2e8f0;border-radius:8px;font-size:13px;box-sizing:border-box;background:var(--surface,#fff);color:var(--text-primary)">
         </div>
+      </div>
+
+      <label style="display:block;font-size:12px;font-weight:600;color:var(--text-secondary);margin-bottom:4px">
+        BLE RSSI Threshold (dBm)
+        <span style="font-weight:400;color:var(--text-secondary)"> — students further away are rejected</span>
+      </label>
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:20px">
+        <input type="range" id="ad-setup-rssi" min="-100" max="-20" step="5" value="${current?.rssi ?? -70}"
+          oninput="document.getElementById('ad-setup-rssi-val').textContent=this.value+' dBm'"
+          style="flex:1;accent-color:#6366f1">
+        <span id="ad-setup-rssi-val" style="font-size:13px;font-weight:700;color:var(--text-primary);white-space:nowrap;min-width:60px">${current?.rssi ?? -70} dBm</span>
       </div>
 
       <div id="ad-setup-err" style="display:none;color:#dc2626;font-size:12px;margin-bottom:10px"></div>
@@ -1803,13 +1815,15 @@ async function adSubmitSetup(deviceId) {
   const deptEl  = document.getElementById('ad-setup-dept');
   const levelEl = document.getElementById('ad-setup-level');
   const groupEl = document.getElementById('ad-setup-group');
+  const rssiEl  = document.getElementById('ad-setup-rssi');
   const errEl   = document.getElementById('ad-setup-err');
   const btn     = document.getElementById('ad-setup-submit');
 
-  const deviceName = nameEl?.value?.trim();
-  const department = deptEl?.value?.trim();
-  const level      = levelEl?.value?.trim();
-  const group      = groupEl?.value?.trim();
+  const deviceName    = nameEl?.value?.trim();
+  const department    = deptEl?.value?.trim();
+  const level         = levelEl?.value?.trim();
+  const group         = groupEl?.value?.trim();
+  const rssiThreshold = rssiEl ? parseInt(rssiEl.value, 10) : undefined;
 
   if (!level || !group) {
     if (errEl) { errEl.textContent = 'Level and Group are required.'; errEl.style.display = 'block'; }
@@ -1824,7 +1838,7 @@ async function adSubmitSetup(deviceId) {
     await api('/api/devices/assign-group', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ deviceId, department, level, group }),
+      body: JSON.stringify({ deviceId, department, level, group, rssiThreshold }),
     });
   } catch (e) {
     errors.push('Group: ' + (e.message || 'Failed'));

@@ -328,13 +328,14 @@ exports.heartbeat = async (req, res) => {
     }
 
     return res.json({
-      ok:         true,
-      success:    true,
-      serverTime: new Date().toISOString(),
-      lastSeenAt: device.lastHeartbeat,
-      deviceName: device.deviceName,
+      ok:            true,
+      success:       true,
+      serverTime:    new Date().toISOString(),
+      lastSeenAt:    device.lastHeartbeat,
+      deviceName:    device.deviceName,
       offlineKey,
       bundle,
+      rssiThreshold: device.rssiThreshold ?? -70,
       activeSession: session ? {
         sessionId:       session._id,
         title:           session.title || '',
@@ -840,7 +841,7 @@ exports.assignGroup = async (req, res) => {
       return res.status(403).json({ message: 'Only class reps, HODs, and admins can assign a device to a group.' });
     }
 
-    const { deviceId, department, level, group } = req.body;
+    const { deviceId, department, level, group, rssiThreshold } = req.body;
     if (!deviceId) {
       return res.status(400).json({ message: 'deviceId is required.' });
     }
@@ -860,6 +861,10 @@ exports.assignGroup = async (req, res) => {
     device.assignedGroup      = group.trim().toUpperCase();
     device.assignedLevel      = String(level).trim();
     device.assignedDepartment = department ? department.trim() : device.assignedDepartment;
+    if (rssiThreshold !== undefined) {
+      const val = parseInt(rssiThreshold, 10);
+      if (!isNaN(val) && val >= -100 && val <= -20) device.rssiThreshold = val;
+    }
     await device.save();
 
     _auditDevice(req.user, AUDIT_ACTIONS.UPDATE, device, {
