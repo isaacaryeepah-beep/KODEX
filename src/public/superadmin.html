@@ -735,7 +735,7 @@ async function loadDevices() {
 }
 
 // ── Fee Adjuster ─────────────────────────────────────────────────────────────
-function renderAdjuster() {
+function _renderRateCards() {
   document.getElementById('ratesList').innerHTML = ROLE_DEFS.map(function(r) {
     const tierLabel = r.tier==='both' ? 'All institutions' : r.tier==='academic' ? 'Academic only' : 'Corporate only';
     return '<div class="rate-card">'+
@@ -752,14 +752,43 @@ function renderAdjuster() {
   }).join('');
 }
 
-function saveRate(key) {
+async function renderAdjuster() {
+  document.getElementById('ratesList').innerHTML = '<div class="loading">Loading rates…</div>';
+  try {
+    const s = await api('/api/superadmin/settings');
+    const keyMap = { admin:'rateAdmin', hod:'rateHod', lecturer:'rateLecturer', student:'rateStudent', manager:'rateManager', employee:'rateEmployee' };
+    ROLE_DEFS.forEach(function(r) {
+      const apiKey = keyMap[r.key];
+      if (s[apiKey] != null) {
+        GLOBAL_RATES[r.key] = s[apiKey];
+        localStorage.setItem('sa_rate_'+r.key, s[apiKey]);
+      }
+    });
+  } catch(e) {
+    // fall back to localStorage values already in GLOBAL_RATES
+  }
+  _renderRateCards();
+}
+
+async function saveRate(key) {
   const val = Math.max(0, parseFloat(document.getElementById('rate-'+key).value)||0);
   GLOBAL_RATES[key] = val;
   localStorage.setItem('sa_rate_'+key, val);
   const btn = document.getElementById('savebtn-'+key);
-  btn.textContent='Saved ✓'; btn.classList.add('saved');
-  setTimeout(function(){ btn.textContent='Save'; btn.classList.remove('saved'); }, 1600);
-  showToast(ROLE_DEFS.find(function(r){return r.key===key;}).label + ' rate → ' + fmtGHS(val));
+  btn.disabled = true; btn.textContent = 'Saving…';
+  try {
+    const keyMap = { admin:'rateAdmin', hod:'rateHod', lecturer:'rateLecturer', student:'rateStudent', manager:'rateManager', employee:'rateEmployee' };
+    const body = {};
+    ROLE_DEFS.forEach(function(r) { body[keyMap[r.key]] = GLOBAL_RATES[r.key]; });
+    await api('/api/superadmin/settings', { method:'POST', body: JSON.stringify(body) });
+    btn.textContent='Saved ✓'; btn.classList.add('saved');
+    setTimeout(function(){ btn.textContent='Save'; btn.classList.remove('saved'); btn.disabled=false; }, 1600);
+    showToast(ROLE_DEFS.find(function(r){return r.key===key;}).label + ' rate → ' + fmtGHS(val));
+  } catch(e) {
+    btn.textContent='Error'; btn.disabled=false;
+    setTimeout(function(){ btn.textContent='Save'; }, 2000);
+    showToast('Failed to save: ' + e.message);
+  }
 }
 
 // ── CSV export ────────────────────────────────────────────────────────────────

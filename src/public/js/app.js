@@ -22378,7 +22378,7 @@ function _convoTypeLabel(type) {
 async function renderMessages() {
   const content = document.getElementById('main-content');
   if (!content) return;
-  const canAttach = ['admin','superadmin','lecturer','manager','hod','employee'].includes(currentUser?.role);
+  const canAttach = ['admin','superadmin','lecturer','manager','hod','employee','student'].includes(currentUser?.role);
   const isStudent = currentUser?.role === 'student';
 
   content.innerHTML = `
@@ -23020,12 +23020,12 @@ async function _cvLoadCourses() {
       return;
     }
     sel.innerHTML = courses.map(c =>
-      `<option value="${c._id}">${escHtml(c.title)}${c.code ? ' (' + escHtml(c.code) + ')' : ''}</option>`
+      `<option value="${c._id}">${esc(c.title)}${c.code ? ' (' + esc(c.code) + ')' : ''}</option>`
     ).join('');
     sel.addEventListener('change', () => cvLoadList(sel.value));
     cvLoadList(sel.value);
   } catch(e) {
-    if (sel) sel.innerHTML = `<option value="">Error: ${escHtml(e.message)}</option>`;
+    if (sel) sel.innerHTML = `<option value="">Error: ${esc(e.message)}</option>`;
   }
 }
 

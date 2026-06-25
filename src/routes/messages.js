@@ -644,7 +644,7 @@ router.post("/conversations/:id/messages", ...mw, uploadMessage, handleUploadErr
     }
 
     // Roles allowed to send file attachments
-    const FILE_ROLES = ["admin", "superadmin", "lecturer", "manager", "hod", "employee"];
+    const FILE_ROLES = ["admin", "superadmin", "lecturer", "manager", "hod", "employee", "student"];
     if (hasFile && !FILE_ROLES.includes(req.user.role)) {
       fs.unlink(req.file.path, () => {});
       return res.status(403).json({ error: "Your role is not allowed to send file attachments." });

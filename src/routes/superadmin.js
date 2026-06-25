@@ -594,7 +594,11 @@ router.get("/settings", async (req, res) => {
 // ── POST /api/superadmin/settings ─────────────────────────────────────────────
 router.post("/settings", async (req, res) => {
   try {
-    const { trialDays, academicPrice, corporatePrice, currency, studentTrialDays, studentSemesterPrice, employeeMonthlyPrice } = req.body;
+    const {
+      trialDays, academicPrice, corporatePrice, currency,
+      studentTrialDays, studentSemesterPrice, employeeMonthlyPrice,
+      rateAdmin, rateHod, rateLecturer, rateStudent, rateManager, rateEmployee,
+    } = req.body;
     const allowed = {};
     if (trialDays            != null) allowed.trialDays            = Math.max(1, Number(trialDays));
     if (academicPrice        != null) allowed.academicPrice        = Math.max(0, Number(academicPrice));
@@ -603,6 +607,12 @@ router.post("/settings", async (req, res) => {
     if (studentTrialDays     != null) allowed.studentTrialDays     = Math.max(1, Number(studentTrialDays));
     if (studentSemesterPrice != null) allowed.studentSemesterPrice = Math.max(0, Number(studentSemesterPrice));
     if (employeeMonthlyPrice != null) allowed.employeeMonthlyPrice = Math.max(0, Number(employeeMonthlyPrice));
+    if (rateAdmin    != null) allowed.rateAdmin    = Math.max(0, Number(rateAdmin));
+    if (rateHod      != null) allowed.rateHod      = Math.max(0, Number(rateHod));
+    if (rateLecturer != null) allowed.rateLecturer = Math.max(0, Number(rateLecturer));
+    if (rateStudent  != null) allowed.rateStudent  = Math.max(0, Number(rateStudent));
+    if (rateManager  != null) allowed.rateManager  = Math.max(0, Number(rateManager));
+    if (rateEmployee != null) allowed.rateEmployee = Math.max(0, Number(rateEmployee));
     const s = await PlatformSettings.findOneAndUpdate({}, { $set: allowed }, { upsert: true, new: true });
     res.json(s);
   } catch (err) {
