@@ -15,16 +15,16 @@ router.get("/status",            paymentController.getSubscriptionStatus);
 router.get("/plans",             paymentController.getPlans);
 router.get("/user-subscription", paymentController.getUserSubscription);
 
-// Paystack — semester plan only, GHS 300
+// Paystack — all paying roles (students pay ₵20/semester, employees ₵15/month, etc.)
 router.get("/paystack/public-key", paymentController.getPaystackPublicKey);
 router.post(
   "/paystack/initialize",
-  requireRole("admin", "manager", "lecturer", "superadmin"),
+  requireRole("admin", "manager", "lecturer", "superadmin", "student", "employee"),
   paymentController.initializePaystackSubscription
 );
 router.get(
   "/paystack/verify",
-  requireRole("admin", "manager", "lecturer", "superadmin"),
+  requireRole("admin", "manager", "lecturer", "superadmin", "student", "employee"),
   paymentController.verifyPaystackSubscription
 );
 
