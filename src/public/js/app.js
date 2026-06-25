@@ -9035,10 +9035,33 @@ async function createInstantMeeting() {
 // ── Meetings auto-poll ────────────────────────────────────────────────────────
 let _meetingsPollTimer = null;
 let _meetingsKnownLiveIds = new Set();
+let _meetingsCountdownTimer = null;
 
 function _stopMeetingsPoll() {
   if (_meetingsPollTimer) { clearInterval(_meetingsPollTimer); _meetingsPollTimer = null; }
+  if (_meetingsCountdownTimer) { clearInterval(_meetingsCountdownTimer); _meetingsCountdownTimer = null; }
   _meetingsKnownLiveIds = new Set();
+}
+
+function _startCountdownTicker() {
+  if (_meetingsCountdownTimer) clearInterval(_meetingsCountdownTimer);
+  function tick() {
+    const now = Date.now();
+    document.querySelectorAll('[data-countdown-ms]').forEach(el => {
+      const start = parseInt(el.dataset.countdownMs, 10);
+      const diff  = start - now;
+      if (diff <= 0) { el.textContent = '▶ Start'; el.disabled = false; return; }
+      const totalMins = Math.ceil(diff / 60000);
+      if (totalMins < 60) {
+        el.textContent = `⏳ In ${totalMins}m`;
+      } else {
+        const h = Math.floor(totalMins / 60), m = totalMins % 60;
+        el.textContent = m ? `⏳ In ${h}h ${m}m` : `⏳ In ${h}h`;
+      }
+    });
+  }
+  tick();
+  _meetingsCountdownTimer = setInterval(tick, 30000);
 }
 
 function _startMeetingsPoll() {
@@ -9077,6 +9100,7 @@ async function _meetingsSilentRefresh() {
     _meetingsKnownLiveIds.forEach(id => { if (!liveNow.has(id)) _meetingsKnownLiveIds.delete(id); });
 
     _renderMeetingsData(data);
+    _startCountdownTicker();
   } catch(_) { /* silent — don't disrupt UI on background poll error */ }
 }
 
@@ -9105,6 +9129,7 @@ async function renderMeetings() {
   meetings0.forEach(m => { if (m.status === 'live') _meetingsKnownLiveIds.add(String(m._id)); });
   _renderMeetingsData(data);
   _startMeetingsPoll();
+  _startCountdownTicker();
 }
 
 function _renderMeetingsData(data) {
@@ -9198,7 +9223,7 @@ function _renderMeetingsData(data) {
             const canStart = now >= start - 60000; // allow 1 min early
             return canStart
               ? `<button style="flex:1;background:#3b82f6;color:#fff;border:none;padding:10px 14px;border-radius:9px;font-weight:700;cursor:pointer;font-size:14px;min-width:90px;" onclick="startMeeting('${m._id}')">▶ Start</button>`
-              : `<button disabled style="flex:1;background:#93c5fd;color:#fff;border:none;padding:10px 14px;border-radius:9px;font-weight:600;font-size:13px;min-width:90px;cursor:not-allowed;" title="Meeting hasn't reached its scheduled time">⏳ In ${minsUntil}m</button>`;
+              : `<button disabled data-countdown-ms="${start}" style="flex:1;background:#93c5fd;color:#fff;border:none;padding:10px 14px;border-radius:9px;font-weight:600;font-size:13px;min-width:90px;cursor:not-allowed;" title="Meeting hasn't reached its scheduled time">⏳ In ${minsUntil}m</button>`;
           })() : ''}
           ${canControl && isLive ? `<button style="background:#0ea5e9;color:#fff;border:none;padding:10px 14px;border-radius:9px;font-weight:700;cursor:pointer;" onclick="openMeetingMonitor('${m._id}')">👁 Monitor</button>` : ''}
           ${canControl && isLive ? `<button style="background:#ef4444;color:#fff;border:none;padding:10px 14px;border-radius:9px;font-weight:700;cursor:pointer;" onclick="endMeeting('${m._id}')">■ End</button>` : ''}

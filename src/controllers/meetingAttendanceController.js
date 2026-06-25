@@ -86,8 +86,9 @@ exports.getAttendance = async (req, res) => {
 
     // Only creator or admin can view
     const role    = req.user.role?.toLowerCase();
-    const isAdmin = ['admin', 'superadmin', 'hod', 'manager'].includes(role);
-    const isOwner = meeting.creatorId.toString() === req.user._id.toString();
+    const isAdmin = ['admin', 'superadmin', 'hod', 'manager', 'lecturer'].includes(role);
+    const creatorId = meeting.creatorId?._id ?? meeting.creatorId;
+    const isOwner = creatorId.toString() === req.user._id.toString();
     if (!isAdmin && !isOwner) {
       return res.status(403).json({ message: 'Unauthorized access to this meeting' });
     }
@@ -116,8 +117,9 @@ exports.attendanceReport = async (req, res) => {
     const meeting = req.meeting;
 
     const role    = req.user.role?.toLowerCase();
-    const isAdmin = ['admin', 'superadmin', 'hod', 'manager'].includes(role);
-    const isOwner = meeting.creatorId.toString() === req.user._id.toString();
+    const isAdmin = ['admin', 'superadmin', 'hod', 'manager', 'lecturer'].includes(role);
+    const creatorId = meeting.creatorId?._id ?? meeting.creatorId;
+    const isOwner = creatorId.toString() === req.user._id.toString();
     if (!isAdmin && !isOwner) {
       return res.status(403).json({ message: 'Unauthorized access to this meeting' });
     }
@@ -165,8 +167,9 @@ exports.downloadPDF = async (req, res) => {
     const meeting = req.meeting;
 
     const role    = req.user.role?.toLowerCase();
-    const isAdmin = ['admin', 'superadmin', 'hod', 'manager'].includes(role);
-    const isOwner = meeting.creatorId.toString() === req.user._id.toString();
+    const isAdmin = ['admin', 'superadmin', 'hod', 'manager', 'lecturer'].includes(role);
+    const creatorId = meeting.creatorId?._id ?? meeting.creatorId;
+    const isOwner = creatorId.toString() === req.user._id.toString();
     if (!isAdmin && !isOwner) {
       return res.status(403).json({ message: 'Unauthorized access to this meeting' });
     }

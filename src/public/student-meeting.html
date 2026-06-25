@@ -186,7 +186,11 @@
       <div class="brand-logo">D</div>
       <span class="brand-name">Dikly</span>
     </div>
-    <div class="card">
+    <div class="card" style="position:relative;">
+      <button onclick="location.href='/index.html'" style="position:absolute;top:14px;left:14px;background:none;border:none;color:rgba(255,255,255,.5);font-size:13px;cursor:pointer;display:flex;align-items:center;gap:5px;padding:4px 6px;border-radius:8px;font-family:inherit;transition:color .15s" onmouseover="this.style.color='rgba(255,255,255,.9)'" onmouseout="this.style.color='rgba(255,255,255,.5)'">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="19" y1="12" x2="5" y2="12"/><polyline points="12 19 5 12 12 5"/></svg>
+        Back
+      </button>
       <div class="join-badge">Joining Class</div>
       <div class="meeting-title" id="meetingTitle">Connecting to class…</div>
       <div class="host-info" id="hostInfo" style="display:none">
@@ -226,7 +230,7 @@
     </div>
     <div class="actions">
       <button class="btn btn-warning" onclick="retryNow()">Check Now</button>
-      <button class="btn btn-ghost" onclick="history.back()">Go Back</button>
+      <button class="btn btn-ghost" onclick="location.href='/index.html'">Go Back</button>
     </div>
   </div>
 
@@ -243,7 +247,7 @@
     </div>
     <div class="actions">
       <button class="btn btn-primary" onclick="init()">Try Again</button>
-      <button class="btn btn-ghost" onclick="history.back()">Go Back</button>
+      <button class="btn btn-ghost" onclick="location.href='/index.html'">Go Back</button>
     </div>
   </div>
 
