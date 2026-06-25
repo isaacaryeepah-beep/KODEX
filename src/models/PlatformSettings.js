@@ -9,6 +9,13 @@ const platformSettingsSchema = new mongoose.Schema({
   studentTrialDays:     { type: Number, default: 45 },
   studentSemesterPrice: { type: Number, default: 20 },
   employeeMonthlyPrice: { type: Number, default: 15 },
+  // Per-role monthly rates (used by the superadmin fee adjuster)
+  rateAdmin:    { type: Number, default: 15 },
+  rateHod:      { type: Number, default: 10 },
+  rateLecturer: { type: Number, default: 8  },
+  rateStudent:  { type: Number, default: 3  },
+  rateManager:  { type: Number, default: 12 },
+  rateEmployee: { type: Number, default: 8  },
 }, { timestamps: true });
 
 // PlatformSettings is a singleton collection (no company field).

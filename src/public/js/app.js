@@ -2746,6 +2746,7 @@ function buildSidebar() {
       links.push({ id: 'meetings', label: 'Meetings', icon: meetingsIcon() });
       links.push({ sep: true, label: 'INSIGHTS' });
       links.push({ id: 'reports', label: 'Reports', icon: reportsIcon() });
+      links.push({ id: 'ai-reports', label: 'Dikly AI', icon: svgIcon('<path d="M15 4V2"/><path d="M15 16v-2"/><path d="M8 9h2"/><path d="M20 9h2"/><path d="M17.8 11.8 19 13"/><path d="M15 9h.01"/><path d="M17.8 6.2 19 5"/><path d="M13.2 6.2 12 5"/><path d="M3 21l9-9"/>') });
       links.push({ sep: true, label: 'SUPPORT' });
       links.push({ id: 'faq-center', label: 'FAQ Center', icon: svgIcon('<circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/>') });
       links.push({ id: 'subscription', label: 'Subscription', icon: subscriptionIcon() });
@@ -2770,6 +2771,7 @@ function buildSidebar() {
         links.push({ id: 'meetings',       label: 'Meetings',        icon: meetingsIcon() });
         links.push({ sep: true, label: 'INSIGHTS' });
         links.push({ id: 'reports',        label: 'Reports',         icon: reportsIcon() });
+        links.push({ id: 'ai-reports',     label: 'Dikly AI',        icon: svgIcon('<path d="M15 4V2"/><path d="M15 16v-2"/><path d="M8 9h2"/><path d="M20 9h2"/><path d="M17.8 11.8 19 13"/><path d="M15 9h.01"/><path d="M17.8 6.2 19 5"/><path d="M13.2 6.2 12 5"/><path d="M3 21l9-9"/>') });
         links.push({ id: 'audit-logs',     label: 'Audit Logs',      icon: svgIcon('<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><line x1="10" y1="9" x2="10" y2="9"/>') });
       } else {
         links.push({ sep: true, label: 'COMMUNICATE' });
@@ -2777,6 +2779,7 @@ function buildSidebar() {
         links.push({ id: 'meetings', label: 'Meetings', icon: meetingsIcon() });
         links.push({ sep: true, label: 'INSIGHTS' });
         links.push({ id: 'reports', label: 'Reports', icon: reportsIcon() });
+        links.push({ id: 'ai-reports', label: 'Dikly AI', icon: svgIcon('<path d="M15 4V2"/><path d="M15 16v-2"/><path d="M8 9h2"/><path d="M20 9h2"/><path d="M17.8 11.8 19 13"/><path d="M15 9h.01"/><path d="M17.8 6.2 19 5"/><path d="M13.2 6.2 12 5"/><path d="M3 21l9-9"/>') });
       }
       links.push({ sep: true, label: 'SUPPORT' });
       links.push({ id: 'faq-center', label: 'FAQ Center', icon: svgIcon('<circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/>') });
@@ -2796,6 +2799,7 @@ function buildSidebar() {
       links.push({ id: 'hod-alerts',       label: 'Smart Alerts',   icon: svgIcon('<path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/>') });
       links.push({ id: 'hod-lecturer-activity', label: 'Lecturer Activity', icon: svgIcon('<rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/>') });
       links.push({ id: 'hod-reports',      label: 'Reports',        icon: reportsIcon() });
+      links.push({ id: 'ai-reports',       label: 'Dikly AI',       icon: svgIcon('<path d="M15 4V2"/><path d="M15 16v-2"/><path d="M8 9h2"/><path d="M20 9h2"/><path d="M17.8 11.8 19 13"/><path d="M15 9h.01"/><path d="M17.8 6.2 19 5"/><path d="M13.2 6.2 12 5"/><path d="M3 21l9-9"/>') });
       links.push({ sep: true, label: 'COMMUNICATE' });
       links.push({ id: 'hod-messaging',    label: 'Dept. Messaging', icon: svgIcon('<path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/><line x1="9" y1="10" x2="15" y2="10"/><line x1="12" y1="7" x2="12" y2="13"/>') });
       links.push({ id: 'messages',         label: 'Messages',       icon: svgIcon('<path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>') });
@@ -2830,6 +2834,7 @@ function buildSidebar() {
       links.push({ sep: true, label: 'INSIGHTS' });
       links.push({ id: 'lecturer-performance', label: 'Performance', icon: svgIcon('<line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/>') });
       links.push({ id: 'reports', label: 'Reports', icon: reportsIcon() });
+      links.push({ id: 'ai-reports', label: 'Dikly AI', icon: svgIcon('<path d="M15 4V2"/><path d="M15 16v-2"/><path d="M8 9h2"/><path d="M20 9h2"/><path d="M17.8 11.8 19 13"/><path d="M15 9h.01"/><path d="M17.8 6.2 19 5"/><path d="M13.2 6.2 12 5"/><path d="M3 21l9-9"/>') });
       links.push({ id: 'announcements', label: 'Announcements', icon: svgIcon('<path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/>') });
       links.push({ sep: true, label: 'SUPPORT' });
       links.push({ id: 'faq-center', label: 'FAQ Center', icon: svgIcon('<circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/>') });
@@ -2868,6 +2873,7 @@ function buildSidebar() {
       links.push({ id: 'gradebook', label: 'My Grades', icon: svgIcon('<path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/>') });
       links.push({ id: 'quiz-history', label: 'My Results', icon: svgIcon('<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/>') });
       links.push({ id: 'course-videos', label: 'Course Videos', icon: svgIcon('<polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2" ry="2"/>') });
+      links.push({ id: 'ai-reports', label: 'Dikly AI', icon: svgIcon('<path d="M15 4V2"/><path d="M15 16v-2"/><path d="M8 9h2"/><path d="M20 9h2"/><path d="M17.8 11.8 19 13"/><path d="M15 9h.01"/><path d="M17.8 6.2 19 5"/><path d="M13.2 6.2 12 5"/><path d="M3 21l9-9"/>') });
       links.push({ sep: true, label: 'COMMUNICATE' });
       links.push({ id: 'messages', label: 'Messages', icon: svgIcon('<path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>') });
       links.push({ id: 'meetings', label: 'Meetings', icon: meetingsIcon() });
@@ -2887,6 +2893,7 @@ function buildSidebar() {
       links.push({ id: 'superadmin-platform', label: 'Platform',     icon: svgIcon('<rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/>') });
       links.push({ id: 'approvals',            label: 'Approvals',    icon: approvalsIcon() });
       links.push({ id: 'search',               label: 'Search',       icon: svgIcon('<circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>') });
+      links.push({ id: 'ai-reports',           label: 'Dikly AI',     icon: svgIcon('<path d="M15 4V2"/><path d="M15 16v-2"/><path d="M8 9h2"/><path d="M20 9h2"/><path d="M17.8 11.8 19 13"/><path d="M15 9h.01"/><path d="M17.8 6.2 19 5"/><path d="M13.2 6.2 12 5"/><path d="M3 21l9-9"/>') });
       links.push({ sep: true, label: 'SUPPORT' });
       break;
   }
@@ -3060,6 +3067,7 @@ function navigateTo(view) {
     case 'class-announcements':  renderClassAnnouncements(); break;
     case 'class-timetable':      renderClassTimetable(); break;
     case 'course-videos':        renderCourseVideos(); break;
+    case 'ai-reports':           renderAIReports(); break;
     default: renderDashboard();
   }
 }
@@ -22378,7 +22386,7 @@ function _convoTypeLabel(type) {
 async function renderMessages() {
   const content = document.getElementById('main-content');
   if (!content) return;
-  const canAttach = ['admin','superadmin','lecturer','manager','hod','employee'].includes(currentUser?.role);
+  const canAttach = ['admin','superadmin','lecturer','manager','hod','employee','student'].includes(currentUser?.role);
   const isStudent = currentUser?.role === 'student';
 
   content.innerHTML = `
@@ -22967,6 +22975,25 @@ function renderCourseVideos() {
             <label>Description <span style="color:var(--text-muted);font-weight:400">(optional)</span></label>
             <input id="cv-desc" placeholder="Brief description of the video">
           </div>
+          <div class="form-group">
+            <label>Target Audience</label>
+            <select id="cv-audience">
+              <option value="All Students">All Students</option>
+              <option value="Level 100">Level 100</option>
+              <option value="Level 200">Level 200</option>
+              <option value="Level 300">Level 300</option>
+              <option value="Level 400">Level 400</option>
+              <option value="Level 500">Level 500</option>
+              <option value="Level 600">Level 600</option>
+              <option value="Level 700">Level 700</option>
+              <option value="Group A">Group A</option>
+              <option value="Group B">Group B</option>
+              <option value="Group C">Group C</option>
+              <option value="Group D">Group D</option>
+              <option value="Beginners">Beginners</option>
+              <option value="Advanced">Advanced</option>
+            </select>
+          </div>
           <div class="form-group" style="margin-bottom:1.25rem">
             <label>Video URL</label>
             <input id="cv-url" placeholder="Paste a YouTube, Vimeo, Drive or Loom link">
@@ -23020,12 +23047,12 @@ async function _cvLoadCourses() {
       return;
     }
     sel.innerHTML = courses.map(c =>
-      `<option value="${c._id}">${escHtml(c.title)}${c.code ? ' (' + escHtml(c.code) + ')' : ''}</option>`
+      `<option value="${c._id}">${esc(c.title)}${c.code ? ' (' + esc(c.code) + ')' : ''}</option>`
     ).join('');
     sel.addEventListener('change', () => cvLoadList(sel.value));
     cvLoadList(sel.value);
   } catch(e) {
-    if (sel) sel.innerHTML = `<option value="">Error: ${escHtml(e.message)}</option>`;
+    if (sel) sel.innerHTML = `<option value="">Error: ${esc(e.message)}</option>`;
   }
 }
 
@@ -23059,23 +23086,29 @@ async function cvLoadList(courseId) {
         return `<div class="card" style="padding:0;overflow:hidden;cursor:pointer;transition:transform .15s,box-shadow .15s" onmouseover="this.style.transform='translateY(-3px)';this.style.boxShadow='var(--shadow-lg)'" onmouseout="this.style.transform='';this.style.boxShadow=''">
           <div style="position:relative;aspect-ratio:16/9;background:#0d1117;overflow:hidden" onclick="cvWatchVideo(${JSON.stringify(v.embedUrl)},${JSON.stringify(v.title)})">
             ${v.thumbnail
-              ? `<img src="${escHtml(v.thumbnail)}" style="width:100%;height:100%;object-fit:cover;display:block">`
+              ? `<img src="${esc(v.thumbnail)}" style="width:100%;height:100%;object-fit:cover;display:block">`
               : `<div style="width:100%;height:100%;display:flex;align-items:center;justify-content:center;background:linear-gradient(135deg,#1e293b,#334155)">${svgIcon('<circle cx="12" cy="12" r="10"/><polygon points="10 8 16 12 10 16 10 8"/>', 36, 'rgba(255,255,255,.4)')}</div>`}
             <div style="position:absolute;inset:0;background:rgba(0,0,0,.35);display:flex;align-items:center;justify-content:center;opacity:0;transition:opacity .15s" onmouseover="this.style.opacity=1" onmouseout="this.style.opacity=0">
               <div style="width:44px;height:44px;border-radius:50%;background:rgba(255,255,255,.95);display:flex;align-items:center;justify-content:center">
                 ${svgIcon('<polygon points="5 3 19 12 5 21 5 3"/>', 18, '#1e293b')}
               </div>
             </div>
-            <div style="position:absolute;top:.5rem;left:.5rem;background:${color};color:#fff;font-size:.65rem;font-weight:600;letter-spacing:.04em;text-transform:uppercase;padding:.2rem .45rem;border-radius:4px;line-height:1.4">${escHtml(v.platform||'video')}</div>
+            <div style="position:absolute;top:.5rem;left:.5rem;background:${color};color:#fff;font-size:.65rem;font-weight:600;letter-spacing:.04em;text-transform:uppercase;padding:.2rem .45rem;border-radius:4px;line-height:1.4">${esc(v.platform||'video')}</div>
           </div>
           <div style="padding:.85rem">
-            <p style="margin:0 0 .25rem;font-weight:600;font-size:.88rem;line-height:1.4;overflow:hidden;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical">${escHtml(v.title)}</p>
-            ${v.description ? `<p style="margin:0 0 .75rem;font-size:.78rem;color:var(--text-light);overflow:hidden;display:-webkit-box;-webkit-line-clamp:1;-webkit-box-orient:vertical">${escHtml(v.description)}</p>` : '<div style="margin-bottom:.75rem"></div>'}
+            <p style="margin:0 0 .25rem;font-weight:600;font-size:.88rem;line-height:1.4;overflow:hidden;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical">${esc(v.title)}</p>
+            ${v.description ? `<p style="margin:0 0 .5rem;font-size:.78rem;color:var(--text-light);overflow:hidden;display:-webkit-box;-webkit-line-clamp:1;-webkit-box-orient:vertical">${esc(v.description)}</p>` : ''}
+            <div style="margin-bottom:.6rem">
+              <span style="display:inline-flex;align-items:center;gap:.3rem;font-size:.68rem;font-weight:600;color:var(--accent);background:rgba(79,110,247,.12);padding:.18rem .45rem;border-radius:4px">
+                ${svgIcon('<path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/>', 11, 'var(--accent)')}
+                ${esc(v.targetAudience || 'All Students')}
+              </span>
+            </div>
             <div style="display:flex;gap:.5rem">
               <button class="btn btn-sm btn-primary" style="flex:1;font-size:.78rem" onclick="cvWatchVideo(${JSON.stringify(v.embedUrl)},${JSON.stringify(v.title)})">
                 ${svgIcon('<polygon points="5 3 19 12 5 21 5 3"/>', 12)} Watch
               </button>
-              <button class="btn btn-sm btn-ghost" style="padding:.35rem .55rem;color:var(--error);border-color:var(--border)" onclick="cvDeleteVideo('${v._id}','${escHtml(courseId)}')" title="Delete">
+              <button class="btn btn-sm btn-ghost" style="padding:.35rem .55rem;color:var(--error);border-color:var(--border)" onclick="cvDeleteVideo('${v._id}','${esc(courseId)}')" title="Delete">
                 ${svgIcon('<polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4h6v2"/>', 14, 'var(--error)')}
               </button>
             </div>
@@ -23084,7 +23117,7 @@ async function cvLoadList(courseId) {
       }).join('')
     }</div>`;
   } catch(e) {
-    area.innerHTML = `<div class="empty-state"><p style="color:var(--error)">${escHtml(e.message)}</p></div>`;
+    area.innerHTML = `<div class="empty-state"><p style="color:var(--error)">${esc(e.message)}</p></div>`;
   }
 }
 
@@ -23093,9 +23126,10 @@ window.cvAddVideo = async function() {
   const title    = document.getElementById('cv-title')?.value?.trim();
   const desc     = document.getElementById('cv-desc')?.value?.trim();
   const url      = document.getElementById('cv-url')?.value?.trim();
+  const audience = document.getElementById('cv-audience')?.value || 'All Students';
   if (!courseId || !title || !url) { toastError('Course, title and URL are required'); return; }
   try {
-    await api('/api/course-videos', { method: 'POST', body: JSON.stringify({ courseId, title, description: desc, url }) });
+    await api('/api/course-videos', { method: 'POST', body: JSON.stringify({ courseId, title, description: desc, url, targetAudience: audience }) });
     document.getElementById('cv-title').value = '';
     document.getElementById('cv-desc').value  = '';
     document.getElementById('cv-url').value   = '';
@@ -23123,14 +23157,14 @@ window.cvWatchVideo = function(embedUrl, title) {
           <div style="width:32px;height:32px;border-radius:6px;background:rgba(255,255,255,.12);display:flex;align-items:center;justify-content:center;flex-shrink:0">
             ${svgIcon('<polygon points="5 3 19 12 5 21 5 3"/>', 14, '#fff')}
           </div>
-          <h3 style="color:#fff;margin:0;font-size:1rem;font-weight:600;overflow:hidden;white-space:nowrap;text-overflow:ellipsis">${escHtml(title)}</h3>
+          <h3 style="color:#fff;margin:0;font-size:1rem;font-weight:600;overflow:hidden;white-space:nowrap;text-overflow:ellipsis">${esc(title)}</h3>
         </div>
         <button id="cv-close-btn" style="background:rgba(255,255,255,.12);border:none;color:#fff;width:34px;height:34px;border-radius:8px;cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0;margin-left:.75rem;transition:background .15s" onmouseover="this.style.background='rgba(255,255,255,.22)'" onmouseout="this.style.background='rgba(255,255,255,.12)'">
           ${svgIcon('<line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>', 16, '#fff')}
         </button>
       </div>
       <div style="position:relative;padding-bottom:56.25%;height:0;overflow:hidden;border-radius:12px;background:#000;box-shadow:0 24px 60px rgba(0,0,0,.6)">
-        <iframe src="${escHtml(embedUrl)}" style="position:absolute;top:0;left:0;width:100%;height:100%;border:0" allow="accelerometer;autoplay;clipboard-write;encrypted-media;gyroscope;picture-in-picture" allowfullscreen></iframe>
+        <iframe src="${esc(embedUrl)}" style="position:absolute;top:0;left:0;width:100%;height:100%;border:0" allow="accelerometer;autoplay;clipboard-write;encrypted-media;gyroscope;picture-in-picture" allowfullscreen></iframe>
       </div>
       <p style="color:rgba(255,255,255,.45);text-align:center;font-size:.75rem;margin:.75rem 0 0">Click outside or press Esc to close</p>
     </div>`;
@@ -23164,8 +23198,8 @@ async function _renderStudentVideos() {
             ${svgIcon('<path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/>', 16, 'var(--primary)')}
           </div>
           <div>
-            <h3 style="margin:0;font-size:.95rem;font-weight:600">${escHtml(course?.title||'Unknown Course')}</h3>
-            ${course?.code ? `<p style="margin:0;font-size:.75rem;color:var(--text-light)">${escHtml(course.code)}</p>` : ''}
+            <h3 style="margin:0;font-size:.95rem;font-weight:600">${esc(course?.title||'Unknown Course')}</h3>
+            ${course?.code ? `<p style="margin:0;font-size:.75rem;color:var(--text-light)">${esc(course.code)}</p>` : ''}
           </div>
           <span style="margin-left:auto;font-size:.75rem;color:var(--text-muted);font-weight:500">${videos.length} video${videos.length!==1?'s':''}</span>
         </div>
@@ -23175,25 +23209,29 @@ async function _renderStudentVideos() {
             return `<div class="card" style="padding:0;overflow:hidden;cursor:pointer;transition:transform .15s,box-shadow .15s" onclick="cvWatchVideo(${JSON.stringify(v.embedUrl)},${JSON.stringify(v.title)})" onmouseover="this.style.transform='translateY(-3px)';this.style.boxShadow='var(--shadow-lg)'" onmouseout="this.style.transform='';this.style.boxShadow=''">
               <div style="position:relative;aspect-ratio:16/9;background:#0d1117;overflow:hidden">
                 ${v.thumbnail
-                  ? `<img src="${escHtml(v.thumbnail)}" style="width:100%;height:100%;object-fit:cover;display:block">`
+                  ? `<img src="${esc(v.thumbnail)}" style="width:100%;height:100%;object-fit:cover;display:block">`
                   : `<div style="width:100%;height:100%;display:flex;align-items:center;justify-content:center;background:linear-gradient(135deg,#1e293b,#334155)">${svgIcon('<circle cx="12" cy="12" r="10"/><polygon points="10 8 16 12 10 16 10 8"/>', 32, 'rgba(255,255,255,.35)')}</div>`}
                 <div style="position:absolute;inset:0;background:rgba(0,0,0,.3);display:flex;align-items:center;justify-content:center">
                   <div style="width:40px;height:40px;border-radius:50%;background:rgba(255,255,255,.92);display:flex;align-items:center;justify-content:center">
                     ${svgIcon('<polygon points="5 3 19 12 5 21 5 3"/>', 16, '#1e293b')}
                   </div>
                 </div>
-                <div style="position:absolute;top:.5rem;left:.5rem;background:${color};color:#fff;font-size:.62rem;font-weight:700;letter-spacing:.05em;text-transform:uppercase;padding:.18rem .42rem;border-radius:4px">${escHtml(v.platform||'video')}</div>
+                <div style="position:absolute;top:.5rem;left:.5rem;background:${color};color:#fff;font-size:.62rem;font-weight:700;letter-spacing:.05em;text-transform:uppercase;padding:.18rem .42rem;border-radius:4px">${esc(v.platform||'video')}</div>
               </div>
               <div style="padding:.75rem">
-                <p style="margin:0;font-weight:600;font-size:.85rem;line-height:1.4;overflow:hidden;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical">${escHtml(v.title)}</p>
-                ${v.description ? `<p style="margin:.25rem 0 0;font-size:.75rem;color:var(--text-light);overflow:hidden;display:-webkit-box;-webkit-line-clamp:1;-webkit-box-orient:vertical">${escHtml(v.description)}</p>` : ''}
+                <p style="margin:0 0 .25rem;font-weight:600;font-size:.85rem;line-height:1.4;overflow:hidden;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical">${esc(v.title)}</p>
+                ${v.description ? `<p style="margin:0 0 .4rem;font-size:.75rem;color:var(--text-light);overflow:hidden;display:-webkit-box;-webkit-line-clamp:1;-webkit-box-orient:vertical">${esc(v.description)}</p>` : ''}
+                <span style="display:inline-flex;align-items:center;gap:.25rem;font-size:.66rem;font-weight:600;color:var(--accent);background:rgba(79,110,247,.12);padding:.15rem .4rem;border-radius:4px">
+                  ${svgIcon('<path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/>', 10, 'var(--accent)')}
+                  ${esc(v.targetAudience || 'All Students')}
+                </span>
               </div>
             </div>`;
           }).join('')}
         </div>
       </div>`).join('');
   } catch(e) {
-    body.innerHTML = `<div class="empty-state"><p style="color:var(--error)">${escHtml(e.message)}</p></div>`;
+    body.innerHTML = `<div class="empty-state"><p style="color:var(--error)">${esc(e.message)}</p></div>`;
   }
 }
 
@@ -23370,6 +23408,313 @@ async function renderClassTimetable() {
   } catch(e) {
     content.innerHTML = `<div class="card"><p style="color:var(--danger)">${esc(e.message)}</p></div>`;
   }
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// DIKLY AI REPORTS
+// ═══════════════════════════════════════════════════════════════════════════
+
+const AI_REPORT_DEFS = {
+  at_risk_students:    { label: 'At-Risk Students',        roles: ['admin','hod','lecturer'],      icon: '<path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/>',  color: '#ef4444', desc: 'Identifies students with low attendance, poor quiz scores, or missing assignments.' },
+  class_health:        { label: 'Class Health',            roles: ['admin','hod','lecturer'],      icon: '<path d="M22 12h-4l-3 9L9 3l-3 9H2"/>',                                                                                                                                                     color: '#10b981', desc: 'Overall health of a specific course — attendance trends, quiz performance, assignment completion.' },
+  department_overview: { label: 'Department Overview',     roles: ['admin','hod'],                 icon: '<path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>',                                                                                                                               color: '#6366f1', desc: 'Cross-course department report covering all lecturers, students, attendance, and quiz performance.' },
+  exam_readiness:      { label: 'Exam Readiness',          roles: ['admin','hod','lecturer','student'], icon: '<path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/>',                                                                                   color: '#f59e0b', desc: 'Per-student readiness score based on attendance, quiz averages, and assignment completion.' },
+  workforce_attendance:{ label: 'Workforce Attendance',    roles: ['admin','manager'],              icon: '<path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/>',                     color: '#0ea5e9', desc: 'Attendance patterns, chronic absentees, and department-level breakdowns for corporate staff.' },
+  leave_anomaly:       { label: 'Leave Anomaly',           roles: ['admin','manager'],              icon: '<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/>',                                    color: '#a855f7', desc: 'Detects employees with unusual or spiking leave request patterns compared to historical data.' },
+  shift_compliance:    { label: 'Shift Compliance',        roles: ['admin','manager'],              icon: '<rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/>',            color: '#f97316', desc: 'Compares scheduled shifts against actual clock-in times and flags non-compliance.' },
+  weekly_digest:       { label: 'Weekly Digest',           roles: ['admin','manager','hod'],        icon: '<rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/><line x1="8" y1="14" x2="16" y2="14"/>',  color: '#14b8a6', desc: 'A plain-English digest of the past 7 days: sessions, attendance, announcements, and leave activity.' },
+  custom_query:        { label: 'Ask Dikly AI',            roles: ['admin','hod','lecturer','manager','student'], icon: '<path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>',                                                                                              color: '#8b5cf6', desc: 'Ask any question about your institution\'s data in plain English.' },
+  platform_health:     { label: 'Platform Health',         roles: ['superadmin'],                  icon: '<rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/>',                                                       color: '#ec4899', desc: 'Revenue, active institutions, subscription status, and churn risk across the entire platform.' },
+};
+
+async function renderAIReports() {
+  const content = document.getElementById('main-content');
+  if (!content) return;
+
+  const role = currentUser?.role || '';
+  const available = Object.entries(AI_REPORT_DEFS).filter(([, d]) => d.roles.includes(role));
+
+  content.innerHTML = `
+    <div class="page-header" style="margin-bottom:1.5rem">
+      <div>
+        <h1 style="margin:0 0 .25rem;display:flex;align-items:center;gap:.5rem">
+          ${svgIcon('<path d="M15 4V2"/><path d="M15 16v-2"/><path d="M8 9h2"/><path d="M20 9h2"/><path d="M17.8 11.8 19 13"/><path d="M15 9h.01"/><path d="M17.8 6.2 19 5"/><path d="M13.2 6.2 12 5"/><path d="M3 21l9-9"/>', 22, 'var(--accent)')}
+          Dikly AI Reports
+        </h1>
+        <p style="margin:0;color:var(--text-light);font-size:.9rem">AI-generated intelligence reports for your institution</p>
+      </div>
+    </div>
+
+    <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:1rem;margin-bottom:2rem" id="ai-report-cards">
+      ${available.map(([type, d]) => `
+        <div class="card" style="cursor:pointer;transition:transform .15s,box-shadow .15s;border-top:3px solid ${d.color}"
+          onmouseover="this.style.transform='translateY(-2px)';this.style.boxShadow='var(--shadow-lg)'"
+          onmouseout="this.style.transform='';this.style.boxShadow=''"
+          onclick="aiReportOpen('${type}')">
+          <div style="display:flex;align-items:flex-start;gap:.75rem">
+            <div style="width:38px;height:38px;border-radius:9px;background:${d.color}20;display:flex;align-items:center;justify-content:center;flex-shrink:0">
+              ${svgIcon(d.icon, 18, d.color)}
+            </div>
+            <div style="min-width:0;flex:1">
+              <div style="font-weight:700;font-size:.92rem;margin-bottom:.25rem">${d.label}</div>
+              <div style="font-size:.78rem;color:var(--text-light);line-height:1.5">${d.desc}</div>
+            </div>
+          </div>
+          <div style="margin-top:.85rem;display:flex;gap:.5rem">
+            <button class="btn btn-sm btn-primary" style="flex:1;font-size:.78rem" onclick="event.stopPropagation();aiReportGenerate('${type}')">
+              ${svgIcon('<path d="M15 4V2"/><path d="M15 16v-2"/><path d="M8 9h2"/><path d="M20 9h2"/><path d="M17.8 11.8 19 13"/><path d="M15 9h.01"/><path d="M17.8 6.2 19 5"/><path d="M13.2 6.2 12 5"/><path d="M3 21l9-9"/>', 12)}
+              Generate
+            </button>
+            <button class="btn btn-sm btn-ghost" style="font-size:.78rem" onclick="event.stopPropagation();aiReportOpen('${type}')">
+              History
+            </button>
+          </div>
+        </div>`).join('')}
+    </div>
+
+    <div id="ai-report-panel" style="display:none">
+      <div class="card" id="ai-report-view"></div>
+    </div>`;
+
+  // Load recent reports list
+  _aiLoadRecentReports();
+}
+
+async function _aiLoadRecentReports() {
+  try {
+    const d = await api('/api/ai-reports?limit=5');
+    if (!d.reports?.length) return;
+    const panel = document.getElementById('ai-report-panel');
+    if (!panel) return;
+    panel.style.display = 'block';
+    const view = document.getElementById('ai-report-view');
+    view.innerHTML = `
+      <h3 style="margin:0 0 1rem;font-size:1rem">Recent Reports</h3>
+      <div style="display:flex;flex-direction:column;gap:.6rem">
+        ${d.reports.map(r => {
+          const def = AI_REPORT_DEFS[r.type] || { label: r.type, color: 'var(--accent)' };
+          return `<div style="display:flex;align-items:center;gap:.75rem;padding:.65rem .85rem;border-radius:8px;border:1px solid var(--border);cursor:pointer;transition:background .12s" onmouseover="this.style.background='var(--bg-secondary)'" onmouseout="this.style.background=''" onclick="aiReportView('${r._id}')">
+            <div style="width:8px;height:8px;border-radius:50%;background:${def.color};flex-shrink:0"></div>
+            <div style="flex:1;min-width:0">
+              <div style="font-size:.84rem;font-weight:600">${def.label}</div>
+              <div style="font-size:.73rem;color:var(--text-light);overflow:hidden;white-space:nowrap;text-overflow:ellipsis">${esc(r.summary || '')}</div>
+            </div>
+            <div style="font-size:.72rem;color:var(--text-muted);white-space:nowrap">${new Date(r.createdAt).toLocaleDateString()}</div>
+          </div>`;
+        }).join('')}
+      </div>`;
+  } catch(_) {}
+}
+
+window.aiReportOpen = async function(type) {
+  const def = AI_REPORT_DEFS[type];
+  if (!def) return;
+
+  // If custom_query, show the question input modal
+  if (type === 'custom_query') {
+    _aiShowCustomQueryModal();
+    return;
+  }
+
+  // For course-specific reports, pick a course first
+  if (['class_health', 'exam_readiness', 'at_risk_students'].includes(type)) {
+    await _aiShowCoursePickerModal(type);
+    return;
+  }
+
+  // For department_overview, pick a department
+  if (type === 'department_overview') {
+    await _aiShowDeptPickerModal();
+    return;
+  }
+
+  // Everything else: just generate directly
+  aiReportGenerate(type);
+};
+
+window.aiReportGenerate = async function(type, parameters = {}, forceRefresh = false) {
+  const def = AI_REPORT_DEFS[type];
+  if (!def) return;
+
+  const panel = document.getElementById('ai-report-panel');
+  const view  = document.getElementById('ai-report-view');
+  if (!panel || !view) return;
+
+  panel.style.display = 'block';
+  view.innerHTML = `
+    <div style="display:flex;flex-direction:column;align-items:center;padding:3rem 1rem;gap:1rem">
+      <div style="width:48px;height:48px;border-radius:12px;background:${def.color}20;display:flex;align-items:center;justify-content:center">
+        ${svgIcon(def.icon, 22, def.color)}
+      </div>
+      <div style="font-weight:700;font-size:1rem">${def.label}</div>
+      <div style="font-size:.85rem;color:var(--text-light)">Analysing data and generating report…</div>
+      <div style="width:200px;height:4px;background:var(--border);border-radius:2px;overflow:hidden">
+        <div style="height:100%;background:${def.color};border-radius:2px;animation:aiProgress 2.5s ease-in-out infinite"></div>
+      </div>
+    </div>
+    <style>@keyframes aiProgress{0%{width:0;margin-left:0}50%{width:60%;margin-left:20%}100%{width:0;margin-left:100%}}</style>`;
+
+  panel.scrollIntoView({ behavior: 'smooth', block: 'start' });
+
+  try {
+    const d = await api('/api/ai-reports/generate', {
+      method: 'POST',
+      body: JSON.stringify({ type, parameters, forceRefresh }),
+    });
+    _aiRenderReport(d.report, def);
+  } catch (e) {
+    view.innerHTML = `<div style="padding:2rem;text-align:center">
+      <div style="color:var(--error);font-weight:600;margin-bottom:.5rem">Failed to generate report</div>
+      <div style="font-size:.85rem;color:var(--text-light)">${esc(e.message)}</div>
+      <button class="btn btn-sm btn-primary" style="margin-top:1rem" onclick="aiReportGenerate('${type}',${JSON.stringify(parameters)},true)">Retry</button>
+    </div>`;
+  }
+};
+
+window.aiReportView = async function(id) {
+  const panel = document.getElementById('ai-report-panel');
+  const view  = document.getElementById('ai-report-view');
+  if (!panel || !view) return;
+  panel.style.display = 'block';
+  view.innerHTML = `<div style="padding:2rem;text-align:center;color:var(--text-light)">Loading…</div>`;
+  panel.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  try {
+    const d = await api(`/api/ai-reports/${id}`);
+    const def = AI_REPORT_DEFS[d.report.type] || { label: d.report.type, color: 'var(--accent)', icon: '' };
+    _aiRenderReport(d.report, def);
+  } catch(e) {
+    view.innerHTML = `<div style="padding:2rem;color:var(--error)">${esc(e.message)}</div>`;
+  }
+};
+
+function _aiRenderReport(report, def) {
+  const view = document.getElementById('ai-report-view');
+  if (!view) return;
+
+  // Convert markdown to simple HTML
+  const html = _aiMarkdownToHtml(report.report || '');
+  const when = report.createdAt ? new Date(report.createdAt).toLocaleString() : '';
+
+  view.innerHTML = `
+    <div style="display:flex;align-items:flex-start;justify-content:space-between;flex-wrap:wrap;gap:.75rem;margin-bottom:1.25rem;padding-bottom:1rem;border-bottom:1px solid var(--border)">
+      <div style="display:flex;align-items:center;gap:.65rem">
+        <div style="width:36px;height:36px;border-radius:9px;background:${def.color}20;display:flex;align-items:center;justify-content:center;flex-shrink:0">
+          ${svgIcon(def.icon, 17, def.color)}
+        </div>
+        <div>
+          <div style="font-weight:700;font-size:1rem">${def.label}</div>
+          ${when ? `<div style="font-size:.73rem;color:var(--text-muted)">${when}</div>` : ''}
+        </div>
+      </div>
+      <div style="display:flex;gap:.5rem">
+        <button class="btn btn-sm btn-ghost" style="font-size:.78rem" onclick="aiReportGenerate('${report.type}',${JSON.stringify(report.parameters||{})},true)">
+          ${svgIcon('<polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-.57-4.13"/>', 13)} Regenerate
+        </button>
+        <button class="btn btn-sm btn-ghost" style="font-size:.78rem" onclick="_aiCopyReport()">
+          ${svgIcon('<rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>', 13)} Copy
+        </button>
+      </div>
+    </div>
+    <div id="ai-report-body" style="line-height:1.75;font-size:.9rem">${html}</div>`;
+}
+
+function _aiMarkdownToHtml(md) {
+  return md
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+    .replace(/^## (.+)$/gm, '<h2 style="font-size:1rem;font-weight:700;margin:1.25rem 0 .5rem;color:var(--text)">$1</h2>')
+    .replace(/^### (.+)$/gm, '<h3 style="font-size:.9rem;font-weight:700;margin:1rem 0 .4rem;color:var(--text)">$1</h3>')
+    .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+    .replace(/\*(.+?)\*/g, '<em>$1</em>')
+    .replace(/^- (.+)$/gm, '<li style="margin:.25rem 0;padding-left:.25rem">$1</li>')
+    .replace(/(<li.*<\/li>\n?)+/g, m => `<ul style="padding-left:1.25rem;margin:.5rem 0">${m}</ul>`)
+    .replace(/\n{2,}/g, '</p><p style="margin:.5rem 0">')
+    .replace(/^(?!<[hul])/gm, '')
+    .replace(/\n/g, '<br>')
+    + '';
+}
+
+window._aiCopyReport = function() {
+  const body = document.getElementById('ai-report-body');
+  if (!body) return;
+  navigator.clipboard?.writeText(body.innerText).then(() => toastSuccess('Report copied to clipboard'));
+};
+
+async function _aiShowCoursePickerModal(type) {
+  let courses = [];
+  try {
+    const d = await api('/api/courses');
+    courses = d.courses || [];
+  } catch(_) {}
+
+  if (!courses.length) {
+    toastError('No courses found. Create a course first.');
+    return;
+  }
+
+  const overlay = document.createElement('div');
+  overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:9999;display:flex;align-items:center;justify-content:center;padding:1rem';
+  overlay.innerHTML = `
+    <div class="card" style="width:100%;max-width:420px">
+      <h3 style="margin:0 0 1rem">Select Course</h3>
+      <select id="ai-course-pick" style="width:100%;padding:.6rem;border-radius:8px;border:1px solid var(--border);background:var(--bg);color:var(--text);margin-bottom:1rem;font-size:.9rem">
+        ${courses.map(c => `<option value="${c._id}">${esc(c.title)}${c.code?' ('+esc(c.code)+')':''}</option>`).join('')}
+      </select>
+      <div style="display:flex;gap:.5rem;justify-content:flex-end">
+        <button class="btn btn-ghost" onclick="this.closest('[style*=position]').remove()">Cancel</button>
+        <button class="btn btn-primary" onclick="(()=>{const v=document.getElementById('ai-course-pick')?.value;if(!v)return;this.closest('[style*=position]').remove();aiReportGenerate('${type}',{courseId:v})})()">Generate Report</button>
+      </div>
+    </div>`;
+  document.body.appendChild(overlay);
+  overlay.addEventListener('click', e => { if (e.target === overlay) overlay.remove(); });
+}
+
+async function _aiShowDeptPickerModal() {
+  let depts = [];
+  try {
+    const d = await api('/api/departments');
+    depts = (d.departments || d.data || []);
+  } catch(_) {}
+
+  const overlay = document.createElement('div');
+  overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:9999;display:flex;align-items:center;justify-content:center;padding:1rem';
+  overlay.innerHTML = `
+    <div class="card" style="width:100%;max-width:420px">
+      <h3 style="margin:0 0 1rem">Select Department</h3>
+      ${depts.length
+        ? `<select id="ai-dept-pick" style="width:100%;padding:.6rem;border-radius:8px;border:1px solid var(--border);background:var(--bg);color:var(--text);margin-bottom:1rem;font-size:.9rem">${depts.map(d => `<option value="${esc(d.name||d._id)}">${esc(d.name||d._id)}</option>`).join('')}</select>`
+        : `<input id="ai-dept-pick" placeholder="Enter department name" style="width:100%;padding:.6rem;border-radius:8px;border:1px solid var(--border);background:var(--bg);color:var(--text);margin-bottom:1rem;font-size:.9rem">`
+      }
+      <div style="display:flex;gap:.5rem;justify-content:flex-end">
+        <button class="btn btn-ghost" onclick="this.closest('[style*=position]').remove()">Cancel</button>
+        <button class="btn btn-primary" onclick="(()=>{const v=document.getElementById('ai-dept-pick')?.value;if(!v)return;this.closest('[style*=position]').remove();aiReportGenerate('department_overview',{department:v})})()">Generate Report</button>
+      </div>
+    </div>`;
+  document.body.appendChild(overlay);
+  overlay.addEventListener('click', e => { if (e.target === overlay) overlay.remove(); });
+}
+
+function _aiShowCustomQueryModal() {
+  const overlay = document.createElement('div');
+  overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:9999;display:flex;align-items:center;justify-content:center;padding:1rem';
+  overlay.innerHTML = `
+    <div class="card" style="width:100%;max-width:480px">
+      <h3 style="margin:0 0 .5rem;display:flex;align-items:center;gap:.5rem">
+        ${svgIcon('<path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>', 18, 'var(--accent)')}
+        Ask Dikly AI
+      </h3>
+      <p style="margin:0 0 1rem;font-size:.83rem;color:var(--text-light)">Ask any question about your institution's data in plain English.</p>
+      <textarea id="ai-query-input" rows="4" placeholder="e.g. Which students in Level 300 had below 60% attendance last month?" style="width:100%;padding:.7rem;border-radius:8px;border:1px solid var(--border);background:var(--bg);color:var(--text);font-size:.88rem;resize:vertical;margin-bottom:1rem;font-family:inherit"></textarea>
+      <div style="display:flex;gap:.5rem;justify-content:flex-end">
+        <button class="btn btn-ghost" onclick="this.closest('[style*=position]').remove()">Cancel</button>
+        <button class="btn btn-primary" onclick="(()=>{const v=document.getElementById('ai-query-input')?.value?.trim();if(!v)return;this.closest('[style*=position]').remove();aiReportGenerate('custom_query',{question:v})})()">
+          ${svgIcon('<path d="M15 4V2"/><path d="M15 16v-2"/><path d="M8 9h2"/><path d="M20 9h2"/><path d="M17.8 11.8 19 13"/><path d="M15 9h.01"/><path d="M17.8 6.2 19 5"/><path d="M13.2 6.2 12 5"/><path d="M3 21l9-9"/>', 13)}
+          Ask AI
+        </button>
+      </div>
+    </div>`;
+  document.body.appendChild(overlay);
+  overlay.addEventListener('click', e => { if (e.target === overlay) overlay.remove(); });
+  setTimeout(() => overlay.querySelector('#ai-query-input')?.focus(), 50);
 }
 
 window._realSelectMode   = selectMode;

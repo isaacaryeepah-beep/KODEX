@@ -54,7 +54,7 @@ function parseVideoUrl(raw) {
 // POST /api/course-videos — add a video to a course (lecturer / admin)
 exports.addVideo = async (req, res) => {
   try {
-    const { courseId, title, description, url } = req.body;
+    const { courseId, title, description, url, targetAudience } = req.body;
     if (!courseId || !title || !url) {
       return res.status(400).json({ error: 'courseId, title and url are required' });
     }
@@ -80,10 +80,11 @@ exports.addVideo = async (req, res) => {
       title:     title.trim(),
       description: (description || '').trim(),
       url:       url.trim(),
-      embedUrl:  parsed.embedUrl,
-      thumbnail: parsed.thumbnail,
-      platform:  parsed.platform,
-      order:     count,
+      embedUrl:       parsed.embedUrl,
+      thumbnail:      parsed.thumbnail,
+      platform:       parsed.platform,
+      order:          count,
+      targetAudience: (targetAudience || 'All Students').trim(),
     });
 
     res.status(201).json({ video });
@@ -143,6 +144,7 @@ exports.updateVideo = async (req, res) => {
 
     if (req.body.title)       video.title       = req.body.title.trim();
     if (req.body.description !== undefined) video.description = req.body.description.trim();
+    if (req.body.targetAudience !== undefined) video.targetAudience = req.body.targetAudience.trim();
     await video.save();
     res.json({ video });
   } catch (e) {
