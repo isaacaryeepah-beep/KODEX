@@ -4238,6 +4238,7 @@ static void registerLocalHttp() {
       }
     }
 
+
     // ── Re-mark path — end-of-class presence confirmation ────────────────────
     bool isRemark = req["remark"] | false;
     if (isRemark || reMarkActive) {
