@@ -265,7 +265,7 @@ static const char*   DEFAULT_API_BASE     = "https://dikly.sbs";
 
 static const uint32_t HEARTBEAT_MS        = 5000;
 static const uint32_t WIFI_TIMEOUT_MS     = 8000;   // 8 s: typical connect is 3-5 s; fail fast on wrong creds
-static const uint32_t WINDOW_SECONDS      = 120;  // code rotation period (2 minutes)
+static const uint32_t WINDOW_SECONDS      = 300;  // code rotation period (5 minutes)
 
 // ─── Theme selector ──────────────────────────────────────────────────────────
 // Change THEME to switch the whole UI colour scheme without touching anything else.
