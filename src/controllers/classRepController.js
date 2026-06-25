@@ -38,7 +38,7 @@ exports.getCourseLecturers = async (req, res, next) => {
 
     const courses = await Course.find(query).populate('lecturerId', 'name email').lean();
 
-    const lecturers = courses
+    let lecturers = courses
       .filter(c => c.lecturerId)
       .map(c => ({
         lecturerId: c.lecturerId._id,
@@ -48,6 +48,23 @@ exports.getCourseLecturers = async (req, res, next) => {
         courseTitle: c.title,
         courseCode: c.code,
       }));
+
+    // Fallback: if no courses matched the strict class-group filters, return all
+    // lecturers from the rep's department so the device can still be connected.
+    if (!lecturers.length) {
+      const repFull = await User.findById(req.user._id).select('department').lean();
+      const fallbackFilter = { company: req.user.company, role: 'lecturer', isActive: true };
+      if (repFull && repFull.department) fallbackFilter.department = repFull.department;
+      const fallback = await User.find(fallbackFilter).select('_id name email').limit(50).lean();
+      lecturers = fallback.map(l => ({
+        lecturerId: l._id,
+        lecturerName: l.name,
+        lecturerEmail: l.email,
+        courseId: null,
+        courseTitle: null,
+        courseCode: null,
+      }));
+    }
 
     res.json({ lecturers });
   } catch (e) { next(e); }

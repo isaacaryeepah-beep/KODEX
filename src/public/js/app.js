@@ -2933,6 +2933,17 @@ function buildSidebar() {
         </div>
       </div>`;
   }
+  // For students not yet marked as class rep, silently refresh profile once.
+  // Admin may have assigned rep status after the student last logged in.
+  if (role === 'student' && !currentUser.isClassRep) {
+    api('/api/auth/me').then(function(me) {
+      if (me && me.user && me.user.isClassRep) {
+        currentUser.isClassRep = true;
+        window.currentUser = currentUser;
+        buildSidebar();
+      }
+    }).catch(function() {});
+  }
 }
 
 function navigateTo(view) {
@@ -13149,10 +13160,8 @@ window.crScanWifi = async function(localIp) {
   msgEl.textContent = '';
 
   try {
-    const res = await fetch(`http://${localIp}/wifi/scan`, { signal: AbortSignal.timeout(12000) });
-    if (!res.ok) throw new Error('Device returned an error');
-    const nets = await res.json();
-    const list = Array.isArray(nets) ? nets : (nets.networks || []);
+    const result = await api(`/api/class-rep/scan-wifi?ip=${encodeURIComponent(localIp)}`);
+    const list = Array.isArray(result.networks) ? result.networks : [];
     list.sort((a, b) => (b.rssi || 0) - (a.rssi || 0));
 
     if (!list.length) {
