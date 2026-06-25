@@ -153,344 +153,355 @@ function selectPortal(t){if(window._appLoaded)window._realSelectPortal(t);else w
 </head>
 <body>
 
-<!-- ── Splash screen (3D hex prism — shown on web and Capacitor) ─── -->
+<!-- ── Splash screen (3D globe + D launch + burst) ── -->
 <div id="web-splash">
 <style>
 #web-splash {
   position: fixed; inset: 0; z-index: 99990;
-  background: #050a14;
-  overflow: hidden;
+  background: #000; overflow: hidden;
   font-family: 'Segoe UI', system-ui, sans-serif;
-  display: flex; flex-direction: column;
-  align-items: center; justify-content: center;
 }
-
-/* background radial glow */
-#web-splash::before {
-  content: '';
-  position: absolute; inset: 0;
-  background:
-    radial-gradient(ellipse 70% 55% at 50% 48%, rgba(20,60,160,.35) 0%, transparent 70%),
-    radial-gradient(ellipse 90% 80% at 50% 100%, rgba(10,25,70,.6) 0%, transparent 60%);
+#sp-gl, #sp-fx {
+  position: fixed; top: 0; left: 0; width: 100%; height: 100%; display: block;
+}
+#sp-gl { z-index: 99991; }
+#sp-fx { z-index: 99993; pointer-events: none; }
+#sp-scene {
+  position: fixed; top: 0; left: 0; width: 100%; height: 100%; z-index: 99994;
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
   pointer-events: none;
 }
-
-/* subtle dot grid */
-#web-splash::after {
-  content: '';
-  position: absolute; inset: 0;
-  background-image: radial-gradient(circle, rgba(59,130,246,.12) 1px, transparent 1px);
-  background-size: 28px 28px;
-  pointer-events: none;
+#sp-d {
+  width: clamp(110px,22vw,170px); height: clamp(110px,22vw,170px);
+  transform: translateY(-140vh); opacity: 0;
+  will-change: transform, opacity, filter;
+  filter: drop-shadow(0 0 20px #3b82f6) drop-shadow(0 0 55px #1d4ed8);
 }
-
-/* ══════════════════════════════════
-   HEX PRISM STAGE
-══════════════════════════════════ */
-.sp-hex-stage {
-  position: relative;
-  width: 200px; height: 200px;
-  perspective: 560px;
-  perspective-origin: 50% 50%;
-  z-index: 10;
-  flex-shrink: 0;
-  margin-bottom: 36px;
-  opacity: 0;
-  animation: hexReveal .7s cubic-bezier(.22,1,.36,1) .15s forwards;
+#sp-d svg { width: 100%; height: 100%; }
+#sp-wordmark { text-align: center; margin-top: clamp(14px,3vw,26px); }
+#sp-brand {
+  font-size: clamp(1.9rem,5vw,3.2rem); font-weight: 900; letter-spacing: .2em; color: #fff;
+  text-shadow: 0 0 20px rgba(59,130,246,.9), 0 0 60px rgba(59,130,246,.3);
+  opacity: 0; transform: translateY(16px);
+  transition: opacity .7s ease, transform .7s ease;
 }
-@keyframes hexReveal {
-  from { opacity: 0; transform: scale(.65) translateY(20px); }
-  to   { opacity: 1; transform: scale(1)   translateY(0); }
+#sp-brand.sp-show { opacity: 1; transform: translateY(0); }
+#sp-tag {
+  font-size: clamp(.6rem,1.9vw,.78rem); letter-spacing: .38em;
+  color: rgba(255,255,255,.5); margin-top: 10px; min-height: 1.4em;
+  opacity: 0; transition: opacity .5s ease;
 }
-
-.sp-hex-world {
-  position: absolute; inset: 0;
-  transform-style: preserve-3d;
-  animation: hexRock 5.5s ease-in-out infinite;
+#sp-tag.sp-show { opacity: 1; }
+#sp-final {
+  position: fixed; top: 0; left: 0; width: 100%; height: 100%; z-index: 99995;
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  opacity: 0; pointer-events: none; transition: opacity 1.2s ease;
 }
-@keyframes hexRock {
-  0%   { transform: rotateY(-28deg) rotateX(16deg); }
-  50%  { transform: rotateY( 28deg) rotateX(-12deg); }
-  100% { transform: rotateY(-28deg) rotateX(16deg); }
+#sp-final.sp-show { opacity: 1; }
+.sp-fi-d { width: clamp(110px,22vw,170px); height: clamp(110px,22vw,170px); filter: drop-shadow(0 0 14px rgba(59,130,246,.7)); }
+.sp-fi-d svg { width: 100%; height: 100%; }
+.sp-fi-brand {
+  font-size: clamp(1.9rem,5vw,3.2rem); font-weight: 900; letter-spacing: .2em; color: #fff;
+  text-shadow: 0 0 18px rgba(59,130,246,.65); margin-top: clamp(14px,3vw,26px);
 }
-
-/* shared hex shape */
-.hx {
-  position: absolute;
-  top: 50%; left: 50%;
-  clip-path: polygon(50% 0%,100% 25%,100% 75%,50% 100%,0% 75%,0% 25%);
-}
-
-/* ── Aura (blurred glow behind everything) ── */
-.hx-aura {
-  width: 180px; height: 180px;
-  margin: -90px 0 0 -90px;
-  transform: translateZ(-36px);
-  background: radial-gradient(ellipse, rgba(37,99,235,.55) 0%, rgba(14,40,120,.2) 65%, transparent 100%);
-  filter: blur(14px);
-}
-
-/* ── Depth plates (back → front) ── */
-.hx-b4 {
-  width: 130px; height: 130px;
-  margin: -65px 0 0 -65px;
-  transform: translateZ(-32px);
-  background: linear-gradient(160deg, #0a1a40 0%, #061230 100%);
-  box-shadow: inset 0 1px 0 rgba(96,165,250,.08);
-}
-.hx-b3 {
-  width: 140px; height: 140px;
-  margin: -70px 0 0 -70px;
-  transform: translateZ(-16px);
-  background: linear-gradient(155deg, #0e2258 0%, #091840 100%);
-  box-shadow: inset 0 1px 0 rgba(96,165,250,.1);
-}
-.hx-b2 {
-  width: 148px; height: 148px;
-  margin: -74px 0 0 -74px;
-  transform: translateZ(0px);
-  background: linear-gradient(150deg, #142c72 0%, #0d2060 100%);
-  box-shadow: inset 0 1px 0 rgba(96,165,250,.15);
-}
-.hx-b1 {
-  width: 154px; height: 154px;
-  margin: -77px 0 0 -77px;
-  transform: translateZ(16px);
-  background: linear-gradient(145deg, #1a3888 0%, #122876 100%);
-  box-shadow: inset 0 2px 0 rgba(96,165,250,.18);
-}
-
-/* ── Front face (brightest) ── */
-.hx-front {
-  width: 158px; height: 158px;
-  margin: -79px 0 0 -79px;
-  transform: translateZ(32px);
-  background: linear-gradient(140deg, #2251b8 0%, #1a3ea0 50%, #1230 80%);
-  box-shadow:
-    0 0 40px rgba(37,99,235,.55),
-    0 0 80px rgba(37,99,235,.22),
-    inset 0 2px 0 rgba(255,255,255,.18),
-    inset 0 -2px 0 rgba(0,0,0,.25);
-  display: flex; align-items: center; justify-content: center;
-}
-
-/* gloss sheen on front face */
-.hx-front::before {
-  content: '';
-  position: absolute; inset: 0;
-  clip-path: polygon(50% 0%,100% 25%,100% 75%,50% 100%,0% 75%,0% 25%);
-  background: linear-gradient(135deg,
-    rgba(255,255,255,.18) 0%, rgba(255,255,255,.06) 45%, transparent 70%);
-}
-
-/* drop shadow below the prism */
-.hx-front::after {
-  content: '';
-  position: absolute;
-  bottom: -28px; left: 50%;
-  transform: translateX(-50%);
-  width: 100px; height: 18px;
-  background: radial-gradient(ellipse, rgba(10,30,100,.7) 0%, transparent 70%);
-  filter: blur(6px);
-  clip-path: none;
-}
-
-/* the Dikly logo icon */
-.hx-icon {
-  position: relative; z-index: 1;
-  width: 80px; height: 80px;
-  filter:
-    drop-shadow(0 0 10px rgba(147,197,253,.85))
-    drop-shadow(0 0 26px rgba(37,99,235,.6));
-}
-
-/* ── Outer glow ring ── */
-.hx-ring {
-  position: absolute;
-  width: 190px; height: 190px;
-  margin: -95px 0 0 -95px;
-  top: 50%; left: 50%;
-  transform: translateZ(20px);
-  clip-path: polygon(50% 0%,100% 25%,100% 75%,50% 100%,0% 75%,0% 25%);
-  background: transparent;
-  box-shadow: 0 0 0 2px rgba(96,165,250,.25);
-  /* ring via outline trick using a pseudo; use a mask instead */
-  -webkit-mask:
-    polygon(50% 0%,100% 25%,100% 75%,50% 100%,0% 75%,0% 25%) subtract,
-    polygon(50% 4%,97% 26%,97% 74%,50% 96%,3% 74%,3% 26%);
-  mask:
-    polygon(50% 0%,100% 25%,100% 75%,50% 100%,0% 75%,0% 25%) subtract,
-    polygon(50% 4%,97% 26%,97% 74%,50% 96%,3% 74%,3% 26%);
-}
-
-/* ── Edge highlight lines (simulate prism edges) ── */
-.hx-edge {
-  position: absolute;
-  top: 50%; left: 50%;
-  width: 162px; height: 162px;
-  margin: -81px 0 0 -81px;
-  transform: translateZ(32px);
-  pointer-events: none;
-}
-.hx-edge svg {
-  width: 100%; height: 100%;
-  overflow: visible;
-}
-
-/* ── Floating particles ── */
-.sp-particle {
-  position: absolute;
-  border-radius: 50%;
-  background: rgba(96,165,250,.6);
-  animation: spFloat linear infinite;
-  pointer-events: none;
-}
-@keyframes spFloat {
-  0%   { transform: translateY(0)   scale(1);   opacity: .7; }
-  50%  { transform: translateY(-22px) scale(1.3); opacity: 1; }
-  100% { transform: translateY(0)   scale(1);   opacity: .7; }
-}
-
-/* ══════════════════════════════════
-   WORDMARK + SUBTITLE
-══════════════════════════════════ */
-.sp-wordmark {
-  position: relative; z-index: 10;
-  text-align: center;
-  opacity: 0;
-  animation: spWmIn .65s cubic-bezier(.22,1,.36,1) .75s forwards;
-}
-@keyframes spWmIn {
-  from { opacity: 0; transform: translateY(14px); }
-  to   { opacity: 1; transform: translateY(0); }
-}
-.sp-wm-name {
-  font-size: clamp(26px, 7vw, 38px);
-  font-weight: 900; letter-spacing: 10px;
-  color: #fff;
-  text-shadow: 0 0 24px rgba(96,165,250,.5), 0 2px 8px rgba(0,0,0,.6);
-  margin-bottom: 8px;
-}
-.sp-wm-sub {
-  font-size: 11px; letter-spacing: 2px; font-weight: 500;
-  color: rgba(147,197,253,.65);
-  margin-bottom: 5px;
-}
-.sp-wm-cyc {
-  font-size: 11px; letter-spacing: 2px;
-  color: rgba(147,197,253,.38);
-  min-height: 16px;
-  transition: opacity .2s;
-}
-
-/* vignette */
-.sp-vign {
-  position: absolute; inset: 0; z-index: 5; pointer-events: none;
-  background:
-    radial-gradient(ellipse 90% 90% at 50% 50%, transparent 40%, rgba(5,10,20,.8) 100%),
-    linear-gradient(0deg, rgba(5,10,20,.9) 0%, transparent 22%),
-    linear-gradient(180deg, rgba(5,10,20,.8) 0%, transparent 18%);
+.sp-fi-tag {
+  font-size: clamp(.6rem,1.9vw,.78rem); letter-spacing: .38em;
+  color: rgba(255,255,255,.45); margin-top: 10px;
 }
 </style>
 
-<!-- vignette overlay -->
-<div class="sp-vign"></div>
+<canvas id="sp-gl"></canvas>
+<canvas id="sp-fx"></canvas>
 
-<!-- 3D hex prism -->
-<div class="sp-hex-stage">
-  <div class="sp-hex-world">
-    <div class="hx hx-aura"></div>
-    <div class="hx hx-b4"></div>
-    <div class="hx hx-b3"></div>
-    <div class="hx hx-b2"></div>
-    <div class="hx hx-b1"></div>
-    <div class="hx hx-front">
-      <svg class="hx-icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">
-        <defs>
-          <linearGradient id="sp-dg" x1="0%" y1="0%" x2="100%" y2="100%">
-            <stop offset="0%" stop-color="#bfdbfe"/>
-            <stop offset="45%" stop-color="#93c5fd"/>
-            <stop offset="100%" stop-color="#60a5fa"/>
-          </linearGradient>
-          <clipPath id="sp-dc">
-            <path d="M14,4 L14,96 L50,96 C97,93 97,7 50,4 Z"/>
-          </clipPath>
-        </defs>
-        <path d="M14,4 L14,96 L50,96 C97,93 97,7 50,4 Z" fill="url(#sp-dg)"/>
-        <g clip-path="url(#sp-dc)">
-          <polygon points="4,58 63,-2 89,-2 30,58" fill="white"/>
-          <polygon points="30,102 89,42 63,42 4,102" fill="white"/>
-        </g>
-      </svg>
-    </div>
-    <!-- edge SVG lines to simulate prism depth -->
-    <div class="hx-edge">
-      <svg viewBox="0 0 162 162" fill="none" xmlns="http://www.w3.org/2000/svg">
-        <polygon points="81,0 162,40.5 162,121.5 81,162 0,121.5 0,40.5"
-          fill="none" stroke="rgba(96,165,250,0.22)" stroke-width="1.2"/>
-        <polygon points="81,8 154,44.5 154,117.5 81,154 8,117.5 8,44.5"
-          fill="none" stroke="rgba(96,165,250,0.1)" stroke-width="0.8"/>
-      </svg>
-    </div>
+<div id="sp-scene">
+  <div id="sp-d">
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" aria-hidden="true">
+      <defs>
+        <linearGradient id="sp-dg1" x1="0%" y1="0%" x2="100%" y2="100%">
+          <stop offset="0%" stop-color="#93c5fd"/>
+          <stop offset="42%" stop-color="#2563eb"/>
+          <stop offset="100%" stop-color="#1e3a8a"/>
+        </linearGradient>
+        <filter id="sp-gls">
+          <feGaussianBlur stdDeviation="1.5" result="b"/>
+          <feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge>
+        </filter>
+        <clipPath id="sp-dc1"><path d="M14,4 L14,96 L50,96 C97,93 97,7 50,4 Z"/></clipPath>
+      </defs>
+      <path d="M14,4 L14,96 L50,96 C97,93 97,7 50,4 Z" fill="url(#sp-dg1)" filter="url(#sp-gls)"/>
+      <g clip-path="url(#sp-dc1)">
+        <polygon points="4,58 63,-2 89,-2 30,58" fill="white" opacity=".93"/>
+        <polygon points="30,102 89,42 63,42 4,102" fill="white" opacity=".76"/>
+      </g>
+    </svg>
+  </div>
+  <div id="sp-wordmark">
+    <div id="sp-brand">DIKLY</div>
+    <div id="sp-tag"></div>
   </div>
 </div>
 
-<!-- particles (injected by JS) -->
-<div id="sp-particles" style="position:absolute;inset:0;z-index:8;pointer-events:none;overflow:hidden"></div>
-
-<!-- wordmark -->
-<div class="sp-wordmark">
-  <div class="sp-wm-name">DIKLY</div>
-  <div class="sp-wm-sub">Smart Attendance &amp; Education Platform</div>
-  <div class="sp-wm-cyc" id="sp-cycle">Innovate •</div>
-</div>
+<div id="sp-final">
+  <div class="sp-fi-d">
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" aria-hidden="true">
+      <defs>
+        <linearGradient id="sp-dg2" x1="0%" y1="0%" x2="100%" y2="100%">
+          <stop offset="0%" stop-color="#93c5fd"/>
+          <stop offset="42%" stop-color="#2563eb"/>
+          <stop offset="100%" stop-color="#1e3a8a"/>
+        </linearGradient>
+        <clipPath id="sp-dc2"><path d="M14,4 L14,96 L50,96 C97,93 97,7 50,4 Z"/></clipPath>
+      </defs>
+      <path d="M14,4 L14,96 L50,96 C97,93 97,7 50,4 Z" fill="url(#sp-dg2)"/>
+      <g clip-path="url(#sp-dc2)">
+        <polygon points="4,58 63,-2 89,-2 30,58" fill="white" opacity=".93"/>
+        <polygon points="30,102 89,42 63,42 4,102" fill="white" opacity=".76"/>
+      </g>
+    </svg>
+  </div>
+  <div class="sp-fi-brand">DIKLY</div>
+  <div class="sp-fi-tag">SMARTER &nbsp;·&nbsp; FASTER &nbsp;·&nbsp; TOGETHER</div>
 </div>
 
 <script>
-(function() {
-  /* spawn particles */
-  var pc = document.getElementById('sp-particles');
-  if (pc) {
-    for (var i = 0; i < 22; i++) {
-      var p = document.createElement('div');
-      p.className = 'sp-particle';
-      var sz = (Math.random() * 3 + 1.5).toFixed(1);
-      p.style.cssText = [
-        'width:' + sz + 'px', 'height:' + sz + 'px',
-        'left:' + (Math.random() * 100).toFixed(1) + '%',
-        'top:'  + (Math.random() * 100).toFixed(1) + '%',
-        'opacity:' + (Math.random() * 0.5 + 0.2).toFixed(2),
-        'animation-duration:' + (Math.random() * 3 + 2.5).toFixed(1) + 's',
-        'animation-delay:' + (Math.random() * 2).toFixed(2) + 's',
-      ].join(';');
-      pc.appendChild(p);
+(function () {
+'use strict';
+
+function dismissSplash() {
+  var el = document.getElementById('web-splash');
+  if (!el) return;
+  el.style.transition = 'opacity .55s ease';
+  el.style.opacity = '0';
+  el.style.pointerEvents = 'none';
+  setTimeout(function () { if (el && el.parentNode) el.parentNode.removeChild(el); }, 600);
+}
+
+var easeOut3     = function(t) { return 1 - Math.pow(1 - t, 3); };
+var easeIn3      = function(t) { return t * t * t; };
+var easeOutElast = function(t) {
+  if (t === 0 || t === 1) return t;
+  return Math.pow(2, -10 * t) * Math.sin((t * 10 - 0.75) * (2 * Math.PI / 2.8)) + 1;
+};
+var lerp    = function(a, b, t) { return a + (b - a) * t; };
+var clamp01 = function(t) { return Math.max(0, Math.min(1, t)); };
+
+var glCanvas = document.getElementById('sp-gl');
+var fxCanvas = document.getElementById('sp-fx');
+var fxCtx    = fxCanvas.getContext('2d');
+fxCanvas.width  = window.innerWidth;
+fxCanvas.height = window.innerHeight;
+
+var renderer, scene, camera, starMat, globe;
+var globeScaleCur = 0;
+
+function initThreeJS() {
+  renderer = new THREE.WebGLRenderer({ canvas: glCanvas, alpha: true, antialias: true });
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+  renderer.setSize(window.innerWidth, window.innerHeight);
+  scene  = new THREE.Scene();
+  camera = new THREE.PerspectiveCamera(48, window.innerWidth / window.innerHeight, 0.1, 600);
+  camera.position.set(0, 1.5, 7);
+  camera.lookAt(0, -1.5, 0);
+
+  var sv = [];
+  for (var i = 0; i < 4500; i++) {
+    var th = Math.random() * Math.PI * 2, ph = Math.acos(2 * Math.random() - 1), r = 80 + Math.random() * 60;
+    sv.push(r * Math.sin(ph) * Math.cos(th), r * Math.sin(ph) * Math.sin(th), r * Math.cos(ph));
+  }
+  var sg = new THREE.BufferGeometry();
+  sg.setAttribute('position', new THREE.Float32BufferAttribute(sv, 3));
+  starMat = new THREE.PointsMaterial({ color: 0xffffff, size: 0.22, transparent: true, opacity: 0 });
+  scene.add(new THREE.Points(sg, starMat));
+
+  var R = 5.5;
+  globe = new THREE.Mesh(
+    new THREE.SphereGeometry(R, 72, 72),
+    new THREE.MeshPhongMaterial({ color: 0x060c28, emissive: 0x0b1e70, emissiveIntensity: .28, specular: 0x1640a0, shininess: 20 })
+  );
+  globe.position.set(0, -8.5, 0);
+  globe.scale.set(0, 0, 0);
+  scene.add(globe);
+
+  globe.add(new THREE.Mesh(new THREE.SphereGeometry(R + .22, 72, 72),
+    new THREE.MeshPhongMaterial({ color: 0x1a5cff, emissive: 0x0033cc, transparent: true, opacity: .17, side: THREE.BackSide })));
+  globe.add(new THREE.Mesh(new THREE.SphereGeometry(R + .10, 72, 72),
+    new THREE.MeshBasicMaterial({ color: 0xff6600, transparent: true, opacity: .06, depthWrite: false })));
+
+  var lv = [];
+  for (var j = 0; j < 650; j++) {
+    var lat = (Math.random() - .5) * Math.PI * .82, lon = Math.random() * Math.PI * 2, r2 = R + .04;
+    lv.push(r2 * Math.cos(lat) * Math.cos(lon), r2 * Math.sin(lat), r2 * Math.cos(lat) * Math.sin(lon));
+  }
+  var lg = new THREE.BufferGeometry();
+  lg.setAttribute('position', new THREE.Float32BufferAttribute(lv, 3));
+  globe.add(new THREE.Points(lg, new THREE.PointsMaterial({ color: 0xffcc55, size: .06, transparent: true, opacity: .8 })));
+  globe.add(new THREE.Mesh(new THREE.SphereGeometry(R + .01, 32, 32),
+    new THREE.MeshBasicMaterial({ color: 0x1a4aff, wireframe: true, transparent: true, opacity: .05 })));
+  globe.add(new THREE.Mesh(new THREE.TorusGeometry(R, .055, 8, 140),
+    new THREE.MeshBasicMaterial({ color: 0x4488ff, transparent: true, opacity: .45 })));
+
+  scene.add(new THREE.AmbientLight(0x0f1135, 1.4));
+  var sun = new THREE.DirectionalLight(0x4488ff, 3.5); sun.position.set(7, 5, 6); scene.add(sun);
+  var rim = new THREE.DirectionalLight(0x2244ff, 1.8); rim.position.set(-6, 2, -4); scene.add(rim);
+}
+
+var s3 = document.createElement('script');
+s3.src = 'https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js';
+s3.crossOrigin = 'anonymous';
+s3.onload  = function () { initThreeJS(); };
+s3.onerror = function () { glCanvas.style.background = 'radial-gradient(ellipse at 50% 110%, #0c1a4a 0%, #020810 55%)'; };
+document.head.appendChild(s3);
+
+window.addEventListener('resize', function () {
+  if (renderer && camera) {
+    camera.aspect = window.innerWidth / window.innerHeight;
+    camera.updateProjectionMatrix();
+    renderer.setSize(window.innerWidth, window.innerHeight);
+  }
+  fxCanvas.width = window.innerWidth; fxCanvas.height = window.innerHeight;
+});
+
+var particles = [];
+var BURST_COLORS = ['#3b82f6','#7c3aed','#60a5fa','#ffffff','#a78bfa','#fbbf24','#f0f9ff','#818cf8','#38bdf8','#34d399'];
+
+function spawnBurst(cx, cy) {
+  for (var i = 0; i < 340; i++) {
+    var ang = Math.random() * Math.PI * 2, spd = 1.5 + Math.random() * 16;
+    particles.push({ x: cx, y: cy, vx: Math.cos(ang)*spd, vy: Math.sin(ang)*spd - 1.5 - Math.random()*5,
+      sz: 1.5 + Math.random()*5.5, alpha: 1, color: BURST_COLORS[Math.floor(Math.random()*BURST_COLORS.length)],
+      decay: .012 + Math.random()*.018, grav: .10 + Math.random()*.13, type: Math.random() < .28 ? 'star' : 'dot' });
+  }
+  for (var j = 0; j < 50; j++) {
+    var ang2 = Math.random()*Math.PI*2, spd2 = 11 + Math.random()*24;
+    particles.push({ x: cx, y: cy, vx: Math.cos(ang2)*spd2, vy: Math.sin(ang2)*spd2 - 4,
+      sz: 2, alpha: 1, color: '#fff', decay: .018, grav: .07, type: 'streak' });
+  }
+  for (var k = 0; k < 18; k++) {
+    var ang3 = Math.random()*Math.PI*2, spd3 = 2 + Math.random()*6;
+    particles.push({ x: cx, y: cy, vx: Math.cos(ang3)*spd3, vy: Math.sin(ang3)*spd3 - 2,
+      sz: 6 + Math.random()*8, alpha: 1, color: BURST_COLORS[Math.floor(Math.random()*4)],
+      decay: .008, grav: .05, type: 'diamond' });
+  }
+}
+
+function draw4Star(ctx, x, y, r, color) {
+  ctx.beginPath();
+  for (var i = 0; i < 8; i++) {
+    var a = (i*Math.PI)/4 - Math.PI/2, ri = i%2===0 ? r : r*.30;
+    if (i===0) ctx.moveTo(x+ri*Math.cos(a), y+ri*Math.sin(a));
+    else       ctx.lineTo(x+ri*Math.cos(a), y+ri*Math.sin(a));
+  }
+  ctx.closePath(); ctx.fillStyle = color; ctx.shadowBlur = 12; ctx.shadowColor = color; ctx.fill();
+}
+function drawDiamond(ctx, x, y, r, color) {
+  ctx.beginPath();
+  ctx.moveTo(x, y-r); ctx.lineTo(x+r*.5, y); ctx.lineTo(x, y+r); ctx.lineTo(x-r*.5, y);
+  ctx.closePath(); ctx.fillStyle = color; ctx.shadowBlur = 16; ctx.shadowColor = color; ctx.fill();
+}
+function tickParticles() {
+  fxCtx.clearRect(0, 0, fxCanvas.width, fxCanvas.height);
+  for (var i = particles.length-1; i >= 0; i--) {
+    var p = particles[i];
+    if (p.alpha <= 0) { particles.splice(i, 1); continue; }
+    var px = p.x, py = p.y;
+    p.x += p.vx; p.y += p.vy; p.vy += p.grav; p.vx *= .97; p.alpha -= p.decay;
+    if (p.alpha < 0) p.alpha = 0;
+    fxCtx.save(); fxCtx.globalAlpha = Math.max(0, p.alpha);
+    if (p.type === 'star') {
+      draw4Star(fxCtx, p.x, p.y, p.sz*1.6, p.color);
+    } else if (p.type === 'streak') {
+      fxCtx.strokeStyle = p.color; fxCtx.lineWidth = 2; fxCtx.shadowBlur = 8; fxCtx.shadowColor = p.color;
+      fxCtx.beginPath(); fxCtx.moveTo(px-p.vx*2.5, py-p.vy*2.5); fxCtx.lineTo(p.x, p.y); fxCtx.stroke();
+    } else if (p.type === 'diamond') {
+      drawDiamond(fxCtx, p.x, p.y, p.sz, p.color);
+    } else {
+      fxCtx.beginPath(); fxCtx.arc(p.x, p.y, p.sz, 0, Math.PI*2);
+      fxCtx.fillStyle = p.color; fxCtx.shadowBlur = 7; fxCtx.shadowColor = p.color; fxCtx.fill();
+    }
+    fxCtx.restore();
+  }
+}
+
+var dWrap = document.getElementById('sp-d');
+var brandEl = document.getElementById('sp-brand');
+var tagEl = document.getElementById('sp-tag');
+var finalEl = document.getElementById('sp-final');
+var TAGLINE = 'SMARTER. FASTER. TOGETHER.';
+var tagIdx = 0, typeTimer = null;
+function startTyping() {
+  tagEl.classList.add('sp-show');
+  typeTimer = setInterval(function () {
+    if (tagIdx < TAGLINE.length) tagEl.textContent = TAGLINE.slice(0, ++tagIdx);
+    else clearInterval(typeTimer);
+  }, 28);
+}
+
+var t0 = null, launchT0 = null, phase = 0, burstFired = false;
+
+function frame(ts) {
+  requestAnimationFrame(frame);
+  if (!t0) t0 = ts;
+  var ms = ts - t0;
+
+  if (globe) globe.rotation.y += .0022;
+  if (starMat) starMat.opacity = clamp01(ms / 500);
+  if (globe) {
+    var gScale = easeOut3(clamp01((ms - 200) / 800));
+    globeScaleCur = lerp(globeScaleCur, gScale, .07);
+    globe.scale.set(globeScaleCur, globeScaleCur, globeScaleCur);
+  }
+
+  if (!burstFired) {
+    if (ms >= 700) {
+      var t = clamp01((ms - 700) / 550);
+      var y = lerp(-240, 0, easeOutElast(t));
+      dWrap.style.transform = 'translateY(' + y + 'px)';
+      dWrap.style.opacity   = String(Math.min(1, (ms - 700) / 150));
+    }
+    if (ms >= 1300 && phase < 2) { phase = 2; brandEl.classList.add('sp-show'); }
+    if (ms >= 1650 && phase < 3) { phase = 3; startTyping(); }
+    if (ms >= 2200 && ms < 3050) {
+      var p = .5 + .5 * Math.sin((ms - 2200) / 155);
+      var g1 = 18 + p * 50, g2 = 45 + p * 80;
+      dWrap.style.filter = 'drop-shadow(0 0 ' + g1 + 'px #3b82f6) drop-shadow(0 0 ' + g2 + 'px #7c3aed) drop-shadow(0 0 ' + (g1*.5) + 'px #fff)';
+    }
+    if (ms >= 2750 && ms < 3050) {
+      var v = (ms - 2750) / 300, shake = 3.5 * v * Math.sin(ms / 26);
+      dWrap.style.transform = 'translateY(' + shake + 'px) translateX(' + (shake*.3) + 'px)';
+    }
+    if (ms >= 3050) {
+      if (!launchT0) launchT0 = ts;
+      var lt = (ts - launchT0) / 400;
+      var ly = -easeIn3(Math.min(lt, 1)) * (window.innerHeight + 380);
+      var sc = 1 + Math.min(lt, 1) * .5;
+      dWrap.style.transform = 'translateY(' + ly + 'px) scale(' + sc + ')';
+      var gl = 80 + lt * 140;
+      dWrap.style.filter = 'drop-shadow(0 0 ' + gl + 'px #3b82f6) drop-shadow(0 0 ' + (gl*1.7) + 'px #7c3aed)';
+
+      if (lt >= 0.38 && !burstFired) {
+        burstFired = true;
+        clearInterval(typeTimer);
+        spawnBurst(window.innerWidth / 2, window.innerHeight / 2 - 30);
+        setTimeout(function () {
+          dWrap.style.transition  = 'opacity .3s'; dWrap.style.opacity  = '0';
+          brandEl.style.transition= 'opacity .4s'; brandEl.style.opacity= '0';
+          tagEl.style.transition  = 'opacity .4s'; tagEl.style.opacity  = '0';
+        }, 100);
+        setTimeout(function () { finalEl.classList.add('sp-show'); }, 900);
+        setTimeout(dismissSplash, 1800);
+      }
     }
   }
 
-  /* cycle taglines */
-  var words = ['Innovate •', 'Connect •', 'Empower •', 'Educate •', 'Attend •'];
-  var wi = 0;
-  var cyc = document.getElementById('sp-cycle');
-  var iv = setInterval(function() {
-    cyc.style.opacity = '0';
-    setTimeout(function() {
-      wi = (wi + 1) % words.length;
-      cyc.textContent = words[wi];
-      cyc.style.opacity = '1';
-    }, 200);
-  }, 520);
+  tickParticles();
+  if (renderer) renderer.render(scene, camera);
+}
 
-  /* dismiss */
-  var splash = document.getElementById('web-splash');
-  setTimeout(function() {
-    clearInterval(iv);
-    splash.style.transition = 'opacity .55s ease';
-    splash.style.opacity = '0';
-    splash.style.pointerEvents = 'none';
-    setTimeout(function() { if (splash) splash.remove(); }, 580);
-  }, 3400);
+requestAnimationFrame(frame);
 })();
 </script>
+</div>
+
 
 
   <div id="auth-page">
