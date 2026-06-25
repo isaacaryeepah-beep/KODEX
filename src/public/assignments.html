@@ -492,10 +492,6 @@ async function init(){
         links += navLink('courses', courseIcon, 'Courses');
         links += navLink('quizzes', quizIcon, 'Quizzes');
         links += navLink('announcements', annIcon, 'Announcements');
-      } else {
-        links += navLink('courses', courseIcon, 'Courses');
-        links += navLink('quizzes', quizIcon, 'Quizzes');
-        links += navLink('announcements', annIcon, 'Announcements');
       }
       extraNav.innerHTML = `<nav class="sidebar-nav" style="margin-top:0;padding-top:0">${links}</nav>`;
     }
@@ -3182,8 +3178,8 @@ async function addAIQuestionsToQuiz(quizId) {
     try {
       let body, endpoint;
       if (isSnapQuiz) {
-        // Snap quiz uses correctOptionIndex (number), not correctAnswer array
-        const correctOptionIndex = q.correctAnswers?.[0] ?? 0;
+        // Snap quiz uses correctOptionIndex (number); prefer correctAnswer for single-type
+        const correctOptionIndex = q.correctAnswer ?? q.correctAnswers?.[0] ?? 0;
         body = {
           questionType: 'mcq',
           questionText: q.questionText,
@@ -3200,8 +3196,14 @@ async function addAIQuestionsToQuiz(quizId) {
           marks: q.marks || 1,
           explanation: q.explanation || null,
         };
-        if (q.questionType === 'multiple') { body.correctAnswers = q.correctAnswers; }
-        else { body.correctAnswer = q.correctAnswers[0]; }
+        if (q.questionType === 'multiple') {
+          body.correctAnswers = q.correctAnswers;
+        } else if (q.questionType === 'fill') {
+          body.correctAnswerText = q.correctAnswerText;
+          if (q.acceptedAnswers?.length) body.acceptedAnswers = q.acceptedAnswers;
+        } else {
+          body.correctAnswer = q.correctAnswer ?? q.correctAnswers?.[0] ?? 0;
+        }
         endpoint = '/api/lecturer/quizzes/' + quizId + '/questions';
       }
       await api('POST', endpoint, body);

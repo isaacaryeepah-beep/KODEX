@@ -742,6 +742,12 @@ window.addEventListener('load', () => loadMLLibs().catch(() => {}));
     <!-- ── SIGN IN ── -->
     <div id="panel-signin">
 
+      <!-- Loading: shown while checking portal session -->
+      <div id="panel-loading" style="text-align:center;padding:16px 0">
+        <div class="spinner" style="margin:0 auto 14px"></div>
+        <p style="font-size:13px;color:rgba(255,255,255,.4)">Checking session…</p>
+      </div>
+
       <!-- Shown when no portal session found -->
       <div id="panel-no-session" style="display:none;text-align:center;padding:8px 0 4px">
         <div style="width:48px;height:48px;border-radius:14px;background:rgba(220,38,38,.15);display:flex;align-items:center;justify-content:center;margin:0 auto 14px">
@@ -753,13 +759,13 @@ window.addEventListener('load', () => loadMLLibs().catch(() => {}));
       </div>
 
       <!-- Shown when portal session is detected -->
-      <div id="panel-confirm-index">
+      <div id="panel-confirm-index" style="display:none">
         <p style="font-size:12px;color:rgba(255,255,255,.45);margin-bottom:18px;line-height:1.5">Confirm your identity to continue. Enter your index number below.</p>
         <div class="field">
           <label>Index Number</label>
           <div class="login-input-wrap">
             <svg class="login-field-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
-            <input type="text" id="login-index" placeholder="e.g. 0621NICO" autocomplete="off" autocorrect="off" autocapitalize="characters" spellcheck="false" oninput="clearAuthErr()" onkeydown="if(event.key==='Enter')document.getElementById('login-btn').click()" style="text-transform:uppercase"/>
+            <input type="text" id="login-index" placeholder="e.g. 0621NICO" autocomplete="off" autocorrect="off" autocapitalize="characters" spellcheck="false" style="text-transform:uppercase"/>
           </div>
         </div>
         <button class="btn btn-primary" id="login-btn" type="button">
@@ -770,9 +776,9 @@ window.addEventListener('load', () => loadMLLibs().catch(() => {}));
       </div>
 
       <div class="login-footer-links" style="margin-top:18px">
-        <a onclick="showSnapLegal('terms')">Terms</a>
+        <a id="link-terms" style="cursor:pointer">Terms</a>
         <span class="dot"></span>
-        <a onclick="showSnapLegal('privacy')">Privacy</a>
+        <a id="link-privacy" style="cursor:pointer">Privacy</a>
         <span class="dot"></span>
         <span>&copy; 2025 DIKLY</span>
       </div>
@@ -1183,30 +1189,44 @@ function showAuthError(elId, msg) {
 // ── Sign In handler ───────────────────────────────────────────────
 // ── Auto-detect portal session on load ───────────────────────────────────────
 (async function initExamPortal() {
+  function showPanel(id) {
+    document.getElementById('panel-loading').style.display = 'none';
+    document.getElementById('panel-no-session').style.display = 'none';
+    document.getElementById('panel-confirm-index').style.display = 'none';
+    document.getElementById(id).style.display = 'block';
+  }
+
   const portalToken = localStorage.getItem('token');
   if (!portalToken) {
-    // No portal session — show message to go log in first
-    document.getElementById('panel-confirm-index').style.display = 'none';
-    document.getElementById('panel-no-session').style.display = 'block';
+    showPanel('panel-no-session');
     show('login-screen');
     return;
   }
 
-  // Try to verify the portal token
   state.token = portalToken;
   try {
     const data = await api('GET', '/api/auth/me');
     if (data.user?.role !== 'student') throw new Error('not-student');
     state.user = data.user;
-    // Valid student session — still ask for index number confirmation
+    showPanel('panel-confirm-index');
+    document.getElementById('login-index')?.focus();
     show('login-screen');
   } catch {
     state.token = null;
-    document.getElementById('panel-confirm-index').style.display = 'none';
-    document.getElementById('panel-no-session').style.display = 'block';
+    showPanel('panel-no-session');
     show('login-screen');
   }
 })();
+
+// Terms / Privacy links via addEventListener (no inline onclick needed)
+document.getElementById('link-terms').addEventListener('click', () => showSnapLegal('terms'));
+document.getElementById('link-privacy').addEventListener('click', () => showSnapLegal('privacy'));
+
+// Enter key on index-number input triggers CONTINUE
+document.getElementById('login-index').addEventListener('keydown', (e) => {
+  if (e.key === 'Enter') document.getElementById('login-btn').click();
+});
+document.getElementById('login-index').addEventListener('input', clearAuthErr);
 
 document.getElementById('login-btn').addEventListener('click', async () => {
   const entered = (document.getElementById('login-index')?.value || '').trim().toUpperCase();
@@ -1276,13 +1296,13 @@ function showLoginError(msg) {
 
 document.getElementById('logout-btn').addEventListener('click', () => {
   state.token = null; state.user = null;
-  // Re-run init to show the correct panel
   const portalToken = localStorage.getItem('token');
+  document.getElementById('panel-loading').style.display = 'none';
+  document.getElementById('panel-confirm-index').style.display = 'none';
+  document.getElementById('panel-no-session').style.display = 'none';
   if (!portalToken) {
-    document.getElementById('panel-confirm-index').style.display = 'none';
     document.getElementById('panel-no-session').style.display = 'block';
   } else {
-    document.getElementById('panel-no-session').style.display = 'none';
     document.getElementById('panel-confirm-index').style.display = 'block';
   }
   const idx = document.getElementById('login-index');
