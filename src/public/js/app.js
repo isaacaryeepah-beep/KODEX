@@ -23461,7 +23461,7 @@ async function renderAIReports() {
             </div>
           </div>
           <div style="margin-top:.85rem;display:flex;gap:.5rem">
-            <button class="btn btn-sm btn-primary" style="flex:1;font-size:.78rem" onclick="event.stopPropagation();aiReportGenerate('${type}')">
+            <button class="btn btn-sm btn-primary" style="flex:1;font-size:.78rem" onclick="event.stopPropagation();aiReportOpen('${type}')">
               ${svgIcon('<path d="M15 4V2"/><path d="M15 16v-2"/><path d="M8 9h2"/><path d="M20 9h2"/><path d="M17.8 11.8 19 13"/><path d="M15 9h.01"/><path d="M17.8 6.2 19 5"/><path d="M13.2 6.2 12 5"/><path d="M3 21l9-9"/>', 12)}
               Generate
             </button>
