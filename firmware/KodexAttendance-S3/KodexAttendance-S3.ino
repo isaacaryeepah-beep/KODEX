@@ -739,12 +739,13 @@ static bool touchRead(uint16_t& tx, uint16_t& ty) {
 
   if ((td & 0x0F) == 0) return false;
 
-  // FT6336G on ES3C28P: chip is mounted 180° relative to the display.
-  // Both axes must be inverted to match portrait screen coordinates.
+  // FT6336G on ES3C28P: chip is mounted 180° — raw coords are inverted.
+  // With display setRotation(2) (also 180°), the two inversions cancel out:
+  // raw coords map directly to display coords with no adjustment needed.
   uint16_t rawX = ((xh & 0x0F) << 8) | xl;
   uint16_t rawY = ((yh & 0x0F) << 8) | yl;
-  tx = (SW - 1) - rawX;   // mirror X
-  ty = (SH - 1) - rawY;   // mirror Y
+  tx = rawX;
+  ty = rawY;
   return true;
 }
 
@@ -2577,7 +2578,6 @@ static void drawSession(const String& code, uint32_t secsLeft, uint32_t secsTota
   // ── Header ───────────────────────────────────────────────────────────────────
   spr.fillRect(0, 0, SW, 44, COL_CARD);
   spr.fillRect(0, 44, SW, 2, COL_SUCCESS);
-  // Live session indicator — pulsing dot
   uint32_t ms = millis();
   uint16_t dotPulse = ((ms / 600) % 2 == 0) ? COL_SUCCESS : 0x1342;
   spr.fillCircle(14, 22, 6, dotPulse);
@@ -2585,84 +2585,74 @@ static void drawSession(const String& code, uint32_t secsLeft, uint32_t secsTota
   spr.fillCircle(14, 22, 1, dotPulse);
   spr.setFont(F_SMALL); spr.setTextColor(COL_SUCCESS, COL_CARD);
   spr.setCursor(26, 14); spr.print("Session Active");
-  // Online dot top-right
   bool online = (WiFi.status() == WL_CONNECTED);
   uint16_t odC = online ? COL_SUCCESS : COL_MUTED;
   spr.fillCircle(219, 14, 4, odC);
   spr.setFont(F_TINY); spr.setTextColor(odC, COL_CARD);
   spr.setCursor(227, 8); spr.print(online ? "ON" : "OFF");
 
-  drawTabBar(spr, 1);  // Session tab active
+  drawTabBar(spr, 1);
 
-  // ── Course + Lecturer row card (y=56..90) ─────────────────────────────────────
-  spr.fillRoundRect(8, 56, SW - 16, 34, 6, COL_CARD);
-  spr.drawRoundRect(8, 56, SW - 16, 34, 6, COL_BORDER);
-
+  // ── Course + Lecturer row (compact) ──────────────────────────────────────────
+  spr.fillRoundRect(8, 52, SW - 16, 26, 5, COL_CARD);
+  spr.drawRoundRect(8, 52, SW - 16, 26, 5, COL_BORDER);
   String courseStr = sessionCourse.isEmpty() ? sessionTitle : sessionCourse;
   if (courseStr.isEmpty()) courseStr = "Attendance";
-  spr.setFont(F_SMALL); spr.setTextColor(COL_TEXT, COL_CARD);
-  if (spr.textWidth(courseStr) > SW - 100) courseStr = courseStr.substring(0, 12) + "..";
+  spr.setFont(F_TINY); spr.setTextColor(COL_TEXT, COL_CARD);
+  if (spr.textWidth(courseStr) > SW - 100) courseStr = courseStr.substring(0, 14) + "..";
   spr.setCursor(14, 62); spr.print(courseStr);
-
   if (!sessionLecturer.isEmpty()) {
-    spr.setFont(F_TINY); spr.setTextColor(COL_MUTED, COL_CARD);
     String lect = sessionLecturer;
     if (spr.textWidth(lect) > 110) lect = lect.substring(0, 16) + "..";
     int32_t lw2 = spr.textWidth(lect);
-    spr.setCursor(SW - lw2 - 14, 70); spr.print(lect);
+    spr.setTextColor(COL_MUTED, COL_CARD);
+    spr.setCursor(SW - lw2 - 14, 62); spr.print(lect);
   }
 
-  // ── Timer (directly below header) ────────────────────────────────────────────
+  // ── Rotating CODE — the main thing students need to see ──────────────────────
+  spr.setFont(F_TINY); spr.setTextColor(COL_MUTED, COL_BG);
+  const char* codeLbl = "ATTENDANCE CODE";
+  int32_t lw = spr.textWidth(codeLbl);
+  spr.setCursor((SW - lw) / 2, 88); spr.print(codeLbl);
+
+  spr.setFont(F_LARGE); spr.setTextColor(COL_SUCCESS, COL_BG);
+  int32_t codeW = spr.textWidth(code.c_str());
+  spr.setCursor((SW - codeW) / 2, 102); spr.print(code.c_str());
+
+  // Code rotates every WINDOW_SECONDS — show a small bar beneath it
   uint16_t barCol = secsLeft > 120 ? COL_SUCCESS : secsLeft > 60 ? COL_WARNING : COL_ERROR;
+  uint32_t codeSecsLeft = WINDOW_SECONDS - (time(nullptr) % WINDOW_SECONDS);
+  int32_t codeBarW = (int32_t)((SW - 32) * codeSecsLeft / WINDOW_SECONDS);
+  spr.fillRoundRect(16, 155, SW - 32, 3, 1, COL_DIM_CARD);
+  if (codeBarW > 0) spr.fillRoundRect(16, 155, codeBarW, 3, 1, COL_PRIMARY);
+  spr.setFont(F_TINY); spr.setTextColor(COL_MUTED, COL_BG);
+  char rotBuf[18]; snprintf(rotBuf, sizeof(rotBuf), "rotates in %lus", (unsigned long)codeSecsLeft);
+  lw = spr.textWidth(rotBuf);
+  spr.setCursor((SW - lw) / 2, 162); spr.print(rotBuf);
+
+  // ── Session timer bar ─────────────────────────────────────────────────────────
   uint32_t mins = secsLeft / 60, secs = secsLeft % 60;
   char timerBuf[12];
-  if (mins > 0) snprintf(timerBuf, sizeof(timerBuf), "%um %02us", (unsigned)mins, (unsigned)secs);
-  else          snprintf(timerBuf, sizeof(timerBuf), "%us", (unsigned)secs);
+  if (mins > 0) snprintf(timerBuf, sizeof(timerBuf), "%um %02us left", (unsigned)mins, (unsigned)secs);
+  else          snprintf(timerBuf, sizeof(timerBuf), "%us left", (unsigned)secs);
   spr.setFont(F_TINY); spr.setTextColor(barCol, COL_BG);
-  int32_t tw = spr.textWidth(timerBuf);
-  spr.setCursor((SW - tw) / 2, 96); spr.print(timerBuf);
+  lw = spr.textWidth(timerBuf);
+  spr.setCursor((SW - lw) / 2, 178); spr.print(timerBuf);
   int32_t barW = (secsTotal > 0) ? (int32_t)((SW - 32) * secsLeft / secsTotal) : 0;
-  spr.fillRoundRect(16, 106, SW - 32, 4, 2, COL_DIM_CARD);
-  if (barW > 0) spr.fillRoundRect(16, 106, barW, 4, 2, barCol);
+  spr.fillRoundRect(16, 190, SW - 32, 4, 2, COL_DIM_CARD);
+  if (barW > 0) spr.fillRoundRect(16, 190, barW, 4, 2, barCol);
 
-  // ── Stats row: Present | Time (y=116..256) ───────────────────────────────────
-  int32_t cw = (SW - 26) / 2;
-
-  // Present card — tall, big count
-  spr.fillRoundRect(8, 116, cw, 138, 6, COL_CARD);
-  spr.drawRoundRect(8, 116, cw, 138, 6, COL_BORDER);
+  // ── Present count ─────────────────────────────────────────────────────────────
+  spr.fillRoundRect(8, 200, SW - 16, 60, 6, COL_CARD);
+  spr.drawRoundRect(8, 200, SW - 16, 60, 6, COL_BORDER);
   spr.setFont(F_TINY); spr.setTextColor(COL_MUTED, COL_CARD);
-  tw = spr.textWidth("Present");
-  spr.setCursor(8 + (cw - tw) / 2, 124); spr.print("Present");
-  spr.setTextFont(7); spr.setTextSize(1);
-  spr.setTextColor(COL_SUCCESS, COL_CARD);
+  lw = spr.textWidth("Present");
+  spr.setCursor((SW - lw) / 2, 208); spr.print("Present");
+  spr.setTextFont(7); spr.setTextSize(1); spr.setTextColor(COL_SUCCESS, COL_CARD);
   String ps = String(studentsMarked);
-  tw = spr.textWidth(ps);
-  spr.setCursor(8 + (cw - tw) / 2, 148); spr.print(ps);
-  if (sessionTotalEnrolled > 0) {
-    spr.setFont(F_TINY); spr.setTextColor(COL_MUTED, COL_CARD);
-    String totLbl = "/ " + String(sessionTotalEnrolled);
-    tw = spr.textWidth(totLbl);
-    spr.setCursor(8 + (cw - tw) / 2, 238); spr.print(totLbl);
-  }
-
-  // Time card
-  int32_t tc = 18 + cw;
-  spr.fillRoundRect(tc, 116, cw, 138, 6, COL_CARD);
-  spr.drawRoundRect(tc, 116, cw, 138, 6, COL_BORDER);
-  time_t nowT = time(nullptr); struct tm tmNow; localtime_r(&nowT, &tmNow);
-  char timeBuf[9]; strftime(timeBuf, sizeof(timeBuf), "%I:%M %p", &tmNow);
-  spr.setFont(F_TINY); spr.setTextColor(COL_MUTED, COL_CARD);
-  tw = spr.textWidth("Time");
-  spr.setCursor(tc + (cw - tw) / 2, 124); spr.print("Time");
-  spr.setFont(F_SMALL); spr.setTextColor(COL_TEXT, COL_CARD);
-  tw = spr.textWidth(timeBuf);
-  spr.setCursor(tc + (cw - tw) / 2, 170); spr.print(timeBuf);
-  uint16_t sdC = sdAvailable ? COL_SUCCESS : COL_MUTED;
-  spr.fillCircle(tc + 10, 241, 3, sdC);
-  spr.setFont(F_TINY); spr.setTextColor(sdC, COL_CARD);
-  spr.setCursor(tc + 17, 238);
-  spr.print(sdAvailable ? (sdRecordCount > 0 ? "SD pend" : "SD OK") : "RAM");
+  if (sessionTotalEnrolled > 0) ps += " / " + String(sessionTotalEnrolled);
+  lw = spr.textWidth(ps);
+  spr.setCursor((SW - lw) / 2, 224); spr.print(ps);
 
   spr.pushSprite(0, 0);
 }
@@ -4619,7 +4609,7 @@ static void registerLocalHttp() {
         "<div style='text-align:center;max-width:300px'>"
         "<div style='font-size:24px;font-weight:900;margin-bottom:12px'>Di<span style='color:#4f6ef7'>kly</span></div>"
         "<p style='color:#f87171;font-size:14px;line-height:1.7'>"
-        "No offline bundle loaded.<br>Connect the device to the internet first, wait 10 minutes, then try again.</p>"
+        "No offline bundle loaded.<br>Connect the device to the internet first — it will sync automatically within a few seconds.</p>"
         "</div></body></html>");
       return;
     }
