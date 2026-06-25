@@ -234,6 +234,7 @@ public:
 #include "lwip/etharp.h"   // ARP table for IP→MAC→RSSI mapping
 #include <ArduinoOTA.h>
 #include <Update.h>
+#include <vector>
 
 // lwIP's etharp.h does not always export ARP_TABLE_SIZE publicly.
 // Define a safe upper bound if not already provided by the SDK.
@@ -366,6 +367,12 @@ uint32_t sessionStartedAt = 0;
 // Compact JSON: [{"courseId":...,"courseCode":...,"courseName":...,"lecturers":[{"id":...,"name":...,"offlinePinHash":...}]}]
 static String bundleJson = "";
 static bool   bundleLoaded = false;
+
+// RAM copy of enrolled student index numbers — loaded by downloadRoster().
+// Primary roster check in /attend uses this; SD file is the fallback.
+// Empty = roster never downloaded yet (device just paired, no internet yet).
+static std::vector<String> rosterRam;
+
 uint32_t sessionDuration  = 300;
 uint32_t studentsMarked       = 0;
 uint32_t sessionTotalEnrolled = 0;   // parsed from heartbeat totalEnrolled
@@ -1143,6 +1150,7 @@ static void downloadRoster() {
     JsonDocument rDoc;
     if (!deserializeJson(rDoc, resp)) {
       JsonArray arr = rDoc["roster"].as<JsonArray>();
+      // Write SD index file for persistent fallback across reboots
       File ix = SD_MMC.open("/roster_idx.txt", FILE_WRITE);
       if (ix) {
         for (JsonObject student : arr) {
@@ -1152,6 +1160,13 @@ static void downloadRoster() {
         ix.close();
         LOG("Roster index written (" + String(arr.size()) + " entries)");
       }
+      // Also load into RAM for fast O(n) check in /attend without SD read
+      rosterRam.clear();
+      for (JsonObject student : arr) {
+        const char* idx = student["indexNumber"] | "";
+        if (idx[0]) rosterRam.push_back(String(idx));
+      }
+      LOG("Roster loaded to RAM: " + String(rosterRam.size()) + " students");
     }
   } else {
     LOG("Roster fetch failed: " + String(code));
@@ -4190,21 +4205,36 @@ static void registerLocalHttp() {
       }
     }
 
-    // ── Roster validation (soft — gracefully skips if index file missing) ─────
-    // Prevents unknown index numbers from being recorded offline.
-    if (indexNum.length() && sdAvailable && SD_MMC.exists("/roster_idx.txt")) {
-      File ix = SD_MMC.open("/roster_idx.txt", FILE_READ);
-      bool found = false;
-      if (ix) {
-        while (ix.available() && !found) {
-          String line = ix.readStringUntil('\n');
-          line.trim();
-          if (line.equalsIgnoreCase(indexNum)) found = true;
+    // ── Roster validation — blocks students from other classes/departments ──────
+    // RAM roster (primary): populated on every successful downloadRoster() call.
+    // SD fallback: read from /roster_idx.txt after a reboot before first heartbeat.
+    // If neither is available (brand-new device, never connected): allow through;
+    // the server re-validates online and the offline record is safe to sync later.
+    if (indexNum.length()) {
+      bool found  = false;
+      bool hasRoster = false;
+      if (!rosterRam.empty()) {
+        // Fast RAM check — O(n), no SD read needed
+        hasRoster = true;
+        for (const String& s : rosterRam) {
+          if (s.equalsIgnoreCase(indexNum)) { found = true; break; }
         }
-        ix.close();
+      } else if (sdAvailable && SD_MMC.exists("/roster_idx.txt")) {
+        // Fallback: scan SD file (slower, only used if RAM roster not loaded yet)
+        hasRoster = true;
+        File ix = SD_MMC.open("/roster_idx.txt", FILE_READ);
+        if (ix) {
+          while (ix.available()) {
+            String line = ix.readStringUntil('\n'); line.trim();
+            if (line.equalsIgnoreCase(indexNum)) { found = true; break; }
+          }
+          ix.close();
+        }
       }
-      if (!found) {
-        localHttp.send(403, "application/json", "{\"error\":\"Your student ID is not enrolled in this class.\"}"); return;
+      if (hasRoster && !found) {
+        localHttp.send(403, "application/json",
+          "{\"error\":\"You are not enrolled in this class.\"}");
+        return;
       }
     }
 
