@@ -30,16 +30,20 @@ function requireHodDept(req, res) {
 
 // ─── GET /api/hod/locked-students ────────────────────────────────────────────
 exports.listLockedStudents = async (req, res) => {
-  if (!requireHodDept(req, res)) return;
   try {
     const now = new Date();
-    const filter = hodDeptFilter(req, {
+    // Scope by company only — students in academic mode are classified by
+    // programme/level/group, not department, so a department filter would
+    // exclude most locked students.  Any HOD or admin can unlock any student
+    // in the institution.
+    const filter = {
+      company: req.user.company,
       role: "student",
       $or: [
         { isLocked: true },
         { "accountDeviceLock.isLocked": true, "accountDeviceLock.lockedUntil": { $gt: now } },
       ],
-    });
+    };
 
     const students = await User.find(filter)
       .select("name IndexNumber department lockReason lockedAt lockedBy failedLoginAttempts lastFailedLoginAt accountDeviceLock isLocked")
@@ -56,22 +60,22 @@ exports.listLockedStudents = async (req, res) => {
 
 // ─── PATCH /api/hod/unlock/:userId ───────────────────────────────────────────
 exports.unlockStudent = async (req, res) => {
-  if (!requireHodDept(req, res)) return;
   if (!isValidObjectId(req.params.userId)) return res.status(400).json({ error: "Invalid userId" });
   try {
     const now = new Date();
-    const filter = hodDeptFilter(req, {
-      _id:  req.params.userId,
-      role: "student",
+    const filter = {
+      _id:     req.params.userId,
+      company: req.user.company,
+      role:    "student",
       $or: [
         { isLocked: true },
         { "accountDeviceLock.isLocked": true, "accountDeviceLock.lockedUntil": { $gt: now } },
       ],
-    });
+    };
 
     const student = await User.findOne(filter);
     if (!student) {
-      return res.status(404).json({ error: "Locked student not found in your department scope" });
+      return res.status(404).json({ error: "Locked student not found" });
     }
 
     const prevReason = student.lockReason;
@@ -368,7 +372,6 @@ exports.getAlerts = async (req, res) => {
 
 // ─── POST /api/hod/bulk-unlock ────────────────────────────────────────────────
 exports.bulkUnlockStudents = async (req, res) => {
-  if (!requireHodDept(req, res)) return;
   try {
     const { userIds, note } = req.body;
     if (!Array.isArray(userIds) || userIds.length === 0) {
@@ -379,14 +382,15 @@ exports.bulkUnlockStudents = async (req, res) => {
     }
 
     const now = new Date();
-    const filter = hodDeptFilter(req, {
+    const filter = {
       _id: { $in: userIds },
+      company: req.user.company,
       role: "student",
       $or: [
         { isLocked: true },
         { "accountDeviceLock.isLocked": true, "accountDeviceLock.lockedUntil": { $gt: now } },
       ],
-    });
+    };
     const students = await User.find(filter).lean();
 
     await User.updateMany(
