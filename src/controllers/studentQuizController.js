@@ -22,7 +22,6 @@ exports.listQuizzes = async (req, res) => {
       company: req.user.company,
       course: { $in: enrolledIds },
       isActive: true,
-      startTime: { $lte: now },
       endTime: { $gte: now },
     };
 
@@ -34,7 +33,6 @@ exports.listQuizzes = async (req, res) => {
     }
 
     if (req.query.showAll === "true") {
-      delete filter.startTime;
       delete filter.endTime;
     }
 

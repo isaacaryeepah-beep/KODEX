@@ -28,6 +28,7 @@ const SnapQuizResult         = require("../models/SnapQuizResult");
 const { SNAP_QUIZ_STATUSES, SECURITY_PRESETS } = require("../models/SnapQuiz");
 const { ATTEMPT_STATUSES, GRADING_STATUSES } = require("../models/SnapQuizAttempt");
 const { autoGradeAttempt } = require("../services/quizGradingService");
+const { handleControllerError } = require("../utils/controllerHelpers");
 
 // ─── Quiz CRUD ───────────────────────────────────────────────────────────────
 
@@ -397,7 +398,8 @@ exports.createQuestion = async (req, res) => {
 
     const last = await SnapQuizQuestion.findOne({ quiz: quiz._id })
       .sort({ orderIndex: -1 }).select("orderIndex").lean();
-    const orderIndex = req.body.orderIndex ?? (last ? last.orderIndex + 1 : 0);
+    const lastOrderIndex = last?.orderIndex;
+    const orderIndex = req.body.orderIndex ?? (Number.isFinite(lastOrderIndex) ? lastOrderIndex + 1 : 0);
 
     const ALLOWED_CREATE_FIELDS = [
       "questionType","questionText","media","options","optionMedia",
@@ -420,9 +422,7 @@ exports.createQuestion = async (req, res) => {
 
     return res.status(201).json({ question });
   } catch (err) {
-    if (err.name === "ValidationError") return res.status(400).json({ error: err.message });
-    console.error("[snapQuiz createQuestion]", err);
-    return res.status(500).json({ error: "Internal server error" });
+    handleControllerError(res, err, "[snapQuiz createQuestion]", { defaultMessage: "Failed to add question" });
   }
 };
 

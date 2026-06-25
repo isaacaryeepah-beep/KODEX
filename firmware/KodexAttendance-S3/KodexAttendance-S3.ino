@@ -273,7 +273,7 @@ static const uint8_t SD_CLK = 38, SD_CMD = 40, SD_D0 = 39;
 static const uint8_t SD_D1  = 41, SD_D2  = 48, SD_D3 = 47;
 
 // ─── App Config ──────────────────────────────────────────────────────────────
-static const char*   FIRMWARE_VERSION     = "s3-2.9.0";
+static const char*   FIRMWARE_VERSION     = "s3-2.9.1";
 static const char*   DEFAULT_API_BASE     = "https://dikly.sbs";
 
 static const uint32_t HEARTBEAT_MS        = 5000;
@@ -4490,8 +4490,8 @@ static void registerLocalHttp() {
       localHttp.send(409, "application/json", "{\"error\":\"Session already active. Stop it first.\"}"); return;
     }
 
-    String pin        = req["pin"]        | "";
-    String employeeId = req["employeeId"] | "";  // staff/employee ID from the /start form
+    String pin          = req["pin"]          | "";
+    String lecturerName = req["lecturerName"] | "";  // lecturer name from the /start form
     String courseCode = req["courseCode"] | "";
     String courseIdV  = req["courseId"]   | "";
     String title      = req["title"]      | "Attendance";
@@ -4503,8 +4503,8 @@ static void registerLocalHttp() {
     if (bundleLoaded) {
       // ── Lecturer-centric bundle lookup + PIN verification ──────────────────
       // Bundle format: [{id, employeeId, name, offlinePinHash, courses:[{courseId,courseCode,courseName,level,group}]}]
-      if (employeeId.isEmpty()) {
-        localHttp.send(400, "application/json", "{\"error\":\"Enter your Staff ID.\"}"); return;
+      if (lecturerName.isEmpty()) {
+        localHttp.send(400, "application/json", "{\"error\":\"Enter your name.\"}"); return;
       }
       if (pin.length() != 4) {
         localHttp.send(400, "application/json", "{\"error\":\"Enter your 4-digit PIN.\"}"); return;
@@ -4518,13 +4518,13 @@ static void registerLocalHttp() {
         localHttp.send(500, "application/json", "{\"error\":\"Bundle parse error.\"}"); return;
       }
 
-      bool lectFound   = false;
-      bool courseFound = false;
-      String empUpper  = employeeId; empUpper.toUpperCase();
+      bool lectFound    = false;
+      bool courseFound  = false;
+      String nameUpper  = lecturerName; nameUpper.toUpperCase();
 
       for (JsonObject lect : bDoc.as<JsonArray>()) {
-        String emp = String(lect["employeeId"] | ""); emp.toUpperCase();
-        if (emp != empUpper) continue;
+        String n = String(lect["name"] | ""); n.toUpperCase();
+        if (n != nameUpper) continue;
         lectFound  = true;
         lecturerId = String(lect["id"]   | "");
         lecturer   = String(lect["name"] | "");
@@ -4566,7 +4566,7 @@ static void registerLocalHttp() {
 
       if (!lectFound) {
         localHttp.send(404, "application/json",
-          "{\"error\":\"Staff ID not found. Check your Employee ID.\"}"); return;
+          "{\"error\":\"Name not found. Check your spelling.\"}"); return;
       }
     }
     // No bundle: manual form values (courseCode + title) used as-is, no PIN check.
@@ -4801,11 +4801,11 @@ static void registerLocalHttp() {
       "&#x26A0; PIN not set. Log into <strong>dikly.sbs</strong> &rarr; Settings &rarr; "
       "<strong>Set Attendance PIN</strong>, then return here."
       "</div>"
-      // Step 1: Employee ID
+      // Step 1: Name
       "<div id='s1'>"
-      "<label>Staff / Employee ID</label>"
-      "<input type='text' id='eid' placeholder='e.g. L0042'"
-      " autocomplete='off' autocorrect='off' autocapitalize='characters'>"
+      "<label>Your Name</label>"
+      "<input type='text' id='ename' placeholder='e.g. Dr. Smith'"
+      " autocomplete='off' autocorrect='off' autocapitalize='words'>"
       "<button onclick='findCourses()'>Find My Courses &#x2192;</button>"
       "</div>"
       // Step 2: Course + PIN (hidden until step 1)
@@ -4825,7 +4825,7 @@ static void registerLocalHttp() {
       "<label>Your Attendance PIN</label>"
       "<input type='password' id='pin' placeholder='4-digit PIN' maxlength='4' inputmode='numeric' autocomplete='off'>"
       "<button id='btn' onclick='go()'>Start Session &#x2192;</button>"
-      "<button class='back' onclick='back()'>&#x2190; Change ID</button>"
+      "<button class='back' onclick='back()'>&#x2190; Change Name</button>"
       "</div>"
       "<div class='ok' id='ok'>"
       "<div class='ck'>&#x1F3AB;</div><h2>Session Started!</h2>"
@@ -4835,11 +4835,11 @@ static void registerLocalHttp() {
       "var bundle=") + bundleEscaped + String(";"
       "var curLect=null;"
       "function findCourses(){"
-      "var eid=document.getElementById('eid').value.trim().toUpperCase();"
+      "var ename=document.getElementById('ename').value.trim();"
       "var err=document.getElementById('err');err.style.display='none';"
-      "if(!eid){err.textContent='Enter your Staff ID.';err.style.display='block';return;}"
-      "curLect=bundle.find(function(l){return (l.employeeId||'').toUpperCase()===eid;});"
-      "if(!curLect){err.textContent='Staff ID not found. Check your Employee ID.';err.style.display='block';return;}"
+      "if(!ename){err.textContent='Enter your name.';err.style.display='block';return;}"
+      "curLect=bundle.find(function(l){return (l.name||'').toUpperCase()===ename.toUpperCase();});"
+      "if(!curLect){err.textContent='Name not found. Check your spelling.';err.style.display='block';return;}"
       "document.getElementById('who').textContent='\xf0\x9f\x91\xa4 '+curLect.name;"
       "document.getElementById('pinwarn').style.display=curLect.offlinePinHash?'none':'block';"
       "var sel=document.getElementById('csel');"
@@ -4870,7 +4870,7 @@ static void registerLocalHttp() {
       "if(pin.length!==4){err.textContent='Enter your 4-digit PIN.';err.style.display='block';return;}"
       "var btn=document.getElementById('btn');btn.textContent='Starting\xe2\x80\xa6';btn.disabled=true;"
       "fetch('/session/start',{method:'POST',headers:{'Content-Type':'application/json'},"
-      "body:JSON.stringify({employeeId:curLect.employeeId,courseId:cid,"
+      "body:JSON.stringify({lecturerName:curLect.name,courseId:cid,"
       "pin:pin,duration:parseInt(dur.value)})})"
       ".then(function(r){return r.json().then(function(d){return{ok:r.ok,d:d};});})"
       ".then(function(r){"

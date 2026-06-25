@@ -139,6 +139,7 @@ exports.listAllQuizzes = async (req, res) => {
     const enrolledIds = enrolledCourses.map(c => c._id);
 
     const showAll = req.query.showAll === "true";
+    const now = new Date();
     const filter = {
       company:     req.companyId,
       isPublished: true,
@@ -146,9 +147,7 @@ exports.listAllQuizzes = async (req, res) => {
       course:      { $in: enrolledIds },
     };
     if (!showAll) {
-      const now = new Date();
-      filter.startTime = { $lte: now };
-      filter.endTime   = { $gte: now };
+      filter.endTime = { $gte: now };
     }
 
     const quizzes = await SnapQuiz.find(filter)

@@ -11105,9 +11105,46 @@ async function deleteLecturerQuiz(quizId) {
 
 async function renderStudentQuizzes(content, showAll) {
   try {
-    const url = showAll ? '/api/student/quizzes?showAll=true' : '/api/student/quizzes';
-    const data = await api(url);
-    const raw = data.quizzes || [];
+    const param = showAll ? '?showAll=true' : '';
+    const [data, snapData] = await Promise.all([
+      api('/api/student/quizzes' + param).catch(() => ({ quizzes: [] })),
+      api('/api/student/snap-quizzes/quizzes' + param).catch(() => ({ quizzes: [] })),
+    ]);
+
+    // Normalize snap quiz entries to match the regular quiz shape for display
+    const nowMs = Date.now();
+    const snapQuizzes = (snapData.quizzes || []).map(sq => {
+      let displayStatus;
+      if (sq.canAttempt) {
+        displayStatus = 'open';
+      } else if ((sq.status === 'published' || sq.status === 'open') && sq.endTime && new Date(sq.endTime).getTime() > nowMs) {
+        displayStatus = 'upcoming';
+      } else {
+        displayStatus = 'closed';
+      }
+      return {
+        _id: sq._id,
+        title: sq.title,
+        course: sq.course,
+        startTime: sq.startTime,
+        endTime: sq.endTime,
+        timeLimit: sq.timeLimitMinutes,
+        questionCount: sq.questionCount || 0,
+        status: displayStatus,
+        canAttempt: sq.canAttempt || false,
+        canContinue: false,
+        isSubmitted: sq.isSubmitted || false,
+        myScore: null,
+        myMaxScore: null,
+        attemptsLeft: null,
+        maxAttempts: sq.allowedAttempts || 1,
+        scorePolicy: 'best',
+        attemptCount: sq.myAttemptCount || 0,
+        _isSnapQuiz: true,
+      };
+    });
+
+    const raw = [...(data.quizzes || []), ...snapQuizzes];
     const seen = new Map();
     raw.forEach(q => {
       const key = q.title + '_' + new Date(q.startTime).getTime();
@@ -11172,11 +11209,17 @@ async function renderStudentQuizzes(content, showAll) {
         ${attemptsNote ? `<div style="font-size:11px;color:var(--text-muted);margin-bottom:10px;">${attemptsNote}</div>` : ''}
 
         <div style="display:flex;gap:8px;flex-wrap:wrap;">
-          ${q.canContinue ? `<button class="btn btn-primary" style="flex:1;" onclick="startStudentQuiz('${q._id}')">▶ Continue Quiz</button>` : ''}
-          ${q.canAttempt && !q.canContinue ? `<button class="btn btn-primary" style="flex:1;" onclick="startStudentQuiz('${q._id}')">${q.attemptCount > 0 ? '↩ Retake' : '▶ Take Quiz'}</button>` : ''}
-          ${q.isSubmitted ? `<button class="btn btn-secondary" style="flex:1;" onclick="viewStudentResult('${q._id}')">📊 View Result</button>` : ''}
-          ${q.status === 'closed' && !q.isSubmitted ? `<div style="font-size:12px;color:var(--text-muted);padding:8px 0;">This quiz has closed.</div>` : ''}
-          ${q.status === 'upcoming' && !q.canAttempt ? `<div style="font-size:12px;color:#7c3aed;padding:8px 0;" id="quiz-countdown-${q._id}">Opens at ${new Date(q.startTime).toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'})}</div>` : ''}
+          ${q._isSnapQuiz ? `
+            ${q.canAttempt ? `<button class="btn btn-primary" style="flex:1;" onclick="window.open('/snap-quiz.html?quizId=${q._id}','_blank')">▶ Open Exam Portal</button>` : ''}
+            ${q.status === 'upcoming' ? `<div style="font-size:12px;color:#7c3aed;padding:8px 0;">Opens at ${new Date(q.startTime).toLocaleString()}</div>` : ''}
+            ${q.status === 'closed' ? `<div style="font-size:12px;color:var(--text-muted);padding:8px 0;">This exam has closed.</div>` : ''}
+          ` : `
+            ${q.canContinue ? `<button class="btn btn-primary" style="flex:1;" onclick="startStudentQuiz('${q._id}')">▶ Continue Quiz</button>` : ''}
+            ${q.canAttempt && !q.canContinue ? `<button class="btn btn-primary" style="flex:1;" onclick="startStudentQuiz('${q._id}')">${q.attemptCount > 0 ? '↩ Retake' : '▶ Take Quiz'}</button>` : ''}
+            ${q.isSubmitted ? `<button class="btn btn-secondary" style="flex:1;" onclick="viewStudentResult('${q._id}')">📊 View Result</button>` : ''}
+            ${q.status === 'closed' && !q.isSubmitted ? `<div style="font-size:12px;color:var(--text-muted);padding:8px 0;">This quiz has closed.</div>` : ''}
+            ${q.status === 'upcoming' && !q.canAttempt ? `<div style="font-size:12px;color:#7c3aed;padding:8px 0;" id="quiz-countdown-${q._id}">Opens at ${new Date(q.startTime).toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'})}</div>` : ''}
+          `}
         </div>
       </div>`;
     }
@@ -18029,8 +18072,14 @@ async function addAIQuizQuestions(quizId) {
         marks: q.marks || 1,
         explanation: q.explanation || null,
       };
-      if (q.questionType === 'multiple') { body.correctAnswers = q.correctAnswers; }
-      else { body.correctAnswer = q.correctAnswers[0]; }
+      if (q.questionType === 'multiple') {
+        body.correctAnswers = q.correctAnswers;
+      } else if (q.questionType === 'fill') {
+        body.correctAnswerText = q.correctAnswerText;
+        if (q.acceptedAnswers?.length) body.acceptedAnswers = q.acceptedAnswers;
+      } else {
+        body.correctAnswer = q.correctAnswer ?? q.correctAnswers?.[0] ?? 0;
+      }
       await api('/api/lecturer/quizzes/' + quizId + '/questions', { method: 'POST', body: JSON.stringify(body) });
       added++;
     } catch(e) { failed++; }

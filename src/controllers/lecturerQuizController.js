@@ -293,7 +293,7 @@ exports.addQuestion = async (req, res) => {
 
     if (!validateObjectId(res, id, "quiz ID")) return;
 
-    const quiz = await Quiz.findOne({ _id: id, company: req.user.company, createdBy: req.user._id });
+    const quiz = await Quiz.findOne({ _id: id, company: req.user.company });
     if (!quiz) {
       return res.status(404).json({ error: "Quiz not found" });
     }

@@ -122,6 +122,10 @@ exports.createAssignment = async (req, res) => {
       targetLevel:             targetLevel || null,
       targetStudyType:         targetStudyType || null,
       targetQualificationType: targetQualificationType || null,
+      // Old route has no separate publish step — treat create as immediate publish
+      status:      'published',
+      isPublished: true,
+      publishedAt: new Date(),
     });
     return res.status(201).json({ assignment });
   } catch (err) {
