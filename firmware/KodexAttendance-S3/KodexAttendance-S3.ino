@@ -260,7 +260,7 @@ static const uint8_t SD_CLK = 38, SD_CMD = 40, SD_D0 = 39;
 static const uint8_t SD_D1  = 41, SD_D2  = 48, SD_D3 = 47;
 
 // ─── App Config ──────────────────────────────────────────────────────────────
-static const char*   FIRMWARE_VERSION     = "s3-2.1.9";
+static const char*   FIRMWARE_VERSION     = "s3-2.2.0";
 static const char*   DEFAULT_API_BASE     = "https://dikly.sbs";
 
 static const uint32_t HEARTBEAT_MS        = 5000;
@@ -712,15 +712,12 @@ static bool touchRead(uint16_t& tx, uint16_t& ty) {
 
   if ((td & 0x0F) == 0) return false;
 
-  // FT6336G on ES3C28P: chip reports X/Y in portrait panel orientation.
-  // The debug dot drawn by drawSetup() will show where the chip thinks you
-  // touched — use that to confirm axis direction and swap if needed.
-  // Current mapping: direct (no swap). If dot appears mirrored, swap rawX/rawY.
-  // If dot appears upside-down, change to:  tx=rawX; ty=(SH-1)-rawY;
+  // FT6336G on ES3C28P: chip reports X/Y already in portrait orientation
+  // (Y=0 at top, Y=319 at bottom). No axis swap or inversion needed.
   uint16_t rawX = ((xh & 0x0F) << 8) | xl;
   uint16_t rawY = ((yh & 0x0F) << 8) | yl;
   tx = rawX;
-  ty = (SH - 1) - rawY;  // invert Y — touch chip reports upside-down relative to display
+  ty = rawY;
   return true;
 }
 
