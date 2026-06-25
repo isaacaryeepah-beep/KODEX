@@ -234,6 +234,7 @@ public:
 #include "lwip/etharp.h"   // ARP table for IP→MAC→RSSI mapping
 #include <ArduinoOTA.h>
 #include <Update.h>
+#include <vector>
 
 // lwIP's etharp.h does not always export ARP_TABLE_SIZE publicly.
 // Define a safe upper bound if not already provided by the SDK.
@@ -260,12 +261,12 @@ static const uint8_t SD_CLK = 38, SD_CMD = 40, SD_D0 = 39;
 static const uint8_t SD_D1  = 41, SD_D2  = 48, SD_D3 = 47;
 
 // ─── App Config ──────────────────────────────────────────────────────────────
-static const char*   FIRMWARE_VERSION     = "s3-2.2.0";
+static const char*   FIRMWARE_VERSION     = "s3-2.3.0";
 static const char*   DEFAULT_API_BASE     = "https://dikly.sbs";
 
 static const uint32_t HEARTBEAT_MS        = 5000;
 static const uint32_t WIFI_TIMEOUT_MS     = 8000;   // 8 s: typical connect is 3-5 s; fail fast on wrong creds
-static const uint32_t WINDOW_SECONDS      = 120;  // code rotation period (2 minutes)
+static const uint32_t WINDOW_SECONDS      = 300;  // code rotation period (5 minutes)
 
 // ─── Theme selector ──────────────────────────────────────────────────────────
 // Change THEME to switch the whole UI colour scheme without touching anything else.
@@ -366,6 +367,12 @@ uint32_t sessionStartedAt = 0;
 // Compact JSON: [{"courseId":...,"courseCode":...,"courseName":...,"lecturers":[{"id":...,"name":...,"offlinePinHash":...}]}]
 static String bundleJson = "";
 static bool   bundleLoaded = false;
+
+// RAM copy of enrolled student index numbers — loaded by downloadRoster().
+// Primary roster check in /attend uses this; SD file is the fallback.
+// Empty = roster never downloaded yet (device just paired, no internet yet).
+static std::vector<String> rosterRam;
+
 uint32_t sessionDuration  = 300;
 uint32_t studentsMarked       = 0;
 uint32_t sessionTotalEnrolled = 0;   // parsed from heartbeat totalEnrolled
@@ -441,7 +448,9 @@ static int presencePruneAndCount() {
 }
 
 // Screen state machine
-enum Screen { SPLASH, SETUP, WIFI_SCAN, WIFI_RECONFIG, CONNECTING, READY, SESSION_START, SESSION, SUMMARY, SETTINGS, DEVICE_INFO, PAIR_SCREEN, CHECKIN_MONITOR, PRESENCE_MONITOR };
+enum Screen { SPLASH, SETUP, WIFI_SCAN, WIFI_RECONFIG, CONNECTING, READY, SESSION_START,
+              ONSCREEN_COURSE, ONSCREEN_LECTURER, ONSCREEN_PIN, ONSCREEN_DURATION,
+              SESSION, SUMMARY, SETTINGS, DEVICE_INFO, PAIR_SCREEN, CHECKIN_MONITOR, PRESENCE_MONITOR };
 Screen curScreen = SPLASH;
 String statusMsg = "";
 uint32_t splashStart = 0;
@@ -461,6 +470,22 @@ static int8_t   wifiScroll   = 0;
 static bool     wifiScanning = false;
 static String   wifiMsg      = "";
 static String   pendingSsid  = "";   // network tapped, waiting for password
+
+// ─── On-screen session start (lecturer starts session via TFT touch) ─────────
+struct OscCourse   { char id[32]; char code[12]; char name[48]; };
+struct OscLecturer { char id[32]; char name[48]; char offlinePinHash[65]; };
+static OscCourse   oscCourses[16];
+static uint8_t     oscCourseCount = 0;
+static OscLecturer oscLects[8];
+static uint8_t     oscLectCount   = 0;
+static int8_t      oscCourseIdx   = -1;  // selected course index
+static int8_t      oscLectIdx     = -1;  // selected lecturer index
+static char        oscPin[5]      = "";  // accumulated PIN (max 4 digits)
+static uint8_t     oscPinLen      = 0;
+static int8_t      oscScroll      = 0;   // list scroll offset
+static uint32_t    oscDuration    = 3600; // chosen duration (seconds)
+static String      oscErrMsg      = "";   // PIN error to display
+static bool        oscHasPin      = false; // true if selected lecturer has PIN hash
 
 // ─── Offline Attendance Storage ──────────────────────────────────────────────
 // Primary: append JSON lines to /attendance.jsonl on the built-in SD card.
@@ -632,7 +657,9 @@ static String deriveCode(const String& seed, uint32_t unixSec) {
              (const uint8_t*)slotStr.c_str(), slotStr.length(), digest);
   uint32_t n = ((uint32_t)digest[0] << 24) | ((uint32_t)digest[1] << 16) |
                ((uint32_t)digest[2] <<  8) |  (uint32_t)digest[3];
-  char buf[8]; snprintf(buf, sizeof(buf), "%06lu", (unsigned long)(n % 1000000UL));
+  uint32_t digits = n % 1000;
+  char     letter = 'A' + (char)((n / 1000) % 26);
+  char buf[6]; snprintf(buf, sizeof(buf), "%03lu%c", (unsigned long)digits, letter);
   return String(buf);
 }
 
@@ -712,12 +739,12 @@ static bool touchRead(uint16_t& tx, uint16_t& ty) {
 
   if ((td & 0x0F) == 0) return false;
 
-  // FT6336G on ES3C28P: chip reports X/Y already in portrait orientation
-  // (Y=0 at top, Y=319 at bottom). No axis swap or inversion needed.
+  // FT6336G on ES3C28P: chip is mounted 180° relative to the display.
+  // Both axes must be inverted to match portrait screen coordinates.
   uint16_t rawX = ((xh & 0x0F) << 8) | xl;
   uint16_t rawY = ((yh & 0x0F) << 8) | yl;
-  tx = rawX;
-  ty = rawY;
+  tx = (SW - 1) - rawX;   // mirror X
+  ty = (SH - 1) - rawY;   // mirror Y
   return true;
 }
 
@@ -875,6 +902,122 @@ static void startLocalSession(uint32_t durationSecs,
   curScreen = SESSION;
 }
 
+// ─── On-screen session helpers ────────────────────────────────────────────────
+static void oscLoadBundle() {
+  oscCourseCount = 0;
+  JsonDocument doc;
+  if (deserializeJson(doc, bundleJson)) return;
+  for (JsonObject c : doc.as<JsonArray>()) {
+    if (oscCourseCount >= 16) break;
+    OscCourse& cc = oscCourses[oscCourseCount++];
+    strncpy(cc.id,   c["courseId"]   | "", 31); cc.id[31] = '\0';
+    strncpy(cc.code, c["courseCode"] | "", 11); cc.code[11] = '\0';
+    strncpy(cc.name, c["courseName"] | "", 47); cc.name[47] = '\0';
+  }
+}
+
+static void oscLoadLecturers(int8_t courseIdx) {
+  oscLectCount = 0;
+  JsonDocument doc;
+  if (deserializeJson(doc, bundleJson)) return;
+  int8_t ci = 0;
+  for (JsonObject c : doc.as<JsonArray>()) {
+    if (ci++ != courseIdx) continue;
+    for (JsonObject l : c["lecturers"].as<JsonArray>()) {
+      if (oscLectCount >= 8) break;
+      OscLecturer& ll = oscLects[oscLectCount++];
+      strncpy(ll.id,   l["id"]   | "", 31); ll.id[31] = '\0';
+      strncpy(ll.name, l["name"] | "", 47); ll.name[47] = '\0';
+      strncpy(ll.offlinePinHash, l["offlinePinHash"] | "", 64); ll.offlinePinHash[64] = '\0';
+    }
+    break;
+  }
+}
+
+// Verify PIN against stored HMAC-SHA256 hash without starting session.
+static bool oscVerifyPin(const char* lecturerId, const char* pin, const char* storedHash) {
+  const char* pepper = "dikly_offline_v1";
+  String msg = String(lecturerId) + ":" + String(pin);
+  uint8_t computed[32];
+  hmacSha256((const uint8_t*)pepper, strlen(pepper),
+             (const uint8_t*)msg.c_str(), msg.length(), computed);
+  char computedHex[65]; computedHex[64] = '\0';
+  for (int i = 0; i < 32; i++) sprintf(computedHex + i*2, "%02x", computed[i]);
+  return strcmp(computedHex, storedHash) == 0;
+}
+
+// Verify PIN from bundle and start session if valid. Returns false + sets oscErrMsg on fail.
+static bool oscVerifyAndStart() {
+  if (oscCourseIdx < 0 || oscCourseIdx >= oscCourseCount) return false;
+  if (oscLectIdx   < 0 || oscLectIdx   >= oscLectCount)   return false;
+  if (oscHasPin && oscPinLen != 4) { oscErrMsg = "Enter all 4 digits"; return false; }
+
+  const char* lecturerId = oscLects[oscLectIdx].id;
+  JsonDocument bDoc;
+  if (deserializeJson(bDoc, bundleJson)) { oscErrMsg = "Bundle error"; return false; }
+
+  bool lecturerFound = false;
+  bool pinValid      = false;
+  for (JsonObject c : bDoc.as<JsonArray>()) {
+    if (String(c["courseId"] | "") != String(oscCourses[oscCourseIdx].id)) continue;
+    for (JsonObject l : c["lecturers"].as<JsonArray>()) {
+      if (String(l["id"] | "") != String(lecturerId)) continue;
+      lecturerFound = true;
+      const char* storedHash = l["offlinePinHash"] | "";
+      if (!storedHash[0]) {
+        pinValid = true; // No PIN required for this lecturer
+      } else {
+        pinValid = oscVerifyPin(lecturerId, oscPin, storedHash);
+      }
+      break;
+    }
+    if (lecturerFound) break;
+  }
+  if (!lecturerFound) { oscErrMsg = "Not in bundle — go online"; return false; }
+  if (!pinValid)      { oscErrMsg = "Wrong PIN"; return false; }
+
+  // All good — start the session
+  time_t now = time(nullptr);
+  if (now < 1700000000UL) now = 1700000000UL + (millis() / 1000);
+
+  char sid[52]; snprintf(sid, sizeof(sid), "local_%s_%lu", macSuffix().c_str(), (uint32_t)now);
+  uint8_t seedBytes[32]; esp_fill_random(seedBytes, 32);
+  char seed[65]; seed[64] = '\0';
+  for (int i = 0; i < 32; i++) snprintf(seed + i*2, 3, "%02x", seedBytes[i]);
+
+  sessionId         = String(sid);
+  sessionSeed       = String(seed);
+  sessionCourse     = String(oscCourses[oscCourseIdx].code);
+  sessionTitle      = String(oscCourses[oscCourseIdx].name);
+  sessionLecturer   = String(oscLects[oscLectIdx].name);
+  sessionLecturerId = String(lecturerId);
+  sessionCourseId   = String(oscCourses[oscCourseIdx].id);
+  sessionDuration   = oscDuration;
+  sessionStartedAt  = (uint32_t)now;
+  studentsMarked    = 0;
+  dedupClear(sessionId);
+  usedMacClear(sessionId);
+  usedIpClear(sessionId);
+  timeSynced              = true;
+  sessionLocallyStarted   = true;
+  saveLocalSession();
+
+  if (sdAvailable) {
+    File sf = SD_MMC.open("/sessions.jsonl", FILE_APPEND);
+    if (sf) {
+      JsonDocument sDoc;
+      sDoc["sessionId"]  = sessionId;  sDoc["courseCode"] = sessionCourse;
+      sDoc["title"]      = sessionTitle; sDoc["lecturer"]   = sessionLecturer;
+      sDoc["lecturerId"] = sessionLecturerId; sDoc["courseId"] = sessionCourseId;
+      sDoc["startedAt"]  = (uint32_t)now; sDoc["duration"]   = oscDuration;
+      sDoc["seed"]       = sessionSeed; sDoc["synced"]     = false;
+      String sl; serializeJson(sDoc, sl); sl += "\n";
+      sf.print(sl); sf.close();
+    }
+  }
+  return true;
+}
+
 // ─── Offline sync (sessions + attendance records) ─────────────────────────────
 static void syncOfflineAttendance() {
   bool hasSessions = sdAvailable && SD_MMC.exists("/sessions.jsonl");
@@ -1007,6 +1150,7 @@ static void downloadRoster() {
     JsonDocument rDoc;
     if (!deserializeJson(rDoc, resp)) {
       JsonArray arr = rDoc["roster"].as<JsonArray>();
+      // Write SD index file for persistent fallback across reboots
       File ix = SD_MMC.open("/roster_idx.txt", FILE_WRITE);
       if (ix) {
         for (JsonObject student : arr) {
@@ -1016,6 +1160,13 @@ static void downloadRoster() {
         ix.close();
         LOG("Roster index written (" + String(arr.size()) + " entries)");
       }
+      // Also load into RAM for fast O(n) check in /attend without SD read
+      rosterRam.clear();
+      for (JsonObject student : arr) {
+        const char* idx = student["indexNumber"] | "";
+        if (idx[0]) rosterRam.push_back(String(idx));
+      }
+      LOG("Roster loaded to RAM: " + String(rosterRam.size()) + " students");
     }
   } else {
     LOG("Roster fetch failed: " + String(code));
@@ -2190,6 +2341,229 @@ static void drawSessionStart() {
   spr.pushSprite(0, 0);
 }
 
+// ── ONSCREEN_COURSE — touch-driven course picker ──────────────────────────────
+static void drawOscCourse() {
+  spr.fillSprite(COL_BG);
+  bool online = (WiFi.status() == WL_CONNECTED);
+  _drawSubHeader(spr, "Select Course", online);
+  drawTabBar(spr, 1);
+
+  const uint8_t ROWS = 5, ROW_H = 46;
+  const int16_t Y0 = 46;
+
+  if (oscCourseCount == 0) {
+    spr.setFont(F_TINY); spr.setTextColor(COL_ERROR, COL_BG);
+    spr.setCursor(14, 140); spr.print("No bundle. Connect to WiFi");
+    spr.setCursor(14, 158); spr.print("and wait ~10 s.");
+    spr.pushSprite(0, 0); return;
+  }
+
+  for (uint8_t i = 0; i < ROWS; i++) {
+    int8_t idx = oscScroll + (int8_t)i;
+    if (idx >= oscCourseCount) break;
+    int16_t y = Y0 + (int16_t)i * ROW_H;
+    bool sel = (idx == oscCourseIdx);
+    uint16_t bg = sel ? COL_BORDER : COL_CARD;
+    spr.fillRoundRect(8, y + 3, SW - 16, ROW_H - 4, 6, bg);
+    if (sel) spr.drawRoundRect(8, y + 3, SW - 16, ROW_H - 4, 6, COL_PRIMARY);
+    spr.setFont(F_TINY);
+    spr.setTextColor(sel ? COL_PRIMARY : COL_TEXT, bg);
+    String code = String(oscCourses[idx].code);
+    spr.setCursor(16, y + 10); spr.print(code);
+    spr.setTextColor(sel ? COL_TEXT : COL_MUTED, bg);
+    String name = String(oscCourses[idx].name);
+    if (spr.textWidth(name) > SW - 32) name = name.substring(0, 22) + "..";
+    spr.setCursor(16, y + 26); spr.print(name);
+  }
+
+  // Scroll indicators
+  if (oscScroll > 0) {
+    spr.setFont(F_TINY); spr.setTextColor(COL_MUTED, COL_BG);
+    spr.setCursor(110, Y0 - 2); spr.print("^ more");
+  }
+  if (oscScroll + ROWS < oscCourseCount) {
+    spr.setFont(F_TINY); spr.setTextColor(COL_MUTED, COL_BG);
+    spr.setCursor(100, Y0 + ROWS * ROW_H + 2); spr.print("v more");
+  }
+
+  // Next button (only when something selected)
+  if (oscCourseIdx >= 0) {
+    spr.fillRoundRect(8, 260, SW - 16, 16, 6, COL_PRIMARY);
+    spr.setFont(F_TINY); spr.setTextColor(COL_WHITE, COL_PRIMARY);
+    String lbl = "Next: select lecturer >";
+    int32_t tw = spr.textWidth(lbl);
+    spr.setCursor((SW - tw) / 2, 263); spr.print(lbl);
+  }
+
+  spr.pushSprite(0, 0);
+}
+
+// ── ONSCREEN_LECTURER — touch-driven lecturer picker ──────────────────────────
+static void drawOscLecturer() {
+  spr.fillSprite(COL_BG);
+  bool online = (WiFi.status() == WL_CONNECTED);
+  _drawSubHeader(spr, "Select Lecturer", online);
+  drawTabBar(spr, 1);
+
+  // Course label at top
+  if (oscCourseIdx >= 0) {
+    spr.setFont(F_TINY); spr.setTextColor(COL_PRIMARY, COL_BG);
+    spr.setCursor(14, 48); spr.print(oscCourses[oscCourseIdx].code);
+    spr.setTextColor(COL_MUTED, COL_BG);
+    String cn = String(oscCourses[oscCourseIdx].name);
+    if (spr.textWidth(cn) > SW - 60) cn = cn.substring(0, 20) + "..";
+    spr.setCursor(14 + spr.textWidth(String(oscCourses[oscCourseIdx].code)) + 6, 48); spr.print(cn);
+  }
+
+  const uint8_t ROWS = 5, ROW_H = 42;
+  const int16_t Y0 = 62;
+
+  if (oscLectCount == 0) {
+    spr.setFont(F_TINY); spr.setTextColor(COL_ERROR, COL_BG);
+    spr.setCursor(14, 140); spr.print("No lecturers in bundle.");
+    spr.pushSprite(0, 0); return;
+  }
+
+  for (uint8_t i = 0; i < ROWS; i++) {
+    int8_t idx = oscScroll + (int8_t)i;
+    if (idx >= oscLectCount) break;
+    int16_t y = Y0 + (int16_t)i * ROW_H;
+    bool sel = (idx == oscLectIdx);
+    uint16_t bg = sel ? COL_BORDER : COL_CARD;
+    spr.fillRoundRect(8, y + 2, SW - 16, ROW_H - 4, 6, bg);
+    if (sel) spr.drawRoundRect(8, y + 2, SW - 16, ROW_H - 4, 6, COL_PRIMARY);
+    spr.setFont(F_TINY);
+    spr.setTextColor(sel ? COL_TEXT : COL_TEXT, bg);
+    String nm = String(oscLects[idx].name);
+    if (spr.textWidth(nm) > SW - 32) nm = nm.substring(0, 24) + "..";
+    int32_t tw = spr.textWidth(nm);
+    spr.setCursor((SW - tw) / 2, y + 14); spr.print(nm);
+  }
+
+  if (oscLectCount > ROWS) {
+    spr.setFont(F_TINY); spr.setTextColor(COL_MUTED, COL_BG);
+    spr.setCursor(100, Y0 + ROWS * ROW_H + 2); spr.print("v more");
+  }
+
+  if (oscLectIdx >= 0) {
+    spr.fillRoundRect(8, 260, SW - 16, 16, 6, COL_PRIMARY);
+    spr.setFont(F_TINY); spr.setTextColor(COL_WHITE, COL_PRIMARY);
+    String lbl = "Next: enter PIN >";
+    int32_t tw = spr.textWidth(lbl);
+    spr.setCursor((SW - tw) / 2, 263); spr.print(lbl);
+  }
+
+  spr.pushSprite(0, 0);
+}
+
+// ── ONSCREEN_PIN — 4-digit numpad ────────────────────────────────────────────
+static void drawOscPin() {
+  spr.fillSprite(COL_BG);
+  bool online = (WiFi.status() == WL_CONNECTED);
+  _drawSubHeader(spr, "Enter PIN", online);
+
+  // Course + Lecturer info row
+  spr.setFont(F_TINY); spr.setTextColor(COL_PRIMARY, COL_BG);
+  if (oscCourseIdx >= 0) {
+    spr.setCursor(14, 48); spr.print(oscCourses[oscCourseIdx].code);
+    spr.setTextColor(COL_MUTED, COL_BG);
+    spr.setCursor(14 + spr.textWidth(String(oscCourses[oscCourseIdx].code)) + 4, 48);
+    spr.print("—");
+  }
+  if (oscLectIdx >= 0) {
+    String nm = String(oscLects[oscLectIdx].name);
+    if (spr.textWidth(nm) > SW - 80) nm = nm.substring(0, 18) + "..";
+    spr.setTextColor(COL_TEXT, COL_BG);
+    spr.setCursor(SW - spr.textWidth(nm) - 14, 48); spr.print(nm);
+  }
+
+  // PIN display: 4 slots
+  const int16_t DOT_Y = 68, DOT_R = 10, DOT_GAP = 36;
+  const int16_t DOT_X0 = (SW - (4 * DOT_GAP - 4)) / 2;
+  for (uint8_t i = 0; i < 4; i++) {
+    int16_t cx = DOT_X0 + i * DOT_GAP + DOT_R;
+    spr.drawCircle(cx, DOT_Y, DOT_R, COL_BORDER);
+    if (i < oscPinLen)
+      spr.fillCircle(cx, DOT_Y, DOT_R - 3, COL_PRIMARY);
+  }
+
+  // Error message
+  if (!oscErrMsg.isEmpty()) {
+    spr.setFont(F_TINY); spr.setTextColor(COL_ERROR, COL_BG);
+    int32_t tw = spr.textWidth(oscErrMsg);
+    spr.setCursor((SW - tw) / 2, 86); spr.print(oscErrMsg);
+  }
+
+  // Numpad: 3 cols × 4 rows, starting y=100
+  // Cols: 0..79, 80..159, 160..239 (80px wide each)
+  // Rows: y=100,142,184,226 (42px each)
+  const char* keys[12] = {"1","2","3","4","5","6","7","8","9","<","0",">"};
+  for (uint8_t k = 0; k < 12; k++) {
+    uint8_t col = k % 3, row = k / 3;
+    int16_t kx = (int16_t)col * 80, ky = 100 + (int16_t)row * 42;
+    bool isBack = (k == 9), isOk = (k == 11);
+    uint16_t bg  = isOk ? COL_SUCCESS : isBack ? COL_ERROR : COL_CARD;
+    uint16_t fg  = COL_WHITE;
+    spr.fillRoundRect(kx + 4, ky + 2, 72, 38, 8, bg);
+    spr.setFont(isOk || isBack ? F_SMALL : F_MED);
+    spr.setTextColor(fg, bg);
+    String lbl = isOk ? "GO" : isBack ? "< " : String(keys[k]);
+    int32_t tw = spr.textWidth(lbl);
+    spr.setCursor(kx + (80 - tw) / 2, ky + (isOk || isBack ? 12 : 8)); spr.print(lbl);
+  }
+
+  spr.pushSprite(0, 0);
+}
+
+// ── ONSCREEN_DURATION — duration picker + start ───────────────────────────────
+static void drawOscDuration() {
+  spr.fillSprite(COL_BG);
+  bool online = (WiFi.status() == WL_CONNECTED);
+  _drawSubHeader(spr, "Duration", online);
+
+  // Info row
+  spr.setFont(F_TINY);
+  if (oscCourseIdx >= 0) {
+    spr.setTextColor(COL_PRIMARY, COL_BG);
+    spr.setCursor(14, 48); spr.print(oscCourses[oscCourseIdx].code);
+  }
+  if (oscLectIdx >= 0) {
+    String nm = String(oscLects[oscLectIdx].name);
+    if (spr.textWidth(nm) > SW - 80) nm = nm.substring(0, 18) + "..";
+    spr.setTextColor(COL_MUTED, COL_BG);
+    spr.setCursor(SW - spr.textWidth(nm) - 14, 48); spr.print(nm);
+  }
+
+  // Duration grid: 2 cols × 3 rows, y starts at 64
+  // 30min, 45min, 1h, 1.5h, 2h, 3h
+  const uint32_t DURS[6]     = {1800, 2700, 3600, 5400, 7200, 10800};
+  const char*    DUR_LBL[6]  = {"30 min","45 min","1 hr","1.5 hr","2 hr","3 hr"};
+  const int16_t  BW = 108, BH = 48, GAP = 8;
+  const int16_t  COL0 = 8, COL1 = COL0 + BW + GAP;
+  const int16_t  ROW0 = 62;
+  for (uint8_t i = 0; i < 6; i++) {
+    int16_t bx = (i % 2 == 0) ? COL0 : COL1;
+    int16_t by = ROW0 + (int16_t)(i / 2) * (BH + GAP);
+    bool sel = (oscDuration == DURS[i]);
+    uint16_t bg = sel ? COL_BORDER : COL_CARD;
+    spr.fillRoundRect(bx, by, BW, BH, 8, bg);
+    if (sel) spr.drawRoundRect(bx, by, BW, BH, 8, COL_PRIMARY);
+    spr.setFont(F_SMALL);
+    spr.setTextColor(sel ? COL_PRIMARY : COL_MUTED, bg);
+    int32_t tw = spr.textWidth(DUR_LBL[i]);
+    spr.setCursor(bx + (BW - tw) / 2, by + 16); spr.print(DUR_LBL[i]);
+  }
+
+  // Start button
+  spr.fillRoundRect(8, 242, SW - 16, 34, 10, COL_SUCCESS);
+  spr.setFont(F_SMALL); spr.setTextColor(COL_WHITE, COL_SUCCESS);
+  String lbl = "Start Session >";
+  int32_t tw = spr.textWidth(lbl);
+  spr.setCursor((SW - tw) / 2, 252); spr.print(lbl);
+
+  spr.pushSprite(0, 0);
+}
+
 // ── SESSION — Attendance Code Display ────────────────────────────────────────
 static void drawSession(const String& code, uint32_t secsLeft, uint32_t secsTotal) {
   spr.fillSprite(COL_BG);
@@ -3011,23 +3385,156 @@ static void startApPortal() {
 
   dns.start(53, "*", gw);           // wildcard: every DNS query → our IP
 
-  // Serve the setup page directly at every OS captive-portal probe URL.
-  // No 302 redirect — the old KodexAttendance firmware used this same pattern
-  // and it works reliably on iOS, Android, Windows, and Samsung.
-  // A redirect adds an extra round-trip that the iOS CNA WebSheet sometimes
-  // drops, leaving the user with a blank page or timeout.
-  auto servePage = []() { sendHtmlChunked(PAIR_HTML); };
+  // ── Student attendance captive portal ────────────────────────────────────────
+  // Served at "/" and every OS captive-portal probe URL so the attendance form
+  // pops up automatically when a student connects to the hotspot.
+  // No 302 redirect — direct inline HTML avoids the iOS CNA WebSheet blank-page
+  // race condition caused by the extra round-trip.
+  auto serveAttendPage = []() {
+    if (sessionId.isEmpty() || sessionSeed.isEmpty()) {
+      // No active session — tell student to wait
+      localHttp.send(200, "text/html",
+        "<!doctype html><html><head><meta charset='utf-8'>"
+        "<meta name='viewport' content='width=device-width,initial-scale=1'>"
+        "<title>Dikly Attendance</title>"
+        "<style>*{box-sizing:border-box;margin:0;padding:0}"
+        "body{min-height:100vh;background:#0a0f1e;color:#fff;"
+        "font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;"
+        "display:flex;align-items:center;justify-content:center;padding:20px}"
+        ".card{background:#111827;border-radius:20px;padding:28px 20px;"
+        "max-width:360px;width:100%;border:1px solid #1e2d45;text-align:center}"
+        ".logo{font-size:22px;font-weight:900;margin-bottom:4px}"
+        ".logo span{color:#4f6ef7}"
+        ".icon{font-size:52px;margin:18px 0 12px}"
+        "h2{font-size:17px;font-weight:700;margin-bottom:8px}"
+        "p{color:#64748b;font-size:13px;line-height:1.6}"
+        "</style></head><body><div class='card'>"
+        "<div class='logo'>Di<span>kly</span></div>"
+        "<div class='icon'>&#x23F3;</div>"
+        "<h2>No Active Session</h2>"
+        "<p>Your lecturer has not started an attendance session yet.<br>"
+        "Wait for them to start, then reconnect.</p>"
+        "</div></body></html>");
+      return;
+    }
 
-  localHttp.on("/",                    HTTP_GET, servePage);
-  localHttp.on("/generate_204",        HTTP_GET, servePage);  // Android
-  localHttp.on("/hotspot-detect.html", HTTP_GET, servePage);  // iOS
-  localHttp.on("/connecttest.txt",     HTTP_GET, servePage);  // Windows
-  localHttp.on("/ncsi.txt",           HTTP_GET, servePage);  // Windows NCSI
-  localHttp.on("/success.txt",         HTTP_GET, servePage);  // Firefox
-  localHttp.on("/redirect",           HTTP_GET, servePage);  // Firefox
-  localHttp.on("/canonical.html",      HTTP_GET, servePage);  // Google
-  localHttp.on("/fwlink/",           HTTP_GET, servePage);  // Microsoft
-  localHttp.onNotFound(servePage);
+    // Active session — build the attendance form
+    String course  = sessionCourse.isEmpty() ? sessionTitle : sessionCourse;
+    String lect    = sessionLecturer;
+
+    String page =
+      "<!doctype html><html><head><meta charset='utf-8'>"
+      "<meta name='viewport' content='width=device-width,initial-scale=1,maximum-scale=1'>"
+      "<title>Mark Attendance</title>"
+      "<style>*{box-sizing:border-box;margin:0;padding:0}"
+      "body{min-height:100vh;background:#0a0f1e;color:#fff;"
+      "font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;"
+      "display:flex;align-items:center;justify-content:center;padding:20px}"
+      ".card{background:#111827;border-radius:20px;padding:28px 20px;"
+      "max-width:360px;width:100%;border:1px solid #1e2d45}"
+      ".logo{text-align:center;font-size:22px;font-weight:900;margin-bottom:2px}"
+      ".logo span{color:#4f6ef7}"
+      ".session{text-align:center;font-size:12px;color:#4f6ef7;font-weight:600;"
+      "margin-bottom:18px;padding:6px 12px;background:#0f172a;"
+      "border-radius:8px;border:1px solid #1e3a5f}"
+      "label{display:block;font-size:11px;font-weight:700;color:#94a3b8;"
+      "text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px}"
+      "input{width:100%;padding:13px 14px;background:#0f172a;"
+      "border:1.5px solid #1e2d45;border-radius:10px;color:#fff;font-size:15px;"
+      "outline:none;margin-bottom:16px}"
+      "input:focus{border-color:#4f6ef7}"
+      "#code{text-transform:uppercase;letter-spacing:10px;font-size:24px;"
+      "text-align:center;font-weight:700}"
+      "button{width:100%;padding:15px;background:#4f6ef7;color:#fff;border:none;"
+      "border-radius:12px;font-size:15px;font-weight:700;cursor:pointer;"
+      "-webkit-tap-highlight-color:transparent}"
+      "button:disabled{opacity:.5}"
+      ".err{display:none;background:#450a0a;border:1px solid #991b1b;"
+      "border-radius:10px;padding:12px 14px;color:#fca5a5;font-size:13px;margin-bottom:14px}"
+      ".done{display:none;text-align:center;padding:8px 0}"
+      ".done .icon{font-size:58px;margin-bottom:12px}"
+      ".done h2{font-size:18px;font-weight:800;margin-bottom:6px}"
+      ".done p{color:#64748b;font-size:13px;line-height:1.6}"
+      ".hint{text-align:center;font-size:11px;color:#334155;margin-top:14px}"
+      "</style></head><body><div class='card'>"
+      "<div class='logo'>Di<span>kly</span></div>"
+      "<div class='session'>";
+    if (course.length()) page += course;
+    if (course.length() && lect.length()) page += " &mdash; ";
+    if (lect.length()) page += lect;
+    if (page.endsWith("<div class='session'>")) page += "Attendance Session";
+    page +=
+      "</div>"
+      "<div class='err' id='err'></div>"
+      "<div id='frm'>"
+      "<label>Index / Student Number</label>"
+      "<input id='idx' type='text' autocomplete='off' autocorrect='off' "
+      "autocapitalize='characters' spellcheck='false' placeholder='e.g. UG/IT/20/0042'>"
+      "<label>Code (from screen)</label>"
+      "<input id='cod' type='text' inputmode='text' maxlength='4' autocomplete='off' "
+      "autocorrect='off' spellcheck='false' placeholder='- - - -'>"
+      "<button id='btn' onclick='go()'>Mark Attendance &#x2192;</button>"
+      "<p class='hint'>&#x1F512; Your WiFi will disconnect after marking</p>"
+      "</div>"
+      "<div class='done' id='done'>"
+      "<div class='icon'>&#x2705;</div>"
+      "<h2 style='color:#22c55e'>Marked!</h2>"
+      "<p>Your attendance has been recorded.<br>WiFi disconnecting&hellip;</p>"
+      "</div>"
+      "<div class='done' id='dup' style='display:none'>"
+      "<div class='icon'>&#x26A0;&#xFE0F;</div>"
+      "<h2 style='color:#f59e0b'>Already Marked</h2>"
+      "<p>Your attendance was already recorded<br>for this session.</p>"
+      "</div>"
+      "</div>"
+      "<script>"
+      "document.getElementById('cod').addEventListener('input',function(){"
+      "this.value=this.value.toUpperCase();});"
+      "function go(){"
+      "var idx=document.getElementById('idx').value.trim();"
+      "var cod=document.getElementById('cod').value.trim().toUpperCase();"
+      "var err=document.getElementById('err');err.style.display='none';"
+      "if(!idx){err.textContent='Enter your index number.';err.style.display='block';return;}"
+      "if(cod.length!==4){err.textContent='Enter the 4-character code shown on the screen.';err.style.display='block';return;}"
+      "var btn=document.getElementById('btn');btn.textContent='Marking\xe2\x80\xa6';btn.disabled=true;"
+      "fetch('/attend',{method:'POST',headers:{'Content-Type':'application/json'},"
+      "body:JSON.stringify({indexNumber:idx,code:cod})})"
+      ".then(function(r){return r.json().then(function(d){return{ok:r.ok,st:r.status,d:d};});})"
+      ".then(function(r){"
+      "if(r.ok){"
+      "document.getElementById('frm').style.display='none';"
+      "document.getElementById('done').style.display='block';"
+      "}else if(r.st===409){"
+      "document.getElementById('frm').style.display='none';"
+      "document.getElementById('dup').style.display='block';"
+      "}else{"
+      "err.textContent=r.d.error||'Failed. Try again.';"
+      "err.style.display='block';"
+      "btn.textContent='Mark Attendance \xe2\x86\x92';btn.disabled=false;"
+      "}"
+      "}).catch(function(){"
+      "err.textContent='Connection lost. Stay on Dikly WiFi and retry.';"
+      "err.style.display='block';"
+      "btn.textContent='Mark Attendance \xe2\x86\x92';btn.disabled=false;"
+      "});}"
+      "</script></body></html>";
+
+    localHttp.send(200, "text/html", page);
+  };
+
+  localHttp.on("/",                    HTTP_GET, serveAttendPage);
+  localHttp.on("/generate_204",        HTTP_GET, serveAttendPage);  // Android
+  localHttp.on("/hotspot-detect.html", HTTP_GET, serveAttendPage);  // iOS
+  localHttp.on("/connecttest.txt",     HTTP_GET, serveAttendPage);  // Windows
+  localHttp.on("/ncsi.txt",           HTTP_GET, serveAttendPage);  // Windows NCSI
+  localHttp.on("/success.txt",         HTTP_GET, serveAttendPage);  // Firefox
+  localHttp.on("/redirect",           HTTP_GET, serveAttendPage);  // Firefox
+  localHttp.on("/canonical.html",      HTTP_GET, serveAttendPage);  // Google
+  localHttp.on("/fwlink/",           HTTP_GET, serveAttendPage);  // Microsoft
+  localHttp.onNotFound(serveAttendPage);
+
+  // /setup — admin device reconfiguration page (pairing + WiFi change)
+  localHttp.on("/setup", HTTP_GET, []() { sendHtmlChunked(PAIR_HTML); });
 
   localHttp.on("/wifi/scan", HTTP_GET, []() {
     int n = WiFi.scanNetworks();
@@ -3683,23 +4190,54 @@ static void registerLocalHttp() {
       }
     }
 
-    // ── Roster validation (soft — gracefully skips if index file missing) ─────
-    // Prevents unknown index numbers from being recorded offline.
-    if (indexNum.length() && sdAvailable && SD_MMC.exists("/roster_idx.txt")) {
-      File ix = SD_MMC.open("/roster_idx.txt", FILE_READ);
-      bool found = false;
-      if (ix) {
-        while (ix.available() && !found) {
-          String line = ix.readStringUntil('\n');
-          line.trim();
-          if (line.equalsIgnoreCase(indexNum)) found = true;
-        }
-        ix.close();
-      }
-      if (!found) {
-        localHttp.send(403, "application/json", "{\"error\":\"Your student ID is not enrolled in this class.\"}"); return;
+    // ── Attendance code verification — proves physical presence (line-of-sight to TFT) ──
+    // Accept current slot and the previous slot to handle boundary edge cases.
+    String submittedCode = req["code"] | "";
+    submittedCode.toUpperCase();
+    if (sessionSeed.length()) {
+      String expected1 = deriveCode(sessionSeed, (uint32_t)now);
+      String expected2 = deriveCode(sessionSeed,
+        (uint32_t)(now > (time_t)WINDOW_SECONDS ? now - (time_t)WINDOW_SECONDS : now));
+      if (submittedCode != expected1 && submittedCode != expected2) {
+        localHttp.send(403, "application/json",
+          "{\"error\":\"Wrong code. Check the screen and try again.\"}");
+        return;
       }
     }
+
+    // ── Roster validation — blocks students from other classes/departments ──────
+    // RAM roster (primary): populated on every successful downloadRoster() call.
+    // SD fallback: read from /roster_idx.txt after a reboot before first heartbeat.
+    // If neither is available (brand-new device, never connected): allow through;
+    // the server re-validates online and the offline record is safe to sync later.
+    if (indexNum.length()) {
+      bool found  = false;
+      bool hasRoster = false;
+      if (!rosterRam.empty()) {
+        // Fast RAM check — O(n), no SD read needed
+        hasRoster = true;
+        for (const String& s : rosterRam) {
+          if (s.equalsIgnoreCase(indexNum)) { found = true; break; }
+        }
+      } else if (sdAvailable && SD_MMC.exists("/roster_idx.txt")) {
+        // Fallback: scan SD file (slower, only used if RAM roster not loaded yet)
+        hasRoster = true;
+        File ix = SD_MMC.open("/roster_idx.txt", FILE_READ);
+        if (ix) {
+          while (ix.available()) {
+            String line = ix.readStringUntil('\n'); line.trim();
+            if (line.equalsIgnoreCase(indexNum)) { found = true; break; }
+          }
+          ix.close();
+        }
+      }
+      if (hasRoster && !found) {
+        localHttp.send(403, "application/json",
+          "{\"error\":\"You are not enrolled in this class.\"}");
+        return;
+      }
+    }
+
 
     // ── Re-mark path — end-of-class presence confirmation ────────────────────
     bool isRemark = req["remark"] | false;
@@ -4074,9 +4612,8 @@ static void registerLocalHttp() {
                 computedHex[64] = '\0';
                 pinValid = (String(computedHex) == String(storedHash));
               } else {
-                // PIN not configured — block until admin sets it in the portal
                 localHttp.send(403, "application/json",
-                  "{\"error\":\"PIN not set. Ask your admin to assign you an offline PIN in the portal.\"}");
+                  "{\"error\":\"You have not set a PIN yet. Log into dikly.sbs \xe2\x86\x92 Settings \xe2\x86\x92 Set Attendance PIN, then try again.\"}");
                 return;
               }
               break;
@@ -4244,6 +4781,8 @@ static void registerLocalHttp() {
       "button:disabled{opacity:.5}"
       ".err{display:none;background:#450a0a;border:1px solid #991b1b;border-radius:10px;"
       "padding:12px 14px;color:#fca5a5;font-size:13px;margin-bottom:14px}"
+      ".warn{display:none;background:#3b2500;border:1px solid #92400e;border-radius:10px;"
+      "padding:12px 14px;color:#fcd34d;font-size:13px;line-height:1.5;margin-bottom:14px}"
       ".ok{display:none;text-align:center;padding:10px 0}"
       ".ck{font-size:56px;margin-bottom:14px}"
       ".ok h2{color:#22c55e;font-size:18px;margin-bottom:8px}"
@@ -4252,6 +4791,10 @@ static void registerLocalHttp() {
       "<div class='logo'>Di<span>kly</span></div>"
       "<div class='sub'>Lecturer Session Setup</div>"
       "<div class='err' id='err'></div>"
+      "<div class='warn' id='pinwarn'>"
+      "&#x26A0; PIN not set. Log into <strong>dikly.sbs</strong> &rarr; Settings &rarr; "
+      "<strong>Set Attendance PIN</strong>, then return here."
+      "</div>"
       "<div id='main'>"
       "<label>Course</label>"
       "<select id='csel' onchange='onCourse()'>"
@@ -4296,6 +4839,26 @@ static void registerLocalHttp() {
       "});"
       "lsel.style.display='block';llbl.style.display='block';"
       "plbl.style.display='block';pin.style.display='block';"
+      "lsel.onchange=onLecturer;"
+      "onLecturer();"
+      "}"
+      "function onLecturer(){"
+      "var cid=document.getElementById('csel').value;"
+      "var lid=document.getElementById('lsel').value;"
+      "var warn=document.getElementById('pinwarn');"
+      "var pin=document.getElementById('pin');"
+      "warn.style.display='none';"
+      "if(!lid)return;"
+      "var course=bundle.find(function(c){return c.courseId==cid;});"
+      "var lect=course?course.lecturers.find(function(l){return l.id==lid;}):null;"
+      "if(lect&&!lect.offlinePinHash){"
+      "warn.style.display='block';"
+      "pin.style.display='none';"
+      "document.getElementById('plbl').style.display='none';"
+      "}else{"
+      "pin.style.display='block';"
+      "document.getElementById('plbl').style.display='block';"
+      "}"
       "}"
       "function go(){"
       "var cid=document.getElementById('csel').value;"
@@ -4305,9 +4868,12 @@ static void registerLocalHttp() {
       "var err=document.getElementById('err');err.style.display='none';"
       "if(!cid){err.textContent='Select a course.';err.style.display='block';return;}"
       "if(!lid){err.textContent='Select a lecturer.';err.style.display='block';return;}"
-      "if(pin.length!==4){err.textContent='Enter the 4-digit PIN.';err.style.display='block';return;}"
       "var course=bundle.find(function(c){return c.courseId==cid;});"
       "var lect=course?course.lecturers.find(function(l){return l.id==lid;}):null;"
+      "if(lect&&!lect.offlinePinHash){"
+      "err.textContent='Set your Attendance PIN at dikly.sbs first.';"
+      "err.style.display='block';return;}"
+      "if(pin.length!==4){err.textContent='Enter the 4-digit PIN.';err.style.display='block';return;}"
       "var btn=document.getElementById('btn');btn.textContent='Starting\xe2\x80\xa6';btn.disabled=true;"
       "fetch('/session/start',{method:'POST',headers:{'Content-Type':'application/json'},"
       "body:JSON.stringify({pin:pin,courseId:cid,lecturerId:lid,"
@@ -4529,16 +5095,32 @@ static void handlePairedTap(uint16_t tx, uint16_t ty) {
   // Tab bar (y ≥ 280)
   if (ty >= 280) {
     uint8_t tabIdx = (uint8_t)(tx / 60);
-    if      (tabIdx == 0) curScreen = READY;
-    else if (tabIdx == 1) curScreen = sessionId.isEmpty() ? SESSION_START : SESSION;
-    else if (tabIdx == 2) curScreen = SUMMARY;
-    else if (tabIdx == 3) curScreen = SETTINGS;
+    if (tabIdx == 0) { curScreen = READY; return; }
+    if (tabIdx == 1) {
+      if (!sessionId.isEmpty()) { curScreen = SESSION; return; }
+      if (bundleLoaded) {
+        oscCourseIdx = -1; oscLectIdx = -1;
+        oscPinLen = 0; oscPin[0] = '\0';
+        oscScroll = 0; oscErrMsg = "";
+        oscLoadBundle();
+        curScreen = ONSCREEN_COURSE;
+      } else {
+        curScreen = SESSION_START;
+      }
+      return;
+    }
+    if (tabIdx == 2) { curScreen = SUMMARY;  return; }
+    if (tabIdx == 3) { curScreen = SETTINGS; return; }
     return;
   }
   // Back button (header area, left quarter)
   if (ty < 46 && tx < 50) {
     if (curScreen == PAIR_SCREEN || curScreen == SUMMARY) curScreen = READY;
     else if (curScreen == SESSION_START)                  curScreen = READY;
+    else if (curScreen == ONSCREEN_COURSE)                curScreen = READY;
+    else if (curScreen == ONSCREEN_LECTURER)              curScreen = ONSCREEN_COURSE;
+    else if (curScreen == ONSCREEN_PIN)                   curScreen = ONSCREEN_LECTURER;
+    else if (curScreen == ONSCREEN_DURATION)              curScreen = oscHasPin ? ONSCREEN_PIN : ONSCREEN_LECTURER;
     else if (curScreen == SETTINGS)                       curScreen = READY;
     else if (curScreen == DEVICE_INFO)                    curScreen = SETTINGS;
     else if (curScreen == CHECKIN_MONITOR)                curScreen = SESSION;
@@ -4573,6 +5155,93 @@ static void handlePairedTap(uint16_t tx, uint16_t ty) {
     // Tap the student count area (y 200-240) to open monitor view
     else if (ty >= 200 && ty <= 240 && monPhase != MON_IDLE) {
       curScreen = (monPhase == MON_CHECKIN_OPEN) ? CHECKIN_MONITOR : PRESENCE_MONITOR;
+    }
+  }
+  // ONSCREEN_COURSE — 5 rows × 46px, Y0=46; Next button y=260; draw: drawOscCourse()
+  else if (curScreen == ONSCREEN_COURSE) {
+    // Scroll up: tap header margin right of back button
+    if (ty < 46 && tx >= 50 && oscScroll > 0) { oscScroll--; return; }
+    // Scroll down: tap below last row (y=276-280)
+    if (ty >= 276 && ty < 280 && oscScroll + 5 < (int8_t)oscCourseCount) { oscScroll++; return; }
+    // Next button: y=260-276, full width (fillRoundRect(8,260,SW-16,16))
+    if (ty >= 260 && ty < 276 && oscCourseIdx >= 0) {
+      oscLoadLecturers(oscCourseIdx);
+      oscLectIdx = -1; oscScroll = 0;
+      curScreen = ONSCREEN_LECTURER;
+      return;
+    }
+    // Row tap: Y0=46, ROW_H=46, rows 0-4
+    if (ty >= 46 && ty < 260) {
+      int8_t row = (int8_t)((ty - 46) / 46);
+      int8_t idx = oscScroll + row;
+      if (idx >= 0 && idx < (int8_t)oscCourseCount)
+        oscCourseIdx = (oscCourseIdx == idx) ? -1 : idx;
+    }
+  }
+  // ONSCREEN_LECTURER — 5 rows × 42px, Y0=62; Next button y=260; draw: drawOscLecturer()
+  else if (curScreen == ONSCREEN_LECTURER) {
+    // Scroll down: tap below last row (y=272-280)
+    if (ty >= 272 && ty < 280 && oscScroll + 5 < (int8_t)oscLectCount) { oscScroll++; return; }
+    // Next button: y=260-276 (fillRoundRect(8,260,SW-16,16))
+    if (ty >= 260 && ty < 276 && oscLectIdx >= 0) {
+      oscPinLen = 0; oscPin[0] = '\0'; oscErrMsg = "";
+      oscHasPin = (oscLects[oscLectIdx].offlinePinHash[0] != '\0');
+      oscScroll = 0;
+      curScreen = oscHasPin ? ONSCREEN_PIN : ONSCREEN_DURATION;
+      return;
+    }
+    // Row tap: Y0=62, ROW_H=42
+    if (ty >= 62 && ty < 260) {
+      int8_t row = (int8_t)((ty - 62) / 42);
+      int8_t idx = oscScroll + row;
+      if (idx >= 0 && idx < (int8_t)oscLectCount)
+        oscLectIdx = (oscLectIdx == idx) ? -1 : idx;
+    }
+  }
+  // ONSCREEN_PIN — 3-col × 4-row numpad, Y0=100, ROW_H=42; draw: drawOscPin()
+  else if (curScreen == ONSCREEN_PIN) {
+    const uint16_t PAD_Y0 = 100, PAD_ROW_H = 42;
+    if (ty >= PAD_Y0 && ty < PAD_Y0 + 4 * PAD_ROW_H) {
+      uint8_t row = (uint8_t)((ty - PAD_Y0) / PAD_ROW_H);
+      uint8_t col = (uint8_t)(tx / 80);
+      if (col > 2) col = 2;
+      // row 0: 1,2,3 | row 1: 4,5,6 | row 2: 7,8,9 | row 3: <,0,GO
+      if (row < 3) {
+        uint8_t digit = row * 3 + col + 1; // 1-9
+        if (oscPinLen < 4) { oscPin[oscPinLen++] = '0' + digit; oscPin[oscPinLen] = '\0'; }
+      } else {
+        if (col == 0) {                          // Backspace
+          if (oscPinLen > 0) { oscPinLen--; oscPin[oscPinLen] = '\0'; }
+        } else if (col == 1) {                   // 0
+          if (oscPinLen < 4) { oscPin[oscPinLen++] = '0'; oscPin[oscPinLen] = '\0'; }
+        } else if (oscPinLen == 4) {             // GO
+          const char* storedHash = oscLects[oscLectIdx].offlinePinHash;
+          if (!storedHash[0] || oscVerifyPin(oscLects[oscLectIdx].id, oscPin, storedHash)) {
+            oscErrMsg = ""; curScreen = ONSCREEN_DURATION;
+          } else {
+            oscErrMsg = "Wrong PIN. Try again.";
+            oscPinLen = 0; oscPin[0] = '\0';
+          }
+        }
+      }
+    }
+  }
+  // ONSCREEN_DURATION — 2-col × 3-row grid (BW=108,BH=48,GAP=8,ROW0=62); Start y=242
+  else if (curScreen == ONSCREEN_DURATION) {
+    static const uint32_t DURATIONS[6] = {1800,2700,3600,5400,7200,10800};
+    // Start Session button: fillRoundRect(8,242,SW-16,34) → y=242-276
+    if (ty >= 242 && ty < 276) {
+      oscErrMsg = "";
+      if (!oscVerifyAndStart()) curScreen = ONSCREEN_DURATION; // error shown on redraw
+      return;
+    }
+    // Grid: ROW0=62, rows spaced 56px (BH+GAP=48+8), 2 cols split at x=120
+    const int16_t ROW0 = 62, ROWH = 56;
+    if (ty >= (uint16_t)ROW0 && ty < (uint16_t)(ROW0 + 3 * ROWH)) {
+      uint8_t row = (uint8_t)((ty - ROW0) / ROWH);
+      uint8_t col = (tx < 120) ? 0 : 1;
+      uint8_t idx = row * 2 + col;
+      if (idx < 6) oscDuration = DURATIONS[idx];
     }
   }
   // SETTINGS screen — 6 rows × 44 px starting at y=56
@@ -4973,6 +5642,10 @@ void loop() {
   lastDraw = now;
 
   switch (curScreen) {
+    case ONSCREEN_COURSE:   drawOscCourse();   break;
+    case ONSCREEN_LECTURER: drawOscLecturer(); break;
+    case ONSCREEN_PIN:      drawOscPin();      break;
+    case ONSCREEN_DURATION: drawOscDuration(); break;
     case SESSION_START: drawSessionStart(); break;
     case SESSION: {
       if (!sessActive) { curScreen = READY; drawReady(); break; }
