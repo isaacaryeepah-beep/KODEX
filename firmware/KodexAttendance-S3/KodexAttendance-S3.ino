@@ -273,7 +273,7 @@ static const uint8_t SD_CLK = 38, SD_CMD = 40, SD_D0 = 39;
 static const uint8_t SD_D1  = 41, SD_D2  = 48, SD_D3 = 47;
 
 // ─── App Config ──────────────────────────────────────────────────────────────
-static const char*   FIRMWARE_VERSION     = "s3-2.7.0";
+static const char*   FIRMWARE_VERSION     = "s3-2.8.0";
 static const char*   DEFAULT_API_BASE     = "https://dikly.sbs";
 
 static const uint32_t HEARTBEAT_MS        = 5000;
@@ -4536,9 +4536,8 @@ static void registerLocalHttp() {
         localHttp.send(403, "application/json", "{\"error\":\"Incorrect PIN. Try again.\"}"); return;
       }
     } else if (!bundleLoaded) {
-      // No bundle — device hasn't been online yet; block session start
-      localHttp.send(503, "application/json",
-        "{\"error\":\"No offline bundle loaded. Connect the device to internet first, then try again.\"}"); return;
+      // No bundle — allow offline session start without PIN validation.
+      // courseCode and title come from the manual form; lecturer identity is unknown.
     }
 
     time_t now = time(nullptr);
@@ -4644,16 +4643,89 @@ static void registerLocalHttp() {
     }
 
     if (courseOpts.isEmpty()) {
-      localHttp.send(503, "text/html",
+      // No bundle — show a manual entry form so the lecturer can still start offline
+      localHttp.send(200, "text/html", String(
         "<!doctype html><html><head><meta charset='utf-8'>"
-        "<meta name='viewport' content='width=device-width,initial-scale=1'></head>"
-        "<body style='background:#0a0f1e;color:#fff;font-family:sans-serif;"
-        "display:flex;align-items:center;justify-content:center;min-height:100vh;padding:20px'>"
-        "<div style='text-align:center;max-width:300px'>"
-        "<div style='font-size:24px;font-weight:900;margin-bottom:12px'>Di<span style='color:#4f6ef7'>kly</span></div>"
-        "<p style='color:#f87171;font-size:14px;line-height:1.7'>"
-        "No offline bundle loaded.<br>Connect the device to the internet first — it will sync automatically within a few seconds.</p>"
-        "</div></body></html>");
+        "<meta name='viewport' content='width=device-width,initial-scale=1,maximum-scale=1'>"
+        "<title>Start Session</title>"
+        "<style>*{box-sizing:border-box;margin:0;padding:0}"
+        "body{min-height:100vh;background:#0a0f1e;color:#fff;"
+        "font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;"
+        "display:flex;align-items:center;justify-content:center;padding:20px}"
+        ".card{background:#111827;border-radius:20px;padding:28px 20px;"
+        "max-width:380px;width:100%;border:1px solid #1e2d45}"
+        ".logo{text-align:center;font-size:22px;font-weight:900;margin-bottom:2px}"
+        ".logo span{color:#4f6ef7}"
+        ".sub{text-align:center;font-size:12px;color:#64748b;margin-bottom:6px}"
+        ".note{background:#1e2d45;border-radius:8px;padding:10px 12px;"
+        "font-size:12px;color:#94a3b8;line-height:1.6;margin-bottom:18px;text-align:center}"
+        "label{display:block;font-size:11px;font-weight:600;color:#94a3b8;"
+        "text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px}"
+        "input[type=text]{width:100%;padding:13px 14px;background:#0f172a;"
+        "border:1.5px solid #1e2d45;border-radius:10px;color:#fff;font-size:15px;"
+        "outline:none;margin-bottom:16px;-webkit-appearance:none}"
+        "input[type=text]:focus{border-color:#4f6ef7}"
+        ".dur{display:flex;gap:7px;flex-wrap:wrap;margin-bottom:22px}"
+        ".dur input[type=radio]{display:none}"
+        ".dur label{flex:1;min-width:66px;background:#0f172a;border:1.5px solid #1e2d45;"
+        "border-radius:10px;padding:12px 4px;text-align:center;cursor:pointer;"
+        "font-size:12px;font-weight:600;color:#94a3b8;letter-spacing:0;text-transform:none}"
+        ".dur input[type=radio]:checked+label{background:#1e3a5f;border-color:#4f6ef7;color:#fff}"
+        "button{width:100%;padding:15px;background:#4f6ef7;color:#fff;border:none;"
+        "border-radius:12px;font-size:15px;font-weight:700;cursor:pointer}"
+        "button:disabled{opacity:.5}"
+        ".err{display:none;background:#450a0a;border:1px solid #991b1b;border-radius:10px;"
+        "padding:12px 14px;color:#fca5a5;font-size:13px;margin-bottom:14px}"
+        ".ok{display:none;text-align:center;padding:10px 0}"
+        ".ck{font-size:56px;margin-bottom:14px}"
+        ".ok h2{color:#22c55e;font-size:18px;margin-bottom:8px}"
+        ".ok p{color:#64748b;font-size:13px;line-height:1.6}"
+        "</style></head><body><div class='card'>"
+        "<div class='logo'>Di<span>kly</span></div>"
+        "<div class='sub'>Start Offline Session</div>"
+        "<div class='note'>Device is offline. Enter details manually.<br>"
+        "Attendance will sync when internet is restored.</div>"
+        "<div class='err' id='err'></div>"
+        "<div id='main'>"
+        "<label>Course Code / Name</label>"
+        "<input type='text' id='ccode' placeholder='e.g. CS301 or Data Structures'"
+        " autocomplete='off' autocorrect='off' autocapitalize='characters'>"
+        "<label>Duration</label>"
+        "<div class='dur'>"
+        "<input type='radio' name='d' id='d5' value='300'><label for='d5'>5 min</label>"
+        "<input type='radio' name='d' id='d30' value='1800'><label for='d30'>30 min</label>"
+        "<input type='radio' name='d' id='d45' value='2700'><label for='d45'>45 min</label>"
+        "<input type='radio' name='d' id='d60' value='3600' checked><label for='d60'>1 hr</label>"
+        "<input type='radio' name='d' id='d90' value='5400'><label for='d90'>1.5 hr</label>"
+        "<input type='radio' name='d' id='d120' value='7200'><label for='d120'>2 hrs</label>"
+        "</div>"
+        "<button id='btn' onclick='go()'>Start Session &#x2192;</button>"
+        "</div>"
+        "<div class='ok' id='ok'>"
+        "<div class='ck'>&#x1F3AB;</div>"
+        "<h2>Session Started!</h2>"
+        "<p>Students can now connect to Dikly WiFi.<br>Attendance portal is now active.</p>"
+        "</div>"
+        "</div>"
+        "<script>"
+        "function go(){"
+        "var cc=document.getElementById('ccode').value.trim();"
+        "var dur=document.querySelector('input[name=d]:checked');"
+        "var err=document.getElementById('err');err.style.display='none';"
+        "if(!cc){err.textContent='Enter a course code or name.';err.style.display='block';return;}"
+        "var btn=document.getElementById('btn');btn.textContent='Starting\xe2\x80\xa6';btn.disabled=true;"
+        "fetch('/session/start',{method:'POST',headers:{'Content-Type':'application/json'},"
+        "body:JSON.stringify({courseCode:cc,title:cc,duration:parseInt(dur.value)})})"
+        ".then(function(r){return r.json().then(function(d){return{ok:r.ok,d:d};});})"
+        ".then(function(r){"
+        "if(r.ok){window.location.href='/status';}"
+        "else{err.textContent=r.d.error||'Failed.';err.style.display='block';"
+        "btn.textContent='Start Session \xe2\x86\x92';btn.disabled=false;}"
+        "}).catch(function(){"
+        "err.textContent='Connection error. Stay on Dikly WiFi and retry.';"
+        "err.style.display='block';btn.textContent='Start Session \xe2\x86\x92';btn.disabled=false;"
+        "});}"
+        "</script></body></html>"));
       return;
     }
 
