@@ -4431,9 +4431,8 @@ static void registerLocalHttp() {
                 computedHex[64] = '\0';
                 pinValid = (String(computedHex) == String(storedHash));
               } else {
-                // PIN not configured — block until admin sets it in the portal
                 localHttp.send(403, "application/json",
-                  "{\"error\":\"PIN not set. Ask your admin to assign you an offline PIN in the portal.\"}");
+                  "{\"error\":\"You have not set a PIN yet. Log into dikly.sbs \xe2\x86\x92 Settings \xe2\x86\x92 Set Attendance PIN, then try again.\"}");
                 return;
               }
               break;
@@ -4601,6 +4600,8 @@ static void registerLocalHttp() {
       "button:disabled{opacity:.5}"
       ".err{display:none;background:#450a0a;border:1px solid #991b1b;border-radius:10px;"
       "padding:12px 14px;color:#fca5a5;font-size:13px;margin-bottom:14px}"
+      ".warn{display:none;background:#3b2500;border:1px solid #92400e;border-radius:10px;"
+      "padding:12px 14px;color:#fcd34d;font-size:13px;line-height:1.5;margin-bottom:14px}"
       ".ok{display:none;text-align:center;padding:10px 0}"
       ".ck{font-size:56px;margin-bottom:14px}"
       ".ok h2{color:#22c55e;font-size:18px;margin-bottom:8px}"
@@ -4609,6 +4610,10 @@ static void registerLocalHttp() {
       "<div class='logo'>Di<span>kly</span></div>"
       "<div class='sub'>Lecturer Session Setup</div>"
       "<div class='err' id='err'></div>"
+      "<div class='warn' id='pinwarn'>"
+      "&#x26A0; PIN not set. Log into <strong>dikly.sbs</strong> &rarr; Settings &rarr; "
+      "<strong>Set Attendance PIN</strong>, then return here."
+      "</div>"
       "<div id='main'>"
       "<label>Course</label>"
       "<select id='csel' onchange='onCourse()'>"
@@ -4653,6 +4658,26 @@ static void registerLocalHttp() {
       "});"
       "lsel.style.display='block';llbl.style.display='block';"
       "plbl.style.display='block';pin.style.display='block';"
+      "lsel.onchange=onLecturer;"
+      "onLecturer();"
+      "}"
+      "function onLecturer(){"
+      "var cid=document.getElementById('csel').value;"
+      "var lid=document.getElementById('lsel').value;"
+      "var warn=document.getElementById('pinwarn');"
+      "var pin=document.getElementById('pin');"
+      "warn.style.display='none';"
+      "if(!lid)return;"
+      "var course=bundle.find(function(c){return c.courseId==cid;});"
+      "var lect=course?course.lecturers.find(function(l){return l.id==lid;}):null;"
+      "if(lect&&!lect.offlinePinHash){"
+      "warn.style.display='block';"
+      "pin.style.display='none';"
+      "document.getElementById('plbl').style.display='none';"
+      "}else{"
+      "pin.style.display='block';"
+      "document.getElementById('plbl').style.display='block';"
+      "}"
       "}"
       "function go(){"
       "var cid=document.getElementById('csel').value;"
@@ -4662,9 +4687,12 @@ static void registerLocalHttp() {
       "var err=document.getElementById('err');err.style.display='none';"
       "if(!cid){err.textContent='Select a course.';err.style.display='block';return;}"
       "if(!lid){err.textContent='Select a lecturer.';err.style.display='block';return;}"
-      "if(pin.length!==4){err.textContent='Enter the 4-digit PIN.';err.style.display='block';return;}"
       "var course=bundle.find(function(c){return c.courseId==cid;});"
       "var lect=course?course.lecturers.find(function(l){return l.id==lid;}):null;"
+      "if(lect&&!lect.offlinePinHash){"
+      "err.textContent='Set your Attendance PIN at dikly.sbs first.';"
+      "err.style.display='block';return;}"
+      "if(pin.length!==4){err.textContent='Enter the 4-digit PIN.';err.style.display='block';return;}"
       "var btn=document.getElementById('btn');btn.textContent='Starting\xe2\x80\xa6';btn.disabled=true;"
       "fetch('/session/start',{method:'POST',headers:{'Content-Type':'application/json'},"
       "body:JSON.stringify({pin:pin,courseId:cid,lecturerId:lid,"
