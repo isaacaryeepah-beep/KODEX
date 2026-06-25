@@ -94,7 +94,7 @@ static const char ATTEND_HTML_2[] =
 "<input type='text' id='idx' placeholder='e.g. STU/2021/001'"
 " autocomplete='off' autocorrect='off' spellcheck='false' autocapitalize='characters'>"
 "<label style='margin-top:4px'>Attendance Code <span style='color:#64748b;font-weight:400;font-size:10px'>(shown on device screen)</span></label>"
-"<input type='text' id='code' placeholder='e.g. 245A' maxlength='6'"
+"<input type='text' id='code' placeholder='e.g. 045827' maxlength='6'"
 " autocomplete='off' autocorrect='off' spellcheck='false' autocapitalize='characters'"
 " style='letter-spacing:4px;font-size:20px;text-align:center'>"
 "<button id='btn' onclick='go()'>Mark Attendance</button>"
@@ -156,7 +156,7 @@ static const char ATTEND_REMARK_HTML_2[] =
 "<input type='text' id='idx' placeholder='e.g. STU/2021/001'"
 " autocomplete='off' autocorrect='off' spellcheck='false' autocapitalize='characters'>"
 "<label style='margin-top:4px'>Attendance Code <span style='color:#64748b;font-weight:400;font-size:10px'>(shown on device screen)</span></label>"
-"<input type='text' id='code' placeholder='e.g. 245A' maxlength='6'"
+"<input type='text' id='code' placeholder='e.g. 045827' maxlength='6'"
 " autocomplete='off' autocorrect='off' spellcheck='false' autocapitalize='characters'"
 " style='letter-spacing:4px;font-size:20px;text-align:center'>"
 "<button id='btn' onclick='go()'>Confirm I&#39;m Still Here</button>"
@@ -273,12 +273,12 @@ static const uint8_t SD_CLK = 38, SD_CMD = 40, SD_D0 = 39;
 static const uint8_t SD_D1  = 41, SD_D2  = 48, SD_D3 = 47;
 
 // ─── App Config ──────────────────────────────────────────────────────────────
-static const char*   FIRMWARE_VERSION     = "s3-2.3.0";
+static const char*   FIRMWARE_VERSION     = "s3-2.4.0";
 static const char*   DEFAULT_API_BASE     = "https://dikly.sbs";
 
 static const uint32_t HEARTBEAT_MS        = 5000;
 static const uint32_t WIFI_TIMEOUT_MS     = 8000;   // 8 s: typical connect is 3-5 s; fail fast on wrong creds
-static const uint32_t WINDOW_SECONDS      = 300;  // code rotation period (5 minutes)
+static const uint32_t WINDOW_SECONDS      = 120;  // code rotation period (2 minutes) — must match server attendanceCodeService.js
 
 // ─── Theme selector ──────────────────────────────────────────────────────────
 // Change THEME to switch the whole UI colour scheme without touching anything else.
@@ -669,9 +669,8 @@ static String deriveCode(const String& seed, uint32_t unixSec) {
              (const uint8_t*)slotStr.c_str(), slotStr.length(), digest);
   uint32_t n = ((uint32_t)digest[0] << 24) | ((uint32_t)digest[1] << 16) |
                ((uint32_t)digest[2] <<  8) |  (uint32_t)digest[3];
-  uint32_t digits = n % 1000;
-  char     letter = 'A' + (char)((n / 1000) % 26);
-  char buf[6]; snprintf(buf, sizeof(buf), "%03lu%c", (unsigned long)digits, letter);
+  uint32_t n6 = n % 1000000;
+  char buf[7]; snprintf(buf, sizeof(buf), "%06lu", (unsigned long)n6);
   return String(buf);
 }
 
@@ -3664,7 +3663,17 @@ static void serveAttendPortal() {
   if (reMarkActive) {
     endUnix = reMarkOpenedAt + REMARK_WINDOW_SECS;
   } else {
-    long secsLeft = (long)((monCheckinEndMs - millis()) / 1000);
+    // Use actual session end time (sessionStartedAt + sessionDuration) so the
+    // phone countdown matches the TFT timer. Fall back to monCheckinEndMs only
+    // if session timestamps are not yet populated.
+    long secsLeft;
+    if (sessionStartedAt > 0 && sessionDuration > 0) {
+      time_t nowT = time(nullptr);
+      if (nowT < 1700000000UL) nowT = (time_t)(1700000000UL + millis() / 1000);
+      secsLeft = (long)(sessionStartedAt + sessionDuration) - (long)nowT;
+    } else {
+      secsLeft = (long)((monCheckinEndMs - millis()) / 1000);
+    }
     if (secsLeft < 0) secsLeft = 0;
     endUnix = (uint32_t)(time(nullptr) + secsLeft);
   }
