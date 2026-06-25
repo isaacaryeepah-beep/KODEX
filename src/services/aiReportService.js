@@ -301,7 +301,7 @@ async function gatherDepartmentOverview(companyId, department) {
 }
 
 // ── 4. Exam Readiness ─────────────────────────────────────────────────────────
-async function gatherExamReadiness(companyId, courseId) {
+async function gatherExamReadiness(companyId, courseId, userId = null) {
   const Course              = require('../models/Course');
   const User                = require('../models/User');
   const AttendanceSession   = require('../models/AttendanceSession');
@@ -360,6 +360,7 @@ async function gatherExamReadiness(companyId, courseId) {
     const readiness = composite === null ? 'Unknown' : composite >= 70 ? 'High' : composite >= 50 ? 'Medium' : 'At Risk';
 
     return {
+      _studentId: sid,
       name:      s.name,
       level:     s.studentLevel || '—',
       attendance: attRate !== null ? `${attRate}%` : 'N/A',
@@ -375,6 +376,11 @@ async function gatherExamReadiness(companyId, courseId) {
     return order[a.readiness] - order[b.readiness];
   });
 
+  // Students only see their own row; lecturers/admins/hods see all
+  const visibleRoster = userId
+    ? roster.filter(r => r._studentId === userId.toString())
+    : roster;
+
   return {
     course:    { title: course.title, code: course.code },
     totalEnrolled: students.length,
@@ -386,7 +392,7 @@ async function gatherExamReadiness(companyId, courseId) {
       atRisk:   roster.filter(r => r.readiness === 'At Risk').length,
       unknown:  roster.filter(r => r.readiness === 'Unknown').length,
     },
-    students: roster,
+    students: visibleRoster.map(({ _studentId, ...rest }) => rest),
   };
 }
 
@@ -657,7 +663,7 @@ async function gatherPlatformHealth() {
   ]);
   const usersByCompany = Object.fromEntries(userAgg.map(r => [r._id.toString(), r.count]));
 
-  const recentPayments = await PaymentLog.find({ createdAt: { $gte: since30 }, status: 'success' })
+  const recentPayments = await PaymentLog.find({ createdAt: { $gte: since30 } })
     .select('amount company createdAt')
     .lean();
 
@@ -751,7 +757,7 @@ Write an overview highlighting strengths, weaknesses, and cross-course patterns.
       break;
     }
     case 'exam_readiness': {
-      data   = await gatherExamReadiness(companyId, parameters.courseId);
+      data   = await gatherExamReadiness(companyId, parameters.courseId, parameters.role === 'student' ? userId : null);
       prompt = `Generate an Exam Readiness Report for: ${data.course.title} (${data.course.code})
 
 Enrolled: ${data.totalEnrolled} | Sessions: ${data.sessions} | Assignments: ${data.assignments}

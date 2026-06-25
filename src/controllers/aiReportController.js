@@ -19,6 +19,12 @@ exports.generate = async (req, res) => {
       return res.status(403).json({ success: false, message: `Report type '${type}' is not available for your role.` });
     }
 
+    // Lecturers must scope by courseId — prevents company-wide student data exposure
+    const courseRequiredTypes = ['at_risk_students', 'class_health', 'exam_readiness'];
+    if (role === 'lecturer' && courseRequiredTypes.includes(type) && !parameters.courseId) {
+      return res.status(400).json({ success: false, message: 'courseId is required for this report type.' });
+    }
+
     const result = await generateReport({
       type,
       companyId,
