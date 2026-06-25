@@ -47,6 +47,20 @@ async function _resolveSessionDevice(user, courseId, explicitDeviceId) {
     if (classRepDevice) return classRepDevice;
   }
 
+  // Check if this lecturer is directly assigned to a device for this course
+  // (admin-set via assignedLecturers). This allows lecturers to self-start
+  // sessions without needing the class rep to connect them first.
+  if (user.role === 'lecturer' && courseId) {
+    const assignedDevice = await Device.findOne({
+      companyId,
+      isActive: true,
+      assignedLecturers: { $elemMatch: { lecturerId: user._id, courseId } },
+    })
+      .populate('assignedLecturers.lecturerId', 'name email')
+      .populate('assignedLecturers.courseId',   'title code');
+    if (assignedDevice) return assignedDevice;
+  }
+
   // Try to find the device assigned to the group for this course
   if (courseId) {
     const StudentCourseEnrollment = require('../models/StudentCourseEnrollment');
@@ -172,6 +186,26 @@ exports.startSession = async (req, res) => {
       }
     }
     // ── End device-lecturer assignment check ──────────────────────────────────
+
+    // Auto-link: lecturer is in assignedLecturers but no class rep has connected
+    // them yet — set activeLecturerId now so the device shows the right state
+    // and the class rep connect step is skipped entirely.
+    if (req.user.role === 'lecturer' && !device.activeLecturerId) {
+      const isDirectlyAssigned = (device.assignedLecturers || []).some(a => {
+        const lecId = a.lecturerId?._id ? a.lecturerId._id.toString() : a.lecturerId?.toString();
+        const crsId = a.courseId?._id   ? a.courseId._id.toString()   : a.courseId?.toString();
+        return lecId === req.user._id.toString() &&
+               req.body.courseId && crsId === req.body.courseId.toString();
+      });
+      if (isDirectlyAssigned) {
+        await Device.findByIdAndUpdate(device._id, {
+          activeLecturerId: req.user._id,
+          activeCourseId:   req.body.courseId,
+          connectedAt:      new Date(),
+        });
+        device.activeLecturerId = req.user._id;
+      }
+    }
 
     // ── Timetable time-window check ───────────────────────────────────────────
     // Enforced only for lecturers, and only when timetable entries exist for
@@ -375,10 +409,11 @@ exports.stopSession = async (req, res) => {
     session.stoppedReason = "manual";
     await session.save();
 
-    // Auto-release shared device when session stops so the class rep doesn't
-    // have to manually disconnect after the lecturer ends attendance.
+    // Auto-release device when session stops — clears activeLecturerId whether the
+    // connection was set by the class rep or auto-linked at session start.
+    // Only clears if the device is still linked to the lecturer who ended the session.
     await Device.findOneAndUpdate(
-      { deviceId: session.deviceId, ownershipType: 'shared', companyId: session.company },
+      { deviceId: session.deviceId, companyId: session.company, activeLecturerId: session.createdBy },
       { $set: { activeLecturerId: null, activeCourseId: null, connectedAt: null } }
     );
 
