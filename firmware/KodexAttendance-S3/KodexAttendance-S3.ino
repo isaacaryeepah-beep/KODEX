@@ -5249,6 +5249,7 @@ void setup() {
   IPAddress apGw;
   uint32_t apWait = millis();
   do { delay(100); apGw = WiFi.softAPIP(); } while (apGw == IPAddress(0,0,0,0) && millis()-apWait < 5000);
+  dns.start(53, "*", apGw);  // wildcard DNS → triggers captive portal popup on iOS/Android/Windows
   MDNS.begin("dikly");  // reachable as http://dikly.local on both AP and school WiFi
   LOG("Device AP: " + apName + " @ " + apGw.toString());
 
