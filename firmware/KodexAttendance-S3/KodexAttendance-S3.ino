@@ -1283,9 +1283,15 @@ static void sendHeartbeat() {
   lastSyncMs      = millis();
   // Flush any offline sessions + attendance records now that we have internet.
   syncOfflineAttendance();
-  // Refresh roster + bundle every ~10 minutes (120 heartbeats × 5 s).
+  // Refresh roster + bundle: immediately on first heartbeat if not yet loaded,
+  // then every ~10 minutes (120 heartbeats × 5 s) thereafter.
   static uint32_t rosterHbCount = 0;
-  if (++rosterHbCount >= 120) { rosterHbCount = 0; downloadRoster(); downloadBundle(); }
+  ++rosterHbCount;
+  if (!bundleLoaded || rosterHbCount >= 120) {
+    rosterHbCount = 0;
+    downloadRoster();
+    downloadBundle();
+  }
   JsonDocument doc;
   if (deserializeJson(doc, resp)) return;
   if (doc["serverTime"].is<const char*>()) {
@@ -5249,6 +5255,7 @@ void setup() {
   IPAddress apGw;
   uint32_t apWait = millis();
   do { delay(100); apGw = WiFi.softAPIP(); } while (apGw == IPAddress(0,0,0,0) && millis()-apWait < 5000);
+  dns.start(53, "*", apGw);  // wildcard DNS → triggers captive portal popup on iOS/Android/Windows
   MDNS.begin("dikly");  // reachable as http://dikly.local on both AP and school WiFi
   LOG("Device AP: " + apName + " @ " + apGw.toString());
 

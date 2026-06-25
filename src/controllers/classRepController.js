@@ -22,13 +22,33 @@ exports.getMyDevice = async (req, res, next) => {
   } catch (e) { next(e); }
 };
 
-// GET /api/class-rep/lecturers — lecturers who teach the class rep's course(s)
+// GET /api/class-rep/lecturers — lecturers assigned to the class rep's device by admin
 exports.getCourseLecturers = async (req, res, next) => {
   try {
     if (!req.user.isClassRep) return res.status(403).json({ error: 'Not a class rep' });
-    const user = await User.findById(req.user._id).select('classRepCourse programme studentLevel studentGroup sessionType semester');
 
-    // Find all courses matching this student's class group
+    // Primary source: device.assignedLecturers set by admin
+    const device = await Device.findOne({ classRepId: req.user._id, companyId: req.user.company, isActive: true })
+      .populate('assignedLecturers.lecturerId', 'name email')
+      .populate('assignedLecturers.courseId', 'title code')
+      .lean();
+
+    if (device && device.assignedLecturers && device.assignedLecturers.length) {
+      const lecturers = device.assignedLecturers
+        .filter(a => a.lecturerId && a.courseId)
+        .map(a => ({
+          lecturerId:   a.lecturerId._id,
+          lecturerName: a.lecturerId.name,
+          lecturerEmail: a.lecturerId.email,
+          courseId:    a.courseId._id,
+          courseTitle: a.courseId.title,
+          courseCode:  a.courseId.code,
+        }));
+      if (lecturers.length) return res.json({ lecturers });
+    }
+
+    // Fallback: query courses matching the class rep's class-group profile
+    const user = await User.findById(req.user._id).select('classRepCourse programme studentLevel studentGroup sessionType semester department').lean();
     const query = { companyId: req.user.company, isActive: true };
     if (user.studentLevel) query.level = user.studentLevel;
     if (user.studentGroup) query.group = user.studentGroup;
@@ -37,32 +57,29 @@ exports.getCourseLecturers = async (req, res, next) => {
     if (user.programme) query.qualificationType = user.programme;
 
     const courses = await Course.find(query).populate('lecturerId', 'name email').lean();
-
     let lecturers = courses
       .filter(c => c.lecturerId)
       .map(c => ({
-        lecturerId: c.lecturerId._id,
+        lecturerId:   c.lecturerId._id,
         lecturerName: c.lecturerId.name,
         lecturerEmail: c.lecturerId.email,
-        courseId: c._id,
+        courseId:    c._id,
         courseTitle: c.title,
-        courseCode: c.code,
+        courseCode:  c.code,
       }));
 
-    // Fallback: if no courses matched the strict class-group filters, return all
-    // lecturers from the rep's department so the device can still be connected.
+    // Last resort: all lecturers in the rep's department (no course association)
     if (!lecturers.length) {
-      const repFull = await User.findById(req.user._id).select('department').lean();
       const fallbackFilter = { company: req.user.company, role: 'lecturer', isActive: true };
-      if (repFull && repFull.department) fallbackFilter.department = repFull.department;
+      if (user.department) fallbackFilter.department = user.department;
       const fallback = await User.find(fallbackFilter).select('_id name email').limit(50).lean();
       lecturers = fallback.map(l => ({
-        lecturerId: l._id,
+        lecturerId:   l._id,
         lecturerName: l.name,
         lecturerEmail: l.email,
-        courseId: null,
+        courseId:    null,
         courseTitle: null,
-        courseCode: null,
+        courseCode:  null,
       }));
     }
 
@@ -94,7 +111,8 @@ exports.searchLecturers = async (req, res, next) => {
 exports.connectDevice = async (req, res, next) => {
   try {
     if (!req.user.isClassRep) return res.status(403).json({ error: 'Not a class rep' });
-    const { lecturerId, courseId, lecturerPin } = req.body;
+    const { lecturerId, lecturerPin } = req.body;
+    const courseId = req.body.courseId && req.body.courseId !== 'null' ? req.body.courseId : null;
     if (!lecturerId) return res.status(400).json({ error: 'lecturerId required' });
 
     const device = await Device.findOne({ classRepId: req.user._id, companyId: req.user.company, isActive: true });

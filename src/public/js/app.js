@@ -13044,7 +13044,13 @@ async function renderClassDevice() {
               <label style="font-size:12px;font-weight:600;text-transform:uppercase;letter-spacing:.5px;color:#64748b;display:block;margin-bottom:6px">Select Lecturer &amp; Course</label>
               <select id="cr-lecturer-select" style="width:100%;padding:10px 12px;border:1.5px solid #e2e8f0;border-radius:8px;font-size:13px">
                 <option value="">&mdash; Choose lecturer / course &mdash;</option>
-                ${lecturers.map(l => `<option value="${l.lecturerId}|${l.courseId}">${esc(l.lecturerName)} — ${esc(l.courseCode)}: ${esc(l.courseTitle)}</option>`).join('')}
+                ${lecturers.map(l => {
+                  const cid = l.courseId || '';
+                  const label = l.courseCode && l.courseTitle
+                    ? `${esc(l.lecturerName)} — ${esc(l.courseCode)}: ${esc(l.courseTitle)}`
+                    : `${esc(l.lecturerName)} (no course assigned)`;
+                  return `<option value="${l.lecturerId}|${cid}">${label}</option>`;
+                }).join('')}
               </select>
             </div>
             <div id="cr-pin-wrap" style="margin-bottom:12px;display:none">
