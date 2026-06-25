@@ -22967,6 +22967,25 @@ function renderCourseVideos() {
             <label>Description <span style="color:var(--text-muted);font-weight:400">(optional)</span></label>
             <input id="cv-desc" placeholder="Brief description of the video">
           </div>
+          <div class="form-group">
+            <label>Target Audience</label>
+            <select id="cv-audience">
+              <option value="All Students">All Students</option>
+              <option value="Level 100">Level 100</option>
+              <option value="Level 200">Level 200</option>
+              <option value="Level 300">Level 300</option>
+              <option value="Level 400">Level 400</option>
+              <option value="Level 500">Level 500</option>
+              <option value="Level 600">Level 600</option>
+              <option value="Level 700">Level 700</option>
+              <option value="Group A">Group A</option>
+              <option value="Group B">Group B</option>
+              <option value="Group C">Group C</option>
+              <option value="Group D">Group D</option>
+              <option value="Beginners">Beginners</option>
+              <option value="Advanced">Advanced</option>
+            </select>
+          </div>
           <div class="form-group" style="margin-bottom:1.25rem">
             <label>Video URL</label>
             <input id="cv-url" placeholder="Paste a YouTube, Vimeo, Drive or Loom link">
@@ -23059,23 +23078,29 @@ async function cvLoadList(courseId) {
         return `<div class="card" style="padding:0;overflow:hidden;cursor:pointer;transition:transform .15s,box-shadow .15s" onmouseover="this.style.transform='translateY(-3px)';this.style.boxShadow='var(--shadow-lg)'" onmouseout="this.style.transform='';this.style.boxShadow=''">
           <div style="position:relative;aspect-ratio:16/9;background:#0d1117;overflow:hidden" onclick="cvWatchVideo(${JSON.stringify(v.embedUrl)},${JSON.stringify(v.title)})">
             ${v.thumbnail
-              ? `<img src="${escHtml(v.thumbnail)}" style="width:100%;height:100%;object-fit:cover;display:block">`
+              ? `<img src="${esc(v.thumbnail)}" style="width:100%;height:100%;object-fit:cover;display:block">`
               : `<div style="width:100%;height:100%;display:flex;align-items:center;justify-content:center;background:linear-gradient(135deg,#1e293b,#334155)">${svgIcon('<circle cx="12" cy="12" r="10"/><polygon points="10 8 16 12 10 16 10 8"/>', 36, 'rgba(255,255,255,.4)')}</div>`}
             <div style="position:absolute;inset:0;background:rgba(0,0,0,.35);display:flex;align-items:center;justify-content:center;opacity:0;transition:opacity .15s" onmouseover="this.style.opacity=1" onmouseout="this.style.opacity=0">
               <div style="width:44px;height:44px;border-radius:50%;background:rgba(255,255,255,.95);display:flex;align-items:center;justify-content:center">
                 ${svgIcon('<polygon points="5 3 19 12 5 21 5 3"/>', 18, '#1e293b')}
               </div>
             </div>
-            <div style="position:absolute;top:.5rem;left:.5rem;background:${color};color:#fff;font-size:.65rem;font-weight:600;letter-spacing:.04em;text-transform:uppercase;padding:.2rem .45rem;border-radius:4px;line-height:1.4">${escHtml(v.platform||'video')}</div>
+            <div style="position:absolute;top:.5rem;left:.5rem;background:${color};color:#fff;font-size:.65rem;font-weight:600;letter-spacing:.04em;text-transform:uppercase;padding:.2rem .45rem;border-radius:4px;line-height:1.4">${esc(v.platform||'video')}</div>
           </div>
           <div style="padding:.85rem">
-            <p style="margin:0 0 .25rem;font-weight:600;font-size:.88rem;line-height:1.4;overflow:hidden;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical">${escHtml(v.title)}</p>
-            ${v.description ? `<p style="margin:0 0 .75rem;font-size:.78rem;color:var(--text-light);overflow:hidden;display:-webkit-box;-webkit-line-clamp:1;-webkit-box-orient:vertical">${escHtml(v.description)}</p>` : '<div style="margin-bottom:.75rem"></div>'}
+            <p style="margin:0 0 .25rem;font-weight:600;font-size:.88rem;line-height:1.4;overflow:hidden;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical">${esc(v.title)}</p>
+            ${v.description ? `<p style="margin:0 0 .5rem;font-size:.78rem;color:var(--text-light);overflow:hidden;display:-webkit-box;-webkit-line-clamp:1;-webkit-box-orient:vertical">${esc(v.description)}</p>` : ''}
+            <div style="margin-bottom:.6rem">
+              <span style="display:inline-flex;align-items:center;gap:.3rem;font-size:.68rem;font-weight:600;color:var(--accent);background:rgba(79,110,247,.12);padding:.18rem .45rem;border-radius:4px">
+                ${svgIcon('<path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/>', 11, 'var(--accent)')}
+                ${esc(v.targetAudience || 'All Students')}
+              </span>
+            </div>
             <div style="display:flex;gap:.5rem">
               <button class="btn btn-sm btn-primary" style="flex:1;font-size:.78rem" onclick="cvWatchVideo(${JSON.stringify(v.embedUrl)},${JSON.stringify(v.title)})">
                 ${svgIcon('<polygon points="5 3 19 12 5 21 5 3"/>', 12)} Watch
               </button>
-              <button class="btn btn-sm btn-ghost" style="padding:.35rem .55rem;color:var(--error);border-color:var(--border)" onclick="cvDeleteVideo('${v._id}','${escHtml(courseId)}')" title="Delete">
+              <button class="btn btn-sm btn-ghost" style="padding:.35rem .55rem;color:var(--error);border-color:var(--border)" onclick="cvDeleteVideo('${v._id}','${esc(courseId)}')" title="Delete">
                 ${svgIcon('<polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4h6v2"/>', 14, 'var(--error)')}
               </button>
             </div>
@@ -23084,7 +23109,7 @@ async function cvLoadList(courseId) {
       }).join('')
     }</div>`;
   } catch(e) {
-    area.innerHTML = `<div class="empty-state"><p style="color:var(--error)">${escHtml(e.message)}</p></div>`;
+    area.innerHTML = `<div class="empty-state"><p style="color:var(--error)">${esc(e.message)}</p></div>`;
   }
 }
 
@@ -23093,9 +23118,10 @@ window.cvAddVideo = async function() {
   const title    = document.getElementById('cv-title')?.value?.trim();
   const desc     = document.getElementById('cv-desc')?.value?.trim();
   const url      = document.getElementById('cv-url')?.value?.trim();
+  const audience = document.getElementById('cv-audience')?.value || 'All Students';
   if (!courseId || !title || !url) { toastError('Course, title and URL are required'); return; }
   try {
-    await api('/api/course-videos', { method: 'POST', body: JSON.stringify({ courseId, title, description: desc, url }) });
+    await api('/api/course-videos', { method: 'POST', body: JSON.stringify({ courseId, title, description: desc, url, targetAudience: audience }) });
     document.getElementById('cv-title').value = '';
     document.getElementById('cv-desc').value  = '';
     document.getElementById('cv-url').value   = '';
@@ -23123,14 +23149,14 @@ window.cvWatchVideo = function(embedUrl, title) {
           <div style="width:32px;height:32px;border-radius:6px;background:rgba(255,255,255,.12);display:flex;align-items:center;justify-content:center;flex-shrink:0">
             ${svgIcon('<polygon points="5 3 19 12 5 21 5 3"/>', 14, '#fff')}
           </div>
-          <h3 style="color:#fff;margin:0;font-size:1rem;font-weight:600;overflow:hidden;white-space:nowrap;text-overflow:ellipsis">${escHtml(title)}</h3>
+          <h3 style="color:#fff;margin:0;font-size:1rem;font-weight:600;overflow:hidden;white-space:nowrap;text-overflow:ellipsis">${esc(title)}</h3>
         </div>
         <button id="cv-close-btn" style="background:rgba(255,255,255,.12);border:none;color:#fff;width:34px;height:34px;border-radius:8px;cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0;margin-left:.75rem;transition:background .15s" onmouseover="this.style.background='rgba(255,255,255,.22)'" onmouseout="this.style.background='rgba(255,255,255,.12)'">
           ${svgIcon('<line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>', 16, '#fff')}
         </button>
       </div>
       <div style="position:relative;padding-bottom:56.25%;height:0;overflow:hidden;border-radius:12px;background:#000;box-shadow:0 24px 60px rgba(0,0,0,.6)">
-        <iframe src="${escHtml(embedUrl)}" style="position:absolute;top:0;left:0;width:100%;height:100%;border:0" allow="accelerometer;autoplay;clipboard-write;encrypted-media;gyroscope;picture-in-picture" allowfullscreen></iframe>
+        <iframe src="${esc(embedUrl)}" style="position:absolute;top:0;left:0;width:100%;height:100%;border:0" allow="accelerometer;autoplay;clipboard-write;encrypted-media;gyroscope;picture-in-picture" allowfullscreen></iframe>
       </div>
       <p style="color:rgba(255,255,255,.45);text-align:center;font-size:.75rem;margin:.75rem 0 0">Click outside or press Esc to close</p>
     </div>`;
@@ -23164,8 +23190,8 @@ async function _renderStudentVideos() {
             ${svgIcon('<path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/>', 16, 'var(--primary)')}
           </div>
           <div>
-            <h3 style="margin:0;font-size:.95rem;font-weight:600">${escHtml(course?.title||'Unknown Course')}</h3>
-            ${course?.code ? `<p style="margin:0;font-size:.75rem;color:var(--text-light)">${escHtml(course.code)}</p>` : ''}
+            <h3 style="margin:0;font-size:.95rem;font-weight:600">${esc(course?.title||'Unknown Course')}</h3>
+            ${course?.code ? `<p style="margin:0;font-size:.75rem;color:var(--text-light)">${esc(course.code)}</p>` : ''}
           </div>
           <span style="margin-left:auto;font-size:.75rem;color:var(--text-muted);font-weight:500">${videos.length} video${videos.length!==1?'s':''}</span>
         </div>
@@ -23175,25 +23201,29 @@ async function _renderStudentVideos() {
             return `<div class="card" style="padding:0;overflow:hidden;cursor:pointer;transition:transform .15s,box-shadow .15s" onclick="cvWatchVideo(${JSON.stringify(v.embedUrl)},${JSON.stringify(v.title)})" onmouseover="this.style.transform='translateY(-3px)';this.style.boxShadow='var(--shadow-lg)'" onmouseout="this.style.transform='';this.style.boxShadow=''">
               <div style="position:relative;aspect-ratio:16/9;background:#0d1117;overflow:hidden">
                 ${v.thumbnail
-                  ? `<img src="${escHtml(v.thumbnail)}" style="width:100%;height:100%;object-fit:cover;display:block">`
+                  ? `<img src="${esc(v.thumbnail)}" style="width:100%;height:100%;object-fit:cover;display:block">`
                   : `<div style="width:100%;height:100%;display:flex;align-items:center;justify-content:center;background:linear-gradient(135deg,#1e293b,#334155)">${svgIcon('<circle cx="12" cy="12" r="10"/><polygon points="10 8 16 12 10 16 10 8"/>', 32, 'rgba(255,255,255,.35)')}</div>`}
                 <div style="position:absolute;inset:0;background:rgba(0,0,0,.3);display:flex;align-items:center;justify-content:center">
                   <div style="width:40px;height:40px;border-radius:50%;background:rgba(255,255,255,.92);display:flex;align-items:center;justify-content:center">
                     ${svgIcon('<polygon points="5 3 19 12 5 21 5 3"/>', 16, '#1e293b')}
                   </div>
                 </div>
-                <div style="position:absolute;top:.5rem;left:.5rem;background:${color};color:#fff;font-size:.62rem;font-weight:700;letter-spacing:.05em;text-transform:uppercase;padding:.18rem .42rem;border-radius:4px">${escHtml(v.platform||'video')}</div>
+                <div style="position:absolute;top:.5rem;left:.5rem;background:${color};color:#fff;font-size:.62rem;font-weight:700;letter-spacing:.05em;text-transform:uppercase;padding:.18rem .42rem;border-radius:4px">${esc(v.platform||'video')}</div>
               </div>
               <div style="padding:.75rem">
-                <p style="margin:0;font-weight:600;font-size:.85rem;line-height:1.4;overflow:hidden;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical">${escHtml(v.title)}</p>
-                ${v.description ? `<p style="margin:.25rem 0 0;font-size:.75rem;color:var(--text-light);overflow:hidden;display:-webkit-box;-webkit-line-clamp:1;-webkit-box-orient:vertical">${escHtml(v.description)}</p>` : ''}
+                <p style="margin:0 0 .25rem;font-weight:600;font-size:.85rem;line-height:1.4;overflow:hidden;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical">${esc(v.title)}</p>
+                ${v.description ? `<p style="margin:0 0 .4rem;font-size:.75rem;color:var(--text-light);overflow:hidden;display:-webkit-box;-webkit-line-clamp:1;-webkit-box-orient:vertical">${esc(v.description)}</p>` : ''}
+                <span style="display:inline-flex;align-items:center;gap:.25rem;font-size:.66rem;font-weight:600;color:var(--accent);background:rgba(79,110,247,.12);padding:.15rem .4rem;border-radius:4px">
+                  ${svgIcon('<path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/>', 10, 'var(--accent)')}
+                  ${esc(v.targetAudience || 'All Students')}
+                </span>
               </div>
             </div>`;
           }).join('')}
         </div>
       </div>`).join('');
   } catch(e) {
-    body.innerHTML = `<div class="empty-state"><p style="color:var(--error)">${escHtml(e.message)}</p></div>`;
+    body.innerHTML = `<div class="empty-state"><p style="color:var(--error)">${esc(e.message)}</p></div>`;
   }
 }
 

@@ -10,7 +10,8 @@ const courseVideoSchema = new mongoose.Schema({
   embedUrl:    { type: String, required: true },
   thumbnail:   { type: String, default: '' },
   platform:    { type: String, enum: ['youtube', 'vimeo', 'googledrive', 'loom', 'other'], default: 'other' },
-  order:       { type: Number, default: 0 },
+  order:          { type: Number, default: 0 },
+  targetAudience: { type: String, default: 'All Students' },
 }, { timestamps: true });
 
 courseVideoSchema.index({ courseId: 1, order: 1 });
