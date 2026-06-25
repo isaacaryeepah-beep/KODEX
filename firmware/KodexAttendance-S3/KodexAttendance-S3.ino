@@ -260,7 +260,7 @@ static const uint8_t SD_CLK = 38, SD_CMD = 40, SD_D0 = 39;
 static const uint8_t SD_D1  = 41, SD_D2  = 48, SD_D3 = 47;
 
 // ─── App Config ──────────────────────────────────────────────────────────────
-static const char*   FIRMWARE_VERSION     = "s3-2.2.0";
+static const char*   FIRMWARE_VERSION     = "s3-2.2.1";
 static const char*   DEFAULT_API_BASE     = "https://dikly.sbs";
 
 static const uint32_t HEARTBEAT_MS        = 5000;
@@ -712,12 +712,12 @@ static bool touchRead(uint16_t& tx, uint16_t& ty) {
 
   if ((td & 0x0F) == 0) return false;
 
-  // FT6336G on ES3C28P: chip reports X/Y already in portrait orientation
-  // (Y=0 at top, Y=319 at bottom). No axis swap or inversion needed.
+  // FT6336G on ES3C28P: chip is mounted 180° relative to the display.
+  // Both axes must be inverted to match portrait screen coordinates.
   uint16_t rawX = ((xh & 0x0F) << 8) | xl;
   uint16_t rawY = ((yh & 0x0F) << 8) | yl;
-  tx = rawX;
-  ty = rawY;
+  tx = (SW - 1) - rawX;   // mirror X
+  ty = (SH - 1) - rawY;   // mirror Y
   return true;
 }
 
