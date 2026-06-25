@@ -7,7 +7,7 @@
 //  attendance can stay fast for 50+ students: the ESP32 just displays the code,
 //  the backend verifies by re-deriving it, no DB lookup of issued codes.
 //
-//  Formula: HMAC-SHA256(seed, floor(unixSeconds / WINDOW_SECONDS)) → 6 digits
+//  Formula: HMAC-SHA256(seed, floor(unixSeconds / WINDOW_SECONDS)) → 4 digits
 //
 //  Anti-cheat properties:
 //    - Code rotates every WINDOW_SECONDS (2 minutes). A friend forwarding the
@@ -16,7 +16,7 @@
 //      grabbed the code at second 19 isn't unfairly rejected at second 21.
 //      That gives a ~20–40s real submission window.
 //    - The seed is secret (per-session, never sent to the student). Without it
-//      you can't brute-force the code — each code is one of 10^6 and each
+//      you can't brute-force the code — each code is one of 10^4 and each
 //      window is independent.
 // ══════════════════════════════════════════════════════════════════════════════
 
@@ -38,13 +38,13 @@ function _deriveCode(seed, slot) {
     .createHmac("sha256", String(seed))
     .update(String(slot))
     .digest();
-  // Take first 4 bytes as a 32-bit unsigned int, mod 1,000,000, zero-pad.
-  const n = h.readUInt32BE(0) % 1_000_000;
-  return n.toString().padStart(6, "0");
+  // Take first 4 bytes as a 32-bit unsigned int, mod 10,000, zero-pad.
+  const n = h.readUInt32BE(0) % 10_000;
+  return n.toString().padStart(4, "0");
 }
 
 /**
- * Return the current 6-digit code for a session.
+ * Return the current 4-digit code for a session.
  * Used by the lecturer dashboard endpoint and for debugging.
  */
 function currentCodeForSession(session, nowMs = Date.now()) {
@@ -70,8 +70,8 @@ function verifyCodeForSession(session, submittedCode, nowMs = Date.now()) {
   if (!session || !session.esp32Seed) {
     return { ok: false, reason: "Session has no rotating code configured." };
   }
-  if (!submittedCode || !/^\d{6}$/.test(String(submittedCode).trim())) {
-    return { ok: false, reason: "Code must be 6 digits." };
+  if (!submittedCode || !/^\d{4}$/.test(String(submittedCode).trim())) {
+    return { ok: false, reason: "Code must be 4 digits." };
   }
 
   const clean = String(submittedCode).trim();
