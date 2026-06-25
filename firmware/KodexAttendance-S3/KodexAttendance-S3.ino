@@ -94,7 +94,7 @@ static const char ATTEND_HTML_2[] =
 "<input type='text' id='idx' placeholder='e.g. STU/2021/001'"
 " autocomplete='off' autocorrect='off' spellcheck='false' autocapitalize='characters'>"
 "<label style='margin-top:4px'>Attendance Code <span style='color:#64748b;font-weight:400;font-size:10px'>(shown on device screen)</span></label>"
-"<input type='text' id='code' placeholder='e.g. 045827' maxlength='6'"
+"<input type='text' id='code' placeholder='e.g. 0458' maxlength='4'"
 " autocomplete='off' autocorrect='off' spellcheck='false' autocapitalize='characters'"
 " style='letter-spacing:4px;font-size:20px;text-align:center'>"
 "<button id='btn' onclick='go()'>Mark Attendance</button>"
@@ -156,7 +156,7 @@ static const char ATTEND_REMARK_HTML_2[] =
 "<input type='text' id='idx' placeholder='e.g. STU/2021/001'"
 " autocomplete='off' autocorrect='off' spellcheck='false' autocapitalize='characters'>"
 "<label style='margin-top:4px'>Attendance Code <span style='color:#64748b;font-weight:400;font-size:10px'>(shown on device screen)</span></label>"
-"<input type='text' id='code' placeholder='e.g. 045827' maxlength='6'"
+"<input type='text' id='code' placeholder='e.g. 0458' maxlength='4'"
 " autocomplete='off' autocorrect='off' spellcheck='false' autocapitalize='characters'"
 " style='letter-spacing:4px;font-size:20px;text-align:center'>"
 "<button id='btn' onclick='go()'>Confirm I&#39;m Still Here</button>"
@@ -273,7 +273,7 @@ static const uint8_t SD_CLK = 38, SD_CMD = 40, SD_D0 = 39;
 static const uint8_t SD_D1  = 41, SD_D2  = 48, SD_D3 = 47;
 
 // ─── App Config ──────────────────────────────────────────────────────────────
-static const char*   FIRMWARE_VERSION     = "s3-2.5.0";
+static const char*   FIRMWARE_VERSION     = "s3-2.6.0";
 static const char*   DEFAULT_API_BASE     = "https://dikly.sbs";
 
 static const uint32_t HEARTBEAT_MS        = 5000;
@@ -670,8 +670,8 @@ static String deriveCode(const String& seed, uint32_t unixSec) {
              (const uint8_t*)slotStr.c_str(), slotStr.length(), digest);
   uint32_t n = ((uint32_t)digest[0] << 24) | ((uint32_t)digest[1] << 16) |
                ((uint32_t)digest[2] <<  8) |  (uint32_t)digest[3];
-  uint32_t n6 = n % 1000000;
-  char buf[7]; snprintf(buf, sizeof(buf), "%06lu", (unsigned long)n6);
+  uint32_t n4 = n % 10000;
+  char buf[5]; snprintf(buf, sizeof(buf), "%04lu", (unsigned long)n4);
   return String(buf);
 }
 
