@@ -273,7 +273,7 @@ static const uint8_t SD_CLK = 38, SD_CMD = 40, SD_D0 = 39;
 static const uint8_t SD_D1  = 41, SD_D2  = 48, SD_D3 = 47;
 
 // ─── App Config ──────────────────────────────────────────────────────────────
-static const char*   FIRMWARE_VERSION     = "s3-2.4.0";
+static const char*   FIRMWARE_VERSION     = "s3-2.5.0";
 static const char*   DEFAULT_API_BASE     = "https://dikly.sbs";
 
 static const uint32_t HEARTBEAT_MS        = 5000;
@@ -377,8 +377,9 @@ uint32_t sessionStartedAt = 0;
 
 // Pre-auth bundle (downloaded when online, persisted in NVS key "bundle")
 // Compact JSON: [{"courseId":...,"courseCode":...,"courseName":...,"lecturers":[{"id":...,"name":...,"offlinePinHash":...}]}]
-static String bundleJson = "";
-static bool   bundleLoaded = false;
+static String bundleJson      = "";
+static bool   bundleLoaded    = false;
+static String bundleErrorMsg  = "";  // last server error, shown on TFT when bundle missing
 
 // RAM copy of enrolled student index numbers — loaded by downloadRoster().
 // Primary roster check in /attend uses this; SD file is the fallback.
@@ -1217,7 +1218,14 @@ static void downloadBundle() {
       }
     }
   } else {
-    LOG("Bundle fetch failed: " + String(code));
+    String errBody = http.getString();
+    JsonDocument errDoc;
+    if (!deserializeJson(errDoc, errBody) && errDoc["error"].is<const char*>()) {
+      bundleErrorMsg = String(errDoc["error"].as<const char*>());
+    } else {
+      bundleErrorMsg = "Server error (HTTP " + String(code) + ")";
+    }
+    LOG("Bundle fetch failed: " + String(code) + " — " + bundleErrorMsg);
   }
   http.end();
 }
@@ -2371,8 +2379,22 @@ static void drawOscCourse() {
 
   if (oscCourseCount == 0) {
     spr.setFont(F_TINY); spr.setTextColor(COL_ERROR, COL_BG);
-    spr.setCursor(14, 140); spr.print("No bundle. Connect to WiFi");
-    spr.setCursor(14, 158); spr.print("and wait ~10 s.");
+    if (bundleErrorMsg.length() > 0) {
+      // Wrap long messages across two lines (max ~28 chars per line at F_TINY)
+      if (bundleErrorMsg.length() <= 28) {
+        spr.setCursor(14, 132); spr.print(bundleErrorMsg);
+      } else {
+        int cut = bundleErrorMsg.lastIndexOf(' ', 28);
+        if (cut < 0) cut = 28;
+        spr.setCursor(14, 124); spr.print(bundleErrorMsg.substring(0, cut));
+        spr.setCursor(14, 142); spr.print(bundleErrorMsg.substring(cut + 1));
+      }
+      spr.setTextColor(COL_MUTED, COL_BG);
+      spr.setCursor(14, 162); spr.print("Reconnect WiFi to retry.");
+    } else {
+      spr.setCursor(14, 140); spr.print("No bundle. Connect to WiFi");
+      spr.setCursor(14, 158); spr.print("and wait ~10 s.");
+    }
     spr.pushSprite(0, 0); return;
   }
 

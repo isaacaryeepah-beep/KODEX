@@ -4549,101 +4549,115 @@ async function hodRejectCourse(id, title) {
   } catch(e) { toastError(e.message || 'Failed to reject course'); }
 }
 
-// ── HOD — Unlock Locked Students (with filter + bulk unlock) ──────────────
+// ── HOD — Unlock Locked Students (card layout, mobile-first) ──────────────
 async function renderHodUnlockStudents() {
   const content = document.getElementById('main-content');
   content.innerHTML = '<div class="loading">Loading locked accounts…</div>';
   try {
     const data = await api('/api/hod/locked-students');
     const students = data.students || [];
-
-    // Gather unique departments for filter
     const depts = [...new Set(students.map(s => s.department).filter(Boolean))].sort();
 
-    // Helper: determine lock type badge for a student
-    function lockTypeBadge(s) {
-      const hasDeviceLock = s.accountDeviceLock?.isLocked && s.accountDeviceLock?.lockedUntil && new Date(s.accountDeviceLock.lockedUntil) > new Date();
-      const hasLoginLock  = s.isLocked;
-      if (hasDeviceLock && hasLoginLock) return `<span style="background:#fef3c7;color:#92400e;border:1px solid #fde68a;padding:2px 8px;border-radius:20px;font-size:10px;font-weight:700;">Login + Device</span>`;
-      if (hasDeviceLock)  return `<span style="background:#ede9fe;color:#6d28d9;border:1px solid #c4b5fd;padding:2px 8px;border-radius:20px;font-size:10px;font-weight:700;">New Device</span>`;
-      return `<span style="background:#fee2e2;color:#b91c1c;border:1px solid #fca5a5;padding:2px 8px;border-radius:20px;font-size:10px;font-weight:700;">Failed Login</span>`;
-    }
-
-    function lockReason(s) {
-      const hasDeviceLock = s.accountDeviceLock?.isLocked && s.accountDeviceLock?.lockedUntil && new Date(s.accountDeviceLock.lockedUntil) > new Date();
-      if (hasDeviceLock) {
-        const until = new Date(s.accountDeviceLock.lockedUntil);
-        return `New device login — locked until ${until.toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'})} ${until.toLocaleDateString()}`;
+    function getLockInfo(s) {
+      const hasDevice = s.accountDeviceLock?.isLocked && s.accountDeviceLock?.lockedUntil && new Date(s.accountDeviceLock.lockedUntil) > new Date();
+      const hasLogin  = s.isLocked;
+      let type, color, bg, border, reason;
+      if (hasDevice && hasLogin) {
+        type = 'Login + Device'; color = '#92400e'; bg = '#fef3c7'; border = '#fde68a';
+        reason = `Failed logins and new device detected — locked until ${new Date(s.accountDeviceLock.lockedUntil).toLocaleString([], {dateStyle:'short',timeStyle:'short'})}`;
+      } else if (hasDevice) {
+        type = 'New Device'; color = '#5b21b6'; bg = '#ede9fe'; border = '#c4b5fd';
+        reason = `New device login detected — locked until ${new Date(s.accountDeviceLock.lockedUntil).toLocaleString([], {dateStyle:'short',timeStyle:'short'})}`;
+      } else {
+        type = 'Failed Login'; color = '#991b1b'; bg = '#fee2e2'; border = '#fca5a5';
+        reason = s.lockReason || 'Too many failed login attempts';
       }
-      return s.lockReason || '—';
+      const since = hasDevice && !hasLogin
+        ? (s.accountDeviceLock.lockedUntil ? timeAgo(new Date(s.accountDeviceLock.lockedUntil).getTime() - 6*3600000) : '—')
+        : (s.lockedAt ? timeAgo(s.lockedAt) : '—');
+      return { type, color, bg, border, reason, since };
     }
 
-    function lockedSince(s) {
-      const hasDeviceLock = s.accountDeviceLock?.isLocked && s.accountDeviceLock?.lockedUntil && new Date(s.accountDeviceLock.lockedUntil) > new Date();
-      if (hasDeviceLock && !s.isLocked) return s.accountDeviceLock.lockedUntil ? timeAgo(new Date(s.accountDeviceLock.lockedUntil).getTime() - 6*3600000) : '—';
-      return s.lockedAt ? timeAgo(s.lockedAt) : '—';
-    }
+    const LOCK_ICON = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>`;
+    const UNLOCK_ICON = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 9.9-1"/></svg>`;
 
     content.innerHTML = `
-      <div class="page-header" style="flex-wrap:wrap;gap:10px;">
+      <div class="page-header" style="flex-wrap:wrap;gap:10px;margin-bottom:6px;">
         <div>
-          <h2>Locked Student Accounts</h2>
-          <p>${students.length} locked account${students.length !== 1 ? 's' : ''} · Failed logins &amp; new device locks</p>
+          <h2 style="margin:0 0 2px;">Locked Student Accounts</h2>
+          <p style="margin:0;color:var(--text-muted);font-size:13px;">
+            ${students.length === 0 ? 'All accounts are clear' : `${students.length} account${students.length !== 1 ? 's' : ''} locked · Failed logins &amp; new device locks`}
+          </p>
         </div>
-        ${students.length > 1 ? `<button class="btn btn-primary btn-sm" onclick="hodBulkUnlockSelected()" id="hod-bulk-btn" style="display:none;">Unlock Selected</button>` : ''}
+        ${students.length > 1 ? `<button class="btn btn-danger btn-sm" onclick="hodBulkUnlockSelected()" id="hod-bulk-btn" style="display:none;gap:6px;align-items:center;">
+          ${UNLOCK_ICON} <span id="hod-bulk-label">Unlock Selected</span>
+        </button>` : ''}
       </div>
 
       ${students.length === 0
-        ? `<div class="card"><div class="empty-state"><p style="color:var(--text-muted);font-size:13px;">No locked student accounts. All clear! ✓</p></div></div>`
-        : `<div style="display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap;align-items:center;">
-            <input id="hod-lock-search" placeholder="Search by name or index…" oninput="hodFilterLocked()" style="padding:8px 12px;border:1.5px solid var(--border);border-radius:8px;font-size:13px;font-family:inherit;outline:none;min-width:220px;">
-            ${depts.length > 1 ? `<select id="hod-lock-dept" onchange="hodFilterLocked()" style="padding:8px 12px;border:1.5px solid var(--border);border-radius:8px;font-size:13px;font-family:inherit;outline:none;">
+        ? `<div class="card" style="text-align:center;padding:48px 24px;">
+            <div style="width:56px;height:56px;border-radius:50%;background:#d1fae5;display:flex;align-items:center;justify-content:center;margin:0 auto 16px;">
+              <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#059669" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
+            </div>
+            <p style="font-weight:600;font-size:15px;margin:0 0 4px;">All Clear</p>
+            <p style="color:var(--text-muted);font-size:13px;margin:0;">No locked student accounts found.</p>
+          </div>`
+        : `<div style="display:flex;gap:8px;margin-bottom:14px;flex-wrap:wrap;align-items:center;">
+            <input id="hod-lock-search" placeholder="Search by name or index…" oninput="hodFilterLocked()"
+              style="flex:1;min-width:180px;padding:9px 14px;border:1.5px solid var(--border);border-radius:10px;font-size:13px;font-family:inherit;background:var(--card);color:var(--text);outline:none;">
+            ${depts.length > 1 ? `<select id="hod-lock-dept" onchange="hodFilterLocked()"
+              style="padding:9px 14px;border:1.5px solid var(--border);border-radius:10px;font-size:13px;font-family:inherit;background:var(--card);color:var(--text);outline:none;">
               <option value="">All Departments</option>
               ${depts.map(d => `<option value="${esc(d)}">${esc(d)}</option>`).join('')}
             </select>` : ''}
+            <label style="display:flex;align-items:center;gap:6px;font-size:13px;color:var(--text-muted);cursor:pointer;padding:9px 14px;border:1.5px solid var(--border);border-radius:10px;background:var(--card);">
+              <input type="checkbox" id="hod-lock-all" onchange="hodToggleAllLocked(this)" style="width:14px;height:14px;cursor:pointer;">
+              Select all
+            </label>
           </div>
-          <div style="overflow-x:auto;" class="card" style="padding:0">
-            <table style="width:100%;border-collapse:collapse;font-size:13px;">
-              <thead>
-                <tr style="border-bottom:2px solid var(--border);">
-                  <th style="padding:10px 16px;">
-                    <input type="checkbox" id="hod-lock-all" onchange="hodToggleAllLocked(this)" title="Select all">
-                  </th>
-                  <th style="text-align:left;padding:10px 12px;font-size:11px;font-weight:700;color:var(--text-muted);text-transform:uppercase;">Student</th>
-                  <th style="text-align:left;padding:10px 12px;font-size:11px;font-weight:700;color:var(--text-muted);text-transform:uppercase;">Index No.</th>
-                  <th style="text-align:left;padding:10px 12px;font-size:11px;font-weight:700;color:var(--text-muted);text-transform:uppercase;">Department</th>
-                  <th style="text-align:left;padding:10px 12px;font-size:11px;font-weight:700;color:var(--text-muted);text-transform:uppercase;">Lock Type</th>
-                  <th style="text-align:left;padding:10px 12px;font-size:11px;font-weight:700;color:var(--text-muted);text-transform:uppercase;">Reason / Expiry</th>
-                  <th style="text-align:left;padding:10px 12px;font-size:11px;font-weight:700;color:var(--text-muted);text-transform:uppercase;">Locked</th>
-                  <th style="padding:10px 12px;"></th>
-                </tr>
-              </thead>
-              <tbody id="hod-lock-tbody">
-                ${students.map(s => `
-                  <tr class="hod-lock-row" data-id="${s._id}" data-name="${(s.name||'').toLowerCase()}" data-index="${(s.IndexNumber||'').toLowerCase()}" data-dept="${(s.department||'').toLowerCase()}" style="border-bottom:1px solid var(--border);" id="locked-row-${s._id}">
-                    <td style="padding:10px 16px;">
-                      <input type="checkbox" class="hod-lock-cb" value="${s._id}" onchange="hodUpdateBulkBtn()">
-                    </td>
-                    <td style="padding:10px 12px;font-weight:600;">${esc(s.name)}</td>
-                    <td style="padding:10px 12px;font-family:monospace;color:var(--text-muted);">${esc(s.IndexNumber || '—')}</td>
-                    <td style="padding:10px 12px;">
-                      ${s.department ? `<span style="background:#ecfeff;color:#0891b2;padding:2px 8px;border-radius:20px;font-size:11px;font-weight:600;">${esc(s.department)}</span>` : '—'}
-                    </td>
-                    <td style="padding:10px 12px;">${lockTypeBadge(s)}</td>
-                    <td style="padding:10px 12px;font-size:12px;color:var(--text-muted);max-width:220px;">${esc(lockReason(s))}</td>
-                    <td style="padding:10px 12px;font-size:12px;color:var(--text-muted);white-space:nowrap;">${lockedSince(s)}</td>
-                    <td style="padding:10px 12px;white-space:nowrap;">
-                      <button class="btn btn-sm btn-primary" onclick="hodUnlockStudent('${s._id}','${esc(s.name).replace(/'/g,"\\'")}')">
-                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 9.9-1"/></svg>
-                        Unlock
-                      </button>
-                    </td>
-                  </tr>`).join('')}
-              </tbody>
-            </table>
+          <div id="hod-lock-cards" style="display:flex;flex-direction:column;gap:12px;">
+            ${students.map(s => {
+              const info = getLockInfo(s);
+              const initials = (s.name || '?').split(' ').map(w => w[0]).join('').substring(0,2).toUpperCase();
+              return `<div class="card hod-lock-row" data-id="${s._id}" data-name="${(s.name||'').toLowerCase()}" data-index="${(s.IndexNumber||'').toLowerCase()}" data-dept="${(s.department||'').toLowerCase()}" id="locked-row-${s._id}"
+                style="padding:16px;border-radius:14px;border:1.5px solid var(--border);">
+                <div style="display:flex;align-items:flex-start;gap:12px;">
+                  <div style="position:relative;flex-shrink:0;">
+                    <div style="width:46px;height:46px;border-radius:50%;background:${info.bg};border:2px solid ${info.border};display:flex;align-items:center;justify-content:center;font-weight:700;font-size:16px;color:${info.color};">${esc(initials)}</div>
+                    <div style="position:absolute;bottom:-2px;right:-2px;width:18px;height:18px;border-radius:50%;background:${info.bg};border:2px solid var(--card);display:flex;align-items:center;justify-content:center;color:${info.color};">
+                      <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+                    </div>
+                  </div>
+                  <div style="flex:1;min-width:0;">
+                    <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:3px;">
+                      <span style="font-weight:700;font-size:15px;">${esc(s.name)}</span>
+                      <span style="background:${info.bg};color:${info.color};border:1px solid ${info.border};padding:2px 9px;border-radius:20px;font-size:10px;font-weight:700;white-space:nowrap;">${info.type}</span>
+                    </div>
+                    <div style="font-size:12px;color:var(--text-muted);display:flex;gap:8px;flex-wrap:wrap;">
+                      ${s.IndexNumber ? `<span style="font-family:monospace;">${esc(s.IndexNumber)}</span>` : ''}
+                      ${s.department ? `<span>· ${esc(s.department)}</span>` : ''}
+                      <span style="color:var(--text-muted);">· ${info.since}</span>
+                    </div>
+                  </div>
+                  <input type="checkbox" class="hod-lock-cb" value="${s._id}" onchange="hodUpdateBulkBtn()"
+                    style="width:16px;height:16px;flex-shrink:0;cursor:pointer;margin-top:2px;">
+                </div>
+                <div style="margin:12px 0 0;padding:10px 14px;background:${info.bg};border-radius:10px;border-left:3px solid ${info.border};">
+                  <p style="margin:0;font-size:12px;color:${info.color};line-height:1.5;">${esc(info.reason)}</p>
+                </div>
+                <div style="margin-top:12px;display:flex;justify-content:flex-end;">
+                  <button class="btn btn-primary btn-sm" onclick="hodUnlockStudent('${s._id}','${esc(s.name).replace(/'/g,"\\'")}')">
+                    ${UNLOCK_ICON} Unlock Account
+                  </button>
+                </div>
+              </div>`;
+            }).join('')}
           </div>`}`;
   } catch(e) {
-    content.innerHTML = `<div class="card"><p style="color:#ef4444;">${e.message}</p></div>`;
+    content.innerHTML = `<div class="card" style="text-align:center;padding:32px 16px;">
+      <p style="color:#ef4444;font-weight:600;margin:0 0 6px;">Failed to load</p>
+      <p style="color:var(--text-muted);font-size:13px;margin:0;">${esc(e.message)}</p>
+    </div>`;
   }
 }
 
@@ -4669,10 +4683,9 @@ function hodToggleAllLocked(cb) {
 function hodUpdateBulkBtn() {
   const checked = document.querySelectorAll('.hod-lock-cb:checked').length;
   const btn = document.getElementById('hod-bulk-btn');
-  if (btn) {
-    btn.style.display = checked > 0 ? '' : 'none';
-    btn.textContent = `Unlock Selected (${checked})`;
-  }
+  const lbl = document.getElementById('hod-bulk-label');
+  if (btn) btn.style.display = checked > 0 ? 'inline-flex' : 'none';
+  if (lbl) lbl.textContent = `Unlock Selected (${checked})`;
 }
 
 async function hodBulkUnlockSelected() {
