@@ -5518,11 +5518,61 @@ async function renderSuperadminDashboard(content) {
       </div>`;
   }
 
-  function renderAdjusterTab() {
+  async function renderAdjusterTab() {
     const r = saGetRates();
+    let ps = {};
+    try { ps = await api('/api/superadmin/settings'); } catch(_) {}
+    const cur = ps.currency || 'GHS';
+    const subFields = [
+      { key:'studentSemesterPrice', label:'Student Semester',  hint:'Academic — paid per semester by each student',          val: ps.studentSemesterPrice ?? 20,  tier:'academic' },
+      { key:'employeeMonthlyPrice', label:'Employee Monthly',  hint:'Corporate — paid monthly by each employee individually', val: ps.employeeMonthlyPrice ?? 15,  tier:'corporate' },
+      { key:'academicPrice',        label:'Academic Plan',     hint:'Academic — paid per semester by lecturers & admins',    val: ps.academicPrice ?? 300,        tier:'academic' },
+      { key:'corporatePrice',       label:'Corporate Plan',    hint:'Corporate — paid monthly by managers & admins',         val: ps.corporatePrice ?? 150,       tier:'corporate' },
+      { key:'studentTrialDays',     label:'Student Trial',     hint:'Free trial period for new student accounts (days)',      val: ps.studentTrialDays ?? 45,      tier:'academic',  unit:'days' },
+      { key:'trialDays',            label:'Institution Trial', hint:'Free trial period for new institution accounts (days)',  val: ps.trialDays ?? 30,             tier:'both',      unit:'days' },
+    ];
+    const tierColor = t => t === 'academic' ? '#2E7D5B' : t === 'corporate' ? '#5B4B8A' : '#0F1B33';
+    const tierLabel = t => t === 'academic' ? 'Academic' : t === 'corporate' ? 'Corporate' : 'All';
     return `
-      <div style="color:${C.muted};font-size:12.5px;margin-bottom:16px">
-        Set a monthly per-seat rate for each role. The computed fee on each institution card updates immediately.
+      <div style="font-size:13px;font-weight:700;color:${C.ink};margin-bottom:6px;letter-spacing:.2px">💳 Subscription Prices</div>
+      <div style="color:${C.muted};font-size:12px;margin-bottom:14px">
+        These prices are shown on the Subscription page in the academic and corporate portals and charged via Paystack.
+        Changes take effect immediately for all users.
+      </div>
+
+      <div style="background:#fff;border:1px solid ${C.line};border-radius:12px;padding:16px;margin-bottom:20px">
+        <div style="display:flex;flex-wrap:wrap;gap:12px;margin-bottom:14px">
+          ${subFields.map(f => `
+            <div style="flex:1;min-width:180px">
+              <div style="display:flex;align-items:center;gap:6px;margin-bottom:4px">
+                <span style="font-size:10px;font-weight:700;padding:1px 7px;border-radius:20px;background:${tierColor(f.tier)}18;color:${tierColor(f.tier)};border:1px solid ${tierColor(f.tier)}30">${tierLabel(f.tier)}</span>
+                <span style="font-size:12.5px;font-weight:700;color:${C.ink}">${f.label}</span>
+              </div>
+              <div style="font-size:11px;color:${C.muted};margin-bottom:6px">${f.hint}</div>
+              <div style="display:flex;align-items:center;gap:6px">
+                <span style="font-size:12px;color:${C.muted}">${f.unit === 'days' ? '' : cur}</span>
+                <input type="number" min="0" id="sa-sub-${f.key}" value="${f.val}"
+                  style="flex:1;padding:8px 10px;border:1px solid ${C.line};border-radius:8px;font-size:14px;text-align:right;background:#FBFAF6;outline:none">
+                <span style="font-size:12px;color:${C.muted}">${f.unit === 'days' ? 'days' : ''}</span>
+              </div>
+            </div>`).join('')}
+        </div>
+        <div style="display:flex;align-items:center;gap:10px;padding-top:12px;border-top:1px solid ${C.line}">
+          <div style="flex:1">
+            <div style="font-size:12.5px;font-weight:700;color:${C.ink};margin-bottom:3px">Currency</div>
+            <input type="text" id="sa-sub-currency" value="${cur}" maxlength="10" placeholder="GHS"
+              style="width:90px;padding:8px 10px;border:1px solid ${C.line};border-radius:8px;font-size:13px;background:#FBFAF6;outline:none">
+          </div>
+          <button id="sa-sub-save-btn" onclick="window._saSaveSubPrices()"
+            style="background:${C.navy};color:${C.cream};border:none;border-radius:9px;padding:10px 22px;font-size:13px;font-weight:700;cursor:pointer">
+            Save Subscription Prices
+          </button>
+        </div>
+      </div>
+
+      <div style="font-size:13px;font-weight:700;color:${C.ink};margin-bottom:6px;letter-spacing:.2px">📊 Institution Billing Rates</div>
+      <div style="color:${C.muted};font-size:12px;margin-bottom:14px">
+        Monthly per-seat rate for billing calculations on institution cards. Stored locally — does not affect Paystack.
       </div>
       ${SA_ROLE_DEFS.map(rd => `
         <div style="background:#fff;border:1px solid ${C.line};border-radius:12px;padding:14px 16px;margin-bottom:10px;display:flex;align-items:center;justify-content:space-between;gap:12px">
@@ -5555,7 +5605,7 @@ async function renderSuperadminDashboard(content) {
     if (tab === 'institutions') body.innerHTML = renderInstTab();
     else if (tab === 'payments')  body.innerHTML = await renderPayTab();
     else if (tab === 'devices')   body.innerHTML = renderDevicesTab();
-    else if (tab === 'adjuster')  body.innerHTML = renderAdjusterTab();
+    else if (tab === 'adjuster')  body.innerHTML = await renderAdjusterTab();
   }
 
   // Render shell
@@ -5603,6 +5653,28 @@ async function renderSuperadminDashboard(content) {
     saShowToast(`${SA_ROLE_DEFS.find(r=>r.key===key)?.label||key} rate → ${saFmt(val)} — applied to all institutions`);
     // refresh inst tab fees if visible
     if (currentTab === 'institutions') { const body = document.getElementById('sa-body'); if (body) body.innerHTML = renderInstTab(); }
+  };
+
+  window._saSaveSubPrices = async () => {
+    const btn = document.getElementById('sa-sub-save-btn');
+    if (btn) { btn.textContent = 'Saving…'; btn.disabled = true; }
+    try {
+      const payload = {
+        studentSemesterPrice: Math.max(0, parseFloat(document.getElementById('sa-sub-studentSemesterPrice')?.value) || 0),
+        employeeMonthlyPrice: Math.max(0, parseFloat(document.getElementById('sa-sub-employeeMonthlyPrice')?.value) || 0),
+        academicPrice:        Math.max(0, parseFloat(document.getElementById('sa-sub-academicPrice')?.value)        || 0),
+        corporatePrice:       Math.max(0, parseFloat(document.getElementById('sa-sub-corporatePrice')?.value)       || 0),
+        studentTrialDays:     Math.max(1, parseInt(document.getElementById('sa-sub-studentTrialDays')?.value)       || 1),
+        trialDays:            Math.max(1, parseInt(document.getElementById('sa-sub-trialDays')?.value)              || 1),
+        currency:             (document.getElementById('sa-sub-currency')?.value || 'GHS').trim().slice(0, 10),
+      };
+      await api('/api/superadmin/settings', { method: 'POST', body: JSON.stringify(payload) });
+      if (btn) { btn.textContent = 'Saved ✓'; btn.style.background = C.green; btn.disabled = false; setTimeout(() => { btn.textContent = 'Save Subscription Prices'; btn.style.background = C.navy; }, 2000); }
+      saShowToast(`Subscription prices updated — students ₵${payload.studentSemesterPrice}/semester, employees ₵${payload.employeeMonthlyPrice}/month`);
+    } catch(e) {
+      if (btn) { btn.textContent = 'Save Subscription Prices'; btn.disabled = false; }
+      saShowToast('Failed to save: ' + (e.message || 'unknown error'));
+    }
   };
 
   drawTab(currentTab);
