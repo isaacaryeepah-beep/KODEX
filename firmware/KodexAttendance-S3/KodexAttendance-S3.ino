@@ -739,12 +739,13 @@ static bool touchRead(uint16_t& tx, uint16_t& ty) {
 
   if ((td & 0x0F) == 0) return false;
 
-  // FT6336G on ES3C28P: chip is mounted 180° relative to the display.
-  // Both axes must be inverted to match portrait screen coordinates.
+  // FT6336G on ES3C28P: chip is mounted 180° — raw coords are inverted.
+  // With display setRotation(2) (also 180°), the two inversions cancel out:
+  // raw coords map directly to display coords with no adjustment needed.
   uint16_t rawX = ((xh & 0x0F) << 8) | xl;
   uint16_t rawY = ((yh & 0x0F) << 8) | yl;
-  tx = (SW - 1) - rawX;   // mirror X
-  ty = (SH - 1) - rawY;   // mirror Y
+  tx = rawX;
+  ty = rawY;
   return true;
 }
 
@@ -4619,7 +4620,7 @@ static void registerLocalHttp() {
         "<div style='text-align:center;max-width:300px'>"
         "<div style='font-size:24px;font-weight:900;margin-bottom:12px'>Di<span style='color:#4f6ef7'>kly</span></div>"
         "<p style='color:#f87171;font-size:14px;line-height:1.7'>"
-        "No offline bundle loaded.<br>Connect the device to the internet first, wait 10 minutes, then try again.</p>"
+        "No offline bundle loaded.<br>Connect the device to the internet first — it will sync automatically within a few seconds.</p>"
         "</div></body></html>");
       return;
     }
