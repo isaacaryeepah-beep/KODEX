@@ -3385,155 +3385,23 @@ static void startApPortal() {
 
   dns.start(53, "*", gw);           // wildcard: every DNS query → our IP
 
-  // ── Student attendance captive portal ────────────────────────────────────────
-  // Served at "/" and every OS captive-portal probe URL so the attendance form
-  // pops up automatically when a student connects to the hotspot.
-  // No 302 redirect — direct inline HTML avoids the iOS CNA WebSheet blank-page
-  // race condition caused by the extra round-trip.
-  auto serveAttendPage = []() {
-    if (sessionId.isEmpty() || sessionSeed.isEmpty()) {
-      // No active session — tell student to wait
-      localHttp.send(200, "text/html",
-        "<!doctype html><html><head><meta charset='utf-8'>"
-        "<meta name='viewport' content='width=device-width,initial-scale=1'>"
-        "<title>Dikly Attendance</title>"
-        "<style>*{box-sizing:border-box;margin:0;padding:0}"
-        "body{min-height:100vh;background:#0a0f1e;color:#fff;"
-        "font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;"
-        "display:flex;align-items:center;justify-content:center;padding:20px}"
-        ".card{background:#111827;border-radius:20px;padding:28px 20px;"
-        "max-width:360px;width:100%;border:1px solid #1e2d45;text-align:center}"
-        ".logo{font-size:22px;font-weight:900;margin-bottom:4px}"
-        ".logo span{color:#4f6ef7}"
-        ".icon{font-size:52px;margin:18px 0 12px}"
-        "h2{font-size:17px;font-weight:700;margin-bottom:8px}"
-        "p{color:#64748b;font-size:13px;line-height:1.6}"
-        "</style></head><body><div class='card'>"
-        "<div class='logo'>Di<span>kly</span></div>"
-        "<div class='icon'>&#x23F3;</div>"
-        "<h2>No Active Session</h2>"
-        "<p>Your lecturer has not started an attendance session yet.<br>"
-        "Wait for them to start, then reconnect.</p>"
-        "</div></body></html>");
-      return;
-    }
+  // Setup portal — serve the pairing form at every OS captive-probe URL.
+  // This function is only called before the device is paired; after pairing,
+  // the student attendance form is served by registerLocalHttp() / serveRoot().
+  auto servePage = []() { sendHtmlChunked(PAIR_HTML); };
 
-    // Active session — build the attendance form
-    String course  = sessionCourse.isEmpty() ? sessionTitle : sessionCourse;
-    String lect    = sessionLecturer;
+  localHttp.on("/",                    HTTP_GET, servePage);
+  localHttp.on("/generate_204",        HTTP_GET, servePage);  // Android
+  localHttp.on("/hotspot-detect.html", HTTP_GET, servePage);  // iOS
+  localHttp.on("/connecttest.txt",     HTTP_GET, servePage);  // Windows
+  localHttp.on("/ncsi.txt",           HTTP_GET, servePage);  // Windows NCSI
+  localHttp.on("/success.txt",         HTTP_GET, servePage);  // Firefox
+  localHttp.on("/redirect",           HTTP_GET, servePage);  // Firefox
+  localHttp.on("/canonical.html",      HTTP_GET, servePage);  // Google
+  localHttp.on("/fwlink/",           HTTP_GET, servePage);  // Microsoft
+  localHttp.onNotFound(servePage);
 
-    String page =
-      "<!doctype html><html><head><meta charset='utf-8'>"
-      "<meta name='viewport' content='width=device-width,initial-scale=1,maximum-scale=1'>"
-      "<title>Mark Attendance</title>"
-      "<style>*{box-sizing:border-box;margin:0;padding:0}"
-      "body{min-height:100vh;background:#0a0f1e;color:#fff;"
-      "font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;"
-      "display:flex;align-items:center;justify-content:center;padding:20px}"
-      ".card{background:#111827;border-radius:20px;padding:28px 20px;"
-      "max-width:360px;width:100%;border:1px solid #1e2d45}"
-      ".logo{text-align:center;font-size:22px;font-weight:900;margin-bottom:2px}"
-      ".logo span{color:#4f6ef7}"
-      ".session{text-align:center;font-size:12px;color:#4f6ef7;font-weight:600;"
-      "margin-bottom:18px;padding:6px 12px;background:#0f172a;"
-      "border-radius:8px;border:1px solid #1e3a5f}"
-      "label{display:block;font-size:11px;font-weight:700;color:#94a3b8;"
-      "text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px}"
-      "input{width:100%;padding:13px 14px;background:#0f172a;"
-      "border:1.5px solid #1e2d45;border-radius:10px;color:#fff;font-size:15px;"
-      "outline:none;margin-bottom:16px}"
-      "input:focus{border-color:#4f6ef7}"
-      "#code{text-transform:uppercase;letter-spacing:10px;font-size:24px;"
-      "text-align:center;font-weight:700}"
-      "button{width:100%;padding:15px;background:#4f6ef7;color:#fff;border:none;"
-      "border-radius:12px;font-size:15px;font-weight:700;cursor:pointer;"
-      "-webkit-tap-highlight-color:transparent}"
-      "button:disabled{opacity:.5}"
-      ".err{display:none;background:#450a0a;border:1px solid #991b1b;"
-      "border-radius:10px;padding:12px 14px;color:#fca5a5;font-size:13px;margin-bottom:14px}"
-      ".done{display:none;text-align:center;padding:8px 0}"
-      ".done .icon{font-size:58px;margin-bottom:12px}"
-      ".done h2{font-size:18px;font-weight:800;margin-bottom:6px}"
-      ".done p{color:#64748b;font-size:13px;line-height:1.6}"
-      ".hint{text-align:center;font-size:11px;color:#334155;margin-top:14px}"
-      "</style></head><body><div class='card'>"
-      "<div class='logo'>Di<span>kly</span></div>"
-      "<div class='session'>";
-    if (course.length()) page += course;
-    if (course.length() && lect.length()) page += " &mdash; ";
-    if (lect.length()) page += lect;
-    if (page.endsWith("<div class='session'>")) page += "Attendance Session";
-    page +=
-      "</div>"
-      "<div class='err' id='err'></div>"
-      "<div id='frm'>"
-      "<label>Index / Student Number</label>"
-      "<input id='idx' type='text' autocomplete='off' autocorrect='off' "
-      "autocapitalize='characters' spellcheck='false' placeholder='e.g. UG/IT/20/0042'>"
-      "<label>Code (from screen)</label>"
-      "<input id='cod' type='text' inputmode='text' maxlength='4' autocomplete='off' "
-      "autocorrect='off' spellcheck='false' placeholder='- - - -'>"
-      "<button id='btn' onclick='go()'>Mark Attendance &#x2192;</button>"
-      "<p class='hint'>&#x1F512; Your WiFi will disconnect after marking</p>"
-      "</div>"
-      "<div class='done' id='done'>"
-      "<div class='icon'>&#x2705;</div>"
-      "<h2 style='color:#22c55e'>Marked!</h2>"
-      "<p>Your attendance has been recorded.<br>WiFi disconnecting&hellip;</p>"
-      "</div>"
-      "<div class='done' id='dup' style='display:none'>"
-      "<div class='icon'>&#x26A0;&#xFE0F;</div>"
-      "<h2 style='color:#f59e0b'>Already Marked</h2>"
-      "<p>Your attendance was already recorded<br>for this session.</p>"
-      "</div>"
-      "</div>"
-      "<script>"
-      "document.getElementById('cod').addEventListener('input',function(){"
-      "this.value=this.value.toUpperCase();});"
-      "function go(){"
-      "var idx=document.getElementById('idx').value.trim();"
-      "var cod=document.getElementById('cod').value.trim().toUpperCase();"
-      "var err=document.getElementById('err');err.style.display='none';"
-      "if(!idx){err.textContent='Enter your index number.';err.style.display='block';return;}"
-      "if(cod.length!==4){err.textContent='Enter the 4-character code shown on the screen.';err.style.display='block';return;}"
-      "var btn=document.getElementById('btn');btn.textContent='Marking\xe2\x80\xa6';btn.disabled=true;"
-      "fetch('/attend',{method:'POST',headers:{'Content-Type':'application/json'},"
-      "body:JSON.stringify({indexNumber:idx,code:cod})})"
-      ".then(function(r){return r.json().then(function(d){return{ok:r.ok,st:r.status,d:d};});})"
-      ".then(function(r){"
-      "if(r.ok){"
-      "document.getElementById('frm').style.display='none';"
-      "document.getElementById('done').style.display='block';"
-      "}else if(r.st===409){"
-      "document.getElementById('frm').style.display='none';"
-      "document.getElementById('dup').style.display='block';"
-      "}else{"
-      "err.textContent=r.d.error||'Failed. Try again.';"
-      "err.style.display='block';"
-      "btn.textContent='Mark Attendance \xe2\x86\x92';btn.disabled=false;"
-      "}"
-      "}).catch(function(){"
-      "err.textContent='Connection lost. Stay on Dikly WiFi and retry.';"
-      "err.style.display='block';"
-      "btn.textContent='Mark Attendance \xe2\x86\x92';btn.disabled=false;"
-      "});}"
-      "</script></body></html>";
-
-    localHttp.send(200, "text/html", page);
-  };
-
-  localHttp.on("/",                    HTTP_GET, serveAttendPage);
-  localHttp.on("/generate_204",        HTTP_GET, serveAttendPage);  // Android
-  localHttp.on("/hotspot-detect.html", HTTP_GET, serveAttendPage);  // iOS
-  localHttp.on("/connecttest.txt",     HTTP_GET, serveAttendPage);  // Windows
-  localHttp.on("/ncsi.txt",           HTTP_GET, serveAttendPage);  // Windows NCSI
-  localHttp.on("/success.txt",         HTTP_GET, serveAttendPage);  // Firefox
-  localHttp.on("/redirect",           HTTP_GET, serveAttendPage);  // Firefox
-  localHttp.on("/canonical.html",      HTTP_GET, serveAttendPage);  // Google
-  localHttp.on("/fwlink/",           HTTP_GET, serveAttendPage);  // Microsoft
-  localHttp.onNotFound(serveAttendPage);
-
-  // /setup — admin device reconfiguration page (pairing + WiFi change)
+  // /setup — alias (same page, consistent with post-pair admin URL)
   localHttp.on("/setup", HTTP_GET, []() { sendHtmlChunked(PAIR_HTML); });
 
   localHttp.on("/wifi/scan", HTTP_GET, []() {
@@ -5335,7 +5203,7 @@ void setup() {
   // from unfragmented PSRAM.
   display.init();
   display.setBrightness(255);  // LovyanGFX PWM resets BL pin after init — force full brightness
-  display.setRotation(0);  // 0 = portrait
+  display.setRotation(2);  // 2 = portrait 180° (ES3C28P chip mounted inverted)
   display.fillScreen(COL_BG);
 
   spr.setColorDepth(16);
