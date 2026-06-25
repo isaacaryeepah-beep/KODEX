@@ -1283,9 +1283,15 @@ static void sendHeartbeat() {
   lastSyncMs      = millis();
   // Flush any offline sessions + attendance records now that we have internet.
   syncOfflineAttendance();
-  // Refresh roster + bundle every ~10 minutes (120 heartbeats × 5 s).
+  // Refresh roster + bundle: immediately on first heartbeat if not yet loaded,
+  // then every ~10 minutes (120 heartbeats × 5 s) thereafter.
   static uint32_t rosterHbCount = 0;
-  if (++rosterHbCount >= 120) { rosterHbCount = 0; downloadRoster(); downloadBundle(); }
+  ++rosterHbCount;
+  if (!bundleLoaded || rosterHbCount >= 120) {
+    rosterHbCount = 0;
+    downloadRoster();
+    downloadBundle();
+  }
   JsonDocument doc;
   if (deserializeJson(doc, resp)) return;
   if (doc["serverTime"].is<const char*>()) {
