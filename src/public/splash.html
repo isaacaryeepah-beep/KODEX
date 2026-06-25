@@ -395,7 +395,7 @@ function startTyping() {
   typeTimer = setInterval(() => {
     if (tagIdx < TAGLINE.length) tagEl.textContent = TAGLINE.slice(0, ++tagIdx);
     else clearInterval(typeTimer);
-  }, 50);
+  }, 28);
 }
 
 // ── Animation state ───────────────────────────────────────────────────────────
@@ -433,40 +433,40 @@ function frame(ts) {
   // Globe always rotates (once visible)
   if (globe) globe.rotation.y += .0022;
 
-  // Stars fade in (0 → 1100ms)
-  if (starMat) starMat.opacity = clamp01(ms / 1100);
+  // Stars fade in (0 → 500ms)
+  if (starMat) starMat.opacity = clamp01(ms / 500);
 
-  // Globe scales in (500ms → 1900ms)
+  // Globe scales in (200ms → 1000ms)
   if (globe) {
-    const gScale = easeOut3(clamp01((ms - 500) / 1400));
+    const gScale = easeOut3(clamp01((ms - 200) / 800));
     globeScaleCur = lerp(globeScaleCur, gScale, .07);
     globe.scale.set(globeScaleCur, globeScaleCur, globeScaleCur);
   }
 
   if (!burstFired) {
-    // ── Phase 1: D elastic drop-in (1300ms → 2150ms) ─────────────────────
-    if (ms >= 1300) {
-      const t = clamp01((ms - 1300) / 850);
+    // ── Phase 1: D elastic drop-in (700ms → 1250ms) ──────────────────────
+    if (ms >= 700) {
+      const t = clamp01((ms - 700) / 550);
       const y = lerp(-240, 0, easeOutElast(t));
       dWrap.style.transform = `translateY(${y}px)`;
-      dWrap.style.opacity   = String(Math.min(1, (ms - 1300) / 200));
+      dWrap.style.opacity   = String(Math.min(1, (ms - 700) / 150));
     }
 
-    // ── Phase 2: brand name (2400ms) ─────────────────────────────────────
-    if (ms >= 2400 && phase < 2) {
+    // ── Phase 2: brand name (1300ms) ──────────────────────────────────────
+    if (ms >= 1300 && phase < 2) {
       phase = 2;
       brandEl.classList.add('show');
     }
 
-    // ── Phase 3: tagline types out (3100ms) ──────────────────────────────
-    if (ms >= 3100 && phase < 3) {
+    // ── Phase 3: tagline types out (1650ms) ───────────────────────────────
+    if (ms >= 1650 && phase < 3) {
       phase = 3;
       startTyping();
     }
 
-    // ── Phase 4: glow pulse intensifies (4200ms → 5400ms) ────────────────
-    if (ms >= 4200 && ms < 5400) {
-      const p   = .5 + .5 * Math.sin((ms - 4200) / 155);
+    // ── Phase 4: glow pulse intensifies (2200ms → 3050ms) ────────────────
+    if (ms >= 2200 && ms < 3050) {
+      const p   = .5 + .5 * Math.sin((ms - 2200) / 155);
       const g1  = 18 + p * 50;
       const g2  = 45 + p * 80;
       const g3  = g1 * .5;
@@ -474,18 +474,17 @@ function frame(ts) {
         `drop-shadow(0 0 ${g1}px #3b82f6) drop-shadow(0 0 ${g2}px #7c3aed) drop-shadow(0 0 ${g3}px #fff)`;
     }
 
-    // ── Phase 5: D vibrates before launch (5000ms → 5400ms) ──────────────
-    if (ms >= 5000 && ms < 5400) {
-      const v     = (ms - 5000) / 400;
+    // ── Phase 5: D vibrates before launch (2750ms → 3050ms) ──────────────
+    if (ms >= 2750 && ms < 3050) {
+      const v     = (ms - 2750) / 300;
       const shake = 3.5 * v * Math.sin(ms / 26);
-      // Keep drop-in Y at 0, just shake X slightly too
       dWrap.style.transform = `translateY(${shake}px) translateX(${shake * .3}px)`;
     }
 
-    // ── Phase 6: D launches upward (5400ms+) ─────────────────────────────
-    if (ms >= 5400) {
+    // ── Phase 6: D launches upward (3050ms+) ─────────────────────────────
+    if (ms >= 3050) {
       if (!launchT0) launchT0 = ts;
-      const lt  = (ts - launchT0) / 700;
+      const lt  = (ts - launchT0) / 400;
       const ly  = -easeIn3(Math.min(lt, 1)) * (window.innerHeight + 380);
       const sc  = 1 + Math.min(lt, 1) * .5;
       dWrap.style.transform = `translateY(${ly}px) scale(${sc})`;
@@ -493,7 +492,7 @@ function frame(ts) {
       dWrap.style.filter =
         `drop-shadow(0 0 ${gl}px #3b82f6) drop-shadow(0 0 ${gl * 1.7}px #7c3aed)`;
 
-      // Trigger burst when D is ~38% up its launch arc
+      // Trigger burst when D is ~38% up its launch arc (~3200ms total)
       if (lt >= 0.38 && !burstFired) {
         burstFired = true;
 
@@ -508,10 +507,10 @@ function frame(ts) {
         }, 100);
 
         // Final logo fades in after particles peak
-        setTimeout(() => finalEl.classList.add('show'), 1750);
+        setTimeout(() => finalEl.classList.add('show'), 900);
 
-        // Auto-redirect after total ~10.5s
-        setTimeout(doRedirect, 5100);
+        // Auto-redirect at ~5s total
+        setTimeout(doRedirect, 1800);
       }
     }
   }
