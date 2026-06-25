@@ -99,13 +99,12 @@ async function notifyMany(recipientIds, { company, type, title, body = "", link 
  */
 exports.notifyRecipients = async (announcement, recipientIds) => {
   if (!announcement || !Array.isArray(recipientIds)) return;
+  const bodyText = announcement.body || announcement.message || "";
   await notifyMany(recipientIds, {
     company: announcement.company || announcement.companyId,
     type:    NOTIFICATION_TYPES.ANNOUNCEMENT,
     title:   announcement.title || "New announcement",
-    body:    announcement.message
-      ? String(announcement.message).slice(0, 160)
-      : "",
+    body:    String(bodyText).slice(0, 160),
     link:    `/announcements/${announcement._id}`,
     data:    { announcementId: announcement._id },
   });

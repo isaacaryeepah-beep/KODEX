@@ -1,6 +1,95 @@
 const crypto       = require('crypto');
 const Announcement = require('../models/Announcement');
 const { getCompanyId } = require('../utils/controllerHelpers');
+const notifSvc     = require('../services/notificationService');
+
+// ---------------------------------------------------------------------------
+// Resolve recipient IDs for an announcement based on its audience field.
+// Returns an array of ObjectIds (may be empty).  Never throws — errors are
+// logged and an empty array is returned so the main request is unaffected.
+// ---------------------------------------------------------------------------
+async function _resolveRecipientIds(announcement) {
+  try {
+    const User    = require('../models/User');
+    const company = announcement.company;
+    const audience = announcement.audience;
+
+    const base = { company, isActive: { $ne: false } };
+
+    switch (audience) {
+      case 'all': {
+        const users = await User.find(base).select('_id').lean();
+        return users.map(u => u._id);
+      }
+      case 'students': {
+        const users = await User.find({ ...base, role: 'student' }).select('_id').lean();
+        return users.map(u => u._id);
+      }
+      case 'lecturers': {
+        const users = await User.find({ ...base, role: 'lecturer' }).select('_id').lean();
+        return users.map(u => u._id);
+      }
+      case 'employees': {
+        const users = await User.find({ ...base, role: 'employee' }).select('_id').lean();
+        return users.map(u => u._id);
+      }
+      case 'hod': {
+        const users = await User.find({ ...base, role: 'hod' }).select('_id').lean();
+        return users.map(u => u._id);
+      }
+      case 'department': {
+        if (!announcement.targetDepartment) return [];
+        const users = await User.find({ ...base, department: announcement.targetDepartment }).select('_id').lean();
+        return users.map(u => u._id);
+      }
+      case 'programme': {
+        if (!announcement.targetProgramme) return [];
+        const users = await User.find({ ...base, role: 'student', programme: announcement.targetProgramme }).select('_id').lean();
+        return users.map(u => u._id);
+      }
+      case 'course': {
+        if (!announcement.targetCourse) return [];
+        const Course = require('../models/Course');
+        const course = await Course.findById(announcement.targetCourse).select('enrolledStudents').lean();
+        return course?.enrolledStudents || [];
+      }
+      case 'level': {
+        if (!announcement.targetLevel) return [];
+        const users = await User.find({ ...base, role: 'student', studentLevel: announcement.targetLevel }).select('_id').lean();
+        return users.map(u => u._id);
+      }
+      case 'group': {
+        if (!announcement.targetGroup) return [];
+        const users = await User.find({ ...base, role: 'student', studentGroup: announcement.targetGroup }).select('_id').lean();
+        return users.map(u => u._id);
+      }
+      case 'studyType': {
+        if (!announcement.targetStudyType) return [];
+        const users = await User.find({ ...base, role: 'student', studyType: announcement.targetStudyType }).select('_id').lean();
+        return users.map(u => u._id);
+      }
+      case 'qualificationType': {
+        if (!announcement.targetQualificationType) return [];
+        const users = await User.find({ ...base, role: 'student', qualificationType: announcement.targetQualificationType }).select('_id').lean();
+        return users.map(u => u._id);
+      }
+      case 'class_group': {
+        const cg = announcement.classGroup || {};
+        const q = { ...base, role: 'student' };
+        if (cg.studentLevel) q.studentLevel = cg.studentLevel;
+        if (cg.studentGroup) q.studentGroup = cg.studentGroup;
+        if (cg.programme)    q.programme    = cg.programme;
+        const users = await User.find(q).select('_id').lean();
+        return users.map(u => u._id);
+      }
+      default:
+        return [];
+    }
+  } catch (err) {
+    console.error('[announcement] _resolveRecipientIds error:', err.message);
+    return [];
+  }
+}
 
 // ─── POST /announcements ──────────────────────────────────────────────────────
 exports.createAnnouncement = async (req, res) => {
@@ -68,6 +157,18 @@ exports.createAnnouncement = async (req, res) => {
     });
 
     await announcement.populate('author', 'name email role');
+
+    // Fire-and-forget: push popup notification to every recipient via SSE
+    const authorId = req.user._id.toString();
+    _resolveRecipientIds(announcement)
+      .then(ids => {
+        // Exclude the author (they just created it — no need to notify themselves)
+        const recipients = ids.filter(id => id.toString() !== authorId);
+        if (recipients.length > 0) {
+          notifSvc.notifyRecipients(announcement, recipients);
+        }
+      })
+      .catch(err => console.error('[announcement notify]', err.message));
 
     return res.status(201).json({
       success: true,
