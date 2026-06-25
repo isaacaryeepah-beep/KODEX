@@ -273,7 +273,7 @@ static const uint8_t SD_CLK = 38, SD_CMD = 40, SD_D0 = 39;
 static const uint8_t SD_D1  = 41, SD_D2  = 48, SD_D3 = 47;
 
 // ─── App Config ──────────────────────────────────────────────────────────────
-static const char*   FIRMWARE_VERSION     = "s3-2.8.0";
+static const char*   FIRMWARE_VERSION     = "s3-2.9.0";
 static const char*   DEFAULT_API_BASE     = "https://dikly.sbs";
 
 static const uint32_t HEARTBEAT_MS        = 5000;
@@ -371,12 +371,13 @@ int8_t rssiThreshold = -70;  // dBm — students weaker than this are rejected
 
 // Active session (from heartbeat)
 String   sessionId, sessionTitle, sessionSeed, sessionCourse, sessionLecturer;
-String   sessionLecturerId;   // set when session started via bundle (offline)
-String   sessionCourseId;     // set when session started via bundle (offline)
+String   sessionLecturerId;   // MongoDB lecturer _id (from bundle lookup)
+String   sessionCourseId;     // MongoDB course _id
+String   sessionGroup;        // group/section e.g. "A", "B"
 uint32_t sessionStartedAt = 0;
 
-// Pre-auth bundle (downloaded when online, persisted in NVS key "bundle")
-// Compact JSON: [{"courseId":...,"courseCode":...,"courseName":...,"lecturers":[{"id":...,"name":...,"offlinePinHash":...}]}]
+// Pre-auth bundle (downloaded when online, persisted on SD card / NVS fallback)
+// Compact JSON: [{"id":...,"employeeId":...,"name":...,"offlinePinHash":...,"courses":[{"courseId":...,"courseCode":...,"courseName":...,"level":...,"group":...}]}]
 static String bundleJson      = "";
 static bool   bundleLoaded    = false;
 static String bundleErrorMsg  = "";  // last server error, shown on TFT when bundle missing
@@ -808,8 +809,12 @@ static void loadConfig() {
     sessionDuration     = prefs.getUInt("l_dur",   3600);
     sessionLocallyStarted = true;
   }
-  // Load pre-auth bundle if previously saved
-  bundleJson = prefs.getString("bundle", "");
+  // Load pre-auth bundle: SD card first (no size limit), NVS fallback
+  if (sdAvailable) {
+    File bf = SD_MMC.open("/bundle.json", FILE_READ);
+    if (bf) { bundleJson = bf.readString(); bf.close(); }
+  }
+  if (bundleJson.length() <= 10) bundleJson = prefs.getString("bundle", "");
   if (bundleJson.length() > 10) bundleLoaded = true;
   // Admin-set display name (kept across reboots)
   displayName = prefs.getString("dname", "");
@@ -1202,20 +1207,23 @@ static void downloadBundle() {
   int code = http.GET();
   if (code == 200) {
     String body = http.getString();
-    // Extract just the bundle array to keep NVS usage small
     JsonDocument doc;
     if (!deserializeJson(doc, body) && doc["bundle"].is<JsonArray>()) {
       String compact; serializeJson(doc["bundle"], compact);
-      if (compact.length() < 3800) {  // NVS string limit safety margin
-        bundleJson   = compact;
-        bundleLoaded = true;
+      bundleJson   = compact;
+      bundleLoaded = true;
+      // Prefer SD card (no size limit); fall back to NVS for small bundles
+      bool savedToSD = false;
+      if (sdAvailable) {
+        File bf = SD_MMC.open("/bundle.json", FILE_WRITE);
+        if (bf) { bf.print(compact); bf.close(); savedToSD = true; }
+      }
+      if (!savedToSD && compact.length() < 3800) {
         prefs.begin("kodex", false);
         prefs.putString("bundle", compact);
         prefs.end();
-        LOG("Bundle saved (" + String(compact.length()) + " bytes)");
-      } else {
-        LOG("Bundle too large for NVS (" + String(compact.length()) + " bytes) — skipped");
       }
+      LOG("Bundle saved (" + String(compact.length()) + " bytes, SD=" + String(savedToSD) + ")");
     }
   } else {
     String errBody = http.getString();
@@ -1344,7 +1352,7 @@ static void sendHeartbeat() {
   JsonVariantConst sess = doc["activeSession"];
   if (sess.isNull()) {
     if (!sessionId.isEmpty()) {
-      LOG("Session ended"); sessionId = ""; sessionSeed = "";       sessionTitle = ""; sessionCourse = ""; sessionLecturer = "";
+      LOG("Session ended"); sessionId = ""; sessionSeed = ""; sessionTitle = ""; sessionCourse = ""; sessionLecturer = ""; sessionGroup = "";
       studentsMarked = 0; sessionTotalEnrolled = 0; reMarkActive = false;
       dedupClear("");
     }
@@ -4483,62 +4491,85 @@ static void registerLocalHttp() {
     }
 
     String pin        = req["pin"]        | "";
-    String lecturerId = req["lecturerId"] | "";
+    String employeeId = req["employeeId"] | "";  // staff/employee ID from the /start form
     String courseCode = req["courseCode"] | "";
     String courseIdV  = req["courseId"]   | "";
     String title      = req["title"]      | "Attendance";
     String lecturer   = req["lecturer"]   | "";
-    uint32_t duration = req["duration"]   | 300;
+    String group      = req["group"]      | "";
+    String lecturerId = "";
+    uint32_t duration = req["duration"]   | 3600;
 
-    // ── Bundle-based PIN validation ──────────────────────────────────────────
-    // If bundle is loaded, verify lecturer PIN against the stored HMAC hash.
-    // Format: HMAC-SHA256("dikly_offline_v1", lecturerId + ":" + pin)
-    if (bundleLoaded && !lecturerId.isEmpty()) {
+    if (bundleLoaded) {
+      // ── Lecturer-centric bundle lookup + PIN verification ──────────────────
+      // Bundle format: [{id, employeeId, name, offlinePinHash, courses:[{courseId,courseCode,courseName,level,group}]}]
+      if (employeeId.isEmpty()) {
+        localHttp.send(400, "application/json", "{\"error\":\"Enter your Staff ID.\"}"); return;
+      }
       if (pin.length() != 4) {
         localHttp.send(400, "application/json", "{\"error\":\"Enter your 4-digit PIN.\"}"); return;
       }
-      // Find this lecturer's offlinePinHash in the bundle
+      if (courseIdV.isEmpty()) {
+        localHttp.send(400, "application/json", "{\"error\":\"Select a course.\"}"); return;
+      }
+
       JsonDocument bDoc;
-      bool pinValid = false;
-      bool lecturerFound = false;
-      if (!deserializeJson(bDoc, bundleJson)) {
-        for (JsonObject course : bDoc.as<JsonArray>()) {
-          for (JsonObject lect : course["lecturers"].as<JsonArray>()) {
-            if (String(lect["id"] | "") == lecturerId) {
-              lecturerFound = true;
-              const char* storedHash = lect["offlinePinHash"] | "";
-              if (storedHash[0]) {
-                // Compute HMAC-SHA256("dikly_offline_v1", lecturerId:pin)
-                const char* pepper = "dikly_offline_v1";
-                String msg = lecturerId + ":" + pin;
-                uint8_t computed[32];
-                hmacSha256((const uint8_t*)pepper, strlen(pepper),
-                           (const uint8_t*)msg.c_str(), msg.length(), computed);
-                char computedHex[65];
-                for (int i = 0; i < 32; i++) sprintf(computedHex + i*2, "%02x", computed[i]);
-                computedHex[64] = '\0';
-                pinValid = (String(computedHex) == String(storedHash));
-              } else {
-                localHttp.send(403, "application/json",
-                  "{\"error\":\"You have not set a PIN yet. Log into dikly.sbs \xe2\x86\x92 Settings \xe2\x86\x92 Set Attendance PIN, then try again.\"}");
-                return;
-              }
-              break;
-            }
-          }
-          if (lecturerFound) break;
+      if (deserializeJson(bDoc, bundleJson)) {
+        localHttp.send(500, "application/json", "{\"error\":\"Bundle parse error.\"}"); return;
+      }
+
+      bool lectFound   = false;
+      bool courseFound = false;
+      String empUpper  = employeeId; empUpper.toUpperCase();
+
+      for (JsonObject lect : bDoc.as<JsonArray>()) {
+        String emp = String(lect["employeeId"] | ""); emp.toUpperCase();
+        if (emp != empUpper) continue;
+        lectFound  = true;
+        lecturerId = String(lect["id"]   | "");
+        lecturer   = String(lect["name"] | "");
+
+        const char* storedHash = lect["offlinePinHash"] | "";
+        if (!storedHash[0]) {
+          localHttp.send(403, "application/json",
+            "{\"error\":\"PIN not set. Log into dikly.sbs \xe2\x86\x92 Settings \xe2\x86\x92 Set Attendance PIN.\"}"); return;
         }
+
+        // HMAC-SHA256("dikly_offline_v1", lecturerId:pin)
+        const char* pepper = "dikly_offline_v1";
+        String msg = lecturerId + ":" + pin;
+        uint8_t computed[32];
+        hmacSha256((const uint8_t*)pepper, strlen(pepper),
+                   (const uint8_t*)msg.c_str(), msg.length(), computed);
+        char hex[65];
+        for (int i = 0; i < 32; i++) sprintf(hex + i*2, "%02x", computed[i]);
+        hex[64] = '\0';
+        if (String(hex) != String(storedHash)) {
+          localHttp.send(403, "application/json", "{\"error\":\"Incorrect PIN. Try again.\"}"); return;
+        }
+
+        // Find the selected course in this lecturer's list
+        for (JsonObject c : lect["courses"].as<JsonArray>()) {
+          if (String(c["courseId"] | "") == courseIdV) {
+            courseCode  = String(c["courseCode"] | "");
+            title       = String(c["courseName"] | "");
+            group       = String(c["group"]      | "");
+            courseFound = true;
+            break;
+          }
+        }
+        if (!courseFound) {
+          localHttp.send(400, "application/json", "{\"error\":\"Course not found in bundle.\"}"); return;
+        }
+        break;
       }
-      if (!lecturerFound) {
-        localHttp.send(403, "application/json", "{\"error\":\"Lecturer not in bundle. Reconnect device to internet.\"}"); return;
+
+      if (!lectFound) {
+        localHttp.send(404, "application/json",
+          "{\"error\":\"Staff ID not found. Check your Employee ID.\"}"); return;
       }
-      if (!pinValid) {
-        localHttp.send(403, "application/json", "{\"error\":\"Incorrect PIN. Try again.\"}"); return;
-      }
-    } else if (!bundleLoaded) {
-      // No bundle — allow offline session start without PIN validation.
-      // courseCode and title come from the manual form; lecturer identity is unknown.
     }
+    // No bundle: manual form values (courseCode + title) used as-is, no PIN check.
 
     time_t now = time(nullptr);
     if (now < 1700000000UL) now = 1700000000UL + (millis() / 1000);
@@ -4556,6 +4587,7 @@ static void registerLocalHttp() {
     sessionLecturer   = lecturer;
     sessionLecturerId = lecturerId;
     sessionCourseId   = courseIdV;
+    sessionGroup      = group;
     sessionDuration   = duration;
     sessionStartedAt  = (uint32_t)now;
     studentsMarked    = 0;
@@ -4595,7 +4627,7 @@ static void registerLocalHttp() {
       localHttp.send(409, "application/json", "{\"error\":\"No active session\"}"); return;
     }
     LOG("Session stopped: " + sessionId);
-    sessionId = ""; sessionSeed = "";     sessionTitle = ""; sessionCourse = ""; sessionLecturer = "";
+    sessionId = ""; sessionSeed = ""; sessionTitle = ""; sessionCourse = ""; sessionLecturer = ""; sessionGroup = "";
     studentsMarked = 0; reMarkActive = false;
     presenceClear();
     localHttp.sendHeader("Access-Control-Allow-Origin", "*");
@@ -4623,26 +4655,15 @@ static void registerLocalHttp() {
       localHttp.sendHeader("Location", "/"); localHttp.send(302, "text/plain", ""); return;
     }
 
-    // Build course options from bundle
-    String courseOpts = "";
+    // Serialize bundle for embedding in page JS
     String bundleEscaped = "";
     if (bundleLoaded && bundleJson.length() > 2) {
-      JsonDocument bDoc;
-      if (!deserializeJson(bDoc, bundleJson)) {
-        for (JsonObject c : bDoc.as<JsonArray>()) {
-          String cid  = c["courseId"]   | "";
-          String code = c["courseCode"] | "";
-          String name = c["courseName"] | "";
-          courseOpts += "<option value='" + cid + "'>" + code + " — " + name + "</option>";
-        }
-        serializeJson(bDoc, bundleEscaped);
-        // escape for embedding in JS string
-        bundleEscaped.replace("\\", "\\\\");
-        bundleEscaped.replace("'", "\\'");
-      }
+      bundleEscaped = bundleJson;
+      bundleEscaped.replace("\\", "\\\\");
+      bundleEscaped.replace("</", "<\\/");
     }
 
-    if (courseOpts.isEmpty()) {
+    if (bundleEscaped.isEmpty()) {
       // No bundle — show a manual entry form so the lecturer can still start offline
       localHttp.send(200, "text/html", String(
         "<!doctype html><html><head><meta charset='utf-8'>"
@@ -4729,6 +4750,8 @@ static void registerLocalHttp() {
       return;
     }
 
+    // Bundle-based lecturer-centric form
+    // Step 1: Employee ID → Step 2: course dropdown + PIN
     String page = String(
       "<!doctype html><html><head><meta charset='utf-8'>"
       "<meta name='viewport' content='width=device-width,initial-scale=1,maximum-scale=1'>"
@@ -4739,14 +4762,16 @@ static void registerLocalHttp() {
       "display:flex;align-items:center;justify-content:center;padding:20px}"
       ".card{background:#111827;border-radius:20px;padding:28px 20px;"
       "max-width:380px;width:100%;border:1px solid #1e2d45}"
-      ".logo{text-align:center;font-size:22px;font-weight:900;color:#fff;margin-bottom:2px}"
+      ".logo{text-align:center;font-size:22px;font-weight:900;margin-bottom:2px}"
       ".logo span{color:#4f6ef7}"
       ".sub{text-align:center;font-size:12px;color:#64748b;margin-bottom:18px}"
+      ".who{background:#0f172a;border-radius:10px;padding:10px 14px;"
+      "font-size:13px;color:#a5b4fc;margin-bottom:16px;font-weight:600}"
       "label{display:block;font-size:11px;font-weight:600;color:#94a3b8;"
       "text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px}"
-      "select,input[type=text]{width:100%;padding:13px 14px;background:#0f172a;"
-      "border:1.5px solid #1e2d45;border-radius:10px;color:#fff;font-size:15px;"
-      "outline:none;margin-bottom:16px;-webkit-appearance:none;appearance:none}"
+      "select,input[type=text],input[type=password]{width:100%;padding:13px 14px;"
+      "background:#0f172a;border:1.5px solid #1e2d45;border-radius:10px;color:#fff;"
+      "font-size:15px;outline:none;margin-bottom:16px;-webkit-appearance:none;appearance:none}"
       "select:focus,input:focus{border-color:#4f6ef7}"
       ".dur{display:flex;gap:7px;flex-wrap:wrap;margin-bottom:22px}"
       ".dur input[type=radio]{display:none}"
@@ -4756,7 +4781,7 @@ static void registerLocalHttp() {
       ".dur input[type=radio]:checked+label{background:#1e3a5f;border-color:#4f6ef7;color:#fff}"
       "button{width:100%;padding:15px;background:#4f6ef7;color:#fff;border:none;"
       "border-radius:12px;font-size:15px;font-weight:700;cursor:pointer;"
-      "-webkit-tap-highlight-color:transparent}"
+      "-webkit-tap-highlight-color:transparent;margin-top:4px}"
       "button:disabled{opacity:.5}"
       ".err{display:none;background:#450a0a;border:1px solid #991b1b;border-radius:10px;"
       "padding:12px 14px;color:#fca5a5;font-size:13px;margin-bottom:14px}"
@@ -4766,6 +4791,8 @@ static void registerLocalHttp() {
       ".ck{font-size:56px;margin-bottom:14px}"
       ".ok h2{color:#22c55e;font-size:18px;margin-bottom:8px}"
       ".ok p{color:#64748b;font-size:13px;line-height:1.6}"
+      ".back{background:none;border:none;color:#4f6ef7;font-size:13px;cursor:pointer;"
+      "padding:0;margin-bottom:14px;width:auto}"
       "</style></head><body><div class='card'>"
       "<div class='logo'>Di<span>kly</span></div>"
       "<div class='sub'>Lecturer Session Setup</div>"
@@ -4774,15 +4801,18 @@ static void registerLocalHttp() {
       "&#x26A0; PIN not set. Log into <strong>dikly.sbs</strong> &rarr; Settings &rarr; "
       "<strong>Set Attendance PIN</strong>, then return here."
       "</div>"
-      "<div id='main'>"
-      "<label>Course</label>"
-      "<select id='csel' onchange='onCourse()'>"
-      "<option value=''>— Select a course —</option>") +
-      courseOpts +
-      String("<label id='llbl' style='display:none'>Lecturer</label>"
-      "<select id='lsel' style='display:none'><option value=''>— Select a lecturer —</option></select>"
-      "<label id='plbl' style='display:none'>Your PIN</label>"
-      "<input type='password' id='pin' placeholder='4-digit PIN' maxlength='4' inputmode='numeric' autocomplete='off' style='display:none'>"
+      // Step 1: Employee ID
+      "<div id='s1'>"
+      "<label>Staff / Employee ID</label>"
+      "<input type='text' id='eid' placeholder='e.g. L0042'"
+      " autocomplete='off' autocorrect='off' autocapitalize='characters'>"
+      "<button onclick='findCourses()'>Find My Courses &#x2192;</button>"
+      "</div>"
+      // Step 2: Course + PIN (hidden until step 1)
+      "<div id='s2' style='display:none'>"
+      "<div class='who' id='who'></div>"
+      "<label>Course &amp; Group</label>"
+      "<select id='csel'><option value=''>&#x2014; Select &#x2014;</option></select>"
       "<label>Duration</label>"
       "<div class='dur'>"
       "<input type='radio' name='d' id='d5' value='300'><label for='d5'>5 min</label>"
@@ -4792,79 +4822,67 @@ static void registerLocalHttp() {
       "<input type='radio' name='d' id='d90' value='5400'><label for='d90'>1.5 hr</label>"
       "<input type='radio' name='d' id='d120' value='7200'><label for='d120'>2 hrs</label>"
       "</div>"
+      "<label>Your Attendance PIN</label>"
+      "<input type='password' id='pin' placeholder='4-digit PIN' maxlength='4' inputmode='numeric' autocomplete='off'>"
       "<button id='btn' onclick='go()'>Start Session &#x2192;</button>"
+      "<button class='back' onclick='back()'>&#x2190; Change ID</button>"
       "</div>"
       "<div class='ok' id='ok'>"
-      "<div class='ck'>&#x1F3AB;</div>"
-      "<h2>Session Started!</h2>"
+      "<div class='ck'>&#x1F3AB;</div><h2>Session Started!</h2>"
       "<p>Students can now connect to Dikly WiFi.<br>Attendance portal is now active.</p>"
       "</div>"
-      "</div>"
-      "<script>"
+      "</div><script>"
       "var bundle=") + bundleEscaped + String(";"
-      "function onCourse(){"
-      "var cid=document.getElementById('csel').value;"
-      "var lsel=document.getElementById('lsel');"
-      "var llbl=document.getElementById('llbl');"
-      "var plbl=document.getElementById('plbl');"
-      "var pin=document.getElementById('pin');"
-      "lsel.innerHTML='<option value=\"\">— Select a lecturer —</option>';"
-      "if(!cid){lsel.style.display='none';llbl.style.display='none';"
-      "plbl.style.display='none';pin.style.display='none';return;}"
-      "var course=bundle.find(function(c){return c.courseId==cid;});"
-      "if(!course||!course.lecturers.length)return;"
-      "course.lecturers.forEach(function(l){"
-      "var o=document.createElement('option');o.value=l.id;o.textContent=l.name;lsel.appendChild(o);"
-      "});"
-      "lsel.style.display='block';llbl.style.display='block';"
-      "plbl.style.display='block';pin.style.display='block';"
-      "lsel.onchange=onLecturer;"
-      "onLecturer();"
+      "var curLect=null;"
+      "function findCourses(){"
+      "var eid=document.getElementById('eid').value.trim().toUpperCase();"
+      "var err=document.getElementById('err');err.style.display='none';"
+      "if(!eid){err.textContent='Enter your Staff ID.';err.style.display='block';return;}"
+      "curLect=bundle.find(function(l){return (l.employeeId||'').toUpperCase()===eid;});"
+      "if(!curLect){err.textContent='Staff ID not found. Check your Employee ID.';err.style.display='block';return;}"
+      "document.getElementById('who').textContent='\xf0\x9f\x91\xa4 '+curLect.name;"
+      "document.getElementById('pinwarn').style.display=curLect.offlinePinHash?'none':'block';"
+      "var sel=document.getElementById('csel');"
+      "sel.innerHTML='<option value=\"\">&#x2014; Select &#x2014;</option>';"
+      "curLect.courses.forEach(function(c){"
+      "var o=document.createElement('option');o.value=c.courseId;"
+      "var lbl=c.courseCode+' \xe2\x80\x94 '+c.courseName;"
+      "if(c.group)lbl+=' (Group '+c.group+')';"
+      "if(c.level)lbl+=' [Lvl '+c.level+']';"
+      "o.textContent=lbl;sel.appendChild(o);});"
+      "document.getElementById('s1').style.display='none';"
+      "document.getElementById('s2').style.display='block';"
       "}"
-      "function onLecturer(){"
-      "var cid=document.getElementById('csel').value;"
-      "var lid=document.getElementById('lsel').value;"
-      "var warn=document.getElementById('pinwarn');"
-      "var pin=document.getElementById('pin');"
-      "warn.style.display='none';"
-      "if(!lid)return;"
-      "var course=bundle.find(function(c){return c.courseId==cid;});"
-      "var lect=course?course.lecturers.find(function(l){return l.id==lid;}):null;"
-      "if(lect&&!lect.offlinePinHash){"
-      "warn.style.display='block';"
-      "pin.style.display='none';"
-      "document.getElementById('plbl').style.display='none';"
-      "}else{"
-      "pin.style.display='block';"
-      "document.getElementById('plbl').style.display='block';"
-      "}"
+      "function back(){"
+      "document.getElementById('s2').style.display='none';"
+      "document.getElementById('s1').style.display='block';"
+      "document.getElementById('err').style.display='none';"
+      "document.getElementById('pinwarn').style.display='none';"
+      "curLect=null;"
       "}"
       "function go(){"
       "var cid=document.getElementById('csel').value;"
-      "var lid=document.getElementById('lsel').value;"
       "var pin=document.getElementById('pin').value.trim();"
       "var dur=document.querySelector('input[name=d]:checked');"
       "var err=document.getElementById('err');err.style.display='none';"
       "if(!cid){err.textContent='Select a course.';err.style.display='block';return;}"
-      "if(!lid){err.textContent='Select a lecturer.';err.style.display='block';return;}"
-      "var course=bundle.find(function(c){return c.courseId==cid;});"
-      "var lect=course?course.lecturers.find(function(l){return l.id==lid;}):null;"
-      "if(lect&&!lect.offlinePinHash){"
-      "err.textContent='Set your Attendance PIN at dikly.sbs first.';"
-      "err.style.display='block';return;}"
-      "if(pin.length!==4){err.textContent='Enter the 4-digit PIN.';err.style.display='block';return;}"
+      "if(!curLect.offlinePinHash){err.textContent='Set your PIN at dikly.sbs first.';err.style.display='block';return;}"
+      "if(pin.length!==4){err.textContent='Enter your 4-digit PIN.';err.style.display='block';return;}"
       "var btn=document.getElementById('btn');btn.textContent='Starting\xe2\x80\xa6';btn.disabled=true;"
       "fetch('/session/start',{method:'POST',headers:{'Content-Type':'application/json'},"
-      "body:JSON.stringify({pin:pin,courseId:cid,lecturerId:lid,"
-      "courseCode:course?course.courseCode:'',title:course?course.courseName:'Attendance',"
-      "lecturer:lect?lect.name:'',duration:parseInt(dur.value)})})"
+      "body:JSON.stringify({employeeId:curLect.employeeId,courseId:cid,"
+      "pin:pin,duration:parseInt(dur.value)})})"
       ".then(function(r){return r.json().then(function(d){return{ok:r.ok,d:d};});})"
       ".then(function(r){"
-      "if(r.ok){window.location.href='/status';}"
-      "else{err.textContent=r.d.error||'Failed.';err.style.display='block';"
+      "if(r.ok){"
+      "document.getElementById('s2').style.display='none';"
+      "document.getElementById('ok').style.display='block';"
+      "setTimeout(function(){window.location.href='/status';},1500);"
+      "}else{"
+      "err.textContent=r.d.error||'Failed.';err.style.display='block';"
       "btn.textContent='Start Session \xe2\x86\x92';btn.disabled=false;}"
       "}).catch(function(){"
-      "err.textContent='Connection lost. Stay on Dikly WiFi and retry.';"
+      "err.textContent='Connection error. Stay on Dikly WiFi.';"
       "err.style.display='block';btn.textContent='Start Session \xe2\x86\x92';btn.disabled=false;"
       "});}"
       "</script></body></html>");
@@ -5132,7 +5150,7 @@ static void handlePairedTap(uint16_t tx, uint16_t ty) {
       summaryPct     = (summaryTotal > 0) ?
                        (float)summaryPresent * 100.0f / (float)summaryTotal : 0.0f;
       summaryCourse  = sessionCourse.isEmpty() ? sessionTitle : sessionCourse;
-      sessionId = ""; sessionSeed = "";       sessionTitle = ""; sessionCourse = ""; sessionLecturer = "";
+      sessionId = ""; sessionSeed = ""; sessionTitle = ""; sessionCourse = ""; sessionLecturer = ""; sessionGroup = "";
       studentsMarked = 0; sessionTotalEnrolled = 0; reMarkActive = false;
       sessionLocallyStarted = false; clearLocalSession();
       if (monPhase == MON_CHECKIN_OPEN || monPhase == MON_MONITORING) {
@@ -5655,7 +5673,7 @@ void loop() {
         summaryPct     = (summaryTotal > 0) ?
                          (float)summaryPresent * 100.0f / (float)summaryTotal : 0.0f;
         summaryCourse  = sessionCourse.isEmpty() ? sessionTitle : sessionCourse;
-        sessionId = ""; sessionSeed = "";         sessionTitle = ""; sessionCourse = ""; sessionLecturer = "";
+        sessionId = ""; sessionSeed = ""; sessionTitle = ""; sessionCourse = ""; sessionLecturer = ""; sessionGroup = "";
         studentsMarked = 0; sessionTotalEnrolled = 0; reMarkActive = false;
         sessionLocallyStarted = false; clearLocalSession();
         curScreen = SUMMARY; drawSummary(); return;

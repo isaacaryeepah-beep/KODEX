@@ -146,29 +146,26 @@ exports.setLecturerPin = async (req, res, next) => {
 exports.getDeviceBundle = async (req, res, next) => {
   try {
     const device = req.device;
-    if (!device.classRepId) return res.status(400).json({ error: 'No class rep assigned to this device' });
 
-    const rep = await User.findById(device.classRepId)
-      .select('classRepCourse studentLevel studentGroup programme sessionType semester')
-      .lean();
-    if (!rep) return res.status(404).json({ error: 'Class rep not found' });
+    // Fetch all active lecturers for this institution
+    const lecturers = await User.find({
+      company: device.companyId,
+      role: 'lecturer',
+      isActive: true,
+    }).select('+offlinePinHash name employeeId').lean();
 
-    // Find all courses for this rep's class group
-    const query = { companyId: device.companyId, isActive: true };
-    if (rep.studentLevel) query.level   = rep.studentLevel;
-    if (rep.studentGroup) query.group   = rep.studentGroup;
-    if (rep.sessionType)  query.sessionType = rep.sessionType;
-    if (rep.semester)     query.semester = rep.semester;
-    if (rep.programme)    query.qualificationType = rep.programme;
+    if (!lecturers.length) return res.json({ bundle: [], issuedAt: Math.floor(Date.now() / 1000) });
 
-    const courses = await Course.find(query)
-      .select('_id title code lecturerId')
-      .lean();
+    const lecturerIds = lecturers.map(l => l._id);
 
-    // Collect all unique lecturer IDs across courses
-    const lecturerIds = [...new Set(courses.map(c => c.lecturerId?.toString()).filter(Boolean))];
+    // Find all active courses assigned to these lecturers
+    const courses = await Course.find({
+      companyId: device.companyId,
+      isActive: true,
+      lecturerId: { $in: lecturerIds },
+    }).select('_id title code lecturerId level group').lean();
 
-    // Also include lecturers from CourseLecturerAssignment if that model exists
+    // Extra assignments from CourseLecturerAssignment if the model exists
     let extraAssignments = [];
     try {
       const CLA = require('../models/CourseLecturerAssignment');
@@ -176,52 +173,46 @@ exports.getDeviceBundle = async (req, res, next) => {
         course: { $in: courses.map(c => c._id) },
         isActive: { $ne: false },
       }).select('course lecturer').lean();
-      extraAssignments.forEach(a => {
-        const id = a.lecturer?.toString();
-        if (id && !lecturerIds.includes(id)) lecturerIds.push(id);
-      });
-    } catch (_) { /* model may not exist */ }
+    } catch (_) {}
 
-    // Fetch lecturers with their offline hash
-    const lecturers = await User.find({
-      _id: { $in: lecturerIds },
-      company: device.companyId,
-      role: 'lecturer',
-      isActive: true,
-    }).select('+offlinePinHash name email').lean();
+    // Build lecturer → courses map
+    const lectCoursesMap = {};
+    courses.forEach(c => {
+      const lid = c.lecturerId?.toString();
+      if (!lid) return;
+      if (!lectCoursesMap[lid]) lectCoursesMap[lid] = [];
+      lectCoursesMap[lid].push(c);
+    });
+    extraAssignments.forEach(a => {
+      const lid = a.lecturer?.toString();
+      const c   = courses.find(x => x._id.toString() === a.course.toString());
+      if (!lid || !c) return;
+      if (!lectCoursesMap[lid]) lectCoursesMap[lid] = [];
+      if (!lectCoursesMap[lid].find(x => x._id.toString() === c._id.toString()))
+        lectCoursesMap[lid].push(c);
+    });
 
-    const lecturerMap = {};
-    lecturers.forEach(l => { lecturerMap[l._id.toString()] = l; });
-
-    // Build bundle: one entry per course, list of eligible lecturers
-    const bundleCourses = courses.map(course => {
-      const courseLecturerIds = [course.lecturerId?.toString()].filter(Boolean);
-      extraAssignments
-        .filter(a => a.course.toString() === course._id.toString())
-        .forEach(a => {
-          const id = a.lecturer?.toString();
-          if (id && !courseLecturerIds.includes(id)) courseLecturerIds.push(id);
-        });
-
-      return {
-        courseId:   course._id,
-        courseCode: course.code,
-        courseName: course.title,
-        lecturers: courseLecturerIds
-          .map(id => lecturerMap[id])
-          .filter(Boolean)
-          .map(l => ({
-            id:             l._id,
-            name:           l.name,
-            offlinePinHash: l.offlinePinHash || null,
-          })),
-      };
-    }).filter(c => c.lecturers.length > 0);
+    // Build lecturer-centric bundle — one entry per lecturer with their courses
+    const bundle = lecturers
+      .filter(l => lectCoursesMap[l._id.toString()]?.length)
+      .map(l => ({
+        id:             l._id,
+        employeeId:     l.employeeId || '',
+        name:           l.name,
+        offlinePinHash: l.offlinePinHash || null,
+        courses: (lectCoursesMap[l._id.toString()] || []).map(c => ({
+          courseId:   c._id,
+          courseCode: c.code,
+          courseName: c.title,
+          level:      c.level  || '',
+          group:      c.group  || '',
+        })),
+      }));
 
     res.json({
-      bundle:    bundleCourses,
+      bundle,
       issuedAt:  Math.floor(Date.now() / 1000),
-      expiresAt: Math.floor(Date.now() / 1000) + 48 * 3600, // 48 h validity
+      expiresAt: Math.floor(Date.now() / 1000) + 48 * 3600,
     });
   } catch (e) { next(e); }
 };
