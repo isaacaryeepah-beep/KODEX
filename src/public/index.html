@@ -205,7 +205,15 @@ function selectPortal(t){if(window._appLoaded)window._realSelectPortal(t);else w
 #sp-icon-or  { width: clamp(62px,11vmin,88px); height: clamp(62px,11vmin,88px);
   filter: drop-shadow(0 0 15px rgba(249,115,22,0.55)); }
 
-/* ── PRECISION TEXT ── */
+/* ── SCENE TEXT BASE ── */
+.sp-stxt {
+  position: absolute; z-index: 15; pointer-events: none;
+  opacity: 0; transition: opacity 0.6s ease;
+}
+.sp-stxt.sp-in  { opacity: 1; }
+.sp-stxt.sp-out { opacity: 0; transition: opacity 0.5s ease; }
+
+/* ── SCENE 0: PRECISION MEETS POWER ── */
 #sp-rule {
   position: absolute; left: 50%; transform: translateX(-50%);
   bottom: clamp(110px,22vmin,180px);
@@ -215,7 +223,6 @@ function selectPortal(t){if(window._appLoaded)window._realSelectPortal(t);else w
   z-index: 15;
 }
 #sp-rule.sp-show { width: 100px; }
-
 #sp-text {
   position: absolute; bottom: clamp(56px,11vmin,110px);
   width: 100%; text-align: center; z-index: 15;
@@ -233,12 +240,108 @@ function selectPortal(t){if(window._appLoaded)window._realSelectPortal(t);else w
   font-size: clamp(0.78rem,1.9vw,1.1rem); font-weight: 300;
   color: rgba(255,255,255,0.55); letter-spacing: 0.35em;
   text-transform: uppercase; margin: 10px 0 0;
-  opacity: 0;
-  transition: opacity 0.8s ease 0.35s;
+  opacity: 0; transition: opacity 0.8s ease 0.35s;
 }
 #sp-text p.sp-show { opacity: 1; }
 
-/* ── BRAND REVEAL (Scene 5) ─────────────────────────────── */
+/* ── SCENE 1: SCROLL TO EXPLORE ── */
+#sp-s1 {
+  top: clamp(80px,16vmin,130px); right: clamp(24px,6vw,80px);
+  text-align: right;
+  transform: translateX(40px);
+  transition: opacity 0.6s ease, transform 0.7s cubic-bezier(0.16,1,0.3,1);
+}
+#sp-s1.sp-in  { transform: translateX(0); }
+#sp-s1.sp-out { transform: translateX(-20px); }
+#sp-s1 h2 {
+  font-size: clamp(1.5rem,4vw,2.8rem); font-weight: 900;
+  color: #fff; letter-spacing: 0.04em; margin: 0 0 8px;
+  text-transform: uppercase;
+}
+#sp-s1-line {
+  height: 2px; width: 0; background: #3b82f6;
+  margin-left: auto; margin-bottom: 14px;
+  transition: width 0.6s ease 0.3s;
+}
+#sp-s1.sp-in #sp-s1-line { width: 80px; }
+#sp-s1 p {
+  font-size: clamp(0.75rem,1.6vw,1rem); font-weight: 300;
+  color: rgba(255,255,255,0.5); max-width: 280px; margin-left: auto;
+  line-height: 1.5; letter-spacing: 0.01em;
+  opacity: 0; transition: opacity 0.6s ease 0.5s;
+}
+#sp-s1.sp-in p { opacity: 1; }
+
+/* ── SCENE 2: INNOVATE CREATE EMPOWER ── */
+#sp-s2 {
+  bottom: clamp(40px,9vmin,80px); left: 0; right: 0; text-align: center;
+  display: flex; flex-direction: column; align-items: center;
+  transform: translateY(16px);
+  transition: opacity 0.6s ease, transform 0.7s cubic-bezier(0.16,1,0.3,1);
+}
+#sp-s2.sp-in  { transform: translateY(0); }
+#sp-s2.sp-out { transform: translateY(-10px); }
+#sp-s2-words {
+  display: flex; align-items: center; gap: 10px; margin-bottom: 10px;
+  opacity: 0; transform: translateY(12px);
+  transition: opacity 0.5s ease 0.1s, transform 0.5s ease 0.1s;
+}
+#sp-s2.sp-in #sp-s2-words { opacity: 1; transform: translateY(0); }
+#sp-s2-words .sp-word {
+  font-size: clamp(0.9rem,2.2vw,1.25rem); font-weight: 700;
+  letter-spacing: 0.15em; color: #fff; text-transform: uppercase;
+}
+#sp-s2-words .sp-dot { color: #60a5fa; font-weight: 900; font-size: 1.2em; line-height: 1; }
+#sp-s2-sub {
+  font-size: clamp(0.55rem,1.4vw,0.72rem); letter-spacing: 0.25em;
+  color: rgba(255,255,255,0.35); text-transform: uppercase; font-weight: 300;
+  margin: 0 0 12px; opacity: 0; transition: opacity 0.6s ease 0.3s;
+}
+#sp-s2.sp-in #sp-s2-sub { opacity: 1; }
+#sp-s2-rule {
+  height: 1px; width: 0; margin-bottom: 14px;
+  background: linear-gradient(to right, transparent, rgba(96,165,250,0.45), transparent);
+  transition: width 0.7s cubic-bezier(0.16,1,0.3,1) 0.35s;
+}
+#sp-s2.sp-in #sp-s2-rule { width: 120px; }
+#sp-s2-badge {
+  display: inline-flex; align-items: center; padding: 8px 28px;
+  border: 1px solid rgba(96,165,250,0.35); border-radius: 9999px;
+  background: rgba(23,37,84,0.4); backdrop-filter: blur(8px);
+  font-size: clamp(0.65rem,1.5vw,0.82rem); font-weight: 600;
+  letter-spacing: 0.2em; color: #bfdbfe; text-transform: uppercase;
+  opacity: 0; transform: scale(0.93) translateY(14px);
+  transition: opacity 0.5s ease 0.55s, transform 0.5s cubic-bezier(0.34,1.56,0.64,1) 0.55s;
+}
+#sp-s2.sp-in #sp-s2-badge { opacity: 1; transform: scale(1) translateY(0); }
+
+/* ── SCENE 3: PUSH GLOW ── */
+#sp-s3 {
+  inset: 0; display: flex; align-items: center; justify-content: center;
+}
+#sp-s3-glow {
+  position: absolute; border-radius: 50%;
+  width: 60vmax; height: 60vmax;
+  background: radial-gradient(circle, rgba(59,130,246,0.28) 0%, rgba(59,130,246,0.08) 45%, transparent 70%);
+  filter: blur(40px);
+  transform: scale(0.4); opacity: 0;
+  transition: transform 2.8s ease-in-out, opacity 1s ease;
+}
+#sp-s3.sp-in #sp-s3-glow { transform: scale(1.4); opacity: 1; }
+#sp-s3-ring {
+  position: absolute; border-radius: 50%;
+  width: 40vmax; height: 40vmax;
+  border: 1px solid rgba(96,165,250,0.2);
+  transform: scale(0.6); opacity: 0;
+}
+#sp-s3.sp-in #sp-s3-ring { animation: sp-ring 2.2s ease-out 0.3s forwards; }
+@keyframes sp-ring {
+  0%   { transform: scale(0.6); opacity: 0; }
+  30%  { opacity: 0.5; }
+  100% { transform: scale(1.6); opacity: 0; }
+}
+
+/* ── BRAND REVEAL (Scene 4) ─────────────────────────────── */
 #sp-brand {
   position: absolute; inset: 0; z-index: 20;
   background: #000;
@@ -300,7 +403,7 @@ function selectPortal(t){if(window._appLoaded)window._realSelectPortal(t);else w
 }
 #sp-shimmer.sp-run { transition: transform 1.6s cubic-bezier(0.16,1,0.3,1); transform: translateX(110%); }
 
-/* Content */
+/* Brand content */
 #sp-brand-cnt {
   position: relative; z-index: 10;
   display: flex; flex-direction: column; align-items: center; text-align: center;
@@ -334,27 +437,57 @@ function selectPortal(t){if(window._appLoaded)window._realSelectPortal(t);else w
 #sp-bt.sp-show { opacity: 1; }
 </style>
 
-<!-- VIDEO INTRO -->
+<!-- VIDEO INTRO (Scenes 0-3) -->
 <div id="sp-intro">
   <video id="sp-bg-video" autoplay muted loop playsinline>
     <source src="/mouse-bg.mp4" type="video/mp4">
   </video>
   <div id="sp-vid-grad"></div>
   <div id="sp-vid-over"></div>
+
   <div id="sp-icons">
     <img id="sp-icon-dk" class="sp-icon" src="/icon-dikly.png" alt="">
     <img id="sp-icon-bl" class="sp-icon" src="/icon-blue.png"  alt="">
     <img id="sp-icon-gr" class="sp-icon" src="/icon-green.png" alt="">
     <img id="sp-icon-or" class="sp-icon" src="/icon-orange.png" alt="">
   </div>
+
+  <!-- Scene 0: PRECISION MEETS POWER -->
   <div id="sp-rule"></div>
   <div id="sp-text">
     <h1 id="sp-h1">PRECISION</h1>
     <p id="sp-p1">MEETS POWER</p>
   </div>
+
+  <!-- Scene 1: SCROLL TO EXPLORE -->
+  <div id="sp-s1" class="sp-stxt">
+    <h2>SCROLL TO EXPLORE</h2>
+    <div id="sp-s1-line"></div>
+    <p>Seamlessly navigate your entire digital workspace with fluid carousel rotation.</p>
+  </div>
+
+  <!-- Scene 2: Innovate Create Empower -->
+  <div id="sp-s2" class="sp-stxt">
+    <div id="sp-s2-words">
+      <span class="sp-word">Innovate</span>
+      <span class="sp-dot">&#8226;</span>
+      <span class="sp-word">Create</span>
+      <span class="sp-dot">&#8226;</span>
+      <span class="sp-word">Empower</span>
+    </div>
+    <p id="sp-s2-sub">This is how it goes</p>
+    <div id="sp-s2-rule"></div>
+    <div id="sp-s2-badge">Dikly Selected</div>
+  </div>
+
+  <!-- Scene 3: Push glow -->
+  <div id="sp-s3" class="sp-stxt">
+    <div id="sp-s3-glow"></div>
+    <div id="sp-s3-ring"></div>
+  </div>
 </div>
 
-<!-- BRAND REVEAL (Scene 5) -->
+<!-- BRAND REVEAL (Scene 4) -->
 <div id="sp-brand">
   <div id="sp-blob-a"></div>
   <div id="sp-blob-b"></div>
@@ -380,7 +513,6 @@ function selectPortal(t){if(window._appLoaded)window._realSelectPortal(t);else w
 (function () {
 'use strict';
 
-/* ── Hard dismiss at 7 s ─────────────────────────────────── */
 var _gone = false;
 function dismissSplash() {
   if (_gone) return; _gone = true;
@@ -391,10 +523,18 @@ function dismissSplash() {
   el.style.pointerEvents = 'none';
   setTimeout(function () { if (el && el.parentNode) el.parentNode.removeChild(el); }, 700);
 }
-setTimeout(dismissSplash, 7000);
+setTimeout(dismissSplash, 9500);
 
 function show(id) {
   var el = document.getElementById(id); if (el) el.classList.add('sp-show');
+}
+function sIn(id) {
+  var el = document.getElementById(id);
+  if (el) { el.classList.remove('sp-out'); el.classList.add('sp-in'); }
+}
+function sOut(id) {
+  var el = document.getElementById(id);
+  if (el) { el.classList.remove('sp-in'); el.classList.add('sp-out'); }
 }
 function pos(el, x, y, z, s, op, ry) {
   if (!el) return;
@@ -407,13 +547,13 @@ var bl = document.getElementById('sp-icon-bl');
 var gr = document.getElementById('sp-icon-gr');
 var or = document.getElementById('sp-icon-or');
 
-/* Initial state — hidden */
+/* Initial: all hidden */
 pos(dk,   0,   0,   0, 0, 0,   0);
 pos(bl, -150,  50, -50, 0, 0,  30);
 pos(gr,  150,  50, -50, 0, 0, -30);
 pos(or,    0, 100,-150, 0, 0,   0);
 
-/* t = 120 ms — icons enter (scene 0) */
+/* Scene 0 (0-1800ms): icons enter + PRECISION MEETS POWER */
 setTimeout(function () {
   pos(dk,   0,   0,   0, 1.0, 1.0,  0);
   pos(bl, -150,  50, -50, 0.8, 0.8, 30);
@@ -421,50 +561,63 @@ setTimeout(function () {
   pos(or,    0, 100,-150, 0.6, 0.6,  0);
 }, 120);
 
-/* t = 500 ms — rule appears */
 setTimeout(function () { show('sp-rule'); }, 500);
+setTimeout(function () { show('sp-h1'); show('sp-p1'); }, 900);
 
-/* t = 900 ms — precision text */
+/* Scene 1 (1800ms): SCROLL TO EXPLORE */
 setTimeout(function () {
-  show('sp-h1'); show('sp-p1');
-}, 900);
-
-/* t = 2200 ms — icons start rotating/zooming out (scene transition) */
-setTimeout(function () {
-  pos(dk,   0,   0, 800, 2.0, 0,  0);
-  pos(bl, -200, 100,-200, 0.5, 0,  0);
-  pos(gr,  250, 100,-200, 0.5, 0,  0);
-  pos(or,    0, 150,-300, 0.4, 0,  0);
   var h1 = document.getElementById('sp-h1');
   var p1 = document.getElementById('sp-p1');
-  if (h1) { h1.style.opacity = '0'; h1.style.transform = 'translateY(-20px)'; }
-  if (p1) { p1.style.opacity = '0'; }
-}, 2200);
+  var rl = document.getElementById('sp-rule');
+  if (h1) { h1.style.opacity='0'; h1.style.transform='translateY(-20px)'; }
+  if (p1) { p1.style.opacity='0'; }
+  if (rl) { rl.style.width='0'; }
+  pos(dk, -200,   0,-100, 0.8, 1.0,-30);
+  pos(bl,    0,   0,   0, 1.0, 0.8,  0);
+  pos(gr,  200,   0,-100, 0.8, 0.8, 30);
+  pos(or,  150,  50, -50, 0.8, 0.8,  0);
+  sIn('sp-s1');
+}, 1800);
 
-/* t = 2700 ms — brand panel fades in */
-setTimeout(function () { show('sp-brand'); }, 2700);
+/* Scene 2 (3200ms): Innovate Create Empower */
+setTimeout(function () {
+  sOut('sp-s1');
+  pos(dk,   0, -50, 100, 1.5, 1.0,  0);
+  pos(bl, -200, 100,-200, 0.5, 0,   0);
+  pos(gr,  250, 100,-200, 0.5, 0,   0);
+  pos(or,    0, 150,-300, 0.4, 0,   0);
+  sIn('sp-s2');
+}, 3200);
 
-/* t = 2900 ms — intro fades out */
+/* Scene 3 (4600ms): push glow */
+setTimeout(function () {
+  sOut('sp-s2');
+  pos(dk, 0, 0, 800, 2.0, 0, 0);
+  sIn('sp-s3');
+}, 4600);
+
+/* Brand reveal (5600ms) */
+setTimeout(function () { show('sp-brand'); }, 5600);
+
+/* Intro fades (5900ms) */
 setTimeout(function () {
   var intro = document.getElementById('sp-intro');
   if (intro) intro.classList.add('sp-fade');
-}, 2900);
+}, 5900);
 
-/* t = 3100 ms — brand icon springs in */
-setTimeout(function () { show('sp-bi'); }, 3100);
+/* Icon springs in (6100ms) */
+setTimeout(function () { show('sp-bi'); }, 6100);
 
-/* t = 3600 ms — wordmark, divider, tagline appear */
-setTimeout(function () {
-  show('sp-bn'); show('sp-bdiv'); show('sp-bt');
-}, 3600);
+/* Wordmark + divider + tagline (6500ms) */
+setTimeout(function () { show('sp-bn'); show('sp-bdiv'); show('sp-bt'); }, 6500);
 
-/* t = 3900 ms — shimmer sweep */
+/* Shimmer sweep (6800ms) */
 setTimeout(function () {
   var sh = document.getElementById('sp-shimmer'); if (sh) sh.classList.add('sp-run');
-}, 3900);
+}, 6800);
 
-/* t = 5800 ms — dismiss */
-setTimeout(dismissSplash, 5800);
+/* Dismiss (8400ms) */
+setTimeout(dismissSplash, 8400);
 
 })();
 </script>
