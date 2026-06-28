@@ -283,11 +283,11 @@ exports.startMeeting = async (req, res, next) => {
     if (meeting.status === 'ended')     return res.status(400).json({ error: 'Meeting already ended' });
     if (meeting.status === 'cancelled') return res.status(400).json({ error: 'Meeting was cancelled' });
 
+    if (!streamConfigured) return res.status(503).json({ error: 'Video meetings are not configured. Set LIVEKIT_URL, LIVEKIT_API_KEY and LIVEKIT_API_SECRET.' });
+
     meeting.status      = 'live';
     meeting.actualStart = new Date();
     await meeting.save();
-
-    if (!streamConfigured) return res.status(503).json({ error: 'Video meetings are not configured. Set LIVEKIT_URL, LIVEKIT_API_KEY and LIVEKIT_API_SECRET.' });
 
     const meetingToken = generateMeetingToken(req.user._id.toString(), meeting._id.toString(), req.user.deviceId || null);
     const livekitToken = await generateLiveKitToken(req.user._id, req.user.name || req.user.email, meeting.roomName, true);
