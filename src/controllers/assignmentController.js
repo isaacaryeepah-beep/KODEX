@@ -497,7 +497,13 @@ exports.gradeSubmission = async (req, res) => {
 
     if (manualGrade !== undefined) {
       if (manualGrade < 0) return res.status(400).json({ error: "Grade cannot be negative" });
-      sub.manualGrade = Number(manualGrade);
+      const totalMarks = sub.assignment.totalMarks || 0;
+      sub.manualGrade  = Number(manualGrade);
+      sub.earnedMarks  = Number(manualGrade);
+      sub.maxMarks     = totalMarks;
+      if (totalMarks > 0) {
+        sub.percentageScore = Math.round((Number(manualGrade) / totalMarks) * 10000) / 100;
+      }
     }
     if (feedback !== undefined) sub.feedback = feedback;
     sub.status    = "graded";

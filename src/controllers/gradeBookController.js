@@ -119,6 +119,11 @@ async function _fetchAssignmentData(courseId, company, studentIds) {
   const asgIds = assignments.map(a => a._id);
   const totalAsgMaxMarks = assignments.reduce((s, a) => s + (a.totalMarks || 0), 0);
 
+  const asgIdToTotalMarks = {};
+  for (const a of assignments) {
+    asgIdToTotalMarks[a._id.toString()] = a.totalMarks || 0;
+  }
+
   const asgMap = {};
   if (asgIds.length && studentIds.length) {
     const submissions = await AssignmentSubmission.find({
@@ -130,9 +135,13 @@ async function _fetchAssignmentData(courseId, company, studentIds) {
     for (const s of submissions) {
       const sid = s.student.toString();
       if (!asgMap[sid]) asgMap[sid] = { earned: 0, max: 0 };
-      if (s.earnedMarks != null) {
-        asgMap[sid].earned += s.earnedMarks;
-        asgMap[sid].max    += (s.maxMarks || 0);
+      const earned = s.earnedMarks ?? s.manualGrade;
+      if (earned != null) {
+        asgMap[sid].earned += earned;
+        const maxForThis = s.maxMarks != null
+          ? s.maxMarks
+          : (asgIdToTotalMarks[s.assignment.toString()] || 0);
+        asgMap[sid].max += maxForThis;
       }
     }
   }
