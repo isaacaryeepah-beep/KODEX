@@ -305,8 +305,43 @@ exports.startAttempt = async (req, res) => {
       status: ATTEMPT_STATUSES.ACTIVE,
     });
     if (activeAttempt) {
-      // Do NOT echo the sessionToken — the client must use the one it received
-      // when the attempt was originally started.
+      // Allow page-refresh resume: if the client sends back the original
+      // session token it received (stored in sessionStorage per-tab), treat
+      // this as a legitimate reconnect rather than a session conflict.
+      // sessionStorage is tab-scoped, so a second tab can never supply the
+      // correct token and will still receive the 409 conflict error.
+      const resumeToken = req.body.resumeToken;
+      if (resumeToken && resumeToken === activeAttempt.sessionToken) {
+        const questions = await _buildQuestionsForAttempt(activeAttempt, quiz);
+        return res.json({
+          resumed: true,
+          attempt: {
+            _id:           activeAttempt._id,
+            attemptNumber: activeAttempt.attemptNumber,
+            expiresAt:     activeAttempt.expiresAt,
+            sessionToken:  activeAttempt.sessionToken,
+            status:        activeAttempt.status,
+          },
+          quiz: {
+            timeLimitMinutes:               quiz.timeLimitMinutes,
+            heartbeatIntervalSeconds:       quiz.heartbeatIntervalSeconds,
+            heartbeatTimeoutSeconds:        quiz.heartbeatTimeoutSeconds,
+            maxViolationsBeforeTermination: quiz.maxViolationsBeforeTermination,
+            terminateOnTabSwitch:           quiz.terminateOnTabSwitch,
+            terminateOnFocusLost:           quiz.terminateOnFocusLost,
+            terminateOnFullscreenExit:      quiz.terminateOnFullscreenExit,
+            preventCopyPaste:               quiz.preventCopyPaste,
+            preventRightClick:              quiz.preventRightClick,
+            preventPrintScreen:             quiz.preventPrintScreen,
+            requireFullscreen:              quiz.requireFullscreen,
+            showViolationWarnings:          quiz.showViolationWarnings,
+            proctoringEnabled:              quiz.proctoringEnabled,
+            snapshotIntervalSeconds:        quiz.snapshotIntervalSeconds,
+            noiseDetectionThreshold:        quiz.noiseDetectionThreshold,
+          },
+          questions,
+        });
+      }
       return res.status(409).json({
         error:    "You already have an active session for this quiz",
         attemptId: activeAttempt._id,
