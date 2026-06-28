@@ -525,6 +525,14 @@ function dismissSplash() {
 }
 setTimeout(dismissSplash, 9500);
 
+/* Force video play — browser autoplay policies sometimes need explicit call */
+var vid = document.getElementById('sp-bg-video');
+if (vid) {
+  vid.muted = true;
+  var vp = vid.play();
+  if (vp && vp.catch) { vp.catch(function () {}); }
+}
+
 function show(id) {
   var el = document.getElementById(id); if (el) el.classList.add('sp-show');
 }
