@@ -384,6 +384,39 @@ showCall();
 startTimer();
 rerender();
 
+// ── Participant event stream (meeting_ended / kicked / warning from host) ─────
+(function() {
+  var es = new EventSource(BASE_URL + '/api/meetings/' + meetingId + '/participant-stream?token=' + encodeURIComponent(kodexToken));
+  es.addEventListener('meeting_ended', function() {
+    es.close();
+    clearInterval(timerInt);
+    fetch(BASE_URL + '/api/meetings/' + meetingId + '/attendance/leave', {
+      method: 'POST', headers: { Authorization: 'Bearer ' + kodexToken },
+    }).catch(function(){});
+    try { room.disconnect(); } catch(_) {}
+    location.replace('/');
+  });
+  es.addEventListener('kicked', function() {
+    es.close();
+    clearInterval(timerInt);
+    fetch(BASE_URL + '/api/meetings/' + meetingId + '/attendance/leave', {
+      method: 'POST', headers: { Authorization: 'Bearer ' + kodexToken },
+    }).catch(function(){});
+    try { room.disconnect(); } catch(_) {}
+    showError('You have been removed from this meeting.');
+    setTimeout(function() { location.replace('/'); }, 3000);
+  });
+  es.addEventListener('warning', function(e) {
+    try {
+      var data = JSON.parse(e.data || '{}');
+      var msg = data.message || 'Warning from host';
+      var el = document.getElementById('handToast');
+      if (el) { document.getElementById('handToastName').textContent = '⚠ ' + msg; el.style.display = 'flex'; clearTimeout(el._t); el._t = setTimeout(function(){el.style.display='none';}, 6000); }
+    } catch(_) {}
+  });
+  es.onerror = function() { setTimeout(function(){ es.close(); }, 30000); };
+})();
+
 // ── Proctoring (oral_exam / live_assessment / proctored_quiz / snap_quiz — students only) ──
 function postProcEvent(type, meta) {
   if (!meetingId || !kodexToken) return;

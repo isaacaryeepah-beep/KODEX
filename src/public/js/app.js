@@ -5527,9 +5527,11 @@ async function renderSuperadminDashboard(content) {
   }
 
   async function renderAdjusterTab() {
-    const r = saGetRates();
     let ps = {};
     try { ps = await api('/api/superadmin/settings'); } catch(_) {}
+    const _rateApiKeys = { admin:'rateAdmin', manager:'rateManager', employee:'rateEmployee', hod:'rateHod', lecturer:'rateLecturer', student:'rateStudent' };
+    SA_ROLE_DEFS.forEach(rd => { if (ps[_rateApiKeys[rd.key]] != null) saSetRate(rd.key, ps[_rateApiKeys[rd.key]]); });
+    const r = saGetRates();
     const cur = ps.currency || 'GHS';
     const subFields = [
       { key:'studentSemesterPrice', label:'Student Semester',  hint:'Academic — paid per semester by each student',          val: ps.studentSemesterPrice ?? 20,  tier:'academic' },
@@ -5651,15 +5653,22 @@ async function renderSuperadminDashboard(content) {
   window._saCompanies = companies;
   window._saDrawTab   = tab => drawTab(tab);
   window._saSearch    = q => { searchQ = q.toLowerCase(); const body = document.getElementById('sa-body'); if (body && currentTab === 'institutions') body.innerHTML = renderInstTab(); };
-  window._saSaveRate  = key => {
+  window._saSaveRate  = async key => {
     const input = document.getElementById('sa-rate-' + key);
     if (!input) return;
     const val = Math.max(0, parseFloat(input.value) || 0);
     saSetRate(key, val);
     const btn = document.getElementById('sa-save-' + key);
-    if (btn) { btn.textContent = 'Saved ✓'; btn.style.background = C.green; setTimeout(() => { btn.textContent = 'Save'; btn.style.background = C.navy; }, 1600); }
+    if (btn) { btn.textContent = 'Saving…'; btn.disabled = true; }
+    try {
+      const _rateApiKeys = { admin:'rateAdmin', manager:'rateManager', employee:'rateEmployee', hod:'rateHod', lecturer:'rateLecturer', student:'rateStudent' };
+      await api('/api/superadmin/settings', { method: 'POST', body: JSON.stringify({ [_rateApiKeys[key]]: val }) });
+      if (btn) { btn.textContent = 'Saved ✓'; btn.style.background = C.green; btn.disabled = false; setTimeout(() => { btn.textContent = 'Save'; btn.style.background = C.navy; }, 1600); }
+    } catch(e) {
+      if (btn) { btn.textContent = 'Save'; btn.disabled = false; }
+      saShowToast('Failed to save rate: ' + (e.message || 'unknown error'));
+    }
     saShowToast(`${SA_ROLE_DEFS.find(r=>r.key===key)?.label||key} rate → ${saFmt(val)} — applied to all institutions`);
-    // refresh inst tab fees if visible
     if (currentTab === 'institutions') { const body = document.getElementById('sa-body'); if (body) body.innerHTML = renderInstTab(); }
   };
 
