@@ -1382,7 +1382,20 @@ async function loadQuizList() {
         const quiz = quizzes.find(q => q._id === card.dataset.id);
         if (!quiz) return;
         if (quiz.isSubmitted) return toast('You have already completed this quiz', 'warn');
-        if (!quiz.canAttempt) return toast(`Quiz is ${quiz.status}`, 'warn');
+        if (!quiz.canAttempt) {
+          const now = Date.now();
+          const pastStart    = quiz.startTime && now >= new Date(quiz.startTime).getTime();
+          const pastDeadline = quiz.lockAfterEndTime && quiz.endTime &&
+            now > new Date(quiz.endTime).getTime() + (quiz.gracePeriodSeconds || 0) * 1000;
+          const msg = pastDeadline
+            ? 'This quiz has closed and is no longer accepting submissions'
+            : !pastStart && quiz.startTime
+              ? `Quiz opens at ${new Date(quiz.startTime).toLocaleString()}`
+              : quiz.status === 'closed'
+                ? 'This quiz has been closed by your lecturer'
+                : `Quiz is not currently open (status: ${quiz.status})`;
+          return toast(msg, 'warn');
+        }
         state.selectedQuiz = quiz;
         populateConsentScreen(quiz);
         show('consent-screen');
@@ -1505,11 +1518,20 @@ document.getElementById('consent-checkbox').addEventListener('change', function 
   document.getElementById('proceed-camera-btn').disabled = !this.checked;
 });
 
-document.getElementById('proceed-camera-btn').addEventListener('click', () => {
+document.getElementById('proceed-camera-btn').addEventListener('click', async () => {
   const quiz = state.selectedQuiz;
   // Snap quizzes skip the camera setup screen — go straight to exam
   if (quiz && quiz.quizLevel !== 'proctored' && !quiz.proctoringEnabled) {
-    startExam();
+    const btn = document.getElementById('proceed-camera-btn');
+    const origText = btn.textContent;
+    btn.disabled = true;
+    btn.textContent = 'Starting…';
+    await startExam();
+    // Re-enable only if exam didn't start (error path)
+    if (!state.examActive) {
+      btn.disabled = false;
+      btn.textContent = origText;
+    }
     return;
   }
   show('camera-screen');
@@ -1694,10 +1716,17 @@ function captureFrame(videoEl) {
 // ── Snap Quiz direct start (no camera setup screen) ──────────────
 async function startExam() {
   try {
+    // Check sessionStorage for a stored session token — handles page refresh
+    // without triggering a session conflict (sessionStorage is tab-scoped so
+    // a second tab cannot supply this token).
+    const sqKey = `sq_s_${state.selectedQuiz._id}`;
+    const stored = (() => { try { return JSON.parse(sessionStorage.getItem(sqKey) || 'null'); } catch { return null; } })();
+
     const data = await api('POST', `/api/student/snap-quizzes/quizzes/${state.selectedQuiz._id}/attempts/start`, {
       termsAcknowledged: true,
       deviceFingerprint: state.deviceFingerprint,
       platform: detectClientPlatform(),
+      ...(stored?.sessionToken ? { resumeToken: stored.sessionToken } : {}),
     });
 
     state.attempt      = data.attempt;
@@ -1706,6 +1735,9 @@ async function startExam() {
     state.answers      = {};
     state.currentIdx   = 0;
     if (data.quiz) Object.assign(state.selectedQuiz, data.quiz);
+
+    // Persist session token so a page refresh can reconnect to the same attempt
+    try { sessionStorage.setItem(sqKey, JSON.stringify({ sessionToken: data.attempt.sessionToken })); } catch { /* ignore */ }
 
     const expiresAt = data.attempt?.expiresAt ? new Date(data.attempt.expiresAt) : null;
     state.timerSeconds = expiresAt
@@ -1748,7 +1780,10 @@ async function startExam() {
     document.getElementById('q-total').textContent = state.questions.length;
 
   } catch (e) {
-    toast(e.message || 'Failed to start quiz. Please try again.', 'error');
+    const msg = e.message?.includes('active session')
+      ? 'A previous session is still open. It will auto-close after the timeout — please wait a moment, then try again.'
+      : e.message || 'Failed to start quiz. Please try again.';
+    toast(msg, 'error');
   }
 }
 
@@ -2697,6 +2732,10 @@ async function submitExam() {
     state.examActive = false;
     stopExamCleanup();
     document.body.classList.remove('exam-active');
+
+    // Clear stored session — exam is done
+    try { sessionStorage.removeItem(`sq_s_${state.selectedQuiz._id}`); } catch { /* ignore */ }
+
     showResult(data);
 
   } catch (e) {
@@ -2837,6 +2876,9 @@ function stopExamCleanup() {
     state._capBackListener.remove?.();
     state._capBackListener = null;
   }
+
+  // Clear per-quiz session token so a future attempt starts fresh
+  try { sessionStorage.removeItem(`sq_s_${state.selectedQuiz?._id}`); } catch { /* ignore */ }
 
   // ── Offline Monitor: final sync + stop ──────────────────────────
   OfflineRecorder.stop().catch(() => {});
