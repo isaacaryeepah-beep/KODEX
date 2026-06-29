@@ -60,7 +60,7 @@ exports.leaveAttendance = async (req, res) => {
     const lastSession = record.sessions[record.sessions.length - 1];
     if (lastSession && !lastSession.leftAt) {
       lastSession.leftAt  = now;
-      lastSession.minutes = Math.floor((now - new Date(lastSession.joinedAt)) / 60000);
+      lastSession.minutes = Math.round((now - new Date(lastSession.joinedAt)) / 60000);
     }
 
     record.leftAt       = now;

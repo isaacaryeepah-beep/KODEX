@@ -152,11 +152,10 @@ snapQuizQuestionSchema.index({ company: 1, quiz: 1 });
 // Pre-save hook
 // ---------------------------------------------------------------------------
 
-snapQuizQuestionSchema.pre("save", function (next) {
+snapQuizQuestionSchema.pre("save", function () {
   if (MANUAL_GRADE_TYPES.has(this.questionType)) {
     this.requiresManualGrading = true;
   }
-  next();
 });
 
 // ---------------------------------------------------------------------------

@@ -30,8 +30,19 @@ function broadcastParticipant(meetingId, userId, event, data) {
   for (const res of clients) sseWrite(res, event, data);
 }
 
-exports.broadcastMonitor      = broadcastMonitor;
-exports.broadcastParticipant  = broadcastParticipant;
+// Broadcast a meeting-level event to all participants currently connected via SSE
+function broadcastAllParticipants(meetingId, event, data) {
+  const prefix = `${String(meetingId)}:`;
+  for (const [key, clients] of participantClients) {
+    if (key.startsWith(prefix)) {
+      for (const res of clients) sseWrite(res, event, data);
+    }
+  }
+}
+
+exports.broadcastMonitor         = broadcastMonitor;
+exports.broadcastParticipant     = broadcastParticipant;
+exports.broadcastAllParticipants = broadcastAllParticipants;
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 function isMeetingModerator(meeting, user) {

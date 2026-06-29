@@ -68,7 +68,7 @@ exports.listQuizzes = async (req, res) => {
     const studentId = new mongoose.Types.ObjectId(req.user._id);
     const companyId = new mongoose.Types.ObjectId(req.companyId);
 
-    const [allCounts, submittedCounts, qCounts] = await Promise.all([
+    const [allCounts, submittedCounts, qCounts, scoreDocs] = await Promise.all([
       SnapQuizAttempt.aggregate([
         { $match: { quiz: { $in: quizIds }, student: studentId, company: companyId } },
         { $group: { _id: "$quiz", count: { $sum: 1 } } },
@@ -86,14 +86,26 @@ exports.listQuizzes = async (req, res) => {
         { $match: { quiz: { $in: quizIds }, isActive: { $ne: false } } },
         { $group: { _id: "$quiz", count: { $sum: 1 } } },
       ]),
+      SnapQuizAttempt.aggregate([
+        { $match: {
+          quiz:    { $in: quizIds },
+          student: studentId,
+          company: companyId,
+          status:  { $in: [ATTEMPT_STATUSES.SUBMITTED, ATTEMPT_STATUSES.AUTO_SUBMITTED] },
+          rawScore: { $ne: null },
+        }},
+        { $group: { _id: "$quiz", myScore: { $max: "$rawScore" }, myMaxScore: { $max: "$maxScore" } } },
+      ]),
     ]);
 
     const attemptMap   = {};
     const submittedMap = {};
     const qCountMap    = {};
+    const scoreMap     = {};
     allCounts.forEach(c       => { attemptMap[c._id.toString()]   = c.count; });
     submittedCounts.forEach(c => { submittedMap[c._id.toString()] = c.count; });
     qCounts.forEach(c         => { qCountMap[c._id.toString()]    = c.count; });
+    scoreDocs.forEach(c       => { scoreMap[c._id.toString()]     = c; });
 
     const nowMs = Date.now();
     return res.json({
@@ -114,6 +126,8 @@ exports.listQuizzes = async (req, res) => {
           myAttemptCount: attemptMap[id] || 0,
           isSubmitted,
           canAttempt,
+          myScore:    scoreMap[id]?.myScore    ?? null,
+          myMaxScore: scoreMap[id]?.myMaxScore ?? null,
         };
       }),
     });
@@ -160,7 +174,7 @@ exports.listAllQuizzes = async (req, res) => {
     const companyId = new mongoose.Types.ObjectId(req.companyId);
 
     // Attempt counts (any status)
-    const [allCounts, submittedCounts, qCounts] = await Promise.all([
+    const [allCounts, submittedCounts, qCounts, scoreDocs] = await Promise.all([
       SnapQuizAttempt.aggregate([
         { $match: { quiz: { $in: quizIds }, student: studentId, company: companyId } },
         { $group: { _id: "$quiz", count: { $sum: 1 } } },
@@ -178,14 +192,26 @@ exports.listAllQuizzes = async (req, res) => {
         { $match: { quiz: { $in: quizIds }, isActive: { $ne: false } } },
         { $group: { _id: "$quiz", count: { $sum: 1 } } },
       ]),
+      SnapQuizAttempt.aggregate([
+        { $match: {
+          quiz:    { $in: quizIds },
+          student: studentId,
+          company: companyId,
+          status:  { $in: [ATTEMPT_STATUSES.SUBMITTED, ATTEMPT_STATUSES.AUTO_SUBMITTED] },
+          rawScore: { $ne: null },
+        }},
+        { $group: { _id: "$quiz", myScore: { $max: "$rawScore" }, myMaxScore: { $max: "$maxScore" } } },
+      ]),
     ]);
 
     const attemptMap   = {};
     const submittedMap = {};
     const qCountMap    = {};
+    const scoreMap     = {};
     allCounts.forEach(c      => { attemptMap[c._id.toString()]   = c.count; });
     submittedCounts.forEach(c => { submittedMap[c._id.toString()] = c.count; });
     qCounts.forEach(c         => { qCountMap[c._id.toString()]    = c.count; });
+    scoreDocs.forEach(c       => { scoreMap[c._id.toString()]     = c; });
 
     const nowMs = Date.now();
     return res.json({
@@ -204,6 +230,8 @@ exports.listAllQuizzes = async (req, res) => {
           myAttemptCount: attemptMap[id] || 0,
           isSubmitted,
           canAttempt,
+          myScore:    scoreMap[id]?.myScore    ?? null,
+          myMaxScore: scoreMap[id]?.myMaxScore ?? null,
         };
       }),
     });
@@ -255,7 +283,7 @@ exports.startAttempt = async (req, res) => {
     const quiz = await SnapQuiz.findOne({
       _id: req.params.quizId, company: req.companyId,
       isPublished: true, isActive: true,
-    }).lean();
+    }).lean().maxTimeMS(8000);
 
     if (!quiz) return res.status(404).json({ error: "Quiz not found" });
 
@@ -263,7 +291,7 @@ exports.startAttempt = async (req, res) => {
     if (quiz.course) {
       const enrolled = await Course.findOne({
         _id: quiz.course, companyId: req.companyId, enrolledStudents: req.user._id,
-      }).select("_id").lean();
+      }).select("_id").lean().maxTimeMS(8000);
       if (!enrolled) return res.status(403).json({ error: "You are not enrolled in this course" });
     }
 
@@ -272,8 +300,8 @@ exports.startAttempt = async (req, res) => {
     if (now < quiz.startTime) {
       return res.status(403).json({ error: "Quiz has not started yet" });
     }
-    if (quiz.lockAfterEndTime) {
-      const hardDeadline = new Date(quiz.endTime.getTime() + (quiz.gracePeriodSeconds || 0) * 1000);
+    if (quiz.lockAfterEndTime && quiz.endTime) {
+      const hardDeadline = new Date(new Date(quiz.endTime).getTime() + (quiz.gracePeriodSeconds || 0) * 1000);
       if (now > hardDeadline) {
         return res.status(403).json({ error: "Quiz window has closed" });
       }
@@ -281,7 +309,7 @@ exports.startAttempt = async (req, res) => {
 
     // Live meeting gate (Phase 3): if quiz is tied to a meeting, it must be live.
     if (quiz.requireLiveMeeting && quiz.linkedMeeting) {
-      const meeting = await Meeting.findById(quiz.linkedMeeting).select("status title").lean();
+      const meeting = await Meeting.findById(quiz.linkedMeeting).select("status title").lean().maxTimeMS(5000);
       if (!meeting) {
         return res.status(403).json({ error: "Linked meeting not found. Cannot start quiz." });
       }
@@ -303,14 +331,72 @@ exports.startAttempt = async (req, res) => {
     const activeAttempt = await SnapQuizAttempt.findOne({
       quiz: quiz._id, student: req.user._id, company: req.companyId,
       status: ATTEMPT_STATUSES.ACTIVE,
-    });
+    }).maxTimeMS(8000);
     if (activeAttempt) {
-      // Do NOT echo the sessionToken — the client must use the one it received
-      // when the attempt was originally started.
-      return res.status(409).json({
-        error:    "You already have an active session for this quiz",
-        attemptId: activeAttempt._id,
-      });
+      // Allow page-refresh resume: if the client sends back the original
+      // session token it received (stored in sessionStorage per-tab), treat
+      // this as a legitimate reconnect rather than a session conflict.
+      // sessionStorage is tab-scoped, so a second tab can never supply the
+      // correct token and will still receive the 409 conflict error.
+      const resumeToken = req.body.resumeToken;
+      if (resumeToken && resumeToken === activeAttempt.sessionToken) {
+        const questions = await _buildQuestionsForAttempt(activeAttempt, quiz);
+        return res.json({
+          resumed: true,
+          attempt: {
+            _id:           activeAttempt._id,
+            attemptNumber: activeAttempt.attemptNumber,
+            expiresAt:     activeAttempt.expiresAt,
+            sessionToken:  activeAttempt.sessionToken,
+            status:        activeAttempt.status,
+          },
+          quiz: {
+            timeLimitMinutes:               quiz.timeLimitMinutes,
+            heartbeatIntervalSeconds:       quiz.heartbeatIntervalSeconds,
+            heartbeatTimeoutSeconds:        quiz.heartbeatTimeoutSeconds,
+            maxViolationsBeforeTermination: quiz.maxViolationsBeforeTermination,
+            terminateOnTabSwitch:           quiz.terminateOnTabSwitch,
+            terminateOnFocusLost:           quiz.terminateOnFocusLost,
+            terminateOnFullscreenExit:      quiz.terminateOnFullscreenExit,
+            preventCopyPaste:               quiz.preventCopyPaste,
+            preventRightClick:              quiz.preventRightClick,
+            preventPrintScreen:             quiz.preventPrintScreen,
+            requireFullscreen:              quiz.requireFullscreen,
+            showViolationWarnings:          quiz.showViolationWarnings,
+            proctoringEnabled:              quiz.proctoringEnabled,
+            snapshotIntervalSeconds:        quiz.snapshotIntervalSeconds,
+            noiseDetectionThreshold:        quiz.noiseDetectionThreshold,
+          },
+          questions,
+        });
+      }
+      // Auto-terminate sessions that went stale (missed heartbeats) or expired.
+      // Covers the case where the student had a network error or page refresh and
+      // the old attempt was left ACTIVE with no client to send heartbeats.
+      const heartbeatTimeout = (quiz.heartbeatTimeoutSeconds || 60) * 1000;
+      const isStale = !activeAttempt.lastHeartbeatAt ||
+        (now.getTime() - new Date(activeAttempt.lastHeartbeatAt).getTime()) > heartbeatTimeout * 3;
+      const isExpired = activeAttempt.expiresAt && new Date(activeAttempt.expiresAt) < now;
+      if (isStale || isExpired) {
+        // If the student never submitted any answers, delete the orphaned attempt so
+        // it does not count against their allowedAttempts. If they did answer something,
+        // keep it as AUTO_SUBMITTED so the grade record is preserved.
+        const hasResponses = await SnapQuizResponse.exists({ attempt: activeAttempt._id });
+        if (hasResponses) {
+          await SnapQuizAttempt.findByIdAndUpdate(activeAttempt._id, {
+            status: ATTEMPT_STATUSES.AUTO_SUBMITTED,
+            endedAt: now,
+          }).maxTimeMS(5000);
+        } else {
+          await SnapQuizAttempt.findByIdAndDelete(activeAttempt._id).maxTimeMS(5000);
+        }
+        // Fall through to create a fresh attempt
+      } else {
+        return res.status(409).json({
+          error:    "You already have an active session for this quiz",
+          attemptId: activeAttempt._id,
+        });
+      }
     }
 
     // Check attempt limit.
@@ -319,7 +405,7 @@ exports.startAttempt = async (req, res) => {
       student: req.user._id,
       company: req.companyId,
       status:  { $in: [ATTEMPT_STATUSES.SUBMITTED, ATTEMPT_STATUSES.AUTO_SUBMITTED, ATTEMPT_STATUSES.TERMINATED] },
-    });
+    }).maxTimeMS(8000);
     if (pastCount >= quiz.allowedAttempts) {
       return res.status(403).json({
         error: `You have used all ${quiz.allowedAttempts} allowed attempt(s)`,
@@ -334,12 +420,12 @@ exports.startAttempt = async (req, res) => {
     // Attempt number.
     const lastAttempt = await SnapQuizAttempt.findOne({
       quiz: quiz._id, student: req.user._id, company: req.companyId,
-    }).sort({ attemptNumber: -1 }).select("attemptNumber").lean();
+    }).sort({ attemptNumber: -1 }).select("attemptNumber").lean().maxTimeMS(5000);
     const attemptNumber = lastAttempt ? lastAttempt.attemptNumber + 1 : 1;
 
     // Build question order.
     const allQuestions = await SnapQuizQuestion.find({ quiz: quiz._id, isActive: true })
-      .sort({ orderIndex: 1 }).lean();
+      .sort({ orderIndex: 1 }).lean().maxTimeMS(8000);
 
     let questionOrder = allQuestions.map(q => q._id);
     if (quiz.randomizeQuestions) questionOrder = _shuffleArray([...questionOrder]);
@@ -418,7 +504,7 @@ exports.startAttempt = async (req, res) => {
     if (err.code === 11000) {
       return res.status(409).json({ error: "Duplicate attempt — please refresh" });
     }
-    console.error("[snapQuiz student startAttempt]", err);
+    console.error("[snapQuiz student startAttempt]", err.message, err.stack || err);
     return res.status(500).json({ error: "Internal server error" });
   }
 };
@@ -1053,7 +1139,7 @@ async function _buildQuestionsForAttempt(attempt, quiz) {
   const qMap = {};
   const raw  = await SnapQuizQuestion.find({ _id: { $in: attempt.questionOrder }, isActive: true })
     .select("-correctOptionIndex -correctOptionIndices -correctBoolean -correctAnswerText -acceptedAnswers -numericAnswer -modelAnswer -mathsDrawing.markingGuide -mathsDrawing.partialCreditGuidance")
-    .lean();
+    .lean().maxTimeMS(8000);
   raw.forEach(q => { qMap[q._id.toString()] = q; });
 
   return attempt.questionOrder.map(qId => {

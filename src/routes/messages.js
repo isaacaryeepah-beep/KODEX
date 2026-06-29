@@ -236,10 +236,10 @@ router.get("/users/messageable", ...mw, async (req, res) => {
           isActive:   true,
           ...(req.user.department ? { department: req.user.department } : { _id: null }),
         }).select("_id name role department").lean();
-        // also include admin
+        // also include admin (not superadmin — platform-level, no company)
         const admins = await User.find({
           company,
-          role:     { $in: ["admin", "superadmin"] },
+          role:     "admin",
           isActive: true,
         }).select("_id name role").lean();
         users = [...users, ...admins];
@@ -256,7 +256,7 @@ router.get("/users/messageable", ...mw, async (req, res) => {
         }).select("_id name role department").lean();
         const staff = await User.find({
           company,
-          role:     { $in: ["hod", "admin", "superadmin", "lecturer"] },
+          role:     { $in: ["hod", "admin", "lecturer"] },
           isActive: true,
           _id:      { $ne: myId },
         }).select("_id name role department").lean();
@@ -280,7 +280,7 @@ router.get("/users/messageable", ...mw, async (req, res) => {
         }
         const admins = await User.find({
           company,
-          role:     { $in: ["admin", "superadmin"] },
+          role:     "admin",
           isActive: true,
         }).select("_id name role").lean();
         users = [...(managerUser ? [managerUser] : []), ...teammates, ...admins];
@@ -301,7 +301,7 @@ router.get("/users/messageable", ...mw, async (req, res) => {
         }
         const admins = await User.find({
           company,
-          role:     { $in: ["admin", "superadmin"] },
+          role:     "admin",
           isActive: true,
         }).select("_id name role").lean();
         users = [...directReports, ...teammates, ...admins];

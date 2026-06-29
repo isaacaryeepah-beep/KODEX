@@ -992,3 +992,51 @@ async function _recomputeAttemptGradingStatus(attemptId, companyId) {
     await attempt.save();
   }
 }
+
+// ─── Reset student attempts ───────────────────────────────────────────────────
+
+/**
+ * DELETE /lecturer/snap-quizzes/:quizId/students/:studentId/attempts
+ *
+ * Deletes ALL attempts (and their responses, violations, proctoring events,
+ * and result record) for a specific student on this quiz, giving them a
+ * clean slate. Intended for cases where a student's attempt was orphaned
+ * by a network error before they could actually answer questions.
+ */
+exports.resetStudentAttempts = async (req, res) => {
+  try {
+    const { quizId, studentId } = req.params;
+
+    if (!mongoose.Types.ObjectId.isValid(studentId)) {
+      return res.status(400).json({ error: "Invalid studentId" });
+    }
+
+    const attempts = await SnapQuizAttempt.find({
+      quiz:    quizId,
+      student: studentId,
+      company: req.companyId,
+    }).select("_id").lean().maxTimeMS(5000);
+
+    const attemptIds = attempts.map(a => a._id);
+
+    if (attemptIds.length === 0) {
+      return res.json({ message: "No attempts found for this student", deletedAttempts: 0 });
+    }
+
+    await Promise.all([
+      SnapQuizAttempt.deleteMany({ _id: { $in: attemptIds } }).maxTimeMS(10000),
+      SnapQuizResponse.deleteMany({ attempt: { $in: attemptIds } }).maxTimeMS(10000),
+      SnapQuizViolationLog.deleteMany({ attempt: { $in: attemptIds } }).maxTimeMS(10000),
+      SnapQuizProctoringEvent.deleteMany({ attempt: { $in: attemptIds } }).maxTimeMS(10000),
+      SnapQuizResult.deleteMany({ quiz: quizId, student: studentId, company: req.companyId }).maxTimeMS(5000),
+    ]);
+
+    return res.json({
+      message: `Reset ${attemptIds.length} attempt(s) — student can now start fresh`,
+      deletedAttempts: attemptIds.length,
+    });
+  } catch (err) {
+    console.error("[snapQuiz lecturer resetStudentAttempts]", err.message);
+    return res.status(500).json({ error: "Internal server error" });
+  }
+};

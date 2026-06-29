@@ -49,6 +49,8 @@ exports.list = async (req, res) => {
     const filter = {};
     if (companyId) filter.company = companyId;
     if (type)      filter.type    = type;
+    // Each user only sees their own report history
+    if (req.user.role !== 'superadmin') filter.requestedBy = req.user._id;
 
     const reports = await AIReport.find(filter)
       .sort({ createdAt: -1 })
@@ -69,6 +71,7 @@ exports.getOne = async (req, res) => {
     const companyId = req.user.role === 'superadmin' ? undefined : getCompanyId(req);
     const filter = { _id: req.params.id };
     if (companyId) filter.company = companyId;
+    if (req.user.role !== 'superadmin') filter.requestedBy = req.user._id;
 
     const report = await AIReport.findOne(filter)
       .populate('requestedBy', 'name role')
@@ -87,6 +90,7 @@ exports.deleteOne = async (req, res) => {
     const companyId = req.user.role === 'superadmin' ? undefined : getCompanyId(req);
     const filter = { _id: req.params.id };
     if (companyId) filter.company = companyId;
+    if (req.user.role !== 'superadmin') filter.requestedBy = req.user._id;
 
     const r = await AIReport.findOneAndDelete(filter);
     if (!r) return res.status(404).json({ success: false, message: 'Report not found.' });

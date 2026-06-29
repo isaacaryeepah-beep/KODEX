@@ -746,6 +746,17 @@ window.addEventListener('load', () => loadMLLibs().catch(() => {}));
       <div id="panel-loading" style="text-align:center;padding:16px 0">
         <div class="spinner" style="margin:0 auto 14px"></div>
         <p style="font-size:13px;color:rgba(255,255,255,.4)">Checking session…</p>
+        <p id="panel-loading-hint" style="display:none;font-size:11px;color:rgba(255,255,255,.25);margin-top:6px">Taking longer than expected…</p>
+      </div>
+
+      <!-- Shown on connection timeout -->
+      <div id="panel-timeout" style="display:none;text-align:center;padding:8px 0 4px">
+        <div style="width:48px;height:48px;border-radius:14px;background:rgba(245,158,11,.12);display:flex;align-items:center;justify-content:center;margin:0 auto 14px">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#fbbf24" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+        </div>
+        <p style="font-size:14px;font-weight:600;color:#f8fafc;margin-bottom:6px">Connection timed out</p>
+        <p style="font-size:12px;color:rgba(255,255,255,.45);margin-bottom:20px;line-height:1.5">The server took too long to respond. Check your connection and try again.</p>
+        <button onclick="location.reload()" class="btn btn-primary" style="display:block;width:100%;text-align:center">Try Again</button>
       </div>
 
       <!-- Shown when no portal session found -->
@@ -800,6 +811,25 @@ window.addEventListener('load', () => loadMLLibs().catch(() => {}));
       <button class="btn btn-ghost btn-sm" id="logout-btn" style="width:auto;padding:8px 14px">Sign out</button>
     </div>
     <div id="quiz-list-container"><div class="spinner"></div></div>
+  </div>
+</div>
+
+<!-- ─────────────────────────────────────────────────────────────────────────
+     SCREEN 2b: QUIZ COUNTDOWN (upcoming quiz waiting room)
+────────────────────────────────────────────────────────────────────────── -->
+<div id="countdown-screen" class="screen hidden">
+  <div class="card" style="max-width:480px;width:100%;text-align:center;padding:32px">
+    <div style="display:flex;justify-content:flex-start;margin-bottom:28px">
+      <button class="btn btn-ghost btn-sm" id="countdown-back-btn" style="width:auto;padding:6px 14px;display:flex;align-items:center;gap:6px">← Back</button>
+    </div>
+    <h2 id="countdown-quiz-title" style="font-size:22px;font-weight:800;color:var(--text);margin:0 0 10px;line-height:1.3"></h2>
+    <p style="font-size:13px;color:var(--muted);margin:0 0 6px">The quiz will start at:</p>
+    <p id="countdown-start-datetime" style="font-size:14px;font-weight:600;color:var(--text);margin:0 0 32px"></p>
+    <div style="background:rgba(79,110,247,0.06);border:1.5px solid rgba(79,110,247,0.22);border-radius:18px;padding:32px 24px;margin:0 auto;max-width:340px">
+      <p style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:1.2px;color:var(--muted);margin:0 0 14px">Time Until Start</p>
+      <p id="countdown-timer" style="font-size:52px;font-weight:900;color:var(--accent);margin:0;font-variant-numeric:tabular-nums;letter-spacing:2px;line-height:1">0:00:00</p>
+    </div>
+    <p style="font-size:12px;color:var(--muted);margin-top:22px;line-height:1.5">This page will automatically open the quiz when the countdown reaches zero.</p>
   </div>
 </div>
 
@@ -1071,6 +1101,7 @@ const state = {
   totalViolations: 0,
   warningsIssued: 0,
   examActive: false,
+  countdownInterval: null,
   // named listener refs so they can be removed on cleanup
   _handleFullscreen: null,
   _handleBlur: null,
@@ -1130,9 +1161,13 @@ function toast(msg, type = 'info') {
 // ══════════════════════════════════════════════════════════════════
 //  API HELPERS
 // ══════════════════════════════════════════════════════════════════
-async function api(method, path, body, extraHeaders) {
+async function api(method, path, body, extraHeaders, timeoutMs = 15000) {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+
   const opts = {
     method,
+    signal: controller.signal,
     headers: {
       'Content-Type': 'application/json',
       'X-Request-Time': Date.now().toString(),
@@ -1147,7 +1182,10 @@ async function api(method, path, body, extraHeaders) {
   let res;
   try {
     res = await fetch(API + path, opts);
+    clearTimeout(timer);
   } catch (networkErr) {
+    clearTimeout(timer);
+    if (networkErr.name === 'AbortError') throw new Error('Request timed out — please check your connection and try again.');
     throw new Error('Network error — check your connection. (' + networkErr.message + ')');
   }
 
@@ -1186,14 +1224,22 @@ function showAuthError(elId, msg) {
   toast(msg, 'error');
 }
 
-// ── Sign In handler ───────────────────────────────────────────────
 // ── Auto-detect portal session on load ───────────────────────────────────────
-(async function initExamPortal() {
+// Decode JWT payload client-side — no network call, no spinner.
+// Real authentication happens server-side when the student submits their index number.
+(function initExamPortal() {
   function showPanel(id) {
-    document.getElementById('panel-loading').style.display = 'none';
-    document.getElementById('panel-no-session').style.display = 'none';
-    document.getElementById('panel-confirm-index').style.display = 'none';
-    document.getElementById(id).style.display = 'block';
+    ['panel-loading','panel-no-session','panel-confirm-index','panel-timeout'].forEach(p => {
+      const el = document.getElementById(p);
+      if (el) el.style.display = p === id ? 'block' : 'none';
+    });
+  }
+
+  function decodeJwt(token) {
+    try {
+      const b64 = token.split('.')[1].replace(/-/g, '+').replace(/_/g, '/');
+      return JSON.parse(atob(b64));
+    } catch { return null; }
   }
 
   const portalToken = localStorage.getItem('token');
@@ -1203,19 +1249,20 @@ function showAuthError(elId, msg) {
     return;
   }
 
-  state.token = portalToken;
-  try {
-    const data = await api('GET', '/api/auth/me');
-    if (data.user?.role !== 'student') throw new Error('not-student');
-    state.user = data.user;
-    showPanel('panel-confirm-index');
-    document.getElementById('login-index')?.focus();
-    show('login-screen');
-  } catch {
-    state.token = null;
+  const payload = decodeJwt(portalToken);
+  // Token missing, malformed, or clearly expired → send to portal login
+  if (!payload || !payload.id || (payload.exp && payload.exp * 1000 < Date.now())) {
     showPanel('panel-no-session');
     show('login-screen');
+    return;
   }
+
+  // Token looks valid — show the form immediately, no API call needed
+  state.token = portalToken;
+  state.user  = { _id: payload.id, role: payload.role || 'student' };
+  showPanel('panel-confirm-index');
+  document.getElementById('login-index')?.focus();
+  show('login-screen');
 })();
 
 // Terms / Privacy links via addEventListener (no inline onclick needed)
@@ -1382,7 +1429,19 @@ async function loadQuizList() {
         const quiz = quizzes.find(q => q._id === card.dataset.id);
         if (!quiz) return;
         if (quiz.isSubmitted) return toast('You have already completed this quiz', 'warn');
-        if (!quiz.canAttempt) return toast(`Quiz is ${quiz.status}`, 'warn');
+        if (!quiz.canAttempt) {
+          const now = Date.now();
+          const pastStart    = quiz.startTime && now >= new Date(quiz.startTime).getTime();
+          const pastDeadline = quiz.lockAfterEndTime && quiz.endTime &&
+            now > new Date(quiz.endTime).getTime() + (quiz.gracePeriodSeconds || 0) * 1000;
+          if (!pastStart && quiz.startTime) return showCountdownScreen(quiz);
+          const msg = pastDeadline
+            ? 'This quiz has closed and is no longer accepting submissions'
+            : quiz.status === 'closed'
+              ? 'This quiz has been closed by your lecturer'
+              : `Quiz is not currently open (status: ${quiz.status})`;
+          return toast(msg, 'warn');
+        }
         state.selectedQuiz = quiz;
         populateConsentScreen(quiz);
         show('consent-screen');
@@ -1395,6 +1454,40 @@ async function loadQuizList() {
     container.innerHTML = `<p style="color:var(--red)">Error loading quizzes: ${e.message}</p>`;
     return false;
   }
+}
+
+// ══════════════════════════════════════════════════════════════════
+//  COUNTDOWN SCREEN
+// ══════════════════════════════════════════════════════════════════
+function showCountdownScreen(quiz) {
+  if (state.countdownInterval) { clearInterval(state.countdownInterval); state.countdownInterval = null; }
+  state.selectedQuiz = quiz;
+
+  document.getElementById('countdown-quiz-title').textContent = quiz.title;
+  const startDate = new Date(quiz.startTime);
+  document.getElementById('countdown-start-datetime').textContent = startDate.toLocaleString('en-US', {
+    weekday: 'long', year: 'numeric', month: 'short', day: 'numeric',
+    hour: 'numeric', minute: '2-digit', hour12: true,
+  });
+
+  function pad(n) { return String(n).padStart(2, '0'); }
+  function tick() {
+    const remaining = Math.max(0, Math.floor((startDate.getTime() - Date.now()) / 1000));
+    const h = Math.floor(remaining / 3600);
+    const m = Math.floor((remaining % 3600) / 60);
+    const s = remaining % 60;
+    document.getElementById('countdown-timer').textContent = `${h}:${pad(m)}:${pad(s)}`;
+    if (remaining <= 0) {
+      clearInterval(state.countdownInterval);
+      state.countdownInterval = null;
+      populateConsentScreen(quiz);
+      show('consent-screen');
+    }
+  }
+
+  tick();
+  state.countdownInterval = setInterval(tick, 1000);
+  show('countdown-screen');
 }
 
 // ══════════════════════════════════════════════════════════════════
@@ -1505,11 +1598,20 @@ document.getElementById('consent-checkbox').addEventListener('change', function 
   document.getElementById('proceed-camera-btn').disabled = !this.checked;
 });
 
-document.getElementById('proceed-camera-btn').addEventListener('click', () => {
+document.getElementById('proceed-camera-btn').addEventListener('click', async () => {
   const quiz = state.selectedQuiz;
   // Snap quizzes skip the camera setup screen — go straight to exam
   if (quiz && quiz.quizLevel !== 'proctored' && !quiz.proctoringEnabled) {
-    startExam();
+    const btn = document.getElementById('proceed-camera-btn');
+    const origText = btn.textContent;
+    btn.disabled = true;
+    btn.textContent = 'Starting…';
+    await startExam();
+    // Re-enable only if exam didn't start (error path)
+    if (!state.examActive) {
+      btn.disabled = false;
+      btn.textContent = origText;
+    }
     return;
   }
   show('camera-screen');
@@ -1517,6 +1619,10 @@ document.getElementById('proceed-camera-btn').addEventListener('click', () => {
 });
 
 document.getElementById('back-to-list-btn').addEventListener('click', () => show('quiz-list-screen'));
+document.getElementById('countdown-back-btn').addEventListener('click', () => {
+  if (state.countdownInterval) { clearInterval(state.countdownInterval); state.countdownInterval = null; }
+  show('quiz-list-screen');
+});
 document.getElementById('cam-back-btn').addEventListener('click', () => {
   stopCamera();
   show('consent-screen');
@@ -1694,10 +1800,17 @@ function captureFrame(videoEl) {
 // ── Snap Quiz direct start (no camera setup screen) ──────────────
 async function startExam() {
   try {
+    // Check sessionStorage for a stored session token — handles page refresh
+    // without triggering a session conflict (sessionStorage is tab-scoped so
+    // a second tab cannot supply this token).
+    const sqKey = `sq_s_${state.selectedQuiz._id}`;
+    const stored = (() => { try { return JSON.parse(sessionStorage.getItem(sqKey) || 'null'); } catch { return null; } })();
+
     const data = await api('POST', `/api/student/snap-quizzes/quizzes/${state.selectedQuiz._id}/attempts/start`, {
       termsAcknowledged: true,
       deviceFingerprint: state.deviceFingerprint,
       platform: detectClientPlatform(),
+      ...(stored?.sessionToken ? { resumeToken: stored.sessionToken } : {}),
     });
 
     state.attempt      = data.attempt;
@@ -1706,6 +1819,9 @@ async function startExam() {
     state.answers      = {};
     state.currentIdx   = 0;
     if (data.quiz) Object.assign(state.selectedQuiz, data.quiz);
+
+    // Persist session token so a page refresh can reconnect to the same attempt
+    try { sessionStorage.setItem(sqKey, JSON.stringify({ sessionToken: data.attempt.sessionToken })); } catch { /* ignore */ }
 
     const expiresAt = data.attempt?.expiresAt ? new Date(data.attempt.expiresAt) : null;
     state.timerSeconds = expiresAt
@@ -1748,7 +1864,10 @@ async function startExam() {
     document.getElementById('q-total').textContent = state.questions.length;
 
   } catch (e) {
-    toast(e.message || 'Failed to start quiz. Please try again.', 'error');
+    const msg = e.message?.includes('active session')
+      ? 'A previous session is still open. It will auto-close after the timeout — please wait a moment, then try again.'
+      : e.message || 'Failed to start quiz. Please try again.';
+    toast(msg, 'error');
   }
 }
 
@@ -2155,26 +2274,25 @@ function startProctoring() {
   if (quiz.mobileMonitoring !== false && window.Capacitor?.isNativePlatform?.()) {
     const { App: CapApp } = window.Capacitor.Plugins;
     if (CapApp?.addListener) {
-      // App backgrounded (home button, notification shade, incoming call, etc.)
-      state._capAppStateListener = await CapApp.addListener('appStateChange', ({ isActive }) => {
-        if (!state.examActive) return;
-        if (!isActive) {
-          // App went to background
-          logEvent('app_backgrounded', { platform: window.Capacitor.getPlatform() }).catch(console.warn);
-          toast('⚠️ You left the exam app! This has been logged.', 'warn');
-        } else {
-          // App came back to foreground
-          logEvent('app_foregrounded', { platform: window.Capacitor.getPlatform() }).catch(console.warn);
-        }
-      });
-
-      // Back button — prevent navigating away mid-exam
-      state._capBackListener = await CapApp.addListener('backButton', () => {
-        if (state.examActive) {
-          logEvent('back_button_pressed').catch(console.warn);
-          toast('⚠️ Back navigation is disabled during the exam', 'warn');
-        }
-      });
+      (async () => {
+        // App backgrounded (home button, notification shade, incoming call, etc.)
+        state._capAppStateListener = await CapApp.addListener('appStateChange', ({ isActive }) => {
+          if (!state.examActive) return;
+          if (!isActive) {
+            logEvent('app_backgrounded', { platform: window.Capacitor.getPlatform() }).catch(console.warn);
+            toast('⚠️ You left the exam app! This has been logged.', 'warn');
+          } else {
+            logEvent('app_foregrounded', { platform: window.Capacitor.getPlatform() }).catch(console.warn);
+          }
+        });
+        // Back button — prevent navigating away mid-exam
+        state._capBackListener = await CapApp.addListener('backButton', () => {
+          if (state.examActive) {
+            logEvent('back_button_pressed').catch(console.warn);
+            toast('⚠️ Back navigation is disabled during the exam', 'warn');
+          }
+        });
+      })();
     }
   }
 }
@@ -2697,6 +2815,10 @@ async function submitExam() {
     state.examActive = false;
     stopExamCleanup();
     document.body.classList.remove('exam-active');
+
+    // Clear stored session — exam is done
+    try { sessionStorage.removeItem(`sq_s_${state.selectedQuiz._id}`); } catch { /* ignore */ }
+
     showResult(data);
 
   } catch (e) {
@@ -2837,6 +2959,9 @@ function stopExamCleanup() {
     state._capBackListener.remove?.();
     state._capBackListener = null;
   }
+
+  // Clear per-quiz session token so a future attempt starts fresh
+  try { sessionStorage.removeItem(`sq_s_${state.selectedQuiz?._id}`); } catch { /* ignore */ }
 
   // ── Offline Monitor: final sync + stop ──────────────────────────
   OfflineRecorder.stop().catch(() => {});

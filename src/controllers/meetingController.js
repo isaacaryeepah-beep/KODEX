@@ -14,7 +14,7 @@ const {
   muteAllInRoom,
   muteParticipantInRoom,
 } = require('../services/livekitService');
-const { broadcastMonitor }                             = require('./meetingMonitorController');
+const { broadcastMonitor, broadcastAllParticipants }   = require('./meetingMonitorController');
 
 const APP_BASE_URL     = process.env.APP_BASE_URL     || 'https://dikly.live';
 const MONITOR_BASE_URL = process.env.APP_SUBDOMAIN_MONITOR || `${APP_BASE_URL}`;
@@ -283,11 +283,11 @@ exports.startMeeting = async (req, res, next) => {
     if (meeting.status === 'ended')     return res.status(400).json({ error: 'Meeting already ended' });
     if (meeting.status === 'cancelled') return res.status(400).json({ error: 'Meeting was cancelled' });
 
+    if (!streamConfigured) return res.status(503).json({ error: 'Video meetings are not configured. Set LIVEKIT_URL, LIVEKIT_API_KEY and LIVEKIT_API_SECRET.' });
+
     meeting.status      = 'live';
     meeting.actualStart = new Date();
     await meeting.save();
-
-    if (!streamConfigured) return res.status(503).json({ error: 'Video meetings are not configured. Set LIVEKIT_URL, LIVEKIT_API_KEY and LIVEKIT_API_SECRET.' });
 
     const meetingToken = generateMeetingToken(req.user._id.toString(), meeting._id.toString(), req.user.deviceId || null);
     const livekitToken = await generateLiveKitToken(req.user._id, req.user.name || req.user.email, meeting.roomName, true);
@@ -323,7 +323,7 @@ exports.endMeeting = async (req, res, next) => {
       const last = rec.sessions[rec.sessions.length - 1];
       if (last && !last.leftAt) {
         last.leftAt  = now;
-        last.minutes = Math.floor((now - last.joinedAt) / 60000);
+        last.minutes = Math.round((now - new Date(last.joinedAt)) / 60000);
       }
       rec.leftAt       = now;
       rec.lastAction   = 'left';
@@ -343,8 +343,9 @@ exports.endMeeting = async (req, res, next) => {
       { $set: { status: 'disconnected', leftAt: now } }
     );
 
-    // Notify all monitor dashboards
+    // Notify all monitor dashboards and all connected participants
     broadcastMonitor(meeting._id.toString(), 'meeting_ended', { meetingId: meeting._id });
+    broadcastAllParticipants(meeting._id.toString(), 'meeting_ended', { meetingId: meeting._id });
 
     res.json({ success: true, message: 'Meeting ended', data: meeting });
   } catch (err) { next(err); }
