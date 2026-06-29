@@ -1086,6 +1086,7 @@ const state = {
   timerInterval: null,
   autoSaveInterval: null,
   timerSeconds: 0,
+  timerPaused: false,
   cameraStream: null,
   faceModel: null,
   faceCheckInterval: null,
@@ -1558,6 +1559,8 @@ function populateConsentScreen(quiz) {
   // Auto-termination threshold
   if (quiz.maxViolationsBeforeTermination > 0) {
     rule('⚠️', `Your exam will be <strong>automatically submitted</strong> after <strong>${quiz.maxViolationsBeforeTermination} violation${quiz.maxViolationsBeforeTermination !== 1 ? 's' : ''}</strong>. Every incident is logged and reviewed by your lecturer.`, 'high');
+  } else {
+    rule('📋', 'All integrity violations are <strong>logged and reviewed by your lecturer</strong> after the quiz. Repeated incidents will be flagged in your integrity report.', 'warn');
   }
 
   // Session lock
@@ -2015,6 +2018,7 @@ function startTimer() {
   const display = document.getElementById('timer-display');
   if (state.timerInterval) clearInterval(state.timerInterval);
   state.timerInterval = setInterval(() => {
+    if (state.timerPaused) return;
     state.timerSeconds--;
     if (state.timerSeconds <= 0) {
       clearInterval(state.timerInterval);
@@ -2026,6 +2030,24 @@ function startTimer() {
     display.textContent = `${m}:${s}`;
     display.className = 'mono ' + (state.timerSeconds < 60 ? 'critical' : state.timerSeconds < 300 ? 'warning' : '');
   }, 1000);
+}
+
+function pauseTimer() {
+  state.timerPaused = true;
+  const display = document.getElementById('timer-display');
+  if (display) display.className = 'mono warning';
+}
+
+function resumeTimer(remainingSeconds) {
+  if (remainingSeconds != null) state.timerSeconds = remainingSeconds;
+  state.timerPaused = false;
+  const display = document.getElementById('timer-display');
+  if (display) {
+    const m = Math.floor(state.timerSeconds / 60).toString().padStart(2,'0');
+    const s = (state.timerSeconds % 60).toString().padStart(2,'0');
+    display.textContent = `${m}:${s}`;
+    display.className = 'mono ' + (state.timerSeconds < 60 ? 'critical' : state.timerSeconds < 300 ? 'warning' : '');
+  }
 }
 
 // ══════════════════════════════════════════════════════════════════
@@ -2165,12 +2187,19 @@ function startProctoring() {
     document.documentElement.requestFullscreen().catch(() => {});
     state._handleFullscreen = () => {
       if (!document.fullscreenElement && state.examActive) {
+        // Exited fullscreen — pause the local timer while student is outside
+        pauseTimer();
         logEvent('fullscreen_exit').catch(console.warn);
         toast(quiz.terminateOnFullscreenExit
           ? '⛔ Fullscreen required — exiting may terminate your exam'
-          : '⚠️ Please return to fullscreen to continue', 'warn');
+          : '⏸ Timer paused — return to fullscreen to continue', 'warn');
         // Re-enforce immediately
         document.documentElement.requestFullscreen().catch(() => {});
+      } else if (document.fullscreenElement && state.examActive && state.timerPaused) {
+        // Regained fullscreen — resume timer, re-sync from server
+        logEvent('heartbeat').catch(console.warn); // triggers server re-sync
+        resumeTimer(); // unpauses; server value arrives async via heartbeat handler
+        toast('✅ Fullscreen restored — timer resumed', 'info');
       }
     };
     document.addEventListener('fullscreenchange', state._handleFullscreen);
@@ -2409,6 +2438,11 @@ async function logEvent(eventType, metadata = {}) {
         `;
         overlay.classList.add('show');
       }
+      // Re-sync local countdown from server's authoritative remaining time.
+      // Only update when timer isn't paused (paused = waiting for fullscreen).
+      if (hbRes?.remainingSeconds != null && !state.timerPaused) {
+        state.timerSeconds = hbRes.remainingSeconds;
+      }
       return;
     }
 
@@ -2420,9 +2454,11 @@ async function logEvent(eventType, metadata = {}) {
 
     if (res.terminated) {
       terminateExam(eventType);
+    } else if (res.flaggedForReview) {
+      showFlaggedForReviewWarning(res.violationCount);
     } else if (res.warned) {
-      if (res.critical) {
-        showViolationWarning(res.violationCount);
+      if (res.critical && res.remainingBeforeTermination != null) {
+        showViolationWarning(res.violationCount, res.remainingBeforeTermination);
       } else {
         showNonCriticalWarning(eventType);
       }
@@ -2438,19 +2474,31 @@ async function logEvent(eventType, metadata = {}) {
   }
 }
 
-function showViolationWarning(level) {
-  const maxViolations = 4;
-  const remaining = maxViolations - level;
+function showViolationWarning(level, remaining) {
   const isFinal = remaining === 1;
   const msg = isFinal
     ? 'This is your <strong>final warning</strong>. One more violation will immediately terminate your exam.'
     : `You have <strong>${remaining} warning${remaining !== 1 ? 's' : ''}</strong> remaining before your exam is terminated.`;
+  const total = level + remaining;
   const overlay = document.getElementById('violation-overlay');
   overlay.innerHTML = `
     <div class="violation-icon">${isFinal ? '🚨' : '⚠️'}</div>
-    <div class="violation-title" style="color:${isFinal ? '#dc2626' : '#1e293b'}">Warning ${level} of ${maxViolations - 1}</div>
+    <div class="violation-title" style="color:${isFinal ? '#dc2626' : '#1e293b'}">Warning ${level} of ${total - 1}</div>
     <div class="violation-msg" style="color:#475569">A proctoring violation was detected. ${msg}</div>
     <button class="btn btn-primary" style="max-width:280px" onclick="this.closest('#violation-overlay').classList.remove('show')">I understand</button>
+  `;
+  overlay.classList.add('show');
+}
+
+function showFlaggedForReviewWarning(count) {
+  const overlay = document.getElementById('violation-overlay');
+  overlay.innerHTML = `
+    <div class="violation-icon">📋</div>
+    <div class="violation-title" style="color:#1e293b">Incident Logged</div>
+    <div class="violation-msg" style="color:#475569">
+      A violation was recorded (incident #${count}). Your lecturer will review all flagged events after the quiz. <strong>You may continue your exam.</strong>
+    </div>
+    <button class="btn btn-primary" style="max-width:280px" onclick="this.closest('#violation-overlay').classList.remove('show')">Continue</button>
   `;
   overlay.classList.add('show');
 }

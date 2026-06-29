@@ -759,9 +759,15 @@ exports.reportViolation = async (req, res) => {
       );
     }
 
-    // Check termination threshold — use quiz config, fall back to 4.
-    const maxViolations = quiz?.maxViolationsBeforeTermination || 4;
-    const causedTermination = newCount >= maxViolations && isCriticalType;
+    // Check termination threshold.
+    // 0 = never auto-terminate (log-only mode). Use nullish coalescing so 0 is not
+    // treated as falsy and silently replaced with a hard-coded fallback.
+    const maxViolations    = quiz?.maxViolationsBeforeTermination ?? 4;
+    const canAutoTerminate = maxViolations > 0;
+    const causedTermination = canAutoTerminate && newCount >= maxViolations && isCriticalType;
+    // When auto-termination is off but the violation count has crossed a notable
+    // threshold, flag the attempt for lecturer review post-session.
+    const flaggedForReview  = !canAutoTerminate && isCriticalType && newCount >= 3;
     const actionTaken = causedTermination
       ? ACTIONS_TAKEN.TERMINATED
       : ACTIONS_TAKEN.WARNED;
@@ -803,7 +809,9 @@ exports.reportViolation = async (req, res) => {
       terminated:                 causedTermination,
       critical:                   isCriticalType,
       violationCount:             newCount,
-      remainingBeforeTermination: Math.max(0, maxViolations - newCount),
+      flaggedForReview,
+      // null when auto-termination is disabled (log-only mode)
+      remainingBeforeTermination: canAutoTerminate ? Math.max(0, maxViolations - newCount) : null,
     });
   } catch (err) {
     console.error("[snapQuiz student reportViolation]", err);
@@ -1212,6 +1220,55 @@ function _detectPlatform(ua) {
   if (/windows|macintosh|linux/.test(ua))    return "desktop";
   return "unknown";
 }
+
+// ─── Single-question fetch (sequential delivery) ──────────────────────────────
+
+/**
+ * GET /student/snap-quizzes/quizzes/:quizId/attempts/:attemptId/questions/:index
+ *
+ * Returns one question by position in the student's shuffled question order.
+ * Correct answers are never sent. Validates the session token so the client
+ * cannot fetch questions out-of-order without a live session.
+ *
+ * This endpoint exists so quiz authors can enable sequential (one-at-a-time)
+ * delivery without all questions landing in the browser on attempt start.
+ */
+exports.getQuestion = async (req, res) => {
+  try {
+    const attempt = await _loadLockedAttempt(req);
+    if (!attempt) return res.status(404).json({ error: "Active session not found" });
+
+    const index = parseInt(req.params.index, 10);
+    if (isNaN(index) || index < 0 || index >= attempt.questionOrder.length) {
+      return res.status(400).json({ error: "Invalid question index" });
+    }
+
+    const questionId = attempt.questionOrder[index];
+    const quiz = await SnapQuiz.findById(attempt.quiz)
+      .select("randomizeOptions").lean().maxTimeMS(5000);
+
+    const q = await SnapQuizQuestion.findOne({ _id: questionId, isActive: true })
+      .select("-correctOptionIndex -correctOptionIndices -correctBoolean -correctAnswerText -acceptedAnswers -numericAnswer -modelAnswer -mathsDrawing.markingGuide -mathsDrawing.partialCreditGuidance")
+      .lean().maxTimeMS(5000);
+
+    if (!q) return res.status(404).json({ error: "Question not found" });
+
+    if (quiz?.randomizeOptions && attempt.optionOrders?.[questionId.toString()] && q.options?.length) {
+      const idx = attempt.optionOrders[questionId.toString()];
+      q.options = idx.map(i => q.options[i]);
+      if (q.optionMedia?.length) q.optionMedia = idx.map(i => q.optionMedia[i] || null);
+    }
+
+    return res.json({
+      question: q,
+      index,
+      total: attempt.questionOrder.length,
+    });
+  } catch (err) {
+    console.error("[snapQuiz student getQuestion]", err);
+    return res.status(500).json({ error: "Internal server error" });
+  }
+};
 
 // POST /api/student/snap-quizzes/verify-identity
 // Verifies that the submitted index number matches the authenticated student.
