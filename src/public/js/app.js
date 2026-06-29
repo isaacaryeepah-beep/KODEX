@@ -7369,7 +7369,6 @@ function _renderSessionsHTML(content, sessions, isOffline, extras) {
               <td>${s.stoppedAt ? new Date(s.stoppedAt).toLocaleString() : '-'}</td>
               <td>${['active','live','paused','locked'].includes(s.status) && canStart ? `
                 <button class="btn btn-danger btn-sm" onclick="stopSession('${s._id}')">Stop</button>
-                ${!isOffline ? `<button class="btn btn-success btn-sm" onclick="generateQR('${s._id}')">QR Code</button>` : ''}
                 ${!isOffline ? `<button class="btn btn-sm" style="background:#7c3aed;color:#fff;font-size:11px" onclick="generateVerbalCode('${s._id}')">Verbal Code</button>` : ''}
                 <button class="btn btn-sm" style="font-size:11px;background:var(--bg);border:1px solid var(--border)" onclick="viewAttendees('${s._id}', '${(s.title||'Session').replace(/['\''\'']/g,'')}')">Attendees</button>
               ` : ['active','live','paused','locked'].includes(s.status) ? `
@@ -7873,6 +7872,14 @@ function _stopQrTimers() {
   if (_qrCountdownTimer){ clearInterval(_qrCountdownTimer); _qrCountdownTimer = null; }
 }
 
+// Verbal/device-code modal timer state (global so onclick strings can reach them)
+let _verbalTimer = null;
+let _verbalRefreshTimer = null;
+function _stopVerbalTimers() {
+  if (_verbalTimer)        { clearInterval(_verbalTimer);      _verbalTimer = null; }
+  if (_verbalRefreshTimer) { clearTimeout(_verbalRefreshTimer); _verbalRefreshTimer = null; }
+}
+
 async function generateQR(sessionId) {
   _stopQrTimers();
   const container = document.getElementById('modal-container');
@@ -8010,14 +8017,6 @@ async function generateQR(sessionId) {
 async function generateVerbalCode(sessionId) {
   const container = document.getElementById('modal-container');
   container.classList.remove('hidden');
-
-  let _verbalTimer = null;
-  let _verbalRefreshTimer = null;
-
-  function _stopVerbalTimers() {
-    if (_verbalTimer)        { clearInterval(_verbalTimer);   _verbalTimer = null; }
-    if (_verbalRefreshTimer) { clearTimeout(_verbalRefreshTimer); _verbalRefreshTimer = null; }
-  }
 
   async function _fetchAndShow() {
     _stopVerbalTimers();
@@ -14860,7 +14859,8 @@ function _renderAttendeesHTML(el, data, isOffline) {
 
 function closeModal(event) {
   if (event && event.target !== event.currentTarget) return;
-  _stopQrTimers(); // always clean up QR rotation if active
+  _stopQrTimers();
+  _stopVerbalTimers();
   document.getElementById('modal-container').classList.add('hidden');
   document.getElementById('modal-container').innerHTML = '';
 }
