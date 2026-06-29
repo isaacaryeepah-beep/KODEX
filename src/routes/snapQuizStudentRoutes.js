@@ -68,6 +68,7 @@ router.post("/verify-identity", ctrl.verifyIdentity);
 
 // ─── Quiz discovery ───────────────────────────────────────────────────────────
 
+router.get("/join/:code",                ctrl.joinByCode);
 router.get("/quizzes",                   ctrl.listAllQuizzes);
 router.get("/courses/:courseId/quizzes", enrolledInCourse, ctrl.listQuizzes);
 router.get("/quizzes/:quizId",           ctrl.getQuiz);

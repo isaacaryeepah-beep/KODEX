@@ -335,6 +335,15 @@ const snapQuizSchema = new mongoose.Schema(
       default: false,
     },
 
+    // ── Join code ─────────────────────────────────────────────────────────
+    // 6-digit numeric string generated at creation time. Lets students enter
+    // the code to jump straight to this quiz without browsing their course list.
+    joinCode: {
+      type: String,
+      sparse: true,
+      index: true,
+    },
+
     // ── Attachments ───────────────────────────────────────────────────────
     attachments: {
       type: [{
@@ -357,6 +366,7 @@ const snapQuizSchema = new mongoose.Schema(
 // Indexes
 // ---------------------------------------------------------------------------
 
+snapQuizSchema.index({ company: 1, joinCode: 1 }, { sparse: true });
 snapQuizSchema.index({ company: 1, course: 1, createdBy: 1, status: 1 });
 snapQuizSchema.index({ company: 1, course: 1, isPublished: 1, isActive: 1 });
 snapQuizSchema.index({ company: 1, startTime: 1, endTime: 1, status: 1 });
@@ -383,6 +393,26 @@ snapQuizSchema.set("toObject", { virtuals: true });
 // ---------------------------------------------------------------------------
 
 const SnapQuiz = mongoose.model("SnapQuiz", snapQuizSchema);
+
+// ---------------------------------------------------------------------------
+// Join-code generation
+// ---------------------------------------------------------------------------
+
+snapQuizSchema.statics.generateJoinCode = async function () {
+  let code, exists;
+  do {
+    code = String(Math.floor(100000 + Math.random() * 900000));
+    exists = await this.exists({ joinCode: code });
+  } while (exists);
+  return code;
+};
+
+snapQuizSchema.pre("save", async function (next) {
+  if (!this.joinCode) {
+    this.joinCode = await this.constructor.generateJoinCode();
+  }
+  next();
+});
 
 module.exports = SnapQuiz;
 module.exports.SNAP_QUIZ_TYPES    = SNAP_QUIZ_TYPES;

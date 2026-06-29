@@ -270,6 +270,40 @@ exports.getQuiz = async (req, res) => {
   }
 };
 
+/**
+ * GET /student/snap-quizzes/join/:code
+ * Looks up a published quiz by its 6-digit join code, scoped to the student's
+ * company. Returns the same quiz payload as getQuiz so the client can go
+ * straight to the consent screen.
+ */
+exports.joinByCode = async (req, res) => {
+  try {
+    const { code } = req.params;
+    if (!/^\d{6}$/.test(code)) {
+      return res.status(400).json({ error: "Enter a valid 6-digit code" });
+    }
+
+    const quiz = await SnapQuiz.findOne({
+      joinCode: code, company: req.companyId,
+      isPublished: true, isActive: true,
+    }).select("-attachments").lean();
+
+    if (!quiz) return res.status(404).json({ error: "No quiz found for that code" });
+
+    if (quiz.course) {
+      const enrolled = await Course.findOne({
+        _id: quiz.course, companyId: req.companyId, enrolledStudents: req.user._id,
+      }).select("_id").lean();
+      if (!enrolled) return res.status(403).json({ error: "You are not enrolled in this course" });
+    }
+
+    return res.json({ quiz });
+  } catch (err) {
+    console.error("[snapQuiz student joinByCode]", err);
+    return res.status(500).json({ error: "Internal server error" });
+  }
+};
+
 // ─── Attempt lifecycle ────────────────────────────────────────────────────────
 
 /**
