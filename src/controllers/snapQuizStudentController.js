@@ -330,8 +330,11 @@ exports.startAttempt = async (req, res) => {
     }
 
     // Check window.
+    // When a lecturer manually sets status to 'open', startTime and requireLiveMeeting
+    // checks are bypassed — the open action is an explicit override of the schedule gate.
     const now = new Date();
-    if (now < quiz.startTime) {
+    const isManuallyOpened = quiz.status === 'open';
+    if (!isManuallyOpened && now < quiz.startTime) {
       return res.status(403).json({ error: "Quiz has not started yet" });
     }
     if (quiz.lockAfterEndTime && quiz.endTime) {
@@ -342,7 +345,8 @@ exports.startAttempt = async (req, res) => {
     }
 
     // Live meeting gate (Phase 3): if quiz is tied to a meeting, it must be live.
-    if (quiz.requireLiveMeeting && quiz.linkedMeeting) {
+    // Skipped when the quiz has been manually opened by the lecturer.
+    if (!isManuallyOpened && quiz.requireLiveMeeting && quiz.linkedMeeting) {
       const meeting = await Meeting.findById(quiz.linkedMeeting).select("status title").lean().maxTimeMS(5000);
       if (!meeting) {
         return res.status(403).json({ error: "Linked meeting not found. Cannot start quiz." });

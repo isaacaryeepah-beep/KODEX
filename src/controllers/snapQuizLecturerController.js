@@ -128,6 +128,19 @@ exports.listQuizzes = async (req, res) => {
       SnapQuiz.countDocuments(filter),
     ]);
 
+    // Backfill join codes for any published/open quiz that was created before
+    // the auto-generate pre-save hook existed.
+    const needCode = quizzes.filter(q =>
+      ['published', 'open'].includes(q.status) && !q.joinCode
+    );
+    if (needCode.length > 0) {
+      await Promise.all(needCode.map(async q => {
+        const code = await SnapQuiz.generateJoinCode();
+        await SnapQuiz.findByIdAndUpdate(q._id, { joinCode: code });
+        q.joinCode = code;
+      }));
+    }
+
     return res.json({ quizzes, total, page: Number(page), limit: Number(limit) });
   } catch (err) {
     console.error("[snapQuiz listQuizzes]", err);
@@ -250,6 +263,9 @@ exports.publishQuiz = async (req, res) => {
     quiz.isPublished = true;
     quiz.publishedAt = new Date();
     quiz.updatedBy   = req.user._id;
+    if (!quiz.joinCode) {
+      quiz.joinCode = await SnapQuiz.generateJoinCode();
+    }
     await quiz.save();
 
     return res.json({ quiz });
@@ -272,6 +288,9 @@ exports.openQuiz = async (req, res) => {
     quiz.status   = SNAP_QUIZ_STATUSES.OPEN;
     quiz.openedAt = new Date();
     quiz.updatedBy = req.user._id;
+    if (!quiz.joinCode) {
+      quiz.joinCode = await SnapQuiz.generateJoinCode();
+    }
     await quiz.save();
     return res.json({ quiz });
   } catch (err) {
