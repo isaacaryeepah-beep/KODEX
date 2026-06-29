@@ -10,6 +10,8 @@ router.get('/lecturers',   authenticate, ctrl.getCourseLecturers);
 router.get('/search-lecturers', authenticate, ctrl.searchLecturers);
 router.get('/scan-wifi',        authenticate, ctrl.scanWifi);
 router.post('/configure-wifi',  authenticate, ctrl.configureWifi);
+router.post('/request-session',  authenticate, ctrl.requestSession);
+router.delete('/request-session', authenticate, ctrl.cancelRequest);
 router.post('/connect',    authenticate, ctrl.connectDevice);
 router.post('/disconnect', authenticate, ctrl.disconnectDevice);
 router.post('/set-pin',    authenticate, ctrl.setLecturerPin);

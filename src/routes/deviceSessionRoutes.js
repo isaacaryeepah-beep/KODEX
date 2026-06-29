@@ -22,6 +22,8 @@ router.post('/devices/pair',          deviceCtrl.pairDevice);
 // ─── LECTURER PORTAL ROUTES (user JWT) ────────────────────────────────────────
 router.post('/devices/pairing-code',   authenticate, deviceCtrl.generatePairingCode);
 router.get('/devices/my',              authenticate, companyIsolation, deviceCtrl.getMyDevice);
+router.get('/devices/pending-assignment', authenticate, companyIsolation, deviceCtrl.getPendingAssignment);
+router.post('/devices/activate',          authenticate, companyIsolation, deviceCtrl.activateSession);
 router.delete('/devices/my',           authenticate, companyIsolation, deviceCtrl.unlinkDevice);
 router.patch('/devices/my/rename',     authenticate, companyIsolation, deviceCtrl.renameDevice);
 router.get('/devices/my/activity',     authenticate, companyIsolation, deviceCtrl.getDeviceActivity);

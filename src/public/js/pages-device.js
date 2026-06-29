@@ -34,19 +34,24 @@ async function renderAttendanceDevice() {
   content.innerHTML = `<div class="loading" style="padding:40px;text-align:center;color:var(--text-secondary)">Loading device…</div>`;
 
   let device = null;
+  let pending = null;
   try {
-    const json = await api('/api/devices/my');
-    device = json.data || null;
+    const [devJson, paJson] = await Promise.all([
+      api('/api/devices/my'),
+      api('/api/devices/pending-assignment').catch(() => ({ pending: null })),
+    ]);
+    device  = devJson.data || null;
+    pending = paJson.pending || null;
   } catch (e) {
     device = null;
   }
 
-  content.innerHTML = _devPageHTML(device);
+  content.innerHTML = _devPageHTML(device, pending);
   _devBindEvents(device);
 }
 
 // ── page HTML ─────────────────────────────────────────────────────────────────
-function _devPageHTML(device) {
+function _devPageHTML(device, pending) {
   const hasDevice = !!device;
 
   return `
@@ -63,6 +68,8 @@ function _devPageHTML(device) {
     </div>` : ''}
   </div>
 
+  ${pending ? _devPendingBannerHTML(pending) : ''}
+
   ${!hasDevice ? _devNoPairedHTML() : _devPairedHTML(device)}
 
   <!-- management modals -->
@@ -71,6 +78,61 @@ function _devPageHTML(device) {
 
 <style>${_devCSS()}</style>`;
 }
+
+// ── pending session request banner (class rep → lecturer handshake) ───────────
+function _devPendingBannerHTML(pa) {
+  const repName    = pa.requestedBy?.name || 'Your class rep';
+  const courseText = pa.courseCode ? `${pa.courseCode}${pa.courseTitle ? ': ' + pa.courseTitle : ''}` : '';
+  const mins       = pa.expiresAt ? Math.max(0, Math.round((new Date(pa.expiresAt) - Date.now()) / 60000)) : 30;
+
+  return `
+<div id="dev-pending-banner" style="background:linear-gradient(135deg,#eff6ff,#f0fdf4);border:2px solid #60a5fa;border-radius:14px;padding:20px 22px;margin-bottom:20px">
+  <div style="display:flex;align-items:flex-start;gap:14px">
+    <div style="font-size:28px;flex-shrink:0">📋</div>
+    <div style="flex:1">
+      <div style="font-size:15px;font-weight:800;color:#1e40af;margin-bottom:4px">Session Request from ${_esc(repName)}</div>
+      <div style="font-size:13px;color:#374151;margin-bottom:14px">
+        ${courseText ? `<strong>${_esc(courseText)}</strong> — ` : ''}Enter your PIN below to activate attendance. Request expires in <strong>${mins} min</strong>.
+      </div>
+      <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center">
+        <div style="position:relative;flex:1;min-width:140px;max-width:200px">
+          <input id="dev-activate-pin" type="password" inputmode="numeric" maxlength="4" placeholder="4-digit PIN"
+            style="width:100%;padding:10px 36px 10px 12px;border:1.5px solid #93c5fd;border-radius:8px;font-size:18px;letter-spacing:6px;font-weight:700;box-sizing:border-box;outline:none"
+            onkeydown="if(event.key==='Enter')_devActivateSession()">
+          <span onclick="const i=document.getElementById('dev-activate-pin');i.type=i.type==='password'?'text':'password'"
+            style="position:absolute;right:10px;top:50%;transform:translateY(-50%);cursor:pointer;opacity:.5;font-size:14px">👁</span>
+        </div>
+        <button onclick="_devActivateSession()" id="dev-activate-btn"
+          style="padding:10px 22px;background:#1d4ed8;color:#fff;border:none;border-radius:9px;font-size:14px;font-weight:700;cursor:pointer;white-space:nowrap">
+          Activate Session
+        </button>
+      </div>
+      <div id="dev-activate-err" style="color:#dc2626;font-size:12px;margin-top:8px;display:none"></div>
+    </div>
+  </div>
+</div>`;
+}
+
+window._devActivateSession = async function() {
+  const pinEl = document.getElementById('dev-activate-pin');
+  const errEl = document.getElementById('dev-activate-err');
+  const btn   = document.getElementById('dev-activate-btn');
+  const pin   = pinEl ? pinEl.value.trim() : '';
+  if (!pin || pin.length !== 4) {
+    if (errEl) { errEl.textContent = 'Enter your 4-digit PIN'; errEl.style.display = 'block'; }
+    return;
+  }
+  if (btn) { btn.disabled = true; btn.textContent = 'Activating…'; }
+  if (errEl) errEl.style.display = 'none';
+  try {
+    const res = await api('/api/devices/activate', { method: 'POST', body: JSON.stringify({ pin }) });
+    if (typeof showToastNotif === 'function') showToastNotif(res.message || 'Session activated!', 'success');
+    setTimeout(renderAttendanceDevice, 800);
+  } catch (e) {
+    if (errEl) { errEl.textContent = e.message || 'Failed to activate'; errEl.style.display = 'block'; }
+    if (btn) { btn.disabled = false; btn.textContent = 'Activate Session'; }
+  }
+};
 
 // ── no device — read-only info (lecturers cannot pair; admin/HOD must assign) ─
 function _devNoPairedHTML() {
