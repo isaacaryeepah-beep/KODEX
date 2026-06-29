@@ -5527,9 +5527,11 @@ async function renderSuperadminDashboard(content) {
   }
 
   async function renderAdjusterTab() {
-    const r = saGetRates();
     let ps = {};
     try { ps = await api('/api/superadmin/settings'); } catch(_) {}
+    const _rateApiKeys = { admin:'rateAdmin', manager:'rateManager', employee:'rateEmployee', hod:'rateHod', lecturer:'rateLecturer', student:'rateStudent' };
+    SA_ROLE_DEFS.forEach(rd => { if (ps[_rateApiKeys[rd.key]] != null) saSetRate(rd.key, ps[_rateApiKeys[rd.key]]); });
+    const r = saGetRates();
     const cur = ps.currency || 'GHS';
     const subFields = [
       { key:'studentSemesterPrice', label:'Student Semester',  hint:'Academic — paid per semester by each student',          val: ps.studentSemesterPrice ?? 20,  tier:'academic' },
@@ -5651,15 +5653,22 @@ async function renderSuperadminDashboard(content) {
   window._saCompanies = companies;
   window._saDrawTab   = tab => drawTab(tab);
   window._saSearch    = q => { searchQ = q.toLowerCase(); const body = document.getElementById('sa-body'); if (body && currentTab === 'institutions') body.innerHTML = renderInstTab(); };
-  window._saSaveRate  = key => {
+  window._saSaveRate  = async key => {
     const input = document.getElementById('sa-rate-' + key);
     if (!input) return;
     const val = Math.max(0, parseFloat(input.value) || 0);
     saSetRate(key, val);
     const btn = document.getElementById('sa-save-' + key);
-    if (btn) { btn.textContent = 'Saved ✓'; btn.style.background = C.green; setTimeout(() => { btn.textContent = 'Save'; btn.style.background = C.navy; }, 1600); }
+    if (btn) { btn.textContent = 'Saving…'; btn.disabled = true; }
+    try {
+      const _rateApiKeys = { admin:'rateAdmin', manager:'rateManager', employee:'rateEmployee', hod:'rateHod', lecturer:'rateLecturer', student:'rateStudent' };
+      await api('/api/superadmin/settings', { method: 'POST', body: JSON.stringify({ [_rateApiKeys[key]]: val }) });
+      if (btn) { btn.textContent = 'Saved ✓'; btn.style.background = C.green; btn.disabled = false; setTimeout(() => { btn.textContent = 'Save'; btn.style.background = C.navy; }, 1600); }
+    } catch(e) {
+      if (btn) { btn.textContent = 'Save'; btn.disabled = false; }
+      saShowToast('Failed to save rate: ' + (e.message || 'unknown error'));
+    }
     saShowToast(`${SA_ROLE_DEFS.find(r=>r.key===key)?.label||key} rate → ${saFmt(val)} — applied to all institutions`);
-    // refresh inst tab fees if visible
     if (currentTab === 'institutions') { const body = document.getElementById('sa-body'); if (body) body.innerHTML = renderInstTab(); }
   };
 
@@ -9058,7 +9067,14 @@ function _startCountdownTicker() {
     document.querySelectorAll('[data-countdown-ms]').forEach(el => {
       const start = parseInt(el.dataset.countdownMs, 10);
       const diff  = start - now;
-      if (diff <= 0) { el.textContent = '▶ Start'; el.disabled = false; return; }
+      if (diff <= 0) {
+        el.textContent = '▶ Start';
+        el.disabled = false;
+        el.style.background = '#3b82f6';
+        el.style.cursor = 'pointer';
+        el.style.fontWeight = '700';
+        return;
+      }
       const totalMins = Math.ceil(diff / 60000);
       if (totalMins < 60) {
         el.textContent = `⏳ In ${totalMins}m`;
@@ -9069,7 +9085,7 @@ function _startCountdownTicker() {
     });
   }
   tick();
-  _meetingsCountdownTimer = setInterval(tick, 30000);
+  _meetingsCountdownTimer = setInterval(tick, 10000);
 }
 
 function _startMeetingsPoll() {
@@ -9231,7 +9247,7 @@ function _renderMeetingsData(data) {
             const canStart = now >= start - 60000; // allow 1 min early
             return canStart
               ? `<button style="flex:1;background:#3b82f6;color:#fff;border:none;padding:10px 14px;border-radius:9px;font-weight:700;cursor:pointer;font-size:14px;min-width:90px;" onclick="startMeeting('${m._id}')">▶ Start</button>`
-              : `<button disabled data-countdown-ms="${start}" style="flex:1;background:#93c5fd;color:#fff;border:none;padding:10px 14px;border-radius:9px;font-weight:600;font-size:13px;min-width:90px;cursor:not-allowed;" title="Meeting hasn't reached its scheduled time">⏳ In ${minsUntil}m</button>`;
+              : `<button disabled data-countdown-ms="${start}" onclick="startMeeting('${m._id}')" style="flex:1;background:#93c5fd;color:#fff;border:none;padding:10px 14px;border-radius:9px;font-weight:600;font-size:13px;min-width:90px;cursor:not-allowed;" title="Meeting hasn't reached its scheduled time">⏳ In ${minsUntil}m</button>`;
           })() : ''}
           ${canControl && isLive ? `<button style="background:#0ea5e9;color:#fff;border:none;padding:10px 14px;border-radius:9px;font-weight:700;cursor:pointer;" onclick="openMeetingMonitor('${m._id}')">👁 Monitor</button>` : ''}
           ${canControl && isLive ? `<button style="background:#ef4444;color:#fff;border:none;padding:10px 14px;border-radius:9px;font-weight:700;cursor:pointer;" onclick="endMeeting('${m._id}')">■ End</button>` : ''}
