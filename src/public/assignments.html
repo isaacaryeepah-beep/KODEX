@@ -1958,130 +1958,186 @@ async function renderLecturerSnapQuizzes() {
     const d = await api('GET', '/api/lecturer/snap-quizzes');
     QS.snapQuizzes = d.quizzes || [];
 
-    const snapBadge = (s) => ({
-      draft:     `<span style="background:var(--bg);color:var(--text-light);border:1px solid var(--border);padding:3px 8px;border-radius:20px;font-size:11px;font-weight:600">Draft</span>`,
-      published: `<span style="background:#fffbeb;color:#92400e;border:1px solid #fde68a;padding:3px 8px;border-radius:20px;font-size:11px;font-weight:600">Published</span>`,
-      open:      `<span style="background:#f0fdf4;color:#166534;border:1px solid #bbf7d0;padding:3px 8px;border-radius:20px;font-size:11px;font-weight:600">● Open</span>`,
-      closed:    `<span style="background:#fef2f2;color:#991b1b;border:1px solid #fecaca;padding:3px 8px;border-radius:20px;font-size:11px;font-weight:600">Closed</span>`,
-      archived:  `<span style="background:var(--bg);color:var(--text-muted);border:1px solid var(--border);padding:3px 8px;border-radius:20px;font-size:11px;font-weight:600">Archived</span>`,
-    }[s] || `<span>${s}</span>`);
-
-    const statusMeta = {
-      draft:     { dot:'#94a3b8', label:'Draft',     bg:'#f8fafc', border:'#e2e8f0', text:'#475569' },
-      published: { dot:'#f59e0b', label:'Published', bg:'#fffbeb', border:'#fde68a', text:'#92400e' },
-      open:      { dot:'#22c55e', label:'Live',      bg:'#f0fdf4', border:'#86efac', text:'#166534' },
-      closed:    { dot:'#ef4444', label:'Closed',    bg:'#fef2f2', border:'#fecaca', text:'#991b1b' },
-      archived:  { dot:'#cbd5e1', label:'Archived',  bg:'#f8fafc', border:'#e2e8f0', text:'#94a3b8' },
+    const STATUS = {
+      draft:     { dot:'#94a3b8', label:'Draft',     bg:'#f8fafc', border:'#e2e8f0', text:'#475569', accent:'#94a3b8' },
+      published: { dot:'#f59e0b', label:'Published', bg:'#fffbeb', border:'#fde68a', text:'#92400e', accent:'#f59e0b' },
+      open:      { dot:'#16a34a', label:'Live',      bg:'#f0fdf4', border:'#86efac', text:'#14532d', accent:'#22c55e' },
+      closed:    { dot:'#dc2626', label:'Closed',    bg:'#fef2f2', border:'#fecaca', text:'#991b1b', accent:'#ef4444' },
+      archived:  { dot:'#94a3b8', label:'Archived',  bg:'#f8fafc', border:'#e2e8f0', text:'#94a3b8', accent:'#cbd5e1' },
     };
-    const typeLabel = {'mid_term':'Mid-Semester','exam':'Final Exam','quiz':'Quiz','class_test':'Class Test','final':'Finals','mock':'Mock Exam'};
+    const TYPE_LABEL = { mid_term:'Mid-Semester', exam:'Final Exam', quiz:'Quiz', class_test:'Class Test', final:'Finals', mock:'Mock Exam' };
+    const TYPE_ICON  = { mid_term:'📝', exam:'📋', quiz:'⚡', class_test:'✏️', final:'🎓', mock:'🔬' };
+
+    const liveCount     = QS.snapQuizzes.filter(q => q.status === 'open').length;
+    const draftCount    = QS.snapQuizzes.filter(q => q.status === 'draft').length;
+    const closedCount   = QS.snapQuizzes.filter(q => q.status === 'closed').length;
 
     $('page-root').innerHTML = `
       ${_qzTabNavHTML('snap')}
-      <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px;margin-bottom:22px">
+
+      <!-- ── PAGE HEADER ── -->
+      <div style="display:flex;align-items:flex-start;justify-content:space-between;flex-wrap:wrap;gap:16px;margin-bottom:24px">
         <div>
-          <h2 style="font-size:20px;font-weight:800;letter-spacing:-.5px;margin:0 0 3px;color:#0f172a">Snap Quizzes</h2>
-          <p style="color:#64748b;font-size:13px;margin:0">Timed exams with anti-cheat enforcement for the student portal</p>
+          <h2 style="font-size:22px;font-weight:800;letter-spacing:-.6px;margin:0 0 4px;color:#0f172a">Snap Quizzes</h2>
+          <p style="color:#64748b;font-size:13px;margin:0">Anti-cheat timed exams with student join codes</p>
         </div>
         <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
-          <button onclick="location.href='/snap-quiz-lecturer.html'" style="display:inline-flex;align-items:center;gap:7px;padding:9px 16px;background:#0ea5e9;color:#fff;border:none;border-radius:9px;font-size:13px;font-weight:700;cursor:pointer;transition:background .15s" onmouseover="this.style.background='#0284c7'" onmouseout="this.style.background='#0ea5e9'">
+          <button onclick="location.href='/snap-quiz-lecturer.html'"
+            style="display:inline-flex;align-items:center;gap:6px;padding:8px 14px;background:#f0f9ff;color:#0369a1;border:1.5px solid #bae6fd;border-radius:9px;font-size:12px;font-weight:700;cursor:pointer;transition:all .15s"
+            onmouseover="this.style.background='#e0f2fe'" onmouseout="this.style.background='#f0f9ff'">
             <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
             Quiz Monitor
           </button>
-          <button onclick="window.open('/proctor-dashboard.html','_blank')" style="display:inline-flex;align-items:center;gap:7px;padding:9px 16px;background:#7c3aed;color:#fff;border:none;border-radius:9px;font-size:13px;font-weight:700;cursor:pointer;transition:background .15s" onmouseover="this.style.background='#6d28d9'" onmouseout="this.style.background='#7c3aed'">
-            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 8v4l3 3"/></svg>
-            Live Proctor Monitor
+          <button onclick="window.open('/proctor-dashboard.html','_blank')"
+            style="display:inline-flex;align-items:center;gap:6px;padding:8px 14px;background:#faf5ff;color:#7c3aed;border:1.5px solid #ddd6fe;border-radius:9px;font-size:12px;font-weight:700;cursor:pointer;transition:all .15s"
+            onmouseover="this.style.background='#ede9fe'" onmouseout="this.style.background='#faf5ff'">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+            Live Monitor
           </button>
-          <button onclick="openCreateSnapQuizModal()" style="display:inline-flex;align-items:center;gap:7px;padding:9px 18px;background:#1e293b;color:#fff;border:none;border-radius:9px;font-size:13px;font-weight:700;cursor:pointer;letter-spacing:-.1px;transition:background .15s" onmouseover="this.style.background='#0f172a'" onmouseout="this.style.background='#1e293b'">
+          <button onclick="openCreateSnapQuizModal()"
+            style="display:inline-flex;align-items:center;gap:6px;padding:8px 16px;background:#1e293b;color:#fff;border:none;border-radius:9px;font-size:12px;font-weight:700;cursor:pointer;transition:background .15s"
+            onmouseover="this.style.background='#0f172a'" onmouseout="this.style.background='#1e293b'">
             <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
-            New Snap Quiz
+            New Quiz
           </button>
         </div>
       </div>
+
+      <!-- ── STATS STRIP ── -->
+      ${QS.snapQuizzes.length ? `
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:10px;margin-bottom:24px">
+        ${[
+          { label:'Total', val: QS.snapQuizzes.length, color:'#1e293b', bg:'#f8fafc', border:'#e2e8f0' },
+          { label:'Live',  val: liveCount,  color:'#14532d', bg:'#f0fdf4', border:'#86efac' },
+          { label:'Draft', val: draftCount,  color:'#78350f', bg:'#fffbeb', border:'#fde68a' },
+          { label:'Closed',val: closedCount, color:'#7f1d1d', bg:'#fef2f2', border:'#fecaca' },
+        ].map(s => `
+          <div style="background:${s.bg};border:1.5px solid ${s.border};border-radius:12px;padding:14px 16px;text-align:center">
+            <div style="font-size:22px;font-weight:800;color:${s.color};line-height:1">${s.val}</div>
+            <div style="font-size:11px;color:#64748b;font-weight:600;margin-top:3px;text-transform:uppercase;letter-spacing:.5px">${s.label}</div>
+          </div>`).join('')}
+      </div>` : ''}
+
+      <!-- ── QUIZ CARDS ── -->
       ${!QS.snapQuizzes.length ? `
-        <div style="text-align:center;padding:64px 20px;background:#fff;border-radius:16px;border:1.5px dashed #e2e8f0">
-          <div style="width:56px;height:56px;background:#f1f5f9;border-radius:16px;display:flex;align-items:center;justify-content:center;margin:0 auto 16px;font-size:26px">⚡</div>
-          <h3 style="font-size:17px;font-weight:700;margin:0 0 6px;color:#0f172a">No snap quizzes yet</h3>
-          <p style="color:#64748b;font-size:13px;max-width:260px;margin:0 auto 20px;line-height:1.6">Create your first snap quiz — students take it through the secure exam portal</p>
-          <button onclick="openCreateSnapQuizModal()" style="display:inline-flex;align-items:center;gap:6px;padding:9px 20px;background:#1e293b;color:#fff;border:none;border-radius:9px;font-size:13px;font-weight:700;cursor:pointer">
-            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
-            New Snap Quiz
+        <div style="text-align:center;padding:72px 24px;background:#fff;border-radius:18px;border:2px dashed #e2e8f0">
+          <div style="width:64px;height:64px;background:linear-gradient(135deg,#f1f5f9,#e2e8f0);border-radius:18px;display:flex;align-items:center;justify-content:center;margin:0 auto 18px;font-size:28px">⚡</div>
+          <h3 style="font-size:18px;font-weight:800;margin:0 0 8px;color:#0f172a">No quizzes yet</h3>
+          <p style="color:#64748b;font-size:13px;max-width:280px;margin:0 auto 22px;line-height:1.6">Students join through the secure exam portal using a 6-digit code you share.</p>
+          <button onclick="openCreateSnapQuizModal()" style="display:inline-flex;align-items:center;gap:7px;padding:10px 22px;background:#1e293b;color:#fff;border:none;border-radius:10px;font-size:13px;font-weight:700;cursor:pointer">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+            Create First Quiz
           </button>
         </div>` : `
-      <div style="display:flex;flex-direction:column;gap:10px">
+      <div style="display:flex;flex-direction:column;gap:12px">
         ${QS.snapQuizzes.map(q => {
-          const sm = statusMeta[q.status] || statusMeta.draft;
-          const tl = typeLabel[q.quizType] || q.quizType || 'Exam';
+          const sm  = STATUS[q.status] || STATUS.draft;
+          const tl  = TYPE_LABEL[q.quizType] || (q.quizType || 'Exam');
+          const ico = TYPE_ICON[q.quizType]  || '📄';
           const qCount = q.questionCount || 0;
-          const accentColor = { draft:'#94a3b8', published:'#f59e0b', open:'#22c55e', closed:'#ef4444', archived:'#cbd5e1' }[q.status] || '#94a3b8';
-          const typeIcon = { mid_term:'📝', exam:'📋', quiz:'⚡', class_test:'✏️', final:'🎓', mock:'🔬' }[q.quizType] || '📄';
+          const isLive = q.status === 'open';
+
           return `
-          <div style="background:#fff;border:1.5px solid #e8edf3;border-radius:14px;overflow:hidden;display:flex;transition:box-shadow .18s,transform .18s" onmouseover="this.style.boxShadow='0 6px 24px rgba(0,0,0,.09)';this.style.transform='translateY(-1px)'" onmouseout="this.style.boxShadow='none';this.style.transform='none'">
-            <!-- status accent bar -->
-            <div style="width:4px;flex-shrink:0;background:${accentColor}"></div>
-            <div style="flex:1;min-width:0">
-              <!-- top content -->
-              <div style="padding:14px 16px 12px">
-                <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:10px">
-                  <div style="display:flex;align-items:center;gap:10px;flex:1;min-width:0">
-                    <div style="width:36px;height:36px;border-radius:10px;background:linear-gradient(135deg,${accentColor}22,${accentColor}11);border:1.5px solid ${accentColor}33;display:flex;align-items:center;justify-content:center;flex-shrink:0;font-size:16px">${typeIcon}</div>
-                    <div style="flex:1;min-width:0">
-                      <div style="font-size:15px;font-weight:700;color:#0f172a;line-height:1.3;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${q.title}</div>
-                      <div style="font-size:11px;color:#64748b;font-weight:500;margin-top:1px">${tl}</div>
-                    </div>
+          <div style="background:#fff;border:1.5px solid #e8edf3;border-radius:16px;overflow:hidden;box-shadow:0 1px 4px rgba(0,0,0,.04);transition:box-shadow .18s,transform .18s"
+               onmouseover="this.style.boxShadow='0 8px 28px rgba(0,0,0,.09)';this.style.transform='translateY(-1px)'"
+               onmouseout="this.style.boxShadow='0 1px 4px rgba(0,0,0,.04)';this.style.transform='none'">
+
+            <!-- top accent bar -->
+            <div style="height:3px;background:linear-gradient(90deg,${sm.accent},${sm.accent}80)"></div>
+
+            <div style="padding:18px 20px 16px;display:grid;grid-template-columns:1fr auto;gap:16px;align-items:start">
+
+              <!-- LEFT: identity -->
+              <div style="min-width:0">
+                <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px">
+                  <div style="width:40px;height:40px;border-radius:12px;background:linear-gradient(135deg,${sm.accent}20,${sm.accent}0d);border:1.5px solid ${sm.accent}30;display:flex;align-items:center;justify-content:center;flex-shrink:0;font-size:18px">${ico}</div>
+                  <div style="min-width:0">
+                    <div style="font-size:16px;font-weight:800;color:#0f172a;line-height:1.25;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${q.title}</div>
+                    <div style="font-size:11px;color:#94a3b8;font-weight:600;margin-top:2px;text-transform:uppercase;letter-spacing:.4px">${tl}</div>
                   </div>
-                  <span style="flex-shrink:0;display:inline-flex;align-items:center;gap:4px;padding:3px 9px;border-radius:20px;font-size:11px;font-weight:700;background:${sm.bg};color:${sm.text};border:1px solid ${sm.border};white-space:nowrap">
-                    <span style="width:5px;height:5px;border-radius:50%;background:${sm.dot};display:inline-block${q.status==='open'?';animation:pulse 2s infinite':''}"></span>
-                    ${sm.label}
-                  </span>
                 </div>
-                <!-- meta pills -->
-                <div style="display:flex;flex-wrap:wrap;gap:5px;margin-top:10px">
-                  <span style="display:inline-flex;align-items:center;gap:3px;padding:3px 8px;background:#f8fafc;border:1px solid #e8edf3;border-radius:20px;font-size:11px;color:#475569;font-weight:500">
-                    <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+
+                <!-- meta row -->
+                <div style="display:flex;flex-wrap:wrap;gap:6px">
+                  <span style="display:inline-flex;align-items:center;gap:4px;padding:4px 9px;background:#f8fafc;border:1px solid #e8edf3;border-radius:20px;font-size:11px;color:#475569;font-weight:600">
+                    <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
                     ${q.timeLimitMinutes} min
                   </span>
-                  <span style="display:inline-flex;align-items:center;gap:3px;padding:3px 8px;background:#f8fafc;border:1px solid #e8edf3;border-radius:20px;font-size:11px;color:#475569;font-weight:500">
-                    <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
-                    ${q.totalMarks||0} marks
+                  <span style="display:inline-flex;align-items:center;gap:4px;padding:4px 9px;background:#f8fafc;border:1px solid #e8edf3;border-radius:20px;font-size:11px;color:#475569;font-weight:600">
+                    <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+                    ${q.totalMarks || 0} marks
                   </span>
-                  ${qCount ? `<span style="display:inline-flex;align-items:center;gap:3px;padding:3px 8px;background:#f8fafc;border:1px solid #e8edf3;border-radius:20px;font-size:11px;color:#475569;font-weight:500">
-                    <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
-                    ${qCount} Q
+                  ${qCount ? `<span style="display:inline-flex;align-items:center;gap:4px;padding:4px 9px;background:#f8fafc;border:1px solid #e8edf3;border-radius:20px;font-size:11px;color:#475569;font-weight:600">
+                    <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>
+                    ${qCount} question${qCount !== 1 ? 's' : ''}
                   </span>` : ''}
-                  <span style="display:inline-flex;align-items:center;gap:3px;padding:3px 8px;background:#f8fafc;border:1px solid #e8edf3;border-radius:20px;font-size:11px;color:#475569;font-weight:500">
-                    <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
-                    ${fmtDate(q.startTime)} → ${fmtDate(q.endTime)}
+                  <span style="display:inline-flex;align-items:center;gap:4px;padding:4px 9px;background:#f8fafc;border:1px solid #e8edf3;border-radius:20px;font-size:11px;color:#475569;font-weight:600">
+                    <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+                    ${fmtDate(q.startTime)} — ${fmtDate(q.endTime)}
                   </span>
-                  ${q.joinCode ? `<span onclick="navigator.clipboard.writeText('${q.joinCode}').then(()=>toast('✓ Code copied','ok'));event.stopPropagation()" style="display:inline-flex;align-items:center;gap:4px;padding:3px 10px;background:#eff6ff;border:1px solid #bfdbfe;border-radius:20px;font-size:11px;color:#1d4ed8;font-weight:800;cursor:pointer;letter-spacing:1px" title="Click to copy join code">🔑 ${q.joinCode}</span>` : ''}
                 </div>
               </div>
-              <!-- action bar -->
-              <div style="padding:8px 16px 12px;display:flex;align-items:center;gap:7px;flex-wrap:wrap;border-top:1px solid #f1f5f9">
-                <button onclick="openSnapQuestionsPanel('${q._id}')" style="display:inline-flex;align-items:center;gap:5px;padding:6px 13px;background:#1e293b;color:#fff;border:none;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer;transition:background .15s" onmouseover="this.style.background='#0f172a'" onmouseout="this.style.background='#1e293b'">
-                  <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>
-                  Questions
-                </button>
-                ${q.status==='draft' ? `
-                  <button onclick="snapQuizAction('${q._id}','publish')" style="display:inline-flex;align-items:center;gap:5px;padding:6px 13px;background:#f8fafc;color:#1e293b;border:1.5px solid #e2e8f0;border-radius:8px;font-size:12px;font-weight:600;cursor:pointer;transition:all .15s" onmouseover="this.style.background='#f1f5f9'" onmouseout="this.style.background='#f8fafc'">
-                    <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="9 11 12 14 22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
-                    Publish
-                  </button>` : ''}
-                ${q.status==='published' ? `
-                  <button onclick="snapQuizAction('${q._id}','open')" style="display:inline-flex;align-items:center;gap:5px;padding:6px 13px;background:#f0fdf4;color:#166534;border:1.5px solid #86efac;border-radius:8px;font-size:12px;font-weight:600;cursor:pointer;transition:all .15s" onmouseover="this.style.background='#dcfce7'" onmouseout="this.style.background='#f0fdf4'">
-                    <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polygon points="5 3 19 12 5 21 5 3"/></svg>
-                    Open to Students
-                  </button>` : ''}
-                ${q.status==='open' ? `
-                  <button onclick="snapQuizAction('${q._id}','close')" style="display:inline-flex;align-items:center;gap:5px;padding:6px 13px;background:#fff7ed;color:#c2410c;border:1.5px solid #fed7aa;border-radius:8px;font-size:12px;font-weight:600;cursor:pointer;transition:all .15s" onmouseover="this.style.background='#ffedd5'" onmouseout="this.style.background='#fff7ed'">
-                    <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><rect x="3" y="3" width="18" height="18" rx="2"/></svg>
-                    Close
-                  </button>` : ''}
-                <button onclick="deleteSnapQuizInline('${q._id}')" style="display:inline-flex;align-items:center;gap:5px;padding:6px 11px;background:transparent;color:#94a3b8;border:1.5px solid #e2e8f0;border-radius:8px;font-size:12px;font-weight:600;cursor:pointer;margin-left:auto;transition:all .15s" onmouseover="this.style.background='#fef2f2';this.style.color='#dc2626';this.style.borderColor='#fecaca'" onmouseout="this.style.background='transparent';this.style.color='#94a3b8';this.style.borderColor='#e2e8f0'">
-                  <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4h6v2"/></svg>
-                  Delete
-                </button>
+
+              <!-- RIGHT: status + join code -->
+              <div style="display:flex;flex-direction:column;align-items:flex-end;gap:10px;flex-shrink:0">
+                <span style="display:inline-flex;align-items:center;gap:5px;padding:5px 11px;border-radius:20px;font-size:12px;font-weight:700;background:${sm.bg};color:${sm.text};border:1.5px solid ${sm.border}">
+                  <span style="width:6px;height:6px;border-radius:50%;background:${sm.dot};display:inline-block${isLive?';animation:pulse 1.8s infinite':''}"></span>
+                  ${sm.label}
+                </span>
+                ${q.joinCode ? `
+                <div onclick="navigator.clipboard.writeText('${q.joinCode}').then(()=>toast('✓ Join code copied','ok'))"
+                     title="Click to copy"
+                     style="cursor:pointer;background:linear-gradient(135deg,#1e293b,#334155);border-radius:10px;padding:8px 14px;text-align:center;min-width:96px;transition:opacity .15s"
+                     onmouseover="this.style.opacity='.85'" onmouseout="this.style.opacity='1'">
+                  <div style="font-size:9px;color:#94a3b8;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;margin-bottom:3px">Join Code</div>
+                  <div style="font-size:20px;font-weight:900;color:#fff;letter-spacing:4px;font-family:monospace;line-height:1">${q.joinCode}</div>
+                  <div style="font-size:9px;color:#64748b;margin-top:3px">tap to copy</div>
+                </div>` : `
+                <div style="background:#f8fafc;border:1.5px dashed #e2e8f0;border-radius:10px;padding:8px 14px;text-align:center;min-width:96px">
+                  <div style="font-size:9px;color:#94a3b8;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;margin-bottom:3px">Join Code</div>
+                  <div style="font-size:11px;color:#cbd5e1;font-style:italic">Publish to generate</div>
+                </div>`}
               </div>
             </div>
+
+            <!-- action bar -->
+            <div style="padding:10px 20px 14px;display:flex;align-items:center;gap:7px;flex-wrap:wrap;border-top:1px solid #f1f5f9">
+              <button onclick="openSnapQuestionsPanel('${q._id}')"
+                style="display:inline-flex;align-items:center;gap:5px;padding:7px 14px;background:#1e293b;color:#fff;border:none;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer;transition:background .15s"
+                onmouseover="this.style.background='#0f172a'" onmouseout="this.style.background='#1e293b'">
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>
+                Questions
+              </button>
+              ${q.status === 'draft' ? `
+              <button onclick="snapQuizAction('${q._id}','publish')"
+                style="display:inline-flex;align-items:center;gap:5px;padding:7px 14px;background:#f8fafc;color:#1e293b;border:1.5px solid #e2e8f0;border-radius:8px;font-size:12px;font-weight:600;cursor:pointer;transition:all .15s"
+                onmouseover="this.style.background='#f1f5f9'" onmouseout="this.style.background='#f8fafc'">
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="9 11 12 14 22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
+                Publish
+              </button>` : ''}
+              ${q.status === 'published' ? `
+              <button onclick="snapQuizAction('${q._id}','open')"
+                style="display:inline-flex;align-items:center;gap:5px;padding:7px 14px;background:#f0fdf4;color:#166534;border:1.5px solid #86efac;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer;transition:all .15s"
+                onmouseover="this.style.background='#dcfce7'" onmouseout="this.style.background='#f0fdf4'">
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+                Open to Students
+              </button>` : ''}
+              ${q.status === 'open' ? `
+              <button onclick="snapQuizAction('${q._id}','close')"
+                style="display:inline-flex;align-items:center;gap:5px;padding:7px 14px;background:#fff7ed;color:#c2410c;border:1.5px solid #fed7aa;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer;transition:all .15s"
+                onmouseover="this.style.background='#ffedd5'" onmouseout="this.style.background='#fff7ed'">
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><rect x="3" y="3" width="18" height="18" rx="2"/></svg>
+                Close Quiz
+              </button>` : ''}
+              <button onclick="deleteSnapQuizInline('${q._id}')"
+                style="display:inline-flex;align-items:center;gap:5px;padding:7px 12px;background:transparent;color:#cbd5e1;border:1.5px solid #e8edf3;border-radius:8px;font-size:12px;font-weight:600;cursor:pointer;margin-left:auto;transition:all .15s"
+                onmouseover="this.style.background='#fef2f2';this.style.color='#dc2626';this.style.borderColor='#fecaca'"
+                onmouseout="this.style.background='transparent';this.style.color='#cbd5e1';this.style.borderColor='#e8edf3'">
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4h6v2"/></svg>
+                Delete
+              </button>
+            </div>
+
           </div>`;
         }).join('')}
       </div>`}
