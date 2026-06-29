@@ -20,6 +20,17 @@ window.MathJax = { tex: { inlineMath: [['\\(','\\)']], displayMath: [['\\[','\\]
    #dashboard-page, .topbar, .main-layout, .sidebar, .sidebar-nav,
    .content, .card, .btn, .btn-primary, .btn-secondary, .loading, etc. */
 
+/* Quiz-mode: sidebar hidden, content fills the page */
+.quiz-mode .sidebar { display: none !important; }
+.quiz-mode .content {
+  margin-left: 24px !important;
+  max-width: 100% !important;
+  width: calc(100% - 48px) !important;
+}
+@media (max-width: 768px) {
+  .quiz-mode .content { margin-left: 0 !important; width: 100% !important; }
+}
+
 /* Assign grid */
 .assign-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(320px,1fr)); gap:14px; }
 .acard {
@@ -503,6 +514,12 @@ async function init(){
     const tabParam = params.get('tab');
     const idParam  = params.get('id');
     const subParam = params.get('subId');
+
+    // Hide sidebar when opening the quiz portal directly
+    if (tabParam === 'quizzes') {
+      document.getElementById('dashboard-page')?.classList.add('quiz-mode');
+    }
+
     if(isLecturer){
       await loadCourses();
       if(tabParam === 'quizzes') await renderQuizzesPanel();
@@ -1515,6 +1532,13 @@ function switchTab(tab) {
   document.querySelectorAll('.sidebar-nav a').forEach(a => a.classList.remove('active'));
   const navEl = $('nav-' + tab);
   if (navEl) navEl.classList.add('active');
+
+  const page = document.getElementById('dashboard-page');
+  if (tab === 'quizzes') {
+    page?.classList.add('quiz-mode');
+  } else {
+    page?.classList.remove('quiz-mode');
+  }
 
   if (tab === 'assignments') {
     const isLec = ['lecturer','admin','superadmin'].includes(S.role);
