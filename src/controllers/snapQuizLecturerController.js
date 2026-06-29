@@ -349,7 +349,7 @@ exports.closeQuiz = async (req, res) => {
             { quiz: a.quiz, student: a.student, company: a.company },
             {
               $set: {
-                attempt:         a._id,
+                countedAttemptId: a._id,
                 rawScore,
                 maxScore,
                 percentageScore: Math.round(pct * 100) / 100,
@@ -358,7 +358,6 @@ exports.closeQuiz = async (req, res) => {
                 isReleased:      autoReleaseResults || false,
                 releasedAt:      autoReleaseResults ? now : null,
               },
-              $setOnInsert: { createdAt: now },
             },
             { upsert: true }
           );
