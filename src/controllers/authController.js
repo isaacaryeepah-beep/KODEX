@@ -1126,8 +1126,9 @@ exports.getMe = async (req, res) => {
   try {
     const user = await User.findById(req.user._id)
       .populate("company", "name mode institutionCode")
-      .populate("reportingManager", "name email designation");
-    const company = await Company.findById(user.company);
+      .populate("reportingManager", "name email designation")
+      .maxTimeMS(8000);
+    const company = await Company.findById(user.company).maxTimeMS(8000);
 
     const isAdmin       = ['admin', 'superadmin', 'manager'].includes(user.role);
     const canSeeQrSeed  = ['admin', 'superadmin'].includes(user.role);
