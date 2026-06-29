@@ -13340,6 +13340,7 @@ async function renderClassDevice() {
               Request Session
             </button>`;
             })()}
+          `}
           </div>` : ''}
 
           <!-- WiFi Management -->
