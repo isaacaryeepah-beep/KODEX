@@ -34,21 +34,27 @@ function attachMonitorWs(server) {
       let msg;
       try { msg = JSON.parse(raw); } catch (_) { return; }
 
-      if (msg.type === 'subscribe' && msg.meetingId) {
-        const mid = String(msg.meetingId);
+      if (msg.type === 'subscribe') {
+        // Support both meeting rooms (meetingId) and quiz rooms (quizId)
+        const roomId = msg.quizId
+          ? `quiz::${msg.quizId}`
+          : msg.meetingId
+            ? String(msg.meetingId)
+            : null;
+        if (!roomId) return;
 
-        // Unsubscribe from previous meeting if any
-        if (ws.meetingId && ws.meetingId !== mid) {
+        // Unsubscribe from previous room if any
+        if (ws.meetingId && ws.meetingId !== roomId) {
           wsClients.get(ws.meetingId)?.delete(ws);
           if (wsClients.get(ws.meetingId)?.size === 0) wsClients.delete(ws.meetingId);
         }
 
-        ws.meetingId = mid;
-        if (!wsClients.has(mid)) wsClients.set(mid, new Set());
-        wsClients.get(mid).add(ws);
+        ws.meetingId = roomId;
+        if (!wsClients.has(roomId)) wsClients.set(roomId, new Set());
+        wsClients.get(roomId).add(ws);
 
         // Welcome acknowledgement
-        safeSend(ws, { event: 'subscribed', meetingId: mid });
+        safeSend(ws, { event: 'subscribed', roomId });
       }
     });
 
@@ -112,4 +118,7 @@ function safeSend(ws, obj) {
   }
 }
 
-module.exports = { attachMonitorWs, broadcastMonitorWs };
+// Generic alias used by snapQuizBroadcast and other services
+const broadcast = broadcastMonitorWs;
+
+module.exports = { attachMonitorWs, broadcastMonitorWs, broadcast };

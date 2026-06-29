@@ -21,7 +21,7 @@
  *   integrity_alert          — high-risk AI score detected
  */
 
-const { broadcast } = require("./monitorWs");
+const { broadcastMonitorWs: broadcast } = require("./monitorWs");
 
 /**
  * Broadcast a quiz monitoring event to all WebSocket clients watching quizId.
