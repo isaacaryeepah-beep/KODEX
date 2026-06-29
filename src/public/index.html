@@ -153,7 +153,7 @@ function selectPortal(t){if(window._appLoaded)window._realSelectPortal(t);else w
 </head>
 <body>
 
-<!-- ── Splash screen (3D globe + D launch + burst) ── -->
+<!-- ── Splash screen (Dikly brand video intro) ── -->
 <div id="web-splash">
 <style>
 #web-splash {
@@ -161,343 +161,472 @@ function selectPortal(t){if(window._appLoaded)window._realSelectPortal(t);else w
   background: #000; overflow: hidden;
   font-family: 'Segoe UI', system-ui, sans-serif;
 }
-#sp-gl, #sp-fx {
-  position: fixed; top: 0; left: 0; width: 100%; height: 100%; display: block;
-}
-#sp-gl { z-index: 99991; }
-#sp-fx { z-index: 99993; pointer-events: none; }
-#sp-scene {
-  position: fixed; top: 0; left: 0; width: 100%; height: 100%; z-index: 99994;
-  display: flex; flex-direction: column; align-items: center; justify-content: center;
+
+/* ── VIDEO INTRO ─────────────────────────────────────────── */
+#sp-intro {
+  position: absolute; inset: 0; z-index: 1;
+  opacity: 1; transition: opacity 0.9s ease;
   pointer-events: none;
 }
-#sp-d {
-  width: clamp(110px,22vw,170px); height: clamp(110px,22vw,170px);
-  transform: translateY(-140vh); opacity: 0;
-  will-change: transform, opacity, filter;
-  filter: drop-shadow(0 0 20px #3b82f6) drop-shadow(0 0 55px #1d4ed8);
+#sp-intro.sp-fade { opacity: 0; }
+
+#sp-bg-video {
+  position: absolute; inset: 0; width: 100%; height: 100%;
+  object-fit: cover; opacity: 0.6;
 }
-#sp-d svg { width: 100%; height: 100%; }
-#sp-wordmark { text-align: center; margin-top: clamp(14px,3vw,26px); }
+#sp-vid-grad {
+  position: absolute; inset: 0;
+  background: linear-gradient(to top, #050d1f 0%, transparent 50%, #050d1f 100%);
+  opacity: 0.9;
+}
+#sp-vid-over {
+  position: absolute; inset: 0;
+  background: rgba(30,64,175,0.15); mix-blend-mode: overlay;
+}
+
+/* ── FLOATING ICONS ── */
+#sp-icons {
+  position: absolute; inset: 0;
+  display: flex; align-items: center; justify-content: center;
+  perspective: 1000px; pointer-events: none; z-index: 10;
+}
+.sp-icon {
+  position: absolute; object-fit: contain;
+  will-change: transform, opacity;
+  transition: transform 1.2s cubic-bezier(0.25,1,0.5,1),
+              opacity 1.2s cubic-bezier(0.25,1,0.5,1);
+}
+#sp-icon-dk  { width: clamp(96px,18vmin,138px); height: clamp(96px,18vmin,138px);
+  filter: drop-shadow(0 0 30px rgba(59,130,246,0.9)); }
+#sp-icon-bl  { width: clamp(76px,14vmin,108px); height: clamp(76px,14vmin,108px);
+  filter: drop-shadow(0 0 15px rgba(59,130,246,0.55)); }
+#sp-icon-gr  { width: clamp(76px,14vmin,108px); height: clamp(76px,14vmin,108px);
+  filter: drop-shadow(0 0 15px rgba(16,185,129,0.55)); }
+#sp-icon-or  { width: clamp(62px,11vmin,88px); height: clamp(62px,11vmin,88px);
+  filter: drop-shadow(0 0 15px rgba(249,115,22,0.55)); }
+
+/* ── SCENE TEXT BASE ── */
+.sp-stxt {
+  position: absolute; z-index: 15; pointer-events: none;
+  opacity: 0; transition: opacity 0.6s ease;
+}
+.sp-stxt.sp-in  { opacity: 1; }
+.sp-stxt.sp-out { opacity: 0; transition: opacity 0.5s ease; }
+
+/* ── SCENE 0: PRECISION MEETS POWER ── */
+#sp-rule {
+  position: absolute; left: 50%; transform: translateX(-50%);
+  bottom: clamp(110px,22vmin,180px);
+  width: 0; height: 1px;
+  background: rgba(96,165,250,0.7);
+  transition: width 0.8s cubic-bezier(0.16,1,0.3,1);
+  z-index: 15;
+}
+#sp-rule.sp-show { width: 100px; }
+#sp-text {
+  position: absolute; bottom: clamp(56px,11vmin,110px);
+  width: 100%; text-align: center; z-index: 15;
+  pointer-events: none;
+}
+#sp-text h1 {
+  font-size: clamp(2.2rem,7vw,4.5rem); font-weight: 900;
+  color: #fff; letter-spacing: -0.02em;
+  text-shadow: 0 4px 40px rgba(0,0,0,0.6); margin: 0;
+  opacity: 0; transform: translateY(36px);
+  transition: opacity 0.8s ease, transform 0.8s ease;
+}
+#sp-text h1.sp-show { opacity: 1; transform: translateY(0); }
+#sp-text p {
+  font-size: clamp(0.78rem,1.9vw,1.1rem); font-weight: 300;
+  color: rgba(255,255,255,0.55); letter-spacing: 0.35em;
+  text-transform: uppercase; margin: 10px 0 0;
+  opacity: 0; transition: opacity 0.8s ease 0.35s;
+}
+#sp-text p.sp-show { opacity: 1; }
+
+/* ── SCENE 1: SCROLL TO EXPLORE ── */
+#sp-s1 {
+  top: clamp(80px,16vmin,130px); right: clamp(24px,6vw,80px);
+  text-align: right;
+  transform: translateX(40px);
+  transition: opacity 0.6s ease, transform 0.7s cubic-bezier(0.16,1,0.3,1);
+}
+#sp-s1.sp-in  { transform: translateX(0); }
+#sp-s1.sp-out { transform: translateX(-20px); }
+#sp-s1 h2 {
+  font-size: clamp(1.5rem,4vw,2.8rem); font-weight: 900;
+  color: #fff; letter-spacing: 0.04em; margin: 0 0 8px;
+  text-transform: uppercase;
+}
+#sp-s1-line {
+  height: 2px; width: 0; background: #3b82f6;
+  margin-left: auto; margin-bottom: 14px;
+  transition: width 0.6s ease 0.3s;
+}
+#sp-s1.sp-in #sp-s1-line { width: 80px; }
+#sp-s1 p {
+  font-size: clamp(0.75rem,1.6vw,1rem); font-weight: 300;
+  color: rgba(255,255,255,0.5); max-width: 280px; margin-left: auto;
+  line-height: 1.5; letter-spacing: 0.01em;
+  opacity: 0; transition: opacity 0.6s ease 0.5s;
+}
+#sp-s1.sp-in p { opacity: 1; }
+
+/* ── SCENE 2: INNOVATE CREATE EMPOWER ── */
+#sp-s2 {
+  bottom: clamp(40px,9vmin,80px); left: 0; right: 0; text-align: center;
+  display: flex; flex-direction: column; align-items: center;
+  transform: translateY(16px);
+  transition: opacity 0.6s ease, transform 0.7s cubic-bezier(0.16,1,0.3,1);
+}
+#sp-s2.sp-in  { transform: translateY(0); }
+#sp-s2.sp-out { transform: translateY(-10px); }
+#sp-s2-words {
+  display: flex; align-items: center; gap: 10px; margin-bottom: 10px;
+  opacity: 0; transform: translateY(12px);
+  transition: opacity 0.5s ease 0.1s, transform 0.5s ease 0.1s;
+}
+#sp-s2.sp-in #sp-s2-words { opacity: 1; transform: translateY(0); }
+#sp-s2-words .sp-word {
+  font-size: clamp(0.9rem,2.2vw,1.25rem); font-weight: 700;
+  letter-spacing: 0.15em; color: #fff; text-transform: uppercase;
+}
+#sp-s2-words .sp-dot { color: #60a5fa; font-weight: 900; font-size: 1.2em; line-height: 1; }
+#sp-s2-sub {
+  font-size: clamp(0.55rem,1.4vw,0.72rem); letter-spacing: 0.25em;
+  color: rgba(255,255,255,0.35); text-transform: uppercase; font-weight: 300;
+  margin: 0 0 12px; opacity: 0; transition: opacity 0.6s ease 0.3s;
+}
+#sp-s2.sp-in #sp-s2-sub { opacity: 1; }
+#sp-s2-rule {
+  height: 1px; width: 0; margin-bottom: 14px;
+  background: linear-gradient(to right, transparent, rgba(96,165,250,0.45), transparent);
+  transition: width 0.7s cubic-bezier(0.16,1,0.3,1) 0.35s;
+}
+#sp-s2.sp-in #sp-s2-rule { width: 120px; }
+#sp-s2-badge {
+  display: inline-flex; align-items: center; padding: 8px 28px;
+  border: 1px solid rgba(96,165,250,0.35); border-radius: 9999px;
+  background: rgba(23,37,84,0.4); backdrop-filter: blur(8px);
+  font-size: clamp(0.65rem,1.5vw,0.82rem); font-weight: 600;
+  letter-spacing: 0.2em; color: #bfdbfe; text-transform: uppercase;
+  opacity: 0; transform: scale(0.93) translateY(14px);
+  transition: opacity 0.5s ease 0.55s, transform 0.5s cubic-bezier(0.34,1.56,0.64,1) 0.55s;
+}
+#sp-s2.sp-in #sp-s2-badge { opacity: 1; transform: scale(1) translateY(0); }
+
+/* ── SCENE 3: PUSH GLOW ── */
+#sp-s3 {
+  inset: 0; display: flex; align-items: center; justify-content: center;
+}
+#sp-s3-glow {
+  position: absolute; border-radius: 50%;
+  width: 60vmax; height: 60vmax;
+  background: radial-gradient(circle, rgba(59,130,246,0.28) 0%, rgba(59,130,246,0.08) 45%, transparent 70%);
+  filter: blur(40px);
+  transform: scale(0.4); opacity: 0;
+  transition: transform 2.8s ease-in-out, opacity 1s ease;
+}
+#sp-s3.sp-in #sp-s3-glow { transform: scale(1.4); opacity: 1; }
+#sp-s3-ring {
+  position: absolute; border-radius: 50%;
+  width: 40vmax; height: 40vmax;
+  border: 1px solid rgba(96,165,250,0.2);
+  transform: scale(0.6); opacity: 0;
+}
+#sp-s3.sp-in #sp-s3-ring { animation: sp-ring 2.2s ease-out 0.3s forwards; }
+@keyframes sp-ring {
+  0%   { transform: scale(0.6); opacity: 0; }
+  30%  { opacity: 0.5; }
+  100% { transform: scale(1.6); opacity: 0; }
+}
+
+/* ── BRAND REVEAL (Scene 4) ─────────────────────────────── */
 #sp-brand {
-  font-size: clamp(1.9rem,5vw,3.2rem); font-weight: 900; letter-spacing: .2em; color: #fff;
-  text-shadow: 0 0 20px rgba(59,130,246,.9), 0 0 60px rgba(59,130,246,.3);
-  opacity: 0; transform: translateY(16px);
-  transition: opacity .7s ease, transform .7s ease;
-}
-#sp-brand.sp-show { opacity: 1; transform: translateY(0); }
-#sp-tag {
-  font-size: clamp(.6rem,1.9vw,.78rem); letter-spacing: .38em;
-  color: rgba(255,255,255,.5); margin-top: 10px; min-height: 1.4em;
-  opacity: 0; transition: opacity .5s ease;
-}
-#sp-tag.sp-show { opacity: 1; }
-#sp-final {
-  position: fixed; top: 0; left: 0; width: 100%; height: 100%; z-index: 99995;
+  position: absolute; inset: 0; z-index: 20;
+  background: #000;
   display: flex; flex-direction: column; align-items: center; justify-content: center;
-  opacity: 0; pointer-events: none; transition: opacity 1.2s ease;
+  opacity: 0; pointer-events: none;
+  transition: opacity 0.9s ease;
 }
-#sp-final.sp-show { opacity: 1; }
-.sp-fi-d { width: clamp(110px,22vw,170px); height: clamp(110px,22vw,170px); filter: drop-shadow(0 0 14px rgba(59,130,246,.7)); }
-.sp-fi-d svg { width: 100%; height: 100%; }
-.sp-fi-brand {
-  font-size: clamp(1.9rem,5vw,3.2rem); font-weight: 900; letter-spacing: .2em; color: #fff;
-  text-shadow: 0 0 18px rgba(59,130,246,.65); margin-top: clamp(14px,3vw,26px);
+#sp-brand.sp-show { opacity: 1; }
+
+/* Blobs */
+#sp-blob-a {
+  position: absolute; top: 5%; left: 50%;
+  width: 70vmin; height: 70vmin;
+  border-radius: 60% 40% 55% 45% / 50% 60% 40% 50%;
+  background: radial-gradient(circle at 40% 40%, #1e4db7 0%, #1239a0 35%, transparent 70%);
+  filter: blur(48px); opacity: 0.6;
+  animation: sp-ba 7s ease-in-out infinite alternate;
 }
-.sp-fi-tag {
-  font-size: clamp(.6rem,1.9vw,.78rem); letter-spacing: .38em;
-  color: rgba(255,255,255,.45); margin-top: 10px;
+@keyframes sp-ba {
+  from { transform: translateX(-50%) scale(1) rotate(0deg); }
+  to   { transform: translateX(-50%) scale(1.05) rotate(8deg); }
 }
+#sp-blob-b {
+  position: absolute; bottom: 10%; right: 10%;
+  width: 40vmin; height: 40vmin;
+  border-radius: 40% 60% 45% 55% / 55% 40% 60% 45%;
+  background: radial-gradient(circle at 60% 60%, #0ea5e9 0%, #0369a1 40%, transparent 70%);
+  filter: blur(40px); opacity: 0.35;
+  animation: sp-bb 6s ease-in-out infinite alternate; animation-delay: -1s;
+}
+@keyframes sp-bb {
+  from { transform: scale(1) rotate(0deg); }
+  to   { transform: scale(1.08) rotate(-10deg); }
+}
+#sp-blob-c {
+  position: absolute; bottom: 15%; left: 5%;
+  width: 35vmin; height: 35vmin; border-radius: 50%;
+  background: radial-gradient(circle, #3b0764 0%, #1e1b4b 50%, transparent 70%);
+  filter: blur(50px); opacity: 0.4;
+  animation: sp-bc 8s ease-in-out infinite alternate; animation-delay: -2s;
+}
+@keyframes sp-bc {
+  from { transform: scale(1); }
+  to   { transform: scale(1.06); }
+}
+
+/* Grain */
+#sp-grain { position: absolute; inset: 0; z-index: 1; pointer-events: none; opacity: 0.04; }
+/* Vignette */
+#sp-vig {
+  position: absolute; inset: 0; z-index: 2; pointer-events: none;
+  background: radial-gradient(ellipse 90% 90% at 50% 50%, transparent 30%, rgba(0,0,0,0.80) 100%);
+}
+/* Shimmer */
+#sp-shimmer {
+  position: absolute; inset: 0; z-index: 3; pointer-events: none;
+  background: linear-gradient(112deg, transparent 20%, rgba(186,230,253,0.07) 50%, transparent 80%);
+  transform: translateX(-110%);
+}
+#sp-shimmer.sp-run { transition: transform 1.6s cubic-bezier(0.16,1,0.3,1); transform: translateX(110%); }
+
+/* Brand content */
+#sp-brand-cnt {
+  position: relative; z-index: 10;
+  display: flex; flex-direction: column; align-items: center; text-align: center;
+}
+#sp-bi {
+  width: clamp(96px,18vmin,144px); height: clamp(96px,18vmin,144px); object-fit: contain;
+  filter: drop-shadow(0 0 24px rgba(59,130,246,0.85)) drop-shadow(0 0 60px rgba(30,77,183,0.5));
+  opacity: 0; transform: scale(0.75) translateY(28px);
+  transition: opacity 0.6s cubic-bezier(0.16,1,0.3,1), transform 0.7s cubic-bezier(0.34,1.56,0.64,1);
+}
+#sp-bi.sp-show { opacity: 1; transform: scale(1) translateY(0); }
+#sp-bn {
+  font-size: clamp(2.5rem,8vmin,3.75rem); font-weight: 900;
+  color: #fff; letter-spacing: 0.14em; margin: clamp(18px,3vmin,28px) 0 0;
+  text-shadow: 0 0 80px rgba(59,130,246,0.3);
+  opacity: 0; transform: translateY(14px);
+  transition: opacity 0.7s ease 0.3s, transform 0.7s ease 0.3s;
+}
+#sp-bn.sp-show { opacity: 1; transform: translateY(0); }
+#sp-bdiv {
+  height: 1px; width: 0; margin: 14px auto 14px;
+  background: linear-gradient(to right, transparent, rgba(147,197,253,0.5), transparent);
+  transition: width 0.7s cubic-bezier(0.16,1,0.3,1) 0.55s;
+}
+#sp-bdiv.sp-show { width: 68px; }
+#sp-bt {
+  font-size: clamp(0.6rem,1.8vmin,0.75rem); letter-spacing: 0.28em;
+  text-transform: uppercase; font-weight: 500; color: rgba(255,255,255,0.4); margin: 0;
+  opacity: 0; transition: opacity 1s ease 0.8s;
+}
+#sp-bt.sp-show { opacity: 1; }
 </style>
 
-<canvas id="sp-gl"></canvas>
-<canvas id="sp-fx"></canvas>
+<!-- VIDEO INTRO (Scenes 0-3) -->
+<div id="sp-intro">
+  <video id="sp-bg-video" autoplay muted loop playsinline>
+    <source src="/mouse-bg.mp4" type="video/mp4">
+  </video>
+  <div id="sp-vid-grad"></div>
+  <div id="sp-vid-over"></div>
 
-<div id="sp-scene">
-  <div id="sp-d">
-    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" aria-hidden="true">
-      <defs>
-        <linearGradient id="sp-dg1" x1="0%" y1="0%" x2="100%" y2="100%">
-          <stop offset="0%" stop-color="#93c5fd"/>
-          <stop offset="42%" stop-color="#2563eb"/>
-          <stop offset="100%" stop-color="#1e3a8a"/>
-        </linearGradient>
-        <filter id="sp-gls">
-          <feGaussianBlur stdDeviation="1.5" result="b"/>
-          <feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge>
-        </filter>
-        <clipPath id="sp-dc1"><path d="M14,4 L14,96 L50,96 C97,93 97,7 50,4 Z"/></clipPath>
-      </defs>
-      <path d="M14,4 L14,96 L50,96 C97,93 97,7 50,4 Z" fill="url(#sp-dg1)" filter="url(#sp-gls)"/>
-      <g clip-path="url(#sp-dc1)">
-        <polygon points="4,58 63,-2 89,-2 30,58" fill="white" opacity=".93"/>
-        <polygon points="30,102 89,42 63,42 4,102" fill="white" opacity=".76"/>
-      </g>
-    </svg>
+  <div id="sp-icons">
+    <img id="sp-icon-dk" class="sp-icon" src="/icon-dikly.png" alt="">
+    <img id="sp-icon-bl" class="sp-icon" src="/icon-blue.png"  alt="">
+    <img id="sp-icon-gr" class="sp-icon" src="/icon-green.png" alt="">
+    <img id="sp-icon-or" class="sp-icon" src="/icon-orange.png" alt="">
   </div>
-  <div id="sp-wordmark">
-    <div id="sp-brand">DIKLY</div>
-    <div id="sp-tag"></div>
+
+  <!-- Scene 0: PRECISION MEETS POWER -->
+  <div id="sp-rule"></div>
+  <div id="sp-text">
+    <h1 id="sp-h1">PRECISION</h1>
+    <p id="sp-p1">MEETS POWER</p>
+  </div>
+
+  <!-- Scene 1: SCROLL TO EXPLORE -->
+  <div id="sp-s1" class="sp-stxt">
+    <h2>SCROLL TO EXPLORE</h2>
+    <div id="sp-s1-line"></div>
+    <p>Seamlessly navigate your entire digital workspace with fluid carousel rotation.</p>
+  </div>
+
+  <!-- Scene 2: Innovate Create Empower -->
+  <div id="sp-s2" class="sp-stxt">
+    <div id="sp-s2-words">
+      <span class="sp-word">Innovate</span>
+      <span class="sp-dot">&#8226;</span>
+      <span class="sp-word">Create</span>
+      <span class="sp-dot">&#8226;</span>
+      <span class="sp-word">Empower</span>
+    </div>
+    <p id="sp-s2-sub">This is how it goes</p>
+    <div id="sp-s2-rule"></div>
+    <div id="sp-s2-badge">Dikly Selected</div>
+  </div>
+
+  <!-- Scene 3: Push glow -->
+  <div id="sp-s3" class="sp-stxt">
+    <div id="sp-s3-glow"></div>
+    <div id="sp-s3-ring"></div>
   </div>
 </div>
 
-<div id="sp-final">
-  <div class="sp-fi-d">
-    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" aria-hidden="true">
-      <defs>
-        <linearGradient id="sp-dg2" x1="0%" y1="0%" x2="100%" y2="100%">
-          <stop offset="0%" stop-color="#93c5fd"/>
-          <stop offset="42%" stop-color="#2563eb"/>
-          <stop offset="100%" stop-color="#1e3a8a"/>
-        </linearGradient>
-        <clipPath id="sp-dc2"><path d="M14,4 L14,96 L50,96 C97,93 97,7 50,4 Z"/></clipPath>
-      </defs>
-      <path d="M14,4 L14,96 L50,96 C97,93 97,7 50,4 Z" fill="url(#sp-dg2)"/>
-      <g clip-path="url(#sp-dc2)">
-        <polygon points="4,58 63,-2 89,-2 30,58" fill="white" opacity=".93"/>
-        <polygon points="30,102 89,42 63,42 4,102" fill="white" opacity=".76"/>
-      </g>
-    </svg>
+<!-- BRAND REVEAL (Scene 4) -->
+<div id="sp-brand">
+  <div id="sp-blob-a"></div>
+  <div id="sp-blob-b"></div>
+  <div id="sp-blob-c"></div>
+  <svg id="sp-grain" aria-hidden="true">
+    <filter id="sp-grf">
+      <feTurbulence type="fractalNoise" baseFrequency="0.75" numOctaves="4" stitchTiles="stitch"/>
+      <feColorMatrix type="saturate" values="0"/>
+    </filter>
+    <rect width="100%" height="100%" filter="url(#sp-grf)"/>
+  </svg>
+  <div id="sp-vig"></div>
+  <div id="sp-shimmer"></div>
+  <div id="sp-brand-cnt">
+    <img id="sp-bi" src="/icon-dikly.png" alt="Dikly">
+    <h1 id="sp-bn">DIKLY</h1>
+    <div id="sp-bdiv"></div>
+    <p id="sp-bt">The Future of Productivity</p>
   </div>
-  <div class="sp-fi-brand">DIKLY</div>
-  <div class="sp-fi-tag">SMARTER &nbsp;·&nbsp; FASTER &nbsp;·&nbsp; TOGETHER</div>
 </div>
 
 <script>
 (function () {
 'use strict';
 
+var _gone = false;
 function dismissSplash() {
+  if (_gone) return; _gone = true;
   var el = document.getElementById('web-splash');
   if (!el) return;
-  el.style.transition = 'opacity .55s ease';
-  el.style.opacity = '0';
+  el.style.transition = 'opacity 0.55s ease';
+  el.style.opacity    = '0';
   el.style.pointerEvents = 'none';
-  setTimeout(function () { if (el && el.parentNode) el.parentNode.removeChild(el); }, 600);
+  setTimeout(function () { if (el && el.parentNode) el.parentNode.removeChild(el); }, 700);
+}
+setTimeout(dismissSplash, 9500);
+
+/* Force video play — browser autoplay policies sometimes need explicit call */
+var vid = document.getElementById('sp-bg-video');
+if (vid) {
+  vid.muted = true;
+  var vp = vid.play();
+  if (vp && vp.catch) { vp.catch(function () {}); }
 }
 
-var easeOut3     = function(t) { return 1 - Math.pow(1 - t, 3); };
-var easeIn3      = function(t) { return t * t * t; };
-var easeOutElast = function(t) {
-  if (t === 0 || t === 1) return t;
-  return Math.pow(2, -10 * t) * Math.sin((t * 10 - 0.75) * (2 * Math.PI / 2.8)) + 1;
-};
-var lerp    = function(a, b, t) { return a + (b - a) * t; };
-var clamp01 = function(t) { return Math.max(0, Math.min(1, t)); };
-
-var glCanvas = document.getElementById('sp-gl');
-var fxCanvas = document.getElementById('sp-fx');
-var fxCtx    = fxCanvas.getContext('2d');
-fxCanvas.width  = window.innerWidth;
-fxCanvas.height = window.innerHeight;
-
-var renderer, scene, camera, starMat, globe;
-var globeScaleCur = 0;
-
-function initThreeJS() {
-  renderer = new THREE.WebGLRenderer({ canvas: glCanvas, alpha: true, antialias: true });
-  renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
-  renderer.setSize(window.innerWidth, window.innerHeight);
-  scene  = new THREE.Scene();
-  camera = new THREE.PerspectiveCamera(48, window.innerWidth / window.innerHeight, 0.1, 600);
-  camera.position.set(0, 1.5, 7);
-  camera.lookAt(0, -1.5, 0);
-
-  var sv = [];
-  for (var i = 0; i < 4500; i++) {
-    var th = Math.random() * Math.PI * 2, ph = Math.acos(2 * Math.random() - 1), r = 80 + Math.random() * 60;
-    sv.push(r * Math.sin(ph) * Math.cos(th), r * Math.sin(ph) * Math.sin(th), r * Math.cos(ph));
-  }
-  var sg = new THREE.BufferGeometry();
-  sg.setAttribute('position', new THREE.Float32BufferAttribute(sv, 3));
-  starMat = new THREE.PointsMaterial({ color: 0xffffff, size: 0.22, transparent: true, opacity: 0 });
-  scene.add(new THREE.Points(sg, starMat));
-
-  var R = 5.5;
-  globe = new THREE.Mesh(
-    new THREE.SphereGeometry(R, 72, 72),
-    new THREE.MeshPhongMaterial({ color: 0x060c28, emissive: 0x0b1e70, emissiveIntensity: .28, specular: 0x1640a0, shininess: 20 })
-  );
-  globe.position.set(0, -8.5, 0);
-  globe.scale.set(0, 0, 0);
-  scene.add(globe);
-
-  globe.add(new THREE.Mesh(new THREE.SphereGeometry(R + .22, 72, 72),
-    new THREE.MeshPhongMaterial({ color: 0x1a5cff, emissive: 0x0033cc, transparent: true, opacity: .17, side: THREE.BackSide })));
-  globe.add(new THREE.Mesh(new THREE.SphereGeometry(R + .10, 72, 72),
-    new THREE.MeshBasicMaterial({ color: 0xff6600, transparent: true, opacity: .06, depthWrite: false })));
-
-  var lv = [];
-  for (var j = 0; j < 650; j++) {
-    var lat = (Math.random() - .5) * Math.PI * .82, lon = Math.random() * Math.PI * 2, r2 = R + .04;
-    lv.push(r2 * Math.cos(lat) * Math.cos(lon), r2 * Math.sin(lat), r2 * Math.cos(lat) * Math.sin(lon));
-  }
-  var lg = new THREE.BufferGeometry();
-  lg.setAttribute('position', new THREE.Float32BufferAttribute(lv, 3));
-  globe.add(new THREE.Points(lg, new THREE.PointsMaterial({ color: 0xffcc55, size: .06, transparent: true, opacity: .8 })));
-  globe.add(new THREE.Mesh(new THREE.SphereGeometry(R + .01, 32, 32),
-    new THREE.MeshBasicMaterial({ color: 0x1a4aff, wireframe: true, transparent: true, opacity: .05 })));
-  globe.add(new THREE.Mesh(new THREE.TorusGeometry(R, .055, 8, 140),
-    new THREE.MeshBasicMaterial({ color: 0x4488ff, transparent: true, opacity: .45 })));
-
-  scene.add(new THREE.AmbientLight(0x0f1135, 1.4));
-  var sun = new THREE.DirectionalLight(0x4488ff, 3.5); sun.position.set(7, 5, 6); scene.add(sun);
-  var rim = new THREE.DirectionalLight(0x2244ff, 1.8); rim.position.set(-6, 2, -4); scene.add(rim);
+function show(id) {
+  var el = document.getElementById(id); if (el) el.classList.add('sp-show');
+}
+function sIn(id) {
+  var el = document.getElementById(id);
+  if (el) { el.classList.remove('sp-out'); el.classList.add('sp-in'); }
+}
+function sOut(id) {
+  var el = document.getElementById(id);
+  if (el) { el.classList.remove('sp-in'); el.classList.add('sp-out'); }
+}
+function pos(el, x, y, z, s, op, ry) {
+  if (!el) return;
+  el.style.transform = 'translate3d('+x+'px,'+y+'px,'+z+'px) scale('+s+') rotateY('+ry+'deg)';
+  el.style.opacity   = String(op);
 }
 
-var s3 = document.createElement('script');
-s3.src = 'https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js';
-s3.crossOrigin = 'anonymous';
-s3.onload  = function () { initThreeJS(); };
-s3.onerror = function () { glCanvas.style.background = 'radial-gradient(ellipse at 50% 110%, #0c1a4a 0%, #020810 55%)'; };
-document.head.appendChild(s3);
+var dk = document.getElementById('sp-icon-dk');
+var bl = document.getElementById('sp-icon-bl');
+var gr = document.getElementById('sp-icon-gr');
+var or = document.getElementById('sp-icon-or');
 
-window.addEventListener('resize', function () {
-  if (renderer && camera) {
-    camera.aspect = window.innerWidth / window.innerHeight;
-    camera.updateProjectionMatrix();
-    renderer.setSize(window.innerWidth, window.innerHeight);
-  }
-  fxCanvas.width = window.innerWidth; fxCanvas.height = window.innerHeight;
-});
+/* Initial: all hidden */
+pos(dk,   0,   0,   0, 0, 0,   0);
+pos(bl, -150,  50, -50, 0, 0,  30);
+pos(gr,  150,  50, -50, 0, 0, -30);
+pos(or,    0, 100,-150, 0, 0,   0);
 
-var particles = [];
-var BURST_COLORS = ['#3b82f6','#7c3aed','#60a5fa','#ffffff','#a78bfa','#fbbf24','#f0f9ff','#818cf8','#38bdf8','#34d399'];
+/* Scene 0 (0-1800ms): icons enter + PRECISION MEETS POWER */
+setTimeout(function () {
+  pos(dk,   0,   0,   0, 1.0, 1.0,  0);
+  pos(bl, -150,  50, -50, 0.8, 0.8, 30);
+  pos(gr,  150,  50, -50, 0.8, 0.8,-30);
+  pos(or,    0, 100,-150, 0.6, 0.6,  0);
+}, 120);
 
-function spawnBurst(cx, cy) {
-  for (var i = 0; i < 340; i++) {
-    var ang = Math.random() * Math.PI * 2, spd = 1.5 + Math.random() * 16;
-    particles.push({ x: cx, y: cy, vx: Math.cos(ang)*spd, vy: Math.sin(ang)*spd - 1.5 - Math.random()*5,
-      sz: 1.5 + Math.random()*5.5, alpha: 1, color: BURST_COLORS[Math.floor(Math.random()*BURST_COLORS.length)],
-      decay: .012 + Math.random()*.018, grav: .10 + Math.random()*.13, type: Math.random() < .28 ? 'star' : 'dot' });
-  }
-  for (var j = 0; j < 50; j++) {
-    var ang2 = Math.random()*Math.PI*2, spd2 = 11 + Math.random()*24;
-    particles.push({ x: cx, y: cy, vx: Math.cos(ang2)*spd2, vy: Math.sin(ang2)*spd2 - 4,
-      sz: 2, alpha: 1, color: '#fff', decay: .018, grav: .07, type: 'streak' });
-  }
-  for (var k = 0; k < 18; k++) {
-    var ang3 = Math.random()*Math.PI*2, spd3 = 2 + Math.random()*6;
-    particles.push({ x: cx, y: cy, vx: Math.cos(ang3)*spd3, vy: Math.sin(ang3)*spd3 - 2,
-      sz: 6 + Math.random()*8, alpha: 1, color: BURST_COLORS[Math.floor(Math.random()*4)],
-      decay: .008, grav: .05, type: 'diamond' });
-  }
-}
+setTimeout(function () { show('sp-rule'); }, 500);
+setTimeout(function () { show('sp-h1'); show('sp-p1'); }, 900);
 
-function draw4Star(ctx, x, y, r, color) {
-  ctx.beginPath();
-  for (var i = 0; i < 8; i++) {
-    var a = (i*Math.PI)/4 - Math.PI/2, ri = i%2===0 ? r : r*.30;
-    if (i===0) ctx.moveTo(x+ri*Math.cos(a), y+ri*Math.sin(a));
-    else       ctx.lineTo(x+ri*Math.cos(a), y+ri*Math.sin(a));
-  }
-  ctx.closePath(); ctx.fillStyle = color; ctx.shadowBlur = 12; ctx.shadowColor = color; ctx.fill();
-}
-function drawDiamond(ctx, x, y, r, color) {
-  ctx.beginPath();
-  ctx.moveTo(x, y-r); ctx.lineTo(x+r*.5, y); ctx.lineTo(x, y+r); ctx.lineTo(x-r*.5, y);
-  ctx.closePath(); ctx.fillStyle = color; ctx.shadowBlur = 16; ctx.shadowColor = color; ctx.fill();
-}
-function tickParticles() {
-  fxCtx.clearRect(0, 0, fxCanvas.width, fxCanvas.height);
-  for (var i = particles.length-1; i >= 0; i--) {
-    var p = particles[i];
-    if (p.alpha <= 0) { particles.splice(i, 1); continue; }
-    var px = p.x, py = p.y;
-    p.x += p.vx; p.y += p.vy; p.vy += p.grav; p.vx *= .97; p.alpha -= p.decay;
-    if (p.alpha < 0) p.alpha = 0;
-    fxCtx.save(); fxCtx.globalAlpha = Math.max(0, p.alpha);
-    if (p.type === 'star') {
-      draw4Star(fxCtx, p.x, p.y, p.sz*1.6, p.color);
-    } else if (p.type === 'streak') {
-      fxCtx.strokeStyle = p.color; fxCtx.lineWidth = 2; fxCtx.shadowBlur = 8; fxCtx.shadowColor = p.color;
-      fxCtx.beginPath(); fxCtx.moveTo(px-p.vx*2.5, py-p.vy*2.5); fxCtx.lineTo(p.x, p.y); fxCtx.stroke();
-    } else if (p.type === 'diamond') {
-      drawDiamond(fxCtx, p.x, p.y, p.sz, p.color);
-    } else {
-      fxCtx.beginPath(); fxCtx.arc(p.x, p.y, p.sz, 0, Math.PI*2);
-      fxCtx.fillStyle = p.color; fxCtx.shadowBlur = 7; fxCtx.shadowColor = p.color; fxCtx.fill();
-    }
-    fxCtx.restore();
-  }
-}
+/* Scene 1 (1800ms): SCROLL TO EXPLORE */
+setTimeout(function () {
+  var h1 = document.getElementById('sp-h1');
+  var p1 = document.getElementById('sp-p1');
+  var rl = document.getElementById('sp-rule');
+  if (h1) { h1.style.opacity='0'; h1.style.transform='translateY(-20px)'; }
+  if (p1) { p1.style.opacity='0'; }
+  if (rl) { rl.style.width='0'; }
+  pos(dk, -200,   0,-100, 0.8, 1.0,-30);
+  pos(bl,    0,   0,   0, 1.0, 0.8,  0);
+  pos(gr,  200,   0,-100, 0.8, 0.8, 30);
+  pos(or,  150,  50, -50, 0.8, 0.8,  0);
+  sIn('sp-s1');
+}, 1800);
 
-var dWrap = document.getElementById('sp-d');
-var brandEl = document.getElementById('sp-brand');
-var tagEl = document.getElementById('sp-tag');
-var finalEl = document.getElementById('sp-final');
-var TAGLINE = 'SMARTER. FASTER. TOGETHER.';
-var tagIdx = 0, typeTimer = null;
-function startTyping() {
-  tagEl.classList.add('sp-show');
-  typeTimer = setInterval(function () {
-    if (tagIdx < TAGLINE.length) tagEl.textContent = TAGLINE.slice(0, ++tagIdx);
-    else clearInterval(typeTimer);
-  }, 28);
-}
+/* Scene 2 (3200ms): Innovate Create Empower */
+setTimeout(function () {
+  sOut('sp-s1');
+  pos(dk,   0, -50, 100, 1.5, 1.0,  0);
+  pos(bl, -200, 100,-200, 0.5, 0,   0);
+  pos(gr,  250, 100,-200, 0.5, 0,   0);
+  pos(or,    0, 150,-300, 0.4, 0,   0);
+  sIn('sp-s2');
+}, 3200);
 
-var t0 = null, launchT0 = null, phase = 0, burstFired = false;
+/* Scene 3 (4600ms): push glow */
+setTimeout(function () {
+  sOut('sp-s2');
+  pos(dk, 0, 0, 800, 2.0, 0, 0);
+  sIn('sp-s3');
+}, 4600);
 
-function frame(ts) {
-  requestAnimationFrame(frame);
-  if (!t0) t0 = ts;
-  var ms = ts - t0;
+/* Brand reveal (5600ms) */
+setTimeout(function () { show('sp-brand'); }, 5600);
 
-  if (globe) globe.rotation.y += .0022;
-  if (starMat) starMat.opacity = clamp01(ms / 500);
-  if (globe) {
-    var gScale = easeOut3(clamp01((ms - 200) / 800));
-    globeScaleCur = lerp(globeScaleCur, gScale, .07);
-    globe.scale.set(globeScaleCur, globeScaleCur, globeScaleCur);
-  }
+/* Intro fades (5900ms) */
+setTimeout(function () {
+  var intro = document.getElementById('sp-intro');
+  if (intro) intro.classList.add('sp-fade');
+}, 5900);
 
-  if (!burstFired) {
-    if (ms >= 700) {
-      var t = clamp01((ms - 700) / 550);
-      var y = lerp(-240, 0, easeOutElast(t));
-      dWrap.style.transform = 'translateY(' + y + 'px)';
-      dWrap.style.opacity   = String(Math.min(1, (ms - 700) / 150));
-    }
-    if (ms >= 1300 && phase < 2) { phase = 2; brandEl.classList.add('sp-show'); }
-    if (ms >= 1650 && phase < 3) { phase = 3; startTyping(); }
-    if (ms >= 2200 && ms < 3050) {
-      var p = .5 + .5 * Math.sin((ms - 2200) / 155);
-      var g1 = 18 + p * 50, g2 = 45 + p * 80;
-      dWrap.style.filter = 'drop-shadow(0 0 ' + g1 + 'px #3b82f6) drop-shadow(0 0 ' + g2 + 'px #7c3aed) drop-shadow(0 0 ' + (g1*.5) + 'px #fff)';
-    }
-    if (ms >= 2750 && ms < 3050) {
-      var v = (ms - 2750) / 300, shake = 3.5 * v * Math.sin(ms / 26);
-      dWrap.style.transform = 'translateY(' + shake + 'px) translateX(' + (shake*.3) + 'px)';
-    }
-    if (ms >= 3050) {
-      if (!launchT0) launchT0 = ts;
-      var lt = (ts - launchT0) / 400;
-      var ly = -easeIn3(Math.min(lt, 1)) * (window.innerHeight + 380);
-      var sc = 1 + Math.min(lt, 1) * .5;
-      dWrap.style.transform = 'translateY(' + ly + 'px) scale(' + sc + ')';
-      var gl = 80 + lt * 140;
-      dWrap.style.filter = 'drop-shadow(0 0 ' + gl + 'px #3b82f6) drop-shadow(0 0 ' + (gl*1.7) + 'px #7c3aed)';
+/* Icon springs in (6100ms) */
+setTimeout(function () { show('sp-bi'); }, 6100);
 
-      if (lt >= 0.38 && !burstFired) {
-        burstFired = true;
-        clearInterval(typeTimer);
-        spawnBurst(window.innerWidth / 2, window.innerHeight / 2 - 30);
-        setTimeout(function () {
-          dWrap.style.transition  = 'opacity .3s'; dWrap.style.opacity  = '0';
-          brandEl.style.transition= 'opacity .4s'; brandEl.style.opacity= '0';
-          tagEl.style.transition  = 'opacity .4s'; tagEl.style.opacity  = '0';
-        }, 100);
-        setTimeout(function () { finalEl.classList.add('sp-show'); }, 900);
-        setTimeout(dismissSplash, 1800);
-      }
-    }
-  }
+/* Wordmark + divider + tagline (6500ms) */
+setTimeout(function () { show('sp-bn'); show('sp-bdiv'); show('sp-bt'); }, 6500);
 
-  tickParticles();
-  if (renderer) renderer.render(scene, camera);
-}
+/* Shimmer sweep (6800ms) */
+setTimeout(function () {
+  var sh = document.getElementById('sp-shimmer'); if (sh) sh.classList.add('sp-run');
+}, 6800);
 
-requestAnimationFrame(frame);
+/* Dismiss (8400ms) */
+setTimeout(dismissSplash, 8400);
+
 })();
 </script>
 </div>
@@ -1335,6 +1464,10 @@ requestAnimationFrame(frame);
           <button id="sound-toggle-btn" onclick="_notifSound.toggleMute()" title="Sound on — click to mute" style="margin-left:auto;background:none;border:none;cursor:pointer;color:rgba(255,255,255,.7);padding:4px;border-radius:6px;display:flex;align-items:center;justify-content:center;transition:color .2s,background .2s" onmouseenter="this.style.color='#fff';this.style.background='rgba(255,255,255,.12)'" onmouseleave="this.style.color='rgba(255,255,255,.7)';this.style.background='none'">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07"/></svg>
           </button>
+        </div>
+        <div class="sidebar-search-wrap">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;opacity:.45"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+          <input id="sidebar-search" type="search" placeholder="Search menu…" autocomplete="off" oninput="_sidebarSearch(this.value)">
         </div>
         <nav class="sidebar-nav" id="sidebar-nav"></nav>
       </div>
