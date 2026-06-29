@@ -342,10 +342,25 @@ exports.startAttempt = async (req, res) => {
           questions,
         });
       }
-      return res.status(409).json({
-        error:    "You already have an active session for this quiz",
-        attemptId: activeAttempt._id,
-      });
+      // Auto-terminate sessions that went stale (missed heartbeats) or expired.
+      // Covers the case where the student had a network error or page refresh and
+      // the old attempt was left ACTIVE with no client to send heartbeats.
+      const heartbeatTimeout = (quiz.heartbeatTimeoutSeconds || 60) * 1000;
+      const isStale = !activeAttempt.lastHeartbeatAt ||
+        (now.getTime() - new Date(activeAttempt.lastHeartbeatAt).getTime()) > heartbeatTimeout * 3;
+      const isExpired = activeAttempt.expiresAt && new Date(activeAttempt.expiresAt) < now;
+      if (isStale || isExpired) {
+        await SnapQuizAttempt.findByIdAndUpdate(activeAttempt._id, {
+          status: ATTEMPT_STATUSES.AUTO_SUBMITTED,
+          endedAt: now,
+        }).maxTimeMS(5000);
+        // Fall through to create a fresh attempt
+      } else {
+        return res.status(409).json({
+          error:    "You already have an active session for this quiz",
+          attemptId: activeAttempt._id,
+        });
+      }
     }
 
     // Check attempt limit.
