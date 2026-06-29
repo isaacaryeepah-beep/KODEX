@@ -746,6 +746,17 @@ window.addEventListener('load', () => loadMLLibs().catch(() => {}));
       <div id="panel-loading" style="text-align:center;padding:16px 0">
         <div class="spinner" style="margin:0 auto 14px"></div>
         <p style="font-size:13px;color:rgba(255,255,255,.4)">Checking session…</p>
+        <p id="panel-loading-hint" style="display:none;font-size:11px;color:rgba(255,255,255,.25);margin-top:6px">Taking longer than expected…</p>
+      </div>
+
+      <!-- Shown on connection timeout -->
+      <div id="panel-timeout" style="display:none;text-align:center;padding:8px 0 4px">
+        <div style="width:48px;height:48px;border-radius:14px;background:rgba(245,158,11,.12);display:flex;align-items:center;justify-content:center;margin:0 auto 14px">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#fbbf24" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+        </div>
+        <p style="font-size:14px;font-weight:600;color:#f8fafc;margin-bottom:6px">Connection timed out</p>
+        <p style="font-size:12px;color:rgba(255,255,255,.45);margin-bottom:20px;line-height:1.5">The server took too long to respond. Check your connection and try again.</p>
+        <button onclick="location.reload()" class="btn btn-primary" style="display:block;width:100%;text-align:center">Try Again</button>
       </div>
 
       <!-- Shown when no portal session found -->
@@ -1217,10 +1228,10 @@ function showAuthError(elId, msg) {
 // ── Auto-detect portal session on load ───────────────────────────────────────
 (async function initExamPortal() {
   function showPanel(id) {
-    document.getElementById('panel-loading').style.display = 'none';
-    document.getElementById('panel-no-session').style.display = 'none';
-    document.getElementById('panel-confirm-index').style.display = 'none';
-    document.getElementById(id).style.display = 'block';
+    ['panel-loading','panel-no-session','panel-confirm-index','panel-timeout'].forEach(p => {
+      const el = document.getElementById(p);
+      if (el) el.style.display = p === id ? 'block' : 'none';
+    });
   }
 
   const portalToken = localStorage.getItem('token');
@@ -1230,17 +1241,29 @@ function showAuthError(elId, msg) {
     return;
   }
 
+  // Show a hint after 5s if still loading
+  const hintTimer = setTimeout(() => {
+    const hint = document.getElementById('panel-loading-hint');
+    if (hint) hint.style.display = 'block';
+  }, 5000);
+
   state.token = portalToken;
   try {
     const data = await api('GET', '/api/auth/me');
+    clearTimeout(hintTimer);
     if (data.user?.role !== 'student') throw new Error('not-student');
     state.user = data.user;
     showPanel('panel-confirm-index');
     document.getElementById('login-index')?.focus();
     show('login-screen');
-  } catch {
+  } catch (err) {
+    clearTimeout(hintTimer);
     state.token = null;
-    showPanel('panel-no-session');
+    if (err.message && err.message.includes('timed out')) {
+      showPanel('panel-timeout');
+    } else {
+      showPanel('panel-no-session');
+    }
     show('login-screen');
   }
 })();
