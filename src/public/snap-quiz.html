@@ -2274,26 +2274,25 @@ function startProctoring() {
   if (quiz.mobileMonitoring !== false && window.Capacitor?.isNativePlatform?.()) {
     const { App: CapApp } = window.Capacitor.Plugins;
     if (CapApp?.addListener) {
-      // App backgrounded (home button, notification shade, incoming call, etc.)
-      state._capAppStateListener = await CapApp.addListener('appStateChange', ({ isActive }) => {
-        if (!state.examActive) return;
-        if (!isActive) {
-          // App went to background
-          logEvent('app_backgrounded', { platform: window.Capacitor.getPlatform() }).catch(console.warn);
-          toast('⚠️ You left the exam app! This has been logged.', 'warn');
-        } else {
-          // App came back to foreground
-          logEvent('app_foregrounded', { platform: window.Capacitor.getPlatform() }).catch(console.warn);
-        }
-      });
-
-      // Back button — prevent navigating away mid-exam
-      state._capBackListener = await CapApp.addListener('backButton', () => {
-        if (state.examActive) {
-          logEvent('back_button_pressed').catch(console.warn);
-          toast('⚠️ Back navigation is disabled during the exam', 'warn');
-        }
-      });
+      (async () => {
+        // App backgrounded (home button, notification shade, incoming call, etc.)
+        state._capAppStateListener = await CapApp.addListener('appStateChange', ({ isActive }) => {
+          if (!state.examActive) return;
+          if (!isActive) {
+            logEvent('app_backgrounded', { platform: window.Capacitor.getPlatform() }).catch(console.warn);
+            toast('⚠️ You left the exam app! This has been logged.', 'warn');
+          } else {
+            logEvent('app_foregrounded', { platform: window.Capacitor.getPlatform() }).catch(console.warn);
+          }
+        });
+        // Back button — prevent navigating away mid-exam
+        state._capBackListener = await CapApp.addListener('backButton', () => {
+          if (state.examActive) {
+            logEvent('back_button_pressed').catch(console.warn);
+            toast('⚠️ Back navigation is disabled during the exam', 'warn');
+          }
+        });
+      })();
     }
   }
 }
