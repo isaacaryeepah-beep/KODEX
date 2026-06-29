@@ -350,10 +350,18 @@ exports.startAttempt = async (req, res) => {
         (now.getTime() - new Date(activeAttempt.lastHeartbeatAt).getTime()) > heartbeatTimeout * 3;
       const isExpired = activeAttempt.expiresAt && new Date(activeAttempt.expiresAt) < now;
       if (isStale || isExpired) {
-        await SnapQuizAttempt.findByIdAndUpdate(activeAttempt._id, {
-          status: ATTEMPT_STATUSES.AUTO_SUBMITTED,
-          endedAt: now,
-        }).maxTimeMS(5000);
+        // If the student never submitted any answers, delete the orphaned attempt so
+        // it does not count against their allowedAttempts. If they did answer something,
+        // keep it as AUTO_SUBMITTED so the grade record is preserved.
+        const hasResponses = await SnapQuizResponse.exists({ attempt: activeAttempt._id });
+        if (hasResponses) {
+          await SnapQuizAttempt.findByIdAndUpdate(activeAttempt._id, {
+            status: ATTEMPT_STATUSES.AUTO_SUBMITTED,
+            endedAt: now,
+          }).maxTimeMS(5000);
+        } else {
+          await SnapQuizAttempt.findByIdAndDelete(activeAttempt._id).maxTimeMS(5000);
+        }
         // Fall through to create a fresh attempt
       } else {
         return res.status(409).json({
