@@ -389,13 +389,8 @@ snapQuizSchema.set("toJSON",   { virtuals: true });
 snapQuizSchema.set("toObject", { virtuals: true });
 
 // ---------------------------------------------------------------------------
-// Exports
-// ---------------------------------------------------------------------------
-
-const SnapQuiz = mongoose.model("SnapQuiz", snapQuizSchema);
-
-// ---------------------------------------------------------------------------
-// Join-code generation
+// Join-code generation — must be defined BEFORE mongoose.model() so the
+// static is present on the constructor and the pre-save hook can call it.
 // ---------------------------------------------------------------------------
 
 snapQuizSchema.statics.generateJoinCode = async function () {
@@ -413,6 +408,12 @@ snapQuizSchema.pre("save", async function (next) {
   }
   next();
 });
+
+// ---------------------------------------------------------------------------
+// Exports
+// ---------------------------------------------------------------------------
+
+const SnapQuiz = mongoose.model("SnapQuiz", snapQuizSchema);
 
 module.exports = SnapQuiz;
 module.exports.SNAP_QUIZ_TYPES    = SNAP_QUIZ_TYPES;
