@@ -1150,9 +1150,13 @@ function toast(msg, type = 'info') {
 // ══════════════════════════════════════════════════════════════════
 //  API HELPERS
 // ══════════════════════════════════════════════════════════════════
-async function api(method, path, body, extraHeaders) {
+async function api(method, path, body, extraHeaders, timeoutMs = 15000) {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+
   const opts = {
     method,
+    signal: controller.signal,
     headers: {
       'Content-Type': 'application/json',
       'X-Request-Time': Date.now().toString(),
@@ -1167,7 +1171,10 @@ async function api(method, path, body, extraHeaders) {
   let res;
   try {
     res = await fetch(API + path, opts);
+    clearTimeout(timer);
   } catch (networkErr) {
+    clearTimeout(timer);
+    if (networkErr.name === 'AbortError') throw new Error('Request timed out — please check your connection and try again.');
     throw new Error('Network error — check your connection. (' + networkErr.message + ')');
   }
 
