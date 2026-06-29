@@ -480,19 +480,7 @@ async function init(){
       const annIcon    = '<path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/>';
 
       let links = '';
-      if (['admin','superadmin'].includes(S.role)) {
-        links += navLink('sessions', sessIcon, 'Sessions');
-        links += navLink('courses', courseIcon, 'Courses');
-        links += navLink('users', usersIcon, 'Users');
-        links += navLink('quizzes', quizIcon, 'Quizzes');
-        links += navLink('reports', reportIcon, 'Reports');
-        links += navLink('announcements', annIcon, 'Announcements');
-      } else if (S.role === 'lecturer') {
-        links += navLink('sessions', sessIcon, 'Sessions');
-        links += navLink('courses', courseIcon, 'Courses');
-        links += navLink('quizzes', quizIcon, 'Quizzes');
-        links += navLink('announcements', annIcon, 'Announcements');
-      } else if (S.role === 'student') {
+      if (S.role === 'student') {
         links += `<a id="nav-quizzes" onclick="switchTab('quizzes')" style="cursor:pointer">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${quizIcon}</svg>
           <span>Proctored/Snap Quiz</span>
