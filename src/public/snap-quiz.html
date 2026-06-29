@@ -1224,14 +1224,22 @@ function showAuthError(elId, msg) {
   toast(msg, 'error');
 }
 
-// ── Sign In handler ───────────────────────────────────────────────
 // ── Auto-detect portal session on load ───────────────────────────────────────
-(async function initExamPortal() {
+// Decode JWT payload client-side — no network call, no spinner.
+// Real authentication happens server-side when the student submits their index number.
+(function initExamPortal() {
   function showPanel(id) {
     ['panel-loading','panel-no-session','panel-confirm-index','panel-timeout'].forEach(p => {
       const el = document.getElementById(p);
       if (el) el.style.display = p === id ? 'block' : 'none';
     });
+  }
+
+  function decodeJwt(token) {
+    try {
+      const b64 = token.split('.')[1].replace(/-/g, '+').replace(/_/g, '/');
+      return JSON.parse(atob(b64));
+    } catch { return null; }
   }
 
   const portalToken = localStorage.getItem('token');
@@ -1241,31 +1249,20 @@ function showAuthError(elId, msg) {
     return;
   }
 
-  // Show a hint after 5s if still loading
-  const hintTimer = setTimeout(() => {
-    const hint = document.getElementById('panel-loading-hint');
-    if (hint) hint.style.display = 'block';
-  }, 5000);
-
-  state.token = portalToken;
-  try {
-    const data = await api('GET', '/api/auth/me');
-    clearTimeout(hintTimer);
-    if (data.user?.role !== 'student') throw new Error('not-student');
-    state.user = data.user;
-    showPanel('panel-confirm-index');
-    document.getElementById('login-index')?.focus();
+  const payload = decodeJwt(portalToken);
+  // Token missing, malformed, or clearly expired → send to portal login
+  if (!payload || !payload.id || (payload.exp && payload.exp * 1000 < Date.now())) {
+    showPanel('panel-no-session');
     show('login-screen');
-  } catch (err) {
-    clearTimeout(hintTimer);
-    state.token = null;
-    if (err.message && err.message.includes('timed out')) {
-      showPanel('panel-timeout');
-    } else {
-      showPanel('panel-no-session');
-    }
-    show('login-screen');
+    return;
   }
+
+  // Token looks valid — show the form immediately, no API call needed
+  state.token = portalToken;
+  state.user  = { _id: payload.id, role: payload.role || 'student' };
+  showPanel('panel-confirm-index');
+  document.getElementById('login-index')?.focus();
+  show('login-screen');
 })();
 
 // Terms / Privacy links via addEventListener (no inline onclick needed)
