@@ -11576,32 +11576,104 @@ async function renderQuizMonitorPage() {
       : '/api/lecturer/snap-quizzes?status=open&limit=50';
     const data = await api(endpoint).catch(() => api('/api/lecturer/snap-quizzes?status=open&limit=50'));
     const quizzes = data.quizzes || [];
+
+    const secBadge = lvl => {
+      const map = { low: ['#dcfce7','#166534'], medium: ['#ede9fe','#5b21b6'], high: ['#fee2e2','#991b1b'] };
+      const [bg, fg] = map[lvl] || map.medium;
+      return `<span style="background:${bg};color:${fg};padding:2px 8px;border-radius:20px;font-size:10px;font-weight:700;letter-spacing:.3px">${(lvl||'medium').toUpperCase()}</span>`;
+    };
+
+    const pageHeader = `
+      <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:24px;flex-wrap:wrap">
+        <div>
+          <div style="display:flex;align-items:center;gap:10px;margin-bottom:4px">
+            <div style="width:36px;height:36px;border-radius:10px;background:linear-gradient(135deg,#6366f1,#4f46e5);display:flex;align-items:center;justify-content:center">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7z"/><circle cx="12" cy="12" r="3"/></svg>
+            </div>
+            <h2 style="font-size:20px;font-weight:800;margin:0">Quiz Monitor</h2>
+            ${quizzes.length ? `<span style="background:#dcfce7;color:#166534;padding:3px 10px;border-radius:20px;font-size:11px;font-weight:700;animation:qm-pulse 2s infinite">● ${quizzes.length} LIVE</span>` : ''}
+          </div>
+          <p style="color:var(--text-muted);font-size:13px;margin:0">${quizzes.length ? 'Select a quiz to open the live proctoring dashboard' : 'Real-time student monitoring for active snap quizzes'}</p>
+        </div>
+        <button onclick="navigateTo('quizzes')" style="display:flex;align-items:center;gap:6px;padding:9px 16px;background:var(--accent,#4f6ef7);color:#fff;border:none;border-radius:9px;font-size:13px;font-weight:700;cursor:pointer">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+          New Snap Quiz
+        </button>
+      </div>`;
+
     if (!quizzes.length) {
-      content.innerHTML = `<div class="page-header"><div><h2>Quiz Monitor</h2><p>No open quizzes right now</p></div></div>
-        <div class="card" style="text-align:center;padding:48px">
-          <div style="font-size:36px;margin-bottom:12px">📋</div>
-          <p style="color:var(--text-muted)">Open a quiz from the <a href="#" onclick="navigateTo('quizzes');return false">Quizzes</a> page to see live student status here.</p>
-        </div>`;
+      content.innerHTML = pageHeader + `
+        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:12px;margin-bottom:28px">
+          ${[
+            { icon:'👁', label:'Live Monitoring', desc:'See every student\'s screen activity in real time' },
+            { icon:'⚠️', label:'Violation Alerts', desc:'Instant notifications for tab switches & suspicious behaviour' },
+            { icon:'🤖', label:'AI Proctoring', desc:'Automated face detection and anomaly scoring' },
+            { icon:'⏱', label:'Time Control', desc:'Force-submit or extend time for individual students' },
+          ].map(f => `
+            <div style="background:var(--card);border:1px solid var(--border);border-radius:12px;padding:16px">
+              <div style="font-size:22px;margin-bottom:8px">${f.icon}</div>
+              <div style="font-size:13px;font-weight:700;margin-bottom:4px">${f.label}</div>
+              <div style="font-size:11px;color:var(--text-muted);line-height:1.5">${f.desc}</div>
+            </div>`).join('')}
+        </div>
+        <div style="background:var(--card);border:1.5px dashed var(--border);border-radius:16px;padding:48px 24px;text-align:center">
+          <div style="width:64px;height:64px;border-radius:16px;background:linear-gradient(135deg,#6366f133,#4f46e511);display:flex;align-items:center;justify-content:center;margin:0 auto 16px">
+            <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#6366f1" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7z"/><circle cx="12" cy="12" r="3"/></svg>
+          </div>
+          <h3 style="font-size:16px;font-weight:800;margin:0 0 8px">No active quizzes right now</h3>
+          <p style="color:var(--text-muted);font-size:13px;max-width:360px;margin:0 auto 20px;line-height:1.6">
+            This dashboard activates automatically when a snap quiz is live. Publish a quiz and set it to open to start monitoring.
+          </p>
+          <div style="display:flex;justify-content:center;gap:10px;flex-wrap:wrap">
+            <button onclick="navigateTo('quizzes')" style="padding:9px 20px;background:var(--accent,#4f6ef7);color:#fff;border:none;border-radius:9px;font-size:13px;font-weight:700;cursor:pointer">Go to Quizzes</button>
+            <button onclick="renderQuizMonitorPage()" style="padding:9px 20px;background:var(--card);color:var(--text);border:1.5px solid var(--border);border-radius:9px;font-size:13px;font-weight:700;cursor:pointer">↻ Refresh</button>
+          </div>
+        </div>
+        <style>@keyframes qm-pulse{0%,100%{opacity:1}50%{opacity:.6}}</style>`;
       return;
     }
-    content.innerHTML = `
-      <div class="page-header"><div><h2>Quiz Monitor</h2><p>Select a quiz to watch live</p></div></div>
-      <div style="display:grid;gap:10px;max-width:800px">
-        ${quizzes.map(q => `
-          <div style="background:var(--card);border:1.5px solid #22c55e;border-radius:12px;padding:14px 18px;display:flex;align-items:center;justify-content:space-between;gap:12px;cursor:pointer" onclick="renderQuizLiveDashboard('${q._id}','${esc(q.title).replace(/'/g,"\\'")}')" onmouseover="this.style.boxShadow='0 4px 16px rgba(0,0,0,.1)'" onmouseout="this.style.boxShadow=''">
-            <div>
-              <div style="font-weight:700;font-size:14px">${esc(q.title)}</div>
-              <div style="font-size:11px;color:var(--text-muted);margin-top:3px">
-                <span style="background:#dcfce7;color:#166534;padding:2px 7px;border-radius:20px;font-size:10px;font-weight:700">LIVE</span>
-                · ${q.timeLimitMinutes} min
-                · Security: <strong>${q.securityLevel || 'medium'}</strong>
+
+    content.innerHTML = pageHeader + `
+      <style>@keyframes qm-pulse{0%,100%{opacity:1}50%{opacity:.6}}</style>
+      <div style="display:grid;gap:12px;max-width:860px">
+        ${quizzes.map(q => {
+          const enrolled = q.enrolledCount ?? q.attemptCount ?? '—';
+          const submitted = q.submittedCount ?? '—';
+          return `
+          <div onclick="renderQuizLiveDashboard('${q._id}','${esc(q.title).replace(/'/g,"\\'")}')"
+            style="background:var(--card);border:1.5px solid var(--border);border-radius:14px;padding:18px 20px;display:flex;align-items:center;gap:16px;cursor:pointer;transition:box-shadow .15s,border-color .15s"
+            onmouseover="this.style.borderColor='#6366f1';this.style.boxShadow='0 4px 20px rgba(99,102,241,.12)'"
+            onmouseout="this.style.borderColor='';this.style.boxShadow=''">
+            <div style="width:44px;height:44px;border-radius:12px;background:linear-gradient(135deg,#22c55e22,#16a34a11);display:flex;align-items:center;justify-content:center;flex-shrink:0">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#16a34a" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7z"/><circle cx="12" cy="12" r="3"/></svg>
+            </div>
+            <div style="flex:1;min-width:0">
+              <div style="display:flex;align-items:center;gap:8px;margin-bottom:5px;flex-wrap:wrap">
+                <span style="font-weight:800;font-size:15px">${esc(q.title)}</span>
+                <span style="background:#dcfce7;color:#166534;padding:2px 8px;border-radius:20px;font-size:10px;font-weight:700;animation:qm-pulse 2s infinite">● LIVE</span>
+                ${secBadge(q.securityLevel)}
+              </div>
+              <div style="display:flex;align-items:center;gap:14px;flex-wrap:wrap">
+                <span style="font-size:12px;color:var(--text-muted);display:flex;align-items:center;gap:4px">
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+                  ${q.timeLimitMinutes} min
+                </span>
+                ${enrolled !== '—' ? `<span style="font-size:12px;color:var(--text-muted)">👥 ${enrolled} students</span>` : ''}
+                ${submitted !== '—' ? `<span style="font-size:12px;color:#3b82f6">✓ ${submitted} submitted</span>` : ''}
+                ${q.courseCode ? `<span style="font-size:12px;color:var(--text-muted)">${esc(q.courseCode)}</span>` : ''}
+                ${q.monitoringMode === 'ai' ? `<span style="font-size:12px;color:#8b5cf6">🤖 AI</span>` : ''}
               </div>
             </div>
-            <button class="btn btn-primary btn-sm">Monitor →</button>
-          </div>`).join('')}
+            <div style="display:flex;align-items:center;gap:8px;flex-shrink:0">
+              <button style="padding:9px 18px;background:linear-gradient(135deg,#6366f1,#4f46e5);color:#fff;border:none;border-radius:9px;font-size:13px;font-weight:700;cursor:pointer;pointer-events:none">
+                Open Monitor →
+              </button>
+            </div>
+          </div>`;
+        }).join('')}
       </div>`;
   } catch (e) {
-    content.innerHTML = `<div class="card"><p>Error: ${e.message}</p></div>`;
+    content.innerHTML = `<div class="card" style="text-align:center;padding:32px"><p style="color:var(--text-muted)">Error: ${esc(e.message)}</p><button class="btn btn-secondary btn-sm" onclick="renderQuizMonitorPage()" style="margin-top:12px">↻ Try Again</button></div>`;
   }
 }
 
