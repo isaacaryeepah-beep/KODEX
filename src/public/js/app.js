@@ -2702,6 +2702,8 @@ function showDashboard(data) {
 function buildSidebar() {
   const nav = document.getElementById('sidebar-nav');
   const role = currentUser.role;
+  const srch = document.getElementById('sidebar-search');
+  if (srch) srch.value = '';
 
   let links = [
     { id: 'dashboard', label: 'Dashboard', icon: dashboardIcon() },
@@ -2951,6 +2953,21 @@ function buildSidebar() {
       }
     }).catch(function() {});
   }
+}
+
+function _sidebarSearch(q) {
+  const nav = document.getElementById('sidebar-nav');
+  if (!nav) return;
+  const term = q.trim().toLowerCase();
+  nav.querySelectorAll('a, .nav-section-label, .nav-sep').forEach(el => {
+    if (!term) { el.style.display = ''; return; }
+    if (el.tagName === 'A') {
+      const label = (el.querySelector('span') || el).textContent.toLowerCase();
+      el.style.display = label.includes(term) ? '' : 'none';
+    } else {
+      el.style.display = 'none';
+    }
+  });
 }
 
 function navigateTo(view) {
