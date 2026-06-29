@@ -17,6 +17,9 @@
  *   PUT  /quizzes/:quizId/attempts/:attemptId/responses           saveResponses
  *   POST /quizzes/:quizId/attempts/:attemptId/submit              submitAttempt
  *
+ * Single-question fetch
+ *   GET  /quizzes/:quizId/attempts/:attemptId/questions/:index    getQuestion
+ *
  * Anti-cheat enforcement
  *   POST /quizzes/:quizId/attempts/:attemptId/violations          reportViolation
  *
@@ -75,6 +78,10 @@ router.post("/quizzes/:quizId/attempts/start",                     requireNoDevi
 router.post("/quizzes/:quizId/attempts/:attemptId/heartbeat",      snapQuizSecurityValidator, ctrl.heartbeat);
 router.put( "/quizzes/:quizId/attempts/:attemptId/responses",      snapQuizSecurityValidator, ctrl.saveResponses);
 router.post("/quizzes/:quizId/attempts/:attemptId/submit",         snapQuizSecurityValidator, ctrl.submitAttempt);
+
+// ─── Single-question fetch (sequential delivery mode) ────────────────────────
+
+router.get("/quizzes/:quizId/attempts/:attemptId/questions/:index", snapQuizSecurityValidator, ctrl.getQuestion);
 
 // ─── Anti-cheat enforcement ───────────────────────────────────────────────────
 
