@@ -18,7 +18,7 @@ const MAX_CLOCK_DRIFT_MS = 30 * 60 * 1000; // 30 minutes — generous tolerance 
 
 module.exports = async function snapQuizSecurityValidator(req, res, next) {
   try {
-    const user = await User.findById(req.user._id).select("deviceId accountDeviceLock").lean();
+    const user = await User.findById(req.user._id).select("deviceId accountDeviceLock").lean().maxTimeMS(5000);
     if (!user) return res.status(401).json({ error: "Unauthorized" });
 
     // 1. Active device-lock check

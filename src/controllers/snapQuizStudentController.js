@@ -255,7 +255,7 @@ exports.startAttempt = async (req, res) => {
     const quiz = await SnapQuiz.findOne({
       _id: req.params.quizId, company: req.companyId,
       isPublished: true, isActive: true,
-    }).lean();
+    }).lean().maxTimeMS(8000);
 
     if (!quiz) return res.status(404).json({ error: "Quiz not found" });
 
@@ -263,7 +263,7 @@ exports.startAttempt = async (req, res) => {
     if (quiz.course) {
       const enrolled = await Course.findOne({
         _id: quiz.course, companyId: req.companyId, enrolledStudents: req.user._id,
-      }).select("_id").lean();
+      }).select("_id").lean().maxTimeMS(8000);
       if (!enrolled) return res.status(403).json({ error: "You are not enrolled in this course" });
     }
 
@@ -272,8 +272,8 @@ exports.startAttempt = async (req, res) => {
     if (now < quiz.startTime) {
       return res.status(403).json({ error: "Quiz has not started yet" });
     }
-    if (quiz.lockAfterEndTime) {
-      const hardDeadline = new Date(quiz.endTime.getTime() + (quiz.gracePeriodSeconds || 0) * 1000);
+    if (quiz.lockAfterEndTime && quiz.endTime) {
+      const hardDeadline = new Date(new Date(quiz.endTime).getTime() + (quiz.gracePeriodSeconds || 0) * 1000);
       if (now > hardDeadline) {
         return res.status(403).json({ error: "Quiz window has closed" });
       }
@@ -281,7 +281,7 @@ exports.startAttempt = async (req, res) => {
 
     // Live meeting gate (Phase 3): if quiz is tied to a meeting, it must be live.
     if (quiz.requireLiveMeeting && quiz.linkedMeeting) {
-      const meeting = await Meeting.findById(quiz.linkedMeeting).select("status title").lean();
+      const meeting = await Meeting.findById(quiz.linkedMeeting).select("status title").lean().maxTimeMS(5000);
       if (!meeting) {
         return res.status(403).json({ error: "Linked meeting not found. Cannot start quiz." });
       }
@@ -303,7 +303,7 @@ exports.startAttempt = async (req, res) => {
     const activeAttempt = await SnapQuizAttempt.findOne({
       quiz: quiz._id, student: req.user._id, company: req.companyId,
       status: ATTEMPT_STATUSES.ACTIVE,
-    });
+    }).maxTimeMS(8000);
     if (activeAttempt) {
       // Allow page-refresh resume: if the client sends back the original
       // session token it received (stored in sessionStorage per-tab), treat
@@ -354,7 +354,7 @@ exports.startAttempt = async (req, res) => {
       student: req.user._id,
       company: req.companyId,
       status:  { $in: [ATTEMPT_STATUSES.SUBMITTED, ATTEMPT_STATUSES.AUTO_SUBMITTED, ATTEMPT_STATUSES.TERMINATED] },
-    });
+    }).maxTimeMS(8000);
     if (pastCount >= quiz.allowedAttempts) {
       return res.status(403).json({
         error: `You have used all ${quiz.allowedAttempts} allowed attempt(s)`,
@@ -369,12 +369,12 @@ exports.startAttempt = async (req, res) => {
     // Attempt number.
     const lastAttempt = await SnapQuizAttempt.findOne({
       quiz: quiz._id, student: req.user._id, company: req.companyId,
-    }).sort({ attemptNumber: -1 }).select("attemptNumber").lean();
+    }).sort({ attemptNumber: -1 }).select("attemptNumber").lean().maxTimeMS(5000);
     const attemptNumber = lastAttempt ? lastAttempt.attemptNumber + 1 : 1;
 
     // Build question order.
     const allQuestions = await SnapQuizQuestion.find({ quiz: quiz._id, isActive: true })
-      .sort({ orderIndex: 1 }).lean();
+      .sort({ orderIndex: 1 }).lean().maxTimeMS(8000);
 
     let questionOrder = allQuestions.map(q => q._id);
     if (quiz.randomizeQuestions) questionOrder = _shuffleArray([...questionOrder]);
@@ -453,7 +453,7 @@ exports.startAttempt = async (req, res) => {
     if (err.code === 11000) {
       return res.status(409).json({ error: "Duplicate attempt — please refresh" });
     }
-    console.error("[snapQuiz student startAttempt]", err);
+    console.error("[snapQuiz student startAttempt]", err.message, err.stack || err);
     return res.status(500).json({ error: "Internal server error" });
   }
 };
@@ -1088,7 +1088,7 @@ async function _buildQuestionsForAttempt(attempt, quiz) {
   const qMap = {};
   const raw  = await SnapQuizQuestion.find({ _id: { $in: attempt.questionOrder }, isActive: true })
     .select("-correctOptionIndex -correctOptionIndices -correctBoolean -correctAnswerText -acceptedAnswers -numericAnswer -modelAnswer -mathsDrawing.markingGuide -mathsDrawing.partialCreditGuidance")
-    .lean();
+    .lean().maxTimeMS(8000);
   raw.forEach(q => { qMap[q._id.toString()] = q; });
 
   return attempt.questionOrder.map(qId => {
