@@ -68,7 +68,7 @@ exports.listQuizzes = async (req, res) => {
     const studentId = new mongoose.Types.ObjectId(req.user._id);
     const companyId = new mongoose.Types.ObjectId(req.companyId);
 
-    const [allCounts, submittedCounts, qCounts] = await Promise.all([
+    const [allCounts, submittedCounts, qCounts, scoreDocs] = await Promise.all([
       SnapQuizAttempt.aggregate([
         { $match: { quiz: { $in: quizIds }, student: studentId, company: companyId } },
         { $group: { _id: "$quiz", count: { $sum: 1 } } },
@@ -86,14 +86,26 @@ exports.listQuizzes = async (req, res) => {
         { $match: { quiz: { $in: quizIds }, isActive: { $ne: false } } },
         { $group: { _id: "$quiz", count: { $sum: 1 } } },
       ]),
+      SnapQuizAttempt.aggregate([
+        { $match: {
+          quiz:    { $in: quizIds },
+          student: studentId,
+          company: companyId,
+          status:  { $in: [ATTEMPT_STATUSES.SUBMITTED, ATTEMPT_STATUSES.AUTO_SUBMITTED] },
+          rawScore: { $ne: null },
+        }},
+        { $group: { _id: "$quiz", myScore: { $max: "$rawScore" }, myMaxScore: { $max: "$maxScore" } } },
+      ]),
     ]);
 
     const attemptMap   = {};
     const submittedMap = {};
     const qCountMap    = {};
+    const scoreMap     = {};
     allCounts.forEach(c       => { attemptMap[c._id.toString()]   = c.count; });
     submittedCounts.forEach(c => { submittedMap[c._id.toString()] = c.count; });
     qCounts.forEach(c         => { qCountMap[c._id.toString()]    = c.count; });
+    scoreDocs.forEach(c       => { scoreMap[c._id.toString()]     = c; });
 
     const nowMs = Date.now();
     return res.json({
@@ -114,6 +126,8 @@ exports.listQuizzes = async (req, res) => {
           myAttemptCount: attemptMap[id] || 0,
           isSubmitted,
           canAttempt,
+          myScore:    scoreMap[id]?.myScore    ?? null,
+          myMaxScore: scoreMap[id]?.myMaxScore ?? null,
         };
       }),
     });
@@ -160,7 +174,7 @@ exports.listAllQuizzes = async (req, res) => {
     const companyId = new mongoose.Types.ObjectId(req.companyId);
 
     // Attempt counts (any status)
-    const [allCounts, submittedCounts, qCounts] = await Promise.all([
+    const [allCounts, submittedCounts, qCounts, scoreDocs] = await Promise.all([
       SnapQuizAttempt.aggregate([
         { $match: { quiz: { $in: quizIds }, student: studentId, company: companyId } },
         { $group: { _id: "$quiz", count: { $sum: 1 } } },
@@ -178,14 +192,26 @@ exports.listAllQuizzes = async (req, res) => {
         { $match: { quiz: { $in: quizIds }, isActive: { $ne: false } } },
         { $group: { _id: "$quiz", count: { $sum: 1 } } },
       ]),
+      SnapQuizAttempt.aggregate([
+        { $match: {
+          quiz:    { $in: quizIds },
+          student: studentId,
+          company: companyId,
+          status:  { $in: [ATTEMPT_STATUSES.SUBMITTED, ATTEMPT_STATUSES.AUTO_SUBMITTED] },
+          rawScore: { $ne: null },
+        }},
+        { $group: { _id: "$quiz", myScore: { $max: "$rawScore" }, myMaxScore: { $max: "$maxScore" } } },
+      ]),
     ]);
 
     const attemptMap   = {};
     const submittedMap = {};
     const qCountMap    = {};
+    const scoreMap     = {};
     allCounts.forEach(c      => { attemptMap[c._id.toString()]   = c.count; });
     submittedCounts.forEach(c => { submittedMap[c._id.toString()] = c.count; });
     qCounts.forEach(c         => { qCountMap[c._id.toString()]    = c.count; });
+    scoreDocs.forEach(c       => { scoreMap[c._id.toString()]     = c; });
 
     const nowMs = Date.now();
     return res.json({
@@ -204,6 +230,8 @@ exports.listAllQuizzes = async (req, res) => {
           myAttemptCount: attemptMap[id] || 0,
           isSubmitted,
           canAttempt,
+          myScore:    scoreMap[id]?.myScore    ?? null,
+          myMaxScore: scoreMap[id]?.myMaxScore ?? null,
         };
       }),
     });
