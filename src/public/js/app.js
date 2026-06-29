@@ -11597,10 +11597,16 @@ async function renderQuizMonitorPage() {
           </div>
           <p style="color:var(--text-muted);font-size:13px;margin:0">${quizzes.length ? 'Select a quiz to open the live proctoring dashboard' : 'Real-time student monitoring for active snap quizzes'}</p>
         </div>
-        <button onclick="navigateTo('quizzes')" style="display:flex;align-items:center;gap:6px;padding:9px 16px;background:var(--accent,#4f6ef7);color:#fff;border:none;border-radius:9px;font-size:13px;font-weight:700;cursor:pointer">
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
-          New Snap Quiz
-        </button>
+        <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+          <button onclick="window.open('/proctor-dashboard.html','_blank')" style="display:inline-flex;align-items:center;gap:6px;padding:9px 14px;background:#faf5ff;color:#7c3aed;border:1.5px solid #ddd6fe;border-radius:9px;font-size:12px;font-weight:700;cursor:pointer">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+            Live Monitor
+          </button>
+          <button onclick="navigateTo('quizzes')" style="display:inline-flex;align-items:center;gap:6px;padding:9px 16px;background:var(--accent,#4f6ef7);color:#fff;border:none;border-radius:9px;font-size:13px;font-weight:700;cursor:pointer">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+            New Snap Quiz
+          </button>
+        </div>
       </div>`;
 
     if (!quizzes.length) {
