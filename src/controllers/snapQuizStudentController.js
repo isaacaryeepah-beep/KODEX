@@ -498,14 +498,16 @@ exports.startAttempt = async (req, res) => {
 
     const questions = await _buildQuestionsForAttempt(attempt, quiz);
 
-    // Notify monitoring dashboard that a student started
-    broadcastQuizEvent(String(quiz._id), "attempt_started", {
-      attemptId:   String(attempt._id),
-      studentName: req.user.name,
-      platform:    _detectPlatform(req.headers["user-agent"]),
-      startedAt:   attempt.startedAt.toISOString(),
-      expiresAt:   attempt.expiresAt.toISOString(),
-    });
+    // Notify monitoring dashboard (non-critical — never let this fail the response)
+    try {
+      broadcastQuizEvent(String(quiz._id), "attempt_started", {
+        attemptId:   String(attempt._id),
+        studentName: req.user.name,
+        platform:    _detectPlatform(req.headers["user-agent"]),
+        startedAt:   attempt.startedAt.toISOString(),
+        expiresAt:   attempt.expiresAt.toISOString(),
+      });
+    } catch (_) {}
 
     return res.status(201).json({
       attempt: {
@@ -714,15 +716,17 @@ exports.submitAttempt = async (req, res) => {
       ).catch(() => {});
     }
 
-    // Broadcast submission to monitoring dashboard
-    broadcastQuizEvent(String(attempt.quiz), "attempt_submitted", {
-      attemptId:       String(attempt._id),
-      rawScore:        attempt.rawScore,
-      maxScore:        attempt.maxScore,
-      percentageScore: attempt.percentageScore,
-      gradingStatus:   attempt.gradingStatus,
-      submittedAt:     now.toISOString(),
-    });
+    // Broadcast submission to monitoring dashboard (non-critical)
+    try {
+      broadcastQuizEvent(String(attempt.quiz), "attempt_submitted", {
+        attemptId:       String(attempt._id),
+        rawScore:        attempt.rawScore,
+        maxScore:        attempt.maxScore,
+        percentageScore: attempt.percentageScore,
+        gradingStatus:   attempt.gradingStatus,
+        submittedAt:     now.toISOString(),
+      });
+    } catch (_) {}
 
     return res.json({
       message:        "Attempt submitted",
@@ -827,15 +831,17 @@ exports.reportViolation = async (req, res) => {
       await _terminateSession(attempt, `Exceeded violation limit (${newCount}/${maxViolations})`);
     }
 
-    // Real-time broadcast to monitoring dashboard
-    broadcastQuizEvent(String(attempt.quiz), "violation_logged", {
-      attemptId:    String(attempt._id),
-      violationType,
-      severity,
-      newCount,
-      causedTermination,
-      occurredAt:   new Date().toISOString(),
-    });
+    // Real-time broadcast to monitoring dashboard (non-critical)
+    try {
+      broadcastQuizEvent(String(attempt.quiz), "violation_logged", {
+        attemptId:    String(attempt._id),
+        violationType,
+        severity,
+        newCount,
+        causedTermination,
+        occurredAt:   new Date().toISOString(),
+      });
+    } catch (_) {}
 
     return res.json({
       acknowledged:               true,
