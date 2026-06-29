@@ -13234,6 +13234,23 @@ async function renderClassDevice() {
               <div><strong>Device is offline.</strong> Power it on and wait for it to connect before linking to a lecturer.</div>
             </div>` :
             !lecturers.length ? `<p style="color:#64748b;font-size:13px">No lecturers found for your class courses.</p>` : `
+            ${(() => {
+              const pa = device.pendingAssignment;
+              const hasPending = pa && pa.lecturerId;
+              if (hasPending) {
+                const lname = pa.lecturerId?.name || 'Lecturer';
+                const mins  = pa.expiresAt ? Math.max(0, Math.round((new Date(pa.expiresAt) - Date.now()) / 60000)) : 30;
+                return `
+                <div style="background:#eff6ff;border:1.5px solid #bfdbfe;border-radius:10px;padding:14px 16px;margin-bottom:12px">
+                  <div style="font-size:13px;font-weight:700;color:#1d4ed8;margin-bottom:4px">⏳ Waiting for ${esc(lname)}…</div>
+                  <div style="font-size:12px;color:#3b82f6">They will see this request on their Attendance Device page and enter their PIN to activate. Expires in ${mins} min.</div>
+                </div>
+                <div id="cr-error" style="color:#dc2626;font-size:13px;margin-bottom:8px;display:none"></div>
+                <button onclick="classRepCancelRequest()" style="width:100%;padding:11px;background:#fff;color:#dc2626;border:1.5px solid #fca5a5;border-radius:9px;font-size:14px;font-weight:700;cursor:pointer">
+                  Cancel Request
+                </button>`;
+              }
+              return `
             <div style="margin-bottom:12px">
               <label style="font-size:12px;font-weight:600;text-transform:uppercase;letter-spacing:.5px;color:#64748b;display:block;margin-bottom:6px">Select Lecturer &amp; Course</label>
               <select id="cr-lecturer-select" style="width:100%;padding:10px 12px;border:1.5px solid #e2e8f0;border-radius:8px;font-size:13px">
@@ -13247,14 +13264,11 @@ async function renderClassDevice() {
                 }).join('')}
               </select>
             </div>
-            <div id="cr-pin-wrap" style="margin-bottom:12px;display:none">
-              <label style="font-size:12px;font-weight:600;text-transform:uppercase;letter-spacing:.5px;color:#64748b;display:block;margin-bottom:6px">Lecturer PIN (if required)</label>
-              <input id="cr-pin" type="password" inputmode="numeric" maxlength="4" placeholder="4-digit PIN" style="width:100%;padding:10px 12px;border:1.5px solid #e2e8f0;border-radius:8px;font-size:16px;letter-spacing:4px;box-sizing:border-box">
-            </div>
             <div id="cr-error" style="color:#dc2626;font-size:13px;margin-bottom:8px;display:none"></div>
-            <button id="cr-connect-btn" onclick="classRepConnect()" style="width:100%;padding:11px;background:#1e293b;color:#fff;border:none;border-radius:9px;font-size:14px;font-weight:700;cursor:pointer">
-              Connect &amp; Start Session
-            </button>`}
+            <button id="cr-connect-btn" onclick="classRepRequestSession()" style="width:100%;padding:11px;background:#1e293b;color:#fff;border:none;border-radius:9px;font-size:14px;font-weight:700;cursor:pointer">
+              Request Session
+            </button>`;
+            })()}
           </div>` : ''}
 
           <!-- WiFi Management -->
@@ -13276,39 +13290,38 @@ async function renderClassDevice() {
       </div>
     `;
 
-    // Show PIN field when a lecturer is selected
-    const sel = document.getElementById('cr-lecturer-select');
-    if (sel) sel.addEventListener('change', () => {
-      const pinWrap = document.getElementById('cr-pin-wrap');
-      if (pinWrap) pinWrap.style.display = sel.value ? 'block' : 'none';
-    });
+    // nothing needed here — PIN is now entered by the lecturer, not the rep
 
   } catch (e) {
     root.innerHTML = `<div style="color:#dc2626;padding:20px">Error: ${esc(e.message)}</div>`;
   }
 }
 
-window.classRepConnect = async function() {
+window.classRepRequestSession = async function() {
   const sel = document.getElementById('cr-lecturer-select');
-  const pin = document.getElementById('cr-pin') ? document.getElementById('cr-pin').value : '';
   const errEl = document.getElementById('cr-error');
   const btn = document.getElementById('cr-connect-btn');
   if (!sel || !sel.value) { if (errEl) { errEl.textContent = 'Please select a lecturer'; errEl.style.display = 'block'; } return; }
-  const parts = sel.value.split('|');
-  const lecturerId = parts[0];
-  const courseId = parts[1];
-  if (btn) { btn.disabled = true; btn.textContent = 'Connecting…'; }
+  const [lecturerId, courseId] = sel.value.split('|');
+  if (btn) { btn.disabled = true; btn.textContent = 'Sending request…'; }
   if (errEl) errEl.style.display = 'none';
   try {
-    await api('/api/class-rep/connect', { method: 'POST', body: JSON.stringify({ lecturerId, courseId, lecturerPin: pin }) });
-    showToastNotif('Device connected successfully', 'success');
+    const res = await api('/api/class-rep/request-session', { method: 'POST', body: JSON.stringify({ lecturerId, courseId }) });
+    showToastNotif(`Request sent to ${res.lecturerName}. Waiting for them to activate.`, 'success');
     renderClassDevice();
   } catch (e) {
-    const requiresPin = e.data && e.data.requiresPin;
-    const msg = requiresPin ? 'Incorrect PIN — ask the lecturer for their 4-digit PIN' : (e.message || 'Failed to connect');
-    if (errEl) { errEl.textContent = msg; errEl.style.display = 'block'; }
-    if (requiresPin) { const pw = document.getElementById('cr-pin-wrap'); if (pw) pw.style.display = 'block'; }
-    if (btn) { btn.disabled = false; btn.textContent = 'Connect & Start Session'; }
+    if (errEl) { errEl.textContent = e.message || 'Failed to send request'; errEl.style.display = 'block'; }
+    if (btn) { btn.disabled = false; btn.textContent = 'Request Session'; }
+  }
+};
+
+window.classRepCancelRequest = async function() {
+  try {
+    await api('/api/class-rep/request-session', { method: 'DELETE' });
+    showToastNotif('Request cancelled', 'info');
+    renderClassDevice();
+  } catch (e) {
+    showToastNotif(e.message || 'Failed to cancel', 'error');
   }
 };
 

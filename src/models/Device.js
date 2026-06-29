@@ -34,6 +34,15 @@ const deviceSchema = new mongoose.Schema({
   activeLecturerId:{ type: mongoose.Schema.Types.ObjectId, ref: 'User' },
   activeCourseId:  { type: mongoose.Schema.Types.ObjectId, ref: 'Course', sparse: true },
   connectedAt:     { type: Date, default: null },
+
+  // 2-step handshake: class rep requests, lecturer activates with their own PIN
+  pendingAssignment: {
+    lecturerId:  { type: mongoose.Schema.Types.ObjectId, ref: 'User',   default: null },
+    courseId:    { type: mongoose.Schema.Types.ObjectId, ref: 'Course',  default: null },
+    requestedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User',   default: null },
+    requestedAt: { type: Date, default: null },
+    expiresAt:   { type: Date, default: null },
+  },
   // ─────────────────────────────────────────────────────────────────────────
 
   // Multi-WiFi support

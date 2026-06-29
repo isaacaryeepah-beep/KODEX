@@ -13,7 +13,9 @@ exports.getMyDevice = async (req, res, next) => {
   try {
     if (!req.user.isClassRep) return res.status(403).json({ error: 'Not a class rep' });
     const device = await Device.findOne({ classRepId: req.user._id, companyId: req.user.company, isActive: true })
-      .populate('activeLecturerId', 'name email');
+      .populate('activeLecturerId', 'name email')
+      .populate('pendingAssignment.lecturerId', 'name')
+      .populate('pendingAssignment.requestedBy', 'name');
     if (!device) return res.json({ device: null });
     const secsSinceHeartbeat = device.lastHeartbeat
       ? Math.floor((Date.now() - device.lastHeartbeat.getTime()) / 1000)
@@ -66,6 +68,53 @@ exports.searchLecturers = async (req, res, next) => {
     if (rep && rep.department) filter.department = rep.department;
     const lecturers = await User.find(filter).select('_id name email').limit(10).lean();
     res.json({ users: lecturers });
+  } catch (e) { next(e); }
+};
+
+// POST /api/class-rep/request-session — rep picks lecturer+course; no PIN needed
+exports.requestSession = async (req, res, next) => {
+  try {
+    if (!req.user.isClassRep) return res.status(403).json({ error: 'Not a class rep' });
+    const { lecturerId, courseId } = req.body;
+    if (!lecturerId) return res.status(400).json({ error: 'lecturerId required' });
+
+    const device = await Device.findOne({ classRepId: req.user._id, companyId: req.user.company, isActive: true });
+    if (!device) return res.status(404).json({ error: 'No device is assigned to your class. Contact your admin.' });
+
+    const ms = Date.now() - new Date(device.lastHeartbeat || 0).getTime();
+    if (ms > 20000) return res.status(503).json({ error: 'Device is offline. Power it on first.' });
+
+    if (device.activeLecturerId) return res.status(409).json({ error: 'Device is already in an active session. End it first.' });
+
+    const lecturer = await User.findOne({ _id: lecturerId, company: req.user.company, role: 'lecturer', isActive: true }).select('name');
+    if (!lecturer) return res.status(404).json({ error: 'Lecturer not found' });
+
+    const resolvedCourseId = courseId && courseId !== 'null' ? courseId : null;
+    const expiresAt = new Date(Date.now() + 30 * 60 * 1000);
+
+    device.pendingAssignment = {
+      lecturerId,
+      courseId: resolvedCourseId,
+      requestedBy: req.user._id,
+      requestedAt: new Date(),
+      expiresAt,
+    };
+    await device.save({ validateModifiedOnly: true });
+
+    res.json({ ok: true, lecturerName: lecturer.name, expiresAt });
+  } catch (e) { next(e); }
+};
+
+// DELETE /api/class-rep/request-session — rep cancels a pending request
+exports.cancelRequest = async (req, res, next) => {
+  try {
+    if (!req.user.isClassRep) return res.status(403).json({ error: 'Not a class rep' });
+    const device = await Device.findOne({ classRepId: req.user._id, companyId: req.user.company, isActive: true });
+    if (!device) return res.status(404).json({ error: 'No device assigned' });
+
+    device.pendingAssignment = { lecturerId: null, courseId: null, requestedBy: null, requestedAt: null, expiresAt: null };
+    await device.save({ validateModifiedOnly: true });
+    res.json({ ok: true });
   } catch (e) { next(e); }
 };
 

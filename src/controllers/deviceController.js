@@ -6,6 +6,7 @@ const AuditLog          = require('../models/AuditLog');
 const { AUDIT_ACTIONS } = require('../models/AuditLog');
 const Company           = require('../models/Company');
 const crypto            = require('crypto');
+const bcrypt            = require('bcryptjs');
 const jwt               = require('jsonwebtoken');
 
 // Device is considered offline if no heartbeat within this window.
@@ -1607,6 +1608,89 @@ exports.transferDevice = async (req, res) => {
 
     _invalidateDevCache(req.user.company);
     res.json({ success: true, message: 'Device ownership transferred', data: device });
+  } catch (err) {
+    res.status(500).json({ message: 'Server error' });
+  }
+};
+
+// GET /api/devices/pending-assignment — lecturer checks if class rep has requested a session
+exports.getPendingAssignment = async (req, res) => {
+  try {
+    if (req.user.role !== 'lecturer') return res.status(403).json({ message: 'Lecturers only' });
+
+    const device = await Device.findOne({
+      companyId: req.user.company,
+      'pendingAssignment.lecturerId': req.user._id,
+      isActive: true,
+    })
+      .populate('pendingAssignment.requestedBy', 'name')
+      .populate('pendingAssignment.courseId', 'code title')
+      .lean();
+
+    if (!device || !device.pendingAssignment?.lecturerId) {
+      return res.json({ success: true, pending: null });
+    }
+
+    const pa = device.pendingAssignment;
+    if (pa.expiresAt && new Date() > new Date(pa.expiresAt)) {
+      // Silently clear expired entry — fire-and-forget
+      Device.updateOne({ _id: device._id }, { $unset: { 'pendingAssignment.lecturerId': 1 } }).catch(() => {});
+      return res.json({ success: true, pending: null });
+    }
+
+    res.json({
+      success: true,
+      pending: {
+        deviceId:    device.deviceId,
+        deviceName:  device.deviceName,
+        requestedBy: pa.requestedBy,
+        courseCode:  pa.courseId?.code  || null,
+        courseTitle: pa.courseId?.title || null,
+        expiresAt:   pa.expiresAt,
+      },
+    });
+  } catch (err) {
+    res.status(500).json({ message: 'Server error' });
+  }
+};
+
+// POST /api/devices/activate — lecturer enters their own PIN to start the session
+exports.activateSession = async (req, res) => {
+  try {
+    if (req.user.role !== 'lecturer') return res.status(403).json({ message: 'Only lecturers can activate sessions' });
+
+    const { pin } = req.body;
+    if (!pin || !/^\d{4}$/.test(String(pin))) {
+      return res.status(400).json({ message: 'A 4-digit PIN is required' });
+    }
+
+    const device = await Device.findOne({
+      companyId: req.user.company,
+      'pendingAssignment.lecturerId': req.user._id,
+      isActive: true,
+    });
+    if (!device) return res.status(404).json({ message: 'No pending session request found for you.' });
+
+    if (device.pendingAssignment.expiresAt && new Date() > device.pendingAssignment.expiresAt) {
+      device.pendingAssignment = { lecturerId: null, courseId: null, requestedBy: null, requestedAt: null, expiresAt: null };
+      await device.save({ validateModifiedOnly: true });
+      return res.status(410).json({ message: 'Session request has expired. Ask the class rep to send a new one.' });
+    }
+
+    // Verify PIN
+    const lecturer = await User.findById(req.user._id).select('+classRepPin').lean();
+    if (lecturer?.classRepPin) {
+      const ok = await bcrypt.compare(String(pin), lecturer.classRepPin);
+      if (!ok) return res.status(403).json({ message: 'Incorrect PIN', requiresPin: true });
+    }
+
+    device.activeLecturerId = device.pendingAssignment.lecturerId;
+    device.activeCourseId   = device.pendingAssignment.courseId || null;
+    device.connectedAt      = new Date();
+    device.pendingAssignment = { lecturerId: null, courseId: null, requestedBy: null, requestedAt: null, expiresAt: null };
+    await device.save({ validateModifiedOnly: true });
+
+    res.json({ success: true, message: 'Session activated. Attendance is now open.' });
   } catch (err) {
     res.status(500).json({ message: 'Server error' });
   }
