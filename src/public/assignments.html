@@ -194,6 +194,13 @@ window.MathJax = { tex: { inlineMath: [['\\(','\\)']], displayMath: [['\\[','\\]
 </style>
 </head>
 <body>
+<!-- Full-page loading overlay — hidden once init() resolves the user role -->
+<div id="page-init-overlay" style="position:fixed;inset:0;z-index:9999;background:#fff;display:flex;align-items:center;justify-content:center;flex-direction:column;gap:12px">
+  <div style="width:40px;height:40px;border:3px solid #e2e8f0;border-top-color:#4f6ef7;border-radius:50%;animation:spin .7s linear infinite"></div>
+  <div style="font-size:13px;color:#94a3b8;font-weight:600">Loading…</div>
+</div>
+<style>@keyframes spin{to{transform:rotate(360deg)}}</style>
+
 <div id="dashboard-page" data-portal="student">
 
 <!-- ── TOPBAR (matches main app exactly) ── -->
@@ -519,6 +526,9 @@ async function init(){
     if (tabParam === 'quizzes') {
       document.getElementById('dashboard-page')?.classList.add('quiz-mode');
     }
+
+    // Remove loading overlay — role is known, portal title is set
+    document.getElementById('page-init-overlay')?.remove();
 
     if(isLecturer){
       await loadCourses();

@@ -1430,20 +1430,14 @@ document.getElementById('logout-btn').addEventListener('click', () => {
     joinBtn.textContent = '…';
     setError('');
     try {
-      const res = await api('GET', `/api/student/snap-quizzes/join/${code}`);
-      if (!res.ok) {
-        const body = await res.json().catch(() => ({}));
-        setError(body.error || 'Quiz not found. Check the code and try again.');
-        return;
-      }
-      const { quiz } = await res.json();
+      const data = await api('GET', `/api/student/snap-quizzes/join/${code}`);
       digits.forEach(d => { d.value = ''; });
       updateJoinBtn();
-      state.selectedQuiz = quiz;
-      populateConsentScreen(quiz);
+      state.selectedQuiz = data.quiz;
+      populateConsentScreen(data.quiz);
       show('consent-screen');
     } catch (err) {
-      setError('Connection error. Please try again.');
+      setError(err.message || 'Connection error. Please try again.');
     } finally {
       joinBtn.disabled = false;
       joinBtn.textContent = 'Join';
