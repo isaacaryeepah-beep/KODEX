@@ -26,7 +26,7 @@ const authenticate = async (req, res, next) => {
     }
     const decoded = verifyToken(token);
 
-    const user = await User.findById(decoded.id);
+    const user = await User.findById(decoded.id).maxTimeMS(8000);
     if (!user || !user.isActive) {
       return res.status(401).json({ error: "User not found or inactive" });
     }
@@ -62,7 +62,8 @@ const authenticate = async (req, res, next) => {
           const Company = require('../models/Company');
           const co = await Company.findById(user.company)
             .select('subscriptionActive subscriptionStatus trialEndDate subscriptionEndDate')
-            .lean();
+            .lean()
+            .maxTimeMS(5000);
           if (co) {
             const status   = co.subscriptionStatus || '';
             const trialEnd = co.trialEndDate        ? new Date(co.trialEndDate)        : null;
