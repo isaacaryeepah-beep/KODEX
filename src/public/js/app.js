@@ -9217,7 +9217,10 @@ function _renderMeetingsData(data) {
       const isCreator   = String(hostId) === String(currentUser._id);
       const isAdmin     = ['admin', 'superadmin', 'hod'].includes(currentUser.role);
       const isInvigil   = (m.invigilators || []).some(i => String(i._id || i) === String(currentUser._id));
-      const canControl  = canManageExisting && (isCreator || isAdmin || isInvigil);
+      // Lecturers are API-scoped (backend only returns meetings they created or invigilate),
+      // so canManageExisting alone suffices for them. Other roles need the explicit ownership check.
+      const isLecturerScoped = currentUser.role === 'lecturer';
+      const canControl  = canManageExisting && (isLecturerScoped || isCreator || isAdmin || isInvigil);
       const durationMin = m.scheduledStart && m.scheduledEnd
         ? Math.round((new Date(m.scheduledEnd) - new Date(m.scheduledStart)) / 60000)
         : (m.duration || '—');

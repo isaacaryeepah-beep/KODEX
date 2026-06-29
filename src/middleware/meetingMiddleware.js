@@ -83,14 +83,15 @@ exports.attachMode = async (req, res, next) => {
 // ─── MEETING OWNERSHIP GUARD ─────────────────────────────────────────────────
 // Use after fetching meeting and attaching to req.meeting
 exports.isOwner = (req, res, next) => {
-  const meeting   = req.meeting;
-  const role      = req.user.role?.toLowerCase();
-  const isAdmin   = ['admin', 'superadmin'].includes(role);
-  const creatorId = meeting.creatorId?._id ?? meeting.creatorId;
-  const isOwner   = String(creatorId) === String(req.user._id);
+  const meeting       = req.meeting;
+  const role          = req.user.role?.toLowerCase();
+  const isAdmin       = ['admin', 'superadmin', 'hod'].includes(role);
+  const creatorId     = meeting.creatorId?._id ?? meeting.creatorId;
+  const isCreator     = String(creatorId) === String(req.user._id);
+  const isInvigilator = (meeting.invigilators || []).some(i => String(i?._id || i) === String(req.user._id));
 
-  if (!isAdmin && !isOwner) {
-    return res.status(403).json({ message: 'Only the meeting creator can perform this action.' });
+  if (!isAdmin && !isCreator && !isInvigilator) {
+    return res.status(403).json({ message: 'Only the meeting creator or an invigilator can perform this action.' });
   }
   next();
 };
