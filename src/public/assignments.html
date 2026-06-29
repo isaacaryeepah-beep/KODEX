@@ -499,6 +499,11 @@ async function init(){
         </a>`;
       }
       extraNav.innerHTML = `<nav class="sidebar-nav" style="margin-top:0;padding-top:0">${links}</nav>`;
+      // Students don't need the static Assignments link — they navigate via Proctored/Snap Quiz
+      if (S.role === 'student') {
+        const assignEl = $('nav-assignments');
+        if (assignEl) assignEl.style.display = 'none';
+      }
       // Set correct active sidebar item based on URL tab param
       const _initTab = new URLSearchParams(location.search).get('tab');
       document.querySelectorAll('.sidebar-nav a').forEach(a => a.classList.remove('active'));
