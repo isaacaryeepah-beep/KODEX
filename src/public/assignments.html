@@ -237,7 +237,7 @@ window.MathJax = { tex: { inlineMath: [['\\(','\\)']], displayMath: [['\\[','\\]
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg>
         <span>Dashboard</span>
       </a>
-      <a class="active" onclick="">
+      <a id="nav-assignments" onclick="switchTab('assignments')">
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
         <span>Assignments</span>
       </a>
@@ -492,8 +492,18 @@ async function init(){
         links += navLink('courses', courseIcon, 'Courses');
         links += navLink('quizzes', quizIcon, 'Quizzes');
         links += navLink('announcements', annIcon, 'Announcements');
+      } else if (S.role === 'student') {
+        links += `<a id="nav-quizzes" onclick="switchTab('quizzes')" style="cursor:pointer">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${quizIcon}</svg>
+          <span>Proctored/Snap Quiz</span>
+        </a>`;
       }
       extraNav.innerHTML = `<nav class="sidebar-nav" style="margin-top:0;padding-top:0">${links}</nav>`;
+      // Set correct active sidebar item based on URL tab param
+      const _initTab = new URLSearchParams(location.search).get('tab');
+      document.querySelectorAll('.sidebar-nav a').forEach(a => a.classList.remove('active'));
+      const _initNavEl = $(_initTab === 'quizzes' ? 'nav-quizzes' : 'nav-assignments');
+      if (_initNavEl) _initNavEl.classList.add('active');
     }
 
     const params   = new URLSearchParams(location.search);
