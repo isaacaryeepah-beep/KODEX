@@ -1128,6 +1128,20 @@ const state = {
 };
 
 // ══════════════════════════════════════════════════════════════════
+//  SECURITY SETTINGS NORMALISER
+//  Upgrades weak stored defaults for medium/high quizzes so that
+//  existing DB records (created before the preset was corrected)
+//  are treated with the same strictness as newly created ones.
+// ══════════════════════════════════════════════════════════════════
+function applyEffectiveSecuritySettings(quiz) {
+  if (!quiz || quiz.securityLevel === 'low' || quiz.securityLevel === 'custom') return;
+  quiz.requireFullscreen         = true;
+  quiz.terminateOnFocusLost      = true;
+  quiz.terminateOnFullscreenExit = true;
+  quiz.preventPrintScreen        = true;
+}
+
+// ══════════════════════════════════════════════════════════════════
 //  DEVICE FINGERPRINT
 // ══════════════════════════════════════════════════════════════════
 function buildFingerprint() {
@@ -1434,6 +1448,7 @@ document.getElementById('logout-btn').addEventListener('click', () => {
       digits.forEach(d => { d.value = ''; });
       updateJoinBtn();
       state.selectedQuiz = data.quiz;
+      applyEffectiveSecuritySettings(state.selectedQuiz);
       populateConsentScreen(data.quiz);
       show('consent-screen');
     } catch (err) {
@@ -1529,6 +1544,7 @@ async function loadQuizList() {
           return toast(msg, 'warn');
         }
         state.selectedQuiz = quiz;
+        applyEffectiveSecuritySettings(state.selectedQuiz);
         populateConsentScreen(quiz);
         show('consent-screen');
       });
@@ -1548,6 +1564,7 @@ async function loadQuizList() {
 function showCountdownScreen(quiz) {
   if (state.countdownInterval) { clearInterval(state.countdownInterval); state.countdownInterval = null; }
   state.selectedQuiz = quiz;
+  applyEffectiveSecuritySettings(state.selectedQuiz);
 
   document.getElementById('countdown-quiz-title').textContent = quiz.title;
   const startDate = new Date(quiz.startTime);
@@ -2187,9 +2204,15 @@ function startProctoring() {
         logEvent('multiple_faces', { count }).catch(console.warn);
 
       } else if (!detected) {
-        setProctorStatus('red', '⚠ No face', floatingCam, dot, text);
-        camInd.className = 'red';
-        logEvent('face_missing').catch(console.warn);
+        if (state.faceModelFailed) {
+          // ML model unavailable — camera is active but we can't determine
+          // face presence; don't penalise students for a model load failure
+          setProctorStatus('yellow', '⚠ AI unavailable', floatingCam, dot, text);
+        } else {
+          setProctorStatus('red', '⚠ No face', floatingCam, dot, text);
+          camInd.className = 'red';
+          logEvent('face_missing').catch(console.warn);
+        }
 
       } else if (!centered) {
         setProctorStatus('yellow', '⚠ Off-center', floatingCam, dot, text);
