@@ -273,8 +273,18 @@ var title     = _p.get('title')     || 'Class';
 var BASE_URL  = location.origin;
 var PROCTOR_TYPES = ['oral_exam', 'live_assessment', 'proctored_quiz', 'snap_quiz'];
 
+// Cross-origin token handoff: the main app (dikly.sbs) passes its JWT via ?dikly_auth=
+// when navigating to a different domain (e.g. app.dikly.live). Save it, then strip it.
+var _handoffToken = _p.get('dikly_auth');
+if (_handoffToken) {
+  try { localStorage.setItem('token', _handoffToken); } catch (_) {}
+  _p.delete('dikly_auth');
+  history.replaceState(null, '', location.pathname + (_p.toString() ? '?' + _p.toString() : ''));
+}
+
 // Require Dikly login — redirect to login if no JWT found
-var kodexToken = localStorage.getItem('token') || localStorage.getItem('jwt_token') ||
+var kodexToken = localStorage.getItem('token') || localStorage.getItem('dikly_token') ||
+                 localStorage.getItem('jwt_token') ||
                  localStorage.getItem('auth_token') || sessionStorage.getItem('token') || '';
 if (!kodexToken) {
   location.replace('/?redirect=' + encodeURIComponent(location.href));
