@@ -29,6 +29,7 @@ const EVENT_TYPES = Object.freeze({
   VIOLATION_SNAPSHOT: "violation_snapshot",  // triggered by a violation
   SESSION_START:      "session_start",        // first capture at attempt start
   SESSION_END:        "session_end",          // final capture on submit/terminate
+  TERMINATION:        "termination",          // captured at the moment of forced termination
   MANUAL_CAPTURE:     "manual_capture",       // lecturer/proctor triggered
 });
 

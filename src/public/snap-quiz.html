@@ -250,6 +250,31 @@ window.addEventListener('load', () => loadMLLibs().catch(() => {}));
     50%       { box-shadow: 0 0 14px var(--green); }
   }
 
+  /* Face oval glows green when face is correctly centered */
+  .face-oval-detected {
+    border-color: #16a34a !important;
+    animation: oval-glow 1.4s ease-in-out infinite;
+  }
+  @keyframes oval-glow {
+    0%, 100% { box-shadow: 0 0 0 1000px rgba(0,0,0,0.4), 0 0 0 0 rgba(22,163,74,0.5); }
+    50%       { box-shadow: 0 0 0 1000px rgba(0,0,0,0.4), 0 0 20px 6px rgba(22,163,74,0.75); }
+  }
+
+  /* Violation counter badge in exam topbar */
+  #violation-badge {
+    display: flex; align-items: center; gap: 5px;
+    padding: 7px 12px; border-radius: 8px;
+    font-size: 12px; font-weight: 700;
+    background: var(--navy); border: 1px solid var(--navy3);
+    color: var(--muted); white-space: nowrap; flex-shrink: 0;
+    transition: background 0.2s, color 0.2s, border-color 0.2s;
+  }
+  #violation-badge.has-violations {
+    background: rgba(220,38,38,0.1);
+    border-color: rgba(220,38,38,0.4);
+    color: #f87171;
+  }
+
   /* ═══════════════════════════════════════════════════════════════
      EXAM SCREEN
   ═══════════════════════════════════════════════════════════════ */
@@ -953,6 +978,7 @@ window.addEventListener('load', () => loadMLLibs().catch(() => {}));
       <span id="timer-display" class="mono">--:--</span>
     </div>
     <div class="progress-pill">Q <span id="q-current">1</span> / <span id="q-total">?</span></div>
+    <div id="violation-badge">⚠ 0</div>
     <div id="proctor-status" class="face-status green" style="margin:0;padding:7px 12px">
       <div class="face-dot green" id="ps-dot"></div>
       <span id="ps-text" style="font-size:12px">OK</span>
@@ -1125,6 +1151,10 @@ const state = {
   _handleBlur: null,
   _handleContextMenu: null,
   _handleKeydown: null,
+  // anti-cheat extras
+  _startFrameData:          null,  // 32×32 pixel fingerprint of student at exam start
+  _identityCheckInterval:   null,
+  _multiScreenCheckInterval: null,
 };
 
 // ══════════════════════════════════════════════════════════════════
@@ -1136,9 +1166,21 @@ const state = {
 function applyEffectiveSecuritySettings(quiz) {
   if (!quiz || quiz.securityLevel === 'low' || quiz.securityLevel === 'custom') return;
   quiz.requireFullscreen         = true;
+  quiz.preventPrintScreen        = true;
   quiz.terminateOnFocusLost      = true;
   quiz.terminateOnFullscreenExit = true;
-  quiz.preventPrintScreen        = true;
+}
+
+// ══════════════════════════════════════════════════════════════════
+//  VIOLATION BADGE
+// ══════════════════════════════════════════════════════════════════
+function updateViolationBadge() {
+  const badge = document.getElementById('violation-badge');
+  if (!badge) return;
+  const max = state.selectedQuiz?.maxViolationsBeforeTermination || 0;
+  const v   = state.totalViolations;
+  badge.textContent = `⚠ ${v}${max > 0 ? ' / ' + max : ''}`;
+  badge.classList.toggle('has-violations', v > 0);
 }
 
 // ══════════════════════════════════════════════════════════════════
@@ -1885,6 +1927,10 @@ async function initCameraSetup() {
         statusEl.className = `face-status ${cls}`;
         statusEl.querySelector('.face-dot').className = `face-dot ${dot}`;
         statusText.textContent = txt;
+
+        // Glow the oval green when face is correctly positioned
+        const faceOval = document.querySelector('#camera-preview-setup .face-oval');
+        if (faceOval) faceOval.classList.toggle('face-oval-detected', detected && centered);
       }, 700);
     });
 
@@ -1908,9 +1954,37 @@ function captureFrame(videoEl) {
   return canvas.toDataURL('image/jpeg', 0.6);
 }
 
+// Downsampled pixel fingerprint of a video frame (32×32 grayscale-equivalent).
+// Used for fast mid-exam identity comparison without ML.
+function captureFrameData(videoEl, size = 32) {
+  const canvas = document.createElement('canvas');
+  canvas.width = canvas.height = size;
+  const ctx = canvas.getContext('2d');
+  ctx.drawImage(videoEl, 0, 0, size, size);
+  return ctx.getImageData(0, 0, size, size).data;
+}
+
+// Returns 0–1 similarity score between two pixel data arrays.
+// 1 = identical, 0 = completely different. Same lighting/angle ≈ 0.85+.
+function frameSimilarity(dataA, dataB) {
+  if (!dataA || !dataB || dataA.length !== dataB.length) return 1;
+  let diff = 0;
+  for (let i = 0; i < dataA.length; i += 4) {
+    diff += Math.abs(dataA[i]   - dataB[i])   +
+            Math.abs(dataA[i+1] - dataB[i+1]) +
+            Math.abs(dataA[i+2] - dataB[i+2]);
+  }
+  return 1 - diff / (dataA.length / 4 * 3 * 255);
+}
+
 // ── Snap Quiz direct start (no camera setup screen) ──────────────
 async function startExam() {
   try {
+    // Enter fullscreen immediately in the user gesture context (before async work)
+    if (state.selectedQuiz?.requireFullscreen) {
+      document.documentElement.requestFullscreen().catch(() => {});
+    }
+
     // Check sessionStorage for a stored session token — handles page refresh
     // without triggering a session conflict (sessionStorage is tab-scoped so
     // a second tab cannot supply this token).
@@ -1943,8 +2017,9 @@ async function startExam() {
     state.totalViolations      = 0;
     state.warningsIssued       = 0;
     state._violationBreakdown  = {};
+    updateViolationBadge();
 
-    // Hide floating camera for snap quizzes — no camera stream
+    // Hide floating camera for snap quizzes — no camera stream (yet)
     const floatingCam = document.getElementById('floating-cam');
     if (floatingCam) floatingCam.style.display = 'none';
 
@@ -1955,6 +2030,51 @@ async function startExam() {
     show('exam-screen');
     document.body.classList.add('exam-active');
     state.examActive = true;
+
+    // For medium/high snap quizzes, try to acquire camera for periodic integrity
+    // snapshots and identity checks. Must happen after examActive = true so cleanup
+    // works if the exam is terminated before the camera resolves.
+    const quiz = state.selectedQuiz;
+    if (!state.cameraStream && !quiz.proctoringEnabled &&
+        (quiz.securityLevel === 'medium' || quiz.securityLevel === 'high')) {
+      navigator.mediaDevices.getUserMedia({ video: { facingMode: 'user' }, audio: false })
+        .then(stream => {
+          if (!state.examActive) { stream.getTracks().forEach(t => t.stop()); return; }
+          state.cameraStream = stream;
+          const ev = document.getElementById('exam-video');
+          ev.srcObject = stream;
+          ev.muted = true;
+          ev.setAttribute('playsinline', '');
+          ev.play().catch(() => {});
+          if (floatingCam) floatingCam.style.display = '';
+
+          // Capture reference frame after video is ready, then start 45 s snapshots
+          const onReady = () => {
+            if (!state._startFrameData) state._startFrameData = captureFrameData(ev);
+            if (!state.snapshotInterval) {
+              state.snapshotInterval = setInterval(() => {
+                if (!state.examActive) return;
+                uploadSnapshot(captureFrame(ev), 'scheduled_snapshot', null, null, null).catch(console.warn);
+              }, 45000);
+            }
+            // Identity re-check — compare current frame to reference every 60 s
+            if (!state._identityCheckInterval) {
+              state._identityCheckInterval = setInterval(() => {
+                if (!state.examActive || !state._startFrameData) return;
+                const sim = frameSimilarity(state._startFrameData, captureFrameData(ev));
+                if (sim < 0.40) {
+                  logEvent('identity_mismatch', { similarity: Math.round(sim * 100) }).catch(console.warn);
+                  toast('⚠️ Identity check: face mismatch detected and logged', 'warn');
+                }
+              }, 60000);
+            }
+          };
+          if (ev.readyState >= 2) onReady();
+          else ev.addEventListener('loadeddata', onReady, { once: true });
+          toast('📸 Camera connected for integrity monitoring', 'info');
+        })
+        .catch(() => {}); // Silently continue without camera if denied
+    }
 
     await OfflineMonitor.init({
       attemptId: state.attempt._id,
@@ -1988,10 +2108,16 @@ async function startExam() {
 document.getElementById('capture-start-btn').addEventListener('click', async () => {
   const btn = document.getElementById('capture-start-btn');
   btn.disabled = true; btn.textContent = 'Starting exam…';
+
+  // Enter fullscreen immediately in the user gesture context (before async work)
+  if (state.selectedQuiz?.requireFullscreen) {
+    document.documentElement.requestFullscreen().catch(() => {});
+  }
   clearInterval(state.faceCheckInterval);
 
   const video = document.getElementById('setup-video');
   const snapshot = captureFrame(video);
+  state._startFrameData = captureFrameData(video);   // reference for mid-exam identity checks
   const { count, detected, centered } = await detectFaces(video);
 
   try {
@@ -2018,6 +2144,7 @@ document.getElementById('capture-start-btn').addEventListener('click', async () 
     state.integrityScore = 100;
     state.totalViolations = 0;
     state.warningsIssued = 0;
+    updateViolationBadge();
 
     // Upload start snapshot
     uploadSnapshot(snapshot, 'start', detected, count, centered).catch(console.warn);
@@ -2240,7 +2367,7 @@ function startProctoring() {
     }, 3000);
   }
 
-  // ── Periodic snapshots — only when proctoringEnabled and interval > 0 ──
+  // ── Periodic snapshots — when proctoringEnabled and interval > 0 ──
   const snapSecs = quiz.proctoringEnabled && quiz.snapshotIntervalSeconds > 0
     ? quiz.snapshotIntervalSeconds : 0;
   if (snapSecs > 0) {
@@ -2251,6 +2378,35 @@ function startProctoring() {
       uploadSnapshot(img, 'periodic', detected, count, centered).catch(console.warn);
     }, Math.max(10, snapSecs) * 1000);
   }
+
+  // ── Identity re-check every 60 s (proctored quizzes with start frame) ──
+  // For snap quiz camera obtained in startExam(), the interval is set there instead.
+  if (!state._identityCheckInterval && state._startFrameData && state.cameraStream) {
+    state._identityCheckInterval = setInterval(() => {
+      if (!state.examActive || !state._startFrameData || !state.cameraStream) return;
+      const sim = frameSimilarity(state._startFrameData, captureFrameData(examVideo));
+      if (sim < 0.40) {
+        logEvent('identity_mismatch', { similarity: Math.round(sim * 100) }).catch(console.warn);
+        toast('⚠️ Identity check: face mismatch detected and logged', 'warn');
+      }
+    }, 60000);
+  }
+
+  // ── Multiple screen detection ─────────────────────────────────────
+  // Uses screen.availWidth heuristic: if the desktop is wider than one screen,
+  // a second monitor is likely attached. Also checks the Screen Details API if
+  // available (Chrome 111+, gated behind window-management permission).
+  const _checkScreens = () => {
+    if (!state.examActive) return;
+    const isMulti = screen.availWidth > screen.width + 100 ||
+      (typeof screen.isExtended !== 'undefined' && screen.isExtended === true);
+    if (isMulti) {
+      logEvent('multiple_screens', { availWidth: screen.availWidth, screenWidth: screen.width }).catch(console.warn);
+      toast('⚠️ Multiple screens detected and logged', 'warn');
+    }
+  };
+  _checkScreens();
+  state._multiScreenCheckInterval = setInterval(_checkScreens, 30000);
 
   // ── Visibility change (tab / app switch) ─────────────────────
   document.addEventListener('visibilitychange', handleVisibilityChange);
@@ -2298,8 +2454,13 @@ function startProctoring() {
 
   // ── Fullscreen enforcement ────────────────────────────────────
   if (quiz.requireFullscreen) {
+    // Track the last fullscreen transition so the blur handler can suppress
+    // false focus_lost violations caused by the browser briefly blurring the
+    // window when entering or leaving fullscreen.
+    state._lastFullscreenChange = Date.now();
     document.documentElement.requestFullscreen().catch(() => {});
     state._handleFullscreen = () => {
+      state._lastFullscreenChange = Date.now();
       if (!document.fullscreenElement && state.examActive) {
         // Exited fullscreen — pause the local timer while student is outside
         pauseTimer();
@@ -2323,7 +2484,11 @@ function startProctoring() {
   // ── Focus / window-blur enforcement ──────────────────────────
   if (quiz.terminateOnFocusLost) {
     state._handleBlur = () => {
-      if (state.examActive) logEvent('focus_lost').catch(console.warn);
+      if (!state.examActive) return;
+      // Suppress blur events caused by fullscreen enter/exit transitions —
+      // the browser fires blur on the window whenever fullscreen changes.
+      if (state._lastFullscreenChange && Date.now() - state._lastFullscreenChange < 2000) return;
+      logEvent('focus_lost').catch(console.warn);
     };
     window.addEventListener('blur', state._handleBlur);
   }
@@ -2465,6 +2630,7 @@ async function startNoiseDetection(threshold) {
         if (now - lastNoiseLog > 15000) {
           lastNoiseLog = now;
           logEvent('audio_detected', { level: Math.round(avg), threshold }).catch(console.warn);
+          toast(`🔊 Background noise detected (level ${Math.round(avg)}) — logged`, 'warn');
         }
       }
     }, 3000);
@@ -2578,7 +2744,7 @@ async function logEvent(eventType, metadata = {}) {
       }
     }
 
-    if (res.violationCount != null) state.totalViolations = res.violationCount;
+    if (res.violationCount != null) { state.totalViolations = res.violationCount; updateViolationBadge(); }
     // Track per-type counts for the integrity report breakdown
     if (!state._violationBreakdown) state._violationBreakdown = {};
     state._violationBreakdown[eventType] = (state._violationBreakdown[eventType] || 0) + 1;
@@ -2720,6 +2886,17 @@ function terminateExam(reason) {
   stopExamCleanup();
   document.body.classList.remove('exam-active');
 
+  // Capture termination snapshot from live exam camera feed
+  let terminationImg = null;
+  const examVideo = document.getElementById('exam-video');
+  if (examVideo && examVideo.readyState >= 2 && state.cameraStream) {
+    try {
+      terminationImg = captureFrame(examVideo);
+      // Upload to server tagged 'termination' — stored for lecturer review
+      uploadSnapshot(terminationImg, 'termination', null, null, null).catch(console.warn);
+    } catch { /* non-fatal */ }
+  }
+
   const overlay = document.getElementById('violation-overlay');
   const reasonMap = {
     multiple_faces:  'Multiple faces were detected in the camera frame.',
@@ -2735,10 +2912,19 @@ function terminateExam(reason) {
     print_screen:    'A screenshot attempt was detected.',
     copy_paste:      'Copy/paste was used during the exam.',
   };
+
+  const snapshotHtml = terminationImg
+    ? `<div style="margin:14px auto 0;max-width:260px">
+        <img src="${terminationImg}" style="width:100%;border-radius:8px;border:2px solid rgba(220,38,38,0.4);display:block" alt="Termination photo" draggable="false" oncontextmenu="return false">
+        <p style="margin:6px 0 16px;font-size:11px;color:#94a3b8;text-align:center">📸 Photo captured at termination — shared with your lecturer</p>
+      </div>`
+    : '<div style="margin-bottom:16px"></div>';
+
   overlay.innerHTML = `
     <div class="violation-icon">⛔</div>
     <div class="violation-title" style="color:#1e293b">Exam Terminated</div>
     <div class="violation-msg" style="color:#475569">${reasonMap[reason] || 'Proctoring violations exceeded the allowed threshold.'}</div>
+    ${snapshotHtml}
     <div style="color:var(--slate);font-size:12px;margin-bottom:20px">Integrity Score: ${state.integrityScore} / 100</div>
     <button class="btn btn-ghost" style="max-width:280px" onclick="document.getElementById('violation-overlay').classList.remove('show');show('quiz-list-screen')">Return to Dashboard</button>
   `;
@@ -3101,6 +3287,14 @@ function stopExamCleanup() {
   if (state._devToolsInterval) {
     clearInterval(state._devToolsInterval);
     state._devToolsInterval = null;
+  }
+  if (state._identityCheckInterval) {
+    clearInterval(state._identityCheckInterval);
+    state._identityCheckInterval = null;
+  }
+  if (state._multiScreenCheckInterval) {
+    clearInterval(state._multiScreenCheckInterval);
+    state._multiScreenCheckInterval = null;
   }
   if (document.fullscreenElement) document.exitFullscreen().catch(() => {});
   if (state.audioStream) {
