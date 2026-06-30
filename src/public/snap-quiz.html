@@ -1517,7 +1517,11 @@ async function loadQuizList() {
               ? `<span style="background:rgba(22,163,74,0.08);color:var(--green);border:1px solid rgba(34,197,94,0.3);border-radius:6px;padding:4px 10px;font-size:11px;font-weight:700">Done</span>`
               : q.canAttempt
                 ? `<span style="background:rgba(14,165,233,0.08);color:var(--accent);border:1px solid rgba(56,189,248,0.3);border-radius:6px;padding:4px 10px;font-size:11px;font-weight:700">Open</span>`
-                : `<span style="background:#f8fafc;color:var(--slate);border:1px solid rgba(100,116,139,0.3);border-radius:6px;padding:4px 10px;font-size:11px;font-weight:700">${q.status}</span>`
+                : q.status === 'published' && q.startTime && Date.now() < new Date(q.startTime).getTime()
+                  ? `<span style="background:rgba(245,158,11,0.08);color:var(--yellow);border:1px solid rgba(245,158,11,0.3);border-radius:6px;padding:4px 10px;font-size:11px;font-weight:700">Starts ${new Date(q.startTime).toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'})}</span>`
+                  : q.status === 'closed'
+                    ? `<span style="background:#f8fafc;color:var(--slate);border:1px solid rgba(100,116,139,0.3);border-radius:6px;padding:4px 10px;font-size:11px;font-weight:700">Closed</span>`
+                    : `<span style="background:#f8fafc;color:var(--slate);border:1px solid rgba(100,116,139,0.3);border-radius:6px;padding:4px 10px;font-size:11px;font-weight:700">${q.status}</span>`
             }
           </div>
         </div>
@@ -1540,7 +1544,9 @@ async function loadQuizList() {
             ? 'This quiz has closed and is no longer accepting submissions'
             : quiz.status === 'closed'
               ? 'This quiz has been closed by your lecturer'
-              : `Quiz is not currently open (status: ${quiz.status})`;
+              : quiz.status === 'published' && quiz.startTime
+                ? `This quiz opens at ${new Date(quiz.startTime).toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'})} on ${new Date(quiz.startTime).toLocaleDateString()}`
+                : `Quiz is not currently open`;
           return toast(msg, 'warn');
         }
         state.selectedQuiz = quiz;
