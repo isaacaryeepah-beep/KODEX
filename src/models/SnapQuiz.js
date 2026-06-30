@@ -402,11 +402,10 @@ snapQuizSchema.statics.generateJoinCode = async function () {
   return code;
 };
 
-snapQuizSchema.pre("save", async function (next) {
+snapQuizSchema.pre("save", async function () {
   if (!this.joinCode) {
     this.joinCode = await this.constructor.generateJoinCode();
   }
-  next();
 });
 
 // ---------------------------------------------------------------------------
