@@ -44,6 +44,8 @@ class _SplashScreenState extends State<SplashScreen>
   static const _taglines = ['Innovate •', 'Connect •', 'Empower •', 'Educate •', 'Attend •'];
   int _taglineIdx = 0;
   Timer? _taglineTimer;
+  Timer? _navTimer;
+  bool _showSkip = false;
 
   late final Future<UpdateInfo?> _updateFuture = UpdateChecker.check();
   double? _downloadProgress;
@@ -60,7 +62,12 @@ class _SplashScreenState extends State<SplashScreen>
       if (mounted) setState(() => _taglineIdx = (_taglineIdx + 1) % _taglines.length);
     });
 
-    Future.delayed(const Duration(milliseconds: 3200), () async {
+    // Show skip button after reveal animation finishes
+    Future.delayed(const Duration(milliseconds: 1500), () {
+      if (mounted) setState(() => _showSkip = true);
+    });
+
+    _navTimer = Timer(const Duration(milliseconds: 3200), () async {
       if (!mounted) return;
       final update = await _updateFuture;
       if (!mounted) return;
@@ -88,12 +95,19 @@ class _SplashScreenState extends State<SplashScreen>
     }
   }
 
+  void _skip() {
+    _navTimer?.cancel();
+    _taglineTimer?.cancel();
+    if (mounted) context.go('/portal');
+  }
+
   @override
   void dispose() {
     _rockCtrl.dispose();
     _revealCtrl.dispose();
     _particleCtrl.dispose();
     _taglineTimer?.cancel();
+    _navTimer?.cancel();
     super.dispose();
   }
 
@@ -118,6 +132,45 @@ class _SplashScreenState extends State<SplashScreen>
         children: [
           // Dark gradient background + dot grid
           CustomPaint(size: size, painter: const _BgPainter()),
+
+          // Skip button — fades in after reveal animation, hidden during update
+          if (_showSkip && _downloadProgress == null)
+            Positioned(
+              bottom: 40,
+              right: 28,
+              child: AnimatedOpacity(
+                opacity: _showSkip ? 1.0 : 0.0,
+                duration: const Duration(milliseconds: 400),
+                child: TextButton(
+                  onPressed: _skip,
+                  style: TextButton.styleFrom(
+                    foregroundColor: const Color(0xFF93C5FD),
+                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(20),
+                      side: BorderSide(
+                        color: const Color(0xFF60A5FA).withOpacity(0.35), // ignore: deprecated_member_use
+                      ),
+                    ),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        'Skip',
+                        style: GoogleFonts.dmSans(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w500,
+                          letterSpacing: 0.5,
+                        ),
+                      ),
+                      const SizedBox(width: 4),
+                      const Icon(Icons.arrow_forward_ios_rounded, size: 12),
+                    ],
+                  ),
+                ),
+              ),
+            ),
 
           // Update-download overlay
           if (_downloadProgress != null)
