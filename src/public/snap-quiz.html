@@ -1165,15 +1165,22 @@ const state = {
 // ══════════════════════════════════════════════════════════════════
 function applyEffectiveSecuritySettings(quiz) {
   if (!quiz || quiz.securityLevel === 'low' || quiz.securityLevel === 'custom') return;
-  quiz.requireFullscreen    = true;
-  quiz.preventPrintScreen   = true;
-  // For medium: exiting fullscreen pauses the timer and re-enforces fullscreen
-  // but does NOT count as a violation (the timer-pause is deterrent enough).
-  // For high: fullscreen exit IS a violation (set explicitly in the high preset).
-  if (quiz.securityLevel === 'medium') {
-    quiz.terminateOnFocusLost      = true;
-    quiz.terminateOnFullscreenExit = false;
-  }
+  quiz.requireFullscreen         = true;
+  quiz.preventPrintScreen        = true;
+  quiz.terminateOnFocusLost      = true;
+  quiz.terminateOnFullscreenExit = true;
+}
+
+// ══════════════════════════════════════════════════════════════════
+//  VIOLATION BADGE
+// ══════════════════════════════════════════════════════════════════
+function updateViolationBadge() {
+  const badge = document.getElementById('violation-badge');
+  if (!badge) return;
+  const max = state.selectedQuiz?.maxViolationsBeforeTermination || 0;
+  const v   = state.totalViolations;
+  badge.textContent = `⚠ ${v}${max > 0 ? ' / ' + max : ''}`;
+  badge.classList.toggle('has-violations', v > 0);
 }
 
 // ══════════════════════════════════════════════════════════════════
