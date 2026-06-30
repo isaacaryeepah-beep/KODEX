@@ -518,13 +518,17 @@ async function init(){
     }
 
     const params   = new URLSearchParams(location.search);
-    const tabParam = params.get('tab');
+    // Detect quiz tab from either ?tab=quizzes or the /quizzes pathname
+    const tabParam = params.get('tab') || (location.pathname === '/quizzes' ? 'quizzes' : null);
     const idParam  = params.get('id');
     const subParam = params.get('subId');
 
-    // Hide sidebar when opening the quiz portal directly
+    // Hide sidebar when opening the quiz portal directly; clean up URL
     if (tabParam === 'quizzes') {
       document.getElementById('dashboard-page')?.classList.add('quiz-mode');
+      history.replaceState(null, '', '/quizzes');
+    } else if (location.pathname !== '/assignments') {
+      history.replaceState(null, '', '/assignments');
     }
 
     // Remove loading overlay — role is known, portal title is set
@@ -1546,8 +1550,10 @@ function switchTab(tab) {
   const page = document.getElementById('dashboard-page');
   if (tab === 'quizzes') {
     page?.classList.add('quiz-mode');
+    history.pushState(null, '', '/quizzes');
   } else {
     page?.classList.remove('quiz-mode');
+    history.pushState(null, '', '/assignments');
   }
 
   if (tab === 'assignments') {
