@@ -179,6 +179,18 @@ function selectPortal(t){if(window._appLoaded)window._realSelectPortal(t);else w
   background: linear-gradient(to top, #050d1f 0%, transparent 50%, #050d1f 100%);
   opacity: 0.9;
 }
+
+/* ── Mobile: lighter gradient + anchor video at top so mouse fills the frame ── */
+@media (max-width: 600px) {
+  #sp-bg-video {
+    object-position: center top;   /* anchor to top — mouse stays in view */
+  }
+  #sp-vid-grad {
+    /* Only darken the very top for text readability; let the full video show below */
+    background: linear-gradient(to bottom, rgba(5,13,31,0.82) 0%, transparent 35%, rgba(5,13,31,0.25) 100%);
+    opacity: 1;
+  }
+}
 #sp-vid-over {
   position: absolute; inset: 0;
   background: rgba(30,64,175,0.15); mix-blend-mode: overlay;
