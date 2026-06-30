@@ -331,6 +331,15 @@ async function init() {
     if (window.Capacitor?.isNativePlatform?.()) {
       window.open(meetingUrl, '_system');
     } else {
+      // Cross-origin handoff: if stream-room is on a different domain (e.g. app.dikly.live)
+      // localStorage won't carry over — pass the token via URL so stream-room can store it.
+      try {
+        const destUrl = new URL(meetingUrl);
+        if (destUrl.origin !== location.origin && AUTH_TOKEN) {
+          destUrl.searchParams.set('dikly_auth', AUTH_TOKEN);
+          meetingUrl = destUrl.toString();
+        }
+      } catch (_) {}
       history.replaceState(null, '', '/index.html');
       window.location.href = meetingUrl;
     }

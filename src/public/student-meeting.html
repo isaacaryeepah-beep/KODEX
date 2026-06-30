@@ -332,7 +332,16 @@ async function init() {
     if (window.Capacitor?.isNativePlatform?.()) {
       window.open(data.meetingUrl, '_system');
     } else {
-      window.location.href = data.meetingUrl;
+      // Cross-origin handoff: pass auth token when stream-room is on a different domain
+      let joinUrl = data.meetingUrl;
+      try {
+        const destUrl = new URL(joinUrl);
+        if (destUrl.origin !== location.origin && AUTH_TOKEN) {
+          destUrl.searchParams.set('dikly_auth', AUTH_TOKEN);
+          joinUrl = destUrl.toString();
+        }
+      } catch (_) {}
+      window.location.href = joinUrl;
     }
 
   } catch (err) {
