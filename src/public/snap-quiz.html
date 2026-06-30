@@ -1151,6 +1151,10 @@ const state = {
   _handleBlur: null,
   _handleContextMenu: null,
   _handleKeydown: null,
+  // anti-cheat extras
+  _startFrameData:          null,  // 32×32 pixel fingerprint of student at exam start
+  _identityCheckInterval:   null,
+  _multiScreenCheckInterval: null,
 };
 
 // ══════════════════════════════════════════════════════════════════
@@ -1950,6 +1954,29 @@ function captureFrame(videoEl) {
   return canvas.toDataURL('image/jpeg', 0.6);
 }
 
+// Downsampled pixel fingerprint of a video frame (32×32 grayscale-equivalent).
+// Used for fast mid-exam identity comparison without ML.
+function captureFrameData(videoEl, size = 32) {
+  const canvas = document.createElement('canvas');
+  canvas.width = canvas.height = size;
+  const ctx = canvas.getContext('2d');
+  ctx.drawImage(videoEl, 0, 0, size, size);
+  return ctx.getImageData(0, 0, size, size).data;
+}
+
+// Returns 0–1 similarity score between two pixel data arrays.
+// 1 = identical, 0 = completely different. Same lighting/angle ≈ 0.85+.
+function frameSimilarity(dataA, dataB) {
+  if (!dataA || !dataB || dataA.length !== dataB.length) return 1;
+  let diff = 0;
+  for (let i = 0; i < dataA.length; i += 4) {
+    diff += Math.abs(dataA[i]   - dataB[i])   +
+            Math.abs(dataA[i+1] - dataB[i+1]) +
+            Math.abs(dataA[i+2] - dataB[i+2]);
+  }
+  return 1 - diff / (dataA.length / 4 * 3 * 255);
+}
+
 // ── Snap Quiz direct start (no camera setup screen) ──────────────
 async function startExam() {
   try {
@@ -1992,7 +2019,7 @@ async function startExam() {
     state._violationBreakdown  = {};
     updateViolationBadge();
 
-    // Hide floating camera for snap quizzes — no camera stream
+    // Hide floating camera for snap quizzes — no camera stream (yet)
     const floatingCam = document.getElementById('floating-cam');
     if (floatingCam) floatingCam.style.display = 'none';
 
@@ -2003,6 +2030,51 @@ async function startExam() {
     show('exam-screen');
     document.body.classList.add('exam-active');
     state.examActive = true;
+
+    // For medium/high snap quizzes, try to acquire camera for periodic integrity
+    // snapshots and identity checks. Must happen after examActive = true so cleanup
+    // works if the exam is terminated before the camera resolves.
+    const quiz = state.selectedQuiz;
+    if (!state.cameraStream && !quiz.proctoringEnabled &&
+        (quiz.securityLevel === 'medium' || quiz.securityLevel === 'high')) {
+      navigator.mediaDevices.getUserMedia({ video: { facingMode: 'user' }, audio: false })
+        .then(stream => {
+          if (!state.examActive) { stream.getTracks().forEach(t => t.stop()); return; }
+          state.cameraStream = stream;
+          const ev = document.getElementById('exam-video');
+          ev.srcObject = stream;
+          ev.muted = true;
+          ev.setAttribute('playsinline', '');
+          ev.play().catch(() => {});
+          if (floatingCam) floatingCam.style.display = '';
+
+          // Capture reference frame after video is ready, then start 45 s snapshots
+          const onReady = () => {
+            if (!state._startFrameData) state._startFrameData = captureFrameData(ev);
+            if (!state.snapshotInterval) {
+              state.snapshotInterval = setInterval(() => {
+                if (!state.examActive) return;
+                uploadSnapshot(captureFrame(ev), 'scheduled_snapshot', null, null, null).catch(console.warn);
+              }, 45000);
+            }
+            // Identity re-check — compare current frame to reference every 60 s
+            if (!state._identityCheckInterval) {
+              state._identityCheckInterval = setInterval(() => {
+                if (!state.examActive || !state._startFrameData) return;
+                const sim = frameSimilarity(state._startFrameData, captureFrameData(ev));
+                if (sim < 0.40) {
+                  logEvent('identity_mismatch', { similarity: Math.round(sim * 100) }).catch(console.warn);
+                  toast('⚠️ Identity check: face mismatch detected and logged', 'warn');
+                }
+              }, 60000);
+            }
+          };
+          if (ev.readyState >= 2) onReady();
+          else ev.addEventListener('loadeddata', onReady, { once: true });
+          toast('📸 Camera connected for integrity monitoring', 'info');
+        })
+        .catch(() => {}); // Silently continue without camera if denied
+    }
 
     await OfflineMonitor.init({
       attemptId: state.attempt._id,
@@ -2045,6 +2117,7 @@ document.getElementById('capture-start-btn').addEventListener('click', async () 
 
   const video = document.getElementById('setup-video');
   const snapshot = captureFrame(video);
+  state._startFrameData = captureFrameData(video);   // reference for mid-exam identity checks
   const { count, detected, centered } = await detectFaces(video);
 
   try {
@@ -2294,7 +2367,7 @@ function startProctoring() {
     }, 3000);
   }
 
-  // ── Periodic snapshots — only when proctoringEnabled and interval > 0 ──
+  // ── Periodic snapshots — when proctoringEnabled and interval > 0 ──
   const snapSecs = quiz.proctoringEnabled && quiz.snapshotIntervalSeconds > 0
     ? quiz.snapshotIntervalSeconds : 0;
   if (snapSecs > 0) {
@@ -2305,6 +2378,35 @@ function startProctoring() {
       uploadSnapshot(img, 'periodic', detected, count, centered).catch(console.warn);
     }, Math.max(10, snapSecs) * 1000);
   }
+
+  // ── Identity re-check every 60 s (proctored quizzes with start frame) ──
+  // For snap quiz camera obtained in startExam(), the interval is set there instead.
+  if (!state._identityCheckInterval && state._startFrameData && state.cameraStream) {
+    state._identityCheckInterval = setInterval(() => {
+      if (!state.examActive || !state._startFrameData || !state.cameraStream) return;
+      const sim = frameSimilarity(state._startFrameData, captureFrameData(examVideo));
+      if (sim < 0.40) {
+        logEvent('identity_mismatch', { similarity: Math.round(sim * 100) }).catch(console.warn);
+        toast('⚠️ Identity check: face mismatch detected and logged', 'warn');
+      }
+    }, 60000);
+  }
+
+  // ── Multiple screen detection ─────────────────────────────────────
+  // Uses screen.availWidth heuristic: if the desktop is wider than one screen,
+  // a second monitor is likely attached. Also checks the Screen Details API if
+  // available (Chrome 111+, gated behind window-management permission).
+  const _checkScreens = () => {
+    if (!state.examActive) return;
+    const isMulti = screen.availWidth > screen.width + 100 ||
+      (typeof screen.isExtended !== 'undefined' && screen.isExtended === true);
+    if (isMulti) {
+      logEvent('multiple_screens', { availWidth: screen.availWidth, screenWidth: screen.width }).catch(console.warn);
+      toast('⚠️ Multiple screens detected and logged', 'warn');
+    }
+  };
+  _checkScreens();
+  state._multiScreenCheckInterval = setInterval(_checkScreens, 30000);
 
   // ── Visibility change (tab / app switch) ─────────────────────
   document.addEventListener('visibilitychange', handleVisibilityChange);
@@ -2528,6 +2630,7 @@ async function startNoiseDetection(threshold) {
         if (now - lastNoiseLog > 15000) {
           lastNoiseLog = now;
           logEvent('audio_detected', { level: Math.round(avg), threshold }).catch(console.warn);
+          toast(`🔊 Background noise detected (level ${Math.round(avg)}) — logged`, 'warn');
         }
       }
     }, 3000);
@@ -3184,6 +3287,14 @@ function stopExamCleanup() {
   if (state._devToolsInterval) {
     clearInterval(state._devToolsInterval);
     state._devToolsInterval = null;
+  }
+  if (state._identityCheckInterval) {
+    clearInterval(state._identityCheckInterval);
+    state._identityCheckInterval = null;
+  }
+  if (state._multiScreenCheckInterval) {
+    clearInterval(state._multiScreenCheckInterval);
+    state._multiScreenCheckInterval = null;
   }
   if (document.fullscreenElement) document.exitFullscreen().catch(() => {});
   if (state.audioStream) {

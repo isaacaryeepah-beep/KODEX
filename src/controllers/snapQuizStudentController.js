@@ -886,16 +886,20 @@ exports.recordSnapshot = async (req, res) => {
     if (!attempt) return res.status(403).json({ error: "Session invalid or already submitted" });
 
     const quiz = await SnapQuiz.findById(attempt.quiz)
-      .select("proctoringEnabled aiProctoringEnabled").lean();
+      .select("proctoringEnabled aiProctoringEnabled securityLevel").lean();
 
     const {
       imageUrl, thumbnailUrl, eventType, relatedViolationId,
       faceDetected, faceCount, faceScore, similarityToStart,
     } = req.body;
 
-    // Store termination snapshots for all quiz types so lecturers can review them.
-    // All other snapshot types are proctored-only.
-    if (!quiz?.proctoringEnabled && eventType !== "termination") return res.sendStatus(204);
+    // Proctored quizzes store all events.
+    // Medium/high snap quizzes store termination + scheduled snapshots for integrity review.
+    // Low/custom and unrecognised types are dropped (no storage cost).
+    const isNonProctored = !quiz?.proctoringEnabled;
+    const allowedForNonProctored = ["termination", "scheduled_snapshot"].includes(eventType) &&
+      quiz?.securityLevel !== "low" && quiz?.securityLevel != null;
+    if (isNonProctored && !allowedForNonProctored) return res.sendStatus(204);
 
     // Run Claude Haiku AI analysis when enabled and image data is present
     const aiFlags = [];
