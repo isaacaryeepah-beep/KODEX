@@ -274,7 +274,8 @@
 'use strict';
 const _p       = new URLSearchParams(location.search);
 const meetingId= _p.get('meetingId') || '';
-const token    = _p.get('token')     || '';
+const quizId   = _p.get('quizId')   || '';
+const token    = _p.get('token')     || localStorage.getItem('token') || '';
 const userId   = _p.get('userId')    || '';
 const userName = _p.get('userName')  || '';
 
@@ -398,10 +399,13 @@ function checkFace() {
 }
 
 async function beginExam() {
-  if (!meetingId || !token) { alert('Missing exam parameters. Go back and try again.'); return; }
+  if (!meetingId && !quizId) { alert('Missing exam parameters. Go back and try again.'); return; }
+  if (!token) { alert('Session expired. Please log in again.'); location.href = '/'; return; }
   try { await (document.documentElement.requestFullscreen || document.documentElement.webkitRequestFullscreen)?.call(document.documentElement); } catch (_) {}
   camStream?.getTracks().forEach(t => t.stop());
-  const qs = new URLSearchParams({ meetingId, token, userId, userName });
+  const qs = new URLSearchParams({ token, userId, userName });
+  if (meetingId) qs.set('meetingId', meetingId);
+  if (quizId)    qs.set('quizId', quizId);
   location.href = '/exam-room?' + qs.toString();
 }
 

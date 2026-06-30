@@ -11324,6 +11324,17 @@ async function renderStudentQuizzes(content, showAll) {
 }
 
 async function startStudentQuiz(quizId) {
+  // Redirect to the proctored exam flow: preflight checks → exam room with AI invigilator
+  const t  = localStorage.getItem('token') || '';
+  const uid = currentUser?._id || currentUser?.id || '';
+  const uname = encodeURIComponent(
+    currentUser?.name || currentUser?.fullName ||
+    `${currentUser?.firstName || ''} ${currentUser?.lastName || ''}`.trim() || 'Student'
+  );
+  location.href = `/exam-preflight?quizId=${quizId}&token=${encodeURIComponent(t)}&userId=${uid}&userName=${uname}`;
+}
+
+async function _startStudentQuizInline(quizId) {
   const content = document.getElementById('main-content');
   if (!content) return;
   content.innerHTML = '<div class="card"><p>Loading quiz...</p></div>';

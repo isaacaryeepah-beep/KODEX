@@ -11,7 +11,8 @@ const violationSchema = new mongoose.Schema({
 }, { _id: false });
 
 const examSessionSchema = new mongoose.Schema({
-  meeting:  { type: mongoose.Schema.Types.ObjectId, ref: 'Meeting', required: true },
+  meeting:  { type: mongoose.Schema.Types.ObjectId, ref: 'Meeting', default: null },
+  quiz:     { type: mongoose.Schema.Types.ObjectId, ref: 'Quiz',    default: null },
   student:  { type: mongoose.Schema.Types.ObjectId, ref: 'User',    required: true },
   company:  { type: mongoose.Schema.Types.ObjectId, ref: 'Company', required: true },
 

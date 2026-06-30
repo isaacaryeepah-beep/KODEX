@@ -2,6 +2,7 @@
 const mongoose         = require('mongoose');
 const ExamSession      = require('../models/ExamSession');
 const Meeting          = require('../models/Meeting');
+const Quiz             = require('../models/Quiz');
 const { analyzeSnapshot, detectViolations, generateReport, riskFor, severityFor } = require('../services/aiProctoringService');
 
 const MODERATOR_ROLES = ['lecturer', 'manager', 'admin', 'superadmin', 'hod'];
@@ -10,25 +11,40 @@ function isMod(role) { return MODERATOR_ROLES.includes((role || '').toLowerCase(
 // ── POST /api/exam/sessions  (student starts exam) ────────────────────────────
 exports.startSession = async (req, res, next) => {
   try {
-    const { meetingId } = req.body;
-    if (!meetingId) return res.status(400).json({ error: 'meetingId is required' });
-    if (!mongoose.isValidObjectId(meetingId)) return res.status(400).json({ error: 'Invalid meetingId' });
+    const { meetingId, quizId } = req.body;
 
-    const meeting = await Meeting.findOne({ _id: meetingId, company: req.user.company, isActive: true });
-    if (!meeting) return res.status(404).json({ error: 'Meeting not found' });
-    if (meeting.status !== 'live') return res.status(403).json({ error: 'Exam is not live yet.' });
+    if (meetingId) {
+      // Meeting-based session (legacy / video proctoring flow)
+      if (!mongoose.isValidObjectId(meetingId)) return res.status(400).json({ error: 'Invalid meetingId' });
+      const meeting = await Meeting.findOne({ _id: meetingId, company: req.user.company, isActive: true });
+      if (!meeting) return res.status(404).json({ error: 'Meeting not found' });
+      if (meeting.status !== 'live') return res.status(403).json({ error: 'Exam is not live yet.' });
 
-    // Prevent duplicate active sessions
-    const existing = await ExamSession.findOne({ meeting: meetingId, student: req.user._id, status: 'active' });
-    if (existing) return res.json({ success: true, data: { sessionId: existing._id } });
+      const existing = await ExamSession.findOne({ meeting: meetingId, student: req.user._id, status: 'active' });
+      if (existing) return res.json({ success: true, data: { sessionId: existing._id } });
 
-    const session = await ExamSession.create({
-      meeting: meetingId,
-      student: req.user._id,
-      company: req.user.company,
-    });
+      const session = await ExamSession.create({ meeting: meetingId, student: req.user._id, company: req.user.company });
+      return res.status(201).json({ success: true, data: { sessionId: session._id } });
+    }
 
-    res.status(201).json({ success: true, data: { sessionId: session._id } });
+    if (quizId) {
+      // Quiz-based session (proctored quiz flow via exam-room.html)
+      if (!mongoose.isValidObjectId(quizId)) return res.status(400).json({ error: 'Invalid quizId' });
+      const quiz = await Quiz.findOne({ _id: quizId, company: req.user.company, isActive: true });
+      if (!quiz) return res.status(404).json({ error: 'Quiz not found or not active' });
+
+      const now = new Date();
+      if (now < new Date(quiz.startTime)) return res.status(403).json({ error: 'Quiz has not started yet' });
+      if (now > new Date(quiz.endTime))   return res.status(403).json({ error: 'Quiz window has closed' });
+
+      const existing = await ExamSession.findOne({ quiz: quizId, student: req.user._id, status: 'active' });
+      if (existing) return res.json({ success: true, data: { sessionId: existing._id } });
+
+      const session = await ExamSession.create({ quiz: quizId, student: req.user._id, company: req.user.company });
+      return res.status(201).json({ success: true, data: { sessionId: session._id } });
+    }
+
+    return res.status(400).json({ error: 'meetingId or quizId is required' });
   } catch (err) { next(err); }
 };
 
