@@ -1135,10 +1135,15 @@ const state = {
 // ══════════════════════════════════════════════════════════════════
 function applyEffectiveSecuritySettings(quiz) {
   if (!quiz || quiz.securityLevel === 'low' || quiz.securityLevel === 'custom') return;
-  quiz.requireFullscreen         = true;
-  quiz.terminateOnFocusLost      = true;
-  quiz.terminateOnFullscreenExit = true;
-  quiz.preventPrintScreen        = true;
+  quiz.requireFullscreen    = true;
+  quiz.preventPrintScreen   = true;
+  // For medium: exiting fullscreen pauses the timer and re-enforces fullscreen
+  // but does NOT count as a violation (the timer-pause is deterrent enough).
+  // For high: fullscreen exit IS a violation (set explicitly in the high preset).
+  if (quiz.securityLevel === 'medium') {
+    quiz.terminateOnFocusLost      = true;
+    quiz.terminateOnFullscreenExit = false;
+  }
 }
 
 // ══════════════════════════════════════════════════════════════════
@@ -2298,8 +2303,13 @@ function startProctoring() {
 
   // ── Fullscreen enforcement ────────────────────────────────────
   if (quiz.requireFullscreen) {
+    // Track the last fullscreen transition so the blur handler can suppress
+    // false focus_lost violations caused by the browser briefly blurring the
+    // window when entering or leaving fullscreen.
+    state._lastFullscreenChange = Date.now();
     document.documentElement.requestFullscreen().catch(() => {});
     state._handleFullscreen = () => {
+      state._lastFullscreenChange = Date.now();
       if (!document.fullscreenElement && state.examActive) {
         // Exited fullscreen — pause the local timer while student is outside
         pauseTimer();
@@ -2323,7 +2333,11 @@ function startProctoring() {
   // ── Focus / window-blur enforcement ──────────────────────────
   if (quiz.terminateOnFocusLost) {
     state._handleBlur = () => {
-      if (state.examActive) logEvent('focus_lost').catch(console.warn);
+      if (!state.examActive) return;
+      // Suppress blur events caused by fullscreen enter/exit transitions —
+      // the browser fires blur on the window whenever fullscreen changes.
+      if (state._lastFullscreenChange && Date.now() - state._lastFullscreenChange < 2000) return;
+      logEvent('focus_lost').catch(console.warn);
     };
     window.addEventListener('blur', state._handleBlur);
   }
