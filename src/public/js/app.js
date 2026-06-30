@@ -10418,7 +10418,7 @@ async function renderQuizzes() {
   const role = currentUser.role;
   // Lecturer and student: open the quizzes panel in assignments.html
   if (role === 'student' || role === 'lecturer') {
-    window.location.href = '/assignments.html?tab=quizzes';
+    window.location.href = '/quizzes';
     return;
   }
   // Admin / superadmin keep the proctored quiz overview
