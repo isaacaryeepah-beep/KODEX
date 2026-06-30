@@ -366,6 +366,20 @@ function selectPortal(t){if(window._appLoaded)window._realSelectPortal(t);else w
   100% { transform: scale(1.6); opacity: 0; }
 }
 
+/* ── SKIP BUTTON ────────────────────────────────────────── */
+#sp-skip {
+  position: fixed; bottom: 40px; right: 28px; z-index: 99999;
+  padding: 9px 22px; border-radius: 9999px;
+  border: 1px solid rgba(96,165,250,0.35);
+  background: rgba(15,23,42,0.55); backdrop-filter: blur(10px);
+  color: #93c5fd; font-size: 0.82rem; font-weight: 600;
+  letter-spacing: 0.06em; cursor: pointer;
+  opacity: 0; pointer-events: none;
+  transition: opacity 0.4s ease, background 0.2s ease, color 0.2s ease;
+}
+#sp-skip.sp-skip-show { opacity: 1; pointer-events: auto; }
+#sp-skip:hover { background: rgba(96,165,250,0.18); color: #bfdbfe; }
+
 /* ── BRAND REVEAL (Scene 4) ─────────────────────────────── */
 #sp-brand {
   position: absolute; inset: 0; z-index: 20;
@@ -534,6 +548,8 @@ function selectPortal(t){if(window._appLoaded)window._realSelectPortal(t);else w
   </div>
 </div>
 
+<button id="sp-skip" aria-label="Skip intro">SKIP</button>
+
 <script>
 (function () {
 'use strict';
@@ -549,6 +565,14 @@ function dismissSplash() {
   setTimeout(function () { if (el && el.parentNode) el.parentNode.removeChild(el); }, 700);
 }
 setTimeout(dismissSplash, 9500);
+
+/* Skip button — appears after 1.5 s, hidden once splash dismisses */
+(function () {
+  var skipBtn = document.getElementById('sp-skip');
+  if (!skipBtn) return;
+  setTimeout(function () { skipBtn.classList.add('sp-skip-show'); }, 1500);
+  skipBtn.addEventListener('click', dismissSplash);
+})();
 
 /* Force video play — browser autoplay policies sometimes need explicit call */
 var vid = document.getElementById('sp-bg-video');
