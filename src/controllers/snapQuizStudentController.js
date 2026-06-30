@@ -887,12 +887,15 @@ exports.recordSnapshot = async (req, res) => {
 
     const quiz = await SnapQuiz.findById(attempt.quiz)
       .select("proctoringEnabled aiProctoringEnabled").lean();
-    if (!quiz?.proctoringEnabled) return res.sendStatus(204);
 
     const {
       imageUrl, thumbnailUrl, eventType, relatedViolationId,
       faceDetected, faceCount, faceScore, similarityToStart,
     } = req.body;
+
+    // Store termination snapshots for all quiz types so lecturers can review them.
+    // All other snapshot types are proctored-only.
+    if (!quiz?.proctoringEnabled && eventType !== "termination") return res.sendStatus(204);
 
     // Run Claude Haiku AI analysis when enabled and image data is present
     const aiFlags = [];
