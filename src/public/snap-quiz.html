@@ -1165,10 +1165,15 @@ const state = {
 // ══════════════════════════════════════════════════════════════════
 function applyEffectiveSecuritySettings(quiz) {
   if (!quiz || quiz.securityLevel === 'low' || quiz.securityLevel === 'custom') return;
-  quiz.requireFullscreen         = true;
-  quiz.preventPrintScreen        = true;
-  quiz.terminateOnFocusLost      = true;
-  quiz.terminateOnFullscreenExit = true;
+  quiz.requireFullscreen    = true;
+  quiz.preventPrintScreen   = true;
+  // For medium: exiting fullscreen pauses the timer and re-enforces fullscreen
+  // but does NOT count as a violation (the timer-pause is deterrent enough).
+  // For high: fullscreen exit IS a violation (set explicitly in the high preset).
+  if (quiz.securityLevel === 'medium') {
+    quiz.terminateOnFocusLost      = true;
+    quiz.terminateOnFullscreenExit = false;
+  }
 }
 
 // ══════════════════════════════════════════════════════════════════
