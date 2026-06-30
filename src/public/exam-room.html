@@ -150,9 +150,17 @@
 'use strict';
 const _p       = new URLSearchParams(location.search);
 const meetingId= _p.get('meetingId') || '';
-const token    = _p.get('token')     || '';
+const quizId   = _p.get('quizId')   || '';
+const token    = _p.get('token')     || localStorage.getItem('token') || '';
 const userId   = _p.get('userId')    || '';
 const userName = _p.get('userName')  || 'Student';
+
+// Quiz state (populated in init when quizId mode)
+let _quizAttemptId = null;
+let _quizQuestions = [];
+let _quizTimeLimit = 0;
+let _quizEndTime   = null;
+let _quizTimerInt  = null;
 
 const API = location.origin + '/api';
 let sessionId     = null;
@@ -231,14 +239,110 @@ setInterval(function() {
 document.addEventListener('dragstart', function(e) { e.preventDefault(); }, true);
 document.addEventListener('drop', function(e) { e.preventDefault(); }, true);
 
+// ── Quiz question renderer ────────────────────────────────────────────────────
+function _renderQuizQuestions() {
+  const content = document.getElementById('examContent');
+  if (!content || !_quizQuestions.length) return;
+  document.getElementById('examPlaceholder')?.remove();
+
+  content.innerHTML = `
+    <div style="padding:16px 20px;max-width:820px;margin:0 auto">
+      ${_quizQuestions.map((q, i) => `
+        <div style="background:var(--card,#0f172a);border:1px solid var(--border,#1e293b);border-radius:12px;padding:18px 20px;margin-bottom:14px">
+          <div style="font-size:12px;color:var(--muted,#64748b);margin-bottom:6px;font-weight:600">
+            QUESTION ${i + 1} OF ${_quizQuestions.length}
+            <span style="float:right">${q.marks || 1} mark${q.marks !== 1 ? 's' : ''}</span>
+          </div>
+          <p style="margin:0 0 14px;font-size:15px;line-height:1.6;color:var(--text,#f1f5f9)">${q.questionText}</p>
+          ${q.questionType === 'fill'
+            ? `<input type="text" id="qans-${q._id}" placeholder="Type your answer…"
+                style="width:100%;padding:10px 13px;border:1.5px solid var(--border,#1e293b);border-radius:8px;font-size:14px;background:var(--bg,#080b12);color:var(--text,#f1f5f9);outline:none;box-sizing:border-box"/>`
+            : q.questionType === 'explain'
+            ? `<textarea id="qans-${q._id}" rows="5" placeholder="Type your answer…"
+                style="width:100%;padding:10px 13px;border:1.5px solid var(--border,#1e293b);border-radius:8px;font-size:14px;background:var(--bg,#080b12);color:var(--text,#f1f5f9);outline:none;resize:vertical;box-sizing:border-box"></textarea>`
+            : q.questionType === 'multiple'
+            ? `<div style="display:flex;flex-direction:column;gap:8px">
+                ${(q.options||[]).map((opt, oi) => `
+                  <label style="display:flex;align-items:center;gap:10px;padding:10px 13px;border:1px solid var(--border,#1e293b);border-radius:8px;cursor:pointer">
+                    <input type="checkbox" name="qans-${q._id}" value="${oi}" style="accent-color:#4f6ef7;width:16px;height:16px">
+                    <span style="color:var(--text,#f1f5f9)"><strong>${String.fromCharCode(65+oi)}.</strong> ${opt}</span>
+                  </label>`).join('')}
+              </div>`
+            : `<div style="display:flex;flex-direction:column;gap:8px">
+                ${(q.options||[]).map((opt, oi) => `
+                  <label style="display:flex;align-items:center;gap:10px;padding:10px 13px;border:1px solid var(--border,#1e293b);border-radius:8px;cursor:pointer">
+                    <input type="radio" name="qans-${q._id}" value="${oi}" style="accent-color:#4f6ef7;width:16px;height:16px">
+                    <span style="color:var(--text,#f1f5f9)"><strong>${String.fromCharCode(65+oi)}.</strong> ${opt}</span>
+                  </label>`).join('')}
+              </div>`}
+        </div>`).join('')}
+    </div>`;
+}
+
+function _collectAnswers() {
+  return _quizQuestions.map(q => {
+    if (q.questionType === 'fill' || q.questionType === 'explain') {
+      return { questionId: q._id, answer: (document.getElementById(`qans-${q._id}`)?.value || '').trim() };
+    }
+    if (q.questionType === 'multiple') {
+      const checked = [...document.querySelectorAll(`input[name="qans-${q._id}"]:checked`)].map(el => parseInt(el.value));
+      return { questionId: q._id, selectedIndices: checked };
+    }
+    const sel = document.querySelector(`input[name="qans-${q._id}"]:checked`);
+    return { questionId: q._id, selectedIndex: sel ? parseInt(sel.value) : null };
+  });
+}
+
+function _startQuizTimer() {
+  _quizTimerInt = setInterval(() => {
+    const remaining = Math.max(0, _quizEndTime - Date.now());
+    const m = Math.floor(remaining / 60000);
+    const s = Math.floor((remaining % 60000) / 1000);
+    const td = document.getElementById('timerDisplay');
+    if (td) {
+      td.textContent = `${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`;
+      td.className = 'timer-display' + (remaining < 120000 ? ' urgent' : '');
+    }
+    if (remaining <= 0) {
+      clearInterval(_quizTimerInt);
+      submitExam(true);
+    }
+  }, 1000);
+}
+
 // ── Init ──────────────────────────────────────────────────────────────────────
 async function init() {
-  if (!meetingId || !token) { alert('Missing exam parameters.'); history.back(); return; }
+  if (!meetingId && !quizId) { alert('Missing exam parameters.'); history.back(); return; }
+  if (!token) { alert('Session expired. Please log in again.'); location.href = '/'; return; }
 
   try {
-    const r = await apiFetch('/exam/sessions', 'POST', { meetingId });
+    const sessionPayload = quizId ? { quizId } : { meetingId };
+    const r = await apiFetch('/exam/sessions', 'POST', sessionPayload);
     sessionId = r.data.sessionId;
   } catch (e) { alert('Could not start exam: ' + e.message); return; }
+
+  // Quiz mode: load questions and render them
+  if (quizId) {
+    try {
+      const qData = await apiFetch(`/student/quizzes/${quizId}/start`, 'POST', {});
+      _quizAttemptId = qData.attempt?._id;
+      _quizQuestions = qData.questions || [];
+      _quizTimeLimit = qData.timeLimit || 30;
+      const startedAt = new Date(qData.attempt?.startedAt || Date.now());
+      const attemptEnd = new Date(startedAt.getTime() + _quizTimeLimit * 60 * 1000);
+      const quizEnd = qData.quizEndTime ? new Date(qData.quizEndTime) : null;
+      _quizEndTime = quizEnd && quizEnd < attemptEnd ? quizEnd : attemptEnd;
+
+      const title = qData.quiz?.title || qData.title || 'Proctored Quiz';
+      document.getElementById('barTitle').textContent = title;
+      _renderQuizQuestions();
+      _startQuizTimer();
+    } catch (e) {
+      alert('Could not load quiz: ' + e.message);
+      history.back();
+      return;
+    }
+  }
 
   // Camera
   try {
@@ -433,29 +537,40 @@ function startTimer() {
 }
 
 // ── Submit exam ───────────────────────────────────────────────────────────────
-async function submitExam() {
+async function submitExam(autoSubmit = false) {
   if (submitting || !sessionId) return;
-  if (!confirm('Submit your exam? This cannot be undone.')) return;
+  if (!autoSubmit && !confirm('Submit your exam? This cannot be undone.')) return;
   submitting = true;
   document.getElementById('submitBtn').disabled = true;
   document.getElementById('submitBtn').textContent = 'Submitting…';
   clearTimeout(snapInterval);
   clearInterval(timerInt);
+  if (_quizTimerInt) clearInterval(_quizTimerInt);
 
   try { await (document.exitFullscreen || document.webkitExitFullscreen)?.call(document); } catch(_) {}
   camStream?.getTracks().forEach(t => t.stop());
 
+  // End proctoring session
+  let integrityScore = Math.max(0, 100 - riskScore);
   try {
     const result = await apiFetch(`/exam/sessions/${sessionId}/end`, 'POST', {});
-    const report = result.data?.report;
-    const score  = report?.integrityScore ?? Math.max(0, 100 - riskScore);
-    const summary = `Exam submitted.\n\nIntegrity Score: ${score}/100\nViolations logged: ${violationCount}${report?.summary ? '\n\n' + report.summary : ''}`;
-    alert(summary);
-  } catch (e) {
-    alert('Exam submitted. ' + e.message);
+    integrityScore = result.data?.report?.integrityScore ?? integrityScore;
+  } catch (_) {}
+
+  // Submit quiz answers if in quiz mode
+  if (quizId && _quizAttemptId) {
+    try {
+      const answers = _collectAnswers();
+      await apiFetch(`/student/quizzes/${quizId}/submit`, 'POST', { answers });
+      alert(`Exam submitted.\n\nIntegrity Score: ${integrityScore}/100\nViolations logged: ${violationCount}\n\nYour answers have been recorded.`);
+    } catch (e) {
+      alert('Answers submitted but result could not be confirmed: ' + e.message);
+    }
+  } else {
+    alert(`Exam submitted.\n\nIntegrity Score: ${integrityScore}/100\nViolations logged: ${violationCount}`);
   }
 
-  history.back();
+  location.href = '/quizzes';
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
