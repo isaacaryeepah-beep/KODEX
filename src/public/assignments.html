@@ -1967,20 +1967,21 @@ async function renderLecturerSnapQuizzes() {
   try {
     const d = await api('GET', '/api/lecturer/snap-quizzes');
     QS.snapQuizzes = d.quizzes || [];
+    // Archived quizzes are soft-deleted — hide them from the default view
+    const visibleQuizzes = QS.snapQuizzes.filter(q => q.status !== 'archived');
 
     const STATUS = {
       draft:     { dot:'#94a3b8', label:'Draft',     bg:'#f8fafc', border:'#e2e8f0', text:'#475569', accent:'#94a3b8' },
       published: { dot:'#f59e0b', label:'Published', bg:'#fffbeb', border:'#fde68a', text:'#92400e', accent:'#f59e0b' },
       open:      { dot:'#16a34a', label:'Live',      bg:'#f0fdf4', border:'#86efac', text:'#14532d', accent:'#22c55e' },
       closed:    { dot:'#dc2626', label:'Closed',    bg:'#fef2f2', border:'#fecaca', text:'#991b1b', accent:'#ef4444' },
-      archived:  { dot:'#94a3b8', label:'Archived',  bg:'#f8fafc', border:'#e2e8f0', text:'#94a3b8', accent:'#cbd5e1' },
     };
     const TYPE_LABEL = { mid_term:'Mid-Semester', exam:'Final Exam', quiz:'Quiz', class_test:'Class Test', final:'Finals', mock:'Mock Exam' };
     const TYPE_ICON  = { mid_term:'📝', exam:'📋', quiz:'⚡', class_test:'✏️', final:'🎓', mock:'🔬' };
 
-    const liveCount     = QS.snapQuizzes.filter(q => q.status === 'open').length;
-    const draftCount    = QS.snapQuizzes.filter(q => q.status === 'draft').length;
-    const closedCount   = QS.snapQuizzes.filter(q => q.status === 'closed').length;
+    const liveCount     = visibleQuizzes.filter(q => q.status === 'open').length;
+    const draftCount    = visibleQuizzes.filter(q => q.status === 'draft').length;
+    const closedCount   = visibleQuizzes.filter(q => q.status === 'closed').length;
 
     $('page-root').innerHTML = `
       ${_qzTabNavHTML('snap')}
@@ -2014,10 +2015,10 @@ async function renderLecturerSnapQuizzes() {
       </div>
 
       <!-- ── STATS STRIP ── -->
-      ${QS.snapQuizzes.length ? `
+      ${visibleQuizzes.length ? `
       <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:10px;margin-bottom:24px">
         ${[
-          { label:'Total', val: QS.snapQuizzes.length, color:'#1e293b', bg:'#f8fafc', border:'#e2e8f0' },
+          { label:'Total', val: visibleQuizzes.length, color:'#1e293b', bg:'#f8fafc', border:'#e2e8f0' },
           { label:'Live',  val: liveCount,  color:'#14532d', bg:'#f0fdf4', border:'#86efac' },
           { label:'Draft', val: draftCount,  color:'#78350f', bg:'#fffbeb', border:'#fde68a' },
           { label:'Closed',val: closedCount, color:'#7f1d1d', bg:'#fef2f2', border:'#fecaca' },
@@ -2029,7 +2030,7 @@ async function renderLecturerSnapQuizzes() {
       </div>` : ''}
 
       <!-- ── QUIZ CARDS ── -->
-      ${!QS.snapQuizzes.length ? `
+      ${!visibleQuizzes.length ? `
         <div style="text-align:center;padding:72px 24px;background:#fff;border-radius:18px;border:2px dashed #e2e8f0">
           <div style="width:64px;height:64px;background:linear-gradient(135deg,#f1f5f9,#e2e8f0);border-radius:18px;display:flex;align-items:center;justify-content:center;margin:0 auto 18px;font-size:28px">⚡</div>
           <h3 style="font-size:18px;font-weight:800;margin:0 0 8px;color:#0f172a">No quizzes yet</h3>
@@ -2040,7 +2041,7 @@ async function renderLecturerSnapQuizzes() {
           </button>
         </div>` : `
       <div style="display:flex;flex-direction:column;gap:12px">
-        ${QS.snapQuizzes.map(q => {
+        ${visibleQuizzes.map(q => {
           const sm  = STATUS[q.status] || STATUS.draft;
           const tl  = TYPE_LABEL[q.quizType] || (q.quizType || 'Exam');
           const ico = TYPE_ICON[q.quizType]  || '📄';
@@ -2960,8 +2961,9 @@ async function snapQuizAction(quizId, action) {
 async function deleteSnapQuizInline(id) {
   if (!confirm('Delete this snap quiz and all its questions? Cannot be undone.')) return;
   try {
-    await api('DELETE', `/api/lecturer/snap-quizzes/${id}`);
-    toast('Snap quiz deleted', 'ok');
+    const r = await api('DELETE', `/api/lecturer/snap-quizzes/${id}`);
+    const msg = r?.message || '';
+    toast(msg.includes('archived') ? 'Quiz removed (archived — students had submissions)' : 'Snap quiz deleted', 'ok');
     await renderLecturerSnapQuizzes();
   } catch(e) {
     toast(e.message || 'Failed to delete snap quiz', 'err');
