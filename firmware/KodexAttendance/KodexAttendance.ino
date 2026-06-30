@@ -116,12 +116,14 @@ bool     wifiReconnectNeeded = false;
 
 // ─── Offline attendance mode ─────────────────────────────────────────────────
 bool     offlineMode          = false;   // true when running as standalone AP
-bool     offlineSessionActive = false;
+bool     offlineSessionActive   = false;
 String   offlineSessionTitle;
 String   offlineSessionCourse;
-uint32_t offlineSessionStart  = 0;
-int      offlineRecordCount   = 0;
-bool     offlineSyncPending   = false;
+String   offlineSessionCourseId;   // MongoDB _id of the matched course
+String   offlineSessionLecturerId; // MongoDB _id of the lecturer
+uint32_t offlineSessionStart    = 0;
+int      offlineRecordCount     = 0;
+bool     offlineSyncPending     = false;
 
 // ─── Offline authorization (credential + roster) ──────────────────────────────
 String   offlineHmacKey;        // 64-char hex HMAC-SHA256 key from heartbeat
@@ -281,6 +283,55 @@ static String loadRoster() {
   return s;
 }
 
+// Extract compact courseCode→{courseId,lecturerId} map from roster and cache it.
+static void saveCourseMap(const String& rosterJson) {
+  // Build a compact JSON: [{"code":"CS101","courseId":"...","lecturerId":"..."},...]
+  // We parse just the "courses" array; student lists are ignored.
+  DynamicJsonDocument doc(4096);
+  if (deserializeJson(doc, rosterJson) != DeserializationError::Ok) return;
+  JsonArray courses = doc["courses"].as<JsonArray>();
+  if (courses.isNull()) return;
+
+  String out = "[";
+  bool first = true;
+  for (JsonObject c : courses) {
+    String code = c["courseCode"] | "";
+    String cid  = c["courseId"]   | "";
+    String lid  = c["lecturerId"] | "";
+    if (!code.length() || !cid.length()) continue;
+    if (!first) out += ",";
+    out += "{\"code\":\"" + code + "\",\"courseId\":\"" + cid + "\",\"lecturerId\":\"" + lid + "\"}";
+    first = false;
+  }
+  out += "]";
+
+  Preferences op;
+  op.begin("kodexOff", false);
+  op.putString("courseMap", out);
+  op.end();
+}
+
+// Returns courseId and lecturerId for a given course code (case-insensitive).
+static bool lookupCourse(const String& code, String& courseId, String& lecturerId) {
+  Preferences op;
+  op.begin("kodexOff", true);
+  String map = op.getString("courseMap", "[]");
+  op.end();
+  if (map == "[]") return false;
+
+  DynamicJsonDocument doc(2048);
+  if (deserializeJson(doc, map) != DeserializationError::Ok) return false;
+  for (JsonObject c : doc.as<JsonArray>()) {
+    String c_code = c["code"] | "";
+    if (c_code.equalsIgnoreCase(code)) {
+      courseId   = c["courseId"]   | "";
+      lecturerId = c["lecturerId"] | "";
+      return courseId.length() > 0;
+    }
+  }
+  return false;
+}
+
 // Check if an index number is enrolled in the currently active course.
 // Returns true if no roster is stored (fail-open) or if enrollment confirmed.
 static bool isStudentEnrolled(const String& idx) {
@@ -382,13 +433,9 @@ static void downloadRoster() {
   int code = http.GET();
   if (code == 200) {
     String body = http.getString();
-    // Extract the "courses" array from the response and store it compactly
-    StaticJsonDocument<256> meta;
-    if (!deserializeJson(meta, body)) {
-      // Just store the raw body — isStudentEnrolled does a substring scan
-      saveRoster(body);
-      log("Roster saved (" + String(body.length()) + " bytes)");
-    }
+    saveRoster(body);
+    saveCourseMap(body);  // compact courseCode→{courseId,lecturerId} map for offline sync
+    log("Roster saved (" + String(body.length()) + " bytes)");
   } else {
     log("Roster download failed: HTTP " + String(code));
   }
@@ -1273,22 +1320,26 @@ static String loadOfflineRecords() {
 static void saveOfflineSession() {
   Preferences p;
   p.begin("offlineSess", false);
-  p.putBool("active",  offlineSessionActive);
-  p.putString("title", offlineSessionTitle);
-  p.putString("course",offlineSessionCourse);
-  p.putUInt("start",   offlineSessionStart);
-  p.putInt("count",    offlineRecordCount);
+  p.putBool("active",      offlineSessionActive);
+  p.putString("title",     offlineSessionTitle);
+  p.putString("course",    offlineSessionCourse);
+  p.putString("courseId",  offlineSessionCourseId);
+  p.putString("lecturerI", offlineSessionLecturerId);  // NVS key max 15 chars
+  p.putUInt("start",       offlineSessionStart);
+  p.putInt("count",        offlineRecordCount);
   p.end();
 }
 
 static void loadOfflineSession() {
   Preferences p;
   p.begin("offlineSess", true);
-  offlineSessionActive = p.getBool("active", false);
-  offlineSessionTitle  = p.getString("title",  "");
-  offlineSessionCourse = p.getString("course", "");
-  offlineSessionStart  = p.getUInt("start",   0);
-  offlineRecordCount   = p.getInt("count",    0);
+  offlineSessionActive    = p.getBool("active",    false);
+  offlineSessionTitle     = p.getString("title",    "");
+  offlineSessionCourse    = p.getString("course",   "");
+  offlineSessionCourseId  = p.getString("courseId", "");
+  offlineSessionLecturerId = p.getString("lecturerI","");
+  offlineSessionStart     = p.getUInt("start",     0);
+  offlineRecordCount      = p.getInt("count",      0);
   p.end();
 }
 
@@ -1305,9 +1356,16 @@ static bool syncOfflineRecords() {
   http.addHeader("Content-Type", "application/json");
   http.addHeader("Authorization", "Bearer " + deviceJWT);
 
-  String body = "{\"deviceId\":\"" + deviceId + "\",\"course\":\"" + offlineSessionCourse +
-                "\",\"title\":\"" + offlineSessionTitle + "\",\"startedAt\":" +
-                String(offlineSessionStart) + ",\"records\":" + records + "}";
+  String body = "{\"deviceId\":\"" + deviceId
+              + "\",\"course\":\""    + offlineSessionCourse
+              + "\",\"title\":\""     + offlineSessionTitle
+              + "\",\"startedAt\":"   + String(offlineSessionStart)
+              + ",\"records\":"       + records;
+  if (offlineSessionCourseId.length())
+    body += ",\"courseId\":\"" + offlineSessionCourseId + "\"";
+  if (offlineSessionLecturerId.length())
+    body += ",\"lecturerId\":\"" + offlineSessionLecturerId + "\"";
+  body += "}";
   int code = http.POST(body);
   http.end();
   if (code == 200 || code == 201) {
@@ -1332,11 +1390,13 @@ static void registerOfflineHttp() {
     String page = buildOfflinePage(OFFLINE_HOME_HTML, pin);
     localHttp.send(200, "text/html", page);
   };
-  localHttp.on("/",                   HTTP_GET, serveHome);
-  localHttp.on("/generate_204",       HTTP_GET, serveHome);
-  localHttp.on("/hotspot-detect.html",HTTP_GET, serveHome);
-  localHttp.on("/ncsi.txt",           HTTP_GET, serveHome);
-  localHttp.on("/connecttest.txt",    HTTP_GET, serveHome);
+  localHttp.on("/",                        HTTP_GET, serveHome);
+  localHttp.on("/generate_204",           HTTP_GET, serveHome);
+  localHttp.on("/hotspot-detect.html",    HTTP_GET, serveHome);  // iOS / macOS
+  localHttp.on("/library/test/success.html", HTTP_GET, serveHome); // iOS fallback
+  localHttp.on("/ncsi.txt",              HTTP_GET, serveHome);    // Windows
+  localHttp.on("/connecttest.txt",       HTTP_GET, serveHome);    // Windows
+  localHttp.on("/redirect",             HTTP_GET, serveHome);    // Android
   localHttp.onNotFound(serveHome);
 
   // Lecturer page
@@ -1363,6 +1423,14 @@ static void registerOfflineHttp() {
     if (!offlineSessionCourse.length() || !offlineSessionTitle.length()) {
       localHttp.send(400, "application/json", "{\"error\":\"course and title required\"}"); return;
     }
+
+    // Resolve courseId + lecturerId from cached roster map
+    offlineSessionCourseId   = "";
+    offlineSessionLecturerId = "";
+    lookupCourse(offlineSessionCourse, offlineSessionCourseId, offlineSessionLecturerId);
+    // Credential-authenticated lecturer takes precedence over roster entry
+    if (authorizedLecturerId.length()) offlineSessionLecturerId = authorizedLecturerId;
+
     offlineSessionActive = true;
     offlineSessionStart  = (uint32_t)time(nullptr);
     offlineRecordCount   = 0;
@@ -1508,7 +1576,8 @@ static void registerOfflineHttp() {
       localHttp.send(403, "application/json", "{\"error\":\"Lecturer not assigned to this device\"}");
       return;
     }
-    authorizedLecturerId = uid;
+    authorizedLecturerId     = uid;
+    offlineSessionLecturerId = uid;  // persist for sync even if cred verified before start
     log("Lecturer credential accepted: " + uid);
     // Return the device PIN so app can start sessions directly
     String resp = "{\"ok\":true,\"pin\":\"" + pin + "\",\"session\":" + offlineSessionJson() + "}";
