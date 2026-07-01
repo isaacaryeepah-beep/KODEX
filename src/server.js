@@ -508,6 +508,28 @@ const start = async () => {
     } catch (e) {
       logger.error("Scheduler failed to start", { error: e.message });
     }
+
+    // Daily MongoDB backup at 02:00 (only when backup is configured)
+    if (process.env.BACKUP_DIR || process.env.BACKUP_S3_BUCKET) {
+      try {
+        const cron       = require("node-cron");
+        const { execFile } = require("child_process");
+        const backupScript = path.join(__dirname, "..", "scripts", "backup-mongo.sh");
+        cron.schedule("0 2 * * *", () => {
+          logger.info("[backup] Starting scheduled MongoDB backup...");
+          execFile(backupScript, { env: { ...process.env, PATH: process.env.PATH } }, (err, stdout, stderr) => {
+            if (err) {
+              logger.error("[backup] Backup failed", { error: err.message, stderr: stderr?.trim() });
+            } else {
+              logger.info("[backup] Backup complete", { output: stdout?.trim() });
+            }
+          });
+        });
+        logger.info("[backup] Daily backup scheduled at 02:00");
+      } catch (e) {
+        logger.error("[backup] Failed to schedule backup", { error: e.message });
+      }
+    }
   });
 };
 
