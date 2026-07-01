@@ -1096,12 +1096,22 @@ async function _loadLockedAttempt(req) {
   });
   if (!attempt) return null;
 
-  // Session-lock check.
+  // Session-lock check. The lecturer can turn this off per-quiz
+  // (enforceSessionLock: false) for cases like shared/unreliable devices —
+  // every SnapQuizAttempt still gets a sessionToken by schema default, so
+  // that flag must be checked here, not inferred from the token's presence.
+  const quizLock = await SnapQuiz.findById(attempt.quiz).select("enforceSessionLock").lean();
+  const lockEnabled = quizLock?.enforceSessionLock !== false;
+
   const token = req.headers["x-session-token"];
-  if (attempt.sessionToken) {
+  if (lockEnabled && attempt.sessionToken) {
     if (token && token !== attempt.sessionToken) {
       // A *present but wrong* token is a strong signal of a genuine second
       // tab/device actively holding its own session token — terminate immediately.
+      console.warn(
+        `[snapQuiz sessionLock] attempt ${attempt._id} terminated: token mismatch on ${req.method} ${req.originalUrl} ` +
+        `(got ${token.slice(0, 8)}…, expected ${attempt.sessionToken.slice(0, 8)}…)`
+      );
       await _terminateSession(attempt, "Session conflict: duplicate tab or device detected");
       return null;
     }
