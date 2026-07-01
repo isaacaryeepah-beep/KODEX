@@ -1,0 +1,645 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Student Lookup — Dikly</title>
+<link rel="icon" type="image/svg+xml" href="/dikly-icon.svg">
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet" />
+<style>
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+:root {
+  --bg:       #080b12;
+  --surface:  #0f1623;
+  --surface2: #161e2e;
+  --border:   #1e2d45;
+  --accent:   #4f6ef7;
+  --accent2:  #7c3aed;
+  --green:    #22c55e;
+  --yellow:   #f59e0b;
+  --red:      #ef4444;
+  --text:     #e2e8f0;
+  --muted:    #64748b;
+  --mono:     'Space Mono', monospace;
+  --sans:     'Plus Jakarta Sans', sans-serif;
+}
+
+html, body {
+  min-height: 100vh;
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--sans);
+  font-size: 15px;
+}
+
+/* ── TOPBAR ── */
+.topbar {
+  position: sticky; top: 0; z-index: 50;
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+  padding: 0 24px;
+  height: 60px;
+  display: flex; align-items: center; gap: 16px;
+}
+.topbar-brand {
+  display: flex; align-items: center; gap: 10px;
+  font-weight: 800; font-size: 17px;
+  text-decoration: none; color: var(--text);
+  flex-shrink: 0;
+}
+.topbar-brand span { color: var(--accent); }
+.topbar-title {
+  font-size: 14px; font-weight: 600; color: var(--muted);
+  border-left: 1px solid var(--border);
+  padding-left: 16px;
+}
+.topbar-back {
+  margin-left: auto;
+  background: var(--surface2); border: 1px solid var(--border);
+  color: var(--muted); border-radius: 8px;
+  padding: 8px 14px; font-size: 13px; font-weight: 600;
+  cursor: pointer; transition: color 0.2s;
+  text-decoration: none;
+}
+.topbar-back:hover { color: var(--text); }
+
+/* ── LAYOUT ── */
+.layout {
+  display: grid;
+  grid-template-columns: 360px 1fr;
+  min-height: calc(100vh - 60px);
+  gap: 0;
+}
+
+/* ── LEFT PANEL: search + results ── */
+.left-panel {
+  border-right: 1px solid var(--border);
+  display: flex; flex-direction: column;
+  overflow: hidden;
+  height: calc(100vh - 60px);
+  position: sticky; top: 60px;
+}
+
+.search-box {
+  padding: 20px 16px 12px;
+  border-bottom: 1px solid var(--border);
+  background: var(--surface);
+}
+.search-label {
+  font-size: 11px; font-weight: 700; text-transform: uppercase;
+  letter-spacing: 0.8px; color: var(--muted); margin-bottom: 10px;
+}
+.search-input-wrap {
+  position: relative;
+}
+.search-input-wrap svg {
+  position: absolute; left: 12px; top: 50%; transform: translateY(-50%);
+  width: 16px; height: 16px; color: var(--muted); pointer-events: none;
+}
+#searchInput {
+  width: 100%;
+  background: var(--surface2); border: 1.5px solid var(--border);
+  border-radius: 10px; padding: 11px 12px 11px 38px;
+  color: var(--text); font-family: var(--sans); font-size: 14px;
+  outline: none; transition: border-color 0.2s;
+}
+#searchInput:focus { border-color: var(--accent); }
+#searchInput::placeholder { color: var(--muted); }
+
+.role-tabs {
+  display: flex; gap: 6px; margin-top: 10px;
+}
+.role-tab {
+  padding: 5px 12px; border-radius: 6px; font-size: 12px; font-weight: 600;
+  border: 1px solid var(--border); background: transparent; cursor: pointer;
+  color: var(--muted); transition: all 0.15s;
+}
+.role-tab.active { background: var(--accent); border-color: var(--accent); color: #fff; }
+.role-tab:hover:not(.active) { border-color: var(--accent); color: var(--text); }
+
+/* Results list */
+.results-area {
+  flex: 1; overflow-y: auto; padding: 8px 8px;
+}
+.result-empty {
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  height: 200px; color: var(--muted); font-size: 13px; gap: 10px;
+}
+.result-empty svg { width: 36px; height: 36px; opacity: 0.3; }
+
+.result-item {
+  display: flex; align-items: center; gap: 12px;
+  padding: 12px 10px; border-radius: 10px; cursor: pointer;
+  border: 1px solid transparent; transition: all 0.15s;
+  margin-bottom: 4px;
+}
+.result-item:hover { background: var(--surface2); border-color: var(--border); }
+.result-item.active { background: rgba(79,110,247,0.1); border-color: rgba(79,110,247,0.4); }
+
+.result-avatar {
+  width: 40px; height: 40px; border-radius: 10px;
+  background: linear-gradient(135deg, var(--accent), var(--accent2));
+  display: flex; align-items: center; justify-content: center;
+  font-size: 16px; font-weight: 700; flex-shrink: 0;
+  overflow: hidden;
+}
+.result-avatar img { width: 100%; height: 100%; object-fit: cover; }
+.result-info { flex: 1; min-width: 0; }
+.result-name { font-size: 14px; font-weight: 600; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.result-sub { font-size: 12px; color: var(--muted); margin-top: 1px; }
+.result-role-badge {
+  font-size: 10px; font-weight: 700; text-transform: uppercase;
+  padding: 2px 7px; border-radius: 5px; flex-shrink: 0;
+  background: rgba(79,110,247,0.12); color: var(--accent);
+  border: 1px solid rgba(79,110,247,0.25);
+}
+
+/* Search spinner */
+.search-spinner {
+  display: none; text-align: center; padding: 20px;
+  color: var(--muted); font-size: 13px;
+}
+
+/* ── RIGHT PANEL: profile ── */
+.right-panel {
+  overflow-y: auto;
+  padding: 28px;
+}
+
+.empty-state {
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  min-height: 400px; color: var(--muted); gap: 14px; text-align: center;
+}
+.empty-state svg { width: 56px; height: 56px; opacity: 0.2; }
+.empty-state h3 { font-size: 16px; font-weight: 700; color: var(--text); }
+.empty-state p { font-size: 13px; max-width: 280px; line-height: 1.6; }
+
+/* Profile header */
+.profile-header {
+  display: flex; align-items: flex-start; gap: 20px;
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: 14px; padding: 24px;
+  margin-bottom: 20px;
+}
+.profile-avatar {
+  width: 72px; height: 72px; border-radius: 14px; flex-shrink: 0;
+  background: linear-gradient(135deg, var(--accent), var(--accent2));
+  display: flex; align-items: center; justify-content: center;
+  font-size: 28px; font-weight: 800;
+  overflow: hidden;
+}
+.profile-avatar img { width: 100%; height: 100%; object-fit: cover; }
+.profile-meta { flex: 1; }
+.profile-name { font-size: 22px; font-weight: 800; line-height: 1.2; margin-bottom: 4px; }
+.profile-index {
+  font-family: var(--mono); font-size: 13px; color: var(--accent);
+  margin-bottom: 8px; letter-spacing: 1px;
+}
+.profile-tags { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
+.tag {
+  font-size: 11px; font-weight: 600; padding: 3px 9px; border-radius: 6px;
+  border: 1px solid var(--border); color: var(--muted); background: var(--surface2);
+}
+.tag.green  { background: rgba(34,197,94,0.1); border-color: rgba(34,197,94,0.3); color: var(--green); }
+.tag.red    { background: rgba(239,68,68,0.1); border-color: rgba(239,68,68,0.3); color: var(--red); }
+.tag.yellow { background: rgba(245,158,11,0.1); border-color: rgba(245,158,11,0.3); color: var(--yellow); }
+.tag.blue   { background: rgba(79,110,247,0.1); border-color: rgba(79,110,247,0.3); color: var(--accent); }
+
+.profile-actions { display: flex; flex-direction: column; gap: 8px; flex-shrink: 0; }
+.btn-sm {
+  padding: 8px 14px; border-radius: 8px; font-size: 12px; font-weight: 700;
+  border: 1px solid var(--border); cursor: pointer; transition: all 0.15s;
+  font-family: var(--sans); white-space: nowrap;
+}
+.btn-outline { background: transparent; color: var(--muted); }
+.btn-outline:hover { border-color: var(--accent); color: var(--accent); }
+.btn-primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+.btn-primary:hover { opacity: 0.9; }
+
+/* Info grid */
+.info-grid {
+  display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: 12px; margin-bottom: 20px;
+}
+.info-card {
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: 12px; padding: 16px;
+}
+.info-card-label {
+  font-size: 10px; font-weight: 700; text-transform: uppercase;
+  letter-spacing: 0.7px; color: var(--muted); margin-bottom: 6px;
+}
+.info-card-value {
+  font-size: 14px; font-weight: 600; color: var(--text);
+  word-break: break-all;
+}
+.info-card-value.mono { font-family: var(--mono); font-size: 13px; }
+
+/* Tabs */
+.tabs { display: flex; gap: 2px; margin-bottom: 20px; border-bottom: 1px solid var(--border); }
+.tab-btn {
+  padding: 10px 18px; font-size: 13px; font-weight: 600;
+  border: none; background: none; cursor: pointer; color: var(--muted);
+  border-bottom: 2px solid transparent; margin-bottom: -1px;
+  transition: all 0.15s; font-family: var(--sans);
+}
+.tab-btn.active { color: var(--accent); border-bottom-color: var(--accent); }
+.tab-btn:hover:not(.active) { color: var(--text); }
+.tab-pane { display: none; }
+.tab-pane.active { display: block; }
+
+/* Section heading */
+.section-title {
+  font-size: 11px; font-weight: 700; text-transform: uppercase;
+  letter-spacing: 0.8px; color: var(--muted); margin-bottom: 12px;
+}
+
+/* Summary stats */
+.stats-row {
+  display: grid; grid-template-columns: repeat(auto-fill, minmax(130px, 1fr));
+  gap: 10px; margin-bottom: 20px;
+}
+.stat-card {
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: 12px; padding: 16px; text-align: center;
+}
+.stat-val { font-family: var(--mono); font-size: 24px; font-weight: 700; color: var(--accent); }
+.stat-key { font-size: 11px; color: var(--muted); margin-top: 3px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; }
+
+/* Course table */
+.course-table { width: 100%; border-collapse: collapse; }
+.course-table th {
+  text-align: left; font-size: 11px; font-weight: 700; text-transform: uppercase;
+  letter-spacing: 0.6px; color: var(--muted);
+  padding: 8px 12px; border-bottom: 1px solid var(--border);
+}
+.course-table td {
+  padding: 12px 12px; border-bottom: 1px solid var(--border);
+  font-size: 13px; vertical-align: top;
+}
+.course-table tr:last-child td { border-bottom: none; }
+.course-table tr:hover td { background: var(--surface2); }
+.course-code { font-family: var(--mono); font-size: 11px; color: var(--accent); }
+.course-title { font-weight: 600; color: var(--text); }
+.status-pill {
+  display: inline-block; padding: 2px 8px; border-radius: 5px;
+  font-size: 10px; font-weight: 700; text-transform: uppercase;
+}
+.status-active   { background: rgba(34,197,94,0.1); color: var(--green); }
+.status-completed{ background: rgba(79,110,247,0.12); color: var(--accent); }
+.status-dropped  { background: rgba(239,68,68,0.1); color: var(--red); }
+
+.grade-chip {
+  display: inline-block; padding: 3px 8px; border-radius: 6px;
+  font-family: var(--mono); font-size: 12px; font-weight: 700;
+  background: var(--surface2); border: 1px solid var(--border);
+}
+.att-bar-wrap { display: flex; align-items: center; gap: 8px; }
+.att-bar {
+  flex: 1; height: 5px; border-radius: 3px;
+  background: var(--border); overflow: hidden;
+}
+.att-bar-fill { height: 100%; border-radius: 3px; background: var(--green); transition: width 0.4s; }
+.att-bar-fill.warn { background: var(--yellow); }
+.att-bar-fill.bad  { background: var(--red); }
+.att-pct { font-size: 11px; font-weight: 700; color: var(--muted); white-space: nowrap; }
+
+/* Loading skeleton */
+.skeleton { background: var(--surface2); border-radius: 8px; animation: shimmer 1.4s infinite linear; }
+@keyframes shimmer { 0% { opacity: 1; } 50% { opacity: 0.4; } 100% { opacity: 1; } }
+
+/* Responsive */
+@media (max-width: 900px) {
+  .layout { grid-template-columns: 1fr; }
+  .left-panel { height: auto; position: static; border-right: none; border-bottom: 1px solid var(--border); }
+  .right-panel { padding: 16px; }
+}
+@media (max-width: 600px) {
+  .profile-header { flex-direction: column; }
+  .info-grid { grid-template-columns: 1fr 1fr; }
+}
+</style>
+</head>
+<body>
+
+<!-- TOPBAR -->
+<div class="topbar">
+  <a class="topbar-brand" href="/">Di<span>kly</span></a>
+  <div class="topbar-title">Student Lookup</div>
+  <a class="topbar-back" href="javascript:history.back()">← Back</a>
+</div>
+
+<!-- MAIN LAYOUT -->
+<div class="layout">
+
+  <!-- LEFT: Search panel -->
+  <div class="left-panel">
+    <div class="search-box">
+      <div class="search-label">Search Students</div>
+      <div class="search-input-wrap">
+        <svg fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-4.35-4.35M17 11A6 6 0 105 11a6 6 0 0012 0z"/></svg>
+        <input id="searchInput" type="search" placeholder="Name or index number…" autocomplete="off" />
+      </div>
+      <div class="role-tabs" id="roleTabs">
+        <button class="role-tab active" data-role="student">Students</button>
+        <button class="role-tab" data-role="lecturer">Lecturers</button>
+        <button class="role-tab" data-role="all">All</button>
+      </div>
+    </div>
+
+    <div class="search-spinner" id="searchSpinner">Searching…</div>
+
+    <div class="results-area" id="resultsArea">
+      <div class="result-empty">
+        <svg fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0"/></svg>
+        <span>Type to search</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- RIGHT: Profile panel -->
+  <div class="right-panel" id="rightPanel">
+    <div class="empty-state" id="emptyState">
+      <svg fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.2" d="M5.121 17.804A13.937 13.937 0 0112 16c2.5 0 4.847.655 6.879 1.804M15 10a3 3 0 11-6 0 3 3 0 016 0zm6 2a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+      <h3>Select a student</h3>
+      <p>Search by name or index number, then click a result to view their full profile.</p>
+    </div>
+
+    <div id="profileView" style="display:none"></div>
+  </div>
+
+</div>
+
+<script>
+// ── Auth ──────────────────────────────────────────────────────────────────────
+const token = localStorage.getItem('token') || sessionStorage.getItem('token');
+if (!token) { window.location.href = '/'; }
+
+const api = (method, url, body) =>
+  fetch(url, {
+    method,
+    headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+    body: body ? JSON.stringify(body) : undefined,
+  }).then(async r => {
+    const d = await r.json().catch(() => ({}));
+    if (!r.ok) throw new Error(d.error || r.statusText);
+    return d;
+  });
+
+// ── State ─────────────────────────────────────────────────────────────────────
+let activeRole = 'student';
+let searchTimer = null;
+let activeResultId = null;
+
+// ── Role tabs ─────────────────────────────────────────────────────────────────
+document.getElementById('roleTabs').addEventListener('click', e => {
+  const btn = e.target.closest('.role-tab');
+  if (!btn) return;
+  document.querySelectorAll('.role-tab').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  activeRole = btn.dataset.role;
+  const q = document.getElementById('searchInput').value.trim();
+  if (q.length >= 2) doSearch(q);
+});
+
+// ── Search input ──────────────────────────────────────────────────────────────
+document.getElementById('searchInput').addEventListener('input', e => {
+  clearTimeout(searchTimer);
+  const q = e.target.value.trim();
+  if (q.length < 2) {
+    showEmptyResults('Type to search');
+    return;
+  }
+  searchTimer = setTimeout(() => doSearch(q), 320);
+});
+
+async function doSearch(q) {
+  document.getElementById('searchSpinner').style.display = 'block';
+  document.getElementById('resultsArea').innerHTML = '';
+  try {
+    const role = activeRole === 'all' ? undefined : activeRole;
+    const url = `/api/search?q=${encodeURIComponent(q)}${role ? '&role=' + role : ''}`;
+    const data = await api('GET', url);
+    renderResults(data.users || []);
+  } catch (e) {
+    showEmptyResults('Search failed: ' + e.message);
+  } finally {
+    document.getElementById('searchSpinner').style.display = 'none';
+  }
+}
+
+function showEmptyResults(msg) {
+  document.getElementById('resultsArea').innerHTML =
+    `<div class="result-empty"><svg fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0"/></svg><span>${msg}</span></div>`;
+}
+
+function renderResults(users) {
+  if (!users.length) { showEmptyResults('No results found'); return; }
+  const area = document.getElementById('resultsArea');
+  area.innerHTML = '';
+  users.forEach(u => {
+    const initials = (u.name || '?').split(' ').map(w => w[0]).join('').slice(0, 2).toUpperCase();
+    const sub = u.IndexNumber || u.employeeId || u.email || '';
+    const dept = u.department || u.programme || '';
+    const div = document.createElement('div');
+    div.className = 'result-item' + (u._id === activeResultId ? ' active' : '');
+    div.dataset.id = u._id;
+    div.innerHTML = `
+      <div class="result-avatar">
+        ${u.profilePhoto ? `<img src="${u.profilePhoto}" alt="">` : initials}
+      </div>
+      <div class="result-info">
+        <div class="result-name">${esc(u.name)}</div>
+        <div class="result-sub">${esc(sub)}${dept ? ' · ' + esc(dept) : ''}</div>
+      </div>
+      <div class="result-role-badge">${u.role}</div>`;
+    div.addEventListener('click', () => loadProfile(u._id, u.role, div));
+    area.appendChild(div);
+  });
+}
+
+// ── Load profile ──────────────────────────────────────────────────────────────
+async function loadProfile(userId, role, clickedEl) {
+  // Mark active in list
+  document.querySelectorAll('.result-item').forEach(el => el.classList.remove('active'));
+  clickedEl.classList.add('active');
+  activeResultId = userId;
+
+  const view = document.getElementById('profileView');
+  const emptyState = document.getElementById('emptyState');
+  emptyState.style.display = 'none';
+  view.style.display = 'block';
+  view.innerHTML = `<div class="skeleton" style="height:120px;border-radius:14px;margin-bottom:16px"></div>
+    <div class="skeleton" style="height:60px;border-radius:12px;margin-bottom:12px"></div>
+    <div class="skeleton" style="height:200px;border-radius:12px"></div>`;
+
+  try {
+    // Fetch profile + transcript in parallel (transcript only for students)
+    const promises = [api('GET', `/api/search/student/${userId}`)];
+    if (role === 'student') promises.push(api('GET', `/api/transcripts/${userId}`).catch(() => null));
+
+    const [profileData, transcriptData] = await Promise.all(promises);
+    renderProfile(profileData.student, transcriptData?.transcript || null);
+  } catch (e) {
+    view.innerHTML = `<div class="empty-state"><svg fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/></svg><h3>Error</h3><p>${esc(e.message)}</p></div>`;
+  }
+}
+
+// ── Render profile ────────────────────────────────────────────────────────────
+function renderProfile(s, transcript) {
+  const initials = (s.name || '?').split(' ').map(w => w[0]).join('').slice(0, 2).toUpperCase();
+  const statusTag = s.isLocked
+    ? `<span class="tag red">🔒 Locked</span>`
+    : s.isActive
+      ? `<span class="tag green">● Active</span>`
+      : `<span class="tag red">● Inactive</span>`;
+  const classRepTag = s.isClassRep ? `<span class="tag blue">Class Rep</span>` : '';
+  const selfRegTag = s.selfRegistered ? `<span class="tag yellow">Self-Registered</span>` : '';
+
+  const fields = [
+    { label: 'Index Number', value: s.IndexNumber || '—', mono: true },
+    { label: 'Email', value: s.email || '—' },
+    { label: 'Phone', value: s.phone || '—' },
+    { label: 'Programme', value: s.programme || '—' },
+    { label: 'Department', value: s.department || '—' },
+    { label: 'Level', value: s.studentLevel || '—' },
+    { label: 'Group', value: s.studentGroup || '—' },
+    { label: 'Session', value: s.sessionType || '—' },
+    { label: 'Semester', value: s.semester || '—' },
+    { label: 'Academic Year', value: s.academicYear || '—' },
+    { label: 'Joined', value: s.createdAt ? new Date(s.createdAt).toLocaleDateString() : '—' },
+    { label: 'Last Login', value: s.lastLoginAt ? timeAgo(new Date(s.lastLoginAt)) : 'Never' },
+  ];
+
+  // Build stats from transcript
+  let statsHtml = '', coursesHtml = '';
+  if (transcript) {
+    const sm = transcript.summary;
+    statsHtml = `
+      <div class="section-title">Academic Summary</div>
+      <div class="stats-row">
+        <div class="stat-card"><div class="stat-val">${sm.totalCourses}</div><div class="stat-key">Courses</div></div>
+        <div class="stat-card"><div class="stat-val">${sm.activeCourses}</div><div class="stat-key">Active</div></div>
+        <div class="stat-card"><div class="stat-val">${sm.completedCourses}</div><div class="stat-key">Completed</div></div>
+        <div class="stat-card"><div class="stat-val">${sm.gpa != null ? sm.gpa.toFixed(2) : '—'}</div><div class="stat-key">GPA</div></div>
+        <div class="stat-card"><div class="stat-val">${sm.averageScore != null ? sm.averageScore + '%' : '—'}</div><div class="stat-key">Avg Score</div></div>
+      </div>`;
+
+    const rows = (transcript.courses || []).map(c => {
+      const att = c.attendance;
+      const pct = att.pct != null ? att.pct : (att.totalSessions > 0 ? Math.round(att.attended / att.totalSessions * 100) : null);
+      const attClass = pct == null ? '' : pct >= 75 ? '' : pct >= 50 ? 'warn' : 'bad';
+      const attHtml = att.totalSessions > 0
+        ? `<div class="att-bar-wrap"><div class="att-bar"><div class="att-bar-fill ${attClass}" style="width:${pct || 0}%"></div></div><span class="att-pct">${pct != null ? pct + '%' : '—'}</span></div><div style="font-size:11px;color:var(--muted);margin-top:2px">${att.attended}/${att.totalSessions} sessions</div>`
+        : '<span style="color:var(--muted);font-size:12px">No sessions yet</span>';
+
+      const grade = c.finalGrade;
+      const gradeHtml = grade
+        ? `<span class="grade-chip">${grade.letter || ''} ${grade.score != null ? grade.score + '%' : ''}</span>`
+        : '<span style="color:var(--muted);font-size:12px">—</span>';
+
+      const statusClass = { active: 'status-active', completed: 'status-completed', dropped: 'status-dropped' }[c.enrollment.status] || '';
+      return `<tr>
+        <td><div class="course-code">${esc(c.course?.code || '')}</div><div class="course-title">${esc(c.course?.title || 'Unknown')}</div>
+            <div style="font-size:11px;color:var(--muted);margin-top:2px">${esc(c.course?.academicYear || '')} · Sem ${esc(c.course?.semester || '')}</div></td>
+        <td><span class="status-pill ${statusClass}">${c.enrollment.status}</span></td>
+        <td>${gradeHtml}</td>
+        <td>${attHtml}</td>
+      </tr>`;
+    }).join('');
+
+    coursesHtml = rows
+      ? `<div class="section-title">Enrolled Courses</div>
+         <div style="overflow-x:auto">
+           <table class="course-table">
+             <thead><tr><th>Course</th><th>Status</th><th>Grade</th><th>Attendance</th></tr></thead>
+             <tbody>${rows}</tbody>
+           </table>
+         </div>`
+      : `<div style="color:var(--muted);font-size:13px;padding:20px 0">No course enrollments found.</div>`;
+  }
+
+  const lockedNote = s.isLocked
+    ? `<div style="background:rgba(239,68,68,0.08);border:1px solid rgba(239,68,68,0.25);border-radius:10px;padding:12px 16px;margin-bottom:20px;font-size:13px;color:var(--red)">
+         🔒 <strong>Account Locked</strong>${s.lockReason ? ' — ' + esc(s.lockReason) : ''}
+         ${s.lockedAt ? '<span style="float:right;color:var(--muted)">' + new Date(s.lockedAt).toLocaleDateString() + '</span>' : ''}
+       </div>` : '';
+
+  document.getElementById('profileView').innerHTML = `
+    <!-- Header -->
+    <div class="profile-header">
+      <div class="profile-avatar">
+        ${s.profilePhoto ? `<img src="${esc(s.profilePhoto)}" alt="">` : initials}
+      </div>
+      <div class="profile-meta">
+        <div class="profile-name">${esc(s.name)}</div>
+        <div class="profile-index">${esc(s.IndexNumber || 'No Index Number')}</div>
+        <div class="profile-tags">
+          ${statusTag}${classRepTag}${selfRegTag}
+          ${s.programme ? `<span class="tag">${esc(s.programme)}</span>` : ''}
+          ${s.studentLevel ? `<span class="tag">Level ${esc(s.studentLevel)}</span>` : ''}
+          ${s.sessionType ? `<span class="tag">${esc(s.sessionType)}</span>` : ''}
+        </div>
+      </div>
+      <div class="profile-actions">
+        <button class="btn-sm btn-outline" onclick="window.location.href='mailto:${esc(s.email || '')}'">✉ Email</button>
+        ${s.phone ? `<button class="btn-sm btn-outline" onclick="window.location.href='tel:${esc(s.phone)}'">${esc(s.phone)}</button>` : ''}
+      </div>
+    </div>
+
+    ${lockedNote}
+
+    <!-- Tabs -->
+    <div class="tabs">
+      <button class="tab-btn active" data-tab="overview">Overview</button>
+      ${transcript ? '<button class="tab-btn" data-tab="academic">Academic</button>' : ''}
+    </div>
+
+    <div id="tab-overview" class="tab-pane active">
+      <div class="info-grid">
+        ${fields.map(f => `
+          <div class="info-card">
+            <div class="info-card-label">${esc(f.label)}</div>
+            <div class="info-card-value${f.mono ? ' mono' : ''}">${esc(String(f.value))}</div>
+          </div>`).join('')}
+      </div>
+    </div>
+
+    ${transcript ? `
+    <div id="tab-academic" class="tab-pane">
+      ${statsHtml}
+      ${coursesHtml}
+    </div>` : ''}
+  `;
+
+  // Tab switching
+  document.querySelectorAll('.tab-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+      document.querySelectorAll('.tab-pane').forEach(p => p.classList.remove('active'));
+      btn.classList.add('active');
+      document.getElementById('tab-' + btn.dataset.tab)?.classList.add('active');
+    });
+  });
+}
+
+// ── Helpers ───────────────────────────────────────────────────────────────────
+function esc(str) {
+  return String(str ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+function timeAgo(date) {
+  const diff = Date.now() - date.getTime();
+  const m = Math.floor(diff / 60000);
+  if (m < 1) return 'Just now';
+  if (m < 60) return m + 'm ago';
+  const h = Math.floor(m / 60);
+  if (h < 24) return h + 'h ago';
+  const d = Math.floor(h / 24);
+  if (d < 30) return d + 'd ago';
+  return date.toLocaleDateString();
+}
+</script>
+</body>
+</html>
