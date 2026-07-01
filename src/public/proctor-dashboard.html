@@ -472,11 +472,91 @@ function selectQuiz(id, title) {
   clearInterval(refreshTimer);
   loadAttempts();
   refreshTimer = setInterval(loadAttempts, 15000);
+  connectLiveWs();
 }
+
+// ── Live camera feed (WebSocket) ──────────────────────────────────────
+// Students publish a small camera frame every ~2s; the server relays them
+// to this quiz's room. Frames land here and update the Camera Grid in place.
+let liveWs = null;
+const liveFrames = {}; // attemptId → { frame, at }
+const LIVE_FRESH_MS = 10000;
+
+function connectLiveWs() {
+  if (liveWs) { try { liveWs.close(); } catch (e) { /* ignore */ } liveWs = null; }
+  if (!currentQuizId || !authToken) return;
+  const proto = location.protocol === 'https:' ? 'wss' : 'ws';
+  let ws;
+  try {
+    ws = new WebSocket(`${proto}://${location.host}/ws/monitor?token=${encodeURIComponent(authToken)}`);
+  } catch (e) { return; }
+  liveWs = ws;
+  const wsQuizId = currentQuizId;
+  ws.onopen = () => { try { ws.send(JSON.stringify({ type: 'subscribe', quizId: wsQuizId })); } catch (e) { /* ignore */ } };
+  ws.onmessage = (e) => {
+    let m; try { m = JSON.parse(e.data); } catch (err) { return; }
+    if (m.event === 'quiz:live_frame' && m.data?.attemptId && m.data?.frame) {
+      liveFrames[m.data.attemptId] = { frame: m.data.frame, at: Date.now() };
+      applyLiveFrame(m.data.attemptId, m.data.frame);
+      const ld = document.getElementById('live-dot');
+      if (ld) ld.style.display = '';
+    } else if (/^quiz:(violation_logged|attempt_started|attempt_submitted|attempt_auto_submitted|integrity_alert)$/.test(m.event || '')) {
+      scheduleLiveRefresh();
+    }
+  };
+  ws.onclose = () => {
+    if (liveWs === ws) liveWs = null;
+    // Reconnect while this quiz is still being monitored
+    if (currentQuizId === wsQuizId) setTimeout(() => { if (currentQuizId === wsQuizId && !liveWs) connectLiveWs(); }, 5000);
+  };
+  ws.onerror = () => { try { ws.close(); } catch (e) { /* ignore */ } };
+}
+
+// Debounced refresh so a burst of events causes one reload, not ten
+let _liveRefreshTimer = null;
+function scheduleLiveRefresh() {
+  if (_liveRefreshTimer) return;
+  _liveRefreshTimer = setTimeout(() => { _liveRefreshTimer = null; loadAttempts(); }, 1500);
+}
+
+// Update a Camera Grid cell (and the badge) in place when a frame arrives
+function applyLiveFrame(attemptId, frame) {
+  const img = document.getElementById('cam-img-' + attemptId);
+  if (img) {
+    img.src = frame;
+    img.style.display = '';
+    const ph = document.getElementById('cam-ph-' + attemptId);
+    if (ph) ph.style.display = 'none';
+  }
+  const badge = document.getElementById('cam-live-' + attemptId);
+  if (badge) badge.style.display = '';
+  const detailImg = document.getElementById('detail-live-' + attemptId);
+  if (detailImg) detailImg.src = frame;
+}
+
+// Hide LIVE badges for students whose frames have gone stale
+setInterval(() => {
+  const now = Date.now();
+  let anyLive = false;
+  Object.keys(liveFrames).forEach(aid => {
+    const fresh = now - liveFrames[aid].at < LIVE_FRESH_MS;
+    if (fresh) anyLive = true;
+    else {
+      const badge = document.getElementById('cam-live-' + aid);
+      if (badge) badge.style.display = 'none';
+    }
+  });
+  if (!anyLive) {
+    const ld = document.getElementById('live-dot');
+    if (ld) ld.style.display = 'none';
+  }
+}, 5000);
 
 function resetView() {
   attemptsData = [];
   selectedAttemptId = null;
+  if (liveWs) { try { liveWs.close(); } catch (e) { /* ignore */ } liveWs = null; }
+  Object.keys(liveFrames).forEach(k => delete liveFrames[k]);
   const ld = document.getElementById('live-dot');
   if (ld) ld.style.display = 'none';
   document.getElementById('summary-grid').innerHTML = `
@@ -649,7 +729,7 @@ async function loadDetail(attemptId) {
           LAST CAMERA CAPTURE · ${new Date(latestSnap.capturedAt).toLocaleTimeString()}
           ${latestSnap.aiFlags?.length ? ` · <span style="color:var(--yellow)">${latestSnap.aiFlags.map(f=>f.flagType.replace(/_/g,' ')).join(', ')}</span>` : ''}
         </div>
-        <img src="${latestSnap.thumbnailUrl || latestSnap.imageUrl}" alt="snapshot"
+        <img id="detail-live-${s._id}" src="${(liveFrames[s._id] && Date.now() - liveFrames[s._id].at < LIVE_FRESH_MS) ? liveFrames[s._id].frame : (latestSnap.thumbnailUrl || latestSnap.imageUrl)}" alt="snapshot"
           style="width:100%;display:block;aspect-ratio:4/3;object-fit:cover;background:#000"
           onerror="this.style.display='none'" />
       </div>` : '';
@@ -792,9 +872,12 @@ function renderCameraGrid() {
       ${attemptsData.map(a => {
         const risk     = riskOf(a);
         const initials = (a.student?.name||'S').split(' ').map(w=>w[0]).join('').toUpperCase().slice(0,2);
-        const cellBody = a.latestSnapshotUrl
-          ? `<img src="${a.latestSnapshotUrl}" alt="camera capture" style="width:100%;height:100%;object-fit:cover" onerror="this.outerHTML='<div style=&quot;width:100%;height:100%;display:flex;align-items:center;justify-content:center;background:linear-gradient(135deg,#0f1c2e,#1e3a5f);font-size:28px;font-weight:800;color:rgba(255,255,255,.3)&quot;>${initials}</div>'" />`
-          : `<div style="width:100%;height:100%;display:flex;align-items:center;justify-content:center;background:linear-gradient(135deg,#0f1c2e,#1e3a5f);font-size:28px;font-weight:800;color:rgba(255,255,255,.3)">${initials}</div>`;
+        const live     = liveFrames[a._id] && (Date.now() - liveFrames[a._id].at < LIVE_FRESH_MS) ? liveFrames[a._id].frame : null;
+        const imgSrc   = live || a.latestSnapshotUrl || '';
+        const cellBody =
+          `<img id="cam-img-${a._id}" src="${imgSrc}" alt="camera capture" style="width:100%;height:100%;object-fit:cover;${imgSrc?'':'display:none'}" onerror="this.style.display='none';var p=document.getElementById('cam-ph-${a._id}');if(p)p.style.display='flex'" />` +
+          `<div id="cam-ph-${a._id}" style="width:100%;height:100%;display:${imgSrc?'none':'flex'};align-items:center;justify-content:center;background:linear-gradient(135deg,#0f1c2e,#1e3a5f);font-size:28px;font-weight:800;color:rgba(255,255,255,.3)">${initials}</div>` +
+          `<div id="cam-live-${a._id}" style="position:absolute;top:6px;left:6px;display:${live?'':'none'};align-items:center;gap:4px;background:rgba(220,38,38,.85);color:#fff;font-size:9px;font-weight:800;letter-spacing:.5px;padding:2px 7px;border-radius:10px">● LIVE</div>`;
         return `
           <div class="cam-cell ${risk}" onclick="selectStudentFromGrid('${a._id}')">
             ${cellBody}
