@@ -38,6 +38,10 @@ const { analyzeSnapshot, generateQuizReport } = require("../services/aiProctorin
 const { broadcastQuizEvent } = require("../services/snapQuizBroadcast");
 const notificationService    = require("../services/notificationService");
 
+// Consecutive heartbeat/action requests that may arrive with no X-Session-Token
+// header before we treat it as a genuine session conflict (see _loadLockedAttempt).
+const MAX_TOKEN_MISS_STREAK = 2;
+
 // ─── Quiz discovery ───────────────────────────────────────────────────────────
 
 /**
@@ -558,8 +562,29 @@ exports.heartbeat = async (req, res) => {
   try {
     const attempt = await _loadLockedAttempt(req);
     if (!attempt) {
-      // Return a graceful terminated response rather than 404 so the client
-      // handles it via the success path (not the error catch block).
+      // Attempt is no longer ACTIVE. Fetch its real status so the client gets
+      // an accurate message instead of always seeing "session_conflict".
+      const dead = await SnapQuizAttempt.findOne({
+        _id:     req.params.attemptId,
+        quiz:    req.params.quizId,
+        student: req.user._id,
+        company: req.companyId,
+      }).select("status terminationReason").lean();
+
+      if (dead?.status === ATTEMPT_STATUSES.SUBMITTED || dead?.status === ATTEMPT_STATUSES.AUTO_SUBMITTED) {
+        return res.json({ expired: true, terminated: false });
+      }
+      if (dead?.status === ATTEMPT_STATUSES.TERMINATED) {
+        const isConflict = dead.terminationReason?.toLowerCase().includes("session conflict") ||
+                           dead.terminationReason?.toLowerCase().includes("duplicate tab");
+        return res.json({
+          terminated: true,
+          reason: isConflict ? "session_conflict" : "terminated",
+          terminationReason: dead.terminationReason || null,
+        });
+      }
+
+      // Not found at all (genuinely a different session or token mismatch).
       return res.json({ terminated: true, reason: "session_conflict" });
     }
 
@@ -1071,13 +1096,30 @@ async function _loadLockedAttempt(req) {
   });
   if (!attempt) return null;
 
-  // Session-lock check — token is REQUIRED when the attempt has one.
-  // Omitting the header is treated the same as sending the wrong token.
+  // Session-lock check.
   const token = req.headers["x-session-token"];
   if (attempt.sessionToken) {
-    if (!token || token !== attempt.sessionToken) {
+    if (token && token !== attempt.sessionToken) {
+      // A *present but wrong* token is a strong signal of a genuine second
+      // tab/device actively holding its own session token — terminate immediately.
       await _terminateSession(attempt, "Session conflict: duplicate tab or device detected");
       return null;
+    }
+    if (!token) {
+      // A *missing* token is ambiguous — it can also be caused by a flaky
+      // network/proxy stripping custom headers on a single request. Only
+      // terminate after a sustained streak of misses, not on the first one.
+      attempt.tokenMissStreak = (attempt.tokenMissStreak || 0) + 1;
+      if (attempt.tokenMissStreak > MAX_TOKEN_MISS_STREAK) {
+        await _terminateSession(attempt, "Session conflict: duplicate tab or device detected");
+        return null;
+      }
+      await attempt.save();
+      return attempt;
+    }
+    if (attempt.tokenMissStreak) {
+      attempt.tokenMissStreak = 0;
+      await attempt.save();
     }
   }
 
