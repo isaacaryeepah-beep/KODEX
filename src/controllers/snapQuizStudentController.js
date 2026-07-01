@@ -558,8 +558,29 @@ exports.heartbeat = async (req, res) => {
   try {
     const attempt = await _loadLockedAttempt(req);
     if (!attempt) {
-      // Return a graceful terminated response rather than 404 so the client
-      // handles it via the success path (not the error catch block).
+      // Attempt is no longer ACTIVE. Fetch its real status so the client gets
+      // an accurate message instead of always seeing "session_conflict".
+      const dead = await SnapQuizAttempt.findOne({
+        _id:     req.params.attemptId,
+        quiz:    req.params.quizId,
+        student: req.user._id,
+        company: req.companyId,
+      }).select("status terminationReason").lean();
+
+      if (dead?.status === ATTEMPT_STATUSES.SUBMITTED || dead?.status === ATTEMPT_STATUSES.AUTO_SUBMITTED) {
+        return res.json({ expired: true, terminated: false });
+      }
+      if (dead?.status === ATTEMPT_STATUSES.TERMINATED) {
+        const isConflict = dead.terminationReason?.toLowerCase().includes("session conflict") ||
+                           dead.terminationReason?.toLowerCase().includes("duplicate tab");
+        return res.json({
+          terminated: true,
+          reason: isConflict ? "session_conflict" : "terminated",
+          terminationReason: dead.terminationReason || null,
+        });
+      }
+
+      // Not found at all (genuinely a different session or token mismatch).
       return res.json({ terminated: true, reason: "session_conflict" });
     }
 

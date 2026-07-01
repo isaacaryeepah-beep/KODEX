@@ -1192,9 +1192,9 @@ window.addEventListener('load', () => loadMLLibs().catch(() => {}));
       </div>
     </div>
 
-    <div id="face-status-display" class="face-status red">
-      <div class="face-dot red"></div>
-      <span id="face-status-text">Detecting face…</span>
+    <div id="face-status-display" class="face-status yellow">
+      <div class="face-dot yellow"></div>
+      <span id="face-status-text">Starting camera…</span>
     </div>
 
     <div id="cam-msg" style="text-align:center;font-size:13px;color:var(--muted);margin-bottom:16px">Please allow camera access when prompted.</div>
@@ -2233,7 +2233,10 @@ async function initCameraSetup() {
     // Load face model
     loadFaceModel().then(model => {
       if (!model) {
-        msg.textContent = 'Face detection unavailable — you may proceed manually.';
+        msg.textContent = 'Camera ready. Proceed when ready.';
+        statusEl.className = 'face-status green';
+        statusEl.querySelector('.face-dot').className = 'face-dot green';
+        statusText.textContent = '✓ Camera Ready';
         captureBtn.disabled = false;
         return;
       }
@@ -2244,7 +2247,7 @@ async function initCameraSetup() {
         let cls = 'red', dot = 'red', txt = 'No face detected';
 
         if (count > 1) { cls = 'yellow'; dot = 'yellow'; txt = `${count} faces — only you should be visible`; }
-        else if (detected && centered) { cls = 'green'; dot = 'green'; txt = 'Face detected ✓'; captureBtn.disabled = false; }
+        else if (detected && centered) { cls = 'green'; dot = 'green'; txt = '✅ Face Verified'; captureBtn.disabled = false; }
         else if (detected) { cls = 'yellow'; dot = 'yellow'; txt = 'Center your face'; captureBtn.disabled = false; }
         else { captureBtn.disabled = true; }
 
@@ -3041,10 +3044,15 @@ async function logEvent(eventType, metadata = {}) {
         stopExamCleanup();
         state.examActive = false;
         const overlay = document.getElementById('violation-overlay');
-        let msg = 'Your exam session was terminated.';
+        let msg = 'Your exam session was terminated. Please contact your instructor.';
         if (hbRes.meetingEnded) msg = 'The live session has ended. Your exam has been automatically submitted.';
         else if (hbRes.expired)  msg = 'Your exam time has expired. Your answers have been automatically submitted.';
         else if (hbRes.reason === 'session_conflict') msg = 'Your exam session was ended. If you opened the exam in another tab or device, please close it and contact your instructor.';
+        else if (hbRes.reason === 'terminated') {
+          msg = hbRes.terminationReason
+            ? `Your exam was ended. ${hbRes.terminationReason}. Please contact your instructor if you believe this was an error.`
+            : 'Your exam session was ended by the system. Please contact your instructor.';
+        }
         overlay.innerHTML = `
           <div class="violation-icon">🔴</div>
           <div class="violation-title" style="color:#1e293b">Exam Session Ended</div>
