@@ -411,18 +411,21 @@ window.addEventListener('load', () => loadMLLibs().catch(() => {}));
   }
   .option-text { font-size: 14px; line-height: 1.4; flex: 1; }
 
-  /* Bottom nav */
+  /* Nav bar — fixed bottom on mobile, inline on desktop (overridden below) */
   .exam-nav {
     position: fixed;
     bottom: 0; left: 0; right: 0;
     background: var(--navy2);
     border-top: 1px solid var(--navy3);
     box-shadow: 0 -4px 16px rgba(0,0,0,0.06);
-    padding: 12px 16px;
-    padding-bottom: calc(12px + env(safe-area-inset-bottom));
-    display: flex; gap: 10px;
+    padding: 10px 14px;
+    padding-bottom: calc(10px + env(safe-area-inset-bottom));
+    display: flex; align-items: center; gap: 8px;
     z-index: 10;
   }
+  /* Hide desktop-only elements on mobile */
+  .exam-nav #sq-prev-btn { display: none; }
+  .exam-nav .q-progress-text { flex: 1; font-size: 12px; color: var(--muted); text-align: center; font-weight: 600; }
 
   /* ═══════════════════════════════════════════════════════════════
      VIOLATION OVERLAY
@@ -525,6 +528,223 @@ window.addEventListener('load', () => loadMLLibs().catch(() => {}));
     #exam-screen { flex-direction: column; }
     #floating-cam { width: 200px; height: 150px; bottom: 120px; }
     .exam-body { max-width: 740px; margin: 0 auto; }
+  }
+
+  /* ═══════════════════════════════════════════════════════════════
+     3-COLUMN EXAM LAYOUT (≥ 860px desktop)
+  ═══════════════════════════════════════════════════════════════ */
+  @media (min-width: 860px) {
+    /* override mobile #exam-screen stacking */
+    #exam-screen {
+      flex-direction: column;
+      overflow: hidden;
+    }
+    #exam-main-grid {
+      display: grid;
+      grid-template-columns: 220px 1fr 272px;
+      flex: 1;
+      overflow: hidden;
+      gap: 0;
+    }
+    /* Left sidebar — question navigation */
+    #qNavPanel {
+      display: flex;
+      flex-direction: column;
+      border-right: 1px solid var(--navy3);
+      overflow-y: auto;
+      padding: 16px;
+      background: var(--navy2);
+    }
+    #qNavPanel .sidebar-title {
+      font-size: 11px; font-weight: 700; text-transform: uppercase;
+      letter-spacing: 0.8px; color: var(--muted); margin-bottom: 12px;
+    }
+    /* Legend */
+    .qnav-legend {
+      display: flex; flex-direction: column; gap: 5px;
+      margin-bottom: 14px; padding-bottom: 14px;
+      border-bottom: 1px solid var(--navy3);
+    }
+    .qnav-legend-item {
+      display: flex; align-items: center; gap: 7px;
+      font-size: 11px; color: var(--muted);
+    }
+    .qleg-dot {
+      width: 14px; height: 14px; border-radius: 4px; flex-shrink: 0;
+    }
+    .qleg-dot.current  { background: #16a34a; }
+    .qleg-dot.answered { background: rgba(14,165,233,0.25); border: 1.5px solid var(--accent); }
+    .qleg-dot.visited  { background: rgba(14,165,233,0.1); border: 1.5px solid rgba(14,165,233,0.4); }
+    .qleg-dot.unseen   { background: transparent; border: 1.5px solid var(--navy3); }
+    /* Nav button grid */
+    #qNavGrid {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 6px;
+    }
+    .qnav-btn {
+      aspect-ratio: 1;
+      border-radius: 7px;
+      border: 1.5px solid var(--navy3);
+      background: transparent;
+      cursor: pointer;
+      font-size: 12px; font-weight: 700;
+      color: var(--white);
+      display: flex; align-items: center; justify-content: center;
+      transition: all 0.15s;
+    }
+    .qnav-btn:hover { border-color: var(--accent); }
+    .qnav-btn.current  { background: #16a34a; border-color: #16a34a; color: #fff; }
+    .qnav-btn.answered { background: rgba(14,165,233,0.18); border-color: var(--accent); }
+    .qnav-btn.visited  { background: rgba(14,165,233,0.07); border-color: rgba(14,165,233,0.35); }
+
+    /* Center column */
+    #qCenter {
+      overflow-y: auto;
+      display: flex; flex-direction: column;
+      background: var(--navy);
+    }
+    #qScrollArea {
+      flex: 1; overflow-y: auto; padding: 20px;
+    }
+    #qNavBar {
+      border-top: 1px solid var(--navy3);
+      padding: 12px 20px;
+      background: var(--navy2);
+      display: flex; align-items: center; gap: 10px;
+    }
+    #qNavBar .q-progress-text {
+      font-size: 12px; color: var(--muted); flex: 1; text-align: center; font-weight: 600;
+    }
+    #qNavBar button {
+      min-width: 100px;
+    }
+    /* Snapshot carousel strip */
+    #snapCarousel {
+      border-top: 1px solid var(--navy3);
+      padding: 12px 20px;
+      background: var(--navy2);
+    }
+    #snapCarousel .snap-title {
+      font-size: 11px; font-weight: 700; text-transform: uppercase;
+      letter-spacing: 0.8px; color: var(--muted); margin-bottom: 8px;
+    }
+    #snapList {
+      display: flex; gap: 8px; overflow-x: auto;
+      padding-bottom: 4px;
+      scrollbar-width: thin;
+    }
+    .snap-thumb {
+      flex-shrink: 0;
+      width: 60px; height: 45px;
+      border-radius: 6px; overflow: hidden;
+      border: 1.5px solid var(--navy3);
+      position: relative;
+      cursor: pointer;
+    }
+    .snap-thumb img {
+      width: 100%; height: 100%; object-fit: cover;
+    }
+    .snap-thumb-ts {
+      position: absolute; bottom: 0; left: 0; right: 0;
+      background: rgba(0,0,0,0.55);
+      font-size: 8px; color: #fff; text-align: center;
+      padding: 2px 1px;
+    }
+
+    /* Right sidebar */
+    #procPanel {
+      border-left: 1px solid var(--navy3);
+      overflow-y: auto;
+      display: flex; flex-direction: column;
+      background: var(--navy2);
+    }
+    #camBox {
+      position: relative;
+      aspect-ratio: 4/3;
+      background: #000;
+      overflow: hidden;
+      border-bottom: 1px solid var(--navy3);
+    }
+    #camBox video {
+      width: 100%; height: 100%; object-fit: cover; transform: scaleX(-1);
+    }
+    #cam-indicator {
+      position: absolute; top: 8px; right: 8px;
+      width: 10px; height: 10px; border-radius: 50%;
+      background: var(--green);
+    }
+    #cam-indicator.red { background: var(--red); animation: blink 1s infinite; }
+    .proc-section {
+      padding: 14px 16px;
+      border-bottom: 1px solid var(--navy3);
+    }
+    .proc-section-title {
+      font-size: 11px; font-weight: 700; text-transform: uppercase;
+      letter-spacing: 0.8px; color: var(--muted); margin-bottom: 10px;
+    }
+    .proc-rec {
+      display: flex; align-items: center; gap: 8px;
+      font-size: 13px; font-weight: 600; color: var(--red);
+      margin-bottom: 10px;
+    }
+    .proc-rec-dot {
+      width: 8px; height: 8px; border-radius: 50%;
+      background: var(--red);
+      animation: pulse-green 1.2s infinite;
+    }
+    .env-check-row {
+      display: flex; align-items: center; gap: 8px;
+      font-size: 12px; color: var(--white);
+      margin-bottom: 7px;
+    }
+    .env-check-icon { font-size: 13px; }
+    .proc-notice {
+      font-size: 11px; color: var(--muted); line-height: 1.5;
+    }
+    .detail-row {
+      display: flex; flex-direction: column; margin-bottom: 10px;
+    }
+    .detail-row .detail-key {
+      font-size: 10px; font-weight: 700; text-transform: uppercase;
+      letter-spacing: 0.6px; color: var(--muted); margin-bottom: 3px;
+    }
+    .detail-row .detail-val {
+      font-size: 13px; font-weight: 600; color: var(--white);
+    }
+    .status-badge {
+      display: inline-block; padding: 3px 10px;
+      border-radius: 6px; font-size: 11px; font-weight: 700;
+      background: rgba(22,163,74,0.12); color: var(--green);
+      border: 1px solid rgba(22,163,74,0.3);
+    }
+
+    /* Override nav bar: inline, not fixed */
+    .exam-nav {
+      position: static;
+      box-shadow: none;
+      padding: 10px 16px;
+      border-top: 1px solid var(--navy3);
+    }
+    .exam-nav #sq-prev-btn { display: flex; }
+    .exam-nav #next-btn { min-width: 110px; }
+    .exam-nav #skip-btn { min-width: 90px; }
+    .exam-topbar-ai-pill { display: flex; }
+    /* Hide floating cam on desktop */
+    #floating-cam { display: none !important; }
+  }
+
+  /* Mobile overrides */
+  @media (max-width: 859px) {
+    #exam-main-grid { display: flex; flex-direction: column; flex: 1; overflow: hidden; }
+    #qNavPanel { display: none; }
+    #procPanel { display: none; }
+    #qCenter { flex: 1; overflow: hidden; display: flex; flex-direction: column; }
+    #qScrollArea { flex: 1; overflow-y: auto; padding: 16px; padding-bottom: 70px; }
+    #snapCarousel { display: none; }
+    .exam-topbar-ai-pill { display: none; }
+    /* Show floating cam on mobile */
+    #floating-cam { display: block; }
   }
 
   /* Prevent zoom on double-tap iOS — scoped to avoid blocking tap on buttons */
@@ -973,34 +1193,108 @@ window.addEventListener('load', () => loadMLLibs().catch(() => {}));
 
   <!-- TOP BAR -->
   <div class="exam-topbar">
-    <div class="timer-block">
-      <span class="timer-icon">⏱</span>
-      <span id="timer-display" class="mono">--:--</span>
+    <!-- Logo -->
+    <div class="brand-icon" style="width:32px;height:32px;border-radius:8px;font-size:15px;flex-shrink:0">🛡</div>
+    <div id="examBarTitle" style="font-size:13px;font-weight:700;color:var(--white);flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">Snap Quiz</div>
+    <!-- AI pill (hidden on small screens) -->
+    <div class="exam-topbar-ai-pill" style="display:flex;align-items:center;gap:5px;padding:5px 10px;border-radius:6px;background:rgba(14,165,233,0.1);border:1px solid rgba(14,165,233,0.3);font-size:11px;font-weight:600;color:var(--accent);white-space:nowrap">
+      <span>🤖</span><span>AI Monitoring</span>
     </div>
-    <div class="progress-pill">Q <span id="q-current">1</span> / <span id="q-total">?</span></div>
     <div id="violation-badge">⚠ 0</div>
-    <div id="proctor-status" class="face-status green" style="margin:0;padding:7px 12px">
+    <div id="proctor-status" class="face-status green" style="margin:0;padding:6px 11px">
       <div class="face-dot green" id="ps-dot"></div>
-      <span id="ps-text" style="font-size:12px">OK</span>
+      <span id="ps-text" style="font-size:11px">OK</span>
     </div>
+    <!-- Timer block -->
+    <div class="timer-block" style="flex:unset;min-width:110px">
+      <span class="timer-icon">⏱</span>
+      <div style="display:flex;flex-direction:column;line-height:1.1">
+        <span class="exam-topbar-time-label" style="font-size:9px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:0.5px">Time Left</span>
+        <span id="timer-display" class="mono" style="font-size:16px">--:--</span>
+      </div>
+    </div>
+    <!-- Submit button -->
+    <button class="btn btn-primary" id="topbar-submit-btn" style="width:auto;padding:9px 16px;font-size:13px;min-height:36px;white-space:nowrap">Submit Quiz</button>
   </div>
 
-  <!-- EXAM BODY -->
-  <div class="exam-body" id="exam-body">
-    <div id="question-container"></div>
-  </div>
+  <!-- 3-COLUMN GRID (desktop ≥860px) / single column (mobile) -->
+  <div id="exam-main-grid">
 
-  <!-- FLOATING CAMERA -->
-  <div id="floating-cam" class="cam-green">
-    <video id="exam-video" autoplay playsinline muted></video>
-    <div id="cam-indicator"></div>
-  </div>
+    <!-- LEFT: Question navigation (desktop only) -->
+    <div id="qNavPanel">
+      <div class="sidebar-title">Questions</div>
+      <div class="qnav-legend">
+        <div class="qnav-legend-item"><div class="qleg-dot current"></div> Current</div>
+        <div class="qnav-legend-item"><div class="qleg-dot answered"></div> Answered</div>
+        <div class="qnav-legend-item"><div class="qleg-dot visited"></div> Visited</div>
+        <div class="qnav-legend-item"><div class="qleg-dot unseen"></div> Not Visited</div>
+      </div>
+      <div id="qNavGrid"></div>
+    </div>
 
-  <!-- BOTTOM NAV -->
-  <div class="exam-nav">
-    <button class="btn btn-ghost" id="skip-btn" style="flex:1">Skip →</button>
-    <button class="btn btn-primary" id="next-btn" style="flex:2">Next Question</button>
-  </div>
+    <!-- CENTER: Question scroll + unified nav bar + snapshots -->
+    <div id="qCenter">
+      <div id="qScrollArea">
+        <div id="exam-body">
+          <div id="question-container"></div>
+        </div>
+      </div>
+
+      <!-- Unified nav bar: fixed-bottom on mobile, inline on desktop -->
+      <div class="exam-nav" id="examNavBar">
+        <button class="btn btn-ghost btn-sm" id="sq-prev-btn">← Prev</button>
+        <div class="q-progress-text">Q <span id="q-current">1</span> / <span id="q-total">?</span></div>
+        <button class="btn btn-ghost btn-sm" id="skip-btn">Skip →</button>
+        <button class="btn btn-primary btn-sm" id="next-btn">Next →</button>
+      </div>
+
+      <!-- Snapshot carousel (desktop only) -->
+      <div id="snapCarousel">
+        <div class="snap-title">Quiz Snaps (Captured During the Quiz)</div>
+        <div id="snapList"></div>
+      </div>
+    </div>
+
+    <!-- RIGHT: Proctoring panel (desktop only) -->
+    <div id="procPanel">
+      <!-- Camera feed -->
+      <div id="camBox">
+        <video id="exam-video" autoplay playsinline muted></video>
+        <div id="cam-indicator"></div>
+      </div>
+
+      <!-- Recording status -->
+      <div class="proc-section">
+        <div class="proc-section-title">Proctoring</div>
+        <div class="proc-rec">
+          <div class="proc-rec-dot"></div>
+          <span>Recording <span id="proc-rec-timer" class="mono" style="font-size:13px">00:00:00</span></span>
+        </div>
+        <div style="margin-bottom:8px">
+          <div class="env-check-row"><span class="env-check-icon">✅</span> Camera Connected</div>
+          <div class="env-check-row"><span class="env-check-icon">✅</span> Microphone Connected</div>
+          <div class="env-check-row" id="envBrowser"><span class="env-check-icon">✅</span> Browser Secure</div>
+          <div class="env-check-row" id="envFs"><span class="env-check-icon">✅</span> Fullscreen Active</div>
+        </div>
+        <div class="proc-notice">Proctoring is active. Any violations are logged and may affect your result.</div>
+      </div>
+
+      <!-- Quiz details -->
+      <div class="proc-section">
+        <div class="proc-section-title">Quiz Details</div>
+        <div class="detail-row"><div class="detail-key">Quiz</div><div class="detail-val" id="detail-quiz">—</div></div>
+        <div class="detail-row"><div class="detail-key">Course</div><div class="detail-val" id="detail-course">—</div></div>
+        <div class="detail-row"><div class="detail-key">Started At</div><div class="detail-val" id="detail-started">—</div></div>
+        <div class="detail-row"><div class="detail-key">Student</div><div class="detail-val" id="detail-student">—</div></div>
+        <div class="detail-row"><div class="detail-key">Status</div><div class="detail-val"><span class="status-badge">In Progress</span></div></div>
+      </div>
+    </div>
+
+  </div><!-- /#exam-main-grid -->
+
+  <!-- Floating camera (mobile only — video element lives in #camBox; this is a coloured indicator) -->
+  <div id="floating-cam" class="cam-green"></div>
+
 </div>
 
 <!-- ─────────────────────────────────────────────────────────────────────────
@@ -2174,13 +2468,24 @@ document.getElementById('capture-start-btn').addEventListener('click', async () 
       setTimeout(() => examVideo.play().catch(() => {}), 300);
     }
 
-    // Ensure floating camera is visible for proctored quizzes
+    // Ensure floating camera is visible on mobile
     const floatingCamEl = document.getElementById('floating-cam');
-    if (floatingCamEl) floatingCamEl.style.display = '';
+    if (floatingCamEl && window.innerWidth < 860) floatingCamEl.style.display = '';
 
     show('exam-screen');
     document.body.classList.add('exam-active');
     state.examActive = true;
+
+    // Populate right sidebar details & topbar title
+    const sq = state.selectedQuiz || {};
+    const _setDetail = (id, val) => { const el = document.getElementById(id); if (el) el.textContent = val || '—'; };
+    _setDetail('detail-quiz', sq.title);
+    _setDetail('detail-course', sq.courseName || sq.course?.name);
+    _setDetail('detail-started', new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }));
+    _setDetail('detail-student', state.user?.name || state.user?.email);
+    const barTitle = document.getElementById('examBarTitle');
+    if (barTitle) barTitle.textContent = (sq.courseName || sq.course?.name || 'Snap Quiz') + ' / ' + (sq.title || 'Quiz');
+    _startRecordingTimer();
 
     // ── Offline AI Monitor ────────────────────────────────────────
     await OfflineMonitor.init({
@@ -2946,6 +3251,9 @@ function terminateExam(reason) {
 async function uploadSnapshot(imageData, type, faceDetected, faceCount, faceCentered, similarityToStart) {
   if (!state.sessionToken || !state.attempt?._id) return;
   try {
+    // Add to carousel immediately (before server round-trip)
+    _addSnapToCarousel(imageData);
+
     const res = await api(
       'POST',
       `/api/student/snap-quizzes/quizzes/${state.selectedQuiz._id}/attempts/${state.attempt._id}/snapshots`,
@@ -2989,7 +3297,15 @@ function renderQuestion() {
   const q = state.questions[state.currentIdx];
   if (!q) return;
 
+  // Track visited questions for nav grid
+  if (!state._visitedQs) state._visitedQs = new Set();
+  state._visitedQs.add(state.currentIdx);
+
   document.getElementById('q-current').textContent = state.currentIdx + 1;
+
+  // Update prev button state
+  const prevBtn = document.getElementById('sq-prev-btn');
+  if (prevBtn) prevBtn.disabled = state.currentIdx === 0;
   const container = document.getElementById('question-container');
 
   const letters = ['A','B','C','D','E','F'];
@@ -3064,8 +3380,11 @@ function renderQuestion() {
 
   const nextBtn = document.getElementById('next-btn');
   const isLast = state.currentIdx === state.questions.length - 1;
-  nextBtn.textContent = isLast ? 'Submit Exam' : 'Next Question';
-  nextBtn.className = isLast ? 'btn btn-danger' : 'btn btn-primary';
+  nextBtn.textContent = isLast ? 'Submit Exam' : 'Next →';
+  nextBtn.className = isLast ? 'btn btn-danger btn-sm' : 'btn btn-primary btn-sm';
+
+  // Rebuild desktop nav grid to reflect current/answered/visited states
+  _buildQNavGrid();
 }
 
 // Fire-and-forget save of all current answers to the server
@@ -3096,7 +3415,7 @@ document.getElementById('next-btn').addEventListener('click', () => {
     saveAnswer(); // persist progress before moving
     state.currentIdx++;
     renderQuestion();
-    document.getElementById('exam-body').scrollTop = 0;
+    const _sc = document.getElementById('qScrollArea'); if (_sc) _sc.scrollTop = 0;
   } else {
     confirmSubmit();
   }
@@ -3107,9 +3426,82 @@ document.getElementById('skip-btn').addEventListener('click', () => {
     saveAnswer(); // persist progress before skipping
     state.currentIdx++;
     renderQuestion();
-    document.getElementById('exam-body').scrollTop = 0;
+    const _sc = document.getElementById('qScrollArea'); if (_sc) _sc.scrollTop = 0;
   }
 });
+
+// ── Prev button ────────────────────────────────────────────────────
+document.getElementById('sq-prev-btn').addEventListener('click', () => {
+  if (state.currentIdx > 0) {
+    saveAnswer();
+    state.currentIdx--;
+    renderQuestion();
+    const _sc = document.getElementById('qScrollArea'); if (_sc) _sc.scrollTop = 0;
+  }
+});
+
+// ── Submit from topbar ─────────────────────────────────────────────
+document.getElementById('topbar-submit-btn').addEventListener('click', () => confirmSubmit());
+
+// ══════════════════════════════════════════════════════════════════
+//  QUESTION NAV GRID (3-col desktop sidebar)
+// ══════════════════════════════════════════════════════════════════
+function _buildQNavGrid() {
+  const grid = document.getElementById('qNavGrid');
+  if (!grid) return;
+  grid.innerHTML = '';
+  const total = state.questions?.length || 0;
+  for (let i = 0; i < total; i++) {
+    const btn = document.createElement('button');
+    btn.className = 'qnav-btn';
+    btn.textContent = i + 1;
+    const qId = state.questions[i]?._id;
+    if (i === state.currentIdx) {
+      btn.classList.add('current');
+    } else if (state.answers[qId] !== undefined && state.answers[qId] !== null && state.answers[qId] !== '') {
+      btn.classList.add('answered');
+    } else if (state._visitedQs && state._visitedQs.has(i)) {
+      btn.classList.add('visited');
+    }
+    btn.addEventListener('click', () => {
+      saveAnswer();
+      state.currentIdx = i;
+      renderQuestion();
+      const _sc = document.getElementById('qScrollArea'); if (_sc) _sc.scrollTop = 0;
+    });
+    grid.appendChild(btn);
+  }
+}
+
+// ══════════════════════════════════════════════════════════════════
+//  SNAPSHOT CAROUSEL
+// ══════════════════════════════════════════════════════════════════
+function _addSnapToCarousel(dataUrl) {
+  const list = document.getElementById('snapList');
+  if (!list || !dataUrl) return;
+  const wrap = document.createElement('div');
+  wrap.className = 'snap-thumb';
+  const now = new Date();
+  const ts = `${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')}:${String(now.getSeconds()).padStart(2,'0')}`;
+  wrap.innerHTML = `<img src="${dataUrl}" alt="snap"><div class="snap-thumb-ts">${ts}</div>`;
+  list.appendChild(wrap);
+  list.scrollLeft = list.scrollWidth;
+}
+
+// ══════════════════════════════════════════════════════════════════
+//  RECORDING TIMER (counts up in right sidebar)
+// ══════════════════════════════════════════════════════════════════
+function _startRecordingTimer() {
+  let secs = 0;
+  state._recTimerInterval = setInterval(() => {
+    secs++;
+    const h = String(Math.floor(secs / 3600)).padStart(2,'0');
+    const m = String(Math.floor((secs % 3600) / 60)).padStart(2,'0');
+    const s = String(secs % 60).padStart(2,'0');
+    const el = document.getElementById('proc-rec-timer');
+    if (el) el.textContent = `${h}:${m}:${s}`;
+  }, 1000);
+}
 
 // ══════════════════════════════════════════════════════════════════
 //  SUBMIT
@@ -3307,6 +3699,10 @@ function stopExamCleanup() {
   if (state._multiScreenCheckInterval) {
     clearInterval(state._multiScreenCheckInterval);
     state._multiScreenCheckInterval = null;
+  }
+  if (state._recTimerInterval) {
+    clearInterval(state._recTimerInterval);
+    state._recTimerInterval = null;
   }
   if (document.fullscreenElement) document.exitFullscreen().catch(() => {});
   if (state.audioStream) {
