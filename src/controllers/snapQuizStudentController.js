@@ -1276,10 +1276,15 @@ function _isCriticalViolation(type, quiz) {
   if (type === "print_screen"    && quiz.preventPrintScreen)        return true;
   // Mobile backgrounding is treated as tab_switch equivalent when mobileMonitoring is on
   if (type === "app_backgrounded" && quiz.mobileMonitoring !== false && quiz.terminateOnTabSwitch) return true;
-  // Always-critical: security and proctoring events (not configurable)
+  // Always-critical: security and proctoring events (not configurable).
+  // phone_detected and head_turn are intentionally NOT here: they come from
+  // naive client-side camera heuristics (brightness / keypoint ratios) that
+  // false-positive on lighting and angle. They are logged as INFO and appear
+  // in the lecturer's violation log and integrity report for human review,
+  // but never count toward automatic termination.
   return [
     "session_conflict", "devtools_open", "multiple_windows",
-    "phone_detected", "head_turn", "multiple_faces",
+    "multiple_faces",
   ].includes(type);
 }
 
