@@ -109,7 +109,7 @@ async function canSendMessage(sender, recipientId, company) {
     _id:      recipientObjId,
     company,
     isActive: true,
-  }).select("role corporateTeamRef reportingManager").lean();
+  }).select("role department corporateTeamRef reportingManager").lean();
 
   if (!recipient) return { allowed: false, reason: "Recipient not found or inactive." };
 
@@ -129,7 +129,14 @@ async function canSendMessage(sender, recipientId, company) {
     if (sRole === "hod") return { allowed: true };
 
     if (sRole === "lecturer") {
-      if (["hod", "admin", "superadmin", "lecturer"].includes(rRole)) return { allowed: true };
+      if (["admin", "superadmin", "lecturer"].includes(rRole)) return { allowed: true };
+      if (rRole === "hod") {
+        // Lecturer may only message the HOD of their own department
+        if (!sender.department || !recipient.department || sender.department !== recipient.department) {
+          return { allowed: false, reason: "You can only message the HOD of your own department." };
+        }
+        return { allowed: true };
+      }
       if (rRole === "student") {
         const enrolled = await Course.findOne({
           companyId:        company,
@@ -254,11 +261,17 @@ router.get("/users/messageable", ...mw, async (req, res) => {
           _id:      { $in: studentIds },
           isActive: true,
         }).select("_id name role department").lean();
+        const hodFilter = req.user.department
+          ? { role: "hod", department: req.user.department }
+          : { _id: null };
         const staff = await User.find({
           company,
-          role:     { $in: ["hod", "admin", "lecturer"] },
           isActive: true,
           _id:      { $ne: myId },
+          $or: [
+            { role: { $in: ["admin", "lecturer"] } },
+            hodFilter,
+          ],
         }).select("_id name role department").lean();
         users = [...students, ...staff];
       }
