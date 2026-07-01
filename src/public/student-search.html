@@ -324,15 +324,15 @@ html, body {
 </head>
 <body>
 
-<!-- TOPBAR -->
-<div class="topbar">
+<!-- TOPBAR (hidden in embed mode) -->
+<div class="topbar" id="mainTopbar">
   <a class="topbar-brand" href="/">Di<span>kly</span></a>
   <div class="topbar-title">Student Lookup</div>
   <a class="topbar-back" href="javascript:history.back()">← Back</a>
 </div>
 
 <!-- MAIN LAYOUT -->
-<div class="layout">
+<div class="layout" id="mainLayout">
 
   <!-- LEFT: Search panel -->
   <div class="left-panel">
@@ -373,9 +373,35 @@ html, body {
 </div>
 
 <script>
+// ── Embed mode ────────────────────────────────────────────────────────────────
+const _params = new URLSearchParams(window.location.search);
+const _embed  = _params.get('embed') === '1';
+
+if (_embed) {
+  // Hide topbar, make layout fill full height with no sticky offset
+  const tb = document.getElementById('mainTopbar');
+  if (tb) tb.style.display = 'none';
+  const ly = document.getElementById('mainLayout');
+  if (ly) { ly.style.minHeight = '100vh'; }
+  document.querySelector('.left-panel').style.height = '100vh';
+}
+
 // ── Auth ──────────────────────────────────────────────────────────────────────
-const token = localStorage.getItem('token') || sessionStorage.getItem('token');
-if (!token) { window.location.href = '/'; }
+// In embed mode, accept token from parent window via postMessage (avoids cross-origin issues)
+// or fall back to localStorage/sessionStorage.
+let token = localStorage.getItem('token') || sessionStorage.getItem('token');
+
+if (_embed && !token) {
+  // Request token from parent
+  window.parent.postMessage({ type: 'REQUEST_TOKEN' }, '*');
+  window.addEventListener('message', (e) => {
+    if (e.data?.type === 'TOKEN_RESPONSE' && e.data.token) {
+      token = e.data.token;
+    }
+  }, { once: true });
+}
+
+if (!_embed && !token) { window.location.href = '/'; }
 
 const api = (method, url, body) =>
   fetch(url, {

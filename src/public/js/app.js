@@ -2986,6 +2986,9 @@ function navigateTo(view) {
 
   const content = document.getElementById('main-content');
   if (!content) return;
+  // Reset any overrides set by renderSearch's iframe embed
+  content.style.padding = '';
+  content.style.overflow = '';
   content.innerHTML = '<div class="loading">Loading...</div>';
 
   // Close mobile sidebar automatically on every navigation
@@ -14528,122 +14531,31 @@ async function renderSubscription() {
 async function renderSearch() {
   const content = document.getElementById('main-content');
   if (!content) return;
-  const mode = currentUser.company?.mode || 'corporate';
-  const isAcademic = mode === 'academic';
-  const role = currentUser.role;
-  const canSeeAdmins = (role === 'admin' || role === 'superadmin');
 
-  // inject filter button styles once
-  if (!document.getElementById('search-filter-styles')) {
-    const style = document.createElement('style');
-    style.id = 'search-filter-styles';
-    style.textContent = '.search-filter-btn{padding:6px 14px;border-radius:20px;border:1px solid var(--border);background:var(--bg);color:var(--text-light);font-size:12px;cursor:pointer;transition:all .15s}.search-filter-btn.active,.search-filter-btn:hover{background:var(--primary);color:#fff;border-color:var(--primary)}';
-    document.head.appendChild(style);
-  }
+  // Use the dedicated student-search page embedded as a frameless iframe
+  content.style.padding = '0';
+  content.style.overflow = 'hidden';
+  const frame = document.createElement('iframe');
+  frame.src = '/student-search.html?embed=1';
+  frame.style.cssText = 'width:100%;height:calc(100vh - 60px);border:none;display:block';
+  frame.setAttribute('allowfullscreen', '');
+  content.innerHTML = '';
+  content.appendChild(frame);
 
-  let filterBtns = '<button class="search-filter-btn active" onclick="setSearchFilter(\'all\', this)">All</button>';
-  if (isAcademic) {
-    filterBtns += '<button class="search-filter-btn" onclick="setSearchFilter(\'student\', this)">Students</button>';
-    filterBtns += '<button class="search-filter-btn" onclick="setSearchFilter(\'lecturer\', this)">Lecturers</button>';
-  } else {
-    filterBtns += '<button class="search-filter-btn" onclick="setSearchFilter(\'employee\', this)">Employees</button>';
-    filterBtns += '<button class="search-filter-btn" onclick="setSearchFilter(\'manager\', this)">Managers</button>';
-  }
-  if (canSeeAdmins) {
-    filterBtns += '<button class="search-filter-btn" onclick="setSearchFilter(\'admin\', this)">Admins</button>';
-  }
-
-  const placeholder = isAcademic
-    ? 'Search by name, email, index number...'
-    : 'Search by name, email, employee ID...';
-
-  content.innerHTML =
-    '<div class="page-header" style="margin-bottom:20px"><h2 style="font-size:22px;font-weight:800;letter-spacing:-.5px;color:#0f172a;margin-bottom:2px">Search</h2><p style="color:#64748b;font-size:13px">Find ' + (isAcademic ? 'students, lecturers, or staff' : 'employees or staff') + ' quickly</p></div>' +
-    '<div style="background:#fff;border:1px solid #e8eaed;border-radius:14px;padding:18px 20px;margin-bottom:16px;box-shadow:0 1px 4px rgba(0,0,0,.05)">' +
-      '<div style="display:flex;gap:10px;align-items:center;margin-bottom:12px">' +
-        '<div style="flex:1;position:relative">' +
-          '<svg style="position:absolute;left:12px;top:50%;transform:translateY(-50%);pointer-events:none;color:#94a3b8" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>' +
-          '<input type="text" id="search-input" placeholder="' + placeholder + '" style="width:100%;padding:11px 14px 11px 38px;border:1.5px solid #e2e8f0;border-radius:10px;font-size:13.5px;font-family:inherit;outline:none;transition:border-color .15s;box-sizing:border-box" onfocus="this.style.borderColor=\'#2563eb\'" onblur="this.style.borderColor=\'#e2e8f0\'" oninput="debounceSearch()" onkeydown="if(event.key===\'Enter\')doSearch()">' +
-        '</div>' +
-        '<button class="btn btn-primary" onclick="doSearch()" style="padding:11px 20px;border-radius:10px;font-weight:600;display:flex;align-items:center;gap:6px;white-space:nowrap"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>Search</button>' +
-      '</div>' +
-      '<div style="display:flex;gap:6px;flex-wrap:wrap" id="search-filters">' + filterBtns + '</div>' +
-    '</div>' +
-    '<div id="search-results">' +
-      '<div style="text-align:center;padding:48px 20px">' +
-        '<div style="width:52px;height:52px;border-radius:14px;background:#f1f5f9;display:flex;align-items:center;justify-content:center;margin:0 auto 14px">' +
-          '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#94a3b8" stroke-width="1.8"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>' +
-        '</div>' +
-        '<p style="color:#94a3b8;font-size:13.5px">Enter a name, email' + (isAcademic ? ', or index number' : ', or employee ID') + ' to search</p>' +
-      '</div>' +
-    '</div>';
-}
-
-let searchFilter = 'all';
-let searchDebounceTimer = null;
-
-function setSearchFilter(filter, btn) {
-  searchFilter = filter;
-  document.querySelectorAll('.search-filter-btn').forEach(function(b) { b.classList.remove('active'); });
-  btn.classList.add('active');
-  doSearch();
-}
-
-function debounceSearch() {
-  clearTimeout(searchDebounceTimer);
-  searchDebounceTimer = setTimeout(doSearch, 350);
-}
-
-async function doSearch() {
-  var query = document.getElementById('search-input') ? document.getElementById('search-input').value.trim() : '';
-  var resultsEl = document.getElementById('search-results');
-  if (!resultsEl) return;
-
-  if (!query || query.length < 2) {
-    resultsEl.innerHTML = '<div class="card"><div class="empty-state"><p>Enter at least 2 characters to search</p></div></div>';
-    return;
-  }
-
-  resultsEl.innerHTML = '<div class="card"><p>Searching...</p></div>';
-
-  try {
-    var params = new URLSearchParams({ q: query });
-    if (searchFilter !== 'all') params.append('role', searchFilter);
-    var data = await api('/api/search?' + params.toString());
-    var users = data.users || [];
-    var mode = currentUser.company ? currentUser.company.mode || 'corporate' : 'corporate';
-
-    if (users.length === 0) {
-      resultsEl.innerHTML = '<div class="card"><div class="empty-state"><p>No users found for "' + query + '"</p></div></div>';
-      return;
+  // Pass auth token to the iframe once it loads
+  const tok = localStorage.getItem('token') || sessionStorage.getItem('token');
+  frame.addEventListener('load', () => {
+    frame.contentWindow.postMessage({ type: 'TOKEN_RESPONSE', token: tok }, '*');
+  });
+  window.addEventListener('message', (e) => {
+    if (e.data?.type === 'REQUEST_TOKEN') {
+      frame.contentWindow.postMessage({ type: 'TOKEN_RESPONSE', token: tok }, '*');
     }
-
-    var rows = users.map(function(u) {
-      var idCol = mode === 'academic'
-        ? '<td>' + (u.IndexNumber || u.indexNumber || u.email || '—') + '</td>'
-        : '<td>' + (u.email || '—') + '</td><td>' + (u.employeeId || '—') + '</td>';
-      var activeClass = u.isActive ? 'status-active' : 'status-stopped';
-      var activeLabel = u.isActive ? 'Active' : 'Inactive';
-      return '<tr><td style="font-weight:600">' + u.name + '</td>' + idCol +
-        '<td><span class="role-badge role-' + u.role + '">' + u.role + '</span></td>' +
-        '<td><span class="status-badge ' + activeClass + '">' + activeLabel + '</span></td>' +
-        '<td style="font-size:12px;color:var(--text-light)">' + new Date(u.createdAt).toLocaleDateString() + '</td></tr>';
-    }).join('');
-
-    var headerCols = mode === 'academic'
-      ? '<th>Index / Email</th>'
-      : '<th>Email</th><th>Employee ID</th>';
-
-    resultsEl.innerHTML =
-      '<div class="card">' +
-        '<div class="card-title" style="margin-bottom:12px">' + users.length + ' result' + (users.length !== 1 ? 's' : '') + ' for "<strong>' + query + '</strong>"</div>' +
-        '<table><thead><tr><th>Name</th>' + headerCols + '<th>Role</th><th>Status</th><th>Joined</th></tr></thead>' +
-        '<tbody>' + rows + '</tbody></table>' +
-      '</div>';
-  } catch (e) {
-    resultsEl.innerHTML = '<div class="card"><p style="color:var(--danger)">Search failed: ' + e.message + '</p></div>';
-  }
+  });
 }
+
+// doSearch / debounceSearch / setSearchFilter removed — search view now uses
+// student-search.html embedded as an iframe in renderSearch()
 
 
 function renderReports() {
