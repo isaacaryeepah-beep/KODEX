@@ -2240,20 +2240,31 @@ async function initCameraSetup() {
         captureBtn.disabled = false;
         return;
       }
-      // Run continuous face check
+      // Run continuous face check. "Verified" requires 2 consecutive good
+      // frames so the tick doesn't flicker on a single detection blip.
       if (state.faceCheckInterval) clearInterval(state.faceCheckInterval);
+      let verifyStreak = 0;
       state.faceCheckInterval = setInterval(async () => {
         const { count, detected, centered } = await detectFaces(video);
         let cls = 'red', dot = 'red', txt = 'No face detected';
 
-        if (count > 1) { cls = 'yellow'; dot = 'yellow'; txt = `${count} faces — only you should be visible`; }
-        else if (detected && centered) { cls = 'green'; dot = 'green'; txt = '✅ Face Verified'; captureBtn.disabled = false; }
-        else if (detected) { cls = 'yellow'; dot = 'yellow'; txt = 'Center your face'; captureBtn.disabled = false; }
-        else { captureBtn.disabled = true; }
+        if (count > 1) { verifyStreak = 0; cls = 'yellow'; dot = 'yellow'; txt = `${count} faces — only you should be visible`; }
+        else if (detected && centered) {
+          verifyStreak++;
+          cls = 'green'; dot = 'green';
+          txt = verifyStreak >= 2 ? "✅ You're Verified" : 'Hold still…';
+          captureBtn.disabled = false;
+        }
+        else if (detected) { verifyStreak = 0; cls = 'yellow'; dot = 'yellow'; txt = 'Center your face'; captureBtn.disabled = false; }
+        else { verifyStreak = 0; captureBtn.disabled = true; }
 
         statusEl.className = `face-status ${cls}`;
         statusEl.querySelector('.face-dot').className = `face-dot ${dot}`;
         statusText.textContent = txt;
+
+        const verified = verifyStreak >= 2;
+        _setVerifiedBadge(verified);
+        if (verified) msg.textContent = 'Identity confirmed — you can begin your exam.';
 
         // Glow the oval green when face is correctly positioned
         const faceOval = document.querySelector('#camera-preview-setup .face-oval');
@@ -2267,9 +2278,31 @@ async function initCameraSetup() {
   }
 }
 
+// Green "You're Verified" tick shown over the camera preview once the face
+// has been detected and centred for 2 consecutive checks.
+function _setVerifiedBadge(show) {
+  const holder = document.getElementById('camera-preview-setup');
+  if (!holder) return;
+  let badge = document.getElementById('face-verified-badge');
+  if (show) {
+    if (!badge) {
+      if (getComputedStyle(holder).position === 'static') holder.style.position = 'relative';
+      badge = document.createElement('div');
+      badge.id = 'face-verified-badge';
+      badge.style.cssText = 'position:absolute;top:10px;left:50%;transform:translateX(-50%);z-index:5;display:flex;align-items:center;gap:7px;background:rgba(22,163,74,.94);color:#fff;font-size:13px;font-weight:800;padding:7px 14px;border-radius:20px;box-shadow:0 4px 14px rgba(0,0,0,.45);white-space:nowrap';
+      badge.innerHTML = '<span style="display:inline-flex;width:18px;height:18px;border-radius:50%;background:#fff;color:#16a34a;align-items:center;justify-content:center;font-size:12px;font-weight:900">✓</span> You’re Verified';
+      holder.appendChild(badge);
+    }
+    badge.style.display = 'flex';
+  } else if (badge) {
+    badge.style.display = 'none';
+  }
+}
+
 function stopCamera() {
   if (state.faceCheckInterval) { clearInterval(state.faceCheckInterval); state.faceCheckInterval = null; }
   if (state.cameraStream) { state.cameraStream.getTracks().forEach(t => t.stop()); state.cameraStream = null; }
+  _setVerifiedBadge(false);
 }
 
 function captureFrame(videoEl) {
@@ -2398,6 +2431,7 @@ async function startExam() {
           };
           if (ev.readyState >= 2) onReady();
           else ev.addEventListener('loadeddata', onReady, { once: true });
+          _startLiveFeed(); // camera arrived after startProctoring — begin live feed now
           toast('📸 Camera connected for integrity monitoring', 'info');
         })
         .catch(() => {}); // Silently continue without camera if denied
@@ -2445,7 +2479,11 @@ document.getElementById('capture-start-btn').addEventListener('click', async () 
   const video = document.getElementById('setup-video');
   const snapshot = captureFrame(video);
   state._startFrameData = captureFrameData(video);   // reference for mid-exam identity checks
-  const { count, detected, centered } = await detectFaces(video);
+  // Face fields must be null (unknown) when the model isn't loaded — the
+  // server counts an explicit faceDetected:false toward auto-submit.
+  const { count, detected, centered } = state.faceModel
+    ? await detectFaces(video)
+    : { count: null, detected: null, centered: null };
 
   try {
     // Start proctored session via API
@@ -2626,9 +2664,85 @@ function resumeTimer(remainingSeconds) {
 // ══════════════════════════════════════════════════════════════════
 //  PROCTORING ENGINE
 // ══════════════════════════════════════════════════════════════════
+// ── Live camera feed to the lecturer's monitor dashboard ─────────────────────
+// Streams one small JPEG frame every ~2s over the monitor WebSocket. Chosen
+// over WebRTC deliberately: it survives 3G/flaky networks, needs no TURN
+// servers, and degrades to the periodic snapshots if the socket drops.
+let _liveFrameCanvas = null;
+function _captureLiveFrame(video) {
+  if (!_liveFrameCanvas) {
+    _liveFrameCanvas = document.createElement('canvas');
+    _liveFrameCanvas.width = 240; _liveFrameCanvas.height = 180;
+  }
+  const ctx = _liveFrameCanvas.getContext('2d');
+  ctx.drawImage(video, 0, 0, 240, 180);
+  return _liveFrameCanvas.toDataURL('image/jpeg', 0.45);
+}
+
+function _startLiveFeed() {
+  if (state._liveFrameInterval || !state.cameraStream) return;
+
+  const proto = location.protocol === 'https:' ? 'wss' : 'ws';
+  const connect = () => {
+    if (!state.examActive || state._liveWs) return;
+    let ws;
+    try {
+      ws = new WebSocket(`${proto}://${location.host}/ws/monitor?token=${encodeURIComponent(state.token)}`);
+    } catch { return; }
+    state._liveWs = ws;
+    state._liveWatching = false;
+    ws.onopen = () => {
+      // Announce availability; the server replies stream_start only while a
+      // lecturer's dashboard is actually watching this student, so no data
+      // is spent streaming to nobody.
+      try {
+        ws.send(JSON.stringify({
+          type: 'register_publisher',
+          quizId: state.selectedQuiz._id,
+          attemptId: state.attempt._id,
+        }));
+      } catch { /* retry on next connect */ }
+    };
+    ws.onmessage = (e) => {
+      let m; try { m = JSON.parse(e.data); } catch { return; }
+      if (m.event === 'stream_start') state._liveWatching = true;
+      else if (m.event === 'stream_stop') state._liveWatching = false;
+    };
+    ws.onclose = () => {
+      state._liveWs = null;
+      state._liveWatching = false;
+      if (state.examActive) setTimeout(connect, 5000);
+    };
+    ws.onerror = () => { try { ws.close(); } catch { /* ignore */ } };
+  };
+  connect();
+
+  state._liveFrameInterval = setInterval(() => {
+    const ws = state._liveWs;
+    if (!state.examActive || !state._liveWatching || !ws || ws.readyState !== 1) return;
+    const video = document.getElementById('exam-video');
+    if (!video || video.readyState < 2 || !state.attempt?._id) return;
+    try {
+      ws.send(JSON.stringify({
+        type: 'publish_frame',
+        frame: _captureLiveFrame(video),
+      }));
+    } catch { /* skip this frame */ }
+  }, 2000);
+}
+
+function _stopLiveFeed() {
+  if (state._liveFrameInterval) { clearInterval(state._liveFrameInterval); state._liveFrameInterval = null; }
+  state._liveWatching = false;
+  if (state._liveWs) { try { state._liveWs.close(); } catch { /* ignore */ } state._liveWs = null; }
+}
+
 function startProctoring() {
   const quiz = state.selectedQuiz;
   const examVideo = document.getElementById('exam-video');
+
+  // ── Live camera feed to lecturer dashboard (when camera available) ──
+  _startLiveFeed();
 
   // ── Heartbeat — use quiz's configured interval (default 30 s) ──
   const hbMs = Math.max(10, quiz.heartbeatIntervalSeconds || 30) * 1000;
@@ -2642,12 +2756,26 @@ function startProctoring() {
   }, 60000);
 
   // ── Face + Head-turn + Phone monitoring (only when proctoringEnabled) ──
-  state.criticalStrikesThisSession = 0;
+  // Camera heuristics misfire on lighting, autoexposure, and angle, so a
+  // violation is only reported after several CONSECUTIVE flagged frames —
+  // never from a single blip — and streaks reset on any clean frame.
+  // Nothing is checked during the warm-up grace period (autoexposure settles).
+  // Termination is decided exclusively by the server against the lecturer's
+  // maxViolationsBeforeTermination; the client never force-submits on its own.
   if (quiz.proctoringEnabled) {
+    const PROCTOR_GRACE_MS = 12000;
+    const proctorStartAt = Date.now();
+    // Consecutive-frame thresholds: phone/head-turn are the noisiest heuristics
+    const streaks = { phone: 0, headTurn: 0, multiFace: 0 };
+    const STREAK_NEEDED = { phone: 3, headTurn: 3, multiFace: 2 };
     state.faceCheckInterval = setInterval(async () => {
       if (!state.examActive) return;
+      if (Date.now() - proctorStartAt < PROCTOR_GRACE_MS) return;
       const { count, detected, centered, headTurn } = await detectFaces(examVideo);
-      const phoneDetected = detectPhoneInFrame(examVideo);
+      // Phone heuristic is brightness-based; only meaningful when the face
+      // model is working (otherwise we can't distinguish "phone glow" from
+      // a bright background with no other signal to cross-check).
+      const phoneDetected = state.faceModel ? detectPhoneInFrame(examVideo) : false;
       const floatingCam = document.getElementById('floating-cam');
       const dot = document.getElementById('ps-dot');
       const text = document.getElementById('ps-text');
@@ -2656,26 +2784,36 @@ function startProctoring() {
       if (phoneDetected) {
         setProctorStatus('red', '🚫 Phone!', floatingCam, dot, text);
         camInd.className = 'red';
-        state.criticalStrikesThisSession++;
-        showProctorStrikeWarning('phone_detected', state.criticalStrikesThisSession);
-        logEvent('phone_detected').catch(console.warn);
+        streaks.headTurn = 0; streaks.multiFace = 0;
+        if (++streaks.phone >= STREAK_NEEDED.phone) {
+          streaks.phone = 0;
+          showProctorStrikeWarning('phone_detected');
+          logEvent('phone_detected').catch(console.warn);
+        }
 
       } else if (headTurn) {
         setProctorStatus('red', '⚠ Head turn!', floatingCam, dot, text);
         camInd.className = 'red';
-        state.criticalStrikesThisSession++;
-        showProctorStrikeWarning('head_turn', state.criticalStrikesThisSession);
-        logEvent('head_turn').catch(console.warn);
+        streaks.phone = 0; streaks.multiFace = 0;
+        if (++streaks.headTurn >= STREAK_NEEDED.headTurn) {
+          streaks.headTurn = 0;
+          showProctorStrikeWarning('head_turn');
+          logEvent('head_turn').catch(console.warn);
+        }
 
       } else if (count > 1) {
         setProctorStatus('red', '⚠ Multiple faces', floatingCam, dot, text);
         camInd.className = 'red';
-        state.criticalStrikesThisSession++;
-        showProctorStrikeWarning('multiple_faces', state.criticalStrikesThisSession);
-        logEvent('multiple_faces', { count }).catch(console.warn);
+        streaks.phone = 0; streaks.headTurn = 0;
+        if (++streaks.multiFace >= STREAK_NEEDED.multiFace) {
+          streaks.multiFace = 0;
+          showProctorStrikeWarning('multiple_faces');
+          logEvent('multiple_faces', { count }).catch(console.warn);
+        }
 
       } else if (!detected) {
-        if (state.faceModelFailed) {
+        streaks.phone = 0; streaks.headTurn = 0; streaks.multiFace = 0;
+        if (state.faceModelFailed || !state.faceModel) {
           // ML model unavailable — camera is active but we can't determine
           // face presence; don't penalise students for a model load failure
           setProctorStatus('yellow', '⚠ AI unavailable', floatingCam, dot, text);
@@ -2686,19 +2824,16 @@ function startProctoring() {
         }
 
       } else if (!centered) {
+        streaks.phone = 0; streaks.headTurn = 0; streaks.multiFace = 0;
         setProctorStatus('yellow', '⚠ Off-center', floatingCam, dot, text);
         camInd.className = '';
         if (state.lastFaceState !== 'yellow') logEvent('face_off_center').catch(console.warn);
 
       } else {
+        streaks.phone = 0; streaks.headTurn = 0; streaks.multiFace = 0;
         setProctorStatus('green', '✓ Face OK', floatingCam, dot, text);
         camInd.className = '';
         if (state.lastFaceState !== 'green') logEvent('face_detected').catch(console.warn);
-      }
-
-      if (state.criticalStrikesThisSession >= 2) {
-        state.criticalStrikesThisSession = 0;
-        showAutoSubmitCountdown();
       }
 
       state.lastFaceState = phoneDetected || headTurn || count > 1 ? 'red' : !detected ? 'red' : !centered ? 'yellow' : 'green';
@@ -2711,8 +2846,15 @@ function startProctoring() {
   if (snapSecs > 0) {
     state.snapshotInterval = setInterval(async () => {
       if (!state.examActive) return;
-      const { count, detected, centered } = await detectFaces(examVideo);
       const img = captureFrame(examVideo);
+      if (!state.faceModel) {
+        // Face model never loaded — send the image for lecturer review but
+        // report face fields as unknown (null), NOT "no face": the server
+        // counts faceDetected === false toward auto-submit enforcement.
+        uploadSnapshot(img, 'periodic', null, null, null).catch(console.warn);
+        return;
+      }
+      const { count, detected, centered } = await detectFaces(examVideo);
       uploadSnapshot(img, 'periodic', detected, count, centered).catch(console.warn);
     }, Math.max(10, snapSecs) * 1000);
   }
@@ -3148,7 +3290,7 @@ function dismissStrikeWarning() {
 }
 
 // ── Strike warning popup (phone / head turn / multiple faces) ──────────────
-function showProctorStrikeWarning(type, strikeNum) {
+function showProctorStrikeWarning(type) {
   document.getElementById('proctor-strike-toast')?.remove();
   const labels = {
     phone_detected: '📱 Phone Detected',
@@ -3175,53 +3317,12 @@ function showProctorStrikeWarning(type, strikeNum) {
     '<div style="font-size:40px;margin-bottom:10px">⚠️</div>' +
     '<div style="font-size:19px;font-weight:700;color:#ef4444;margin-bottom:8px">' + label + '</div>' +
     '<div style="font-size:14px;color:#64748b;line-height:1.6;margin-bottom:16px">' +
-      'Strike <span style="color:#fbbf24;font-size:20px;font-weight:800">' + strikeNum + '</span> of 2<br>' +
-      (strikeNum < 2
-        ? '<span style="color:#fbbf24">⚠ One more violation will auto-submit your quiz!</span>'
-        : '<span style="color:#ef4444">Submitting your quiz now…</span>') +
+      'This incident has been logged and reported to your lecturer.<br>' +
+      '<span style="color:#fbbf24">⚠ Repeated violations may terminate your exam.</span>' +
     '</div>' +
-    (strikeNum < 2
-      ? '<button onclick="dismissStrikeWarning()" style="background:#ef4444;color:#fff;border:none;border-radius:8px;padding:9px 22px;font-size:14px;font-weight:600;cursor:pointer;font-family:inherit">I Understand</button>'
-      : '');
+    '<button onclick="dismissStrikeWarning()" style="background:#ef4444;color:#fff;border:none;border-radius:8px;padding:9px 22px;font-size:14px;font-weight:600;cursor:pointer;font-family:inherit">I Understand</button>';
   document.body.appendChild(el);
-  if (strikeNum < 2) setTimeout(() => document.getElementById('proctor-strike-toast')?.remove(), 6000);
-}
-
-// ── Auto-submit countdown when 2nd critical violation hits ─────────────────
-function showAutoSubmitCountdown() {
-  document.getElementById('proctor-strike-toast')?.remove();
-  const el = document.createElement('div');
-  el.style.cssText = [
-    'position:fixed', 'inset:0',
-    'z-index:10000',
-    'background:rgba(240,244,255,0.97)',
-    'display:flex',
-    'align-items:center',
-    'justify-content:center'
-  ].join(';');
-  el.innerHTML =
-    '<div style="background:#ffffff;border:2px solid #dc2626;border-radius:16px;padding:36px 32px;text-align:center;max-width:360px;width:90%;box-shadow:0 20px 60px rgba(0,0,0,.8)">' +
-      '<div style="font-size:52px;margin-bottom:12px">🚫</div>' +
-      '<div style="font-size:20px;font-weight:700;color:#ef4444;margin-bottom:8px">Quiz Auto-Submitting</div>' +
-      '<div style="font-size:14px;color:#475569;margin-bottom:20px;line-height:1.6">' +
-        'You received <strong style="color:#fbbf24">2 critical violations</strong>.<br>' +
-        'Your work is being submitted automatically.' +
-      '</div>' +
-      '<div style="font-size:58px;font-weight:800;color:#fbbf24;line-height:1" id="asc-num">5</div>' +
-      '<div style="font-size:12px;color:#64748b;margin-top:6px">seconds</div>' +
-    '</div>';
-  document.body.appendChild(el);
-  let secs = 5;
-  const timer = setInterval(function() {
-    secs--;
-    const n = document.getElementById('asc-num');
-    if (n) n.textContent = secs;
-    if (secs <= 0) {
-      clearInterval(timer);
-      el.remove();
-      submitExam();
-    }
-  }, 1000);
+  setTimeout(() => document.getElementById('proctor-strike-toast')?.remove(), 6000);
 }
 
 function terminateExam(reason) {
@@ -3730,6 +3831,7 @@ function stopExamCleanup() {
     clearInterval(state._recTimerInterval);
     state._recTimerInterval = null;
   }
+  _stopLiveFeed();
   if (document.fullscreenElement) document.exitFullscreen().catch(() => {});
   if (state.audioStream) {
     state.audioStream.getTracks().forEach(t => t.stop());
