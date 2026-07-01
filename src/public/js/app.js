@@ -15589,7 +15589,7 @@ async function renderAnnouncements() {
     const data = await api('/api/announcements');
     offlineCache('announcements', data);
     const anns = data.announcements || [];
-    const canPost = ANN_CAN_POST.includes(currentUser.role);
+    const canPost = ANN_CAN_POST.includes(currentUser.role) || !!currentUser.isClassRep;
     const isAdmin = ['admin','superadmin'].includes(currentUser.role);
 
     content.innerHTML = `
@@ -15700,7 +15700,10 @@ async function openPostAnnouncementModal() {
           </div>
           <div>
             <label style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;color:var(--text-light);margin-bottom:5px;display:block;">Audience</label>
-            ${currentUser.role === 'lecturer'
+            ${currentUser.isClassRep
+              ? `<input type="hidden" id="ann-audience" value="class_group">
+                 <div style="padding:8px 12px;background:var(--bg);border:1.5px solid var(--border);border-radius:8px;font-size:13px;color:var(--text-light);">👥 My Class only</div>`
+              : currentUser.role === 'lecturer'
               ? `<input type="hidden" id="ann-audience" value="students">
                  <div style="padding:8px 12px;background:var(--bg);border:1.5px solid var(--border);border-radius:8px;font-size:13px;color:var(--text-light);">📚 My Students only</div>`
               : currentUser.role === 'hod'
