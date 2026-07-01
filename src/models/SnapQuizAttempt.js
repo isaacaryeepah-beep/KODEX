@@ -126,6 +126,14 @@ const snapQuizAttemptSchema = new mongoose.Schema(
       type: Date,
       default: null,
     },
+    // Consecutive requests that arrived with no X-Session-Token header at all
+    // (as opposed to a present-but-wrong token). A dropped header can happen
+    // from a flaky network/proxy stripping custom headers, so a single miss
+    // is not treated as proof of a second tab/device — only a sustained streak is.
+    tokenMissStreak: {
+      type: Number,
+      default: 0,
+    },
 
     // ── Scores ────────────────────────────────────────────────────────────
     rawScore:        { type: Number,  default: null },

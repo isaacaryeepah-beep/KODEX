@@ -38,6 +38,10 @@ const { analyzeSnapshot, generateQuizReport } = require("../services/aiProctorin
 const { broadcastQuizEvent } = require("../services/snapQuizBroadcast");
 const notificationService    = require("../services/notificationService");
 
+// Consecutive heartbeat/action requests that may arrive with no X-Session-Token
+// header before we treat it as a genuine session conflict (see _loadLockedAttempt).
+const MAX_TOKEN_MISS_STREAK = 2;
+
 // ─── Quiz discovery ───────────────────────────────────────────────────────────
 
 /**
@@ -1092,13 +1096,30 @@ async function _loadLockedAttempt(req) {
   });
   if (!attempt) return null;
 
-  // Session-lock check — token is REQUIRED when the attempt has one.
-  // Omitting the header is treated the same as sending the wrong token.
+  // Session-lock check.
   const token = req.headers["x-session-token"];
   if (attempt.sessionToken) {
-    if (!token || token !== attempt.sessionToken) {
+    if (token && token !== attempt.sessionToken) {
+      // A *present but wrong* token is a strong signal of a genuine second
+      // tab/device actively holding its own session token — terminate immediately.
       await _terminateSession(attempt, "Session conflict: duplicate tab or device detected");
       return null;
+    }
+    if (!token) {
+      // A *missing* token is ambiguous — it can also be caused by a flaky
+      // network/proxy stripping custom headers on a single request. Only
+      // terminate after a sustained streak of misses, not on the first one.
+      attempt.tokenMissStreak = (attempt.tokenMissStreak || 0) + 1;
+      if (attempt.tokenMissStreak > MAX_TOKEN_MISS_STREAK) {
+        await _terminateSession(attempt, "Session conflict: duplicate tab or device detected");
+        return null;
+      }
+      await attempt.save();
+      return attempt;
+    }
+    if (attempt.tokenMissStreak) {
+      attempt.tokenMissStreak = 0;
+      await attempt.save();
     }
   }
 
