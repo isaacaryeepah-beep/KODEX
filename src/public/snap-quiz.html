@@ -15,6 +15,24 @@
 <script src="/js/offline-monitor.js"></script>
 <script src="/js/offline-recorder.js"></script>
 
+<!-- Mobile block — runs before anything else renders -->
+<script>
+(function(){
+  var ua = navigator.userAgent;
+  if (/iphone|ipad|android|mobile|tablet|silk|kindle|opera mini|blackberry|windows phone/i.test(ua)) {
+    document.addEventListener('DOMContentLoaded', function() {
+      document.body.innerHTML = '';
+      document.body.style.cssText = 'margin:0;padding:0;min-height:100vh;background:#080b12;display:flex;align-items:center;justify-content:center;font-family:sans-serif;';
+      document.body.innerHTML = '<div style="max-width:340px;text-align:center;padding:2rem 1.5rem">'
+        + '<div style="font-size:3rem;margin-bottom:1rem">💻</div>'
+        + '<h2 style="color:#f1f5f9;font-size:1.2rem;margin-bottom:.75rem">Desktop Required</h2>'
+        + '<p style="color:#94a3b8;font-size:.9rem;line-height:1.6">Quizzes cannot be taken on a phone or tablet. Please open this page on a <strong style="color:#f1f5f9">desktop or laptop computer</strong> to continue.</p>'
+        + '</div>';
+    });
+  }
+})();
+</script>
+
 <!-- TF loaded async so it never blocks login UI wiring -->
 <script>
 function loadMLLibs() {

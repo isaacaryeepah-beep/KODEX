@@ -10,7 +10,7 @@ This file is the single source of truth for Claude Code sessions. Read it at the
 
 - **Backend**: Node.js / Express / MongoDB / Redis — `src/server.js`
 - **Frontend**: Vanilla HTML/CSS/JS served by Express — `src/public/`
-- **Mobile app**: Flutter — `dikly_flutter/`
+- **Mobile app**: Flutter — `dikly_flutter/` — **STOPPED. Do not work on Flutter. User has decided to stop Flutter development.**
 - **Firmware**: ESP32 Arduino for BLE + WiFi attendance devices — `firmware/`
 - **Primary domain**: `dikly.sbs` (subdomains: `app`, `api`, `admin`, `monitor`, `meet`)
 
@@ -117,7 +117,7 @@ This file is the single source of truth for Claude Code sessions. Read it at the
 
 ## Pending / Next Steps
 
-1. **Flutter app UI polish** — User wants to review the web app (via video/screenshots) first, then align Flutter screens to match. Session was paused; resume when user shares the recording.
+1. **Flutter — STOPPED** — User has decided to stop Flutter development entirely. Do not suggest or work on Flutter.
 2. **Production deployment** — Set `JWT_REFRESH_SECRET` to a real 64-char random string before first deploy.
 3. No other outstanding bugs or blockers known.
 
