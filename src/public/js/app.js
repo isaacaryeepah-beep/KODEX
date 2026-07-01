@@ -23479,6 +23479,7 @@ const AI_REPORT_DEFS = {
   weekly_digest:       { label: 'Weekly Digest',           roles: ['admin','manager','hod'],        icon: '<rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/><line x1="8" y1="14" x2="16" y2="14"/>',  color: '#14b8a6', desc: 'A plain-English digest of the past 7 days: sessions, attendance, announcements, and leave activity.' },
   custom_query:        { label: 'Ask Dikly AI',            roles: ['admin','hod','lecturer','manager','student'], icon: '<path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>',                                                                                              color: '#8b5cf6', desc: 'Ask any question about your institution\'s data in plain English.' },
   platform_health:     { label: 'Platform Health',         roles: ['superadmin'],                  icon: '<rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/>',                                                       color: '#ec4899', desc: 'Revenue, active institutions, subscription status, and churn risk across the entire platform.' },
+  student_lookup:      { label: 'Student Lookup',          roles: ['admin','superadmin','hod','lecturer'], icon: '<circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>',                                                                                                    color: '#0ea5e9', desc: 'Enter a student\'s index number or name to instantly pull up their full profile and academic details.' },
 };
 
 async function renderAIReports() {
@@ -23563,6 +23564,12 @@ async function _aiLoadRecentReports() {
 window.aiReportOpen = async function(type) {
   const def = AI_REPORT_DEFS[type];
   if (!def) return;
+
+  // Student lookup
+  if (type === 'student_lookup') {
+    _aiShowStudentLookupModal();
+    return;
+  }
 
   // If custom_query, show the question input modal
   if (type === 'custom_query') {
@@ -23746,6 +23753,110 @@ async function _aiShowDeptPickerModal() {
   document.body.appendChild(overlay);
   overlay.addEventListener('click', e => { if (e.target === overlay) overlay.remove(); });
 }
+
+function _aiShowStudentLookupModal() {
+  const overlay = document.createElement('div');
+  overlay.id = 'student-lookup-overlay';
+  overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:9999;display:flex;align-items:center;justify-content:center;padding:1rem';
+  overlay.innerHTML = `
+    <div class="card" style="width:100%;max-width:520px;max-height:90vh;overflow-y:auto">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1.2rem">
+        <h3 style="margin:0;display:flex;align-items:center;gap:.5rem">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#0ea5e9" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+          Student Lookup
+        </h3>
+        <button onclick="document.getElementById('student-lookup-overlay').remove()" style="background:none;border:none;font-size:1.4rem;cursor:pointer;color:var(--text-muted);line-height:1">×</button>
+      </div>
+      <div style="display:flex;gap:.5rem;margin-bottom:1rem">
+        <input id="sl-query" placeholder="Enter index number or name…" style="flex:1;padding:9px 12px;border:1.5px solid var(--border);border-radius:8px;font-size:14px;font-family:inherit;outline:none;background:var(--bg);color:var(--text)"
+          onkeydown="if(event.key==='Enter')_slSearch()">
+        <button class="btn btn-primary" onclick="_slSearch()" style="white-space:nowrap">Search</button>
+      </div>
+      <div id="sl-results"></div>
+    </div>`;
+  document.body.appendChild(overlay);
+  overlay.addEventListener('click', e => { if (e.target === overlay) overlay.remove(); });
+  setTimeout(() => document.getElementById('sl-query')?.focus(), 80);
+}
+
+window._slSearch = async function() {
+  const q = (document.getElementById('sl-query')?.value || '').trim();
+  const out = document.getElementById('sl-results');
+  if (!q || !out) return;
+  out.innerHTML = '<div style="text-align:center;padding:1.5rem;color:var(--text-muted)">Searching…</div>';
+  try {
+    const d = await api('/api/users/student-lookup?q=' + encodeURIComponent(q));
+    if (d.student) {
+      out.innerHTML = _slCard(d.student);
+    } else if (d.students?.length) {
+      out.innerHTML = d.students.length === 1
+        ? _slCard(d.students[0])
+        : `<div style="font-size:.82rem;color:var(--text-muted);margin-bottom:.6rem">${d.students.length} matches — click one to expand</div>` +
+          d.students.map(s => `
+            <div style="display:flex;align-items:center;gap:.75rem;padding:.6rem .85rem;border-radius:8px;border:1px solid var(--border);margin-bottom:.4rem;cursor:pointer;transition:background .12s"
+              onmouseover="this.style.background='var(--bg-secondary)'" onmouseout="this.style.background=''"
+              onclick="document.getElementById('sl-results').innerHTML=_slCard(${JSON.stringify(s).replace(/"/g,'&quot;')})">
+              <div style="width:34px;height:34px;border-radius:50%;background:#0ea5e920;display:flex;align-items:center;justify-content:center;font-weight:700;color:#0ea5e9;font-size:.85rem;flex-shrink:0">${esc((s.name||'?')[0].toUpperCase())}</div>
+              <div style="flex:1;min-width:0">
+                <div style="font-weight:600;font-size:.9rem">${esc(s.name||'')}</div>
+                <div style="font-size:.78rem;color:var(--text-muted)">${esc(s.IndexNumber||'')}${s.programme?' · '+esc(s.programme):''}</div>
+              </div>
+              <div style="font-size:.75rem;padding:2px 8px;border-radius:20px;background:${s.isActive?'#dcfce7':'#fee2e2'};color:${s.isActive?'#16a34a':'#dc2626'}">${s.isActive?'Active':'Inactive'}</div>
+            </div>`).join('');
+    } else {
+      out.innerHTML = '<div style="text-align:center;padding:1.5rem;color:var(--text-muted)">No student found.</div>';
+    }
+  } catch(e) {
+    out.innerHTML = `<div style="padding:.75rem 1rem;background:#fef2f2;border:1px solid #fecaca;border-radius:8px;color:#dc2626;font-size:.85rem">${esc(e.message)}</div>`;
+  }
+};
+
+window._slCard = function(s) {
+  const statusColor = s.isActive ? '#16a34a' : '#dc2626';
+  const statusBg    = s.isActive ? '#dcfce7'  : '#fee2e2';
+  const rows = [
+    ['Index Number', s.IndexNumber],
+    ['Email',        s.email],
+    ['Phone',        s.phone],
+    ['Programme',    s.programme],
+    ['Department',   s.department],
+    ['Level',        s.studentLevel],
+    ['Group',        s.studentGroup],
+    ['Semester',     s.semester],
+    ['Study Type',   s.studyType],
+    ['Qualification',s.qualificationType],
+    ['Trust Score',  s.attendanceTrustScore != null ? s.attendanceTrustScore + '%' : null],
+    ['Joined',       s.createdAt ? new Date(s.createdAt).toLocaleDateString() : null],
+  ].filter(([,v]) => v != null && v !== '');
+
+  const flags = [];
+  if (!s.isActive)    flags.push('<span style="background:#fee2e2;color:#dc2626;padding:2px 8px;border-radius:20px;font-size:.75rem;font-weight:700">Inactive</span>');
+  if (s.isLocked)     flags.push('<span style="background:#fef3c7;color:#92400e;padding:2px 8px;border-radius:20px;font-size:.75rem;font-weight:700">🔒 Locked</span>');
+  if (s.isSuspended)  flags.push('<span style="background:#fce7f3;color:#9d174d;padding:2px 8px;border-radius:20px;font-size:.75rem;font-weight:700">Suspended</span>');
+
+  return `
+    <div style="border:1px solid var(--border);border-radius:10px;overflow:hidden">
+      <div style="background:linear-gradient(135deg,#0ea5e915,#0ea5e905);padding:1rem;display:flex;align-items:center;gap:.85rem;border-bottom:1px solid var(--border)">
+        <div style="width:46px;height:46px;border-radius:50%;background:#0ea5e925;display:flex;align-items:center;justify-content:center;font-weight:800;font-size:1.2rem;color:#0ea5e9;flex-shrink:0">${esc((s.name||'?')[0].toUpperCase())}</div>
+        <div style="flex:1;min-width:0">
+          <div style="font-weight:700;font-size:1rem">${esc(s.name||'Unknown')}</div>
+          <div style="font-size:.8rem;color:var(--text-muted)">${esc(s.IndexNumber||'')}${s.programme?' · '+esc(s.programme):''}</div>
+        </div>
+        <div style="display:flex;flex-direction:column;align-items:flex-end;gap:.25rem">
+          <span style="background:${statusBg};color:${statusColor};padding:2px 10px;border-radius:20px;font-size:.75rem;font-weight:700">${s.isActive?'Active':'Inactive'}</span>
+          ${flags.join('')}
+        </div>
+      </div>
+      <div style="padding:.85rem 1rem;display:grid;grid-template-columns:1fr 1fr;gap:.4rem .75rem">
+        ${rows.map(([label, val]) => `
+          <div style="padding:.4rem 0;border-bottom:1px solid var(--border)">
+            <div style="font-size:.7rem;font-weight:700;text-transform:uppercase;letter-spacing:.4px;color:var(--text-muted);margin-bottom:.15rem">${label}</div>
+            <div style="font-size:.88rem;font-weight:500">${esc(String(val))}</div>
+          </div>`).join('')}
+      </div>
+      ${s.isLocked && s.lockReason ? `<div style="margin:.5rem 1rem 1rem;padding:.6rem .85rem;background:#fef3c7;border-radius:7px;font-size:.8rem;color:#92400e"><strong>Lock reason:</strong> ${esc(s.lockReason)}</div>` : ''}
+    </div>`;
+};
 
 function _aiShowCustomQueryModal() {
   const overlay = document.createElement('div');

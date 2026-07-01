@@ -16,6 +16,7 @@ router.patch("/:id", requireRole("manager", "admin", "superadmin"), companyIsola
 router.patch("/:id/activate", requireRole("manager", "admin", "superadmin"), companyIsolation, userController.activateUser);
 router.delete("/:id", requireRole("manager", "admin", "superadmin"), companyIsolation, userController.deactivateUser);
 router.delete("/:id/permanent", requireRole("manager", "admin", "superadmin"), companyIsolation, userController.deleteUser);
+router.get("/student-lookup", requireRole("lecturer", "hod", "admin", "superadmin"), companyIsolation, userController.studentLookup);
 router.get("/reset-logs/all", requireRole("admin", "superadmin"), companyIsolation, userController.getResetLogs);
 router.post("/:id/admin-reset-password", requireRole("admin", "superadmin", "manager", "hod"), companyIsolation, userController.adminResetStudentPassword);
 router.post("/change-password-after-reset", userController.changePasswordAfterReset);
