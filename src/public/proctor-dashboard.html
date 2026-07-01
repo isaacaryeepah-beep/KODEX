@@ -521,6 +521,7 @@ async function loadAttempts() {
     attemptsData = data.attempts || [];
     renderSidebar(attemptsData);
     if (activeTab === 'violations') loadAllViolations();
+    if (activeTab === 'grid') renderCameraGrid();
     const lr = document.getElementById('last-refresh');
     if (lr) lr.textContent = 'Updated ' + new Date().toLocaleTimeString();
   } catch (e) {
@@ -791,9 +792,12 @@ function renderCameraGrid() {
       ${attemptsData.map(a => {
         const risk     = riskOf(a);
         const initials = (a.student?.name||'S').split(' ').map(w=>w[0]).join('').toUpperCase().slice(0,2);
+        const cellBody = a.latestSnapshotUrl
+          ? `<img src="${a.latestSnapshotUrl}" alt="camera capture" style="width:100%;height:100%;object-fit:cover" onerror="this.outerHTML='<div style=&quot;width:100%;height:100%;display:flex;align-items:center;justify-content:center;background:linear-gradient(135deg,#0f1c2e,#1e3a5f);font-size:28px;font-weight:800;color:rgba(255,255,255,.3)&quot;>${initials}</div>'" />`
+          : `<div style="width:100%;height:100%;display:flex;align-items:center;justify-content:center;background:linear-gradient(135deg,#0f1c2e,#1e3a5f);font-size:28px;font-weight:800;color:rgba(255,255,255,.3)">${initials}</div>`;
         return `
           <div class="cam-cell ${risk}" onclick="selectStudentFromGrid('${a._id}')">
-            <div style="width:100%;height:100%;display:flex;align-items:center;justify-content:center;background:linear-gradient(135deg,#0f1c2e,#1e3a5f);font-size:28px;font-weight:800;color:rgba(255,255,255,.3)">${initials}</div>
+            ${cellBody}
             <div class="cam-cell-footer">
               <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:110px">${a.student?.name||'Student'}</span>
               <div style="display:flex;align-items:center;gap:4px;flex-shrink:0">

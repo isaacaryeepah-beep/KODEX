@@ -539,6 +539,35 @@ exports.listAttempts = async (req, res) => {
       SnapQuizAttempt.countDocuments(filter),
     ]);
 
+    // Attach each attempt's most recent camera capture so the monitoring
+    // dashboard's Camera Grid can show a live thumbnail instead of a blank
+    // placeholder — the list query above has no snapshot data of its own.
+    if (attempts.length) {
+      const latestSnaps = await SnapQuizProctoringEvent.aggregate([
+        {
+          $match: {
+            attempt: { $in: attempts.map(a => a._id) },
+            $or: [{ imageUrl: { $ne: null } }, { thumbnailUrl: { $ne: null } }],
+          },
+        },
+        { $sort: { capturedAt: -1 } },
+        {
+          $group: {
+            _id: "$attempt",
+            imageUrl:     { $first: "$imageUrl" },
+            thumbnailUrl: { $first: "$thumbnailUrl" },
+            capturedAt:   { $first: "$capturedAt" },
+          },
+        },
+      ]);
+      const snapByAttempt = new Map(latestSnaps.map(s => [String(s._id), s]));
+      attempts.forEach(a => {
+        const snap = snapByAttempt.get(String(a._id));
+        a.latestSnapshotUrl = snap ? (snap.thumbnailUrl || snap.imageUrl) : null;
+        a.latestSnapshotAt  = snap ? snap.capturedAt : null;
+      });
+    }
+
     return res.json({ attempts, total, page: Number(page), limit: Number(limit) });
   } catch (err) {
     console.error("[snapQuiz listAttempts]", err);
