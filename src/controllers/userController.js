@@ -863,3 +863,34 @@ exports.unlockAccountDeviceLock = async (req, res) => {
     res.status(500).json({ error: "Failed to unlock account" });
   }
 };
+
+// GET /api/users/student-lookup?q=<indexNumber or name>
+// Accessible to lecturer, hod, admin, superadmin
+exports.studentLookup = async (req, res) => {
+  try {
+    const company = req.user.company;
+    const q = (req.query.q || "").trim();
+    if (!q) return res.status(400).json({ error: "Query is required" });
+
+    // Try exact IndexNumber match first (case-insensitive), then partial name
+    const byIndex = await User.findOne({
+      company,
+      role: "student",
+      IndexNumber: { $regex: `^${q}$`, $options: "i" },
+    }).select("name email phone IndexNumber programme department studentLevel studentGroup semester studyType qualificationType isActive isLocked lockReason isSuspended attendanceTrustScore createdAt").lean();
+
+    if (byIndex) return res.json({ student: byIndex });
+
+    // Partial name search — return up to 10 matches
+    const byName = await User.find({
+      company,
+      role: "student",
+      name: { $regex: q, $options: "i" },
+    }).select("name email phone IndexNumber programme department studentLevel studentGroup semester studyType qualificationType isActive isLocked lockReason isSuspended attendanceTrustScore createdAt").limit(10).lean();
+
+    return res.json({ students: byName });
+  } catch (error) {
+    console.error("studentLookup error:", error);
+    res.status(500).json({ error: "Lookup failed" });
+  }
+};
