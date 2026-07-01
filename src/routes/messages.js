@@ -151,7 +151,6 @@ async function canSendMessage(sender, recipientId, company) {
     }
 
     if (sRole === "student") {
-      if (["admin", "superadmin"].includes(rRole)) return { allowed: true };
       if (rRole === "hod") {
         return { allowed: false, reason: "To contact the HOD, please use the HOD Request form.", code: "USE_HOD_REQUEST" };
       }
@@ -243,13 +242,6 @@ router.get("/users/messageable", ...mw, async (req, res) => {
           isActive:   true,
           ...(req.user.department ? { department: req.user.department } : { _id: null }),
         }).select("_id name role department").lean();
-        // also include admin (not superadmin — platform-level, no company)
-        const admins = await User.find({
-          company,
-          role:     "admin",
-          isActive: true,
-        }).select("_id name role").lean();
-        users = [...users, ...admins];
       } else if (sRole === "lecturer") {
         const courses = await Course.find({
           companyId:  company,
