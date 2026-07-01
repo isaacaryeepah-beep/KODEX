@@ -1,4 +1,16 @@
 require("dotenv").config();
+
+// Sentry must be initialised before any other require so it can instrument them
+const Sentry = require("@sentry/node");
+if (process.env.SENTRY_DSN) {
+  Sentry.init({
+    dsn: process.env.SENTRY_DSN,
+    environment: process.env.NODE_ENV || "development",
+    // Capture 10 % of traces in production; 100 % in dev
+    tracesSampleRate: process.env.NODE_ENV === "production" ? 0.1 : 1.0,
+  });
+}
+
 const http = require("http");
 const express = require("express");
 const cors = require("cors");
@@ -381,6 +393,11 @@ app.get('/.well-known/apple-app-site-association', (req, res) => {
     },
   });
 });
+
+// Sentry error handler must come before any other error middleware
+if (process.env.SENTRY_DSN) {
+  Sentry.setupExpressErrorHandler(app);
+}
 
 app.use((req, res) => {
   if (req.path.startsWith('/api')) {
