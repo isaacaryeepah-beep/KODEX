@@ -1876,13 +1876,22 @@ setTimeout(dismissSplash, 8400);
   });
   </script>
 
+  <!--
+    No manual ?v= cache-busting here anymore — the server stamps every
+    /js/ and /css/ reference with a fresh version on every deploy (see
+    ASSET_VERSION / sendVersionedHtml in server.js). Manually-maintained
+    version strings on this list drifted out of date multiple times
+    (files changed, the query string didn't), leaving returning clients —
+    especially the Capacitor-wrapped app, which rarely does a fresh
+    top-level navigation — stuck on week-old cached JS.
+  -->
   <script src="/js/offline-idb.js" defer></script>
-  <script src="/js/pages-device.js?v=20260620p" defer></script>
-  <script src="/js/pages-academic.js?v=20260618" defer></script>
-  <script src="/js/pages-faq.js?v=20260618" defer></script>
-  <script src="/js/pages-corporate.js?v=20260618" defer></script>
-  <script src="/js/app.js?v=20260620o" defer></script>
-  <script src="/js/manager-portal.js?v=20260620a" defer></script>
+  <script src="/js/pages-device.js" defer></script>
+  <script src="/js/pages-academic.js" defer></script>
+  <script src="/js/pages-faq.js" defer></script>
+  <script src="/js/pages-corporate.js" defer></script>
+  <script src="/js/app.js" defer></script>
+  <script src="/js/manager-portal.js" defer></script>
   <script src="/js/faq-widget.js" defer></script>
   <script src="/js/faq-assistant.js" defer></script>
 

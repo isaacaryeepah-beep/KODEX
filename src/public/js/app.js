@@ -17398,12 +17398,64 @@ async function notifyAssignmentDue(assignmentTitle, dueDate) {
 
 
 // ── Service Worker Registration ───────────────────────────────────────────────
+// The browser's own "check for SW updates" only fires on a fresh top-level
+// navigation, at most once per 24h. A single-page app that never navigates
+// away from index.html — and especially the Capacitor-wrapped app, whose
+// WebView session can stay alive for days across app-switches without ever
+// reloading — can go a very long time without that check ever happening
+// again after the first cold start. We drive it ourselves instead: check
+// for updates on load, periodically, and every time the app regains focus,
+// and surface a lightweight prompt (never a silent forced reload, which
+// could interrupt something like a live quiz) when a new version lands.
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {
     navigator.serviceWorker.register('/sw.js')
-      .then(reg => console.log('[SW] Registered:', reg.scope))
+      .then(reg => {
+        console.log('[SW] Registered:', reg.scope);
+        reg.update().catch(() => {});
+
+        reg.addEventListener('updatefound', () => {
+          const installing = reg.installing;
+          if (!installing) return;
+          installing.addEventListener('statechange', () => {
+            // 'installed' + an existing controller means this is a genuine
+            // update, not the very first install on a fresh device.
+            if (installing.state === 'installed' && navigator.serviceWorker.controller) {
+              _showAppUpdateToast();
+            }
+          });
+        });
+
+        setInterval(() => {
+          if (document.visibilityState === 'visible') reg.update().catch(() => {});
+        }, 20 * 60 * 1000); // every 20 min while the app is open
+
+        document.addEventListener('visibilitychange', () => {
+          if (document.visibilityState === 'visible') reg.update().catch(() => {});
+        });
+        // Fires when a Capacitor WebView (or a bfcache'd tab) is resumed —
+        // visibilitychange alone can be unreliable across native shells.
+        window.addEventListener('pageshow', () => reg.update().catch(() => {}));
+      })
       .catch(err => console.warn('[SW] Registration failed:', err));
   });
+}
+
+let _appUpdateToastShown = false;
+function _showAppUpdateToast() {
+  if (_appUpdateToastShown) return;
+  _appUpdateToastShown = true;
+  const el = document.createElement('div');
+  el.id = 'app-update-toast';
+  el.style.cssText = 'position:fixed;left:50%;bottom:24px;transform:translateX(-50%);z-index:99999;display:flex;align-items:center;gap:12px;background:#111827;color:#fff;padding:12px 14px 12px 18px;border-radius:12px;box-shadow:0 10px 30px rgba(0,0,0,.35);font-size:13.5px;font-family:inherit;max-width:92vw;';
+  el.innerHTML = `
+    <span>A new version of Dikly is ready.</span>
+    <button id="app-update-refresh-btn" style="background:linear-gradient(135deg,#4f6ef7,#7c3aed);color:#fff;border:none;border-radius:8px;padding:7px 14px;font-size:13px;font-weight:700;cursor:pointer;white-space:nowrap">Refresh</button>
+    <button id="app-update-dismiss-btn" aria-label="Dismiss" style="background:transparent;border:none;color:rgba(255,255,255,.6);cursor:pointer;font-size:16px;line-height:1;padding:0 2px">&times;</button>
+  `;
+  document.body.appendChild(el);
+  document.getElementById('app-update-refresh-btn').onclick = () => window.location.reload();
+  document.getElementById('app-update-dismiss-btn').onclick = () => { el.remove(); _appUpdateToastShown = false; };
 }
 
 // ══════════════════════════════════════════════════════════════════════════════
