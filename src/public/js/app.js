@@ -3429,12 +3429,12 @@ function exitImpersonation() {
 
 // ── Superadmin per-role rates (stored in localStorage) ───────────────────────
 const SA_ROLE_DEFS = [
-  { key:'admin',    label:'Admins',    color:'#0F1B33', rate:15, tier:'both' },
-  { key:'manager',  label:'Managers',  color:'#5B4B8A', rate:12, tier:'corporate' },
-  { key:'employee', label:'Employees', color:'#9A6A1E', rate:8,  tier:'corporate' },
-  { key:'hod',      label:'HODs',      color:'#2E7D5B', rate:10, tier:'academic' },
-  { key:'lecturer', label:'Lecturers', color:'#C9A24B', rate:8,  tier:'academic' },
-  { key:'student',  label:'Students',  color:'#B5453C', rate:3,  tier:'academic' },
+  { key:'admin',    label:'Admins',    color:'#C9A24B', rate:15, tier:'both' },
+  { key:'manager',  label:'Managers',  color:'#4F6EF7', rate:12, tier:'corporate' },
+  { key:'employee', label:'Employees', color:'#3E9DB8', rate:8,  tier:'corporate' },
+  { key:'hod',      label:'HODs',      color:'#3DAE7D', rate:10, tier:'academic' },
+  { key:'lecturer', label:'Lecturers', color:'#8B6FD8', rate:8,  tier:'academic' },
+  { key:'student',  label:'Students',  color:'#E2574C', rate:3,  tier:'academic' },
 ];
 function saGetRates() {
   try { const s = localStorage.getItem('dikly_sa_rates'); if (s) return JSON.parse(s); } catch(e) {}
@@ -3492,7 +3492,7 @@ async function superadminShowPayments() { /* now handled by tab */ }
 function saShowToast(msg) {
   let t = document.getElementById('sa-toast');
   if (!t) { t = document.createElement('div'); t.id = 'sa-toast'; document.body.appendChild(t); }
-  t.style.cssText = 'position:fixed;bottom:24px;left:50%;transform:translateX(-50%);background:#0F1B33;color:#F6F1E4;padding:11px 22px;border-radius:30px;font-size:13.5px;z-index:9999;box-shadow:0 6px 18px rgba(0,0,0,.28);font-family:Segoe UI,system-ui,sans-serif;';
+  t.style.cssText = 'position:fixed;bottom:24px;left:50%;transform:translateX(-50%);background:#182342;border:1px solid rgba(255,255,255,.14);color:#EDF0F7;padding:12px 22px;border-radius:30px;font-size:13px;font-weight:600;z-index:9999;box-shadow:0 10px 30px rgba(0,0,0,.35);font-family:Segoe UI,system-ui,sans-serif;max-width:88vw;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;';
   t.textContent = msg;
   t.style.display = 'block';
   clearTimeout(t._tid);
@@ -5582,96 +5582,129 @@ async function renderSuperadminDashboard(content) {
   if (!content) content = document.getElementById('main-content');
   content.innerHTML = '<div class="loading">Loading platform overview…</div>';
 
-  // Cream/navy/gold design tokens
-  const C = { navy:'#0F1B33', navy2:'#16264A', cream:'#F6F1E4', gold:'#C9A24B', green:'#2E7D5B', red:'#B5453C', ink:'#1B1F27', line:'#E4DCC6', muted:'#7C7666' };
-  const css = `sa-wrap{all:unset}`;
+  // Dark console design tokens (matches /superadmin standalone portal)
+  const C = {
+    bg:'#0A0F1E', bg2:'#0E1526', surface:'#131C33', surface2:'#182342',
+    line:'rgba(255,255,255,.09)', line2:'rgba(255,255,255,.14)',
+    ink:'#EDF0F7', muted:'#8B93A7', faint:'#5C647A',
+    gold:'#C9A24B', goldSoft:'rgba(201,162,75,.14)',
+    blue:'#4F6EF7', green:'#3DAE7D', greenSoft:'rgba(61,174,125,.14)',
+    red:'#E2574C', redSoft:'rgba(226,87,76,.13)',
+    amber:'#D9A03C', amberSoft:'rgba(217,160,60,.13)',
+    purple:'#8B6FD8', purpleSoft:'rgba(139,111,216,.14)',
+    teal:'#3E9DB8', tealSoft:'rgba(62,157,184,.14)',
+    // kept for the shared helpers below
+    navy:'#131C33', cream:'#EDF0F7',
+  };
 
-  let overview = null, payments = null;
+  let overview = null, payments = null, devices = null, platformSettings = null;
   let currentTab = window._saTab || 'institutions';
   let searchQ = '';
 
-  try { overview = await api('/api/superadmin/overview').catch(() => null); } catch(e) {}
+  // Load overview + settings together so institution fees use SERVER rates,
+  // not stale localStorage (the old behaviour made saved rates invisible on
+  // other devices — the "fee adjuster doesn't work" bug).
+  const [ovr, ps] = await Promise.all([
+    api('/api/superadmin/overview').catch(() => null),
+    api('/api/superadmin/settings').catch(() => null),
+  ]);
+  overview = ovr;
+  platformSettings = ps;
+  if (ps) {
+    const _rateApiKeys = { admin:'rateAdmin', manager:'rateManager', employee:'rateEmployee', hod:'rateHod', lecturer:'rateLecturer', student:'rateStudent' };
+    SA_ROLE_DEFS.forEach(rd => { if (ps[_rateApiKeys[rd.key]] != null) saSetRate(rd.key, ps[_rateApiKeys[rd.key]]); });
+  }
 
   const companies = overview?.companies || [];
-  const rates = saGetRates();
 
-  function cardStyle(extra) { return `background:#fff;border:1px solid ${C.line};border-radius:14px;padding:16px;margin-bottom:12px;${extra||''}`; }
-  function badge(label, bg, color) { return `<span style="font-size:11px;padding:3px 9px;border-radius:20px;font-weight:600;background:${bg};color:${color}">${label}</span>`; }
+  function statTile(num, label, color) {
+    return `<div style="background:${C.surface};border:1px solid ${C.line};border-radius:14px;padding:16px 16px 14px;position:relative;overflow:hidden">
+      <div style="position:absolute;top:0;left:0;right:0;height:2px;background:${color};opacity:.75"></div>
+      <div style="font-family:Georgia,serif;font-size:24px;font-weight:700;line-height:1;color:${color}">${num}</div>
+      <div style="font-size:10.5px;color:${C.muted};letter-spacing:1.3px;text-transform:uppercase;margin-top:6px;font-weight:600">${label}</div>
+    </div>`;
+  }
+  function cardStyle(extra) { return `background:${C.surface};border:1px solid ${C.line};border-radius:14px;padding:18px;${extra||''}`; }
+  function badge(label, bg, color) { return `<span style="font-size:10.5px;padding:3px 9px;border-radius:20px;font-weight:700;background:${bg};color:${color}">${label}</span>`; }
+  function sectionTitle(t) { return `<div style="font-size:11px;letter-spacing:1.6px;text-transform:uppercase;color:${C.muted};margin:22px 0 10px;font-weight:700;display:flex;align-items:center;gap:8px">${t}<span style="flex:1;height:1px;background:${C.line}"></span></div>`; }
 
   function renderInstTab() {
-    const filtered = companies.filter(c => !searchQ || c.name.toLowerCase().includes(searchQ) || (c.institutionCode||'').toLowerCase().includes(searchQ));
+    const rates = saGetRates();
+    const filtered = companies.filter(c => !searchQ || c.name.toLowerCase().includes(searchQ) || (c.institutionCode||'').toLowerCase().includes(searchQ) || (c.adminEmail||'').toLowerCase().includes(searchQ));
     const active  = companies.filter(c => c.isActive).length;
     const acad    = companies.filter(c => c.mode === 'academic').length;
     const corp    = companies.filter(c => c.mode === 'corporate').length;
-    const rev     = companies.reduce((s,c) => s+c.revenue||0, 0);
+    const onTrial = companies.filter(c => c.isTrialActive).length;
+    const rev     = companies.reduce((s,c) => s + (c.revenue||0), 0);
 
     return `
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:16px;">
-        <div style="${cardStyle()}"><div style="font-family:Georgia,serif;font-size:26px;font-weight:700;line-height:1;color:${C.ink}">${companies.length}</div><div style="font-size:11px;color:${C.muted};letter-spacing:1.2px;text-transform:uppercase;margin-top:4px">Institutions</div></div>
-        <div style="${cardStyle()}"><div style="font-family:Georgia,serif;font-size:26px;font-weight:700;line-height:1;color:${C.green}">${active}</div><div style="font-size:11px;color:${C.muted};letter-spacing:1.2px;text-transform:uppercase;margin-top:4px">Active</div></div>
-        <div style="${cardStyle()}"><div style="font-family:Georgia,serif;font-size:26px;font-weight:700;line-height:1;color:${C.gold}">${saFmt(rev)}</div><div style="font-size:11px;color:${C.muted};letter-spacing:1.2px;text-transform:uppercase;margin-top:4px">Revenue</div></div>
-        <div style="${cardStyle()}"><div style="font-family:Georgia,serif;font-size:26px;font-weight:700;line-height:1;color:${C.ink}">${acad}</div><div style="font-size:11px;color:${C.muted};letter-spacing:1.2px;text-transform:uppercase;margin-top:4px">Academic</div></div>
-        <div style="${cardStyle()}"><div style="font-family:Georgia,serif;font-size:26px;font-weight:700;line-height:1;color:${C.ink}">${corp}</div><div style="font-size:11px;color:${C.muted};letter-spacing:1.2px;text-transform:uppercase;margin-top:4px">Corporate</div></div>
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:12px;margin-bottom:16px;">
+        ${statTile(companies.length, 'Institutions', C.ink)}
+        ${statTile(active, 'Active', C.green)}
+        ${statTile(saFmt(rev), 'Revenue', C.gold)}
+        ${statTile(onTrial, 'On Trial', C.amber)}
+        ${statTile(acad, 'Academic', C.purple)}
+        ${statTile(corp, 'Corporate', C.teal)}
       </div>
 
-      <div style="display:flex;align-items:center;gap:8px;background:#fff;border:1px solid ${C.line};border-radius:10px;padding:10px 12px;margin-bottom:16px;">
+      <div style="display:flex;align-items:center;gap:8px;background:${C.surface};border:1px solid ${C.line};border-radius:10px;padding:10px 12px;margin-bottom:4px;">
         <span style="color:${C.muted}">🔍</span>
-        <input id="sa-search" value="${esc(searchQ)}" placeholder="Search by name or code…" oninput="window._saSearch(this.value)" style="border:none;outline:none;width:100%;font-size:14px;background:transparent;color:${C.ink}">
+        <input id="sa-search" value="${esc(searchQ)}" placeholder="Search name, code or admin email…" oninput="window._saSearch(this.value)" style="border:none;outline:none;width:100%;font-size:13.5px;background:transparent;color:${C.ink}">
       </div>
 
-      <div style="font-size:11px;letter-spacing:1.5px;text-transform:uppercase;color:${C.muted};margin:0 0 8px;font-weight:700;">All Institutions</div>
+      ${sectionTitle('All Institutions')}
 
       ${filtered.length === 0
-        ? `<div style="text-align:center;padding:50px 20px;color:${C.muted}"><div style="font-family:Georgia,serif;font-size:18px;color:${C.ink};margin-bottom:6px">No matches</div>Try a different name or code.</div>`
-        : filtered.map(c => {
+        ? `<div style="text-align:center;padding:50px 20px;color:${C.muted}"><div style="font-family:Georgia,serif;font-size:17px;color:${C.ink};margin-bottom:6px">No matches</div>Try a different name or code.</div>`
+        : `<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(330px,1fr));gap:14px">` + filtered.map(c => {
             const fee = saComputeFee(c, rates);
-            const exp = c.subscriptionEndDate ? new Date(c.subscriptionEndDate) : null;
+            const exp = c.subscriptionEndDate ? new Date(c.subscriptionEndDate) : (c.trialEndDate ? new Date(c.trialEndDate) : null);
             const daysLeft = exp ? Math.max(0, Math.ceil((exp - Date.now()) / 86400000)) : 0;
             const subLabel = c.subscriptionStatus === 'active' ? 'Subscribed'
               : c.isTrialActive ? `Trial (${c.trialDaysRemaining||0}d)` : 'Expired';
-            const subBg = c.subscriptionStatus === 'active' ? '#E4F1EA' : c.isTrialActive ? '#FBEED9' : '#F5E4E4';
-            const subColor = c.subscriptionStatus === 'active' ? C.green : c.isTrialActive ? '#9A6A1E' : C.red;
-            const tierBg = c.mode === 'academic' ? '#E8E2F2' : '#E2EEF2';
-            const tierColor = c.mode === 'academic' ? '#5B4B8A' : '#1B5A6B';
+            const subBg = c.subscriptionStatus === 'active' ? C.greenSoft : c.isTrialActive ? C.amberSoft : C.redSoft;
+            const subColor = c.subscriptionStatus === 'active' ? C.green : c.isTrialActive ? C.amber : C.red;
+            const tierBg = c.mode === 'academic' ? C.purpleSoft : C.tealSoft;
+            const tierColor = c.mode === 'academic' ? C.purple : C.teal;
             const nm = c.name.replace(/'/g, "\\'");
             return `
             <div style="${cardStyle()}">
               <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px;margin-bottom:10px">
                 <div>
-                  <div style="font-family:Georgia,serif;font-size:18px;font-weight:700;color:${C.ink}">${esc(c.name)}</div>
-                  <div style="font-size:11px;color:${C.muted};letter-spacing:1px;margin-top:2px">${esc(c.institutionCode||'')}</div>
+                  <div style="font-family:Georgia,serif;font-size:17px;font-weight:700;color:${C.ink}">${esc(c.name)}</div>
+                  <div style="font-size:10.5px;color:${C.faint};letter-spacing:1.2px;margin-top:3px;text-transform:uppercase">${esc(c.institutionCode||'')}</div>
                 </div>
-                <div style="display:flex;gap:6px;flex-shrink:0;flex-wrap:wrap;justify-content:flex-end">
-                  ${badge(c.isActive ? 'Active' : 'Inactive', c.isActive ? '#E4F1EA' : '#F5E4E4', c.isActive ? C.green : C.red)}
+                <div style="display:flex;gap:5px;flex-shrink:0;flex-wrap:wrap;justify-content:flex-end">
+                  ${badge(c.isActive ? 'Active' : 'Inactive', c.isActive ? C.greenSoft : C.redSoft, c.isActive ? C.green : C.red)}
                   ${badge(subLabel, subBg, subColor)}
                   ${badge(c.mode||'academic', tierBg, tierColor)}
                 </div>
               </div>
-              <div style="display:flex;justify-content:space-between;font-size:13.5px;margin-bottom:10px">
+              <div style="display:flex;justify-content:space-between;font-size:13px;margin-bottom:10px;color:${C.ink}">
                 <div>
                   <strong>${saTotalUsers(c)} users</strong>
-                  <div style="color:${C.muted};font-size:12px;margin-top:2px">${saRoleBreakdown(c)}</div>
+                  <div style="color:${C.muted};font-size:11.5px;margin-top:2px">${saRoleBreakdown(c)}</div>
                 </div>
-                ${exp ? `<div style="text-align:right"><strong>${daysLeft}d left</strong><div style="color:${C.muted};font-size:12px;margin-top:2px">exp ${exp.toLocaleDateString('en-GB',{day:'numeric',month:'short',year:'numeric'})}</div></div>` : ''}
+                ${exp ? `<div style="text-align:right"><strong>${daysLeft}d left</strong><div style="color:${C.muted};font-size:11.5px;margin-top:2px">exp ${exp.toLocaleDateString('en-GB',{day:'numeric',month:'short',year:'numeric'})}</div></div>` : ''}
               </div>
-              ${c.adminName ? `<div style="font-size:13.5px;margin-bottom:10px"><strong>${esc(c.adminName)}</strong><div style="color:${C.muted};font-size:12.5px">${esc(c.adminEmail||'')}</div></div>` : ''}
-              <div style="padding-top:12px;border-top:1px dashed ${C.line};display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
+              ${c.adminName ? `<div style="font-size:13px;margin-bottom:10px;color:${C.ink}"><strong>${esc(c.adminName)}</strong><div style="color:${C.muted};font-size:12px">${esc(c.adminEmail||'')}</div></div>` : ''}
+              <div style="margin-top:3px;padding:11px 13px;border-radius:10px;background:${C.bg2};border:1px solid ${C.line};display:flex;justify-content:space-between;align-items:center;margin-bottom:13px">
                 <div>
-                  <div style="font-size:11px;color:${C.muted};text-transform:uppercase;letter-spacing:1px">Subscription fee</div>
-                  <div style="font-family:Georgia,serif;font-size:17px;font-weight:700;color:${C.navy}">${saFmt(fee)}</div>
+                  <div style="font-size:10px;color:${C.muted};text-transform:uppercase;letter-spacing:1.1px;margin-bottom:2px">Computed monthly fee</div>
+                  <div style="font-family:Georgia,serif;font-size:17px;font-weight:700;color:${C.gold}">${saFmt(fee)}</div>
                 </div>
                 <div style="text-align:right">
-                  <div style="font-size:11px;color:${C.muted};text-transform:uppercase;letter-spacing:1px">Revenue paid</div>
-                  <div style="font-family:Georgia,serif;font-size:17px;font-weight:700;color:${C.green}">${c.revenue > 0 ? saFmt(c.revenue) : '—'}</div>
+                  <div style="font-size:10px;color:${C.muted};text-transform:uppercase;letter-spacing:1.1px;margin-bottom:2px">Paid to date</div>
+                  <div style="font-family:Georgia,serif;font-size:15px;font-weight:700;color:${C.green}">${c.revenue > 0 ? saFmt(c.revenue) : '—'}</div>
                 </div>
               </div>
               <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
-                <button onclick="superadminToggleCompany('${c._id}',${c.isActive})" style="border-radius:8px;padding:9px 0;font-size:13px;font-weight:600;cursor:pointer;border:1px solid ${C.red};background:#fff;color:${C.red}">${c.isActive ? 'Deactivate' : 'Activate'}</button>
-                <button onclick="superadminExtendTrial('${c._id}','${nm}')" style="border-radius:8px;padding:9px 0;font-size:13px;font-weight:600;cursor:pointer;border:1px solid ${C.line};background:#fff;color:${C.ink}">+Trial</button>
-                <button onclick="superadminImpersonate('${c._id}','${nm}')" style="border-radius:8px;padding:9px 0;font-size:13px;font-weight:600;cursor:pointer;background:${C.navy};color:${C.cream};border:none;grid-column:1/-1">🔑 Login as Admin</button>
+                <button onclick="superadminToggleCompany('${c._id}',${c.isActive})" style="border-radius:9px;padding:9px 0;font-size:12.5px;font-weight:600;cursor:pointer;border:1px solid rgba(226,87,76,.4);background:transparent;color:${C.red}">${c.isActive ? 'Deactivate' : 'Activate'}</button>
+                <button onclick="superadminExtendTrial('${c._id}','${nm}')" style="border-radius:9px;padding:9px 0;font-size:12.5px;font-weight:600;cursor:pointer;border:1px solid ${C.line2};background:transparent;color:${C.muted}">+Trial</button>
+                <button onclick="superadminImpersonate('${c._id}','${nm}')" style="border-radius:9px;padding:10px 0;font-size:12.5px;font-weight:700;cursor:pointer;background:${C.gold};color:#0A0F1E;border:none;grid-column:1/-1">🔑 Login as Admin</button>
               </div>
             </div>`;
-          }).join('')}
+          }).join('') + '</div>'}
     `;
   }
 
@@ -5682,115 +5715,132 @@ async function renderSuperadminDashboard(content) {
     const list = payments.payments || [];
     const total = payments.totalRevenue || 0;
     return `
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:16px;">
-        <div style="${cardStyle()}"><div style="font-family:Georgia,serif;font-size:22px;font-weight:700;line-height:1;color:${C.green}">${saFmt(total)}</div><div style="font-size:11px;color:${C.muted};letter-spacing:1.2px;text-transform:uppercase;margin-top:4px">Total Revenue</div></div>
-        <div style="${cardStyle()}"><div style="font-family:Georgia,serif;font-size:26px;font-weight:700;line-height:1;color:${C.ink}">${list.length}</div><div style="font-size:11px;color:${C.muted};letter-spacing:1.2px;text-transform:uppercase;margin-top:4px">Payments</div></div>
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px;margin-bottom:16px;">
+        ${statTile(saFmt(total), 'Total Revenue', C.green)}
+        ${statTile(list.length, 'Payments', C.ink)}
       </div>
-      <div style="font-size:11px;letter-spacing:1.5px;text-transform:uppercase;color:${C.muted};margin:0 0 8px;font-weight:700;">Payment History</div>
-      <div style="${cardStyle()}">
+      ${sectionTitle('Payment History')}
+      <div style="${cardStyle('padding:6px 18px;')}">
         ${list.length === 0
-          ? `<div style="text-align:center;padding:40px 20px;color:${C.muted}"><div style="font-family:Georgia,serif;font-size:18px;color:${C.ink};margin-bottom:6px">No payments yet</div>Payments appear after Paystack webhook fires.</div>`
-          : list.slice().reverse().map(p => `
-              <div style="display:flex;justify-content:space-between;padding:10px 0;border-bottom:1px solid ${C.line};font-size:13px;">
+          ? `<div style="text-align:center;padding:40px 20px;color:${C.muted}"><div style="font-family:Georgia,serif;font-size:17px;color:${C.ink};margin-bottom:6px">No payments yet</div>Payments appear after Paystack webhook fires.</div>`
+          : list.map(p => `
+              <div style="display:flex;justify-content:space-between;padding:13px 0;border-bottom:1px solid ${C.line};font-size:13px;">
                 <div>
-                  <div style="font-weight:600">${esc(p.company?.name||'—')}</div>
-                  <div style="color:${C.muted};font-size:11.5px">${esc(p.company?.institutionCode||'')} · ${esc(p.plan||'')}</div>
+                  <div style="font-weight:600;color:${C.ink}">${esc(p.company?.name||'—')}</div>
+                  <div style="color:${C.muted};font-size:11.5px;margin-top:2px">${esc(p.company?.institutionCode||'')} · ${esc(p.plan||'')}</div>
                 </div>
                 <div style="text-align:right">
-                  <div style="font-weight:700;color:${C.navy}">${saFmt(p.amount||0)}</div>
-                  <div style="color:${C.muted};font-size:11.5px">${p.paidAt ? new Date(p.paidAt).toLocaleDateString('en-GB',{day:'numeric',month:'short',year:'numeric'}) : '—'}</div>
+                  <div style="font-family:Georgia,serif;font-weight:700;color:${C.green};font-size:14.5px">${saFmt(p.amount||0)}</div>
+                  <div style="color:${C.muted};font-size:11.5px;margin-top:2px">${p.paidAt ? new Date(p.paidAt).toLocaleDateString('en-GB',{day:'numeric',month:'short',year:'numeric'}) : '—'}</div>
                 </div>
               </div>`).join('')}
       </div>`;
   }
 
-  function renderDevicesTab() {
-    const devTotal = 0; // devices come from device heartbeats
+  async function renderDevicesTab() {
+    if (!devices) {
+      try { const d = await api('/api/superadmin/devices'); devices = d.devices || []; } catch(e) { devices = []; }
+    }
+    const orphaned = devices.filter(d => d.isOrphaned);
     return `
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:16px;">
-        <div style="${cardStyle()}"><div style="font-family:Georgia,serif;font-size:26px;font-weight:700;line-height:1;color:${C.ink}">—</div><div style="font-size:11px;color:${C.muted};letter-spacing:1.2px;text-transform:uppercase;margin-top:4px">Total Devices</div></div>
-        <div style="${cardStyle()}"><div style="font-family:Georgia,serif;font-size:26px;font-weight:700;line-height:1;color:${C.green}">—</div><div style="font-size:11px;color:${C.muted};letter-spacing:1.2px;text-transform:uppercase;margin-top:4px">Registered</div></div>
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:12px;margin-bottom:16px;">
+        ${statTile(devices.length, 'Total Devices', C.ink)}
+        ${statTile(devices.length - orphaned.length, 'Registered', C.green)}
+        ${statTile(orphaned.length, 'Orphaned', C.red)}
       </div>
-      <div style="${cardStyle()}">
-        <div style="text-align:center;padding:30px 20px;color:${C.muted}">
-          <div style="font-size:36px;margin-bottom:10px">📟</div>
-          <div style="font-family:Georgia,serif;font-size:18px;color:${C.ink};margin-bottom:6px">Devices register automatically</div>
-          <div style="font-size:13px">ESP32 devices appear here once they check in via heartbeat.</div>
-        </div>
-      </div>`;
+      ${sectionTitle('Registered Devices')}
+      ${devices.length === 0
+        ? `<div style="${cardStyle()}">
+            <div style="text-align:center;padding:30px 20px;color:${C.muted}">
+              <div style="font-size:36px;margin-bottom:10px">📟</div>
+              <div style="font-family:Georgia,serif;font-size:17px;color:${C.ink};margin-bottom:6px">Devices register automatically</div>
+              <div style="font-size:13px">ESP32 devices appear here once they check in via heartbeat.</div>
+            </div>
+          </div>`
+        : devices.map(dev => `
+            <div style="${cardStyle('padding:15px 17px;margin-bottom:10px;display:flex;justify-content:space-between;align-items:flex-start;gap:12px;')}">
+              <div>
+                <div style="font-weight:700;font-size:13.5px;color:${C.ink}">${esc(dev.name||dev.deviceId||'Unknown')}</div>
+                <div style="color:${C.muted};font-size:11.5px;margin-top:3px">${esc(dev.deviceId||'')} · ${esc(dev.companyName||'')}</div>
+                <div style="color:${C.muted};font-size:11.5px;margin-top:2px">Last seen: ${dev.lastSeen ? new Date(dev.lastSeen).toLocaleDateString('en-GB',{day:'numeric',month:'short',year:'numeric'}) : 'Never'}</div>
+              </div>
+              <span style="font-size:10.5px;padding:3px 9px;border-radius:12px;font-weight:700;flex-shrink:0;background:${dev.isOrphaned ? C.redSoft : C.greenSoft};color:${dev.isOrphaned ? C.red : C.green}">${dev.isOrphaned ? 'Orphaned' : 'Active'}</span>
+            </div>`).join('')}`;
   }
 
   async function renderAdjusterTab() {
-    let ps = {};
-    try { ps = await api('/api/superadmin/settings'); } catch(_) {}
+    let ps = platformSettings || {};
+    try { ps = await api('/api/superadmin/settings'); platformSettings = ps; } catch(_) {}
     const _rateApiKeys = { admin:'rateAdmin', manager:'rateManager', employee:'rateEmployee', hod:'rateHod', lecturer:'rateLecturer', student:'rateStudent' };
     SA_ROLE_DEFS.forEach(rd => { if (ps[_rateApiKeys[rd.key]] != null) saSetRate(rd.key, ps[_rateApiKeys[rd.key]]); });
     const r = saGetRates();
     const cur = ps.currency || 'GHS';
     const subFields = [
-      { key:'studentSemesterPrice', label:'Student Semester',  hint:'Academic — paid per semester by each student',          val: ps.studentSemesterPrice ?? 20,  tier:'academic' },
-      { key:'employeeMonthlyPrice', label:'Employee Monthly',  hint:'Corporate — paid monthly by each employee individually', val: ps.employeeMonthlyPrice ?? 15,  tier:'corporate' },
-      { key:'academicPrice',        label:'Academic Plan',     hint:'Academic — paid per semester by lecturers & admins',    val: ps.academicPrice ?? 300,        tier:'academic' },
-      { key:'corporatePrice',       label:'Corporate Plan',    hint:'Corporate — paid monthly by managers & admins',         val: ps.corporatePrice ?? 150,       tier:'corporate' },
-      { key:'studentTrialDays',     label:'Student Trial',     hint:'Free trial period for new student accounts (days)',      val: ps.studentTrialDays ?? 45,      tier:'academic',  unit:'days' },
-      { key:'trialDays',            label:'Institution Trial', hint:'Free trial period for new institution accounts (days)',  val: ps.trialDays ?? 30,             tier:'both',      unit:'days' },
+      { key:'studentSemesterPrice', label:'Student Semester',  hint:'Paid per semester by each student',           val: ps.studentSemesterPrice ?? 20,  tier:'academic' },
+      { key:'employeeMonthlyPrice', label:'Employee Monthly',  hint:'Paid monthly by each employee individually',  val: ps.employeeMonthlyPrice ?? 15,  tier:'corporate' },
+      { key:'academicPrice',        label:'Academic Plan',     hint:'Paid per semester by lecturers & admins',     val: ps.academicPrice ?? 300,        tier:'academic' },
+      { key:'corporatePrice',       label:'Corporate Plan',    hint:'Paid monthly by managers & admins',           val: ps.corporatePrice ?? 150,       tier:'corporate' },
+      { key:'studentTrialDays',     label:'Student Trial',     hint:'Free trial for new student accounts (days)',  val: ps.studentTrialDays ?? 45,      tier:'academic',  unit:'days' },
+      { key:'trialDays',            label:'Institution Trial', hint:'Free trial for new institutions (days)',      val: ps.trialDays ?? 30,             tier:'both',      unit:'days' },
     ];
-    const tierColor = t => t === 'academic' ? '#2E7D5B' : t === 'corporate' ? '#5B4B8A' : '#0F1B33';
+    const tierColor = t => t === 'academic' ? C.purple : t === 'corporate' ? C.teal : C.gold;
+    const tierBg    = t => t === 'academic' ? C.purpleSoft : t === 'corporate' ? C.tealSoft : C.goldSoft;
     const tierLabel = t => t === 'academic' ? 'Academic' : t === 'corporate' ? 'Corporate' : 'All';
+    const inputStyle = 'flex:1;width:100%;padding:9px 11px;border:1px solid ' + C.line2 + ';border-radius:9px;font-size:14px;text-align:right;background:' + C.bg2 + ';color:' + C.ink + ';outline:none';
     return `
-      <div style="font-size:13px;font-weight:700;color:${C.ink};margin-bottom:6px;letter-spacing:.2px">💳 Subscription Prices</div>
-      <div style="color:${C.muted};font-size:12px;margin-bottom:14px">
-        These prices are shown on the Subscription page in the academic and corporate portals and charged via Paystack.
-        Changes take effect immediately for all users.
+      <div style="color:${C.muted};font-size:12.5px;margin:2px 0 16px;line-height:1.55">
+        Control what every account type pays. <strong style="color:${C.ink}">Subscription prices</strong> are the live Paystack amounts
+        shown on the subscription pages — changes take effect immediately for all users.
+        <strong style="color:${C.ink}">Billing rates</strong> drive the computed monthly fee on each institution card.
       </div>
 
-      <div style="background:#fff;border:1px solid ${C.line};border-radius:12px;padding:16px;margin-bottom:20px">
-        <div style="display:flex;flex-wrap:wrap;gap:12px;margin-bottom:14px">
+      <div style="${cardStyle('padding:20px;margin-bottom:18px;')}">
+        <div style="display:flex;align-items:center;gap:9px;font-size:14px;font-weight:700;color:${C.ink};margin-bottom:4px">💳 Subscription Prices</div>
+        <div style="color:${C.muted};font-size:12px;margin-bottom:16px;line-height:1.5">Live Paystack amounts shown on every subscription page. Saved to the platform — applies to all devices instantly.</div>
+        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:14px;margin-bottom:2px">
           ${subFields.map(f => `
-            <div style="flex:1;min-width:180px">
+            <div>
               <div style="display:flex;align-items:center;gap:6px;margin-bottom:4px">
-                <span style="font-size:10px;font-weight:700;padding:1px 7px;border-radius:20px;background:${tierColor(f.tier)}18;color:${tierColor(f.tier)};border:1px solid ${tierColor(f.tier)}30">${tierLabel(f.tier)}</span>
+                <span style="font-size:9.5px;font-weight:800;padding:2px 8px;border-radius:20px;letter-spacing:.6px;text-transform:uppercase;background:${tierBg(f.tier)};color:${tierColor(f.tier)}">${tierLabel(f.tier)}</span>
                 <span style="font-size:12.5px;font-weight:700;color:${C.ink}">${f.label}</span>
               </div>
-              <div style="font-size:11px;color:${C.muted};margin-bottom:6px">${f.hint}</div>
-              <div style="display:flex;align-items:center;gap:6px">
-                <span style="font-size:12px;color:${C.muted}">${f.unit === 'days' ? '' : cur}</span>
-                <input type="number" min="0" id="sa-sub-${f.key}" value="${f.val}"
-                  style="flex:1;padding:8px 10px;border:1px solid ${C.line};border-radius:8px;font-size:14px;text-align:right;background:#FBFAF6;outline:none">
-                <span style="font-size:12px;color:${C.muted}">${f.unit === 'days' ? 'days' : ''}</span>
+              <div style="font-size:11px;color:${C.muted};margin-bottom:7px;line-height:1.45;min-height:29px">${f.hint}</div>
+              <div style="display:flex;align-items:center;gap:7px">
+                <span style="font-size:11.5px;color:${C.muted};min-width:26px">${f.unit === 'days' ? 'days' : cur}</span>
+                <input type="number" min="0" id="sa-sub-${f.key}" value="${f.val}" style="${inputStyle}">
               </div>
             </div>`).join('')}
         </div>
-        <div style="display:flex;align-items:center;gap:10px;padding-top:12px;border-top:1px solid ${C.line}">
-          <div style="flex:1">
-            <div style="font-size:12.5px;font-weight:700;color:${C.ink};margin-bottom:3px">Currency</div>
-            <input type="text" id="sa-sub-currency" value="${cur}" maxlength="10" placeholder="GHS"
-              style="width:90px;padding:8px 10px;border:1px solid ${C.line};border-radius:8px;font-size:13px;background:#FBFAF6;outline:none">
+        <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;padding-top:16px;margin-top:16px;border-top:1px solid ${C.line};flex-wrap:wrap">
+          <div style="display:flex;align-items:center;gap:9px">
+            <label style="font-size:12px;font-weight:700;color:${C.muted}">Currency</label>
+            <input type="text" id="sa-sub-currency" value="${esc(cur)}" maxlength="10" placeholder="GHS"
+              style="width:80px;padding:9px 10px;border:1px solid ${C.line2};border-radius:9px;font-size:13px;background:${C.bg2};color:${C.ink};outline:none;text-align:center">
           </div>
           <button id="sa-sub-save-btn" onclick="window._saSaveSubPrices()"
-            style="background:${C.navy};color:${C.cream};border:none;border-radius:9px;padding:10px 22px;font-size:13px;font-weight:700;cursor:pointer">
+            style="background:${C.gold};color:#0A0F1E;border:none;border-radius:10px;padding:11px 24px;font-size:13px;font-weight:800;cursor:pointer">
             Save Subscription Prices
           </button>
         </div>
       </div>
 
-      <div style="font-size:13px;font-weight:700;color:${C.ink};margin-bottom:6px;letter-spacing:.2px">📊 Institution Billing Rates</div>
-      <div style="color:${C.muted};font-size:12px;margin-bottom:14px">
-        Monthly per-seat rate for billing calculations on institution cards. Stored locally — does not affect Paystack.
+      <div style="${cardStyle('padding:20px 20px 8px;margin-bottom:12px;')}">
+        <div style="display:flex;align-items:center;gap:9px;font-size:14px;font-weight:700;color:${C.ink};margin-bottom:4px">📊 Institution Billing Rates</div>
+        <div style="color:${C.muted};font-size:12px;margin-bottom:12px;line-height:1.5">Monthly per-seat rate used for the computed fee on each institution card. Saved to the platform and synced across devices.</div>
       </div>
       ${SA_ROLE_DEFS.map(rd => `
-        <div style="background:#fff;border:1px solid ${C.line};border-radius:12px;padding:14px 16px;margin-bottom:10px;display:flex;align-items:center;justify-content:space-between;gap:12px">
+        <div style="${cardStyle('padding:14px 17px;margin-bottom:9px;display:flex;align-items:center;justify-content:space-between;gap:12px;')}">
           <div>
-            <div style="display:flex;align-items:center;gap:8px;font-weight:700;font-size:14.5px;color:${C.ink}">
+            <div style="display:flex;align-items:center;gap:9px;font-weight:700;font-size:13.5px;color:${C.ink}">
               <span style="width:9px;height:9px;border-radius:50%;background:${rd.color};flex-shrink:0;display:inline-block"></span>
               ${rd.label}
             </div>
-            <div style="font-size:11px;color:${C.muted};margin-top:2px">${rd.tier==='both'?'All institutions':rd.tier==='academic'?'Academic only':'Corporate only'}</div>
+            <div style="font-size:11px;color:${C.muted};margin-top:3px">${rd.tier==='both'?'All institutions':rd.tier==='academic'?'Academic only':'Corporate only'}</div>
           </div>
           <div style="display:flex;align-items:center;gap:8px">
-            <span style="font-size:12.5px;color:${C.muted}">GHS</span>
-            <input type="number" min="0" id="sa-rate-${rd.key}" value="${r[rd.key]||0}" style="width:90px;padding:9px 10px;border:1px solid ${C.line};border-radius:8px;font-size:14px;text-align:right;background:#FBFAF6;outline:none">
-            <button id="sa-save-${rd.key}" onclick="window._saSaveRate('${rd.key}')" style="background:${C.navy};color:${C.cream};border:none;border-radius:8px;padding:9px 14px;font-size:12.5px;font-weight:600;cursor:pointer">Save</button>
+            <span style="font-size:12px;color:${C.muted}">${cur}</span>
+            <input type="number" min="0" id="sa-rate-${rd.key}" value="${r[rd.key]||0}" style="width:88px;padding:9px 10px;border:1px solid ${C.line2};border-radius:9px;font-size:14px;text-align:right;background:${C.bg2};color:${C.ink};outline:none">
+            <button id="sa-save-${rd.key}" onclick="window._saSaveRate('${rd.key}')" style="background:${C.surface2};color:${C.ink};border:1px solid ${C.line2};border-radius:9px;padding:9px 15px;font-size:12px;font-weight:700;cursor:pointer">Save</button>
           </div>
         </div>`).join('')}`;
   }
@@ -5801,52 +5851,58 @@ async function renderSuperadminDashboard(content) {
     // Update tab buttons
     ['institutions','payments','devices','adjuster'].forEach(t => {
       const btn = document.getElementById('sa-tab-' + t);
-      if (btn) { btn.style.background = t === tab ? C.gold : 'transparent'; btn.style.color = t === tab ? C.navy : 'rgba(246,241,228,.65)'; }
+      if (btn) {
+        btn.style.background = t === tab ? C.goldSoft : 'transparent';
+        btn.style.color = t === tab ? C.gold : C.muted;
+        btn.style.borderColor = t === tab ? 'rgba(201,162,75,.3)' : 'transparent';
+      }
     });
     const body = document.getElementById('sa-body');
     if (!body) return;
     body.innerHTML = '<div style="padding:20px;text-align:center;color:' + C.muted + '">Loading…</div>';
     if (tab === 'institutions') body.innerHTML = renderInstTab();
     else if (tab === 'payments')  body.innerHTML = await renderPayTab();
-    else if (tab === 'devices')   body.innerHTML = renderDevicesTab();
+    else if (tab === 'devices')   body.innerHTML = await renderDevicesTab();
     else if (tab === 'adjuster')  body.innerHTML = await renderAdjusterTab();
   }
 
   // Render shell
   content.innerHTML = `
     <style>
-      #sa-outer { font-family:'Segoe UI',system-ui,sans-serif; background:#F6F1E4; min-height:100vh; margin:-20px -16px; }
+      #sa-outer { font-family:'Segoe UI',system-ui,sans-serif; background:${C.bg}; min-height:100vh; margin:-20px -16px; color:${C.ink}; }
       #sa-outer * { box-sizing:border-box; }
+      #sa-outer ::placeholder { color:${C.faint}; }
+      #sa-outer input[type=number]::-webkit-inner-spin-button { opacity:.4; }
     </style>
     <div id="sa-outer">
       <!-- Banner -->
-      <div style="background:${C.navy};color:${C.cream};padding:18px 20px 0;position:sticky;top:0;z-index:20;box-shadow:0 4px 14px rgba(0,0,0,.18)">
-        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px">
-          <div style="display:flex;align-items:baseline;gap:8px">
-            <span style="font-family:Georgia,serif;font-size:21px;letter-spacing:.5px">DIKLY</span>
-            <span style="font-size:11px;color:${C.gold};letter-spacing:2px;text-transform:uppercase">Superadmin</span>
+      <div style="background:rgba(10,15,30,.92);backdrop-filter:blur(8px);border-bottom:1px solid ${C.line};color:${C.ink};padding:16px 20px 0;position:sticky;top:0;z-index:20">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:13px">
+          <div style="display:flex;align-items:center;gap:10px">
+            <span style="font-family:Georgia,serif;font-size:20px;letter-spacing:.6px">DIKLY</span>
+            <span style="font-size:10px;font-weight:700;color:${C.gold};letter-spacing:2px;text-transform:uppercase;background:${C.goldSoft};border:1px solid rgba(201,162,75,.3);padding:2px 9px;border-radius:20px">Superadmin</span>
           </div>
           <div style="display:flex;gap:8px">
-            <button onclick="saExportCSV(window._saCompanies||[], saGetRates())" style="background:transparent;border:1px solid rgba(246,241,228,.35);color:${C.cream};font-size:13px;padding:7px 12px;border-radius:7px;cursor:pointer">CSV</button>
-            <button onclick="doLogout()" style="background:transparent;border:1px solid rgba(246,241,228,.35);color:${C.cream};font-size:13px;padding:7px 12px;border-radius:7px;cursor:pointer">Sign Out</button>
+            <button onclick="saExportCSV(window._saCompanies||[], saGetRates())" style="background:${C.surface};border:1px solid ${C.line2};color:${C.muted};font-size:12.5px;padding:7px 13px;border-radius:9px;cursor:pointer;font-weight:600">↓ CSV</button>
+            <button onclick="doLogout()" style="background:${C.surface};border:1px solid ${C.line2};color:${C.muted};font-size:12.5px;padding:7px 13px;border-radius:9px;cursor:pointer;font-weight:600">Sign Out</button>
           </div>
         </div>
         <!-- Tabs -->
-        <div style="display:flex;gap:6px;background:rgba(246,241,228,.08);border-radius:10px;padding:4px">
-          <button id="sa-tab-institutions" onclick="window._saDrawTab('institutions')" style="flex:1;border:none;padding:9px 4px;font-size:12px;border-radius:8px;cursor:pointer;font-weight:600;letter-spacing:.1px;transition:background .15s,color .15s">🏛 Institutions</button>
-          <button id="sa-tab-payments"     onclick="window._saDrawTab('payments')"     style="flex:1;border:none;padding:9px 4px;font-size:12px;border-radius:8px;cursor:pointer;font-weight:600;letter-spacing:.1px;transition:background .15s,color .15s">💳 Payments</button>
-          <button id="sa-tab-devices"      onclick="window._saDrawTab('devices')"      style="flex:1;border:none;padding:9px 4px;font-size:12px;border-radius:8px;cursor:pointer;font-weight:600;letter-spacing:.1px;transition:background .15s,color .15s">📟 Devices</button>
-          <button id="sa-tab-adjuster"     onclick="window._saDrawTab('adjuster')"     style="flex:1;border:none;padding:9px 4px;font-size:12px;border-radius:8px;cursor:pointer;font-weight:600;letter-spacing:.1px;transition:background .15s,color .15s">⚙ Fee Adjuster</button>
+        <div style="display:flex;gap:6px;padding-bottom:10px">
+          <button id="sa-tab-institutions" onclick="window._saDrawTab('institutions')" style="flex:1;border:1px solid transparent;padding:9px 4px;font-size:12px;border-radius:9px;cursor:pointer;font-weight:700;letter-spacing:.1px;background:transparent;transition:background .15s,color .15s">🏛 Institutions</button>
+          <button id="sa-tab-payments"     onclick="window._saDrawTab('payments')"     style="flex:1;border:1px solid transparent;padding:9px 4px;font-size:12px;border-radius:9px;cursor:pointer;font-weight:700;letter-spacing:.1px;background:transparent;transition:background .15s,color .15s">💳 Payments</button>
+          <button id="sa-tab-devices"      onclick="window._saDrawTab('devices')"      style="flex:1;border:1px solid transparent;padding:9px 4px;font-size:12px;border-radius:9px;cursor:pointer;font-weight:700;letter-spacing:.1px;background:transparent;transition:background .15s,color .15s">📟 Devices</button>
+          <button id="sa-tab-adjuster"     onclick="window._saDrawTab('adjuster')"     style="flex:1;border:1px solid transparent;padding:9px 4px;font-size:12px;border-radius:9px;cursor:pointer;font-weight:700;letter-spacing:.1px;background:transparent;transition:background .15s,color .15s">⚙ Fee Adjuster</button>
         </div>
       </div>
       <!-- Body -->
-      <div id="sa-body" style="padding:16px;max-width:900px;margin:0 auto;padding-bottom:60px"></div>
+      <div id="sa-body" style="padding:18px 20px;max-width:1180px;margin:0 auto;padding-bottom:70px"></div>
     </div>`;
 
   // Wire globals
   window._saCompanies = companies;
   window._saDrawTab   = tab => drawTab(tab);
-  window._saSearch    = q => { searchQ = q.toLowerCase(); const body = document.getElementById('sa-body'); if (body && currentTab === 'institutions') body.innerHTML = renderInstTab(); };
+  window._saSearch    = q => { searchQ = q.toLowerCase(); const body = document.getElementById('sa-body'); if (body && currentTab === 'institutions') { body.innerHTML = renderInstTab(); const inp = document.getElementById('sa-search'); if (inp) { inp.focus(); inp.setSelectionRange(inp.value.length, inp.value.length); } } };
   window._saSaveRate  = async key => {
     const input = document.getElementById('sa-rate-' + key);
     if (!input) return;
@@ -5857,12 +5913,12 @@ async function renderSuperadminDashboard(content) {
     try {
       const _rateApiKeys = { admin:'rateAdmin', manager:'rateManager', employee:'rateEmployee', hod:'rateHod', lecturer:'rateLecturer', student:'rateStudent' };
       await api('/api/superadmin/settings', { method: 'POST', body: JSON.stringify({ [_rateApiKeys[key]]: val }) });
-      if (btn) { btn.textContent = 'Saved ✓'; btn.style.background = C.green; btn.disabled = false; setTimeout(() => { btn.textContent = 'Save'; btn.style.background = C.navy; }, 1600); }
+      if (btn) { btn.textContent = 'Saved ✓'; btn.style.background = C.green; btn.style.borderColor = C.green; btn.style.color = '#fff'; btn.disabled = false; setTimeout(() => { btn.textContent = 'Save'; btn.style.background = C.surface2; btn.style.borderColor = C.line2; btn.style.color = C.ink; }, 1600); }
+      saShowToast(`${SA_ROLE_DEFS.find(r=>r.key===key)?.label||key} rate → ${saFmt(val)} — applied to all institutions`);
     } catch(e) {
       if (btn) { btn.textContent = 'Save'; btn.disabled = false; }
       saShowToast('Failed to save rate: ' + (e.message || 'unknown error'));
     }
-    saShowToast(`${SA_ROLE_DEFS.find(r=>r.key===key)?.label||key} rate → ${saFmt(val)} — applied to all institutions`);
     if (currentTab === 'institutions') { const body = document.getElementById('sa-body'); if (body) body.innerHTML = renderInstTab(); }
   };
 
@@ -5879,9 +5935,10 @@ async function renderSuperadminDashboard(content) {
         trialDays:            Math.max(1, parseInt(document.getElementById('sa-sub-trialDays')?.value)              || 1),
         currency:             (document.getElementById('sa-sub-currency')?.value || 'GHS').trim().slice(0, 10),
       };
-      await api('/api/superadmin/settings', { method: 'POST', body: JSON.stringify(payload) });
-      if (btn) { btn.textContent = 'Saved ✓'; btn.style.background = C.green; btn.disabled = false; setTimeout(() => { btn.textContent = 'Save Subscription Prices'; btn.style.background = C.navy; }, 2000); }
-      saShowToast(`Subscription prices updated — students ₵${payload.studentSemesterPrice}/semester, employees ₵${payload.employeeMonthlyPrice}/month`);
+      const s = await api('/api/superadmin/settings', { method: 'POST', body: JSON.stringify(payload) });
+      platformSettings = s;
+      if (btn) { btn.textContent = 'Saved ✓'; btn.style.background = C.green; btn.style.color = '#fff'; btn.disabled = false; setTimeout(() => { btn.textContent = 'Save Subscription Prices'; btn.style.background = C.gold; btn.style.color = '#0A0F1E'; }, 2000); }
+      saShowToast(`Subscription prices updated — students ${payload.currency} ${payload.studentSemesterPrice}/semester, employees ${payload.currency} ${payload.employeeMonthlyPrice}/month`);
     } catch(e) {
       if (btn) { btn.textContent = 'Save Subscription Prices'; btn.disabled = false; }
       saShowToast('Failed to save: ' + (e.message || 'unknown error'));

@@ -6,237 +6,367 @@
 <title>DIKLY · Superadmin</title>
 <style>
   :root{
-    --navy:#0F1B33;
-    --navy2:#16264A;
-    --cream:#F6F1E4;
+    --bg:#0A0F1E;
+    --bg2:#0E1526;
+    --surface:#131C33;
+    --surface2:#182342;
+    --line:rgba(255,255,255,.09);
+    --line2:rgba(255,255,255,.14);
+    --ink:#EDF0F7;
+    --muted:#8B93A7;
+    --faint:#5C647A;
     --gold:#C9A24B;
-    --green:#2E7D5B;
-    --red:#B5453C;
-    --ink:#1B1F27;
-    --line:#E4DCC6;
-    --muted:#7C7666;
+    --gold-soft:rgba(201,162,75,.14);
+    --blue:#4F6EF7;
+    --blue-soft:rgba(79,110,247,.14);
+    --green:#3DAE7D;
+    --green-soft:rgba(61,174,125,.14);
+    --red:#E2574C;
+    --red-soft:rgba(226,87,76,.13);
+    --amber:#D9A03C;
+    --amber-soft:rgba(217,160,60,.13);
+    --purple:#8B6FD8;
+    --purple-soft:rgba(139,111,216,.14);
+    --teal:#3E9DB8;
+    --teal-soft:rgba(62,157,184,.14);
+    --radius:14px;
+    --shadow:0 10px 30px rgba(0,0,0,.35);
   }
   *{box-sizing:border-box;}
+  html,body{height:100%;}
   body{
     margin:0;
     font-family:'Segoe UI',system-ui,-apple-system,sans-serif;
-    background:var(--cream);
+    background:var(--bg);
     color:var(--ink);
+    -webkit-font-smoothing:antialiased;
   }
   .display{font-family:Georgia,'Times New Roman',serif;}
+  input,textarea,select,button{font-family:inherit;}
+  ::placeholder{color:var(--faint);}
 
-  header{
-    background:var(--navy);
-    color:var(--cream);
-    padding:18px 20px 16px;
+  /* ── App shell ──────────────────────────────────────────── */
+  #shell{display:none; min-height:100vh;}
+  #shell.on{display:flex;}
+
+  aside.sidenav{
+    width:232px; flex-shrink:0;
+    background:var(--bg2);
+    border-right:1px solid var(--line);
+    display:flex; flex-direction:column;
+    position:sticky; top:0; height:100vh;
+  }
+  .side-brand{padding:22px 20px 18px; border-bottom:1px solid var(--line);}
+  .side-brand .display{font-size:20px; letter-spacing:.6px;}
+  .side-brand .tag{
+    display:inline-block; margin-top:5px; font-size:10px; font-weight:700;
+    letter-spacing:2px; text-transform:uppercase; color:var(--gold);
+    background:var(--gold-soft); border:1px solid rgba(201,162,75,.3);
+    padding:2px 9px; border-radius:20px;
+  }
+  .side-nav{padding:14px 12px; flex:1; display:flex; flex-direction:column; gap:3px;}
+  .side-nav button{
+    display:flex; align-items:center; gap:11px; width:100%;
+    background:transparent; border:none; color:var(--muted);
+    font-size:13.5px; font-weight:600; padding:11px 12px;
+    border-radius:10px; cursor:pointer; text-align:left;
+    transition:background .13s,color .13s;
+  }
+  .side-nav button:hover{background:rgba(255,255,255,.04); color:var(--ink);}
+  .side-nav button.active{background:var(--gold-soft); color:var(--gold);}
+  .side-nav button .ico{width:19px; text-align:center; font-size:15px; flex-shrink:0;}
+  .side-foot{padding:14px 12px; border-top:1px solid var(--line);}
+  .side-user{display:flex; align-items:center; gap:10px; padding:8px 10px 12px;}
+  .side-user .avatar{
+    width:32px; height:32px; border-radius:50%; flex-shrink:0;
+    background:linear-gradient(135deg,var(--gold),#8a6a24);
+    display:flex; align-items:center; justify-content:center;
+    font-size:13px; font-weight:800; color:#0A0F1E;
+  }
+  .side-user .u-name{font-size:12.5px; font-weight:700; line-height:1.2;}
+  .side-user .u-role{font-size:10.5px; color:var(--muted); margin-top:1px;}
+  .side-foot .out-btn{
+    width:100%; background:transparent; border:1px solid var(--line2);
+    color:var(--muted); font-size:12.5px; font-weight:600;
+    padding:9px 0; border-radius:9px; cursor:pointer;
+  }
+  .side-foot .out-btn:hover{border-color:var(--red); color:var(--red);}
+
+  .main-col{flex:1; min-width:0; display:flex; flex-direction:column;}
+
+  .topbar{
+    display:flex; align-items:center; gap:12px;
+    padding:14px 24px; border-bottom:1px solid var(--line);
+    background:rgba(10,15,30,.85); backdrop-filter:blur(8px);
     position:sticky; top:0; z-index:20;
-    box-shadow:0 4px 14px rgba(0,0,0,.18);
   }
-  .brand-row{display:flex; align-items:center; justify-content:space-between;}
-  .brand{display:flex; align-items:baseline; gap:8px;}
-  .brand .display{font-size:21px; letter-spacing:.5px;}
-  .brand .tag{font-size:11px; color:var(--gold); letter-spacing:2px; text-transform:uppercase;}
-  .hdr-actions{display:flex; gap:8px; align-items:center;}
-  .hdr-btn{
-    background:transparent; border:1px solid rgba(246,241,228,.35);
-    color:var(--cream); font-size:13px; padding:7px 12px; border-radius:7px;
-    cursor:pointer;
+  .topbar h1{margin:0; font-size:16px; font-weight:700; flex-shrink:0;}
+  .top-search{
+    flex:1; max-width:360px; display:flex; align-items:center; gap:8px;
+    background:var(--surface); border:1px solid var(--line);
+    border-radius:10px; padding:8px 12px;
   }
-  .hdr-btn:hover{border-color:var(--gold); color:var(--gold);}
-  .hdr-user{font-size:12px; color:rgba(246,241,228,.6); margin-right:4px;}
+  .top-search input{border:none; outline:none; width:100%; font-size:13px; background:transparent; color:var(--ink);}
+  .top-actions{margin-left:auto; display:flex; gap:8px;}
+  .top-btn{
+    background:var(--surface); border:1px solid var(--line2); color:var(--muted);
+    font-size:12.5px; font-weight:600; padding:8px 14px; border-radius:9px; cursor:pointer;
+  }
+  .top-btn:hover{color:var(--gold); border-color:var(--gold);}
 
-  nav.tabs{
-    display:flex; gap:6px; margin-top:14px;
-    background:rgba(246,241,228,.08);
-    border-radius:10px; padding:4px;
-  }
-  nav.tabs button{
-    flex:1; background:transparent; border:none; color:rgba(246,241,228,.65);
-    padding:9px 4px; font-size:12px; border-radius:8px; cursor:pointer;
-    font-weight:600; letter-spacing:.1px;
-  }
-  nav.tabs button.active{background:var(--gold); color:var(--navy);}
+  main{padding:22px 24px 70px; max-width:1180px; width:100%; margin:0 auto;}
 
-  main{padding:16px; max-width:900px; margin:0 auto; padding-bottom:60px;}
-
-  .stat-grid{
-    display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-bottom:16px;
-  }
+  /* ── Stats ──────────────────────────────────────────────── */
+  .stat-grid{display:grid; grid-template-columns:repeat(auto-fit,minmax(150px,1fr)); gap:12px; margin-bottom:20px;}
   .stat{
-    background:#fff; border:1px solid var(--line); border-radius:12px;
-    padding:14px 14px 12px;
+    background:var(--surface); border:1px solid var(--line);
+    border-radius:var(--radius); padding:16px 16px 14px; position:relative; overflow:hidden;
   }
-  .stat .num{font-family:Georgia,serif; font-size:26px; font-weight:700; line-height:1;}
-  .stat .lbl{font-size:11px; color:var(--muted); letter-spacing:1.2px; text-transform:uppercase; margin-top:4px;}
-  .stat.green .num{color:var(--green);}
-  .stat.red .num{color:var(--red);}
-  .stat.gold .num{color:var(--gold);}
-
-  .toolbar{display:flex; flex-direction:column; gap:8px; margin-bottom:16px;}
-  .search{
-    display:flex; align-items:center; gap:8px;
-    background:#fff; border:1px solid var(--line); border-radius:10px; padding:10px 12px;
-  }
-  .search input{border:none; outline:none; width:100%; font-size:14px; background:transparent;}
+  .stat::before{content:''; position:absolute; top:0; left:0; right:0; height:2px; background:var(--stat-c,var(--gold)); opacity:.75;}
+  .stat .num{font-family:Georgia,serif; font-size:25px; font-weight:700; line-height:1; color:var(--stat-c,var(--ink));}
+  .stat .lbl{font-size:10.5px; color:var(--muted); letter-spacing:1.3px; text-transform:uppercase; margin-top:6px; font-weight:600;}
 
   .section-title{
-    font-size:11px; letter-spacing:1.5px; text-transform:uppercase; color:var(--muted);
-    margin:18px 0 8px; font-weight:700;
+    font-size:11px; letter-spacing:1.6px; text-transform:uppercase; color:var(--muted);
+    margin:22px 0 10px; font-weight:700; display:flex; align-items:center; gap:8px;
   }
+  .section-title::after{content:''; flex:1; height:1px; background:var(--line);}
 
+  /* ── Institution cards ─────────────────────────────────── */
+  .inst-grid{display:grid; grid-template-columns:repeat(auto-fill,minmax(340px,1fr)); gap:14px;}
   .card{
-    background:#fff; border:1px solid var(--line); border-radius:14px;
-    padding:16px; margin-bottom:12px;
+    background:var(--surface); border:1px solid var(--line);
+    border-radius:var(--radius); padding:18px;
+    transition:border-color .15s, transform .15s;
   }
+  .card:hover{border-color:var(--line2);}
   .card-top{display:flex; justify-content:space-between; align-items:flex-start; gap:8px;}
-  .card-top h3{margin:0; font-family:Georgia,serif; font-size:18px;}
-  .code{font-size:11px; color:var(--muted); letter-spacing:1px; margin-top:2px;}
-  .badges{display:flex; gap:6px; flex-shrink:0; flex-wrap:wrap;}
-  .badge{font-size:11px; padding:3px 9px; border-radius:20px; font-weight:600;}
-  .badge.active{background:#E4F1EA; color:var(--green);}
-  .badge.inactive{background:#FBE9E7; color:var(--red);}
-  .badge.trial{background:#FBEED9; color:#9A6A1E;}
-  .badge.tier{background:#E8E2F2; color:#5B4B8A;}
+  .card-top h3{margin:0; font-family:Georgia,serif; font-size:17px; font-weight:700;}
+  .code{font-size:10.5px; color:var(--faint); letter-spacing:1.2px; margin-top:3px; text-transform:uppercase;}
+  .badges{display:flex; gap:5px; flex-shrink:0; flex-wrap:wrap; justify-content:flex-end;}
+  .badge{font-size:10.5px; padding:3px 9px; border-radius:20px; font-weight:700; letter-spacing:.2px;}
+  .badge.active{background:var(--green-soft); color:var(--green);}
+  .badge.inactive{background:var(--red-soft); color:var(--red);}
+  .badge.trial{background:var(--amber-soft); color:var(--amber);}
+  .badge.expired{background:var(--red-soft); color:var(--red);}
+  .badge.subscribed{background:var(--green-soft); color:var(--green);}
+  .badge.academic{background:var(--purple-soft); color:var(--purple);}
+  .badge.corporate{background:var(--teal-soft); color:var(--teal);}
 
-  .meta-row{display:flex; justify-content:space-between; margin-top:12px; font-size:13.5px;}
-  .meta-row .sub{color:var(--muted); font-size:12px; margin-top:2px;}
-  .contact{margin-top:10px; font-size:13.5px;}
-  .contact .email{color:var(--muted); font-size:12.5px;}
+  .meta-row{display:flex; justify-content:space-between; margin-top:13px; font-size:13px;}
+  .meta-row .sub{color:var(--muted); font-size:11.5px; margin-top:2px;}
+  .contact{margin-top:10px; font-size:13px;}
+  .contact .email{color:var(--muted); font-size:12px;}
 
   .fee-row{
-    margin-top:12px; padding-top:12px; border-top:1px dashed var(--line);
+    margin-top:13px; padding:11px 13px; border-radius:10px;
+    background:var(--bg2); border:1px solid var(--line);
     display:flex; justify-content:space-between; align-items:center;
   }
-  .fee-row .fee-amt{font-family:Georgia,serif; font-size:17px; font-weight:700; color:var(--navy);}
-  .fee-row .fee-lbl{font-size:11px; color:var(--muted); text-transform:uppercase; letter-spacing:1px;}
+  .fee-row .fee-amt{font-family:Georgia,serif; font-size:17px; font-weight:700; color:var(--gold);}
+  .fee-row .fee-lbl{font-size:10px; color:var(--muted); text-transform:uppercase; letter-spacing:1.1px; margin-bottom:2px;}
+  .fee-row .rev-amt{font-family:Georgia,serif; font-size:15px; font-weight:700; color:var(--green); text-align:right;}
 
-  .btn-row{display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-top:12px;}
+  .btn-row{display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-top:13px;}
   .btn{
-    border-radius:8px; padding:9px 0; font-size:13px; font-weight:600; cursor:pointer;
-    border:1px solid var(--line); background:#fff; text-align:center;
+    border-radius:9px; padding:9px 0; font-size:12.5px; font-weight:600; cursor:pointer;
+    border:1px solid var(--line2); background:transparent; color:var(--muted); text-align:center;
+    transition:color .13s,border-color .13s,background .13s;
   }
+  .btn:hover{color:var(--ink); border-color:var(--faint);}
   .btn.full{grid-column:1/-1;}
-  .btn.adjust{border-color:var(--gold); color:#9A6A1E; background:#FBF6E9;}
-  .btn.deact{border-color:var(--red); color:var(--red);}
-  .btn.danger{border-color:var(--red); color:var(--red);}
-  .btn.primary{background:var(--navy); color:var(--cream); border:none;}
-  .btn.login-as{background:var(--navy2); color:var(--cream); border:none;}
-  .btn:active{transform:scale(.98);}
+  .btn.deact{border-color:rgba(226,87,76,.4); color:var(--red);}
+  .btn.deact:hover{background:var(--red-soft);}
+  .btn.danger{border-color:rgba(226,87,76,.4); color:var(--red);}
+  .btn.danger:hover{background:var(--red-soft);}
+  .btn.primary{background:var(--blue); color:#fff; border:none;}
+  .btn.primary:hover{background:#3d5ce8;}
+  .btn.login-as{background:var(--gold); color:#0A0F1E; border:none; font-weight:700;}
+  .btn.login-as:hover{background:#d8b25e;}
+  .btn:active{transform:scale(.985);}
   .btn:disabled{opacity:.5; cursor:not-allowed;}
 
-  /* Login screen */
+  /* ── Login screen ──────────────────────────────────────── */
   #login-screen{
-    position:fixed; inset:0; background:var(--navy);
+    position:fixed; inset:0; background:radial-gradient(1000px 600px at 70% -10%, #17203c 0%, var(--bg) 55%);
     display:flex; align-items:center; justify-content:center; z-index:100; padding:24px;
   }
   .login-card{
-    background:var(--cream); border-radius:18px; padding:32px 28px;
-    width:100%; max-width:380px;
+    background:var(--surface); border:1px solid var(--line2);
+    border-radius:20px; padding:36px 30px; width:100%; max-width:390px;
+    box-shadow:var(--shadow);
   }
-  .login-brand{margin-bottom:24px;}
-  .login-brand .display{font-size:24px; color:var(--navy);}
-  .login-brand .tag{font-size:11px; color:var(--gold); letter-spacing:2px; text-transform:uppercase; display:block; margin-top:2px;}
+  .login-brand{margin-bottom:26px;}
+  .login-brand .display{font-size:26px;}
+  .login-brand .tag{
+    display:inline-block; margin-top:7px; font-size:10px; font-weight:700; letter-spacing:2px;
+    text-transform:uppercase; color:var(--gold); background:var(--gold-soft);
+    border:1px solid rgba(201,162,75,.3); padding:3px 10px; border-radius:20px;
+  }
   .login-field{margin-bottom:14px;}
-  .login-field label{display:block; font-size:12px; font-weight:700; color:var(--navy); margin-bottom:6px; letter-spacing:.3px;}
+  .login-field label{display:block; font-size:11.5px; font-weight:700; color:var(--muted); margin-bottom:6px; letter-spacing:.4px; text-transform:uppercase;}
   .login-field input{
-    width:100%; padding:12px 13px; border:1.5px solid var(--line); border-radius:9px;
-    font-size:14px; background:#fff; outline:none; font-family:inherit;
+    width:100%; padding:12px 13px; border:1.5px solid var(--line2); border-radius:10px;
+    font-size:14px; background:var(--bg2); color:var(--ink); outline:none;
   }
   .login-field input:focus{border-color:var(--gold);}
   .login-btn{
-    width:100%; padding:13px; background:var(--navy); color:var(--cream);
-    border:none; border-radius:9px; font-size:14px; font-weight:700;
-    cursor:pointer; font-family:inherit; margin-top:4px;
+    width:100%; padding:13px; background:var(--gold); color:#0A0F1E;
+    border:none; border-radius:10px; font-size:14px; font-weight:800;
+    cursor:pointer; margin-top:6px; letter-spacing:.2px;
   }
-  .login-btn:hover{background:var(--navy2);}
+  .login-btn:hover{background:#d8b25e;}
   .login-btn:disabled{opacity:.6; cursor:not-allowed;}
   .login-err{
     display:none; margin-top:12px; padding:10px 13px;
-    background:#FBEAE8; border:1px solid rgba(181,69,60,.3);
-    border-radius:8px; color:var(--red); font-size:13px;
+    background:var(--red-soft); border:1px solid rgba(226,87,76,.35);
+    border-radius:9px; color:var(--red); font-size:13px;
   }
 
-  /* Loading */
-  .loading{text-align:center; padding:40px 20px; color:var(--muted); font-size:14px;}
+  .loading{text-align:center; padding:46px 20px; color:var(--muted); font-size:13.5px;}
+  .empty{text-align:center; padding:50px 20px; color:var(--muted); font-size:13.5px;}
+  .empty .display{font-size:17px; color:var(--ink); margin-bottom:6px;}
 
-  /* modal */
+  /* ── Modals ────────────────────────────────────────────── */
   .overlay{
-    position:fixed; inset:0; background:rgba(15,27,51,.55);
-    display:none; align-items:flex-end; justify-content:center; z-index:50;
+    position:fixed; inset:0; background:rgba(4,7,16,.7); backdrop-filter:blur(3px);
+    display:none; align-items:center; justify-content:center; z-index:50; padding:20px;
   }
   .overlay.show{display:flex;}
   .modal{
-    background:var(--cream); width:100%; max-width:480px;
-    border-radius:18px 18px 0 0; padding:20px 20px 26px;
-    max-height:90vh; overflow-y:auto;
-    animation:slideUp .22s ease-out;
+    background:var(--surface); border:1px solid var(--line2); width:100%; max-width:460px;
+    border-radius:18px; padding:24px 22px; max-height:88vh; overflow-y:auto;
+    box-shadow:var(--shadow); animation:pop .18s ease-out;
   }
-  @keyframes slideUp{from{transform:translateY(30px); opacity:0;} to{transform:translateY(0); opacity:1;}}
-  .modal h2{font-family:Georgia,serif; margin:0 0 2px; font-size:20px;}
-  .modal .sub{color:var(--muted); font-size:12.5px; margin-bottom:16px;}
+  @keyframes pop{from{transform:scale(.96); opacity:0;} to{transform:scale(1); opacity:1;}}
+  .modal h2{font-family:Georgia,serif; margin:0 0 3px; font-size:19px;}
+  .modal .sub{color:var(--muted); font-size:12.5px; margin:0 0 18px;}
   .field{margin-bottom:14px;}
-  .field label{display:block; font-size:12px; font-weight:700; color:var(--navy); margin-bottom:6px; letter-spacing:.3px;}
+  .field label{display:block; font-size:11px; font-weight:700; color:var(--muted); margin-bottom:6px; letter-spacing:.5px; text-transform:uppercase;}
   .field select, .field input, .field textarea{
-    width:100%; padding:11px 12px; border:1px solid var(--line); border-radius:9px;
-    font-size:14px; background:#fff; outline:none; font-family:inherit;
+    width:100%; padding:11px 12px; border:1px solid var(--line2); border-radius:10px;
+    font-size:14px; background:var(--bg2); color:var(--ink); outline:none;
   }
   .field textarea{resize:vertical; min-height:90px;}
   .field select:focus, .field input:focus, .field textarea:focus{border-color:var(--gold);}
+  .field input[type="date"]{color-scheme:dark;}
+  .modal-actions{display:flex; gap:10px; margin-top:8px;}
+  .modal-actions .btn{flex:1; padding:12px;}
 
-  .modal-actions{display:flex; gap:10px; margin-top:6px;}
-  .modal-actions .btn{flex:1; padding:13px;}
-
-  .rate-card{
-    background:#fff; border:1px solid var(--line); border-radius:12px;
-    padding:14px 16px; margin-bottom:10px;
-    display:flex; align-items:center; justify-content:space-between; gap:12px;
-  }
-  .rate-card .rname{display:flex; align-items:center; gap:8px; font-weight:700; font-size:14.5px;}
-  .rate-card .rname .dot{width:9px; height:9px; border-radius:50%; flex-shrink:0;}
-  .rate-card .rtier{font-size:11px; color:var(--muted); margin-top:2px;}
-  .rate-card .rate-input-wrap{display:flex; align-items:center; gap:8px;}
-  .rate-card input{
-    width:90px; padding:9px 10px; border:1px solid var(--line); border-radius:8px;
-    font-size:14px; text-align:right; background:#FBFAF6;
-  }
-  .rate-card input:focus{border-color:var(--gold); outline:none;}
-  .rate-card .save-btn{
-    background:var(--navy); color:var(--cream); border:none; border-radius:8px;
-    padding:9px 14px; font-size:12.5px; font-weight:600; cursor:pointer;
-  }
-  .rate-card .save-btn.saved{background:var(--green);}
-
-  .empty{text-align:center; padding:50px 20px; color:var(--muted);}
-  .empty .display{font-size:18px; color:var(--ink); margin-bottom:6px;}
-
+  /* ── Payments / devices ────────────────────────────────── */
+  .list-card{background:var(--surface); border:1px solid var(--line); border-radius:var(--radius); padding:6px 18px;}
   .history-item{
-    display:flex; justify-content:space-between; padding:10px 0;
+    display:flex; justify-content:space-between; padding:13px 0;
     border-bottom:1px solid var(--line); font-size:13px;
   }
   .history-item:last-child{border-bottom:none;}
   .history-item .h-name{font-weight:600;}
-  .history-item .h-sub{color:var(--muted); font-size:11.5px;}
+  .history-item .h-sub{color:var(--muted); font-size:11.5px; margin-top:2px;}
+  .history-item .h-amt{font-family:Georgia,serif; font-weight:700; color:var(--green); font-size:14.5px;}
 
-  .toast{
-    position:fixed; bottom:24px; left:50%; transform:translateX(-50%);
-    background:var(--navy); color:var(--cream); padding:11px 20px; border-radius:30px;
-    font-size:13.5px; z-index:60; box-shadow:0 6px 18px rgba(0,0,0,.25);
-    display:none; white-space:nowrap;
-  }
-  .toast.show{display:block; animation:fadeUp .25s ease-out;}
-  @keyframes fadeUp{from{opacity:0; transform:translate(-50%,8px);} to{opacity:1; transform:translate(-50%,0);}}
-
-  /* Device cards */
   .device-card{
-    background:#fff; border:1px solid var(--line); border-radius:12px;
-    padding:14px 16px; margin-bottom:10px;
+    background:var(--surface); border:1px solid var(--line); border-radius:12px;
+    padding:15px 17px; margin-bottom:10px;
     display:flex; justify-content:space-between; align-items:flex-start; gap:12px;
   }
-  .device-card .d-name{font-weight:700; font-size:14px;}
-  .device-card .d-sub{color:var(--muted); font-size:12px; margin-top:3px;}
-  .device-card .d-badge{font-size:11px; padding:2px 8px; border-radius:12px; font-weight:600;}
-  .device-card .d-badge.ok{background:#E4F1EA; color:var(--green);}
-  .device-card .d-badge.orphan{background:#FBEAE8; color:var(--red);}
+  .device-card .d-name{font-weight:700; font-size:13.5px;}
+  .device-card .d-sub{color:var(--muted); font-size:11.5px; margin-top:3px;}
+  .device-card .d-badge{font-size:10.5px; padding:3px 9px; border-radius:12px; font-weight:700; flex-shrink:0;}
+  .device-card .d-badge.ok{background:var(--green-soft); color:var(--green);}
+  .device-card .d-badge.orphan{background:var(--red-soft); color:var(--red);}
+
+  /* ── Fee adjuster ──────────────────────────────────────── */
+  .adjuster-intro{color:var(--muted); font-size:12.5px; margin:2px 0 16px; line-height:1.55;}
+  .panel{
+    background:var(--surface); border:1px solid var(--line);
+    border-radius:var(--radius); padding:20px; margin-bottom:18px;
+  }
+  .panel-title{display:flex; align-items:center; gap:9px; font-size:14px; font-weight:700; margin-bottom:4px;}
+  .panel-sub{color:var(--muted); font-size:12px; margin-bottom:16px; line-height:1.5;}
+  .price-grid{display:grid; grid-template-columns:repeat(auto-fit,minmax(215px,1fr)); gap:14px;}
+  .price-cell .p-head{display:flex; align-items:center; gap:6px; margin-bottom:4px;}
+  .price-cell .p-tier{font-size:9.5px; font-weight:800; padding:2px 8px; border-radius:20px; letter-spacing:.6px; text-transform:uppercase;}
+  .p-tier.academic{background:var(--purple-soft); color:var(--purple);}
+  .p-tier.corporate{background:var(--teal-soft); color:var(--teal);}
+  .p-tier.both{background:var(--gold-soft); color:var(--gold);}
+  .price-cell .p-name{font-size:12.5px; font-weight:700;}
+  .price-cell .p-hint{font-size:11px; color:var(--muted); margin-bottom:7px; line-height:1.45; min-height:29px;}
+  .price-input{display:flex; align-items:center; gap:7px;}
+  .price-input .unit{font-size:11.5px; color:var(--muted); min-width:26px;}
+  .price-input input{
+    flex:1; width:100%; padding:9px 11px; border:1px solid var(--line2); border-radius:9px;
+    font-size:14px; text-align:right; background:var(--bg2); color:var(--ink); outline:none;
+  }
+  .price-input input:focus{border-color:var(--gold);}
+  .panel-foot{
+    display:flex; align-items:center; justify-content:space-between; gap:12px;
+    padding-top:16px; margin-top:16px; border-top:1px solid var(--line); flex-wrap:wrap;
+  }
+  .currency-wrap{display:flex; align-items:center; gap:9px;}
+  .currency-wrap label{font-size:12px; font-weight:700; color:var(--muted);}
+  .currency-wrap input{
+    width:80px; padding:9px 10px; border:1px solid var(--line2); border-radius:9px;
+    font-size:13px; background:var(--bg2); color:var(--ink); outline:none; text-align:center;
+  }
+  .save-all-btn{
+    background:var(--gold); color:#0A0F1E; border:none; border-radius:10px;
+    padding:11px 24px; font-size:13px; font-weight:800; cursor:pointer;
+  }
+  .save-all-btn:hover{background:#d8b25e;}
+  .save-all-btn:disabled{opacity:.6; cursor:not-allowed;}
+  .save-all-btn.saved{background:var(--green); color:#fff;}
+
+  .rate-card{
+    background:var(--surface); border:1px solid var(--line); border-radius:12px;
+    padding:14px 17px; margin-bottom:9px;
+    display:flex; align-items:center; justify-content:space-between; gap:12px;
+  }
+  .rate-card .rname{display:flex; align-items:center; gap:9px; font-weight:700; font-size:13.5px;}
+  .rate-card .rname .dot{width:9px; height:9px; border-radius:50%; flex-shrink:0;}
+  .rate-card .rtier{font-size:11px; color:var(--muted); margin-top:3px;}
+  .rate-card .rate-input-wrap{display:flex; align-items:center; gap:8px;}
+  .rate-card .rate-input-wrap .unit{font-size:12px; color:var(--muted);}
+  .rate-card input{
+    width:88px; padding:9px 10px; border:1px solid var(--line2); border-radius:9px;
+    font-size:14px; text-align:right; background:var(--bg2); color:var(--ink); outline:none;
+  }
+  .rate-card input:focus{border-color:var(--gold);}
+  .rate-card .save-btn{
+    background:var(--surface2); color:var(--ink); border:1px solid var(--line2); border-radius:9px;
+    padding:9px 15px; font-size:12px; font-weight:700; cursor:pointer;
+  }
+  .rate-card .save-btn:hover{border-color:var(--gold); color:var(--gold);}
+  .rate-card .save-btn.saved{background:var(--green); border-color:var(--green); color:#fff;}
+  .rate-card .save-btn:disabled{opacity:.6; cursor:not-allowed;}
+
+  /* ── Toast ─────────────────────────────────────────────── */
+  .toast{
+    position:fixed; bottom:26px; left:50%; transform:translateX(-50%);
+    background:var(--surface2); border:1px solid var(--line2); color:var(--ink);
+    padding:12px 22px; border-radius:30px; font-size:13px; font-weight:600; z-index:60;
+    box-shadow:var(--shadow); display:none; max-width:88vw; white-space:nowrap;
+    overflow:hidden; text-overflow:ellipsis;
+  }
+  .toast.show{display:block; animation:fadeUp .22s ease-out;}
+  @keyframes fadeUp{from{opacity:0; transform:translate(-50%,10px);} to{opacity:1; transform:translate(-50%,0);}}
+
+  /* ── Mobile ────────────────────────────────────────────── */
+  @media (max-width:840px){
+    aside.sidenav{
+      position:fixed; top:auto; bottom:0; left:0; right:0; height:auto; width:100%;
+      flex-direction:row; border-right:none; border-top:1px solid var(--line2);
+      z-index:30; background:rgba(10,15,30,.97); backdrop-filter:blur(8px);
+    }
+    .side-brand,.side-foot{display:none;}
+    .side-nav{flex-direction:row; padding:7px 8px; gap:4px;}
+    .side-nav button{flex-direction:column; gap:3px; font-size:10px; padding:7px 2px; border-radius:9px; justify-content:center; text-align:center;}
+    .side-nav button .ico{width:auto; font-size:17px;}
+    main{padding:16px 14px 110px;}
+    .topbar{padding:12px 14px; flex-wrap:wrap;}
+    .topbar h1{font-size:15px;}
+    .top-search{order:3; max-width:none; width:100%;}
+    .inst-grid{grid-template-columns:1fr;}
+  }
 </style>
 </head>
 <body>
@@ -246,74 +376,91 @@
   <div class="login-card">
     <div class="login-brand">
       <div class="display">DIKLY</div>
-      <span class="tag">Platform Admin</span>
+      <span class="tag">Platform Control</span>
     </div>
     <div class="login-field">
       <label>Email</label>
-      <input type="email" id="em" placeholder="superadmin@dikly.sbs">
+      <input type="email" id="em" placeholder="superadmin@dikly.sbs" autocomplete="username">
     </div>
     <div class="login-field">
       <label>Password</label>
-      <input type="password" id="pw">
+      <input type="password" id="pw" autocomplete="current-password">
     </div>
     <button class="login-btn" id="login-btn" onclick="doLogin()">Sign In</button>
     <div class="login-err" id="login-err"></div>
   </div>
 </div>
 
-<!-- Header -->
-<header id="site-header" style="display:none">
-  <div class="brand-row">
-    <div class="brand">
-      <span class="display">DIKLY</span>
+<!-- App shell -->
+<div id="shell">
+  <aside class="sidenav">
+    <div class="side-brand">
+      <div class="display">DIKLY</div>
       <span class="tag">Superadmin</span>
     </div>
-    <div class="hdr-actions">
-      <span class="hdr-user" id="hdr-user"></span>
-      <button class="hdr-btn" onclick="exportCSV()">&#8595; CSV</button>
-      <button class="hdr-btn" onclick="doLogout()">Sign Out</button>
+    <nav class="side-nav" id="side-nav">
+      <button class="active" data-tab="institutions" onclick="switchTab('institutions')"><span class="ico">&#127963;</span><span>Institutions</span></button>
+      <button data-tab="payments" onclick="switchTab('payments')"><span class="ico">&#128179;</span><span>Payments</span></button>
+      <button data-tab="devices" onclick="switchTab('devices')"><span class="ico">&#128223;</span><span>Devices</span></button>
+      <button data-tab="adjuster" onclick="switchTab('adjuster')"><span class="ico">&#9881;</span><span>Fee Adjuster</span></button>
+    </nav>
+    <div class="side-foot">
+      <div class="side-user">
+        <div class="avatar" id="side-avatar">S</div>
+        <div>
+          <div class="u-name" id="side-user-name">Superadmin</div>
+          <div class="u-role">Platform Owner</div>
+        </div>
+      </div>
+      <button class="out-btn" onclick="doLogout()">Sign Out</button>
     </div>
-  </div>
-  <nav class="tabs">
-    <button class="active" data-tab="institutions" onclick="switchTab('institutions',this)">&#127963; Institutions</button>
-    <button data-tab="payments" onclick="switchTab('payments',this)">&#128179; Payments</button>
-    <button data-tab="devices" onclick="switchTab('devices',this)">&#128223; Devices</button>
-    <button data-tab="adjuster" onclick="switchTab('adjuster',this)">&#9881; Fee Adjuster</button>
-  </nav>
-</header>
+  </aside>
 
-<!-- Main Content -->
-<main id="site-main" style="display:none">
-  <!-- INSTITUTIONS TAB -->
-  <div id="tab-institutions">
-    <div class="stat-grid" id="instStats"></div>
-    <div class="toolbar">
-      <div class="search">&#128269; <input id="searchBox" placeholder="Search by name or code&#8230;" oninput="renderCards()"></div>
+  <div class="main-col">
+    <div class="topbar">
+      <h1 id="topbar-title">Institutions</h1>
+      <div class="top-search" id="topbar-search">
+        &#128269; <input id="searchBox" placeholder="Search name, code or admin email&#8230;" oninput="renderCards()">
+      </div>
+      <div class="top-actions">
+        <button class="top-btn" onclick="exportCSV()">&#8595; CSV</button>
+      </div>
     </div>
-    <div class="section-title">All Institutions</div>
-    <div id="instList"></div>
-  </div>
 
-  <!-- PAYMENTS TAB -->
-  <div id="tab-payments" style="display:none">
-    <div class="stat-grid" id="payStats"></div>
-    <div class="section-title">Payment History</div>
-    <div class="card" id="payList"></div>
-  </div>
+    <main>
+      <!-- INSTITUTIONS TAB -->
+      <div id="tab-institutions">
+        <div class="stat-grid" id="instStats"></div>
+        <div class="section-title">All Institutions</div>
+        <div class="inst-grid" id="instList"></div>
+      </div>
 
-  <!-- DEVICES TAB -->
-  <div id="tab-devices" style="display:none">
-    <div class="stat-grid" id="devStats"></div>
-    <div class="section-title">Registered Devices</div>
-    <div id="devList"></div>
-  </div>
+      <!-- PAYMENTS TAB -->
+      <div id="tab-payments" style="display:none">
+        <div class="stat-grid" id="payStats"></div>
+        <div class="section-title">Payment History</div>
+        <div class="list-card" id="payList"></div>
+      </div>
 
-  <!-- FEE ADJUSTER TAB -->
-  <div id="tab-adjuster" style="display:none">
-    <p style="color:var(--muted);font-size:12.5px;margin-bottom:14px;">Set a monthly rate per role. Rates apply to all institutions and update the computed fee on every card.</p>
-    <div id="ratesList"></div>
+      <!-- DEVICES TAB -->
+      <div id="tab-devices" style="display:none">
+        <div class="stat-grid" id="devStats"></div>
+        <div class="section-title">Registered Devices</div>
+        <div id="devList"></div>
+      </div>
+
+      <!-- FEE ADJUSTER TAB -->
+      <div id="tab-adjuster" style="display:none">
+        <p class="adjuster-intro">
+          Control what every account type pays. <strong>Subscription prices</strong> are the live Paystack
+          amounts shown on the subscription pages — changes take effect immediately for all users.
+          <strong>Billing rates</strong> drive the computed monthly fee shown on each institution card.
+        </p>
+        <div id="adjusterBody"><div class="loading">Loading pricing&#8230;</div></div>
+      </div>
+    </main>
   </div>
-</main>
+</div>
 
 <!-- Trial modal -->
 <div class="overlay" id="overlay-trial">
@@ -384,20 +531,33 @@
 <script>
 // ── Config ──────────────────────────────────────────────────────────────────
 const ROLE_DEFS = [
-  { key:'admin',    label:'Admins',    color:'#0F1B33', tier:'both' },
-  { key:'hod',      label:'HODs',      color:'#2E7D5B', tier:'academic' },
-  { key:'lecturer', label:'Lecturers', color:'#C9A24B', tier:'academic' },
-  { key:'student',  label:'Students',  color:'#B5453C', tier:'academic' },
-  { key:'manager',  label:'Managers',  color:'#5B4B8A', tier:'corporate' },
-  { key:'employee', label:'Employees', color:'#9A6A1E', tier:'corporate' },
+  { key:'admin',    label:'Admins',    color:'#C9A24B', tier:'both' },
+  { key:'hod',      label:'HODs',      color:'#3DAE7D', tier:'academic' },
+  { key:'lecturer', label:'Lecturers', color:'#8B6FD8', tier:'academic' },
+  { key:'student',  label:'Students',  color:'#E2574C', tier:'academic' },
+  { key:'manager',  label:'Managers',  color:'#4F6EF7', tier:'corporate' },
+  { key:'employee', label:'Employees', color:'#3E9DB8', tier:'corporate' },
+];
+const RATE_KEY_MAP = { admin:'rateAdmin', hod:'rateHod', lecturer:'rateLecturer', student:'rateStudent', manager:'rateManager', employee:'rateEmployee' };
+const RATE_DEFAULTS = { admin:15, hod:10, lecturer:8, student:3, manager:12, employee:8 };
+
+const SUB_FIELDS = [
+  { key:'studentSemesterPrice', label:'Student Semester',  hint:'Paid per semester by each student',            def:20,  tier:'academic' },
+  { key:'employeeMonthlyPrice', label:'Employee Monthly',  hint:'Paid monthly by each employee individually',   def:15,  tier:'corporate' },
+  { key:'academicPrice',        label:'Academic Plan',     hint:'Paid per semester by lecturers &amp; admins',  def:300, tier:'academic' },
+  { key:'corporatePrice',       label:'Corporate Plan',    hint:'Paid monthly by managers &amp; admins',        def:150, tier:'corporate' },
+  { key:'studentTrialDays',     label:'Student Trial',     hint:'Free trial for new student accounts (days)',   def:45,  tier:'academic',  unit:'days' },
+  { key:'trialDays',            label:'Institution Trial', hint:'Free trial for new institutions (days)',       def:30,  tier:'both',      unit:'days' },
 ];
 
-// Load from localStorage or use defaults
+// Rates: localStorage is only a fallback cache — the server is the source of truth
+// and is synced into GLOBAL_RATES at dashboard load (see loadSettings()).
 let GLOBAL_RATES = {};
 ROLE_DEFS.forEach(r => {
   const stored = localStorage.getItem('sa_rate_' + r.key);
-  GLOBAL_RATES[r.key] = stored !== null ? parseFloat(stored) : { admin:15, hod:10, lecturer:8, student:3, manager:12, employee:8 }[r.key];
+  GLOBAL_RATES[r.key] = stored !== null ? parseFloat(stored) : RATE_DEFAULTS[r.key];
 });
+let PLATFORM_SETTINGS = null;   // full /settings doc once loaded
 
 let SA_TOKEN = localStorage.getItem('sa_token') || '';
 let SA_USER = '';
@@ -405,6 +565,7 @@ let _companies = [];
 let _activeModal = null;
 let _modalCompanyId = null;
 let _modalCompanyName = null;
+let _currentTab = 'institutions';
 
 // ── API helper ───────────────────────────────────────────────────────────────
 async function api(path, opts={}) {
@@ -442,7 +603,7 @@ async function doLogin() {
     SA_TOKEN = d.token;
     SA_USER = d.user.name || d.user.email;
     localStorage.setItem('sa_token', SA_TOKEN);
-    localStorage.setItem('sa_user', d.user.name || d.user.email);
+    localStorage.setItem('sa_user', SA_USER);
     showDashboard();
   } catch(ex) {
     err.textContent = ex.message; err.style.display = 'block';
@@ -454,25 +615,51 @@ function doLogout() {
   localStorage.removeItem('sa_token');
   localStorage.removeItem('sa_user');
   SA_TOKEN = ''; _companies = [];
-  document.getElementById('site-header').style.display = 'none';
-  document.getElementById('site-main').style.display = 'none';
+  document.getElementById('shell').classList.remove('on');
   document.getElementById('login-screen').style.display = 'flex';
+  const btn = document.getElementById('login-btn');
+  btn.disabled = false; btn.textContent = 'Sign In';
 }
 
 function showDashboard() {
   document.getElementById('login-screen').style.display = 'none';
-  document.getElementById('site-header').style.display = 'block';
-  document.getElementById('site-main').style.display = 'block';
-  document.getElementById('hdr-user').textContent = SA_USER;
+  document.getElementById('shell').classList.add('on');
+  document.getElementById('side-user-name').textContent = SA_USER || 'Superadmin';
+  document.getElementById('side-avatar').textContent = (SA_USER || 'S').charAt(0).toUpperCase();
+  loadSettings();       // sync rates/prices from server FIRST so fees are accurate
   loadInstitutions();
 }
 
+// ── Platform settings (server = source of truth) ────────────────────────────
+async function loadSettings() {
+  try {
+    const s = await api('/api/superadmin/settings');
+    PLATFORM_SETTINGS = s;
+    ROLE_DEFS.forEach(r => {
+      const apiKey = RATE_KEY_MAP[r.key];
+      if (s[apiKey] != null) {
+        GLOBAL_RATES[r.key] = s[apiKey];
+        localStorage.setItem('sa_rate_' + r.key, s[apiKey]);
+      }
+    });
+    // Re-render institution fees with fresh rates if cards are already up
+    if (_companies.length) renderCards();
+  } catch(e) {
+    // offline / error → keep localStorage fallback
+  }
+}
+
 // ── Tabs ─────────────────────────────────────────────────────────────────────
-function switchTab(tab, btn) {
-  document.querySelectorAll('nav.tabs button').forEach(b => b.classList.toggle('active', b===btn));
+const TAB_TITLES = { institutions:'Institutions', payments:'Payments', devices:'Devices', adjuster:'Fee Adjuster' };
+function switchTab(tab) {
+  _currentTab = tab;
+  document.querySelectorAll('#side-nav button').forEach(b => b.classList.toggle('active', b.dataset.tab===tab));
   ['institutions','payments','devices','adjuster'].forEach(t => {
     document.getElementById('tab-'+t).style.display = t===tab ? 'block' : 'none';
   });
+  document.getElementById('topbar-title').textContent = TAB_TITLES[tab] || 'Superadmin';
+  document.getElementById('topbar-search').style.display = tab==='institutions' ? 'flex' : 'none';
+  if (tab==='institutions') renderCards();       // always repaint → fees reflect latest rates
   if (tab==='payments')  loadPayments();
   if (tab==='devices')   loadDevices();
   if (tab==='adjuster')  renderAdjuster();
@@ -486,7 +673,7 @@ async function loadInstitutions() {
     _companies = d.companies || [];
     renderCards();
   } catch(e) {
-    document.getElementById('instList').innerHTML = '<div class="card"><div class="empty"><div class="display">Failed to load</div>'+e.message+'</div></div>';
+    document.getElementById('instList').innerHTML = '<div class="card"><div class="empty"><div class="display">Failed to load</div>'+esc(e.message)+'</div></div>';
   }
 }
 
@@ -496,7 +683,7 @@ function rolesForMode(mode) {
 
 function computeFee(c) {
   const roles = rolesForMode(c.mode || 'academic');
-  return roles.reduce((s,r) => s + (c.roleCounts[r.key]||0) * (GLOBAL_RATES[r.key]||0), 0);
+  return roles.reduce((s,r) => s + ((c.roleCounts&&c.roleCounts[r.key])||0) * (GLOBAL_RATES[r.key]||0), 0);
 }
 
 function fmtGHS(n) { return 'GHS ' + Number(n).toLocaleString('en-GH',{maximumFractionDigits:0}); }
@@ -505,7 +692,7 @@ function esc(s) { return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;'
 
 function roleBreakdown(c) {
   const roles = rolesForMode(c.mode||'academic');
-  const parts = roles.filter(r=>(c.roleCounts[r.key]||0)>0).map(r=>c.roleCounts[r.key]+' '+r.label.toLowerCase());
+  const parts = roles.filter(r=>((c.roleCounts&&c.roleCounts[r.key])||0)>0).map(r=>c.roleCounts[r.key]+' '+r.label.toLowerCase());
   return parts.length ? parts.join(' · ') : 'No members yet';
 }
 
@@ -525,16 +712,16 @@ function renderCards() {
   const corporate = _companies.filter(c=>c.mode==='corporate').length;
 
   document.getElementById('instStats').innerHTML =
-    '<div class="stat"><div class="num">'+total+'</div><div class="lbl">Institutions</div></div>'+
-    '<div class="stat green"><div class="num">'+active+'</div><div class="lbl">Active</div></div>'+
-    '<div class="stat gold"><div class="num">'+fmtGHS(revenue)+'</div><div class="lbl">Revenue</div></div>'+
-    '<div class="stat"><div class="num">'+onTrial+'</div><div class="lbl">On Trial</div></div>'+
-    '<div class="stat red"><div class="num">'+expired+'</div><div class="lbl">Expired</div></div>'+
-    '<div class="stat"><div class="num">'+academic+'</div><div class="lbl">Academic</div></div>'+
-    '<div class="stat"><div class="num">'+corporate+'</div><div class="lbl">Corporate</div></div>';
+    '<div class="stat" style="--stat-c:var(--ink)"><div class="num">'+total+'</div><div class="lbl">Institutions</div></div>'+
+    '<div class="stat" style="--stat-c:var(--green)"><div class="num">'+active+'</div><div class="lbl">Active</div></div>'+
+    '<div class="stat" style="--stat-c:var(--gold)"><div class="num">'+fmtGHS(revenue)+'</div><div class="lbl">Revenue</div></div>'+
+    '<div class="stat" style="--stat-c:var(--amber)"><div class="num">'+onTrial+'</div><div class="lbl">On Trial</div></div>'+
+    '<div class="stat" style="--stat-c:var(--red)"><div class="num">'+expired+'</div><div class="lbl">Expired</div></div>'+
+    '<div class="stat" style="--stat-c:var(--purple)"><div class="num">'+academic+'</div><div class="lbl">Academic</div></div>'+
+    '<div class="stat" style="--stat-c:var(--teal)"><div class="num">'+corporate+'</div><div class="lbl">Corporate</div></div>';
 
   if (!filtered.length) {
-    document.getElementById('instList').innerHTML = '<div class="card"><div class="empty"><div class="display">No matches</div>Try a different name or code.</div></div>';
+    document.getElementById('instList').innerHTML = '<div class="card" style="grid-column:1/-1"><div class="empty"><div class="display">No matches</div>Try a different name or code.</div></div>';
     return;
   }
 
@@ -545,13 +732,14 @@ function renderCards() {
     const expires = c.trialEndDate || c.subscriptionEndDate;
     const fee = computeFee(c);
     const statusBadge = isActive ? '<span class="badge active">Active</span>' : '<span class="badge inactive">Inactive</span>';
-    const trialBadge = c.isTrialActive ? '<span class="badge trial">Trial</span>' : '';
+    const subBadge = c.subscriptionActive ? '<span class="badge subscribed">Subscribed</span>'
+      : c.isTrialActive ? '<span class="badge trial">Trial</span>' : '<span class="badge expired">Expired</span>';
     const escapedName = esc(c.name);
     const escapedNotes = esc(c.superadminNotes||'');
     return '<div class="card" id="card-'+id+'">'+
       '<div class="card-top">'+
         '<div><h3>'+escapedName+'</h3><div class="code">'+esc(c.institutionCode||'')+'</div></div>'+
-        '<div class="badges">'+statusBadge+trialBadge+'<span class="badge tier">'+esc(c.mode||'academic')+'</span></div>'+
+        '<div class="badges">'+statusBadge+subBadge+'<span class="badge '+esc(c.mode||'academic')+'">'+esc(c.mode||'academic')+'</span></div>'+
       '</div>'+
       '<div class="meta-row">'+
         '<div><strong>'+(c.userCount||0)+' users</strong><div class="sub">'+esc(roleBreakdown(c))+'</div></div>'+
@@ -562,8 +750,8 @@ function renderCards() {
         '<div class="email">'+esc(c.adminEmail||'')+'</div>'+
       '</div>'+
       '<div class="fee-row">'+
-        '<div><div class="fee-lbl">Computed subscription fee</div><div class="fee-amt">'+fmtGHS(fee)+'</div></div>'+
-        '<div style="font-size:12px;color:var(--muted);text-align:right">'+(c.revenue?fmtGHS(c.revenue)+' paid':'No payments')+'</div>'+
+        '<div><div class="fee-lbl">Computed monthly fee</div><div class="fee-amt">'+fmtGHS(fee)+'</div></div>'+
+        '<div><div class="fee-lbl" style="text-align:right">Paid to date</div><div class="rev-amt">'+(c.revenue?fmtGHS(c.revenue):'—')+'</div></div>'+
       '</div>'+
       '<div class="btn-row">'+
         '<button class="btn '+(isActive?'deact':'')+'" onclick="toggleInstitution(\''+id+'\',\''+escapedName+'\','+isActive+')">'+(isActive?'Deactivate':'Activate')+'</button>'+
@@ -571,7 +759,6 @@ function renderCards() {
         '<button class="btn" onclick="openEmail(\''+id+'\',\''+escapedName+'\')">Email</button>'+
         '<button class="btn" onclick="openNotes(\''+id+'\',\''+escapedName+'\',\''+escapedNotes+'\')">Notes</button>'+
         '<button class="btn login-as full" onclick="loginAsAdmin(\''+id+'\',\''+escapedName+'\')">&#128273; Login as Admin</button>'+
-        '<button class="btn adjust full" onclick="switchTab(\'adjuster\',document.querySelector(\'[data-tab=adjuster]\'))">&#9881; Fee Adjuster</button>'+
         '<button class="btn danger full" onclick="openDelete(\''+id+'\',\''+escapedName+'\')">&#128465; Remove Institution</button>'+
       '</div>'+
     '</div>';
@@ -681,8 +868,8 @@ async function loadPayments() {
     const payments = d.payments || [];
     const totalRevenue = d.totalRevenue || 0;
     document.getElementById('payStats').innerHTML =
-      '<div class="stat green"><div class="num">'+fmtGHS(totalRevenue)+'</div><div class="lbl">Total Revenue</div></div>'+
-      '<div class="stat"><div class="num">'+payments.length+'</div><div class="lbl">Payments</div></div>';
+      '<div class="stat" style="--stat-c:var(--green)"><div class="num">'+fmtGHS(totalRevenue)+'</div><div class="lbl">Total Revenue</div></div>'+
+      '<div class="stat" style="--stat-c:var(--ink)"><div class="num">'+payments.length+'</div><div class="lbl">Payments</div></div>';
     if (!payments.length) {
       document.getElementById('payList').innerHTML = '<div class="empty"><div class="display">No payments yet</div>Payments will appear here when institutions subscribe.</div>';
       return;
@@ -694,13 +881,13 @@ async function loadPayments() {
           '<div class="h-sub">'+esc(p.description||p.plan||'')+' · '+esc(p.company&&p.company.institutionCode?p.company.institutionCode:'')+'</div>'+
         '</div>'+
         '<div style="text-align:right">'+
-          '<div class="h-name" style="color:var(--navy)">'+fmtGHS(p.amount||0)+'</div>'+
+          '<div class="h-amt">'+fmtGHS(p.amount||0)+'</div>'+
           '<div class="h-sub">'+fmtDate(p.paidAt)+'</div>'+
         '</div>'+
       '</div>';
     }).join('');
   } catch(e) {
-    document.getElementById('payList').innerHTML = '<div class="empty"><div class="display">Failed to load</div>'+e.message+'</div>';
+    document.getElementById('payList').innerHTML = '<div class="empty"><div class="display">Failed to load</div>'+esc(e.message)+'</div>';
   }
 }
 
@@ -712,9 +899,9 @@ async function loadDevices() {
     const devices = d.devices || [];
     const orphaned = devices.filter(function(x){return x.isOrphaned;});
     document.getElementById('devStats').innerHTML =
-      '<div class="stat"><div class="num">'+devices.length+'</div><div class="lbl">Total Devices</div></div>'+
-      '<div class="stat green"><div class="num">'+(devices.length-orphaned.length)+'</div><div class="lbl">Registered</div></div>'+
-      '<div class="stat red"><div class="num">'+orphaned.length+'</div><div class="lbl">Orphaned</div></div>';
+      '<div class="stat" style="--stat-c:var(--ink)"><div class="num">'+devices.length+'</div><div class="lbl">Total Devices</div></div>'+
+      '<div class="stat" style="--stat-c:var(--green)"><div class="num">'+(devices.length-orphaned.length)+'</div><div class="lbl">Registered</div></div>'+
+      '<div class="stat" style="--stat-c:var(--red)"><div class="num">'+orphaned.length+'</div><div class="lbl">Orphaned</div></div>';
     if (!devices.length) {
       document.getElementById('devList').innerHTML = '<div class="card"><div class="empty"><div class="display">No devices yet</div>Devices register automatically on first check-in.</div></div>';
       return;
@@ -730,13 +917,27 @@ async function loadDevices() {
       '</div>';
     }).join('');
   } catch(e) {
-    document.getElementById('devList').innerHTML = '<div class="card"><div class="empty"><div class="display">Failed to load</div>'+e.message+'</div></div>';
+    document.getElementById('devList').innerHTML = '<div class="card"><div class="empty"><div class="display">Failed to load</div>'+esc(e.message)+'</div></div>';
   }
 }
 
 // ── Fee Adjuster ─────────────────────────────────────────────────────────────
-function _renderRateCards() {
-  document.getElementById('ratesList').innerHTML = ROLE_DEFS.map(function(r) {
+function _renderAdjusterBody() {
+  const s = PLATFORM_SETTINGS || {};
+  const cur = s.currency || 'GHS';
+  const tierName = { academic:'Academic', corporate:'Corporate', both:'All' };
+
+  const priceCells = SUB_FIELDS.map(function(f) {
+    const val = s[f.key] != null ? s[f.key] : f.def;
+    const unit = f.unit === 'days' ? 'days' : cur;
+    return '<div class="price-cell">'+
+      '<div class="p-head"><span class="p-tier '+f.tier+'">'+tierName[f.tier]+'</span><span class="p-name">'+f.label+'</span></div>'+
+      '<div class="p-hint">'+f.hint+'</div>'+
+      '<div class="price-input"><span class="unit">'+unit+'</span><input type="number" min="0" id="sub-'+f.key+'" value="'+val+'"></div>'+
+    '</div>';
+  }).join('');
+
+  const rateCards = ROLE_DEFS.map(function(r) {
     const tierLabel = r.tier==='both' ? 'All institutions' : r.tier==='academic' ? 'Academic only' : 'Corporate only';
     return '<div class="rate-card">'+
       '<div>'+
@@ -744,30 +945,46 @@ function _renderRateCards() {
         '<div class="rtier">'+tierLabel+'</div>'+
       '</div>'+
       '<div class="rate-input-wrap">'+
-        '<span style="font-size:12.5px;color:var(--muted)">GHS</span>'+
-        '<input type="number" min="0" id="rate-'+r.key+'" value="'+GLOBAL_RATES[r.key]+'">'+
+        '<span class="unit">'+cur+'</span>'+
+        '<input type="number" min="0" id="rate-'+r.key+'" value="'+(GLOBAL_RATES[r.key]||0)+'">'+
         '<button class="save-btn" id="savebtn-'+r.key+'" onclick="saveRate(\''+r.key+'\')">Save</button>'+
       '</div>'+
     '</div>';
   }).join('');
+
+  document.getElementById('adjusterBody').innerHTML =
+    '<div class="panel">'+
+      '<div class="panel-title">&#128179; Subscription Prices</div>'+
+      '<div class="panel-sub">Live Paystack amounts shown on every subscription page. Saved to the platform — applies to all devices instantly.</div>'+
+      '<div class="price-grid">'+priceCells+'</div>'+
+      '<div class="panel-foot">'+
+        '<div class="currency-wrap"><label>Currency</label><input type="text" id="sub-currency" maxlength="10" value="'+esc(cur)+'" placeholder="GHS"></div>'+
+        '<button class="save-all-btn" id="sub-save-btn" onclick="saveSubPrices()">Save Subscription Prices</button>'+
+      '</div>'+
+    '</div>'+
+    '<div class="panel" style="padding-bottom:12px">'+
+      '<div class="panel-title">&#128202; Institution Billing Rates</div>'+
+      '<div class="panel-sub">Monthly per-seat rate used for the computed fee on each institution card. Saved to the platform and synced across devices.</div>'+
+    '</div>'+
+    rateCards;
 }
 
 async function renderAdjuster() {
-  document.getElementById('ratesList').innerHTML = '<div class="loading">Loading rates…</div>';
+  document.getElementById('adjusterBody').innerHTML = '<div class="loading">Loading pricing…</div>';
   try {
     const s = await api('/api/superadmin/settings');
-    const keyMap = { admin:'rateAdmin', hod:'rateHod', lecturer:'rateLecturer', student:'rateStudent', manager:'rateManager', employee:'rateEmployee' };
+    PLATFORM_SETTINGS = s;
     ROLE_DEFS.forEach(function(r) {
-      const apiKey = keyMap[r.key];
+      const apiKey = RATE_KEY_MAP[r.key];
       if (s[apiKey] != null) {
         GLOBAL_RATES[r.key] = s[apiKey];
         localStorage.setItem('sa_rate_'+r.key, s[apiKey]);
       }
     });
   } catch(e) {
-    // fall back to localStorage values already in GLOBAL_RATES
+    // fall back to cached values already in GLOBAL_RATES / PLATFORM_SETTINGS
   }
-  _renderRateCards();
+  _renderAdjusterBody();
 }
 
 async function saveRate(key) {
@@ -777,16 +994,42 @@ async function saveRate(key) {
   const btn = document.getElementById('savebtn-'+key);
   btn.disabled = true; btn.textContent = 'Saving…';
   try {
-    const keyMap = { admin:'rateAdmin', hod:'rateHod', lecturer:'rateLecturer', student:'rateStudent', manager:'rateManager', employee:'rateEmployee' };
-    const body = {};
-    ROLE_DEFS.forEach(function(r) { body[keyMap[r.key]] = GLOBAL_RATES[r.key]; });
-    await api('/api/superadmin/settings', { method:'POST', body: JSON.stringify(body) });
-    btn.textContent='Saved ✓'; btn.classList.add('saved');
-    setTimeout(function(){ btn.textContent='Save'; btn.classList.remove('saved'); btn.disabled=false; }, 1600);
-    showToast(ROLE_DEFS.find(function(r){return r.key===key;}).label + ' rate → ' + fmtGHS(val));
+    await api('/api/superadmin/settings', { method:'POST', body: JSON.stringify({ [RATE_KEY_MAP[key]]: val }) });
+    btn.textContent='Saved ✓'; btn.classList.add('saved'); btn.disabled = false;
+    setTimeout(function(){ btn.textContent='Save'; btn.classList.remove('saved'); }, 1600);
+    showToast(ROLE_DEFS.find(function(r){return r.key===key;}).label + ' rate → ' + fmtGHS(val) + ' — applied to all institutions');
+    renderCards();   // refresh computed fees so the change is visible immediately
   } catch(e) {
     btn.textContent='Error'; btn.disabled=false;
     setTimeout(function(){ btn.textContent='Save'; }, 2000);
+    showToast('Failed to save: ' + e.message);
+  }
+}
+
+async function saveSubPrices() {
+  const btn = document.getElementById('sub-save-btn');
+  btn.disabled = true; btn.textContent = 'Saving…';
+  const num = function(id, min) {
+    const v = parseFloat(document.getElementById(id) ? document.getElementById(id).value : '');
+    return Math.max(min, isNaN(v) ? min : v);
+  };
+  const payload = {
+    studentSemesterPrice: num('sub-studentSemesterPrice', 0),
+    employeeMonthlyPrice: num('sub-employeeMonthlyPrice', 0),
+    academicPrice:        num('sub-academicPrice', 0),
+    corporatePrice:       num('sub-corporatePrice', 0),
+    studentTrialDays:     Math.round(num('sub-studentTrialDays', 1)),
+    trialDays:            Math.round(num('sub-trialDays', 1)),
+    currency:             (document.getElementById('sub-currency').value || 'GHS').trim().slice(0, 10),
+  };
+  try {
+    const s = await api('/api/superadmin/settings', { method:'POST', body: JSON.stringify(payload) });
+    PLATFORM_SETTINGS = s;
+    btn.textContent = 'Saved ✓'; btn.classList.add('saved'); btn.disabled = false;
+    setTimeout(function(){ btn.textContent='Save Subscription Prices'; btn.classList.remove('saved'); }, 2000);
+    showToast('Subscription prices updated — students '+payload.currency+' '+payload.studentSemesterPrice+'/semester, employees '+payload.currency+' '+payload.employeeMonthlyPrice+'/month');
+  } catch(e) {
+    btn.textContent = 'Save Subscription Prices'; btn.disabled = false;
     showToast('Failed to save: ' + e.message);
   }
 }
@@ -829,8 +1072,7 @@ if (SA_TOKEN) {
   try {
     const payload = JSON.parse(atob(SA_TOKEN.split('.')[1]));
     if (payload.exp * 1000 > Date.now()) {
-      const savedUser = localStorage.getItem('sa_user') || '';
-      SA_USER = savedUser;
+      SA_USER = localStorage.getItem('sa_user') || '';
       showDashboard();
     } else { doLogout(); }
   } catch(e) { doLogout(); }
