@@ -24211,14 +24211,14 @@ function _exvHBars(items, { unit = '%', max = 100 } = {}) {
   return `<div style="display:flex;flex-direction:column;gap:.55rem">
     ${items.map(it => {
       const w = Math.max(2, Math.round((it.value / max) * 100));
-      return `<div style="display:grid;grid-template-columns:110px 1fr 42px;align-items:center;gap:.55rem"
+      return `<div class="exv-bar-row"
         onmousemove="_exvShowTip(event,'${esc(it.name)}: <b>${it.value}${unit}</b>')" onmouseleave="_exvHideTip()">
-        <div style="font-size:.76rem;color:var(--text-light);overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${esc(it.name)}">${esc(it.name)}</div>
+        <div class="exv-bar-label" style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${esc(it.name)}">${esc(it.name)}</div>
         <div style="height:14px;position:relative">
           <div style="position:absolute;inset:0;background:var(--border);opacity:.35;border-radius:0 4px 4px 0"></div>
           <div style="position:absolute;top:0;bottom:0;left:0;width:${w}%;background:var(--primary, #4f6ef7);border-radius:0 4px 4px 0"></div>
         </div>
-        <div style="font-size:.76rem;font-weight:700;color:var(--text);font-variant-numeric:tabular-nums">${it.value}${unit}</div>
+        <div class="exv-bar-value">${it.value}${unit}</div>
       </div>`;
     }).join('')}
   </div>
@@ -24278,21 +24278,21 @@ async function renderExecutiveDashboard() {
     critical: { icon: '⛔', color: '#d03b3b', label: 'Critical' },
   };
   const tile = (label, value, sub = '') => `
-    <div class="card" style="padding:1rem 1.1rem">
-      <div style="font-size:.72rem;color:var(--text-light);font-weight:600;text-transform:uppercase;letter-spacing:.4px">${label}</div>
-      <div style="font-size:1.65rem;font-weight:700;color:var(--text);margin-top:.2rem">${value}</div>
-      ${sub ? `<div style="font-size:.72rem;color:var(--text-muted);margin-top:.15rem">${sub}</div>` : ''}
+    <div class="card exv-tile">
+      <div class="exv-tile-label">${label}</div>
+      <div class="exv-tile-value">${value}</div>
+      ${sub ? `<div class="exv-tile-sub">${sub}</div>` : ''}
     </div>`;
 
   const leaveTotal = Math.max(1, d.leaveStats.approved + d.leaveStats.pending + d.leaveStats.rejected);
   const leaveRow = (label, count, color, icon) => `
-    <div style="display:grid;grid-template-columns:110px 1fr 34px;align-items:center;gap:.55rem;margin-bottom:.55rem">
-      <div style="font-size:.78rem;color:var(--text-light)"><span style="color:${color};font-weight:800">${icon}</span> ${label}</div>
+    <div class="exv-bar-row" style="margin-bottom:.55rem">
+      <div class="exv-bar-label"><span style="color:${color};font-weight:800">${icon}</span> ${label}</div>
       <div style="height:12px;position:relative">
-        <div style="position:absolute;inset:0;background:${color};opacity:.16;border-radius:0 4px 4px 0"></div>
+        <div style="position:absolute;inset:0;background:var(--border);opacity:.35;border-radius:0 4px 4px 0"></div>
         <div style="position:absolute;top:0;bottom:0;left:0;width:${Math.round((count / leaveTotal) * 100)}%;background:${color};border-radius:0 4px 4px 0"></div>
       </div>
-      <div style="font-size:.78rem;font-weight:700;color:var(--text);font-variant-numeric:tabular-nums">${count}</div>
+      <div class="exv-bar-value">${count}</div>
     </div>`;
 
   const chartCard = (title, sub, body) => `
@@ -24311,16 +24311,16 @@ async function renderExecutiveDashboard() {
       <button class="btn btn-sm btn-ghost" onclick="renderExecutiveDashboard()">↻ Refresh</button>
     </div>
 
-    <div style="display:grid;grid-template-columns:minmax(220px,1fr) 2fr;gap:1rem;margin-bottom:1rem;align-items:stretch">
-      <div class="card" style="padding:1.2rem;display:flex;flex-direction:column;justify-content:center">
-        <div style="font-size:.72rem;color:var(--text-light);font-weight:600;text-transform:uppercase;letter-spacing:.4px">Company health score</div>
-        <div style="font-size:52px;font-weight:700;line-height:1.1;color:var(--text);margin:.3rem 0 .5rem">${k.healthScore}<span style="font-size:1rem;color:var(--text-muted);font-weight:600"> / 100</span></div>
+    <div class="exv-hero-grid">
+      <div class="card exv-health">
+        <div class="exv-tile-label">Company health score</div>
+        <div class="exv-score">${k.healthScore}<span> / 100</span></div>
         <div style="height:8px;border-radius:4px;background:${scoreColor}2b;overflow:hidden">
           <div style="height:100%;width:${k.healthScore}%;background:${scoreColor};border-radius:4px"></div>
         </div>
-        <div style="font-size:.72rem;color:var(--text-muted);margin-top:.5rem">Attendance · punctuality · approvals backlog</div>
+        <div class="exv-tile-sub" style="margin-top:.5rem">Attendance · punctuality · approvals backlog</div>
       </div>
-      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:.7rem">
+      <div class="exv-kpis">
         ${tile('Present today', k.presentToday, `${k.attendanceRateToday}% of workforce`)}
         ${tile('Absent today', k.absentToday)}
         ${tile('Late arrivals', k.lateToday)}
@@ -24345,7 +24345,7 @@ async function renderExecutiveDashboard() {
       </div>
     </div>
 
-    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(340px,1fr));gap:1rem">
+    <div class="exv-charts">
       ${chartCard('Attendance trend', 'Daily attendance rate, last 14 days', _exvLineChart(d.attendanceTrend))}
       ${chartCard('Monthly expenses', 'Approved expenses, last 6 months', _exvColumns(d.monthlyExpenses, { prefix: '₵' }))}
       ${chartCard('Department performance', '30-day attendance rate by department', _exvHBars(d.departmentPerformance.map(x => ({ name: x.name, value: x.rate }))))}
