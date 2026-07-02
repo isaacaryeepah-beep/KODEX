@@ -24,9 +24,8 @@ const PRESENT_STATUSES = new Set(["present", "late", "remote", "half_day"]);
 function dayStart(d) { const x = new Date(d); x.setHours(0, 0, 0, 0); return x; }
 function dayEnd(d)   { const x = new Date(d); x.setHours(23, 59, 59, 999); return x; }
 
-exports.dashboard = async (req, res) => {
-  try {
-    const companyId = req.user.company;
+// Shared with Dikly AI (custom queries) — computes the full executive snapshot.
+async function computeExecutiveSnapshot(companyId) {
     const now       = new Date();
     const todayS    = dayStart(now);
     const todayE    = dayEnd(now);
@@ -69,6 +68,11 @@ exports.dashboard = async (req, res) => {
     }
     const presentToday = presentSet.size;
     const absentToday  = Math.max(0, activeEmployees - presentToday);
+    const absentNames  = staff.filter(u => !presentSet.has(String(u._id))).map(u => u.name).slice(0, 50);
+    const lateNames    = todayRecs
+      .filter(r => r.status === "late" || r.isLate)
+      .map(r => staffById.get(String(r.employee))?.name)
+      .filter(Boolean).slice(0, 50);
     const todayRate    = activeEmployees ? Math.round((presentToday / activeEmployees) * 100) : 0;
 
     // ── 14-day attendance trend ───────────────────────────────────────────
@@ -190,7 +194,7 @@ exports.dashboard = async (req, res) => {
     }
     if (!alerts.length) alerts.push({ level: "good", text: "All clear — no issues detected today." });
 
-    return res.json({
+    return {
       generatedAt: now.toISOString(),
       kpis: {
         healthScore,
@@ -210,7 +214,16 @@ exports.dashboard = async (req, res) => {
       monthlyExpenses,
       leaveStats,
       alerts,
-    });
+      absentNames,
+      lateNames,
+    };
+}
+
+exports.computeExecutiveSnapshot = computeExecutiveSnapshot;
+
+exports.dashboard = async (req, res) => {
+  try {
+    return res.json(await computeExecutiveSnapshot(req.user.company));
   } catch (err) {
     console.error("[executive dashboard]", err);
     return res.status(500).json({ error: "Internal server error" });

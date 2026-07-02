@@ -1125,7 +1125,7 @@ exports.refresh = async (req, res) => {
 exports.getMe = async (req, res) => {
   try {
     const user = await User.findById(req.user._id)
-      .populate("company", "name mode institutionCode")
+      .populate("company", "name mode institutionCode modulePermissions timezone")
       .populate("reportingManager", "name email designation")
       .maxTimeMS(8000);
     const company = await Company.findById(user.company).maxTimeMS(8000);
@@ -1141,6 +1141,9 @@ exports.getMe = async (req, res) => {
           name: company.name,
           mode: company.mode,
           institutionCode: company.institutionCode,
+          timezone: company.timezone,
+          // Sidebar module visibility (Roles & Permissions page)
+          modulePermissions: company.modulePermissions || null,
           ...(isAdmin ? { bleLocationId: company.bleLocationId } : {}),
           ...(canSeeQrSeed ? { qrSeed: company.qrSeed } : {}),
         } : user.company,

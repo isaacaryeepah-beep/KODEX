@@ -2716,6 +2716,8 @@ function buildSidebar() {
         links.push({ id: 'executive-dashboard', label: 'Executive Dashboard', icon: svgIcon('<rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/><line x1="7" y1="13" x2="7" y2="9"/><line x1="12" y1="13" x2="12" y2="7"/><line x1="17" y1="13" x2="17" y2="11"/>') });
         links.push({ sep: true, label: 'WORKFORCE' });
         links.push({ id: 'users',           label: 'Employees',           icon: usersIcon() });
+        links.push({ id: 'departments',     label: 'Departments',         icon: svgIcon('<path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><line x1="9" y1="22" x2="9" y2="12"/><line x1="15" y1="22" x2="15" y2="12"/>') });
+        links.push({ id: 'corp-teams',      label: 'Teams',               icon: svgIcon('<path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/>') });
         links.push({ id: 'corp-attendance', label: 'Attendance',          icon: svgIcon('<path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/><polyline points="9 11 12 14 22 4"/>') });
         links.push({ id: 'sign-in-out',     label: 'Clock In / Out',      icon: attendanceIcon() });
         links.push({ id: 'shifts',          label: 'Shifts',              icon: svgIcon('<rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/>') });
@@ -2728,10 +2730,12 @@ function buildSidebar() {
         links.push({ id: 'assets',          label: 'Assets',              icon: svgIcon('<path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><polyline points="3.27 6.96 12 12.01 20.73 6.96"/><line x1="12" y1="22.08" x2="12" y2="12"/>') });
         links.push({ id: 'timesheets',      label: 'Timesheets',          icon: svgIcon('<rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/><line x1="8" y1="14" x2="16" y2="14"/>') });
         links.push({ id: 'approvals',       label: 'Approvals',           icon: approvalsIcon() });
+        links.push({ id: 'tasks',           label: 'Tasks',               icon: svgIcon('<path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/>') });
         links.push({ id: 'corp-clock-settings', label: 'Clock Settings',  icon: svgIcon('<circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/><circle cx="12" cy="12" r="2"/>') });
         links.push({ sep: true, label: 'COMMUNICATION' });
         links.push({ id: 'messages',        label: 'Messages',            icon: svgIcon('<path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>') });
         links.push({ id: 'meetings',        label: 'Meetings',            icon: meetingsIcon() });
+        links.push({ id: 'corp-calendar',   label: 'Calendar',            icon: svgIcon('<rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/><circle cx="12" cy="15" r="2"/>') });
         links.push({ id: 'announcements',   label: 'Announcements',       icon: svgIcon('<path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/>') });
         links.push({ sep: true, label: 'INSIGHTS' });
         links.push({ id: 'analytics',       label: 'Analytics',           icon: svgIcon('<rect x="18" y="3" width="4" height="18"/><rect x="10" y="8" width="4" height="13"/><rect x="2" y="13" width="4" height="8"/>') });
@@ -2739,6 +2743,8 @@ function buildSidebar() {
         links.push({ id: 'audit-logs',      label: 'Audit Logs',          icon: svgIcon('<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><line x1="10" y1="9" x2="10" y2="9"/>') });
         links.push({ id: 'ai-reports',      label: 'Dikly AI',            icon: svgIcon('<path d="M15 4V2"/><path d="M15 16v-2"/><path d="M8 9h2"/><path d="M20 9h2"/><path d="M17.8 11.8 19 13"/><path d="M15 9h.01"/><path d="M17.8 6.2 19 5"/><path d="M13.2 6.2 12 5"/><path d="M3 21l9-9"/>') });
         links.push({ sep: true, label: 'ADMINISTRATION' });
+        links.push({ id: 'roles-permissions', label: 'Roles & Permissions', icon: svgIcon('<rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/>') });
+        links.push({ id: 'company-settings',  label: 'Company Settings',    icon: svgIcon('<circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/>') });
         links.push({ id: 'branding',        label: 'Branding',            icon: svgIcon('<circle cx="12" cy="12" r="10"/><path d="M8 14s1.5 2 4 2 4-2 4-2"/><line x1="9" y1="9" x2="9.01" y2="9"/><line x1="15" y1="9" x2="15.01" y2="9"/>') });
         links.push({ id: 'search',          label: 'Search',              icon: svgIcon('<circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>') });
         links.push({ sep: true, label: 'SUPPORT' });
@@ -2780,6 +2786,7 @@ function buildSidebar() {
         links.push({ id: 'executive-dashboard', label: 'Executive Dashboard', icon: svgIcon('<rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/><line x1="7" y1="13" x2="7" y2="9"/><line x1="12" y1="13" x2="12" y2="7"/><line x1="17" y1="13" x2="17" y2="11"/>') });
         links.push({ sep: true, label: 'WORKFORCE' });
         links.push({ id: 'users',           label: 'Team',                icon: usersIcon() });
+        links.push({ id: 'corp-teams',      label: 'Teams',               icon: svgIcon('<path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/>') });
         links.push({ id: 'corp-attendance', label: 'Attendance',          icon: svgIcon('<path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/><polyline points="9 11 12 14 22 4"/>') });
         links.push({ id: 'sign-in-out',     label: 'Clock In / Out',      icon: attendanceIcon() });
         links.push({ id: 'shifts',          label: 'Shifts',              icon: svgIcon('<rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/>') });
@@ -2792,9 +2799,11 @@ function buildSidebar() {
         links.push({ id: 'assets',          label: 'Assets',              icon: svgIcon('<path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><polyline points="3.27 6.96 12 12.01 20.73 6.96"/><line x1="12" y1="22.08" x2="12" y2="12"/>') });
         links.push({ id: 'timesheets',      label: 'Timesheets',          icon: svgIcon('<rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/><line x1="8" y1="14" x2="16" y2="14"/>') });
         links.push({ id: 'approvals',       label: 'Approvals',           icon: approvalsIcon() });
+        links.push({ id: 'tasks',           label: 'Tasks',               icon: svgIcon('<path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/>') });
         links.push({ sep: true, label: 'COMMUNICATION' });
         links.push({ id: 'messages',        label: 'Messages',            icon: svgIcon('<path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>') });
         links.push({ id: 'meetings',        label: 'Meetings',            icon: meetingsIcon() });
+        links.push({ id: 'corp-calendar',   label: 'Calendar',            icon: svgIcon('<rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/><circle cx="12" cy="15" r="2"/>') });
         links.push({ id: 'announcements',   label: 'Announcements',       icon: svgIcon('<path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/>') });
         links.push({ sep: true, label: 'INSIGHTS' });
         links.push({ id: 'reports',         label: 'Reports',             icon: reportsIcon() });
@@ -2882,11 +2891,13 @@ function buildSidebar() {
       links.push({ id: 'my-attendance', label: 'My Attendance',   icon: sessionsIcon() });
       links.push({ id: 'my-shift',      label: 'My Shift',        icon: svgIcon('<rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/>') });
       links.push({ id: 'my-leaves',     label: 'Leave',           icon: svgIcon('<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/>') });
+      links.push({ id: 'tasks',         label: 'My Tasks',        icon: svgIcon('<path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/>') });
       links.push({ sep: true, label: 'COMMUNICATE' });
       links.push({ id: 'emp-notifications', label: 'Notifications', icon: svgIcon('<path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/>') });
       links.push({ id: 'announcements', label: 'Announcements', icon: svgIcon('<path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/>') });
       links.push({ id: 'messages',      label: 'Messages',        icon: svgIcon('<path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>') });
       links.push({ id: 'meetings',      label: 'Meetings',        icon: meetingsIcon() });
+      links.push({ id: 'corp-calendar', label: 'Calendar',        icon: svgIcon('<rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/><circle cx="12" cy="15" r="2"/>') });
       links.push({ sep: true, label: 'INSIGHTS' });
       links.push({ id: 'my-performance', label: 'My Performance', icon: svgIcon('<line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/>') });
       links.push({ id: 'reports',       label: 'Reports',         icon: reportsIcon() });
@@ -2947,6 +2958,15 @@ function buildSidebar() {
     divider.className = 'sidebar-divider-line';
     const logo = sidebar.querySelector('.sidebar-logo');
     if (logo) logo.after(divider);
+  }
+
+  // Roles & Permissions: hide modules the admin has switched off for this role.
+  const _mp = currentUser.company?.modulePermissions;
+  if (_mp && ['manager', 'employee'].includes(role) && Array.isArray(_mp[role])) {
+    const _allowed = new Set(_mp[role]);
+    links = links.filter(l => l.sep || l.id === 'dashboard' || l.id === 'emp-home' || _allowed.has(l.id));
+    // Drop section headers whose sections became empty
+    links = links.filter((l, i) => !l.sep || (links[i + 1] && !links[i + 1].sep));
   }
 
   nav.innerHTML =
@@ -3122,6 +3142,12 @@ function navigateTo(view) {
     case 'course-videos':        renderCourseVideos(); break;
     case 'ai-reports':           renderAIReports(); break;
     case 'executive-dashboard':  renderExecutiveDashboard(); break;
+    case 'departments':          renderDepartments(); break;
+    case 'corp-teams':           renderCorpTeams(); break;
+    case 'tasks':                renderTasks(); break;
+    case 'corp-calendar':        renderCorpCalendar(); break;
+    case 'company-settings':     renderCompanySettings(); break;
+    case 'roles-permissions':    renderRolesPermissions(); break;
     default: renderDashboard();
   }
 }
@@ -23501,6 +23527,433 @@ async function renderClassTimetable() {
 // ═══════════════════════════════════════════════════════════════════════════
 // DIKLY AI REPORTS
 // ═══════════════════════════════════════════════════════════════════════════
+
+
+// ═══════════════════════════════════════════════════════════════════
+//  CORPORATE MODULES: Departments · Teams · Tasks · Calendar ·
+//  Company Settings · Roles & Permissions
+// ═══════════════════════════════════════════════════════════════════
+
+function _corpHeader(title, sub) {
+  return `<div class="page-header" style="margin-bottom:1.2rem"><div>
+    <h1 style="margin:0 0 .25rem">${title}</h1>
+    <p style="margin:0;color:var(--text-light);font-size:.9rem">${sub}</p>
+  </div></div>`;
+}
+
+// ── Departments ─────────────────────────────────────────────────────
+async function renderDepartments() {
+  const content = document.getElementById('main-content');
+  if (!content) return;
+  content.innerHTML = _corpHeader('Departments', 'Organize your workforce into departments') + '<div class="card" style="padding:2rem;text-align:center;color:var(--text-light)">Loading…</div>';
+  let depts = [];
+  try { depts = (await api('/api/departments')).departments || []; }
+  catch (e) { content.innerHTML += `<div class="card" style="padding:1rem;color:var(--error)">${esc(e.message)}</div>`; return; }
+
+  const isAdmin = ['admin', 'superadmin'].includes(currentUser.role);
+  content.innerHTML = `
+    ${_corpHeader('Departments', 'Organize your workforce into departments')}
+    ${isAdmin ? `
+    <div class="card" style="padding:1rem 1.2rem;margin-bottom:1rem;display:flex;gap:.6rem;flex-wrap:wrap;align-items:center">
+      <input id="dept-name" placeholder="Department name (e.g. Human Resources)" style="flex:2;min-width:200px;padding:.6rem .8rem;border:1px solid var(--border);border-radius:8px;background:var(--bg);color:var(--text)" />
+      <input id="dept-desc" placeholder="Description (optional)" style="flex:3;min-width:200px;padding:.6rem .8rem;border:1px solid var(--border);border-radius:8px;background:var(--bg);color:var(--text)" />
+      <button class="btn btn-primary" onclick="_deptCreate()">+ Add Department</button>
+    </div>` : ''}
+    <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:1rem" id="dept-grid">
+      ${depts.length ? depts.map(d => `
+        <div class="card" style="padding:1.1rem 1.2rem">
+          <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:.5rem">
+            <div style="font-weight:700;font-size:.95rem">${esc(d.name)}</div>
+            ${isAdmin ? `<button class="btn btn-sm btn-ghost" title="Delete" onclick="_deptDelete('${d._id}','${esc(d.name)}')" style="padding:.15rem .45rem">✕</button>` : ''}
+          </div>
+          ${d.description ? `<div style="font-size:.78rem;color:var(--text-light);margin-top:.3rem">${esc(d.description)}</div>` : ''}
+          <div style="margin-top:.7rem;display:flex;gap:1rem;font-size:.78rem;color:var(--text-muted)">
+            <span>👥 ${d.headcount} member${d.headcount === 1 ? '' : 's'}</span>
+            ${d.head?.name ? `<span>Head: ${esc(d.head.name)}</span>` : ''}
+          </div>
+          <button class="btn btn-sm btn-ghost" style="margin-top:.7rem;font-size:.75rem" onclick="_deptEmployees('${d._id}','${esc(d.name)}')">View employees</button>
+          <div id="dept-emps-${d._id}"></div>
+        </div>`).join('') : '<div class="card" style="padding:2rem;text-align:center;color:var(--text-muted)">No departments yet — create your first one above.</div>'}
+    </div>`;
+}
+window._deptCreate = async function() {
+  const name = document.getElementById('dept-name')?.value?.trim();
+  const description = document.getElementById('dept-desc')?.value?.trim();
+  if (!name) { toastError('Enter a department name'); return; }
+  try {
+    await api('/api/departments', { method: 'POST', body: JSON.stringify({ name, description }) });
+    toastSuccess('Department created');
+    renderDepartments();
+  } catch (e) { toastError(e.message); }
+};
+window._deptDelete = async function(id, name) {
+  if (!confirm(`Delete department "${name}"? Employees keep their department label but it will no longer be managed here.`)) return;
+  try { await api('/api/departments/' + id, { method: 'DELETE' }); toastSuccess('Department deleted'); renderDepartments(); }
+  catch (e) { toastError(e.message); }
+};
+window._deptEmployees = async function(id, name) {
+  const box = document.getElementById('dept-emps-' + id);
+  if (!box) return;
+  if (box.innerHTML) { box.innerHTML = ''; return; }
+  box.innerHTML = '<div style="font-size:.75rem;color:var(--text-muted);padding:.4rem 0">Loading…</div>';
+  try {
+    const d = await api(`/api/departments/${id}/employees`);
+    const emps = d.employees || d.users || [];
+    box.innerHTML = emps.length
+      ? `<div style="margin-top:.5rem;border-top:1px solid var(--border);padding-top:.5rem;display:flex;flex-direction:column;gap:.3rem">${emps.map(u => `<div style="font-size:.78rem;color:var(--text-light)">• ${esc(u.name)}${u.role ? ` <span style="color:var(--text-muted)">(${u.role})</span>` : ''}</div>`).join('')}</div>`
+      : '<div style="font-size:.75rem;color:var(--text-muted);padding:.4rem 0">No employees assigned yet.</div>';
+  } catch (e) { box.innerHTML = `<div style="font-size:.75rem;color:var(--error)">${esc(e.message)}</div>`; }
+};
+
+// ── Teams ───────────────────────────────────────────────────────────
+async function renderCorpTeams() {
+  const content = document.getElementById('main-content');
+  if (!content) return;
+  content.innerHTML = _corpHeader('Teams', 'Cross-department working groups') + '<div class="card" style="padding:2rem;text-align:center;color:var(--text-light)">Loading…</div>';
+  let teams = [], depts = [];
+  try {
+    const [t, d] = await Promise.all([api('/api/teams'), api('/api/departments').catch(() => ({ departments: [] }))]);
+    teams = t.teams || []; depts = d.departments || [];
+  } catch (e) { content.innerHTML += `<div class="card" style="padding:1rem;color:var(--error)">${esc(e.message)}</div>`; return; }
+
+  const canManage = ['admin', 'superadmin', 'manager'].includes(currentUser.role);
+  content.innerHTML = `
+    ${_corpHeader('Teams', 'Cross-department working groups')}
+    ${canManage ? `
+    <div class="card" style="padding:1rem 1.2rem;margin-bottom:1rem;display:flex;gap:.6rem;flex-wrap:wrap;align-items:center">
+      <input id="team-name" placeholder="Team name" style="flex:2;min-width:180px;padding:.6rem .8rem;border:1px solid var(--border);border-radius:8px;background:var(--bg);color:var(--text)" />
+      <select id="team-dept" style="flex:1;min-width:160px;padding:.6rem .8rem;border:1px solid var(--border);border-radius:8px;background:var(--bg);color:var(--text)">
+        <option value="">No department</option>
+        ${depts.map(d => `<option value="${d._id}">${esc(d.name)}</option>`).join('')}
+      </select>
+      <button class="btn btn-primary" onclick="_teamCreate()">+ Add Team</button>
+    </div>` : ''}
+    <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:1rem">
+      ${teams.length ? teams.map(t => `
+        <div class="card" style="padding:1.1rem 1.2rem">
+          <div style="display:flex;justify-content:space-between;align-items:flex-start">
+            <div style="font-weight:700;font-size:.95rem">${esc(t.name)}</div>
+            ${['admin','superadmin'].includes(currentUser.role) ? `<button class="btn btn-sm btn-ghost" title="Delete" onclick="_teamDelete('${t._id}','${esc(t.name)}')" style="padding:.15rem .45rem">✕</button>` : ''}
+          </div>
+          <div style="font-size:.76rem;color:var(--text-muted);margin-top:.25rem">
+            ${t.department?.name ? esc(t.department.name) + ' · ' : ''}${(t.members || []).length} member${(t.members || []).length === 1 ? '' : 's'}${t.lead?.name ? ' · Lead: ' + esc(t.lead.name) : ''}
+          </div>
+          ${(t.members || []).length ? `<div style="margin-top:.6rem;display:flex;flex-wrap:wrap;gap:.3rem">${t.members.slice(0, 8).map(mb => `<span style="font-size:.72rem;background:var(--bg);border:1px solid var(--border);border-radius:20px;padding:.15rem .55rem">${esc(mb.name)}</span>`).join('')}${t.members.length > 8 ? `<span style="font-size:.72rem;color:var(--text-muted)">+${t.members.length - 8} more</span>` : ''}</div>` : ''}
+        </div>`).join('') : '<div class="card" style="padding:2rem;text-align:center;color:var(--text-muted)">No teams yet.</div>'}
+    </div>`;
+}
+window._teamCreate = async function() {
+  const name = document.getElementById('team-name')?.value?.trim();
+  const departmentId = document.getElementById('team-dept')?.value || null;
+  if (!name) { toastError('Enter a team name'); return; }
+  try {
+    await api('/api/teams', { method: 'POST', body: JSON.stringify({ name, departmentId }) });
+    toastSuccess('Team created'); renderCorpTeams();
+  } catch (e) { toastError(e.message); }
+};
+window._teamDelete = async function(id, name) {
+  if (!confirm(`Delete team "${name}"?`)) return;
+  try { await api('/api/teams/' + id, { method: 'DELETE' }); toastSuccess('Team deleted'); renderCorpTeams(); }
+  catch (e) { toastError(e.message); }
+};
+
+// ── Tasks ───────────────────────────────────────────────────────────
+const TASK_STATUS_META = {
+  pending:     { label: 'Pending',     color: '#b45309', icon: '⏳' },
+  in_progress: { label: 'In Progress', color: '#2563eb', icon: '▶' },
+  completed:   { label: 'Completed',   color: '#0ca30c', icon: '✓' },
+};
+async function renderTasks() {
+  const content = document.getElementById('main-content');
+  if (!content) return;
+  const isManager = ['admin', 'superadmin', 'manager'].includes(currentUser.role);
+  const title = isManager ? 'Tasks' : 'My Tasks';
+  content.innerHTML = _corpHeader(title, isManager ? 'Assign and track work across your team' : 'Work assigned to you') + '<div class="card" style="padding:2rem;text-align:center;color:var(--text-light)">Loading…</div>';
+
+  let tasks = [], staff = [];
+  try {
+    const [t, u] = await Promise.all([
+      api('/api/tasks'),
+      isManager ? api('/api/users?role=employee&limit=200').catch(() => ({ users: [] })) : Promise.resolve({ users: [] }),
+    ]);
+    tasks = t.tasks || [];
+    staff = u.users || [];
+  } catch (e) { content.innerHTML += `<div class="card" style="padding:1rem;color:var(--error)">${esc(e.message)}</div>`; return; }
+
+  const counts = { pending: 0, in_progress: 0, completed: 0 };
+  tasks.forEach(t => { if (counts[t.status] !== undefined) counts[t.status]++; });
+
+  const taskRow = t => {
+    const m = TASK_STATUS_META[t.status] || TASK_STATUS_META.pending;
+    const due = t.dueDate ? new Date(t.dueDate) : null;
+    const overdue = due && due < new Date() && t.status !== 'completed';
+    return `<div class="card" style="padding: .85rem 1rem;display:flex;gap:.8rem;align-items:center;flex-wrap:wrap">
+      <span style="color:${m.color};font-weight:800" title="${m.label}">${m.icon}</span>
+      <div style="flex:1;min-width:200px">
+        <div style="font-weight:600;font-size:.88rem;${t.status === 'completed' ? 'text-decoration:line-through;opacity:.65' : ''}">${esc(t.title)}</div>
+        <div style="font-size:.74rem;color:var(--text-muted)">
+          ${isManager ? `→ ${esc(t.assignedTo?.name || '?')}` : `From ${esc(t.assignedBy?.name || '?')}`}
+          ${due ? ` · due <span style="${overdue ? 'color:var(--error);font-weight:700' : ''}">${due.toLocaleDateString()}</span>` : ''}
+          ${t.priority && t.priority !== 'medium' ? ` · <span style="text-transform:capitalize">${t.priority} priority</span>` : ''}
+        </div>
+        ${t.description ? `<div style="font-size:.76rem;color:var(--text-light);margin-top:.2rem">${esc(t.description)}</div>` : ''}
+      </div>
+      <select onchange="_taskStatus('${t._id}', this.value)" style="padding:.35rem .5rem;border:1px solid var(--border);border-radius:7px;background:var(--bg);color:var(--text);font-size:.78rem">
+        ${Object.entries(TASK_STATUS_META).map(([k, v]) => `<option value="${k}" ${t.status === k ? 'selected' : ''}>${v.label}</option>`).join('')}
+      </select>
+      ${isManager ? `<button class="btn btn-sm btn-ghost" onclick="_taskDelete('${t._id}')" style="padding:.2rem .5rem">✕</button>` : ''}
+    </div>`;
+  };
+
+  content.innerHTML = `
+    ${_corpHeader(title, isManager ? 'Assign and track work across your team' : 'Work assigned to you')}
+    <div style="display:flex;gap:.7rem;margin-bottom:1rem;flex-wrap:wrap">
+      ${Object.entries(TASK_STATUS_META).map(([k, v]) => `
+        <div class="card" style="padding:.7rem 1.1rem;display:flex;align-items:center;gap:.5rem">
+          <span style="color:${v.color};font-weight:800">${v.icon}</span>
+          <span style="font-weight:700;font-size:1.05rem">${counts[k]}</span>
+          <span style="font-size:.78rem;color:var(--text-light)">${v.label}</span>
+        </div>`).join('')}
+    </div>
+    ${isManager ? `
+    <div class="card" style="padding:1rem 1.2rem;margin-bottom:1rem;display:flex;gap:.6rem;flex-wrap:wrap;align-items:center">
+      <input id="task-title" placeholder="Task title" style="flex:2;min-width:180px;padding:.6rem .8rem;border:1px solid var(--border);border-radius:8px;background:var(--bg);color:var(--text)" />
+      <select id="task-assignee" style="flex:1;min-width:160px;padding:.6rem .8rem;border:1px solid var(--border);border-radius:8px;background:var(--bg);color:var(--text)">
+        <option value="">Assign to…</option>
+        ${staff.map(u => `<option value="${u._id}">${esc(u.name)}${u.department ? ' — ' + esc(u.department) : ''}</option>`).join('')}
+      </select>
+      <input id="task-due" type="date" style="padding:.6rem .8rem;border:1px solid var(--border);border-radius:8px;background:var(--bg);color:var(--text)" />
+      <select id="task-priority" style="padding:.6rem .8rem;border:1px solid var(--border);border-radius:8px;background:var(--bg);color:var(--text)">
+        <option value="medium">Medium</option><option value="high">High</option><option value="low">Low</option>
+      </select>
+      <button class="btn btn-primary" onclick="_taskCreate()">+ Assign Task</button>
+    </div>` : ''}
+    <div style="display:flex;flex-direction:column;gap:.55rem">
+      ${tasks.length ? tasks.map(taskRow).join('') : '<div class="card" style="padding:2rem;text-align:center;color:var(--text-muted)">No tasks yet.</div>'}
+    </div>`;
+}
+window._taskCreate = async function() {
+  const title = document.getElementById('task-title')?.value?.trim();
+  const assignedTo = document.getElementById('task-assignee')?.value;
+  const dueDate = document.getElementById('task-due')?.value || null;
+  const priority = document.getElementById('task-priority')?.value || 'medium';
+  if (!title || !assignedTo) { toastError('Title and assignee are required'); return; }
+  try {
+    await api('/api/tasks', { method: 'POST', body: JSON.stringify({ title, assignedTo, dueDate, priority }) });
+    toastSuccess('Task assigned'); renderTasks();
+  } catch (e) { toastError(e.message); }
+};
+window._taskStatus = async function(id, status) {
+  try { await api(`/api/tasks/${id}/status`, { method: 'PATCH', body: JSON.stringify({ status }) }); renderTasks(); }
+  catch (e) { toastError(e.message); }
+};
+window._taskDelete = async function(id) {
+  if (!confirm('Delete this task?')) return;
+  try { await api('/api/tasks/' + id, { method: 'DELETE' }); renderTasks(); }
+  catch (e) { toastError(e.message); }
+};
+
+// ── Company Calendar ────────────────────────────────────────────────
+let _calCursor = null;
+async function renderCorpCalendar(offsetMonths) {
+  const content = document.getElementById('main-content');
+  if (!content) return;
+  if (_calCursor === null || offsetMonths === undefined) _calCursor = new Date();
+  if (offsetMonths) _calCursor = new Date(_calCursor.getFullYear(), _calCursor.getMonth() + offsetMonths, 1);
+  const year = _calCursor.getFullYear(), month = _calCursor.getMonth();
+
+  content.innerHTML = _corpHeader('Company Calendar', 'Meetings, leave, holidays, and company events in one view') + '<div class="card" style="padding:2rem;text-align:center;color:var(--text-light)">Loading…</div>';
+  let items = [];
+  try { items = (await api(`/api/calendar/company-month?year=${year}&month=${month + 1}`)).items || []; }
+  catch (e) { content.innerHTML += `<div class="card" style="padding:1rem;color:var(--error)">${esc(e.message)}</div>`; return; }
+
+  const byDay = {};
+  for (const it of items) {
+    const s0 = new Date(it.start), e0 = new Date(it.end || it.start);
+    for (let d = new Date(Math.max(s0, new Date(year, month, 1))); d <= e0 && d.getMonth() === month; d.setDate(d.getDate() + 1)) {
+      (byDay[d.getDate()] = byDay[d.getDate()] || []).push(it);
+    }
+  }
+  const first = new Date(year, month, 1);
+  const startPad = (first.getDay() + 6) % 7; // Monday-first
+  const daysIn = new Date(year, month + 1, 0).getDate();
+  const today = new Date();
+  const isToday = d => d === today.getDate() && month === today.getMonth() && year === today.getFullYear();
+
+  const KIND_META = { meeting: ['#0ea5e9', 'Meetings'], leave: ['#f59e0b', 'Leave'], holiday: ['#ef4444', 'Public holidays'], event: ['#6366f1', 'Company events'] };
+  const cells = [];
+  for (let i = 0; i < startPad; i++) cells.push('<div></div>');
+  for (let d = 1; d <= daysIn; d++) {
+    const evs = byDay[d] || [];
+    cells.push(`<div style="min-height:86px;border:1px solid var(--border);border-radius:9px;padding:.35rem .45rem;${isToday(d) ? 'outline:2px solid var(--primary);outline-offset:-2px' : ''}">
+      <div style="font-size:.72rem;font-weight:700;color:${isToday(d) ? 'var(--primary)' : 'var(--text-muted)'}">${d}</div>
+      ${evs.slice(0, 3).map(ev => `<div title="${esc(ev.title)}" style="font-size:.66rem;margin-top:.2rem;padding:.1rem .3rem;border-radius:4px;background:${ev.color}22;color:var(--text);border-left:2px solid ${ev.color};overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(ev.title)}</div>`).join('')}
+      ${evs.length > 3 ? `<div style="font-size:.62rem;color:var(--text-muted);margin-top:.15rem">+${evs.length - 3} more</div>` : ''}
+    </div>`);
+  }
+
+  content.innerHTML = `
+    ${_corpHeader('Company Calendar', 'Meetings, leave, holidays, and company events in one view')}
+    <div class="card" style="padding:1.1rem 1.2rem">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:.9rem;flex-wrap:wrap;gap:.5rem">
+        <div style="display:flex;align-items:center;gap:.6rem">
+          <button class="btn btn-sm btn-ghost" onclick="renderCorpCalendar(-1)">←</button>
+          <div style="font-weight:700;font-size:1.02rem;min-width:150px;text-align:center">${first.toLocaleDateString(undefined, { month: 'long', year: 'numeric' })}</div>
+          <button class="btn btn-sm btn-ghost" onclick="renderCorpCalendar(1)">→</button>
+        </div>
+        <div style="display:flex;gap:.9rem;flex-wrap:wrap">
+          ${Object.entries(KIND_META).map(([k, [c, lbl]]) => `<span style="font-size:.72rem;color:var(--text-light);display:flex;align-items:center;gap:.3rem"><span style="width:9px;height:9px;border-radius:3px;background:${c};display:inline-block"></span>${lbl}</span>`).join('')}
+        </div>
+      </div>
+      <div style="display:grid;grid-template-columns:repeat(7,1fr);gap:.35rem;margin-bottom:.3rem">
+        ${['Mon','Tue','Wed','Thu','Fri','Sat','Sun'].map(d => `<div style="font-size:.68rem;font-weight:700;color:var(--text-muted);text-align:center;text-transform:uppercase">${d}</div>`).join('')}
+      </div>
+      <div style="display:grid;grid-template-columns:repeat(7,1fr);gap:.35rem">${cells.join('')}</div>
+    </div>`;
+}
+
+// ── Company Settings ────────────────────────────────────────────────
+async function renderCompanySettings() {
+  const content = document.getElementById('main-content');
+  if (!content) return;
+  content.innerHTML = _corpHeader('Company Settings', 'Organization-wide configuration') + '<div class="card" style="padding:2rem;text-align:center;color:var(--text-light)">Loading…</div>';
+  let st;
+  try { st = (await api('/api/advanced/company-settings')).settings || {}; }
+  catch (e) { content.innerHTML += `<div class="card" style="padding:1rem;color:var(--error)">${esc(e.message)}</div>`; return; }
+
+  const TZS = ['Africa/Accra','Africa/Lagos','Africa/Nairobi','Africa/Johannesburg','Africa/Cairo','Europe/London','America/New_York','Asia/Dubai'];
+  const holidayRow = (h, i) => `
+    <div style="display:flex;gap:.5rem;margin-bottom:.4rem" data-holiday>
+      <input value="${esc(h?.name || '')}" placeholder="Holiday name" style="flex:2;padding:.5rem .7rem;border:1px solid var(--border);border-radius:7px;background:var(--bg);color:var(--text)" data-h-name />
+      <input type="date" value="${h?.date ? new Date(h.date).toISOString().slice(0, 10) : ''}" style="padding:.5rem .7rem;border:1px solid var(--border);border-radius:7px;background:var(--bg);color:var(--text)" data-h-date />
+      <button class="btn btn-sm btn-ghost" onclick="this.parentElement.remove()">✕</button>
+    </div>`;
+  const locationRow = l => `
+    <div style="display:flex;gap:.5rem;margin-bottom:.4rem" data-location>
+      <input value="${esc(l?.name || '')}" placeholder="Office name" style="flex:1;padding:.5rem .7rem;border:1px solid var(--border);border-radius:7px;background:var(--bg);color:var(--text)" data-l-name />
+      <input value="${esc(l?.address || '')}" placeholder="Address" style="flex:2;padding:.5rem .7rem;border:1px solid var(--border);border-radius:7px;background:var(--bg);color:var(--text)" data-l-addr />
+      <button class="btn btn-sm btn-ghost" onclick="this.parentElement.remove()">✕</button>
+    </div>`;
+
+  content.innerHTML = `
+    ${_corpHeader('Company Settings', 'Organization-wide configuration')}
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:1rem;align-items:start">
+      <div class="card" style="padding:1.2rem">
+        <div style="font-weight:700;margin-bottom:.9rem">Organization</div>
+        <label style="font-size:.75rem;color:var(--text-light);font-weight:600">Company name</label>
+        <input id="cs-name" value="${esc(st.name || '')}" style="width:100%;padding:.6rem .8rem;border:1px solid var(--border);border-radius:8px;background:var(--bg);color:var(--text);margin:.3rem 0 .9rem" />
+        <label style="font-size:.75rem;color:var(--text-light);font-weight:600">Time zone</label>
+        <select id="cs-tz" style="width:100%;padding:.6rem .8rem;border:1px solid var(--border);border-radius:8px;background:var(--bg);color:var(--text);margin:.3rem 0 .9rem">
+          ${TZS.map(z => `<option value="${z}" ${st.timezone === z ? 'selected' : ''}>${z}</option>`).join('')}
+        </select>
+        <div style="display:flex;gap:.5rem;flex-wrap:wrap;margin-top:.4rem">
+          <button class="btn btn-sm btn-ghost" onclick="navigateTo('branding')">🎨 Branding & logo</button>
+          <button class="btn btn-sm btn-ghost" onclick="navigateTo('corp-clock-settings')">🕐 Working hours</button>
+        </div>
+      </div>
+      <div class="card" style="padding:1.2rem">
+        <div style="font-weight:700;margin-bottom:.9rem">Public holidays <span style="font-weight:400;font-size:.75rem;color:var(--text-muted)">shown on the calendar</span></div>
+        <div id="cs-holidays">${(st.publicHolidays || []).map(holidayRow).join('')}</div>
+        <button class="btn btn-sm btn-ghost" onclick="document.getElementById('cs-holidays').insertAdjacentHTML('beforeend', \`${holidayRow(null).replace(/`/g, '\\`')}\`)">+ Add holiday</button>
+      </div>
+      <div class="card" style="padding:1.2rem">
+        <div style="font-weight:700;margin-bottom:.9rem">Office locations</div>
+        <div id="cs-locations">${(st.officeLocations || []).map(locationRow).join('')}</div>
+        <button class="btn btn-sm btn-ghost" onclick="document.getElementById('cs-locations').insertAdjacentHTML('beforeend', \`${locationRow(null).replace(/`/g, '\\`')}\`)">+ Add location</button>
+      </div>
+    </div>
+    <div style="margin-top:1rem"><button class="btn btn-primary" onclick="_csSave()">Save settings</button></div>`;
+}
+window._csSave = async function() {
+  const publicHolidays = [...document.querySelectorAll('[data-holiday]')].map(r => ({
+    name: r.querySelector('[data-h-name]')?.value?.trim(),
+    date: r.querySelector('[data-h-date]')?.value,
+  })).filter(h => h.name && h.date);
+  const officeLocations = [...document.querySelectorAll('[data-location]')].map(r => ({
+    name: r.querySelector('[data-l-name]')?.value?.trim(),
+    address: r.querySelector('[data-l-addr]')?.value?.trim(),
+  })).filter(l => l.name);
+  try {
+    await api('/api/advanced/company-settings', { method: 'PATCH', body: JSON.stringify({
+      name: document.getElementById('cs-name')?.value,
+      timezone: document.getElementById('cs-tz')?.value,
+      publicHolidays, officeLocations,
+    })});
+    toastSuccess('Company settings saved');
+  } catch (e) { toastError(e.message); }
+};
+
+// ── Roles & Permissions ─────────────────────────────────────────────
+const CORP_MODULES = [
+  ['users', 'Employees / Team'], ['departments', 'Departments'], ['corp-teams', 'Teams'],
+  ['corp-attendance', 'Attendance'], ['sign-in-out', 'Clock In / Out'], ['shifts', 'Shifts'],
+  ['leave-requests', 'Leave Management'], ['training', 'Training & Assessments'], ['performance', 'Performance Reviews'],
+  ['branches', 'Branches'], ['expenses-mgr', 'Expenses'], ['assets', 'Assets'], ['timesheets', 'Timesheets'],
+  ['approvals', 'Approvals'], ['tasks', 'Tasks'], ['messages', 'Messages'], ['meetings', 'Meetings'],
+  ['corp-calendar', 'Calendar'], ['announcements', 'Announcements'], ['reports', 'Reports'],
+  ['audit-logs', 'Audit Logs'], ['ai-reports', 'Dikly AI'],
+];
+const EMP_MODULES = [
+  ['sign-in-out', 'Clock In / Out'], ['my-attendance', 'My Attendance'], ['my-shift', 'My Shift'],
+  ['my-leaves', 'Leave'], ['tasks', 'My Tasks'], ['emp-notifications', 'Notifications'],
+  ['announcements', 'Announcements'], ['messages', 'Messages'], ['meetings', 'Meetings'],
+  ['corp-calendar', 'Calendar'], ['my-performance', 'My Performance'], ['reports', 'Reports'],
+];
+async function renderRolesPermissions() {
+  const content = document.getElementById('main-content');
+  if (!content) return;
+  content.innerHTML = _corpHeader('Roles & Permissions', 'Control which modules each role can access') + '<div class="card" style="padding:2rem;text-align:center;color:var(--text-light)">Loading…</div>';
+  let mp = null;
+  try { mp = (await api('/api/advanced/company-settings')).settings?.modulePermissions || null; }
+  catch (e) { /* default = all allowed */ }
+
+  const isChecked = (role, mod) => !mp || !Array.isArray(mp[role]) || mp[role].includes(mod);
+  const matrix = (role, mods) => `
+    <div class="card" style="padding:1.2rem">
+      <div style="font-weight:700;margin-bottom:.2rem;text-transform:capitalize">${role === 'manager' ? 'Manager' : 'Employee'}</div>
+      <div style="font-size:.74rem;color:var(--text-muted);margin-bottom:.9rem">Untick a module to hide it from every ${role} in your company.</div>
+      <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(190px,1fr));gap:.35rem">
+        ${mods.map(([id, label]) => `
+          <label style="display:flex;align-items:center;gap:.45rem;font-size:.8rem;padding:.3rem .4rem;border-radius:6px;cursor:pointer">
+            <input type="checkbox" data-perm-role="${role}" data-perm-mod="${id}" ${isChecked(role, id) ? 'checked' : ''} />
+            ${label}
+          </label>`).join('')}
+      </div>
+    </div>`;
+
+  content.innerHTML = `
+    ${_corpHeader('Roles & Permissions', 'Control which modules each role can access')}
+    <div class="card" style="padding:.9rem 1.2rem;margin-bottom:1rem;background:var(--primary-ultra-light, var(--bg));border-left:3px solid var(--primary)">
+      <div style="font-size:.82rem;color:var(--text-light)"><strong>Admins always see everything.</strong> Changes apply to managers and employees the next time they sign in (or refresh).</div>
+    </div>
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(340px,1fr));gap:1rem">
+      ${matrix('manager', CORP_MODULES)}
+      ${matrix('employee', EMP_MODULES)}
+    </div>
+    <div style="margin-top:1rem;display:flex;gap:.6rem">
+      <button class="btn btn-primary" onclick="_permsSave()">Save permissions</button>
+      <button class="btn btn-ghost" onclick="_permsReset()">Reset to all modules</button>
+    </div>`;
+}
+window._permsSave = async function() {
+  const modulePermissions = { manager: [], employee: [] };
+  document.querySelectorAll('[data-perm-role]').forEach(cb => {
+    if (cb.checked) modulePermissions[cb.dataset.permRole].push(cb.dataset.permMod);
+  });
+  try {
+    const d = await api('/api/advanced/module-permissions', { method: 'PATCH', body: JSON.stringify({ modulePermissions }) });
+    if (currentUser.company) currentUser.company.modulePermissions = d.modulePermissions;
+    toastSuccess('Permissions saved — applies at next sign-in');
+  } catch (e) { toastError(e.message); }
+};
+window._permsReset = async function() {
+  try {
+    await api('/api/advanced/module-permissions', { method: 'PATCH', body: JSON.stringify({ modulePermissions: null }) });
+    if (currentUser.company) currentUser.company.modulePermissions = null;
+    toastSuccess('Reset — all roles see all modules');
+    renderRolesPermissions();
+  } catch (e) { toastError(e.message); }
+};
 
 // ═══════════════════════════════════════════════════════════════════
 //  EXECUTIVE DASHBOARD (corporate)

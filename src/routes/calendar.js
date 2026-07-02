@@ -372,4 +372,57 @@ router.delete("/:id", ...mw, async (req, res) => {
   }
 });
 
+// ── GET /company-month — unified company calendar ────────────────────────────
+// Merges calendar events, meetings, approved leave, and public holidays into
+// one normalized feed for the corporate Calendar page.
+router.get("/company-month", ...mw, async (req, res) => {
+  try {
+    const company = req.user.company;
+    const year  = parseInt(req.query.year, 10)  || new Date().getFullYear();
+    const month = parseInt(req.query.month, 10); // 1-12
+    const m     = Number.isFinite(month) && month >= 1 && month <= 12 ? month - 1 : new Date().getMonth();
+    const start = new Date(year, m, 1);
+    const end   = new Date(year, m + 1, 0, 23, 59, 59, 999);
+
+    const Meeting      = require("../models/Meeting");
+    const LeaveRequest = require("../models/LeaveRequest");
+    const Company      = require("../models/Company");
+
+    const [events, meetings, leaves, companyDoc] = await Promise.all([
+      CalendarEvent.find({ company, startDate: { $lte: end }, endDate: { $gte: start } })
+        .select("title type startDate endDate color location").limit(300).lean(),
+      Meeting.find({ company, startTime: { $gte: start, $lte: end }, status: { $in: ["scheduled", "live", "ended"] } })
+        .select("title startTime status").limit(200).lean().catch(() => []),
+      LeaveRequest.find({ company, status: "approved", startDate: { $lte: end }, endDate: { $gte: start } })
+        .populate("employee", "name").select("type startDate endDate employee").limit(200).lean().catch(() => []),
+      Company.findById(company).select("publicHolidays").lean(),
+    ]);
+
+    const items = [];
+    for (const e of events) items.push({
+      kind: "event", title: e.title, type: e.type || "event",
+      start: e.startDate, end: e.endDate, color: e.color || "#6366f1", location: e.location || "",
+    });
+    for (const mt of meetings) items.push({
+      kind: "meeting", title: mt.title || "Meeting", type: "meeting",
+      start: mt.startTime, end: mt.startTime, color: "#0ea5e9",
+    });
+    for (const l of leaves) items.push({
+      kind: "leave", title: `${l.employee?.name || "Employee"} — ${l.type || "leave"} leave`, type: "leave",
+      start: l.startDate, end: l.endDate, color: "#f59e0b",
+    });
+    for (const h of (companyDoc?.publicHolidays || [])) {
+      const d = new Date(h.date);
+      if (d >= start && d <= end) items.push({
+        kind: "holiday", title: h.name, type: "holiday", start: d, end: d, color: "#ef4444",
+      });
+    }
+
+    return res.json({ year, month: m + 1, items });
+  } catch (err) {
+    console.error("[calendar company-month]", err);
+    return res.status(500).json({ error: "Internal server error" });
+  }
+});
+
 module.exports = router;
