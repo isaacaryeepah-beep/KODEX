@@ -1103,7 +1103,14 @@ async function _loadLockedAttempt(req) {
   const quizLock = await SnapQuiz.findById(attempt.quiz).select("enforceSessionLock").lean();
   const lockEnabled = quizLock?.enforceSessionLock !== false;
 
-  const token = req.headers["x-session-token"];
+  let token = req.headers["x-session-token"];
+  // Safety net: if the client sent the header twice with the SAME value
+  // (fetch merges duplicates into "tok, tok"), collapse it rather than
+  // treating our own duplicate as a second device.
+  if (token && token.includes(",")) {
+    const parts = token.split(",").map(s => s.trim());
+    if (parts.every(p => p === parts[0])) token = parts[0];
+  }
   if (lockEnabled && attempt.sessionToken) {
     if (token && token !== attempt.sessionToken) {
       // A *present but wrong* token is a strong signal of a genuine second
