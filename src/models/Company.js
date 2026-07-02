@@ -121,6 +121,20 @@ const companySchema = new mongoose.Schema(
       clockOutStart: { type: String, default: null },   // e.g. "16:00"
       clockOutEnd:   { type: String, default: null },   // e.g. "22:00"
     },
+    // ── Organization settings (Company Settings page) ─────────────────────
+    timezone: { type: String, default: "Africa/Accra" },
+    publicHolidays: [{
+      name: { type: String, trim: true },
+      date: { type: Date },
+    }],
+    officeLocations: [{
+      name:    { type: String, trim: true },
+      address: { type: String, trim: true, default: "" },
+    }],
+    // Role → array of module ids that role may see (null = all modules).
+    // Managed from the Roles & Permissions page; enforced in the sidebar.
+    modulePermissions: { type: mongoose.Schema.Types.Mixed, default: null },
+
     subscriptionActive: {
       type: Boolean,
       default: false,

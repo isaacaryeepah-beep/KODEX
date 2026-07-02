@@ -123,6 +123,58 @@ router.patch("/branding", ...mw, adminOnly, asyncHandler(async (req, res) => {
   res.json({ branding: company.branding, companyName: company.name });
 }));
 
+// ─────────────────────────────────────────────────────────────
+// COMPANY SETTINGS (name, timezone, holidays, locations, permissions)
+// ─────────────────────────────────────────────────────────────
+
+router.get("/company-settings", ...mw, asyncHandler(async (req, res) => {
+  const company = await Company.findById(req.user.company)
+    .select("name timezone publicHolidays officeLocations modulePermissions clockSettings branding");
+  res.json({ settings: company });
+}));
+
+router.patch("/company-settings", ...mw, adminOnly, asyncHandler(async (req, res) => {
+  const { name, timezone, publicHolidays, officeLocations } = req.body;
+  const update = {};
+  if (name     !== undefined && String(name).trim()) update.name = String(name).trim();
+  if (timezone !== undefined) update.timezone = String(timezone).trim();
+  if (Array.isArray(publicHolidays)) {
+    update.publicHolidays = publicHolidays
+      .filter(h => h && h.name && h.date)
+      .slice(0, 50)
+      .map(h => ({ name: String(h.name).trim().slice(0, 100), date: new Date(h.date) }));
+  }
+  if (Array.isArray(officeLocations)) {
+    update.officeLocations = officeLocations
+      .filter(l => l && l.name)
+      .slice(0, 50)
+      .map(l => ({ name: String(l.name).trim().slice(0, 100), address: String(l.address || "").trim().slice(0, 300) }));
+  }
+  await Company.updateOne({ _id: req.user.company }, { $set: update });
+  const company = await Company.findById(req.user.company)
+    .select("name timezone publicHolidays officeLocations").lean();
+  res.json({ settings: company });
+}));
+
+router.patch("/module-permissions", ...mw, adminOnly, asyncHandler(async (req, res) => {
+  const { modulePermissions } = req.body;
+  // Expected shape: { manager: ["users","shifts",...], employee: [...] } or null to reset.
+  if (modulePermissions !== null && typeof modulePermissions !== "object") {
+    return res.status(400).json({ error: "modulePermissions must be an object or null" });
+  }
+  let clean = null;
+  if (modulePermissions) {
+    clean = {};
+    for (const [role, mods] of Object.entries(modulePermissions)) {
+      if (!["manager", "employee"].includes(role)) continue; // admin always sees everything
+      if (Array.isArray(mods)) clean[role] = mods.map(String).slice(0, 60);
+    }
+  }
+  await Company.updateOne({ _id: req.user.company }, { $set: { modulePermissions: clean } });
+  const company = await Company.findById(req.user.company).select("modulePermissions").lean();
+  res.json({ modulePermissions: company.modulePermissions });
+}));
+
 // Payroll settings
 router.patch("/payroll-settings", ...mw, adminOnly, asyncHandler(async (req, res) => {
   const { currency, payPeriod, overtimeRate, standardHours } = req.body;

@@ -608,7 +608,32 @@ async function gatherCustomQuery(companyId, question, role) {
   ]);
   const roleCounts = Object.fromEntries(counts.map(r => [r._id, r.count]));
 
-  return { question, role, roleCounts, note: 'Answer based on available platform context and the question asked.' };
+  // Corporate companies get the full executive snapshot so questions like
+  // "Who was absent today?", "Which branch performed best?", or "Generate
+  // today's executive summary" can be answered from real data.
+  let executive = null;
+  try {
+    const Company = require('../models/Company');
+    const company = await Company.findById(companyId).select('mode').lean();
+    if (company?.mode === 'corporate' || company?.mode === 'both') {
+      const { computeExecutiveSnapshot } = require('../controllers/executiveController');
+      const s = await computeExecutiveSnapshot(companyId);
+      executive = {
+        today: s.kpis,
+        absentToday: s.absentNames,
+        lateToday: s.lateNames,
+        departmentAttendance30d: s.departmentPerformance,
+        branchAttendance30d: s.branchPerformance,
+        monthlyApprovedExpenses: s.monthlyExpenses,
+        leaveLast90d: s.leaveStats,
+        alerts: s.alerts.map(a => `[${a.level}] ${a.text}`),
+      };
+    }
+  } catch (e) {
+    console.warn('[aiReport customQuery] executive context unavailable:', e.message);
+  }
+
+  return { question, role, roleCounts, executive, note: 'Answer based on available platform context and the question asked.' };
 }
 
 // ── 9. Weekly Digest ─────────────────────────────────────────────────────────
@@ -829,8 +854,11 @@ Write a shift compliance analysis. Name specific employees with issues and recom
       prompt = `A ${data.role} is asking: "${data.question}"
 
 Platform context (user counts by role): ${JSON.stringify(data.roleCounts)}
-
-Answer the question as best you can using available platform knowledge and the context provided. If you cannot answer from the data given, say so and suggest where the admin could find the information.`;
+${data.executive ? `
+Live company snapshot (generated now):
+${JSON.stringify(data.executive, null, 1)}
+` : ''}
+Answer the question as best you can using the context provided. Prefer concrete numbers and names from the live snapshot when they answer the question. If you cannot answer from the data given, say so and suggest where the admin could find the information.`;
       break;
     }
     case 'weekly_digest': {
