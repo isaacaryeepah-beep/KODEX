@@ -32,7 +32,9 @@ const eventSchema = new mongoose.Schema(
     },
     severity: {
       type: String,
-      enum: ["info", "warning", "critical"],
+      // Covers both naming schemes in use: the offline monitor client sends
+      // low/medium/high; older callers send info/warning/critical.
+      enum: ["info", "warning", "critical", "low", "medium", "high"],
       default: "info",
     },
     timestamp: {

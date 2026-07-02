@@ -1103,7 +1103,14 @@ async function _loadLockedAttempt(req) {
   const quizLock = await SnapQuiz.findById(attempt.quiz).select("enforceSessionLock").lean();
   const lockEnabled = quizLock?.enforceSessionLock !== false;
 
-  const token = req.headers["x-session-token"];
+  let token = req.headers["x-session-token"];
+  // Safety net: if the client sent the header twice with the SAME value
+  // (fetch merges duplicates into "tok, tok"), collapse it rather than
+  // treating our own duplicate as a second device.
+  if (token && token.includes(",")) {
+    const parts = token.split(",").map(s => s.trim());
+    if (parts.every(p => p === parts[0])) token = parts[0];
+  }
   if (lockEnabled && attempt.sessionToken) {
     if (token && token !== attempt.sessionToken) {
       // A *present but wrong* token is a strong signal of a genuine second
@@ -1276,10 +1283,15 @@ function _isCriticalViolation(type, quiz) {
   if (type === "print_screen"    && quiz.preventPrintScreen)        return true;
   // Mobile backgrounding is treated as tab_switch equivalent when mobileMonitoring is on
   if (type === "app_backgrounded" && quiz.mobileMonitoring !== false && quiz.terminateOnTabSwitch) return true;
-  // Always-critical: security and proctoring events (not configurable)
+  // Always-critical: security and proctoring events (not configurable).
+  // phone_detected and head_turn are intentionally NOT here: they come from
+  // naive client-side camera heuristics (brightness / keypoint ratios) that
+  // false-positive on lighting and angle. They are logged as INFO and appear
+  // in the lecturer's violation log and integrity report for human review,
+  // but never count toward automatic termination.
   return [
     "session_conflict", "devtools_open", "multiple_windows",
-    "phone_detected", "head_turn", "multiple_faces",
+    "multiple_faces",
   ].includes(type);
 }
 
