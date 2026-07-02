@@ -642,6 +642,7 @@ async function saveOfflineProfile(credentials, userData) {
         lastLoginAt: userData.user.lastLoginAt || null,
       },
       token: userData.token,           // cached JWT (may expire but used for UI)
+      refreshToken: userData.refreshToken || null, // renews the JWT on reconnect
       trial: userData.trial || null,
       savedAt: Date.now(),
     };
@@ -689,21 +690,23 @@ async function attemptOfflineLogin(credentials) {
       throw new Error('Wrong email or password.');
     }
 
-    // Check if the cached JWT has expired — expired tokens cause all API calls to silently 401
+    // NOTE: access tokens only live ~15 minutes, so the cached JWT is almost
+    // always expired by the time someone needs offline login. That is fine:
+    // offline pages read cached data, and the moment connectivity returns the
+    // api() 401→refresh flow renews the token using the cached refresh token
+    // (valid for 30 days). Never reject offline login for an expired JWT.
     try {
       const jwtPayload = JSON.parse(atob(profile.token.split('.')[1]));
       if (jwtPayload.exp && jwtPayload.exp * 1000 < Date.now()) {
-        throw new Error('Your offline session token has expired. Please connect to the internet to sign in again.');
+        console.log('[OfflineLogin] Cached JWT expired — continuing offline; will refresh on reconnect');
       }
-    } catch (e) {
-      if (e.message.includes('offline session token')) throw e;
-      // Malformed JWT — continue; the server will reject it on first API call
-    }
+    } catch (_) { /* malformed JWT — server will reject it on first online call */ }
 
     // Return a fake login response matching the real API shape
     console.log('[OfflineLogin] Offline login successful for', profileKey);
     return {
       token: profile.token,
+      refreshToken: profile.refreshToken || null,
       user: profile.user,
       trial: profile.trial,
       offlineMode: true,   // flag so app knows we're offline
@@ -2350,8 +2353,23 @@ async function loadUserData() {
     const data = await api('/api/auth/me');
     currentUser = data.user;
     if (!currentUser) throw new Error('No user data');
+    try { localStorage.setItem('dikly_last_user', JSON.stringify(data.user)); } catch (_) {}
     showDashboard(data);
   } catch (e) {
+    // Offline with a previous session? Restore it from the cached snapshot
+    // instead of wiping the token — the 401→refresh flow revalidates on
+    // reconnect, and a genuinely invalid token fails once we're back online.
+    try {
+      const offline = !(await isOnlineAsync());
+      const snap = JSON.parse(localStorage.getItem('dikly_last_user') || 'null');
+      if (offline && snap && localStorage.getItem('token')) {
+        console.log('[OfflineLogin] Offline boot — restoring cached session for', snap.email || snap.name);
+        currentUser = snap;
+        showDashboard({ user: snap, offlineMode: true });
+        if (typeof toast === 'function') toast("You're offline — showing your saved workspace. Data will sync when you reconnect.", 'info');
+        return;
+      }
+    } catch (_) { /* fall through to logout */ }
     localStorage.removeItem('token');
     token = null;
     currentUser = null;
@@ -2512,6 +2530,9 @@ async function submitForceChangePassword() {
 }
 
 function showDashboard(data) {
+  // Snapshot for offline boot-restore (see the /api/auth/me catch)
+  try { if (data && data.user) localStorage.setItem('dikly_last_user', JSON.stringify(data.user)); } catch (_) {}
+
   // If admin forced a password reset, intercept and show change screen
   if (currentUser?.mustChangePassword) {
     showForceChangePassword();

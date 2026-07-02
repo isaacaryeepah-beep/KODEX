@@ -4,7 +4,7 @@
 //  API requests are NOT cached here (handled in app.js with localStorage)
 // ════════════════════════════════════════════════════════════════════
 
-const CACHE_NAME = 'dikly-v6';
+const CACHE_NAME = 'dikly-v7';
 
 // App shell files to cache on install
 const SHELL_FILES = [
@@ -41,8 +41,10 @@ self.addEventListener('activate', event => {
 self.addEventListener('fetch', event => {
   const url = new URL(event.request.url);
 
-  // Always go to network for API calls -- offline handled in app.js
-  if (url.pathname.startsWith('/api/')) {
+  // Always go to network for API calls AND the reachability probe --
+  // /health must NEVER come from cache, or the app thinks it is online
+  // while offline and never falls back to offline login.
+  if (url.pathname.startsWith('/api/') || url.pathname === '/health') {
     event.respondWith(
       fetch(event.request).catch(() =>
         new Response(JSON.stringify({ error: 'You are offline' }), {
