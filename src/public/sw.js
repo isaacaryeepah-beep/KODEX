@@ -4,24 +4,48 @@
 //  API requests are NOT cached here (handled in app.js with localStorage)
 // ════════════════════════════════════════════════════════════════════
 
-const CACHE_NAME = 'dikly-v11';
+const CACHE_NAME = 'dikly-v12';
 
-// App shell files to cache on install
+// App shell files to cache on install.
+// IMPORTANT: index.html loads its scripts with cache-busting query strings
+// (e.g. /js/app.js?v=20260620o). We pre-cache the bare paths and serve them
+// with ignoreSearch matching, so the versioned requests still hit the cache
+// offline. Before this, a fresh SW install left the app unable to boot
+// offline because /js/app.js?v=... was never in the cache.
 const SHELL_FILES = [
   '/',
   '/index.html',
-  '/js/app.js',
   '/css/style.css',
+  '/js/app.js',
+  '/js/offline-idb.js',
+  '/js/pages-device.js',
+  '/js/pages-academic.js',
+  '/js/pages-faq.js',
+  '/js/pages-corporate.js',
+  '/js/manager-portal.js',
+  '/js/faq-widget.js',
+  '/js/faq-assistant.js',
+  '/js/vendor/chart.umd.min.js',
+  '/dikly-icon.svg',
+  '/manifest.json',
 ];
 
+// Strip the query string so runtime-cached files overwrite their
+// pre-cached bare-path entry instead of piling up versioned duplicates.
+const bareUrl = req => {
+  const u = new URL(req.url);
+  return u.origin + u.pathname;
+};
+
 // ── Install: pre-cache app shell ─────────────────────────────────────
+// Files are cached individually so one miss doesn't abort the rest.
 self.addEventListener('install', event => {
   event.waitUntil(
-    caches.open(CACHE_NAME).then(cache => {
-      return cache.addAll(SHELL_FILES).catch(err => {
-        console.warn('[SW] Some files failed to cache:', err);
-      });
-    }).then(() => self.skipWaiting())
+    caches.open(CACHE_NAME).then(cache =>
+      Promise.all(SHELL_FILES.map(f =>
+        cache.add(f).catch(err => console.warn('[SW] Failed to cache', f, err))
+      ))
+    ).then(() => self.skipWaiting())
   );
 });
 
@@ -56,19 +80,20 @@ self.addEventListener('fetch', event => {
     return;
   }
 
-  // JS and CSS -- network first, update cache, fall back to cache if offline
-  // This ensures updated files are always served fresh when online
+  // JS and CSS -- network first, update cache, fall back to cache if offline.
+  // Cached under the bare path (query string stripped) and matched with
+  // ignoreSearch, so /js/app.js?v=... is served offline from /js/app.js.
   if (url.pathname.endsWith('.js') || url.pathname.endsWith('.css')) {
     event.respondWith(
       fetch(event.request)
         .then(res => {
           if (res && res.status === 200) {
             const clone = res.clone();
-            caches.open(CACHE_NAME).then(cache => cache.put(event.request, clone));
+            caches.open(CACHE_NAME).then(cache => cache.put(bareUrl(event.request), clone));
           }
           return res;
         })
-        .catch(() => caches.match(event.request))
+        .catch(() => caches.match(event.request, { ignoreSearch: true }))
     );
     return;
   }
@@ -93,11 +118,11 @@ self.addEventListener('fetch', event => {
       .then(res => {
         if (res && res.status === 200 && res.type !== 'opaque') {
           const clone = res.clone();
-          caches.open(CACHE_NAME).then(cache => cache.put(event.request, clone));
+          caches.open(CACHE_NAME).then(cache => cache.put(bareUrl(event.request), clone));
         }
         return res;
       })
-      .catch(() => caches.match(event.request))
+      .catch(() => caches.match(event.request, { ignoreSearch: true }))
   );
 });
 
