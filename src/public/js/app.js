@@ -2711,6 +2711,41 @@ function buildSidebar() {
 
   switch (role) {
     case 'admin':
+      if (currentUser.company?.mode === 'corporate') {
+        // ── Corporate admin: grouped enterprise layout ──
+        links.push({ id: 'executive-dashboard', label: 'Executive Dashboard', icon: svgIcon('<rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/><line x1="7" y1="13" x2="7" y2="9"/><line x1="12" y1="13" x2="12" y2="7"/><line x1="17" y1="13" x2="17" y2="11"/>') });
+        links.push({ sep: true, label: 'WORKFORCE' });
+        links.push({ id: 'users',           label: 'Employees',           icon: usersIcon() });
+        links.push({ id: 'corp-attendance', label: 'Attendance',          icon: svgIcon('<path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/><polyline points="9 11 12 14 22 4"/>') });
+        links.push({ id: 'sign-in-out',     label: 'Clock In / Out',      icon: attendanceIcon() });
+        links.push({ id: 'shifts',          label: 'Shifts',              icon: svgIcon('<rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/>') });
+        links.push({ id: 'leave-requests',  label: 'Leave Management',    icon: svgIcon('<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/>') });
+        links.push({ id: 'training',        label: 'Training & Assessments', icon: svgIcon('<path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/>') });
+        links.push({ id: 'performance',     label: 'Performance Reviews', icon: svgIcon('<line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/>') });
+        links.push({ sep: true, label: 'OPERATIONS' });
+        links.push({ id: 'branches',        label: 'Branches',            icon: svgIcon('<line x1="6" y1="3" x2="6" y2="15"/><circle cx="18" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><path d="M18 9a9 9 0 0 1-9 9"/>') });
+        links.push({ id: 'expenses-mgr',    label: 'Expenses',            icon: svgIcon('<line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/>') });
+        links.push({ id: 'assets',          label: 'Assets',              icon: svgIcon('<path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><polyline points="3.27 6.96 12 12.01 20.73 6.96"/><line x1="12" y1="22.08" x2="12" y2="12"/>') });
+        links.push({ id: 'timesheets',      label: 'Timesheets',          icon: svgIcon('<rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/><line x1="8" y1="14" x2="16" y2="14"/>') });
+        links.push({ id: 'approvals',       label: 'Approvals',           icon: approvalsIcon() });
+        links.push({ id: 'corp-clock-settings', label: 'Clock Settings',  icon: svgIcon('<circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/><circle cx="12" cy="12" r="2"/>') });
+        links.push({ sep: true, label: 'COMMUNICATION' });
+        links.push({ id: 'messages',        label: 'Messages',            icon: svgIcon('<path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>') });
+        links.push({ id: 'meetings',        label: 'Meetings',            icon: meetingsIcon() });
+        links.push({ id: 'announcements',   label: 'Announcements',       icon: svgIcon('<path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/>') });
+        links.push({ sep: true, label: 'INSIGHTS' });
+        links.push({ id: 'analytics',       label: 'Analytics',           icon: svgIcon('<rect x="18" y="3" width="4" height="18"/><rect x="10" y="8" width="4" height="13"/><rect x="2" y="13" width="4" height="8"/>') });
+        links.push({ id: 'reports',         label: 'Reports',             icon: reportsIcon() });
+        links.push({ id: 'audit-logs',      label: 'Audit Logs',          icon: svgIcon('<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><line x1="10" y1="9" x2="10" y2="9"/>') });
+        links.push({ id: 'ai-reports',      label: 'Dikly AI',            icon: svgIcon('<path d="M15 4V2"/><path d="M15 16v-2"/><path d="M8 9h2"/><path d="M20 9h2"/><path d="M17.8 11.8 19 13"/><path d="M15 9h.01"/><path d="M17.8 6.2 19 5"/><path d="M13.2 6.2 12 5"/><path d="M3 21l9-9"/>') });
+        links.push({ sep: true, label: 'ADMINISTRATION' });
+        links.push({ id: 'branding',        label: 'Branding',            icon: svgIcon('<circle cx="12" cy="12" r="10"/><path d="M8 14s1.5 2 4 2 4-2 4-2"/><line x1="9" y1="9" x2="9.01" y2="9"/><line x1="15" y1="9" x2="15.01" y2="9"/>') });
+        links.push({ id: 'search',          label: 'Search',              icon: svgIcon('<circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>') });
+        links.push({ sep: true, label: 'SUPPORT' });
+        links.push({ id: 'subscription',    label: 'Subscription',        icon: subscriptionIcon() });
+        links.push({ id: 'faq-center',      label: 'FAQ Center',          icon: svgIcon('<circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/>') });
+        break;
+      }
       links.push({ sep: true, label: 'MANAGE' });
       links.push({ id: 'approvals', label: 'Approvals', icon: approvalsIcon() });
       links.push({ id: 'search', label: 'Search', icon: svgIcon('<circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>') });
@@ -2729,20 +2764,6 @@ function buildSidebar() {
         links.push({ id: 'class-rep-mgmt',     label: 'Class Reps',      icon: svgIcon('<path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/><polyline points="9 11 12 14 22 4"/>') });
         links.push({ id: 'admin-devices',      label: 'Devices',         icon: svgIcon('<rect x="5" y="2" width="14" height="20" rx="2" ry="2"/><line x1="12" y1="18" x2="12.01" y2="18"/>') });
       }
-      if (currentUser.company?.mode === 'corporate') {
-        links.push({ sep: true, label: 'WORKFORCE' });
-        links.push({ id: 'sign-in-out',    label: 'Sign In / Out',   icon: attendanceIcon() });
-        links.push({ id: 'corp-attendance',label: 'Team Attendance', icon: svgIcon('<path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/><polyline points="9 11 12 14 22 4"/>') });
-        links.push({ id: 'corp-clock-settings', label: 'Clock Settings', icon: svgIcon('<circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/><circle cx="12" cy="12" r="2"/>') });
-        links.push({ id: 'shifts',         label: 'Shifts',          icon: svgIcon('<rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/>') });
-        links.push({ id: 'leave-requests', label: 'Leave Requests',  icon: svgIcon('<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/>') });
-        links.push({ id: 'timesheets',     label: 'Timesheets',      icon: svgIcon('<rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/><line x1="8" y1="14" x2="16" y2="14"/>') });
-        links.push({ id: 'expenses-mgr',   label: 'Expenses',        icon: svgIcon('<line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/>') });
-        links.push({ id: 'performance',    label: 'Performance',     icon: svgIcon('<line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/>') });
-        links.push({ id: 'branches',       label: 'Branches',        icon: svgIcon('<line x1="6" y1="3" x2="6" y2="15"/><circle cx="18" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><path d="M18 9a9 9 0 0 1-9 9"/>') });
-        links.push({ id: 'announcements',  label: 'Announcements',   icon: svgIcon('<path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/>') });
-        links.push({ id: 'audit-logs',     label: 'Audit Logs',      icon: svgIcon('<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><line x1="10" y1="9" x2="10" y2="9"/>') });
-      }
       links.push({ sep: true, label: 'COMMUNICATE' });
       links.push({ id: 'messages', label: 'Messages', icon: svgIcon('<path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>') });
       links.push({ id: 'meetings', label: 'Meetings', icon: meetingsIcon() });
@@ -2754,28 +2775,40 @@ function buildSidebar() {
       links.push({ id: 'subscription', label: 'Subscription', icon: subscriptionIcon() });
       break;
     case 'manager':
+      if (currentUser.company?.mode === 'corporate') {
+        // ── Corporate manager: grouped enterprise layout ──
+        links.push({ id: 'executive-dashboard', label: 'Executive Dashboard', icon: svgIcon('<rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/><line x1="7" y1="13" x2="7" y2="9"/><line x1="12" y1="13" x2="12" y2="7"/><line x1="17" y1="13" x2="17" y2="11"/>') });
+        links.push({ sep: true, label: 'WORKFORCE' });
+        links.push({ id: 'users',           label: 'Team',                icon: usersIcon() });
+        links.push({ id: 'corp-attendance', label: 'Attendance',          icon: svgIcon('<path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/><polyline points="9 11 12 14 22 4"/>') });
+        links.push({ id: 'sign-in-out',     label: 'Clock In / Out',      icon: attendanceIcon() });
+        links.push({ id: 'shifts',          label: 'Shifts',              icon: svgIcon('<rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/>') });
+        links.push({ id: 'leave-requests',  label: 'Leave Management',    icon: svgIcon('<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/>') });
+        links.push({ id: 'training',        label: 'Training & Assessments', icon: svgIcon('<path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/>') });
+        links.push({ id: 'performance',     label: 'Performance Reviews', icon: svgIcon('<line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/>') });
+        links.push({ sep: true, label: 'OPERATIONS' });
+        links.push({ id: 'branches',        label: 'Branches',            icon: svgIcon('<line x1="6" y1="3" x2="6" y2="15"/><circle cx="18" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><path d="M18 9a9 9 0 0 1-9 9"/>') });
+        links.push({ id: 'expenses-mgr',    label: 'Expenses',            icon: svgIcon('<line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/>') });
+        links.push({ id: 'assets',          label: 'Assets',              icon: svgIcon('<path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><polyline points="3.27 6.96 12 12.01 20.73 6.96"/><line x1="12" y1="22.08" x2="12" y2="12"/>') });
+        links.push({ id: 'timesheets',      label: 'Timesheets',          icon: svgIcon('<rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/><line x1="8" y1="14" x2="16" y2="14"/>') });
+        links.push({ id: 'approvals',       label: 'Approvals',           icon: approvalsIcon() });
+        links.push({ sep: true, label: 'COMMUNICATION' });
+        links.push({ id: 'messages',        label: 'Messages',            icon: svgIcon('<path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>') });
+        links.push({ id: 'meetings',        label: 'Meetings',            icon: meetingsIcon() });
+        links.push({ id: 'announcements',   label: 'Announcements',       icon: svgIcon('<path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/>') });
+        links.push({ sep: true, label: 'INSIGHTS' });
+        links.push({ id: 'reports',         label: 'Reports',             icon: reportsIcon() });
+        links.push({ id: 'audit-logs',      label: 'Audit Logs',          icon: svgIcon('<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><line x1="10" y1="9" x2="10" y2="9"/>') });
+        links.push({ id: 'ai-reports',      label: 'Dikly AI',            icon: svgIcon('<path d="M15 4V2"/><path d="M15 16v-2"/><path d="M8 9h2"/><path d="M20 9h2"/><path d="M17.8 11.8 19 13"/><path d="M15 9h.01"/><path d="M17.8 6.2 19 5"/><path d="M13.2 6.2 12 5"/><path d="M3 21l9-9"/>') });
+        links.push({ sep: true, label: 'SUPPORT' });
+        links.push({ id: 'subscription',    label: 'Subscription',        icon: subscriptionIcon() });
+        links.push({ id: 'faq-center',      label: 'FAQ Center',          icon: svgIcon('<circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/>') });
+        break;
+      }
       links.push({ sep: true, label: 'MANAGE' });
       links.push({ id: 'approvals', label: 'Approvals', icon: approvalsIcon() });
       links.push({ id: 'users', label: 'Team', icon: usersIcon() });
-      if (currentUser.company?.mode === 'corporate') {
-        links.push({ sep: true, label: 'WORKFORCE' });
-        links.push({ id: 'sign-in-out',    label: 'Sign In / Out',   icon: attendanceIcon() });
-        links.push({ id: 'corp-attendance',label: 'Team Attendance', icon: svgIcon('<path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/><polyline points="9 11 12 14 22 4"/>') });
-        links.push({ id: 'shifts',         label: 'Shifts',          icon: svgIcon('<rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/>') });
-        links.push({ id: 'leave-requests', label: 'Leave',           icon: svgIcon('<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/>') });
-        links.push({ id: 'timesheets',     label: 'Timesheets',      icon: svgIcon('<rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/><line x1="8" y1="14" x2="16" y2="14"/>') });
-        links.push({ id: 'expenses-mgr',   label: 'Expenses',        icon: svgIcon('<line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/>') });
-        links.push({ id: 'performance',    label: 'Performance',     icon: svgIcon('<line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/>') });
-        links.push({ id: 'branches',       label: 'Branches',        icon: svgIcon('<line x1="6" y1="3" x2="6" y2="15"/><circle cx="18" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><path d="M18 9a9 9 0 0 1-9 9"/>') });
-        links.push({ sep: true, label: 'COMMUNICATE' });
-        links.push({ id: 'announcements',  label: 'Announcements',   icon: svgIcon('<path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/>') });
-        links.push({ id: 'messages',       label: 'Messages',        icon: svgIcon('<path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>') });
-        links.push({ id: 'meetings',       label: 'Meetings',        icon: meetingsIcon() });
-        links.push({ sep: true, label: 'INSIGHTS' });
-        links.push({ id: 'reports',        label: 'Reports',         icon: reportsIcon() });
-        links.push({ id: 'ai-reports',     label: 'Dikly AI',        icon: svgIcon('<path d="M15 4V2"/><path d="M15 16v-2"/><path d="M8 9h2"/><path d="M20 9h2"/><path d="M17.8 11.8 19 13"/><path d="M15 9h.01"/><path d="M17.8 6.2 19 5"/><path d="M13.2 6.2 12 5"/><path d="M3 21l9-9"/>') });
-        links.push({ id: 'audit-logs',     label: 'Audit Logs',      icon: svgIcon('<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><line x1="10" y1="9" x2="10" y2="9"/>') });
-      } else {
+      {
         links.push({ sep: true, label: 'COMMUNICATE' });
         links.push({ id: 'messages', label: 'Messages', icon: svgIcon('<path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>') });
         links.push({ id: 'meetings', label: 'Meetings', icon: meetingsIcon() });
@@ -3088,6 +3121,7 @@ function navigateTo(view) {
     case 'class-timetable':      renderClassTimetable(); break;
     case 'course-videos':        renderCourseVideos(); break;
     case 'ai-reports':           renderAIReports(); break;
+    case 'executive-dashboard':  renderExecutiveDashboard(); break;
     default: renderDashboard();
   }
 }
@@ -23467,6 +23501,220 @@ async function renderClassTimetable() {
 // ═══════════════════════════════════════════════════════════════════════════
 // DIKLY AI REPORTS
 // ═══════════════════════════════════════════════════════════════════════════
+
+// ═══════════════════════════════════════════════════════════════════
+//  EXECUTIVE DASHBOARD (corporate)
+// ═══════════════════════════════════════════════════════════════════
+
+// ── Shared chart tooltip ──
+function _exvTip() {
+  let t = document.getElementById('exv-tip');
+  if (!t) {
+    t = document.createElement('div');
+    t.id = 'exv-tip';
+    t.style.cssText = 'position:fixed;z-index:9000;pointer-events:none;display:none;background:var(--text);color:var(--card);padding:.4rem .6rem;border-radius:7px;font-size:.75rem;font-weight:600;box-shadow:0 4px 14px rgba(0,0,0,.25);white-space:nowrap';
+    document.body.appendChild(t);
+  }
+  return t;
+}
+window._exvShowTip = function(ev, html) {
+  const t = _exvTip();
+  t.innerHTML = html;
+  t.style.display = 'block';
+  t.style.left = Math.min(ev.clientX + 12, window.innerWidth - t.offsetWidth - 8) + 'px';
+  t.style.top  = (ev.clientY - t.offsetHeight - 10) + 'px';
+};
+window._exvHideTip = function() { const t = document.getElementById('exv-tip'); if (t) t.style.display = 'none'; };
+
+// Table-view twin — every chart ships its data as an accessible table
+function _exvTable(rows, cols) {
+  return `<details style="margin-top:.5rem"><summary style="font-size:.72rem;color:var(--text-muted);cursor:pointer">View data</summary>
+    <table style="width:100%;font-size:.76rem;margin-top:.4rem;border-collapse:collapse">
+      <thead><tr>${cols.map(c => `<th style="text-align:left;padding:.25rem .4rem;color:var(--text-light);font-weight:600;border-bottom:1px solid var(--border)">${c}</th>`).join('')}</tr></thead>
+      <tbody>${rows.map(r => `<tr>${r.map((v, i) => `<td style="padding:.25rem .4rem;border-bottom:1px solid var(--border);${i > 0 ? 'font-variant-numeric:tabular-nums' : ''}">${v}</td>`).join('')}</tr>`).join('')}</tbody>
+    </table></details>`;
+}
+
+// ── Line chart: single series, 2px line, 10% area wash, end label ──
+function _exvLineChart(points, { unit = '%', yMax = 100 } = {}) {
+  if (!points.length) return '<div style="padding:1.6rem;text-align:center;color:var(--text-muted);font-size:.82rem">No data yet</div>';
+  const W = 560, H = 170, PL = 34, PR = 44, PT = 12, PB = 26;
+  const iw = W - PL - PR, ih = H - PT - PB;
+  const x = i => PL + (points.length === 1 ? iw / 2 : (i / (points.length - 1)) * iw);
+  const y = v => PT + ih - (Math.min(v, yMax) / yMax) * ih;
+  const path = points.map((p, i) => `${i ? 'L' : 'M'}${x(i).toFixed(1)},${y(p.rate).toFixed(1)}`).join(' ');
+  const area = `${path} L${x(points.length - 1).toFixed(1)},${PT + ih} L${x(0).toFixed(1)},${PT + ih} Z`;
+  const last = points[points.length - 1];
+  const gridVals = [0, 50, 100];
+  const dayLbl = d => { const dt = new Date(d + 'T00:00:00'); return dt.toLocaleDateString(undefined, { day: 'numeric', month: 'short' }); };
+  return `
+  <svg viewBox="0 0 ${W} ${H}" style="width:100%;height:auto;display:block" role="img" aria-label="Attendance trend, last 14 days">
+    ${gridVals.map(v => `<line x1="${PL}" y1="${y(v)}" x2="${W - PR}" y2="${y(v)}" stroke="var(--border)" stroke-width="1"/>
+      <text x="${PL - 6}" y="${y(v) + 3}" text-anchor="end" font-size="9" fill="var(--text-muted)" style="font-variant-numeric:tabular-nums">${v}</text>`).join('')}
+    <path d="${area}" fill="var(--primary, #4f6ef7)" opacity="0.10"/>
+    <path d="${path}" fill="none" stroke="var(--primary, #4f6ef7)" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>
+    ${points.map((p, i) => `
+      <circle cx="${x(i)}" cy="${y(p.rate)}" r="${i === points.length - 1 ? 4 : 3}" fill="var(--primary, #4f6ef7)" stroke="var(--card)" stroke-width="2"
+        style="cursor:default" onmousemove="_exvShowTip(event,'${dayLbl(p.date)}: <b>${p.rate}${unit}</b>')" onmouseleave="_exvHideTip()"/>`).join('')}
+    <text x="${x(points.length - 1) + 8}" y="${y(last.rate) + 4}" font-size="11" font-weight="700" fill="var(--text)">${last.rate}${unit}</text>
+    ${points.map((p, i) => i % 3 === 0 || i === points.length - 1
+      ? `<text x="${x(i)}" y="${H - 8}" text-anchor="middle" font-size="9" fill="var(--text-muted)">${dayLbl(p.date)}</text>` : '').join('')}
+  </svg>
+  ${_exvTable(points.map(p => [dayLbl(p.date), p.rate + unit]), ['Day', 'Attendance'])}`;
+}
+
+// ── Horizontal bars: single hue, ≤16px thick, rounded data-end, value at tip ──
+function _exvHBars(items, { unit = '%', max = 100 } = {}) {
+  if (!items.length) return '<div style="padding:1.6rem;text-align:center;color:var(--text-muted);font-size:.82rem">No data yet</div>';
+  return `<div style="display:flex;flex-direction:column;gap:.55rem">
+    ${items.map(it => {
+      const w = Math.max(2, Math.round((it.value / max) * 100));
+      return `<div style="display:grid;grid-template-columns:110px 1fr 42px;align-items:center;gap:.55rem"
+        onmousemove="_exvShowTip(event,'${esc(it.name)}: <b>${it.value}${unit}</b>')" onmouseleave="_exvHideTip()">
+        <div style="font-size:.76rem;color:var(--text-light);overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${esc(it.name)}">${esc(it.name)}</div>
+        <div style="height:14px;position:relative">
+          <div style="position:absolute;inset:0;background:var(--border);opacity:.35;border-radius:0 4px 4px 0"></div>
+          <div style="position:absolute;top:0;bottom:0;left:0;width:${w}%;background:var(--primary, #4f6ef7);border-radius:0 4px 4px 0"></div>
+        </div>
+        <div style="font-size:.76rem;font-weight:700;color:var(--text);font-variant-numeric:tabular-nums">${it.value}${unit}</div>
+      </div>`;
+    }).join('')}
+  </div>
+  ${_exvTable(items.map(it => [esc(it.name), it.value + unit]), ['Name', 'Rate'])}`;
+}
+
+// ── Columns: single hue, ≤24px wide, rounded cap, label the extreme only ──
+function _exvColumns(items, { prefix = '' } = {}) {
+  if (!items.length || items.every(i => !i.total)) return '<div style="padding:1.6rem;text-align:center;color:var(--text-muted);font-size:.82rem">No data yet</div>';
+  const W = 560, H = 180, PL = 46, PR = 10, PT = 14, PB = 26;
+  const iw = W - PL - PR, ih = H - PT - PB;
+  const rawMax = Math.max(...items.map(i => i.total), 1);
+  const pow = Math.pow(10, String(Math.ceil(rawMax)).length - 1);
+  const yMax = Math.ceil(rawMax / pow) * pow;
+  const maxIdx = items.findIndex(i => i.total === rawMax);
+  const bw = Math.min(24, (iw / items.length) * 0.55);
+  const cx = i => PL + (i + 0.5) * (iw / items.length);
+  const y = v => PT + ih - (v / yMax) * ih;
+  const mLbl = m => new Date(m + '-02').toLocaleDateString(undefined, { month: 'short' });
+  const fmt = v => v >= 1000 ? (v / 1000).toFixed(v >= 10000 ? 0 : 1) + 'K' : String(Math.round(v));
+  return `
+  <svg viewBox="0 0 ${W} ${H}" style="width:100%;height:auto;display:block" role="img" aria-label="Monthly expenses, last 6 months">
+    ${[0, 0.5, 1].map(f => `<line x1="${PL}" y1="${y(yMax * f)}" x2="${W - PR}" y2="${y(yMax * f)}" stroke="var(--border)" stroke-width="1"/>
+      <text x="${PL - 6}" y="${y(yMax * f) + 3}" text-anchor="end" font-size="9" fill="var(--text-muted)" style="font-variant-numeric:tabular-nums">${prefix}${fmt(yMax * f)}</text>`).join('')}
+    ${items.map((it, i) => {
+      const h = Math.max(it.total > 0 ? 3 : 0, (it.total / yMax) * ih);
+      return `<path d="M${(cx(i) - bw / 2).toFixed(1)},${PT + ih} v${-Math.max(0, h - 4)} q0,-4 4,-4 h${(bw - 8).toFixed(1)} q4,0 4,4 v${Math.max(0, h - 4)} Z"
+        fill="var(--primary, #4f6ef7)" onmousemove="_exvShowTip(event,'${mLbl(it.month)}: <b>${prefix}${it.total.toLocaleString()}</b>')" onmouseleave="_exvHideTip()"/>
+      ${i === maxIdx && it.total > 0 ? `<text x="${cx(i)}" y="${y(it.total) - 6}" text-anchor="middle" font-size="10" font-weight="700" fill="var(--text)">${prefix}${fmt(it.total)}</text>` : ''}
+      <text x="${cx(i)}" y="${H - 8}" text-anchor="middle" font-size="9" fill="var(--text-muted)">${mLbl(it.month)}</text>`;
+    }).join('')}
+    <line x1="${PL}" y1="${PT + ih}" x2="${W - PR}" y2="${PT + ih}" stroke="var(--text-muted)" stroke-width="1" opacity=".5"/>
+  </svg>
+  ${_exvTable(items.map(it => [mLbl(it.month), prefix + it.total.toLocaleString()]), ['Month', 'Approved expenses'])}`;
+}
+
+async function renderExecutiveDashboard() {
+  const content = document.getElementById('main-content');
+  if (!content) return;
+  content.innerHTML = '<div class="card" style="padding:2.5rem;text-align:center;color:var(--text-light)">Loading executive dashboard…</div>';
+
+  let d;
+  try {
+    d = await api('/api/executive/dashboard');
+  } catch (e) {
+    content.innerHTML = `<div class="card" style="padding:2rem;text-align:center"><div style="color:var(--error);font-weight:600">Could not load the executive dashboard</div><div style="font-size:.85rem;color:var(--text-light);margin-top:.4rem">${esc(e.message)}</div></div>`;
+    return;
+  }
+
+  const k = d.kpis;
+  const scoreColor = k.healthScore >= 75 ? '#0ca30c' : k.healthScore >= 50 ? '#fab219' : '#d03b3b';
+  // Status roles are reserved and always paired with an icon + label
+  const alertMeta = {
+    good:     { icon: '✓', color: '#0ca30c', label: 'Good' },
+    warning:  { icon: '⚠', color: '#b45309', label: 'Warning' },
+    serious:  { icon: '⚠', color: '#c2410c', label: 'Attention' },
+    critical: { icon: '⛔', color: '#d03b3b', label: 'Critical' },
+  };
+  const tile = (label, value, sub = '') => `
+    <div class="card" style="padding:1rem 1.1rem">
+      <div style="font-size:.72rem;color:var(--text-light);font-weight:600;text-transform:uppercase;letter-spacing:.4px">${label}</div>
+      <div style="font-size:1.65rem;font-weight:700;color:var(--text);margin-top:.2rem">${value}</div>
+      ${sub ? `<div style="font-size:.72rem;color:var(--text-muted);margin-top:.15rem">${sub}</div>` : ''}
+    </div>`;
+
+  const leaveTotal = Math.max(1, d.leaveStats.approved + d.leaveStats.pending + d.leaveStats.rejected);
+  const leaveRow = (label, count, color, icon) => `
+    <div style="display:grid;grid-template-columns:110px 1fr 34px;align-items:center;gap:.55rem;margin-bottom:.55rem">
+      <div style="font-size:.78rem;color:var(--text-light)"><span style="color:${color};font-weight:800">${icon}</span> ${label}</div>
+      <div style="height:12px;position:relative">
+        <div style="position:absolute;inset:0;background:${color};opacity:.16;border-radius:0 4px 4px 0"></div>
+        <div style="position:absolute;top:0;bottom:0;left:0;width:${Math.round((count / leaveTotal) * 100)}%;background:${color};border-radius:0 4px 4px 0"></div>
+      </div>
+      <div style="font-size:.78rem;font-weight:700;color:var(--text);font-variant-numeric:tabular-nums">${count}</div>
+    </div>`;
+
+  const chartCard = (title, sub, body) => `
+    <div class="card" style="padding:1.1rem 1.2rem">
+      <div style="font-weight:700;font-size:.92rem;color:var(--text)">${title}</div>
+      <div style="font-size:.74rem;color:var(--text-muted);margin-bottom:.8rem">${sub}</div>
+      ${body}
+    </div>`;
+
+  content.innerHTML = `
+    <div class="page-header" style="margin-bottom:1.2rem">
+      <div>
+        <h1 style="margin:0 0 .25rem">Executive Dashboard</h1>
+        <p style="margin:0;color:var(--text-light);font-size:.9rem">Company-wide view for ${new Date(d.generatedAt).toLocaleDateString(undefined, { weekday: 'long', day: 'numeric', month: 'long' })}</p>
+      </div>
+      <button class="btn btn-sm btn-ghost" onclick="renderExecutiveDashboard()">↻ Refresh</button>
+    </div>
+
+    <div style="display:grid;grid-template-columns:minmax(220px,1fr) 2fr;gap:1rem;margin-bottom:1rem;align-items:stretch">
+      <div class="card" style="padding:1.2rem;display:flex;flex-direction:column;justify-content:center">
+        <div style="font-size:.72rem;color:var(--text-light);font-weight:600;text-transform:uppercase;letter-spacing:.4px">Company health score</div>
+        <div style="font-size:52px;font-weight:700;line-height:1.1;color:var(--text);margin:.3rem 0 .5rem">${k.healthScore}<span style="font-size:1rem;color:var(--text-muted);font-weight:600"> / 100</span></div>
+        <div style="height:8px;border-radius:4px;background:${scoreColor}2b;overflow:hidden">
+          <div style="height:100%;width:${k.healthScore}%;background:${scoreColor};border-radius:4px"></div>
+        </div>
+        <div style="font-size:.72rem;color:var(--text-muted);margin-top:.5rem">Attendance · punctuality · approvals backlog</div>
+      </div>
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:.7rem">
+        ${tile('Present today', k.presentToday, `${k.attendanceRateToday}% of workforce`)}
+        ${tile('Absent today', k.absentToday)}
+        ${tile('Late arrivals', k.lateToday)}
+        ${tile('Active employees', k.activeEmployees)}
+        ${tile('Active branches', k.activeBranches)}
+        ${tile('Pending approvals', k.pendingApprovals, 'leave · expenses · timesheets')}
+        ${tile("Today's meetings", k.meetingsToday)}
+        ${tile('Departments', k.totalDepartments)}
+      </div>
+    </div>
+
+    <div class="card" style="padding:1.1rem 1.2rem;margin-bottom:1rem">
+      <div style="font-weight:700;font-size:.92rem;color:var(--text);margin-bottom:.7rem">Executive alerts</div>
+      <div style="display:flex;flex-direction:column;gap:.45rem">
+        ${d.alerts.map(a => {
+          const m = alertMeta[a.level] || alertMeta.warning;
+          return `<div style="display:flex;align-items:center;gap:.6rem;padding:.55rem .75rem;border-radius:9px;background:${m.color}14;border-left:3px solid ${m.color}">
+            <span style="color:${m.color};font-weight:800">${m.icon}</span>
+            <span style="font-size:.83rem;color:var(--text)"><strong style="color:${m.color}">${m.label}:</strong> ${esc(a.text)}</span>
+          </div>`;
+        }).join('')}
+      </div>
+    </div>
+
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(340px,1fr));gap:1rem">
+      ${chartCard('Attendance trend', 'Daily attendance rate, last 14 days', _exvLineChart(d.attendanceTrend))}
+      ${chartCard('Monthly expenses', 'Approved expenses, last 6 months', _exvColumns(d.monthlyExpenses, { prefix: '₵' }))}
+      ${chartCard('Department performance', '30-day attendance rate by department', _exvHBars(d.departmentPerformance.map(x => ({ name: x.name, value: x.rate }))))}
+      ${chartCard('Branch performance', '30-day attendance rate by branch', _exvHBars(d.branchPerformance.map(x => ({ name: x.name, value: x.rate }))))}
+      ${chartCard('Leave statistics', 'Requests in the last 90 days', `
+        ${leaveRow('Approved', d.leaveStats.approved, '#0ca30c', '✓')}
+        ${leaveRow('Pending',  d.leaveStats.pending,  '#b45309', '⏳')}
+        ${leaveRow('Rejected', d.leaveStats.rejected, '#d03b3b', '✗')}
+        ${_exvTable([['Approved', d.leaveStats.approved], ['Pending', d.leaveStats.pending], ['Rejected', d.leaveStats.rejected]], ['Status', 'Requests'])}`)}
+    </div>`;
+}
 
 const AI_REPORT_DEFS = {
   at_risk_students:    { label: 'At-Risk Students',        roles: ['admin','hod','lecturer'], modes: ['academic'],      icon: '<path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/>',  color: '#ef4444', desc: 'Identifies students with low attendance, poor quiz scores, or missing assignments.' },
