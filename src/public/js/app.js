@@ -821,6 +821,35 @@ async function isOnlineAsync() {
   return _serverReachable;
 }
 
+// ── Offline fallback for logins ──────────────────────────────────────────────
+// isOnlineAsync() can report a stale "online" — its result is cached for 8 s,
+// and right after airplane mode iOS often keeps navigator.onLine === true.
+// When that happens the online login request itself fails with a network
+// error; instead of dead-ending on "Network error", retry against the
+// offline profile store.
+function _isNetworkError(e) {
+  const m = String((e && e.message) || '').toLowerCase();
+  return m.includes('failed to fetch') || m.includes('networkerror') || m.includes('network error')
+      || m.includes('load failed')     || m.includes('network request failed')
+      || m.includes('timed out')       || m.includes('timeout')
+      || m.includes('you are offline') || m.includes('abort');
+}
+
+async function loginOnlineWithOfflineFallback(credentials, formId) {
+  try {
+    const data = await initiate2FA(credentials);
+    await saveOfflineProfile(credentials, data);
+    return data;
+  } catch (e) {
+    if (!_isNetworkError(e)) throw e;
+    // Server became unreachable mid-login — remember that and go offline.
+    _serverReachable = false;
+    _serverCheckTs   = Date.now();
+    showOfflineLoginNotice(formId);
+    return attemptOfflineLogin(credentials);
+  }
+}
+
 function offlineCache(key, data) {
   try {
     const store = JSON.parse(localStorage.getItem(OFFLINE_CACHE_KEY) || '{}');
@@ -1662,8 +1691,7 @@ async function handleAdminLogin() {
       data = await attemptOfflineLogin(credentials);
     } else {
       removeOfflineLoginNotice();
-      data = await initiate2FA(credentials);
-      await saveOfflineProfile(credentials, data);
+      data = await loginOnlineWithOfflineFallback(credentials, 'admin-login-form');
     }
 
     token = data.token;
@@ -1735,14 +1763,12 @@ async function handleLecturerLogin() {
       showOfflineLoginNotice('lecturer-login-form');
       data = await attemptOfflineLogin(credentials);
     } else {
-      // ── ONLINE PATH ──
+      // ── ONLINE PATH (falls back to offline if the network drops mid-login) ──
       removeOfflineLoginNotice();
-      data = await initiate2FA(credentials);
+      data = await loginOnlineWithOfflineFallback(credentials, 'lecturer-login-form');
       if (data.user && !data.user.isApproved) {
         return showPendingApproval('Your account is pending admin approval. Please wait for your institution admin to approve your account.');
       }
-      // Cache profile for future offline logins
-      await saveOfflineProfile(credentials, data);
     }
 
     token = data.token;
@@ -1983,8 +2009,7 @@ async function handleHodLogin() {
       data = await attemptOfflineLogin(credentials);
     } else {
       removeOfflineLoginNotice();
-      data = await initiate2FA(credentials);
-      await saveOfflineProfile(credentials, data);
+      data = await loginOnlineWithOfflineFallback(credentials, 'hod-login-form');
     }
     token = data.token;
     localStorage.setItem('token', token);
@@ -2059,11 +2084,9 @@ async function handleEmployeeLogin() {
       showOfflineLoginNotice('employee-login-form');
       data = await attemptOfflineLogin(credentials);
     } else {
-      // ── ONLINE PATH ──
+      // ── ONLINE PATH (falls back to offline if the network drops mid-login) ──
       removeOfflineLoginNotice();
-      data = await initiate2FA(credentials);
-      // Cache profile for future offline logins
-      await saveOfflineProfile(credentials, data);
+      data = await loginOnlineWithOfflineFallback(credentials, 'employee-login-form');
     }
 
     token = data.token;
@@ -2132,11 +2155,9 @@ async function handleStudentLogin() {
       showOfflineLoginNotice('student-login-form');
       data = await attemptOfflineLogin(credentials);
     } else {
-      // ── ONLINE PATH ──
+      // ── ONLINE PATH (falls back to offline if the network drops mid-login) ──
       removeOfflineLoginNotice();
-      data = await initiate2FA(credentials);
-      // Cache profile for future offline logins
-      await saveOfflineProfile(credentials, data);
+      data = await loginOnlineWithOfflineFallback(credentials, 'student-login-form');
     }
 
     token = data.token;
@@ -2360,7 +2381,10 @@ async function loadUserData() {
     // instead of wiping the token — the 401→refresh flow revalidates on
     // reconnect, and a genuinely invalid token fails once we're back online.
     try {
-      const offline = !(await isOnlineAsync());
+      // A network-type failure of /api/auth/me is itself proof we're offline —
+      // don't trust the (up to 8 s stale) reachability cache here, or we'd
+      // wipe the token and log the user out on an offline app open.
+      const offline = _isNetworkError(e) || !(await isOnlineAsync());
       const snap = JSON.parse(localStorage.getItem('dikly_last_user') || 'null');
       if (offline && snap && localStorage.getItem('token')) {
         console.log('[OfflineLogin] Offline boot — restoring cached session for', snap.email || snap.name);
