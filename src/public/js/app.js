@@ -2960,6 +2960,28 @@ function buildSidebar() {
     if (logo) logo.after(divider);
   }
 
+  // ── Premium header: tagline + signed-in user card ──
+  if (sidebar) {
+    const logoEl = sidebar.querySelector('.sidebar-logo');
+    if (logoEl && !sidebar.querySelector('.sidebar-tagline')) {
+      const tg = document.createElement('div');
+      tg.className = 'sidebar-tagline';
+      logoEl.after(tg);
+    }
+    const tgl = sidebar.querySelector('.sidebar-tagline');
+    if (tgl) tgl.textContent = currentUser.company?.mode === 'corporate' ? 'Workforce Platform' : 'Smart Campus Platform';
+    if (!document.getElementById('sidebar-user-card')) {
+      const uc = document.createElement('div');
+      uc.id = 'sidebar-user-card';
+      uc.className = 'sidebar-user-card';
+      (sidebar.querySelector('.sidebar-tagline') || logoEl).after(uc);
+    }
+    const ROLE_LABELS = { superadmin: 'Super Administrator', admin: 'Administrator', manager: 'Manager', hod: 'Head of Department', lecturer: 'Lecturer', student: 'Student', employee: 'Employee' };
+    const _ini = (currentUser.name || 'U').trim().split(/\s+/).map(w => w[0]).join('').toUpperCase().slice(0, 2);
+    const ucEl = document.getElementById('sidebar-user-card');
+    if (ucEl) ucEl.innerHTML = `<div class="suc-avatar">${_ini}</div><div class="suc-meta"><div class="suc-name">${esc(currentUser.name || '')}</div><div class="suc-role">${ROLE_LABELS[role] || role}</div></div>`;
+  }
+
   // Roles & Permissions: hide modules the admin has switched off for this role.
   const _mp = currentUser.company?.modulePermissions;
   if (_mp && ['manager', 'employee'].includes(role) && Array.isArray(_mp[role])) {
@@ -2969,11 +2991,44 @@ function buildSidebar() {
     links = links.filter((l, i) => !l.sep || (links[i + 1] && !links[i + 1].sep));
   }
 
+  // ── Structured render: pinned/recent quick access, top items, accordions ──
+  window._navLinkMeta = {};
+  const allNavLinks = [...links];
+  const hasSupportSec = allNavLinks.some(l => l.sep && /SUPPORT/i.test(l.label || ''));
+  if (!hasSupportSec) allNavLinks.push({ sep: true, label: 'GENERAL' });
+  allNavLinks.push(...universalLinks);
+
+  const navTop = [];
+  const navSections = [];
+  let _sec = null;
+  for (const l of allNavLinks) {
+    if (l.sep) { _sec = { label: l.label || 'MORE', items: [] }; navSections.push(_sec); continue; }
+    window._navLinkMeta[l.id] = { label: l.label, icon: l.icon };
+    if (_sec) _sec.items.push(l); else navTop.push(l);
+  }
+
+  const _pins = _navGetPins();
+  const navItemHtml = (l, mini) =>
+    `<a onclick="navigateTo('${l.id}')" ${mini ? '' : `id="nav-${l.id}"`} data-view="${l.id}" data-tooltip="${l.label}" class="${mini ? 'nav-mini' : ''}${currentView === l.id ? ' active' : ''}">` +
+    (l.id === 'announcements' ? '<div class="ann-line"></div>' : '') +
+    `${l.icon}<span>${l.label}</span><span class="nav-badge" data-badge></span>` +
+    (mini ? '' : `<span class="nav-pin ${_pins.includes(l.id) ? 'pinned' : ''}" title="${_pins.includes(l.id) ? 'Unpin' : 'Pin to top'}" onclick="event.stopPropagation();_navTogglePin('${l.id}')">${_pins.includes(l.id) ? '★' : '☆'}</span>`) +
+    (l.id === 'announcements' ? '<span id="ann-badge" style="display:none;position:absolute;top:4px;right:4px;background:#ef4444;color:#fff;font-size:9px;font-weight:700;padding:1px 5px;border-radius:20px;min-width:14px;text-align:center;line-height:14px;"></span>' : '') +
+    '</a>';
+  window._navItemHtml = navItemHtml;
+
+  const openLabel = _navAccOpenLabel(navSections);
   nav.innerHTML =
-    [...links, ...universalLinks].map(l => {
-      if (l.sep) return l.label ? `<div class="nav-section-label">${l.label}</div>` : `<div class="nav-sep"></div>`;
-      return `<a onclick="navigateTo('${l.id}')" id="nav-${l.id}" data-tooltip="${l.label}">${l.id==='announcements'?'<div class="ann-line"></div>':''} ${l.icon}<span>${l.label}</span>${l.id==='announcements'?'<span id="ann-badge" style="display:none;position:absolute;top:4px;right:4px;background:#ef4444;color:#fff;font-size:9px;font-weight:700;padding:1px 5px;border-radius:20px;min-width:14px;text-align:center;line-height:14px;"></span>':''}</a>`;
-    }).join('');
+    '<div id="nav-quick"></div>' +
+    navTop.map(l => navItemHtml(l)).join('') +
+    navSections.map(sec => `
+      <div class="nav-acc ${sec.label === openLabel ? 'open' : ''}" data-acc="${sec.label}">
+        <button class="nav-acc-hd" onclick="_navAccToggle('${sec.label}')"><span>${sec.label}</span><svg class="nav-acc-ch" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg></button>
+        <div class="nav-acc-body"><div class="nav-acc-inner">${sec.items.map(l => navItemHtml(l)).join('')}</div></div>
+      </div>`).join('');
+
+  _navRenderQuick();
+  setTimeout(() => { try { _updateNavBadges(); } catch (_) {} }, 400);
 
   // Institution code chip — visible to all roles that belong to an institution
   const instCode = currentUser.company?.institutionCode || currentUser.company?.code;
@@ -2985,15 +3040,31 @@ function buildSidebar() {
       if (sidebar) sidebar.appendChild(chip);
     }
     chip.innerHTML = `
-      <div style="padding:10px 14px 12px;border-top:1px solid rgba(255,255,255,.08);">
-        <div style="font-size:9.5px;font-weight:700;letter-spacing:.8px;text-transform:uppercase;opacity:.5;margin-bottom:4px">Institution Code</div>
+      <div class="sidebar-inst-card">
+        <div style="display:flex;align-items:center;gap:7px;margin-bottom:6px">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="opacity:.55;flex-shrink:0"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg>
+          <span style="font-size:9px;font-weight:800;letter-spacing:1px;text-transform:uppercase;opacity:.55">Institution</span>
+        </div>
         <div style="display:flex;align-items:center;gap:6px;">
-          <span id="sidebar-inst-code-val" style="font-family:monospace;font-size:13px;font-weight:700;letter-spacing:.5px;background:rgba(255,255,255,.08);padding:4px 9px;border-radius:7px;flex:1;text-align:center;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${instCode}</span>
+          <span id="sidebar-inst-code-val" style="font-family:monospace;font-size:13px;font-weight:700;letter-spacing:.5px;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${instCode}</span>
           <button onclick="(function(){navigator.clipboard.writeText('${instCode}');const b=document.getElementById('sidebar-copy-btn');if(b){b.textContent='✓';setTimeout(()=>{b.textContent='Copy'},1500);}})();" id="sidebar-copy-btn"
-                  style="font-size:10px;font-weight:700;padding:4px 8px;border-radius:6px;border:1px solid rgba(255,255,255,.18);background:rgba(255,255,255,.1);cursor:pointer;color:inherit;flex-shrink:0;transition:background .15s"
-                  onmouseover="this.style.background='rgba(255,255,255,.2)'" onmouseout="this.style.background='rgba(255,255,255,.1)'">Copy</button>
+                  class="sidebar-copy-btn">Copy</button>
         </div>
       </div>`;
+  }
+
+  // ── User utilities: switch institution / settings / log out ──
+  if (sidebar) {
+    let utils = sidebar.querySelector('.sidebar-utils');
+    if (!utils) {
+      utils = document.createElement('div');
+      utils.className = 'sidebar-utils';
+      sidebar.appendChild(utils);
+    }
+    utils.innerHTML = `
+      <a onclick="handleLogout()"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="17 1 21 5 17 9"/><path d="M3 11V9a4 4 0 0 1 4-4h14"/><polyline points="7 23 3 19 7 15"/><path d="M21 13v2a4 4 0 0 1-4 4H3"/></svg>Switch Institution</a>
+      <a onclick="navigateTo('profile')"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>Settings</a>
+      <a onclick="handleLogout()" class="su-danger"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>Log Out</a>`;
   }
   // For students not yet marked as class rep, silently refresh profile once.
   // Admin may have assigned rep status after the student last logged in.
@@ -3012,14 +3083,36 @@ function _sidebarSearch(q) {
   const nav = document.getElementById('sidebar-nav');
   if (!nav) return;
   const term = q.trim().toLowerCase();
-  nav.querySelectorAll('a, .nav-section-label, .nav-sep').forEach(el => {
-    if (!term) { el.style.display = ''; return; }
-    if (el.tagName === 'A') {
-      const label = (el.querySelector('span') || el).textContent.toLowerCase();
-      el.style.display = label.includes(term) ? '' : 'none';
-    } else {
-      el.style.display = 'none';
+
+  // "Search everywhere" action row (opens the universal Search page)
+  let allRow = document.getElementById('nav-search-all');
+  const hasSearchPage = !!document.getElementById('nav-search');
+  if (term && hasSearchPage) {
+    if (!allRow) {
+      allRow = document.createElement('div');
+      allRow.id = 'nav-search-all';
+      allRow.onclick = () => { document.getElementById('sidebar-search').value = ''; _sidebarSearch(''); navigateTo('search'); };
+      nav.prepend(allRow);
     }
+    allRow.innerHTML = `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg> Search everywhere for “${esc(q.trim())}”`;
+  } else if (allRow) {
+    allRow.remove();
+  }
+
+  nav.classList.toggle('nav-searching', !!term);
+  const quick = document.getElementById('nav-quick');
+  if (quick) quick.style.display = term ? 'none' : '';
+
+  nav.querySelectorAll('a[data-view]').forEach(el => {
+    if (!term) { el.style.display = ''; return; }
+    const label = (el.querySelector('span') || el).textContent.toLowerCase();
+    el.style.display = label.includes(term) ? '' : 'none';
+  });
+  // Hide accordion sections with no visible matches
+  nav.querySelectorAll('.nav-acc').forEach(acc => {
+    if (!term) { acc.style.display = ''; return; }
+    const any = [...acc.querySelectorAll('a[data-view]')].some(a => a.style.display !== 'none');
+    acc.style.display = any ? '' : 'none';
   });
 }
 
@@ -24686,3 +24779,128 @@ window._appLoaded = true;
 // Execute any pending calls from before app.js loaded
 if (window._pendingMode)   { selectMode(window._pendingMode);     window._pendingMode = null; }
 if (window._pendingPortal) { selectPortal(window._pendingPortal); window._pendingPortal = null; }
+
+// ═══════════════════════════════════════════════════════════════════
+//  SIDEBAR UX: pins, recents, accordions, badges, active-state sync
+//  (appended last so the navigateTo wrapper sits outside every patch)
+// ═══════════════════════════════════════════════════════════════════
+
+function _navUid() { return (window.currentUser && (currentUser._id || currentUser.id)) || 'anon'; }
+function _navGetPins()   { try { return JSON.parse(localStorage.getItem('dikly_pins::' + _navUid()) || '[]'); } catch (_) { return []; } }
+function _navGetRecent() { try { return JSON.parse(localStorage.getItem('dikly_recent::' + _navUid()) || '[]'); } catch (_) { return []; } }
+
+window._navTogglePin = function(id) {
+  let pins = _navGetPins();
+  pins = pins.includes(id) ? pins.filter(p => p !== id) : [...pins, id].slice(-6);
+  localStorage.setItem('dikly_pins::' + _navUid(), JSON.stringify(pins));
+  buildSidebar();
+};
+
+function _navAccOpenLabel(sections) {
+  const saved = localStorage.getItem('dikly_acc::' + _navUid());
+  if (saved && sections.some(x => x.label === saved)) return saved;
+  const holding = sections.find(x => x.items.some(i => i.id === (window.currentView || 'dashboard')));
+  return holding ? holding.label : (sections[0] && sections[0].label);
+}
+
+window._navAccToggle = function(label) {
+  const nav = document.getElementById('sidebar-nav');
+  if (!nav) return;
+  const acc = [...nav.querySelectorAll('.nav-acc')].find(x => x.dataset.acc === label);
+  if (!acc) return;
+  const wasOpen = acc.classList.contains('open');
+  nav.querySelectorAll('.nav-acc.open').forEach(x => x.classList.remove('open'));
+  if (!wasOpen) {
+    acc.classList.add('open');
+    localStorage.setItem('dikly_acc::' + _navUid(), label);
+  } else {
+    localStorage.removeItem('dikly_acc::' + _navUid());
+  }
+};
+
+// Expand the accordion that contains the active view (without collapsing on
+// plain re-renders when the view is top-level or pinned).
+function _navExpandFor(view) {
+  const nav = document.getElementById('sidebar-nav');
+  const el = document.getElementById('nav-' + view);
+  const acc = el && el.closest('.nav-acc');
+  if (!nav || !acc || acc.classList.contains('open')) return;
+  nav.querySelectorAll('.nav-acc.open').forEach(x => x.classList.remove('open'));
+  acc.classList.add('open');
+  localStorage.setItem('dikly_acc::' + _navUid(), acc.dataset.acc || '');
+}
+
+// Pinned + Recent quick-access block at the very top of the nav
+function _navRenderQuick() {
+  const box = document.getElementById('nav-quick');
+  if (!box || !window._navLinkMeta || !window._navItemHtml) return;
+  const meta = window._navLinkMeta;
+  const pins = _navGetPins().filter(id => meta[id]);
+  const recent = _navGetRecent().filter(id => meta[id] && !pins.includes(id)).slice(0, 3);
+  let html = '';
+  if (pins.length) {
+    html += '<div class="nav-q-label">★ Pinned</div>' +
+      pins.map(id => window._navItemHtml({ id, label: meta[id].label, icon: meta[id].icon }, true)).join('');
+  }
+  if (recent.length) {
+    html += '<div class="nav-q-label">Recent</div>' +
+      recent.map(id => window._navItemHtml({ id, label: meta[id].label, icon: meta[id].icon }, true)).join('');
+  }
+  box.innerHTML = html;
+  // keep active state consistent on the fresh copies
+  box.querySelectorAll('a[data-view]').forEach(a => a.classList.toggle('active', a.dataset.view === window.currentView));
+}
+
+// ── Notification badges ────────────────────────────────────────────
+window._setNavBadge = function(view, count) {
+  document.querySelectorAll(`.sidebar-nav a[data-view="${view}"] [data-badge]`).forEach(b => {
+    if (count > 0) { b.textContent = count > 99 ? '99+' : String(count); b.classList.add('on'); }
+    else b.classList.remove('on');
+  });
+};
+
+async function _updateNavBadges() {
+  // Messages: unread conversation total
+  try {
+    const d = await api('/api/messages/conversations');
+    const convs = d.conversations || d || [];
+    const unread = Array.isArray(convs) ? convs.reduce((n, c) => n + (c.unread || c.unreadCount || 0), 0) : 0;
+    _setNavBadge('messages', unread);
+  } catch (_) {}
+  // Approvals: corporate admins/managers — reuse the executive snapshot (cached 2 min)
+  try {
+    if (currentUser?.company?.mode === 'corporate' && ['admin', 'superadmin', 'manager'].includes(currentUser.role)) {
+      const cacheKey = 'dikly_approvals_badge';
+      const cached = JSON.parse(sessionStorage.getItem(cacheKey) || 'null');
+      let count;
+      if (cached && Date.now() - cached.at < 120000) count = cached.count;
+      else {
+        const d = await api('/api/executive/dashboard');
+        count = d.kpis?.pendingApprovals || 0;
+        sessionStorage.setItem(cacheKey, JSON.stringify({ count, at: Date.now() }));
+      }
+      _setNavBadge('approvals', count);
+    }
+  } catch (_) {}
+}
+
+// ── Wrap the FINAL navigateTo: recents, active sync on copies, auto-expand ──
+(function () {
+  const _origNavigateTo = navigateTo;
+  navigateTo = function (view) {
+    const r = _origNavigateTo.apply(this, arguments);
+    try {
+      document.querySelectorAll('.sidebar-nav a[data-view]').forEach(a =>
+        a.classList.toggle('active', a.dataset.view === view));
+      _navExpandFor(view);
+      if (!['dashboard', 'emp-home'].includes(view)) {
+        let rec = _navGetRecent().filter(x => x !== view);
+        rec.unshift(view);
+        localStorage.setItem('dikly_recent::' + _navUid(), JSON.stringify(rec.slice(0, 5)));
+      }
+      _navRenderQuick();
+    } catch (_) {}
+    return r;
+  };
+})();
+

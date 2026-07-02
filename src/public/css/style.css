@@ -6504,3 +6504,121 @@ table tr:hover td { background: #f8fafc !important; }
 .sidebar-inst-footer button:hover {
   background: rgba(255,255,255,.2) !important;
 }
+
+/* ═══════════════════════════════════════════════════════════════════
+   SIDEBAR UX REFRESH — accordions, quick access, modern active state
+   ═══════════════════════════════════════════════════════════════════ */
+
+/* Items: rounded, soft-blue active, no per-row borders */
+.sidebar-nav a {
+  border-bottom: none;
+  width: calc(100% - 16px);
+  height: 37px;
+  margin: 1px 8px;
+  padding: 0 10px;
+  border-radius: 12px;
+  transition: background .18s ease, color .18s ease, transform .12s ease, box-shadow .18s ease;
+}
+.sidebar-nav a::after { display: none; }
+.sidebar-nav a svg { width: 19px !important; height: 19px !important; }
+.sidebar-nav a:hover { background: rgba(37, 99, 235, .07); color: #374151; }
+.sidebar-nav a:active { transform: scale(.97); }
+.sidebar-nav a.active {
+  background: rgba(37, 99, 235, .12);
+  color: var(--primary);
+  box-shadow: 0 2px 10px rgba(37, 99, 235, .16);
+}
+.sidebar-nav a.active span { font-weight: 800; }
+.sidebar-nav a.active svg { color: var(--primary); }
+[data-theme="dark"] .sidebar-nav a:hover { color: #e5e7eb; background: rgba(79, 128, 240, .14); }
+[data-theme="dark"] .sidebar-nav a.active { background: rgba(79, 128, 240, .20); color: var(--primary); box-shadow: 0 2px 10px rgba(79, 128, 240, .22); }
+.sidebar-nav a.nav-mini { height: 32px; }
+.sidebar-nav a.nav-mini svg { width: 16px; height: 16px; }
+
+/* Accordion sections */
+.nav-acc { margin: 1px 0; }
+.nav-acc-hd {
+  display: flex; align-items: center; justify-content: space-between;
+  width: calc(100% - 16px); margin: 5px 8px 0; padding: 7px 10px;
+  background: none; border: none; cursor: pointer; font-family: inherit;
+  font-size: 9.5px; font-weight: 800; letter-spacing: 1.1px; text-transform: uppercase;
+  color: #9ca3af; border-radius: 8px; transition: color .15s, background .15s;
+}
+.nav-acc-hd:hover { color: #4b5563; background: rgba(37, 99, 235, .05); }
+[data-theme="dark"] .nav-acc-hd:hover { color: #d1d5db; }
+.nav-acc-ch { transition: transform .2s ease; opacity: .55; flex-shrink: 0; }
+.nav-acc.open .nav-acc-ch { transform: rotate(180deg); }
+.nav-acc-body { display: grid; grid-template-rows: 0fr; transition: grid-template-rows .22s ease; }
+.nav-acc.open .nav-acc-body { grid-template-rows: 1fr; }
+.nav-acc-inner { overflow: hidden; min-height: 0; display: flex; flex-direction: column; }
+.nav-acc + .nav-acc .nav-acc-hd { border-top: 1px solid rgba(148, 163, 184, .14); border-radius: 0 0 8px 8px; padding-top: 9px; margin-top: 4px; }
+.nav-searching .nav-acc-body { grid-template-rows: 1fr !important; }
+.nav-searching .nav-acc-ch { transform: rotate(180deg); }
+
+/* Badges + pin stars */
+.sidebar-nav a .nav-badge {
+  margin-left: auto; background: #ef4444; color: #fff;
+  font-size: 9px !important; font-weight: 800; min-width: 16px; height: 16px;
+  padding: 0 5px; border-radius: 9px;
+  align-items: center; justify-content: center; flex-shrink: 0;
+  /* legacy sidebar rules force spans visible with !important — win with a class */
+  display: none !important;
+}
+.sidebar-nav a .nav-badge.on { display: inline-flex !important; }
+.sidebar-nav a .nav-pin { margin-left: 4px; font-size: 12px; line-height: 1; opacity: 0; transition: opacity .15s, transform .15s; color: #94a3b8; flex-shrink: 0; }
+.sidebar-nav a:hover .nav-pin { opacity: .85; }
+.sidebar-nav a .nav-pin:hover { transform: scale(1.25); }
+.sidebar-nav a .nav-pin.pinned { opacity: 1; color: #f59e0b; }
+.nav-q-label { font-size: 9px; font-weight: 800; letter-spacing: 1.1px; text-transform: uppercase; color: #b6bcc7; margin: 8px 18px 2px; }
+
+/* Header: tagline + signed-in user card */
+.sidebar-tagline { font-size: 9.5px; color: #94a3b8; font-weight: 600; letter-spacing: .4px; margin: -6px 14px 6px 15px; }
+.sidebar-user-card {
+  display: flex; align-items: center; gap: 8px;
+  margin: 0 10px 8px; padding: 7px 9px; border-radius: 12px;
+  background: rgba(148, 163, 184, .10);
+}
+.suc-avatar {
+  width: 28px; height: 28px; border-radius: 50%; flex-shrink: 0;
+  background: linear-gradient(135deg, var(--primary), #7c3aed);
+  color: #fff; font-size: 11px; font-weight: 800;
+  display: flex; align-items: center; justify-content: center;
+}
+.suc-meta { min-width: 0; }
+.suc-name { font-size: 11.5px; font-weight: 700; color: #374151; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.suc-role { font-size: 9.5px; color: #94a3b8; font-weight: 600; }
+[data-theme="dark"] .suc-name { color: #e5e7eb; }
+
+/* Institution info card */
+.sidebar-inst-card {
+  margin: 6px 10px 4px; padding: 9px 11px; border-radius: 12px;
+  background: rgba(148, 163, 184, .10);
+  border: 1px solid rgba(148, 163, 184, .16);
+}
+.sidebar-copy-btn {
+  font-size: 10px; font-weight: 700; padding: 4px 9px; border-radius: 7px;
+  border: 1px solid rgba(148, 163, 184, .3); background: rgba(148, 163, 184, .12);
+  cursor: pointer; color: inherit; flex-shrink: 0; transition: background .15s, transform .12s;
+}
+.sidebar-copy-btn:hover { background: rgba(37, 99, 235, .14); }
+.sidebar-copy-btn:active { transform: scale(.94); }
+
+/* Bottom utilities */
+.sidebar-utils { margin: 2px 10px 10px; padding-top: 6px; border-top: 1px solid rgba(148, 163, 184, .18); display: flex; flex-direction: column; flex-shrink: 0; }
+.sidebar-utils a {
+  display: flex; align-items: center; gap: 8px; padding: 6px 9px; border-radius: 9px;
+  font-size: 11.5px; font-weight: 600; color: #6b7280; cursor: pointer;
+  transition: background .15s, color .15s;
+}
+.sidebar-utils a:hover { background: rgba(37, 99, 235, .07); color: #374151; }
+.sidebar-utils a.su-danger:hover { background: rgba(239, 68, 68, .10); color: #dc2626; }
+[data-theme="dark"] .sidebar-utils a:hover { color: #e5e7eb; }
+
+/* Search-everywhere action row */
+#nav-search-all {
+  display: flex; align-items: center; gap: 8px; margin: 4px 8px; padding: 8px 10px;
+  border-radius: 10px; background: rgba(37, 99, 235, .09); color: var(--primary);
+  font-size: 11.5px; font-weight: 700; cursor: pointer; transition: background .15s;
+}
+#nav-search-all:hover { background: rgba(37, 99, 235, .16); }
+
