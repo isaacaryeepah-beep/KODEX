@@ -6821,3 +6821,52 @@ table tr:hover td { background: #f8fafc !important; }
   font-size: 12px; font-weight: 700; padding: 8px 0; border-radius: 9px; cursor: pointer;
 }
 .fap-open-full:hover { border-color: rgba(124,58,237,.4); }
+
+/* ══════════════════════════════════════════════════════════════════════
+   EXECUTIVE DASHBOARD — responsive layout (exv-*)
+   Class-based grids so the global mobile inline-grid collapse
+   ([style*="grid-template-columns"] → 1fr) no longer wrecks this page.
+══════════════════════════════════════════════════════════════════════ */
+
+.exv-hero-grid {
+  display: grid; grid-template-columns: minmax(220px, 1fr) 2fr;
+  gap: 1rem; margin-bottom: 1rem; align-items: stretch;
+}
+.exv-health { padding: 1.2rem; display: flex; flex-direction: column; justify-content: center; }
+.exv-score { font-size: 52px; font-weight: 700; line-height: 1.1; color: var(--text); margin: .3rem 0 .5rem; font-variant-numeric: tabular-nums; }
+.exv-score span { font-size: 1rem; color: var(--text-muted); font-weight: 600; }
+
+.exv-kpis { display: grid; grid-template-columns: repeat(4, 1fr); gap: .7rem; }
+.exv-tile { padding: 1rem 1.1rem; }
+.exv-tile-label { font-size: .72rem; color: var(--text-light); font-weight: 600; text-transform: uppercase; letter-spacing: .4px; }
+.exv-tile-value { font-size: 1.65rem; font-weight: 700; color: var(--text); margin-top: .2rem; font-variant-numeric: tabular-nums; }
+.exv-tile-sub { font-size: .72rem; color: var(--text-muted); margin-top: .15rem; }
+
+.exv-charts { display: grid; grid-template-columns: repeat(2, 1fr); gap: 1rem; }
+
+.exv-bar-row { display: grid; grid-template-columns: 110px 1fr 42px; align-items: center; gap: .55rem; }
+.exv-bar-label { font-size: .76rem; color: var(--text-light); }
+.exv-bar-value { font-size: .76rem; font-weight: 700; color: var(--text); font-variant-numeric: tabular-nums; text-align: right; }
+
+@media (max-width: 1100px) {
+  .exv-kpis { grid-template-columns: repeat(2, 1fr); }
+}
+@media (max-width: 900px) {
+  .exv-hero-grid { grid-template-columns: 1fr !important; }
+  .exv-charts { grid-template-columns: 1fr !important; }
+}
+/* Phones: compact 2-up tiles instead of a wall of giant cards */
+@media (max-width: 640px) {
+  .exv-kpis { grid-template-columns: repeat(2, 1fr) !important; gap: .55rem; }
+  .exv-tile { padding: .75rem .85rem; border-radius: 12px; }
+  .exv-tile-label { font-size: .62rem; letter-spacing: .3px; }
+  .exv-tile-value { font-size: 1.28rem; }
+  .exv-tile-sub { font-size: .66rem; }
+  .exv-health { padding: .95rem 1rem; }
+  .exv-score { font-size: 38px; }
+  .exv-hero-grid { gap: .65rem; margin-bottom: .65rem; }
+  .exv-charts { gap: .65rem; }
+  .exv-bar-row { grid-template-columns: 86px 1fr 40px !important; gap: .45rem; }
+  .exv-bar-label { font-size: .7rem; }
+  .exv-bar-value { font-size: .72rem; }
+}

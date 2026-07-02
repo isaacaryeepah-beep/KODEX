@@ -4,7 +4,7 @@
 //  API requests are NOT cached here (handled in app.js with localStorage)
 // ════════════════════════════════════════════════════════════════════
 
-const CACHE_NAME = 'dikly-v10';
+const CACHE_NAME = 'dikly-v11';
 
 // App shell files to cache on install
 const SHELL_FILES = [
