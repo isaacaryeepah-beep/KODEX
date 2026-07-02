@@ -78,12 +78,30 @@
   // ── Public API ─────────────────────────────────────────────────────────────
   window.faqPanelToggle = function () { _open ? faqPanelClose() : faqPanelOpen(); };
 
+  // Floating Dikly AI button: opens the side panel on desktop; on small
+  // screens (panel hidden by CSS) it goes to the full Dikly AI page.
+  window.daiFabClick = function () {
+    if (window.matchMedia('(max-width: 1120px)').matches) {
+      if (typeof navigateTo === 'function') navigateTo('ai-reports');
+      return;
+    }
+    faqPanelToggle();
+  };
+
+  function _syncFab() {
+    const fab = document.getElementById('dai-fab');
+    if (!fab) return;
+    const dashVisible = !document.getElementById('dashboard-page')?.classList.contains('hidden');
+    fab.classList.toggle('dai-hidden', !dashVisible || _open);
+  }
+
   window.faqPanelOpen = function () {
     const panel = document.getElementById('faq-assistant-panel');
     if (!panel) return;
     panel.classList.add('fap-open');
     _open = true;
     _syncToggleBtn(true);
+    _syncFab();
     localStorage.setItem('dikly_fap', '1');
     const currentMode = _getMode();
     if (!_initialized || currentMode !== _initializedMode) _init();
@@ -95,6 +113,7 @@
     panel.classList.remove('fap-open');
     _open = false;
     _syncToggleBtn(false);
+    _syncFab();
     localStorage.setItem('dikly_fap', '0');
   };
 
@@ -163,6 +182,9 @@
       QUICK_ANSWERS = QUICK_ANSWERS_ACADEMIC;
     }
 
+    const sub = document.getElementById('fap-subtitle');
+    if (sub) sub.textContent = mode === 'corporate' ? 'Your smart workforce copilot' : 'Your smart campus copilot';
+
     _renderChips(mode);
     _renderFAQ();
     _renderEmptyState();
@@ -222,8 +244,8 @@
     chat.innerHTML = `
       <div class="fap-empty-chat">
         <svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="color:var(--border,#e5e7eb)"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
-        <div style="font-weight:600;font-size:12px;color:var(--text-light,#6b7280)">Ask anything about DIKLY</div>
-        <div style="font-size:11px;color:var(--text-muted,#9ca3af);line-height:1.5">Use the quick chips above<br>or type your own question</div>
+        <div style="font-weight:600;font-size:12px;color:var(--text-light,#6b7280)">Ask Dikly AI anything</div>
+        <div style="font-size:11px;color:var(--text-muted,#9ca3af);line-height:1.5">Quick answers here — or open the full<br>Dikly AI for reports &amp; deep analysis</div>
       </div>`;
   }
 
@@ -260,6 +282,7 @@
         if (shouldOpen) faqPanelOpen();
         else _syncToggleBtn(false);
       }
+      _syncFab();
     };
 
     check();

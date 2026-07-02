@@ -4424,7 +4424,7 @@ async function renderHodReports() {
         if (!window.Chart) {
           await new Promise((res, rej) => {
             const s = document.createElement('script');
-            s.src = 'https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js';
+            s.src = '/js/vendor/chart.umd.min.js';
             s.onload = res; s.onerror = rej; document.head.appendChild(s);
           });
         }
@@ -6946,186 +6946,248 @@ async function renderStudentDashboard(content) {
 }
 
 async function renderAdminDashboard(content) {
-  let _ad = !isOnline() ? offlineRead('admin_dashboard') : null;
+  let _ad = !isOnline() ? offlineRead('admin_dashboard_v2') : null;
   if (!isOnline() && !_ad) { content.innerHTML = `<div style="text-align:center;padding:60px 20px"><div style="font-size:48px;margin-bottom:12px">📡</div><div style="font-size:18px;font-weight:700">You're Offline</div><p style="color:var(--text-muted);margin-top:8px">Connect once while online to cache this page.</p></div>`; return; }
-  const [sessionsData, usersData, pendingData, announcementsData] = _ad
-    ? [_ad.sessionsData, _ad.usersData, _ad.pendingData, _ad.announcementsData]
+
+  const mode       = currentUser.company?.mode || currentUser.mode || 'corporate';
+  const isAcademic = mode === 'academic';
+
+  const [sessionsData, usersData, pendingData, announcementsData, coursesData] = _ad
+    ? [_ad.sessionsData, _ad.usersData, _ad.pendingData, _ad.announcementsData, _ad.coursesData || { courses: [] }]
     : await Promise.all([
-    api('/api/attendance-sessions?limit=5').catch(() => ({ sessions: [], pagination: { total: 0 } })),
+    api('/api/attendance-sessions?limit=100').catch(() => ({ sessions: [], pagination: { total: 0 } })),
     api('/api/users').catch(() => ({ users: [] })),
     api('/api/approvals/pending').catch(() => ({ pending: [] })),
     api('/api/announcements').catch(() => ({ announcements: [] })),
+    isAcademic ? api('/api/courses').catch(() => ({ courses: [] })) : Promise.resolve({ courses: [] }),
   ]);
-  if (!_ad) offlineCache('admin_dashboard', { sessionsData, usersData, pendingData, announcementsData });
+  if (!_ad) offlineCache('admin_dashboard_v2', { sessionsData, usersData, pendingData, announcementsData, coursesData });
 
-  const activeSessions = sessionsData.sessions.filter(s => ['active', 'live', 'paused', 'locked'].includes(s.status)).length;
-  // Auto-refresh every 30s if there are active sessions
+  const LIVE = ['active', 'live', 'paused', 'locked'];
+  const allSessions   = sessionsData.sessions || [];
+  const liveSessions  = allSessions.filter(s => LIVE.includes(s.status));
+  const activeSessions = liveSessions.length;
   if (activeSessions > 0) {
     clearTimeout(window._dashRefreshTimer);
     window._dashRefreshTimer = setTimeout(() => { if (currentView === 'dashboard') renderDashboard(); }, 30000);
   }
-  const totalUsers     = usersData.users.length;
-  const pendingCount   = pendingData.pending.length;
+
+  const users          = usersData.users || [];
+  const totalUsers     = users.length;
+  const pending        = pendingData.pending || [];
+  const pendingCount   = pending.length;
   const announcements  = announcementsData.announcements || [];
   const instCode       = currentUser.company?.institutionCode || currentUser.company?.code || 'N/A';
-  const mode           = currentUser.company?.mode || currentUser.mode || (document.getElementById('dashboard-page')?.dataset?.mode) || 'corporate';
-  const isAcademic     = mode === 'academic';
   const firstName      = currentUser.name.split(' ')[0];
-
   const hour = new Date().getHours();
   const greeting = hour < 12 ? 'Good morning' : hour < 17 ? 'Good afternoon' : 'Good evening';
 
-  const sessionRows = sessionsData.sessions.length
-    ? sessionsData.sessions.map(s => {
-        const isLive = ['active', 'live', 'paused', 'locked'].includes(s.status);
+  // ── Attendance math ────────────────────────────────────────────────────────
+  const enrollMap = {};
+  (coursesData.courses || []).forEach(c => { enrollMap[c._id] = (c.enrolledStudents || []).length; });
+  const employeeCount = users.filter(u => ['employee', 'manager'].includes(u.role) && u.isActive !== false).length;
+
+  const markedOf   = s => s.totalMarked ?? s.attendanceCount ?? (s.records ? s.records.length : 0) ?? 0;
+  const expectedOf = s => {
+    if (isAcademic) {
+      const cid = s.course?._id || s.course;
+      return cid && enrollMap[cid] ? enrollMap[cid] : null;
+    }
+    return employeeCount > 0 ? employeeCount : null;
+  };
+  const rateOf = list => {
+    let m = 0, e = 0;
+    list.forEach(s => { const ex = expectedOf(s); if (ex) { m += Math.min(markedOf(s), ex); e += ex; } });
+    return e > 0 ? Math.round((m / e) * 100) : null;
+  };
+
+  const now = Date.now();
+  const dayMs = 86400000;
+  const startOfToday = new Date(); startOfToday.setHours(0, 0, 0, 0);
+  const in14   = allSessions.filter(s => s.startedAt && (now - new Date(s.startedAt)) < 14 * dayMs);
+  const week1  = in14.filter(s => (now - new Date(s.startedAt)) < 7 * dayMs);           // this week
+  const week2  = in14.filter(s => (now - new Date(s.startedAt)) >= 7 * dayMs);          // previous week
+  const todaySessions = allSessions.filter(s => s.startedAt && new Date(s.startedAt) >= startOfToday);
+
+  const rate14 = rateOf(in14);
+  const rateW1 = rateOf(week1);
+  const rateW2 = rateOf(week2);
+  const delta  = (rateW1 != null && rateW2 != null) ? rateW1 - rateW2 : null;
+
+  // Weakest course over 14 days (academic, ≥2 sessions with a known roster)
+  let lowCourse = null;
+  if (isAcademic) {
+    const byCourse = {};
+    in14.forEach(s => {
+      const c = s.course; const cid = c?._id || c;
+      if (!cid || !enrollMap[cid]) return;
+      if (!byCourse[cid]) byCourse[cid] = { label: c?.code || c?.title || 'Course', n: 0, m: 0, e: 0 };
+      byCourse[cid].n++; byCourse[cid].m += Math.min(markedOf(s), enrollMap[cid]); byCourse[cid].e += enrollMap[cid];
+    });
+    Object.values(byCourse).filter(c => c.n >= 2 && c.e > 0).forEach(c => {
+      c.rate = Math.round((c.m / c.e) * 100);
+      if (!lowCourse || c.rate < lowCourse.rate) lowCourse = c;
+    });
+  }
+
+  const agingApprovals = pending.filter(p => p.createdAt && (now - new Date(p.createdAt)) > 2 * dayMs).length;
+
+  // ── Dikly AI insights (instant heuristics; deep-dive lives in Dikly AI) ───
+  const insights = [];
+  if (activeSessions > 0) {
+    const liveMarked = liveSessions.reduce((s, x) => s + markedOf(x), 0);
+    insights.push({ tone: 'info', text: `<strong>${activeSessions} session${activeSessions > 1 ? 's' : ''} live right now</strong> — ${liveMarked} ${isAcademic ? (liveMarked === 1 ? 'student' : 'students') : (liveMarked === 1 ? 'person' : 'people')} marked so far.` });
+  }
+  if (delta != null && Math.abs(delta) >= 2) {
+    insights.push(delta > 0
+      ? { tone: 'good', text: `Attendance is <strong>up ${delta}%</strong> this week (${rateW1}% vs ${rateW2}%). Keep it going.` }
+      : { tone: 'bad',  text: `Attendance is <strong>down ${Math.abs(delta)}%</strong> this week (${rateW1}% vs ${rateW2}%). Worth a look.` });
+  } else if (rateW1 != null) {
+    insights.push({ tone: 'good', text: `Attendance is <strong>holding steady at ${rateW1}%</strong> this week.` });
+  }
+  if (lowCourse && lowCourse.rate < 75) {
+    insights.push({ tone: 'warn', text: `<strong>${esc(lowCourse.label)}</strong> has the lowest attendance (<strong>${lowCourse.rate}%</strong>) over the last 2 weeks.` });
+  }
+  if (agingApprovals > 0) {
+    insights.push({ tone: 'warn', text: `<strong>${agingApprovals} approval${agingApprovals > 1 ? 's' : ''}</strong> ha${agingApprovals > 1 ? 've' : 's'} been waiting more than 48 hours.` });
+  }
+  if (!insights.length) {
+    insights.push({ tone: 'good', text: `All clear — no attendance anomalies or overdue items detected. Ask me anything about your ${isAcademic ? 'institution' : 'organisation'}.` });
+  }
+  const headline = insights[0];
+  const chipTone = { good: 'adx-chip-good', warn: 'adx-chip-warn', bad: 'adx-chip-bad', info: 'adx-chip-info' };
+
+  // ── Recent sessions rows ───────────────────────────────────────────────────
+  const fmtPct = (m, e) => e ? Math.min(100, Math.round((m / e) * 100)) : null;
+  const barTone = p => p == null ? '' : p >= 85 ? 'good' : p >= 60 ? 'warn' : 'bad';
+  const sessionRows = allSessions.length
+    ? allSessions.slice(0, 6).map(s => {
+        const isLive = LIVE.includes(s.status);
+        const m = markedOf(s), e = expectedOf(s);
+        const pct = fmtPct(m, e);
+        const courseTag = s.course?.code || s.course?.title || '';
         return `
-          <div class="session-row">
-            <div class="session-indicator ${isLive ? 'live' : 'ended'}"></div>
-            <div class="session-row-info">
-              <div class="session-row-title">${s.title || 'Untitled'}</div>
-              <div class="session-row-sub">${s.createdBy?.name || ''}</div>
+          <div class="adx-session-row">
+            <span class="adx-status-pill ${isLive ? 'live' : 'ended'}">${isLive ? '<span class="adx-live-dot"></span>Live' : 'Ended'}</span>
+            <div class="adx-session-info">
+              <div class="adx-session-title">${esc(s.title || courseTag || 'Untitled session')}</div>
+              <div class="adx-session-sub">${courseTag ? esc(courseTag) + ' · ' : ''}${esc(s.createdBy?.name || '')}${!isLive && s.startedAt ? ' · ' + timeAgo(s.startedAt) : ''}</div>
             </div>
-            <span class="session-row-time ${isLive ? 'live' : 'ended'}">${isLive ? 'Live' : timeAgo(s.startedAt)}</span>
+            <div class="adx-session-att">
+              <div class="adx-att-nums">${m}${e ? ' / ' + e : ''} <span class="adx-att-label">${isAcademic ? 'students' : 'marked'}</span></div>
+              ${pct != null ? `<div class="adx-att-bar"><span class="${barTone(pct)}" style="width:${pct}%"></span></div><div class="adx-att-pct ${barTone(pct)}">${pct}%</div>` : ''}
+            </div>
+            <button class="adx-row-btn ${isLive ? 'primary' : ''}" onclick="navigateTo('sessions')">${isLive ? 'Monitor' : 'View'}</button>
           </div>`;
       }).join('')
-    : `<div class="empty-state"><p>No sessions yet</p></div>`;
+    : `<div class="empty-state" style="padding:28px 0"><p>No sessions yet — start one from Sessions.</p></div>`;
 
   const typeColors = { info: '#3b82f6', warning: '#f59e0b', success: '#10b981', urgent: '#ef4444' };
   const annRows = announcements.length
-    ? announcements.slice(0, 5).map(a => `
+    ? announcements.slice(0, 4).map(a => `
         <div class="ann-row">
           <div class="ann-dot" style="background:${typeColors[a.type] || '#94a3b8'}"></div>
-          <div>
-            <div class="ann-title">${a.title}</div>
-            <div class="ann-meta">${a.audience === 'all' ? 'Everyone' : a.audience.charAt(0).toUpperCase()+a.audience.slice(1)} · ${timeAgo(a.createdAt)}</div>
+          <div style="min-width:0">
+            <div class="ann-title">${esc(a.title)}</div>
+            <div class="ann-meta">${a.audience === 'all' ? 'Everyone' : esc(a.audience.charAt(0).toUpperCase() + a.audience.slice(1))} · ${timeAgo(a.createdAt)}</div>
           </div>
         </div>`).join('')
-    : `<div class="empty-state"><p>No announcements yet</p></div>`;
+    : `<div class="empty-state" style="padding:20px 0"><p>No announcements yet</p></div>`;
+
+  const sparkle = '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l1.9 5.7L19.6 10l-5.7 1.9L12 17.6l-1.9-5.7L4.4 10l5.7-1.9z"/><path d="M19 3l.7 2.1L21.8 6l-2.1.7L19 8.8l-.7-2.1L16.2 6l2.1-.9z"/></svg>';
 
   content.innerHTML = `
-    <div style="display:flex;flex-direction:column;gap:14px">
+    <div class="adx-wrap">
 
       <!-- Welcome row -->
-      <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:12px;flex-wrap:wrap">
+      <div class="adx-top-row">
         <div class="dashboard-welcome">
-          <h2>${greeting}, ${firstName} 👋</h2>
-          <p>Here's what's happening at ${currentUser.company?.name || 'your institution'} today.</p>
+          <h2>${greeting}, ${esc(firstName)}</h2>
+          <p>Here's what's happening at ${esc(currentUser.company?.name || 'your institution')} today.</p>
         </div>
-        <div class="inst-code-card">
-          <div class="inst-code-label">Institution code</div>
-          <div class="inst-code-value">${instCode}</div>
-          <button class="btn btn-secondary btn-sm" onclick="navigator.clipboard.writeText('${instCode}').then(()=>toastSuccess('Code copied!'))">Copy</button>
+        <div class="adx-top-actions">
+          <div class="adx-code-chip" onclick="navigator.clipboard.writeText('${instCode}').then(()=>toastSuccess('Code copied!'))" title="Click to copy">
+            <span class="adx-code-label">Code</span><span class="adx-code-value">${instCode}</span>
+          </div>
+          <button class="adx-ai-btn" onclick="navigateTo('ai-reports')">${sparkle} Ask Dikly AI</button>
         </div>
       </div>
 
-      <!-- Stat cards -->
-      <div class="stats-grid" style="margin:0">
-        <div class="stat-card-v2" onclick="navigateTo('users')">
-          <div class="stat-top-bar" style="background:#3b82f6"></div>
-          <div class="stat-header">
-            <span class="stat-label">Total users</span>
-            <div class="stat-icon" style="background:#eff6ff">
-              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#3b82f6" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/></svg>
-            </div>
-          </div>
-          <div class="stat-value">${totalUsers}</div>
-          <div class="stat-trend">${isAcademic ? 'Students, lecturers & staff' : 'Employees & managers'}</div>
+      <!-- Dikly AI insights band -->
+      <div class="adx-ai-band" onclick="navigateTo('ai-reports')" role="button" tabindex="0">
+        <div class="adx-ai-icon">${sparkle}</div>
+        <div class="adx-ai-body">
+          <div class="adx-ai-eyebrow">Dikly AI · Smart insights</div>
+          <div class="adx-ai-headline">${headline.text}</div>
+          ${insights.length > 1 ? `<div class="adx-ai-chips">${insights.slice(1, 4).map(i => `<span class="adx-chip ${chipTone[i.tone]}">${i.text.replace(/<[^>]+>/g, '')}</span>`).join('')}</div>` : ''}
         </div>
+        <div class="adx-ai-cta">Ask Dikly AI <span style="font-size:15px;line-height:1">→</span></div>
+      </div>
 
-        <div class="stat-card-v2" onclick="navigateTo('sessions')">
-          <div class="stat-top-bar" style="background:var(--success)"></div>
-          <div class="stat-header">
-            <span class="stat-label">Active sessions</span>
-            <div class="stat-icon" style="background:#f0fdf4">
-              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="var(--success)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
-            </div>
-          </div>
-          <div class="stat-value">${activeSessions}</div>
-          <div class="stat-trend" style="color:${activeSessions > 0 ? 'var(--success)' : 'var(--text-muted)'}">
-            ${activeSessions > 0 ? '<span class="stat-live-dot"></span> Live now' : 'No active sessions'}
+      <!-- KPI cards -->
+      <div class="adx-kpi-grid">
+        <div class="adx-kpi" onclick="navigateTo('reports')">
+          <div class="adx-kpi-label">Attendance rate <span class="adx-kpi-hint">14 days</span></div>
+          <div class="adx-kpi-value">${rate14 != null ? rate14 + '%' : '—'}</div>
+          <div class="adx-kpi-sub ${delta == null ? '' : delta >= 0 ? 'good' : 'bad'}">
+            ${delta == null ? (rate14 == null ? 'No roster data yet' : 'vs last week: n/a') : (delta >= 0 ? '▲' : '▼') + ' ' + Math.abs(delta) + '% vs last week'}
           </div>
         </div>
-
-        <div class="stat-card-v2" onclick="navigateTo('sessions')">
-          <div class="stat-top-bar" style="background:#f59e0b"></div>
-          <div class="stat-header">
-            <span class="stat-label">Total sessions</span>
-            <div class="stat-icon" style="background:#fffbeb">
-              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#f59e0b" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/></svg>
-            </div>
-          </div>
-          <div class="stat-value">${sessionsData.pagination?.total || sessionsData.sessions.length}</div>
-          <div class="stat-trend">All time</div>
+        <div class="adx-kpi" onclick="navigateTo('sessions')">
+          <div class="adx-kpi-label">Today's sessions</div>
+          <div class="adx-kpi-value">${todaySessions.length}</div>
+          <div class="adx-kpi-sub ${activeSessions > 0 ? 'live' : ''}">${activeSessions > 0 ? '<span class="adx-live-dot"></span>' + activeSessions + ' live now' : 'None live right now'}</div>
         </div>
-
-        <div class="stat-card-v2" style="${pendingCount > 0 ? 'border-color:#ddd6fe' : ''}" onclick="navigateTo('approvals')">
-          <div class="stat-top-bar" style="background:#7c3aed"></div>
-          <div class="stat-header">
-            <span class="stat-label">Pending approvals</span>
-            <div class="stat-icon" style="background:#f5f3ff">
-              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#7c3aed" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
-            </div>
-          </div>
-          <div class="stat-value" style="color:${pendingCount > 0 ? '#7c3aed' : 'var(--text)'}">${pendingCount}</div>
-          <div class="stat-trend" style="color:${pendingCount > 0 ? '#7c3aed' : 'var(--text-muted)'}">${pendingCount > 0 ? 'Action needed' : 'All clear'}</div>
+        <div class="adx-kpi ${pendingCount > 0 ? 'attention' : ''}" onclick="navigateTo('approvals')">
+          <div class="adx-kpi-label">Pending approvals</div>
+          <div class="adx-kpi-value">${pendingCount}</div>
+          <div class="adx-kpi-sub ${pendingCount > 0 ? 'warn' : ''}">${pendingCount > 0 ? 'Action needed' : 'All clear'}</div>
+        </div>
+        <div class="adx-kpi" onclick="navigateTo('users')">
+          <div class="adx-kpi-label">Total users</div>
+          <div class="adx-kpi-value">${totalUsers}</div>
+          <div class="adx-kpi-sub">${isAcademic ? 'Students, lecturers & staff' : 'Employees & managers'}</div>
         </div>
       </div>
 
-      <!-- Quick actions -->
-      <div class="quick-actions-bar">
-        <div class="section-label">Quick actions</div>
-        <div class="actions-row">
-          <button class="action-chip green" onclick="navigateTo('users')">
-            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="8.5" cy="7" r="4"/><line x1="20" y1="8" x2="20" y2="14"/><line x1="23" y1="11" x2="17" y2="11"/></svg>
-            Add user
-          </button>
-          ${pendingCount > 0 ? `
-          <button class="action-chip purple" onclick="navigateTo('approvals')">
-            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 11 12 14 22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
-            Review approvals (${pendingCount})
-          </button>` : ''}
-          <button class="action-chip amber" onclick="navigateTo('announcements')">
-            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
-            Post announcement
-          </button>
-          <button class="action-chip slate" onclick="navigateTo('reports')">
-            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>
-            View reports
-          </button>
-        </div>
-      </div>
-
-      <!-- Bottom panels -->
-      <div class="dashboard-panels">
-        <div class="dashboard-panel">
-          <div class="panel-header">
-            <span class="panel-title">Recent sessions</span>
+      <!-- Main: sessions + compact charts -->
+      <div class="adx-main-grid">
+        <div class="adx-card">
+          <div class="adx-card-head">
+            <span class="adx-card-title">Recent sessions</span>
             <span class="panel-link" onclick="navigateTo('sessions')">View all →</span>
           </div>
           ${sessionRows}
         </div>
-
-        <div class="dashboard-panel">
-          <div class="panel-header">
-            <span class="panel-title">Announcements</span>
-            <button class="btn btn-secondary btn-sm" onclick="navigateTo('announcements')">+ Post</button>
+        <div class="adx-side-col">
+          <div class="adx-card">
+            <div class="adx-card-head"><span class="adx-card-title">Attendance trend</span><span class="adx-card-hint">14 days</span></div>
+            <div style="position:relative;height:110px;width:100%"><canvas id="admin-attendance-chart"></canvas></div>
           </div>
-          ${annRows}
+          <div class="adx-card">
+            <div class="adx-card-head"><span class="adx-card-title">Users by role</span></div>
+            <div style="position:relative;height:150px;width:100%"><canvas id="admin-role-chart"></canvas></div>
+          </div>
         </div>
       </div>
 
-      <!-- Analytics Charts -->
-      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:16px;margin-top:4px">
-        <div class="card" style="min-width:0">
-          <div style="font-size:13px;font-weight:700;margin-bottom:12px">Attendance Trend (Last 14 Days)</div>
-          <div style="position:relative;height:180px;width:100%">
-            <canvas id="admin-attendance-chart"></canvas>
+      <!-- Announcements + quick actions -->
+      <div class="adx-main-grid">
+        <div class="adx-card">
+          <div class="adx-card-head">
+            <span class="adx-card-title">Announcements</span>
+            <span class="panel-link" onclick="navigateTo('announcements')">+ Post</span>
           </div>
+          ${annRows}
         </div>
-        <div class="card" style="min-width:0">
-          <div style="font-size:13px;font-weight:700;margin-bottom:12px">Users by Role</div>
-          <div style="position:relative;height:180px;width:100%">
-            <canvas id="admin-role-chart"></canvas>
+        <div class="adx-card">
+          <div class="adx-card-head"><span class="adx-card-title">Quick actions</span></div>
+          <div class="adx-qa-list">
+            <button class="adx-qa" onclick="navigateTo('users')">Add user<span>→</span></button>
+            ${pendingCount > 0 ? `<button class="adx-qa" onclick="navigateTo('approvals')">Review approvals (${pendingCount})<span>→</span></button>` : ''}
+            <button class="adx-qa" onclick="navigateTo('announcements')">Post announcement<span>→</span></button>
+            <button class="adx-qa" onclick="navigateTo('reports')">View reports<span>→</span></button>
+            <button class="adx-qa" onclick="navigateTo('ai-reports')">${sparkle} Generate AI report<span>→</span></button>
           </div>
         </div>
       </div>
@@ -7133,90 +7195,83 @@ async function renderAdminDashboard(content) {
     </div>
   `;
 
-  // Load Chart.js and render analytics
-  _renderAdminCharts(sessionsData, usersData);
+  // ── Compact charts (data already fetched — no extra API calls) ────────────
+  _renderAdminCharts(allSessions, users, { markedOf, expectedOf });
 }
 
-async function _renderAdminCharts(sessionsData, usersData) {
+async function _renderAdminCharts(allSessions, users, helpers) {
   try {
     if (!window.Chart) {
       await new Promise((res, rej) => {
         const s = document.createElement('script');
-        s.src = 'https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js';
+        s.src = '/js/vendor/chart.umd.min.js';
         s.onload = res; s.onerror = rej;
         document.head.appendChild(s);
       });
     }
-    // Destroy any existing chart instances before reusing canvas
     ['admin-attendance-chart', 'admin-role-chart'].forEach(id => {
       const canvas = document.getElementById(id);
-      if (canvas) {
-        const existing = Chart.getChart(canvas);
-        if (existing) existing.destroy();
-      }
+      if (canvas) { const existing = Chart.getChart(canvas); if (existing) existing.destroy(); }
     });
 
-    // Attendance trend — group all sessions by date over last 14 days
-    const allSessions = await api('/api/attendance-sessions?limit=200').catch(() => ({ sessions: [] }));
+    // Attendance trend — daily attendance RATE when rosters are known,
+    // otherwise raw marked counts.
     const now = Date.now();
-    const days14 = 14 * 86400000;
-    const trendMap = {};
+    const dayKeys = [];
+    const perDay = {};
     for (let i = 13; i >= 0; i--) {
       const d = new Date(now - i * 86400000);
-      trendMap[d.toLocaleDateString('en-GB', { day: '2-digit', month: 'short' })] = 0;
+      const k = d.toLocaleDateString('en-GB', { day: '2-digit', month: 'short' });
+      dayKeys.push(k); perDay[k] = { m: 0, e: 0 };
     }
-    (allSessions.sessions || []).filter(s => s.startedAt && (now - new Date(s.startedAt)) < days14).forEach(s => {
-      const key = new Date(s.startedAt).toLocaleDateString('en-GB', { day: '2-digit', month: 'short' });
-      if (key in trendMap) trendMap[key] += s.attendanceCount || 0;
+    (allSessions || []).filter(s => s.startedAt && (now - new Date(s.startedAt)) < 14 * 86400000).forEach(s => {
+      const k = new Date(s.startedAt).toLocaleDateString('en-GB', { day: '2-digit', month: 'short' });
+      if (!(k in perDay)) return;
+      const m = helpers.markedOf(s), e = helpers.expectedOf(s);
+      perDay[k].m += e ? Math.min(m, e) : m;
+      perDay[k].e += e || 0;
     });
-    const trendLabels = Object.keys(trendMap);
-    const trendData   = Object.values(trendMap);
+    const hasRoster = dayKeys.some(k => perDay[k].e > 0);
+    const trendData = dayKeys.map(k => {
+      const d = perDay[k];
+      return hasRoster ? (d.e > 0 ? Math.round((d.m / d.e) * 100) : null) : d.m;
+    });
 
     const attCtx = document.getElementById('admin-attendance-chart');
     if (attCtx) {
       new Chart(attCtx, {
         type: 'line',
         data: {
-          labels: trendLabels,
-          datasets: [{ label: 'Attendance', data: trendData, borderColor: '#6366f1', backgroundColor: 'rgba(99,102,241,0.1)', borderWidth: 2, fill: true, tension: 0.4, pointRadius: 3 }]
+          labels: dayKeys,
+          datasets: [{ data: trendData, borderColor: '#6366f1', backgroundColor: 'rgba(99,102,241,0.08)', borderWidth: 2, fill: true, tension: 0.4, pointRadius: 0, pointHitRadius: 8, spanGaps: true }]
         },
         options: {
-          responsive: true,
-          maintainAspectRatio: false,
-          plugins: { legend: { display: false } },
+          responsive: true, maintainAspectRatio: false,
+          plugins: { legend: { display: false }, tooltip: { callbacks: { label: c => hasRoster ? c.parsed.y + '% attendance' : c.parsed.y + ' marked' } } },
           scales: {
-            y: { beginAtZero: true, ticks: { stepSize: 1, maxTicksLimit: 4 } },
-            x: { ticks: { maxTicksLimit: 5, maxRotation: 0, autoSkip: true } }
+            y: { beginAtZero: true, max: hasRoster ? 100 : undefined, ticks: { maxTicksLimit: 3, font: { size: 9 }, callback: v => hasRoster ? v + '%' : v }, grid: { color: 'rgba(148,163,184,.12)' } },
+            x: { ticks: { maxTicksLimit: 4, maxRotation: 0, autoSkip: true, font: { size: 9 } }, grid: { display: false } }
           }
         }
       });
     }
 
-    // Users by role
-    const users = usersData.users || [];
+    // Users by role — compact donut with side legend
     const roleCount = {};
-    users.forEach(u => { roleCount[u.role] = (roleCount[u.role] || 0) + 1; });
+    (users || []).forEach(u => { roleCount[u.role] = (roleCount[u.role] || 0) + 1; });
     const roleLabels = Object.keys(roleCount);
-    const roleData   = Object.values(roleCount);
-    const roleColors = ['#6366f1','#10b981','#f59e0b','#ef4444','#0ea5e9','#8b5cf6'];
-
+    const roleColors = ['#6366f1', '#10b981', '#f59e0b', '#ef4444', '#0ea5e9', '#8b5cf6'];
     const roleCtx = document.getElementById('admin-role-chart');
     if (roleCtx && roleLabels.length > 0) {
       new Chart(roleCtx, {
         type: 'doughnut',
         data: {
           labels: roleLabels.map(r => r.charAt(0).toUpperCase() + r.slice(1)),
-          datasets: [{ data: roleData, backgroundColor: roleColors.slice(0, roleLabels.length), borderWidth: 2, borderColor: '#fff' }]
+          datasets: [{ data: Object.values(roleCount), backgroundColor: roleColors.slice(0, roleLabels.length), borderWidth: 2, borderColor: '#fff' }]
         },
         options: {
-          responsive: true,
-          maintainAspectRatio: false,
-          plugins: {
-            legend: {
-              position: 'bottom',
-              labels: { boxWidth: 10, font: { size: 10 }, padding: 8 }
-            }
-          }
+          responsive: true, maintainAspectRatio: false, cutout: '72%',
+          plugins: { legend: { position: 'right', labels: { boxWidth: 8, boxHeight: 8, font: { size: 10 }, padding: 6 } } }
         }
       });
     }
@@ -20995,7 +21050,7 @@ async function renderMyPerformance() {
       if (!window.Chart) {
         await new Promise((res, rej) => {
           const s = document.createElement('script');
-          s.src = 'https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js';
+          s.src = '/js/vendor/chart.umd.min.js';
           s.onload = res; s.onerror = rej;
           document.head.appendChild(s);
         });
