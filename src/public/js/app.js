@@ -23469,17 +23469,17 @@ async function renderClassTimetable() {
 // ═══════════════════════════════════════════════════════════════════════════
 
 const AI_REPORT_DEFS = {
-  at_risk_students:    { label: 'At-Risk Students',        roles: ['admin','hod','lecturer'],      icon: '<path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/>',  color: '#ef4444', desc: 'Identifies students with low attendance, poor quiz scores, or missing assignments.' },
-  class_health:        { label: 'Class Health',            roles: ['admin','hod','lecturer'],      icon: '<path d="M22 12h-4l-3 9L9 3l-3 9H2"/>',                                                                                                                                                     color: '#10b981', desc: 'Overall health of a specific course — attendance trends, quiz performance, assignment completion.' },
-  department_overview: { label: 'Department Overview',     roles: ['admin','hod'],                 icon: '<path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>',                                                                                                                               color: '#6366f1', desc: 'Cross-course department report covering all lecturers, students, attendance, and quiz performance.' },
-  exam_readiness:      { label: 'Exam Readiness',          roles: ['admin','hod','lecturer','student'], icon: '<path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/>',                                                                                   color: '#f59e0b', desc: 'Per-student readiness score based on attendance, quiz averages, and assignment completion.' },
-  workforce_attendance:{ label: 'Workforce Attendance',    roles: ['admin','manager'],              icon: '<path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/>',                     color: '#0ea5e9', desc: 'Attendance patterns, chronic absentees, and department-level breakdowns for corporate staff.' },
-  leave_anomaly:       { label: 'Leave Anomaly',           roles: ['admin','manager'],              icon: '<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/>',                                    color: '#a855f7', desc: 'Detects employees with unusual or spiking leave request patterns compared to historical data.' },
-  shift_compliance:    { label: 'Shift Compliance',        roles: ['admin','manager'],              icon: '<rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/>',            color: '#f97316', desc: 'Compares scheduled shifts against actual clock-in times and flags non-compliance.' },
-  weekly_digest:       { label: 'Weekly Digest',           roles: ['admin','manager','hod'],        icon: '<rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/><line x1="8" y1="14" x2="16" y2="14"/>',  color: '#14b8a6', desc: 'A plain-English digest of the past 7 days: sessions, attendance, announcements, and leave activity.' },
-  custom_query:        { label: 'Ask Dikly AI',            roles: ['admin','hod','lecturer','manager','student'], icon: '<path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>',                                                                                              color: '#8b5cf6', desc: 'Ask any question about your institution\'s data in plain English.' },
-  platform_health:     { label: 'Platform Health',         roles: ['superadmin'],                  icon: '<rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/>',                                                       color: '#ec4899', desc: 'Revenue, active institutions, subscription status, and churn risk across the entire platform.' },
-  student_lookup:      { label: 'Student Lookup',          roles: ['admin','superadmin','hod','lecturer'], icon: '<circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>',                                                                                                    color: '#0ea5e9', desc: 'Enter a student\'s index number or name to instantly pull up their full profile and academic details.' },
+  at_risk_students:    { label: 'At-Risk Students',        roles: ['admin','hod','lecturer'], modes: ['academic'],      icon: '<path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/>',  color: '#ef4444', desc: 'Identifies students with low attendance, poor quiz scores, or missing assignments.' },
+  class_health:        { label: 'Class Health',            roles: ['admin','hod','lecturer'], modes: ['academic'],      icon: '<path d="M22 12h-4l-3 9L9 3l-3 9H2"/>',                                                                                                                                                     color: '#10b981', desc: 'Overall health of a specific course — attendance trends, quiz performance, assignment completion.' },
+  department_overview: { label: 'Department Overview',     roles: ['admin','hod'], modes: ['academic'],                 icon: '<path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>',                                                                                                                               color: '#6366f1', desc: 'Cross-course department report covering all lecturers, students, attendance, and quiz performance.' },
+  exam_readiness:      { label: 'Exam Readiness',          roles: ['admin','hod','lecturer','student'], modes: ['academic'], icon: '<path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/>',                                                                                   color: '#f59e0b', desc: 'Per-student readiness score based on attendance, quiz averages, and assignment completion.' },
+  workforce_attendance:{ label: 'Workforce Attendance',    roles: ['admin','manager'], modes: ['corporate'],              icon: '<path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/>',                     color: '#0ea5e9', desc: 'Attendance patterns, chronic absentees, and department-level breakdowns for corporate staff.' },
+  leave_anomaly:       { label: 'Leave Anomaly',           roles: ['admin','manager'], modes: ['corporate'],              icon: '<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/>',                                    color: '#a855f7', desc: 'Detects employees with unusual or spiking leave request patterns compared to historical data.' },
+  shift_compliance:    { label: 'Shift Compliance',        roles: ['admin','manager'], modes: ['corporate'],              icon: '<rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/>',            color: '#f97316', desc: 'Compares scheduled shifts against actual clock-in times and flags non-compliance.' },
+  weekly_digest:       { label: 'Weekly Digest',           roles: ['admin','manager','hod'], modes: ['academic','corporate'],        icon: '<rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/><line x1="8" y1="14" x2="16" y2="14"/>',  color: '#14b8a6', desc: 'A plain-English digest of the past 7 days: sessions, attendance, announcements, and leave activity.' },
+  custom_query:        { label: 'Ask Dikly AI',            roles: ['admin','hod','lecturer','manager','student'], modes: ['academic','corporate'], icon: '<path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>',                                                                                              color: '#8b5cf6', desc: 'Ask any question about your institution\'s data in plain English.' },
+  platform_health:     { label: 'Platform Health',         roles: ['superadmin'], modes: ['academic','corporate'],                  icon: '<rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/>',                                                       color: '#ec4899', desc: 'Revenue, active institutions, subscription status, and churn risk across the entire platform.' },
+  student_lookup:      { label: 'Student Lookup',          roles: ['admin','superadmin','hod','lecturer'], modes: ['academic'], icon: '<circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>',                                                                                                    color: '#0ea5e9', desc: 'Enter a student\'s index number or name to instantly pull up their full profile and academic details.' },
 };
 
 async function renderAIReports() {
@@ -23487,44 +23487,114 @@ async function renderAIReports() {
   if (!content) return;
 
   const role = currentUser?.role || '';
-  const available = Object.entries(AI_REPORT_DEFS).filter(([, d]) => d.roles.includes(role));
+  // Quick Actions differ by institution type: academic institutions get
+  // student/course reports, corporate ones get workforce/leave/shift reports.
+  const instMode = currentUser?.company?.mode === 'corporate' ? 'corporate' : 'academic';
+  const available = Object.entries(AI_REPORT_DEFS).filter(([, d]) =>
+    d.roles.includes(role) && (!d.modes || d.modes.includes(instMode)));
+  const canAsk = AI_REPORT_DEFS.custom_query.roles.includes(role);
+
+  const firstName = (currentUser?.name || 'there').trim().split(/\s+/)[0];
+  const hour = new Date().getHours();
+  const greeting = hour < 12 ? 'Good Morning' : hour < 17 ? 'Good Afternoon' : 'Good Evening';
+  const hasSpeech = !!(window.SpeechRecognition || window.webkitSpeechRecognition);
 
   content.innerHTML = `
-    <div class="page-header" style="margin-bottom:1.5rem">
-      <div>
-        <h1 style="margin:0 0 .25rem;display:flex;align-items:center;gap:.5rem">
-          ${svgIcon('<path d="M15 4V2"/><path d="M15 16v-2"/><path d="M8 9h2"/><path d="M20 9h2"/><path d="M17.8 11.8 19 13"/><path d="M15 9h.01"/><path d="M17.8 6.2 19 5"/><path d="M13.2 6.2 12 5"/><path d="M3 21l9-9"/>', 22, 'var(--accent)')}
-          Dikly AI Reports
-        </h1>
-        <p style="margin:0;color:var(--text-light);font-size:.9rem">AI-generated intelligence reports for your institution</p>
-      </div>
-    </div>
+    <style>
+      .ai-hero {
+        position:relative; border-radius:20px; overflow:hidden;
+        padding:3.2rem 1.5rem 2.4rem; text-align:center; margin-bottom:1.5rem;
+        background:
+          radial-gradient(900px 420px at 15% -10%, rgba(124,58,237,.14), transparent 60%),
+          radial-gradient(800px 420px at 85% 10%, rgba(79,110,247,.14), transparent 60%),
+          radial-gradient(600px 300px at 50% 110%, rgba(236,72,153,.08), transparent 60%),
+          linear-gradient(180deg, rgba(124,58,237,.05), transparent 55%);
+        border:1px solid var(--border);
+      }
+      [data-theme="dark"] .ai-hero {
+        background:
+          radial-gradient(900px 420px at 15% -10%, rgba(124,58,237,.22), transparent 60%),
+          radial-gradient(800px 420px at 85% 10%, rgba(79,110,247,.20), transparent 60%),
+          radial-gradient(600px 300px at 50% 110%, rgba(236,72,153,.10), transparent 60%),
+          #0d1224;
+      }
+      .ai-hero-label { font-size:1.05rem; font-weight:700; letter-spacing:.2px; color:var(--text); opacity:.85; }
+      .ai-orb {
+        width:64px; height:64px; border-radius:50%; margin:1.4rem auto 1.2rem; position:relative;
+        background: radial-gradient(circle at 62% 38%, #fde68a 0%, #f9a8d4 32%, #a78bfa 68%, #7c3aed 100%);
+        box-shadow: 0 0 34px 10px rgba(167,139,250,.45), 0 0 80px 26px rgba(124,58,237,.18);
+        animation: aiOrbFloat 5s ease-in-out infinite;
+      }
+      @keyframes aiOrbFloat { 0%,100% { transform:translateY(0) scale(1); } 50% { transform:translateY(-6px) scale(1.04); } }
+      .ai-greet { margin:0; font-size:clamp(1.6rem, 4vw, 2.3rem); font-weight:800; letter-spacing:-.5px; color:var(--text); }
+      .ai-sub  { margin:.45rem 0 0; font-size:1rem; font-weight:600; color:var(--text-light); }
+      .ai-sub2 { margin:.3rem 0 0; font-size:.8rem; color:var(--text-muted); }
+      .ai-ask {
+        max-width:680px; margin:1.6rem auto 0; background:var(--bg-card, var(--bg-secondary, #fff));
+        border:1.5px solid var(--border); border-radius:18px; padding:1rem 1rem .7rem;
+        box-shadow:0 10px 34px rgba(15,23,42,.08); text-align:left; transition:border-color .15s, box-shadow .15s;
+      }
+      .ai-ask:focus-within { border-color:var(--accent); box-shadow:0 10px 34px rgba(79,110,247,.16); }
+      .ai-ask input {
+        width:100%; border:none; outline:none; background:transparent; color:var(--text);
+        font-size:1rem; font-family:inherit; padding:.1rem .1rem .8rem;
+      }
+      .ai-ask-row { display:flex; align-items:center; gap:.35rem; }
+      .ai-ask-tool {
+        width:32px; height:32px; border:none; border-radius:9px; background:transparent; cursor:pointer;
+        display:flex; align-items:center; justify-content:center; color:var(--text-light); transition:background .12s;
+      }
+      .ai-ask-tool:hover { background:var(--bg-secondary); }
+      .ai-ask-send {
+        margin-left:auto; width:36px; height:36px; border:none; border-radius:50%; cursor:pointer;
+        background:linear-gradient(135deg, var(--accent, #4f6ef7), var(--accent2, #7c3aed));
+        display:flex; align-items:center; justify-content:center; color:#fff;
+        box-shadow:0 4px 14px rgba(124,58,237,.35); transition:transform .12s, box-shadow .12s;
+      }
+      .ai-ask-send:hover { transform:scale(1.06); box-shadow:0 6px 18px rgba(124,58,237,.45); }
+      .ai-qa-label { margin:1.8rem 0 .7rem; font-size:.86rem; font-weight:700; color:var(--text); text-align:left; max-width:680px; margin-left:auto; margin-right:auto; }
+      .ai-qa-chips { display:flex; flex-wrap:wrap; gap:.5rem; justify-content:center; max-width:760px; margin:0 auto; }
+      .ai-qa-chip {
+        display:inline-flex; align-items:center; gap:.42rem; padding:.5rem .85rem; border-radius:999px;
+        background:var(--bg-card, var(--bg-secondary, #fff)); border:1px solid var(--border); cursor:pointer;
+        font-size:.78rem; font-weight:600; color:var(--text); font-family:inherit;
+        transition:transform .12s, box-shadow .12s, border-color .12s;
+      }
+      .ai-qa-chip:hover { transform:translateY(-1px); border-color:var(--accent); box-shadow:0 4px 14px rgba(79,110,247,.15); }
+    </style>
 
-    <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:1rem;margin-bottom:2rem" id="ai-report-cards">
-      ${available.map(([type, d]) => `
-        <div class="card" style="cursor:pointer;transition:transform .15s,box-shadow .15s;border-top:3px solid ${d.color}"
-          onmouseover="this.style.transform='translateY(-2px)';this.style.boxShadow='var(--shadow-lg)'"
-          onmouseout="this.style.transform='';this.style.boxShadow=''"
-          onclick="aiReportOpen('${type}')">
-          <div style="display:flex;align-items:flex-start;gap:.75rem">
-            <div style="width:38px;height:38px;border-radius:9px;background:${d.color}20;display:flex;align-items:center;justify-content:center;flex-shrink:0">
-              ${svgIcon(d.icon, 18, d.color)}
-            </div>
-            <div style="min-width:0;flex:1">
-              <div style="font-weight:700;font-size:.92rem;margin-bottom:.25rem">${d.label}</div>
-              <div style="font-size:.78rem;color:var(--text-light);line-height:1.5">${d.desc}</div>
-            </div>
-          </div>
-          <div style="margin-top:.85rem;display:flex;gap:.5rem">
-            <button class="btn btn-sm btn-primary" style="flex:1;font-size:.78rem" onclick="event.stopPropagation();aiReportOpen('${type}')">
-              ${svgIcon('<path d="M15 4V2"/><path d="M15 16v-2"/><path d="M8 9h2"/><path d="M20 9h2"/><path d="M17.8 11.8 19 13"/><path d="M15 9h.01"/><path d="M17.8 6.2 19 5"/><path d="M13.2 6.2 12 5"/><path d="M3 21l9-9"/>', 12)}
-              Generate
-            </button>
-            <button class="btn btn-sm btn-ghost" style="font-size:.78rem" onclick="event.stopPropagation();aiReportOpen('${type}')">
-              History
-            </button>
-          </div>
-        </div>`).join('')}
+    <div class="ai-hero">
+      <div class="ai-hero-label">Dikly AI</div>
+      <div class="ai-orb"></div>
+      <h1 class="ai-greet">${greeting}, ${esc(firstName)}</h1>
+      <p class="ai-sub">Master your day with AI automation</p>
+      <p class="ai-sub2">Experience the next level of productivity. Let AI handle the busywork</p>
+
+      ${canAsk ? `
+      <div class="ai-ask">
+        <input id="ai-ask-input" type="text" placeholder="Ask Anything" autocomplete="off"
+          onkeydown="if(event.key==='Enter')_aiAskSubmit()" />
+        <div class="ai-ask-row">
+          <button class="ai-ask-tool" title="Open detailed question box" onclick="_aiShowCustomQueryModal()">
+            ${svgIcon('<line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>', 16)}
+          </button>
+          ${hasSpeech ? `
+          <button class="ai-ask-tool" id="ai-mic-btn" title="Speak your question" onclick="_aiAskVoice()">
+            ${svgIcon('<path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/>', 15)}
+          </button>` : ''}
+          <button class="ai-ask-send" title="Ask Dikly AI" onclick="_aiAskSubmit()">
+            ${svgIcon('<line x1="12" y1="19" x2="12" y2="5"/><polyline points="5 12 12 5 19 12"/>', 16, '#fff')}
+          </button>
+        </div>
+      </div>` : ''}
+
+      <div class="ai-qa-label">Quick Action</div>
+      <div class="ai-qa-chips">
+        ${available.filter(([t]) => t !== 'custom_query').map(([type, d]) => `
+          <button class="ai-qa-chip" title="${esc(d.desc)}" onclick="aiReportOpen('${type}')">
+            ${svgIcon(d.icon, 13, d.color)} ${d.label}
+          </button>`).join('')}
+      </div>
     </div>
 
     <div id="ai-report-panel" style="display:none">
@@ -23534,6 +23604,33 @@ async function renderAIReports() {
   // Load recent reports list
   _aiLoadRecentReports();
 }
+
+// Submit the hero "Ask Anything" input as a custom AI query
+window._aiAskSubmit = function() {
+  const input = document.getElementById('ai-ask-input');
+  const q = (input?.value || '').trim();
+  if (!q) { input?.focus(); return; }
+  input.value = '';
+  aiReportGenerate('custom_query', { question: q });
+};
+
+// Voice input for the Ask bar (Chrome/Edge SpeechRecognition)
+window._aiAskVoice = function() {
+  const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+  if (!SR) return;
+  const btn = document.getElementById('ai-mic-btn');
+  const rec = new SR();
+  rec.lang = 'en-US';
+  rec.interimResults = false;
+  if (btn) btn.style.color = 'var(--error)';
+  rec.onresult = (e) => {
+    const input = document.getElementById('ai-ask-input');
+    if (input) { input.value = e.results[0][0].transcript; input.focus(); }
+  };
+  rec.onend = () => { if (btn) btn.style.color = ''; };
+  rec.onerror = () => { if (btn) btn.style.color = ''; };
+  rec.start();
+};
 
 async function _aiLoadRecentReports() {
   try {
