@@ -2764,7 +2764,7 @@ function buildSidebar() {
         links.push({ id: 'departments',     label: 'Departments',         icon: svgIcon('<path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><line x1="9" y1="22" x2="9" y2="12"/><line x1="15" y1="22" x2="15" y2="12"/>') });
         links.push({ id: 'corp-teams',      label: 'Teams',               icon: svgIcon('<path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/>') });
         links.push({ id: 'corp-attendance', label: 'Attendance',          icon: svgIcon('<path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/><polyline points="9 11 12 14 22 4"/>') });
-        links.push({ id: 'sign-in-out',     label: 'Clock In / Out',      icon: attendanceIcon() });
+        // Admins manage attendance; they don't personally clock in/out — that's an employee/manager action.
         links.push({ id: 'shifts',          label: 'Shifts',              icon: svgIcon('<rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/>') });
         links.push({ id: 'leave-requests',  label: 'Leave Management',    icon: svgIcon('<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/>') });
         links.push({ id: 'training',        label: 'Training & Assessments', icon: svgIcon('<path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/>') });
@@ -18793,6 +18793,52 @@ async function _caDetectMyIP(addToInput = false) {
   } catch { el.textContent = 'unavailable'; }
 }
 
+async function _caDetectMyLocation() {
+  const btn = document.getElementById('cas-detect-geo-btn');
+  const status = document.getElementById('cas-geo-status');
+  if (!navigator.geolocation) {
+    toastError('This browser/device does not support location detection.');
+    return;
+  }
+  if (btn) { btn.disabled = true; btn.textContent = 'Detecting…'; }
+  if (status) status.textContent = '';
+  navigator.geolocation.getCurrentPosition(
+    pos => {
+      const { latitude, longitude, accuracy } = pos.coords;
+      const latEl = document.getElementById('cas-lat');
+      const lngEl = document.getElementById('cas-lng');
+      if (latEl) latEl.value = latitude.toFixed(6);
+      if (lngEl) lngEl.value = longitude.toFixed(6);
+      if (btn) { btn.disabled = false; btn.textContent = 'Detect Location'; }
+      // Anti-cheat geofence: surface the device's own accuracy radius so the
+      // admin knows how tight/loose this reading is before saving it as the
+      // authoritative check-in boundary — a 200m-accuracy fix on a 100m
+      // radius geofence would let people cheat from well outside the office.
+      const accText = Math.round(accuracy);
+      if (status) {
+        status.textContent = `Detected — accurate to ±${accText}m`;
+        status.style.color = accuracy <= 30 ? 'var(--success)' : accuracy <= 100 ? '#d97706' : 'var(--danger)';
+      }
+      if (accuracy > 100) {
+        toastInfo(`Location detected, but accuracy is only ±${accText}m. For a reliable geofence, try again outdoors or on WiFi/GPS rather than cell-tower positioning.`);
+      } else {
+        toastSuccess(`Location detected (±${accText}m) — click Save Attendance Settings to apply`);
+      }
+    },
+    err => {
+      if (btn) { btn.disabled = false; btn.textContent = 'Detect Location'; }
+      const msg = err.code === err.PERMISSION_DENIED
+        ? 'Location permission denied. Enable location access for this site and try again.'
+        : err.code === err.TIMEOUT
+        ? 'Location detection timed out. Try again with a clearer GPS/WiFi signal.'
+        : 'Could not detect your location. Enter latitude/longitude manually.';
+      if (status) { status.textContent = msg; status.style.color = 'var(--danger)'; }
+      toastError(msg);
+    },
+    { enableHighAccuracy: true, timeout: 15000, maximumAge: 0 }
+  );
+}
+
 async function _caSaveSettings() {
   const strict = document.getElementById('cas-strict')?.checked ?? false;
   const ipsRaw = document.getElementById('cas-ips')?.value || '';
@@ -18867,6 +18913,7 @@ async function renderCorpClockSettings() {
         </div>
         <div style="padding:12px 0">
           <div style="font-weight:600;font-size:13px;margin-bottom:6px">Geofence</div>
+          <div style="font-size:11px;color:var(--text-light);margin-bottom:8px">Stand at the office location, then detect — this sets the exact anti-cheat boundary employees must be inside to clock in.</div>
           <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:8px">
             <div>
               <label style="font-size:11px;font-weight:700;text-transform:uppercase;color:var(--text-muted)">Latitude</label>
@@ -18876,6 +18923,10 @@ async function renderCorpClockSettings() {
               <label style="font-size:11px;font-weight:700;text-transform:uppercase;color:var(--text-muted)">Longitude</label>
               <input id="cas-lng" type="number" step="any" value="${s.geofence?.lng||''}" placeholder="e.g. -0.1870" style="width:100%;padding:8px;border:1px solid var(--border);border-radius:6px;font-size:13px">
             </div>
+          </div>
+          <div style="display:flex;align-items:center;gap:8px;margin-bottom:12px">
+            <button id="cas-detect-geo-btn" onclick="_caDetectMyLocation()" type="button" style="background:#f1f5f9;border:none;border-radius:6px;padding:5px 10px;font-size:11px;font-weight:600;cursor:pointer">Detect Location</button>
+            <span id="cas-geo-status" style="font-size:11px;color:var(--text-muted)"></span>
           </div>
           <div>
             <label style="font-size:11px;font-weight:700;text-transform:uppercase;color:var(--text-muted)">Radius (metres)</label>
@@ -24050,30 +24101,30 @@ async function renderCorpCalendar(offsetMonths) {
   for (let i = 0; i < startPad; i++) cells.push('<div></div>');
   for (let d = 1; d <= daysIn; d++) {
     const evs = byDay[d] || [];
-    cells.push(`<div style="min-height:86px;border:1px solid var(--border);border-radius:9px;padding:.35rem .45rem;${isToday(d) ? 'outline:2px solid var(--primary);outline-offset:-2px' : ''}">
-      <div style="font-size:.72rem;font-weight:700;color:${isToday(d) ? 'var(--primary)' : 'var(--text-muted)'}">${d}</div>
-      ${evs.slice(0, 3).map(ev => `<div title="${esc(ev.title)}" style="font-size:.66rem;margin-top:.2rem;padding:.1rem .3rem;border-radius:4px;background:${ev.color}22;color:var(--text);border-left:2px solid ${ev.color};overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(ev.title)}</div>`).join('')}
-      ${evs.length > 3 ? `<div style="font-size:.62rem;color:var(--text-muted);margin-top:.15rem">+${evs.length - 3} more</div>` : ''}
+    cells.push(`<div class="cal-cell${isToday(d) ? ' cal-cell-today' : ''}${evs.length ? ' cal-has-events' : ''}">
+      <div class="cal-cell-num${isToday(d) ? ' cal-cell-num-today' : ''}">${d}</div>
+      ${evs.slice(0, 3).map(ev => `<div class="cal-ev" title="${esc(ev.title)}" style="background:${ev.color}22;border-left-color:${ev.color}">${esc(ev.title)}</div>`).join('')}
+      ${evs.length > 3 ? `<div class="cal-ev-more">+${evs.length - 3} more</div>` : ''}
     </div>`);
   }
 
   content.innerHTML = `
     ${_corpHeader('Company Calendar', 'Meetings, leave, holidays, and company events in one view')}
-    <div class="card" style="padding:1.1rem 1.2rem">
-      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:.9rem;flex-wrap:wrap;gap:.5rem">
+    <div class="card cal-card">
+      <div class="cal-toolbar">
         <div style="display:flex;align-items:center;gap:.6rem">
           <button class="btn btn-sm btn-ghost" onclick="renderCorpCalendar(-1)">←</button>
           <div style="font-weight:700;font-size:1.02rem;min-width:150px;text-align:center">${first.toLocaleDateString(undefined, { month: 'long', year: 'numeric' })}</div>
           <button class="btn btn-sm btn-ghost" onclick="renderCorpCalendar(1)">→</button>
         </div>
-        <div style="display:flex;gap:.9rem;flex-wrap:wrap">
-          ${Object.entries(KIND_META).map(([k, [c, lbl]]) => `<span style="font-size:.72rem;color:var(--text-light);display:flex;align-items:center;gap:.3rem"><span style="width:9px;height:9px;border-radius:3px;background:${c};display:inline-block"></span>${lbl}</span>`).join('')}
+        <div class="cal-legend">
+          ${Object.entries(KIND_META).map(([k, [c, lbl]]) => `<span class="cal-legend-item"><span class="cal-legend-dot" style="background:${c}"></span>${lbl}</span>`).join('')}
         </div>
       </div>
-      <div style="display:grid;grid-template-columns:repeat(7,1fr);gap:.35rem;margin-bottom:.3rem">
-        ${['Mon','Tue','Wed','Thu','Fri','Sat','Sun'].map(d => `<div style="font-size:.68rem;font-weight:700;color:var(--text-muted);text-align:center;text-transform:uppercase">${d}</div>`).join('')}
+      <div class="cal-grid cal-dow-row">
+        ${['Mon','Tue','Wed','Thu','Fri','Sat','Sun'].map(d => `<div class="cal-dow">${d}</div>`).join('')}
       </div>
-      <div style="display:grid;grid-template-columns:repeat(7,1fr);gap:.35rem">${cells.join('')}</div>
+      <div class="cal-grid cal-cells-row">${cells.join('')}</div>
     </div>`;
 }
 

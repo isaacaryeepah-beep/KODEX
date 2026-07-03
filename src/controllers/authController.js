@@ -830,10 +830,21 @@ exports.login = async (req, res) => {
 
     const company = await Company.findById(user.company);
 
-    if (company && ["lecturer", "hod", "student"].includes(user.role) && company.mode !== "academic") {
-      company.mode = "academic";
-      await company.save().catch(() => {});
-      console.log(`[LOGIN] Auto-corrected company mode to 'academic' for ${company.name}`);
+    // Self-heal a mis-set institution mode. Previously this only ran when a
+    // lecturer/hod/student themselves logged in — an admin whose institution
+    // has academic staff/students but who happens to log in first (or is the
+    // only one who ever has) would be stuck seeing corporate-only UI (Clock
+    // In/Out, IP/geofence "employee" settings) indefinitely. The real signal
+    // is whether the company HAS any academic-only-role users at all, not
+    // just who is logging in right now, so check that directly.
+    if (company && company.mode !== "academic") {
+      const hasAcademicRole = ["lecturer", "hod", "student"].includes(user.role)
+        || await User.exists({ company: company._id, role: { $in: ["lecturer", "hod", "student"] } });
+      if (hasAcademicRole) {
+        company.mode = "academic";
+        await company.save().catch(() => {});
+        console.log(`[LOGIN] Auto-corrected company mode to 'academic' for ${company.name}`);
+      }
     }
 
     if (portalMode && company && company.mode !== portalMode && user.role !== "superadmin") {
