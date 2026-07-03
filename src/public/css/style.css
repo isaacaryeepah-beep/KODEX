@@ -2343,6 +2343,14 @@ input[type="checkbox"] {
   /* ── Prevent any element from breaking the viewport ─ */
   * { max-width: 100%; box-sizing: border-box; }
   img, video, iframe { max-width: 100% !important; height: auto !important; }
+
+  /* The blanket video rule above (meant for in-app content video/image
+     previews) was also clobbering the full-bleed splash hero video,
+     collapsing it to the browser's ~150px replaced-element default height
+     on any phone-width viewport — the actual cause of the video appearing
+     pinned near the top with empty space below it. Restore full-bleed
+     sizing for the splash video specifically. */
+  #sp-bg-video { max-width: none !important; width: 100% !important; height: 100% !important; }
 }
 
 /* Extra tiny — 360px and below */

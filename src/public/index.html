@@ -178,7 +178,7 @@ function selectPortal(t){if(window._appLoaded)window._realSelectPortal(t);else w
 
 #sp-bg-video {
   position: absolute; inset: 0; width: 100%; height: 100%;
-  object-fit: cover; opacity: 0.6;
+  object-fit: cover; object-position: center center; opacity: 0.6;
 }
 #sp-vid-grad {
   position: absolute; inset: 0;
@@ -186,11 +186,11 @@ function selectPortal(t){if(window._appLoaded)window._realSelectPortal(t);else w
   opacity: 0.9;
 }
 
-/* ── Mobile: lighter gradient + anchor video at top so mouse fills the frame ── */
+/* ── Mobile: lighter gradient only. The video itself stays centered (same
+   object-position as desktop) — an earlier "anchor to top" override here
+   cropped out the vertically-centered mouse from the bottom of the frame,
+   which visually pushed it toward the top of tall phone viewports. ── */
 @media (max-width: 600px) {
-  #sp-bg-video {
-    object-position: center top;   /* anchor to top — mouse stays in view */
-  }
   #sp-vid-grad {
     /* Only darken the very top for text readability; let the full video show below */
     background: linear-gradient(to bottom, rgba(5,13,31,0.82) 0%, transparent 35%, rgba(5,13,31,0.25) 100%);
