@@ -1,10 +1,12 @@
 name: Deploy to Production (VPS)
 
 # Deploys src/, docker-compose.yml, etc. to dikly.sbs whenever main changes.
-# Mirrors the exact procedure already used by scripts/deploy-webhook.js /
-# .github/workflows/setup-deploy-agent.yml, run directly over SSH instead of
-# depending on the deploy-agent container already being up -- so this works
-# even before that container has ever been started.
+# Runs on a self-hosted runner installed directly on the VPS -- GitHub's
+# cloud runners cannot reach the VPS over SSH (port 22 is firewalled), so
+# this flips the connection direction: the runner dials out to GitHub, and
+# the job then runs locally with normal access to git/Docker. No SSH key,
+# no secrets, nothing needs to be opened on the firewall. Registered via
+# Settings -> Actions -> Runners -> "New self-hosted runner" on the VPS.
 #
 # Does NOT touch dikly_flutter/ (that has its own GitHub Pages deploy) or
 # firmware/ (flashed separately, never auto-deployed).
@@ -20,23 +22,10 @@ concurrency:
 
 jobs:
   deploy:
-    runs-on: ubuntu-latest
+    runs-on: self-hosted
     steps:
-      - name: Setup SSH key
-        run: |
-          mkdir -p ~/.ssh
-          printf '%s\n' "$VPS_SSH_KEY" > ~/.ssh/deploy_key
-          chmod 600 ~/.ssh/deploy_key
-          ssh-keyscan -H 194.163.172.76 >> ~/.ssh/known_hosts 2>/dev/null || true
-        env:
-          VPS_SSH_KEY: ${{ secrets.VPS_SSH_KEY }}
-
       - name: Pull latest main and rebuild app container
         run: |
-          ssh -i ~/.ssh/deploy_key \
-              -o StrictHostKeyChecking=no \
-              -o ConnectTimeout=30 \
-              root@194.163.172.76 bash -s << 'ENDSSH'
           set -e
           cd /root/KODEX
 
@@ -52,4 +41,3 @@ jobs:
           docker restart kodex-web-1 2>/dev/null || true
 
           echo "==> Deploy complete: $(git rev-parse --short HEAD)"
-          ENDSSH
