@@ -17916,7 +17916,7 @@ function buildBottomNav(role) {
       : ['dashboard', 'sessions', 'users', 'reports'],
     manager:    ['dashboard', 'sessions', 'reports', 'users'],
     lecturer:   ['dashboard', 'sessions', 'quizzes', 'assignments'],
-    hod:        ['hod-overview', 'hod-courses', 'hod-lecturers', 'hod-reports', 'meetings', 'hod-lecturer-activity'],
+    hod:        ['hod-overview', 'hod-courses', 'hod-lecturers', 'hod-reports'],
     employee:   ['dashboard', 'sign-in-out', 'my-attendance', 'reports'],
     student:    ['dashboard', 'mark-attendance', 'quizzes', 'assignments'],
     superadmin: currentUser?.company?.mode === 'academic'
