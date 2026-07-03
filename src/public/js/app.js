@@ -6062,6 +6062,35 @@ async function renderLecturerDashboard(content) {
     lecInsights.push({ tone: 'good', text: `All clear — no live sessions or upcoming meetings need your attention right now. Ask me anything about your courses.` });
   }
 
+  // ── Recent sessions rows (same look as Admin's dashboard) ────────────────
+  const lecEnrollMap = {};
+  coursesData.courses.forEach(c => { lecEnrollMap[c._id] = (c.enrolledStudents || []).length; });
+  const lecMarkedOf   = s => s.totalMarked ?? s.attendanceCount ?? (s.records ? s.records.length : 0) ?? 0;
+  const lecExpectedOf = s => { const cid = s.course?._id || s.course; return cid && lecEnrollMap[cid] ? lecEnrollMap[cid] : null; };
+  const lecFmtPct  = (m, e) => e ? Math.min(100, Math.round((m / e) * 100)) : null;
+  const lecBarTone = p => p == null ? '' : p >= 85 ? 'good' : p >= 60 ? 'warn' : 'bad';
+  const lecSessionRows = sessionsData.sessions.length
+    ? sessionsData.sessions.map(s => {
+        const isLive = LIVE.includes(s.status);
+        const m = lecMarkedOf(s), e = lecExpectedOf(s);
+        const pct = lecFmtPct(m, e);
+        const courseTag = s.course?.code || s.course?.title || '';
+        return `
+          <div class="adx-session-row">
+            <span class="adx-status-pill ${isLive ? 'live' : 'ended'}">${isLive ? '<span class="adx-live-dot"></span>Live' : 'Ended'}</span>
+            <div class="adx-session-info">
+              <div class="adx-session-title">${esc(s.title || courseTag || 'Untitled session')}</div>
+              <div class="adx-session-sub">${courseTag ? esc(courseTag) + ' · ' : ''}${!isLive && s.startedAt ? timeAgo(s.startedAt) : (s.startedAt ? new Date(s.startedAt).toLocaleString() : '')}</div>
+            </div>
+            <div class="adx-session-att">
+              <div class="adx-att-nums">${m}${e ? ' / ' + e : ''} <span class="adx-att-label">students</span></div>
+              ${pct != null ? `<div class="adx-att-bar"><span class="${lecBarTone(pct)}" style="width:${pct}%"></span></div><div class="adx-att-pct ${lecBarTone(pct)}">${pct}%</div>` : ''}
+            </div>
+            <button class="adx-row-btn ${isLive ? 'primary' : ''}" onclick="navigateTo('sessions')">${isLive ? 'Monitor' : 'View'}</button>
+          </div>`;
+      }).join('')
+    : `<div class="empty-state" style="padding:28px 0"><p>No sessions yet. Start your first attendance session!</p></div>`;
+
   const _fmtMeetingDate = iso => {
     const d = new Date(iso);
     return d.toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' });
@@ -6113,26 +6142,17 @@ async function renderLecturerDashboard(content) {
         <div class="adx-kpi-sub">${quizzesCreated > 0 ? 'Created' : 'None created yet'}</div>
       </div>
     </div>
-    <div class="quick-actions">
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:10px">
       <button class="btn btn-primary btn-sm" onclick="navigateTo('sessions'); showStartSessionModal()">${sessionsIcon()} Start Session</button>
       <button class="btn btn-secondary btn-sm" onclick="navigateTo('courses'); setTimeout(showCreateCourseModal, 300)">${coursesIcon()} Create Course</button>
       <button class="btn btn-secondary btn-sm" onclick="renderProctoredQuizzes(); setTimeout(showCreateQuizModal, 300)">${quizzesIcon()} Create Quiz</button>
     </div>
-    <div class="card">
-      <div class="card-title">Recent Sessions</div>
-      ${sessionsData.sessions.length ? `
-        <table>
-          <thead><tr><th>Title</th><th>Status</th><th>Started</th><th>Created By</th></tr></thead>
-          <tbody>${sessionsData.sessions.map(s => `
-            <tr>
-              <td style="font-weight:500;color:var(--text)">${s.title || 'Untitled'}</td>
-              <td><span class="status-badge status-${s.status}">${s.status}</span></td>
-              <td>${new Date(s.startedAt).toLocaleString()}</td>
-              <td>${s.createdBy?.name || 'N/A'}</td>
-            </tr>
-          `).join('')}</tbody>
-        </table>
-      ` : '<div class="empty-state"><p>No sessions yet. Start your first attendance session!</p></div>'}
+    <div class="adx-card">
+      <div class="adx-card-head">
+        <span class="adx-card-title">Recent sessions</span>
+        <span class="panel-link" onclick="navigateTo('sessions')">View all →</span>
+      </div>
+      ${lecSessionRows}
     </div>
 
     <div class="card" style="margin-top:0">
