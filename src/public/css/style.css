@@ -6778,9 +6778,22 @@ table tr:hover td { background: #f8fafc !important; }
 
 @media (max-width: 900px) {
   .adx-main-grid { grid-template-columns: 1fr; }
-  .adx-ai-band { flex-wrap: wrap; }
-  .adx-ai-cta { margin-left: 52px; }
   .adx-session-att { min-width: 74px; }
+
+  /* Compact AI insights band on mobile. Previously this wrapped into three
+     stacked full-width rows (icon, body, CTA) at desktop sizing, which made
+     the card feel oversized. Keep icon + text on one row at a smaller scale
+     instead, and drop the trailing "Ask Dikly AI →" CTA — it's redundant on
+     mobile since the dedicated Ask Dikly AI button already sits above this
+     card, and the whole band is itself tappable. */
+  .adx-ai-band { flex-wrap: nowrap; align-items: flex-start; padding: 12px 14px; gap: 10px; }
+  .adx-ai-icon { width: 28px; height: 28px; border-radius: 9px; }
+  .adx-ai-icon svg { width: 14px; height: 14px; }
+  .adx-ai-eyebrow { font-size: 9.5px; margin-bottom: 2px; }
+  .adx-ai-headline { font-size: 12.5px; line-height: 1.42; }
+  .adx-ai-chips { margin-top: 6px; gap: 5px; }
+  .adx-chip { font-size: 10.5px; padding: 2px 8px; max-width: 200px; }
+  .adx-ai-cta { display: none; }
 }
 
 /* ── Dark theme ── */
