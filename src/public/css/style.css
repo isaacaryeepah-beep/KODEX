@@ -4678,19 +4678,21 @@ table tr:hover td { background: #f8fafc !important; }
   height: 58px !important;
 }
 
-/* ── Announcement banner: green welcome bar (visible when active) ── */
+/* Trial/subscription banner: visibility and color are state-driven — see the
+   base .trial-banner / .trial-banner.sub--active / .sub--trial / .sub--urgent
+   rules above (~line 874) and the JS in showDashboard() that toggles them.
+   This block used to force display:flex + a single fixed green color with
+   !important, which fought that logic: it kept the banner visibly open even
+   when JS explicitly hid it (e.g. HOD, who gets no banner at all), and
+   flattened every status to the same green regardless of trial/urgent/active. */
 .trial-banner {
-  background: linear-gradient(90deg, #ecfdf5 0%, #d1fae5 100%) !important;
-  color: #065f46 !important;
-  border-bottom: 1px solid #a7f3d0 !important;
-  padding: 9px 28px !important;
-  font-size: 13px !important;
-  font-weight: 500 !important;
-  display: flex !important;
-  align-items: center !important;
-  justify-content: space-between !important;
-  gap: 12px !important;
-  letter-spacing: .01em !important;
+  padding: 9px 28px;
+  font-size: 13px;
+  font-weight: 500;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  letter-spacing: .01em;
 }
 /* Desktop: offset banner left-padding to clear the fixed 260px sidebar */
 @media (min-width: 769px) {
