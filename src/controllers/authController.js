@@ -10,6 +10,7 @@ const RefreshToken = require("../models/RefreshToken");
 const { sendWelcome, sendAdminPasswordResetNotice, sendPasswordReset, sendNewInstitutionAlert, sendLecturerWelcome, sendEmployeeWelcome, sendHodWelcome, sendSelfRegPending, sendAdminNewSelfReg } = require("../services/emailService");
 const { sendOtp, normalisePhone } = require("../services/smsService");
 const { syncStudentToRoster } = require("../utils/rosterSync");
+const { getMyActiveHRAssignment } = require("../utils/corporateScope");
 
 const MODERATOR_ROLES = ['admin', 'lecturer', 'manager', 'hod', 'superadmin'];
 
@@ -1012,6 +1013,10 @@ exports.login = async (req, res) => {
     const refreshToken = generateRefreshToken(user._id);
     await persistRefreshToken(refreshToken, user._id, req);
 
+    const hrAssignment = company?.mode !== "academic"
+      ? await getMyActiveHRAssignment(user._id, user.company).catch(() => null)
+      : null;
+
     res.json({
       token,
       refreshToken,
@@ -1037,6 +1042,7 @@ exports.login = async (req, res) => {
         lastLoginAt: user.lastLoginAt,
         subscriptionExpiry: user.subscriptionExpiry || null,
         subscriptionStatus: user.subscriptionStatus || null,
+        hrAssignment,
         accountDeviceLock: user.accountDeviceLock?.isLocked ? {
           isLocked: true,
           lockedUntil: user.accountDeviceLock.lockedUntil,
@@ -1143,9 +1149,13 @@ exports.getMe = async (req, res) => {
 
     const isAdmin       = ['admin', 'superadmin', 'manager'].includes(user.role);
     const canSeeQrSeed  = ['admin', 'superadmin'].includes(user.role);
+    const hrAssignment  = company?.mode !== "academic"
+      ? await getMyActiveHRAssignment(user._id, user.company).catch(() => null)
+      : null;
     res.json({
       user: {
         ...user.toJSON(),
+        hrAssignment,
         company: company ? {
           id: company._id,
           _id: company._id,

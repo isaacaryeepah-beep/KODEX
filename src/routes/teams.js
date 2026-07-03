@@ -22,6 +22,7 @@ const express = require("express");
 const router  = express.Router();
 const authenticate              = require("../middleware/auth");
 const { requireRole, requireMode } = require("../middleware/role");
+const { requirePeopleOpsAccess } = require("../utils/corporateScope");
 const { requireActiveSubscription } = require("../middleware/subscription");
 const Team = require("../models/Team");
 const User = require("../models/User");
@@ -29,10 +30,9 @@ const User = require("../models/User");
 const mw        = [authenticate, requireMode("corporate"), requireActiveSubscription];
 const adminOnly = requireRole("admin", "superadmin");
 const canManage = requireRole("admin", "manager", "superadmin");
-const canView   = requireRole("admin", "manager", "superadmin");
 
 // ── GET /  — list teams ──────────────────────────────────────────────────────
-router.get("/", ...mw, canView, async (req, res) => {
+router.get("/", ...mw, requirePeopleOpsAccess, async (req, res) => {
   try {
     const filter = { company: req.user.company, isActive: true };
     if (req.query.departmentId) filter.department = req.query.departmentId;
@@ -79,7 +79,7 @@ router.post("/", ...mw, canManage, async (req, res) => {
 });
 
 // ── GET /:id  — single team ──────────────────────────────────────────────────
-router.get("/:id", ...mw, canView, async (req, res) => {
+router.get("/:id", ...mw, requirePeopleOpsAccess, async (req, res) => {
   try {
     const team = await Team.findOne({ _id: req.params.id, company: req.user.company })
       .populate("department", "name code")
