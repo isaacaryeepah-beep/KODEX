@@ -6418,22 +6418,26 @@ async function renderEmployeeDashboard(content) {
     </div>
 
     <!-- MONTHLY STATS -->
-    <div class="stats-grid" style="margin-bottom:16px">
-      <div class="stat-card" onclick="navigateTo('my-attendance')" style="cursor:pointer">
-        <div class="stat-value" style="color:${attRate >= 80 ? '#16a34a' : attRate >= 60 ? '#d97706' : '#dc2626'}">${attRate}%</div>
-        <div class="stat-label">Monthly Rate</div>
+    <div class="adx-kpi-grid" style="margin-bottom:16px">
+      <div class="adx-kpi" onclick="navigateTo('my-attendance')">
+        <div class="adx-kpi-label">Monthly rate</div>
+        <div class="adx-kpi-value">${attRate}%</div>
+        <div class="adx-kpi-sub ${attRate >= 80 ? 'good' : attRate >= 60 ? 'warn' : 'bad'}">${attRate >= 80 ? 'On track' : attRate >= 60 ? 'Needs attention' : 'Low attendance'}</div>
       </div>
-      <div class="stat-card">
-        <div class="stat-value" style="color:#d97706">${lateDays}</div>
-        <div class="stat-label">Late Days</div>
+      <div class="adx-kpi">
+        <div class="adx-kpi-label">Late days</div>
+        <div class="adx-kpi-value">${lateDays}</div>
+        <div class="adx-kpi-sub ${lateDays === 0 ? 'good' : 'warn'}">${lateDays === 0 ? 'None this month' : 'This month'}</div>
       </div>
-      <div class="stat-card">
-        <div class="stat-value" style="color:#0891b2">${totalHrs.toFixed(1)}h</div>
-        <div class="stat-label">Hours This Month</div>
+      <div class="adx-kpi">
+        <div class="adx-kpi-label">Hours this month</div>
+        <div class="adx-kpi-value">${totalHrs.toFixed(1)}h</div>
+        <div class="adx-kpi-sub">${overtimeTot > 0 ? `+${overtimeTot}h overtime` : 'No overtime yet'}</div>
       </div>
-      <div class="stat-card" onclick="navigateTo('my-leaves')" style="cursor:pointer">
-        <div class="stat-value" style="color:#7c3aed">${annualLeft}</div>
-        <div class="stat-label">Annual Days Left</div>
+      <div class="adx-kpi" onclick="navigateTo('my-leaves')">
+        <div class="adx-kpi-label">Annual days left</div>
+        <div class="adx-kpi-value">${annualLeft}</div>
+        <div class="adx-kpi-sub ${annualLeft > 7 ? 'good' : annualLeft > 3 ? 'warn' : 'bad'}">Of ${ANNUAL_ALLOC} days</div>
       </div>
     </div>
 
@@ -19763,26 +19767,28 @@ async function renderMyLeaves() {
       <div class="page-header"><h2>My Leave</h2><p>Request and track your leave</p></div>
 
       <!-- Leave Balance -->
-      <div class="stats-grid" style="margin-bottom:16px">
-        <div class="stat-card">
-          <div class="stat-value" style="color:${ANNUAL-annualUsed>7?'#16a34a':ANNUAL-annualUsed>3?'#d97706':'#dc2626'}">${ANNUAL - annualUsed}</div>
-          <div class="stat-label">Annual Left</div>
+      <div class="adx-kpi-grid" style="margin-bottom:16px">
+        <div class="adx-kpi">
+          <div class="adx-kpi-label">Annual left</div>
+          <div class="adx-kpi-value">${ANNUAL - annualUsed}</div>
           ${mkBar(annualUsed, ANNUAL, ANNUAL-annualUsed>7?'#16a34a':ANNUAL-annualUsed>3?'#d97706':'#dc2626')}
-          <div style="font-size:10px;color:var(--text-muted);margin-top:4px">${annualUsed} used of ${ANNUAL}</div>
+          <div class="adx-kpi-sub" style="margin-top:6px">${annualUsed} used of ${ANNUAL}</div>
         </div>
-        <div class="stat-card">
-          <div class="stat-value" style="color:${SICK-sickUsed>3?'#16a34a':'#d97706'}">${SICK - sickUsed}</div>
-          <div class="stat-label">Sick Left</div>
+        <div class="adx-kpi">
+          <div class="adx-kpi-label">Sick left</div>
+          <div class="adx-kpi-value">${SICK - sickUsed}</div>
           ${mkBar(sickUsed, SICK, SICK-sickUsed>3?'#16a34a':'#d97706')}
-          <div style="font-size:10px;color:var(--text-muted);margin-top:4px">${sickUsed} used of ${SICK}</div>
+          <div class="adx-kpi-sub" style="margin-top:6px">${sickUsed} used of ${SICK}</div>
         </div>
-        <div class="stat-card">
-          <div class="stat-value">${leaves.filter(l=>l.status==='pending').length}</div>
-          <div class="stat-label">Pending Requests</div>
+        <div class="adx-kpi">
+          <div class="adx-kpi-label">Pending requests</div>
+          <div class="adx-kpi-value">${leaves.filter(l=>l.status==='pending').length}</div>
+          <div class="adx-kpi-sub">Awaiting review</div>
         </div>
-        <div class="stat-card">
-          <div class="stat-value" style="color:#7c3aed">${otherUsed}</div>
-          <div class="stat-label">Other Days Used</div>
+        <div class="adx-kpi">
+          <div class="adx-kpi-label">Other days used</div>
+          <div class="adx-kpi-value">${otherUsed}</div>
+          <div class="adx-kpi-sub">This year</div>
         </div>
       </div>
 
