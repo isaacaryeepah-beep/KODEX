@@ -3636,6 +3636,21 @@ async function renderHodDashboard(content) {
     }
     activeSess = sessions.filter(s => ['active','live','paused','locked'].includes(s.status)).length;
 
+    // ── Dikly AI insights (instant heuristics from data already fetched) ────
+    const hodInsights = [];
+    if (activeSess > 0) {
+      hodInsights.push({ tone: 'info', text: `<strong>${activeSess} session${activeSess > 1 ? 's' : ''} live right now</strong> in ${currentUser.department || 'your department'}.` });
+    }
+    if (lecturers === 0) {
+      hodInsights.push({ tone: 'warn', text: `No lecturers found in ${currentUser.department || 'your department'} yet.` });
+    }
+    if (students === 0) {
+      hodInsights.push({ tone: 'warn', text: `No students found in ${currentUser.department || 'your department'} yet.` });
+    }
+    if (!hodInsights.length) {
+      hodInsights.push({ tone: 'good', text: `All clear — no anomalies detected in ${currentUser.department || 'your department'}. Ask me anything about your department's data.` });
+    }
+
     content.innerHTML = _offlineBanner + `
 
       <div class="page-header" style="display:flex;align-items:flex-start;justify-content:space-between;flex-wrap:wrap;gap:12px;">
@@ -3644,6 +3659,7 @@ async function renderHodDashboard(content) {
           <p>Welcome back, ${currentUser.name} · <strong style="color:#0891b2;">${currentUser.department || 'No Department Assigned'}</strong> — ${currentUser.company?.name || ''}</p>
         </div>
         <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center;">
+          ${_diklyAiBtnHtml()}
           <button onclick="navigateTo('announcements')" style="display:inline-flex;align-items:center;gap:8px;padding:10px 20px;background:linear-gradient(135deg,#0891b2,#0e7490);color:#fff;border:none;border-radius:10px;font-size:14px;font-weight:700;cursor:pointer;box-shadow:0 4px 14px rgba(8,145,178,.35);">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
             Announcements
@@ -3654,6 +3670,7 @@ async function renderHodDashboard(content) {
           </button>
         </div>
       </div>
+      ${_diklyAiBandHtml(hodInsights)}
       <div class="stats-grid" style="margin-bottom:20px;">
         <div class="stat-card" onclick="navigateTo('hod-lecturers')" style="cursor:pointer">
           <div class="stat-value" style="color:#0891b2">${lecturers}</div>
@@ -6022,6 +6039,29 @@ async function renderLecturerDashboard(content) {
     .sort((a, b) => new Date(a.scheduledStart) - new Date(b.scheduledStart))
     .slice(0, 5);
 
+  // ── Dikly AI insights (instant heuristics from data already fetched) ─────
+  const LIVE = ['active', 'live', 'paused', 'locked'];
+  const liveNow = sessionsData.sessions.filter(s => LIVE.includes(s.status)).length;
+  const lecInsights = [];
+  if (liveNow > 0) {
+    lecInsights.push({ tone: 'info', text: `<strong>${liveNow} session${liveNow > 1 ? 's' : ''} live right now</strong> — jump in from Sessions to monitor.` });
+  }
+  const nextMeeting = upcomingMeetings.find(m => m.status !== 'live');
+  if (nextMeeting) {
+    const diffMin = Math.round((new Date(nextMeeting.scheduledStart) - now) / 60000);
+    if (diffMin >= 0 && diffMin < 60) {
+      lecInsights.push({ tone: 'warn', text: `<strong>${esc(nextMeeting.title || 'A meeting')}</strong> starts in ${diffMin} minute${diffMin === 1 ? '' : 's'}.` });
+    }
+  }
+  if (activeCourses === 0) {
+    lecInsights.push({ tone: 'warn', text: `You haven't created a course yet — students can't enroll until you do.` });
+  } else if (quizzesCreated === 0) {
+    lecInsights.push({ tone: 'info', text: `No quizzes created yet — try Dikly AI to generate one from your course material.` });
+  }
+  if (!lecInsights.length) {
+    lecInsights.push({ tone: 'good', text: `All clear — no live sessions or upcoming meetings need your attention right now. Ask me anything about your courses.` });
+  }
+
   const _fmtMeetingDate = iso => {
     const d = new Date(iso);
     return d.toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' });
@@ -6041,12 +6081,16 @@ async function renderLecturerDashboard(content) {
   };
 
   content.innerHTML = `
-    <div class="page-header">
-      <h2>Welcome back, ${currentUser.name.split(' ')[0]}</h2>
-      <p>Here's an overview of your workspace at ${currentUser.company?.name || 'your institution'}
-        ${currentUser.department ? ` · <span style="display:inline-flex;align-items:center;gap:4px;padding:2px 8px;background:#fffbeb;border:1px solid #fde68a;border-radius:20px;font-size:12px;font-weight:700;color:#b45309;">${currentUser.department}</span>` : ''}
-      </p>
+    <div class="page-header" style="display:flex;align-items:flex-start;justify-content:space-between;flex-wrap:wrap;gap:12px;">
+      <div>
+        <h2>Welcome back, ${currentUser.name.split(' ')[0]}</h2>
+        <p>Here's an overview of your workspace at ${currentUser.company?.name || 'your institution'}
+          ${currentUser.department ? ` · <span style="display:inline-flex;align-items:center;gap:4px;padding:2px 8px;background:#fffbeb;border:1px solid #fde68a;border-radius:20px;font-size:12px;font-weight:700;color:#b45309;">${currentUser.department}</span>` : ''}
+        </p>
+      </div>
+      ${_diklyAiBtnHtml()}
     </div>
+    ${_diklyAiBandHtml(lecInsights)}
     <div class="stats-grid">
       <div class="stat-card"><div class="stat-value">${totalStudents}</div><div class="stat-label">Students</div></div>
       <div class="stat-card"><div class="stat-value">${activeCourses}</div><div class="stat-label">Courses</div></div>
@@ -7367,6 +7411,26 @@ async function _renderAdminCharts(allSessions, users, helpers) {
   }
 }
 
+// ── Shared Dikly AI insights band (Admin, Lecturer, HOD dashboards) ─────────
+function _diklyAiBandHtml(insights) {
+  const chipTone = { good: 'adx-chip-good', warn: 'adx-chip-warn', bad: 'adx-chip-bad', info: 'adx-chip-info' };
+  const sparkle = '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l1.9 5.7L19.6 10l-5.7 1.9L12 17.6l-1.9-5.7L4.4 10l5.7-1.9z"/><path d="M19 3l.7 2.1L21.8 6l-2.1.7L19 8.8l-.7-2.1L16.2 6l2.1-.9z"/></svg>';
+  const headline = insights[0];
+  return `
+    <div class="adx-ai-band" onclick="navigateTo('ai-reports')" role="button" tabindex="0">
+      <div class="adx-ai-icon">${sparkle}</div>
+      <div class="adx-ai-body">
+        <div class="adx-ai-eyebrow">Dikly AI · Smart insights</div>
+        <div class="adx-ai-headline">${headline.text}</div>
+        ${insights.length > 1 ? `<div class="adx-ai-chips">${insights.slice(1, 4).map(i => `<span class="adx-chip ${chipTone[i.tone]}">${i.text.replace(/<[^>]+>/g, '')}</span>`).join('')}</div>` : ''}
+      </div>
+      <div class="adx-ai-cta">Ask Dikly AI <span style="font-size:15px;line-height:1">→</span></div>
+    </div>`;
+}
+function _diklyAiBtnHtml() {
+  const sparkle = '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l1.9 5.7L19.6 10l-5.7 1.9L12 17.6l-1.9-5.7L4.4 10l5.7-1.9z"/><path d="M19 3l.7 2.1L21.8 6l-2.1.7L19 8.8l-.7-2.1L16.2 6l2.1-.9z"/></svg>';
+  return `<button class="adx-ai-btn" onclick="navigateTo('ai-reports')">${sparkle} Ask Dikly AI</button>`;
+}
 
 // ── MANAGER DASHBOARD (corporate only) ───────────────────────────────────────
 async function renderManagerDashboard(content) {

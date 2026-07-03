@@ -1,58 +1,101 @@
+## Render Blueprint for Dikly/KODEX.
+##
+## What this deploys: the Node/Express app only (src/server.js + src/public/).
+## MongoDB is Atlas (external, not managed here). Redis is not used by the
+## app code (see src/middleware/rateLimiter.js — in-memory by design), so
+## there is deliberately no Redis service in this blueprint.
+##
+## This file only holds non-secret configuration. Every real secret
+## (API keys, JWT secrets, DB URI) is marked `sync: false`, meaning Render
+## will prompt for it once in the dashboard and never store the value in
+## this repo — this repo is public.
+##
+## Single instance is intentional, not a placeholder: the rate limiter
+## (src/middleware/rateLimiter.js) and the node-cron jobs (src/server.js)
+## both assume one process. Scaling to multiple instances needs that
+## rate limiter moved to a shared store and the cron jobs guarded against
+## running once per instance — neither exists yet.
+##
+## Video: GetStream is primary, LiveKit is the fallback (see
+## src/services/livekitService.js, .env.example). Self-hosted Jitsi is a
+## last-resort fallback only, not required — JITSI_* below is optional.
+
 services:
   - type: web
-    name: kodex
+    name: dikly
     runtime: node
-    rootDir:
-    buildCommand: npm install
+    plan: starter
+    region: frankfurt
+    branch: main
+    autoDeploy: true
+    numInstances: 1
+    buildCommand: npm ci --omit=dev
     startCommand: node src/server.js
+    healthCheckPath: /health
+
     envVars:
+      # ── Non-secret configuration ──────────────────────────────────────────
       - key: NODE_ENV
         value: production
-      - key: PORT
-        generateValue: false
-
-      # ── Platform URLs ──────────────────────────────────────────────────────
+      - key: PLATFORM_DOMAIN
+        value: dikly.sbs
       - key: APP_BASE_URL
-        value: https://app.dikly.sbs
+        value: https://dikly.sbs
       - key: API_BASE_URL
         value: https://api.dikly.sbs
       - key: MONITOR_BASE_URL
         value: https://monitor.dikly.sbs
       - key: ADMIN_BASE_URL
         value: https://admin.dikly.sbs
+      - key: MEET_BASE_URL
+        value: https://meet.dikly.sbs
+      - key: JWT_EXPIRES_IN
+        value: 15m
+      - key: JWT_REFRESH_EXPIRES_IN
+        value: 30d
+      - key: SMS_PROVIDER
+        value: arkesel
+      - key: SMS_SENDER_ID
+        value: DIKLY
 
-      # ── Jitsi Self-Hosted (REQUIRED) ───────────────────────────────────────
-      # All three must match the values in docker-compose.jitsi.yml on the
-      # Jitsi server. If any are missing the server will refuse to start.
-      - key: JITSI_DOMAIN
-        value: meet.dikly.live
-      - key: JITSI_APP_ID
-        value: dikly
-      # Set JITSI_APP_SECRET in the Render dashboard — value must match
-      # JWT_APP_SECRET in docker-compose.jitsi.yml on the Jitsi server.
-      # Generated secret: 923d0107901df52344b7deba13b7fc6cecda59b1846ac690cdbb0cb940722bfb
-      - key: JITSI_APP_SECRET
-        sync: false
-      # Jicofo REST — only reachable if Jitsi is on the same server as DIKLY.
-      # Leave unset if Jitsi runs on a separate VM.
-      - key: JITSI_JICOFO_URL
-        sync: false
-
-      # ── Database ───────────────────────────────────────────────────────────
+      # ── Database (Atlas, external — same cluster the data already lives on)
       - key: MONGODB_URI
         sync: false
-      - key: REDIS_URL
-        sync: false
 
-      # ── Auth Tokens ────────────────────────────────────────────────────────
+      # ── Auth tokens — JWT_REFRESH_SECRET is a hard requirement, the app
+      # refuses to run safely without a real 64-char value here.
       - key: JWT_SECRET
         sync: false
-      - key: JWT_EXPIRES_IN
-        value: 7d
+      - key: JWT_REFRESH_SECRET
+        sync: false
       - key: MEETING_TOKEN_SECRET
         sync: false
 
-      # ── Email ──────────────────────────────────────────────────────────────
+      # ── Cloudinary (image/media storage — src/services/storage/) ──────────
+      - key: CLOUDINARY_CLOUD_NAME
+        sync: false
+      - key: CLOUDINARY_API_KEY
+        sync: false
+      - key: CLOUDINARY_API_SECRET
+        sync: false
+
+      # ── Video — GetStream primary, LiveKit fallback ────────────────────────
+      - key: STREAM_API_KEY
+        sync: false
+      - key: STREAM_API_SECRET
+        sync: false
+      - key: LIVEKIT_API_KEY
+        sync: false
+      - key: LIVEKIT_API_SECRET
+        sync: false
+      - key: LIVEKIT_URL
+        sync: false
+      # Self-hosted Jitsi — last-resort fallback only, leave unset unless
+      # actually running a Jitsi server matching these values.
+      - key: JITSI_APP_SECRET
+        sync: false
+
+      # ── Email ───────────────────────────────────────────────────────────────
       - key: MAILERSEND_API_KEY
         sync: false
       - key: GMAIL_USER
@@ -60,22 +103,24 @@ services:
       - key: GMAIL_APP_PASSWORD
         sync: false
 
-      # ── SMS ────────────────────────────────────────────────────────────────
-      - key: SMS_PROVIDER
-        value: arkesel
-      - key: SMS_SENDER_ID
-        value: DIKLY
+      # ── SMS ─────────────────────────────────────────────────────────────────
       - key: ARKESEL_API_KEY
         sync: false
       - key: MNOTIFY_API_KEY
         sync: false
 
-      # ── Payments ───────────────────────────────────────────────────────────
+      # ── Payments ────────────────────────────────────────────────────────────
       - key: PAYSTACK_SECRET_KEY
         sync: false
       - key: PAYSTACK_PUBLIC_KEY
         sync: false
 
-      # ── AI ─────────────────────────────────────────────────────────────────
+      # ── AI ──────────────────────────────────────────────────────────────────
       - key: ANTHROPIC_API_KEY
+        sync: false
+      - key: OPENAI_API_KEY
+        sync: false
+
+      # ── Error monitoring (optional — leave unset to disable) ──────────────
+      - key: SENTRY_DSN
         sync: false
