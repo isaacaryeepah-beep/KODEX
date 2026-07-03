@@ -182,32 +182,88 @@ app.use("/api/", (req, res, next) => {
   return apiLimiter(req, res, next);
 });
 
-app.get("/superadmin", (req, res) => {
-  res.sendFile(path.join(__dirname, "public", "superadmin.html"));
+// ── Asset version stamp ───────────────────────────────────────────────────────
+// JS/CSS are cached aggressively by the browser (see express.static below).
+// That is only safe because every asset reference in our HTML carries a
+// version query string that changes on every deploy — a stale cached byte
+// range is simply never requested again under the new URL. Relying on a
+// developer to hand-bump a `?v=` string in index.html has already bitten us:
+// app.js was edited across five PRs in one day while its query string sat
+// unchanged, so any client with a warm cache (especially the Capacitor
+// app, which rarely does a fresh top-level navigation) kept running
+// week-old code. This stamp is computed once at boot and injected
+// automatically, so it can't be forgotten again.
+const ASSET_VERSION = process.env.RENDER_GIT_COMMIT || process.env.SOURCE_VERSION
+  || process.env.GIT_COMMIT || Date.now().toString(36);
+
+const fs = require("fs");
+const _versionedHtmlCache = new Map();
+function sendVersionedHtml(res, absPath) {
+  let html = _versionedHtmlCache.get(absPath);
+  if (!html) {
+    const raw = fs.readFileSync(absPath, "utf8");
+    html = raw.replace(
+      /(src|href)="(\/(?:js|css)\/[^"?]+)(?:\?[^"]*)?"/g,
+      (_m, attr, assetPath) => `${attr}="${assetPath}?v=${ASSET_VERSION}"`
+    );
+    _versionedHtmlCache.set(absPath, html);
+  }
+  res.setHeader("Cache-Control", "no-cache, no-store, must-revalidate");
+  res.setHeader("Pragma", "no-cache");
+  res.setHeader("Expires", "0");
+  res.setHeader("Content-Type", "text/html; charset=utf-8");
+  res.send(html);
+}
+
+app.get(["/", "/index.html"], (req, res) => {
+  sendVersionedHtml(res, path.join(__dirname, "public", "index.html"));
 });
 
-app.get("/anticheat",           (req, res) => res.sendFile(path.join(__dirname, "public", "anticheat-dashboard.html")));
-app.get("/monitor",             (req, res) => res.sendFile(path.join(__dirname, "public", "monitor-standalone.html")));
-app.get("/meeting-join",        (req, res) => res.sendFile(path.join(__dirname, "public", "meeting-monitor.html")));
-app.get("/lecturer-meeting",    (req, res) => res.sendFile(path.join(__dirname, "public", "lecturer-meeting.html")));
-app.get("/student-meeting",     (req, res) => res.sendFile(path.join(__dirname, "public", "student-meeting.html")));
-app.get("/session-preflight",   (req, res) => res.sendFile(path.join(__dirname, "public", "session-preflight.html")));
-app.get("/quizzes",        (req, res) => res.sendFile(path.join(__dirname, "public", "assignments.html")));
-app.get("/assignments",    (req, res) => res.sendFile(path.join(__dirname, "public", "assignments.html")));
-app.get("/exam-preflight", (req, res) => res.sendFile(path.join(__dirname, "public", "exam-preflight.html")));
-app.get("/exam-room",      (req, res) => res.sendFile(path.join(__dirname, "public", "exam-room.html")));
-app.get("/about",          (req, res) => res.sendFile(path.join(__dirname, "public", "about.html")));
-app.get("/download",       (req, res) => res.sendFile(path.join(__dirname, "public", "download.html")));
-app.get("/founder",        (req, res) => res.sendFile(path.join(__dirname, "public", "founder.html")));
-app.get("/contact",        (req, res) => res.sendFile(path.join(__dirname, "public", "contact.html")));
-app.get("/privacy",        (req, res) => res.sendFile(path.join(__dirname, "public", "privacy.html")));
-app.get("/terms",          (req, res) => res.sendFile(path.join(__dirname, "public", "terms.html")));
-app.get("/delete-account", (req, res) => res.sendFile(path.join(__dirname, "public", "delete-account.html")));
+app.get("/superadmin", (req, res) => {
+  sendVersionedHtml(res, path.join(__dirname, "public", "superadmin.html"));
+});
+
+app.get("/anticheat",           (req, res) => sendVersionedHtml(res, path.join(__dirname, "public", "anticheat-dashboard.html")));
+app.get("/monitor",             (req, res) => sendVersionedHtml(res, path.join(__dirname, "public", "monitor-standalone.html")));
+app.get("/meeting-join",        (req, res) => sendVersionedHtml(res, path.join(__dirname, "public", "meeting-monitor.html")));
+app.get("/lecturer-meeting",    (req, res) => sendVersionedHtml(res, path.join(__dirname, "public", "lecturer-meeting.html")));
+app.get("/student-meeting",     (req, res) => sendVersionedHtml(res, path.join(__dirname, "public", "student-meeting.html")));
+app.get("/session-preflight",   (req, res) => sendVersionedHtml(res, path.join(__dirname, "public", "session-preflight.html")));
+app.get("/quizzes",        (req, res) => sendVersionedHtml(res, path.join(__dirname, "public", "assignments.html")));
+app.get("/assignments",    (req, res) => sendVersionedHtml(res, path.join(__dirname, "public", "assignments.html")));
+app.get("/exam-preflight", (req, res) => sendVersionedHtml(res, path.join(__dirname, "public", "exam-preflight.html")));
+app.get("/exam-room",      (req, res) => sendVersionedHtml(res, path.join(__dirname, "public", "exam-room.html")));
+app.get("/about",          (req, res) => sendVersionedHtml(res, path.join(__dirname, "public", "about.html")));
+app.get("/download",       (req, res) => sendVersionedHtml(res, path.join(__dirname, "public", "download.html")));
+app.get("/founder",        (req, res) => sendVersionedHtml(res, path.join(__dirname, "public", "founder.html")));
+app.get("/contact",        (req, res) => sendVersionedHtml(res, path.join(__dirname, "public", "contact.html")));
+app.get("/privacy",        (req, res) => sendVersionedHtml(res, path.join(__dirname, "public", "privacy.html")));
+app.get("/terms",          (req, res) => sendVersionedHtml(res, path.join(__dirname, "public", "terms.html")));
+app.get("/delete-account", (req, res) => sendVersionedHtml(res, path.join(__dirname, "public", "delete-account.html")));
+
+// Any other .html file under public/ that isn't explicitly routed above
+// (e.g. snap-quiz.html, stream-room.html) still gets version-stamped, so
+// this class of bug can't resurface on a page we forgot to list here.
+const _publicDir = path.join(__dirname, "public");
+app.get(/^\/[\w\-./]+\.html$/, (req, res, next) => {
+  const abs = path.join(_publicDir, decodeURIComponent(req.path));
+  if (!abs.startsWith(_publicDir) || !fs.existsSync(abs)) return next();
+  sendVersionedHtml(res, abs);
+});
 
 app.use(express.static(path.join(__dirname, "public"), {
   setHeaders: (res, filePath) => {
+    const base = path.basename(filePath).toLowerCase();
     const ext = path.extname(filePath).toLowerCase();
-    if (['.js', '.css', '.svg', '.png', '.jpg', '.jpeg', '.webp', '.woff', '.woff2'].includes(ext)) {
+    // The service worker script must never be cached at the HTTP layer —
+    // its own update algorithm depends on always being able to fetch a
+    // byte-fresh copy from the literal /sw.js URL (it carries no version
+    // query string, unlike the assets it manages).
+    if (base === 'sw.js') {
+      res.setHeader("Cache-Control", "no-cache, no-store, must-revalidate");
+      res.setHeader("Pragma", "no-cache");
+      res.setHeader("Expires", "0");
+    } else if (['.js', '.css', '.svg', '.png', '.jpg', '.jpeg', '.webp', '.woff', '.woff2'].includes(ext)) {
       res.setHeader("Cache-Control", "public, max-age=604800, stale-while-revalidate=86400");
     } else {
       res.setHeader("Cache-Control", "no-cache, no-store, must-revalidate");

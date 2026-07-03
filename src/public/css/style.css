@@ -6870,3 +6870,55 @@ table tr:hover td { background: #f8fafc !important; }
   .exv-bar-label { font-size: .7rem; }
   .exv-bar-value { font-size: .72rem; }
 }
+
+/* ══════════════════════════════════════════════════════════════════════
+   COMPANY CALENDAR — class-based 7-column grid (cal-*)
+   Uses classes instead of inline grid-template-columns so it's immune to
+   the global mobile rule that collapses any inline grid to 1 column
+   (see [style*="grid-template-columns"] above) — that bug was stacking
+   MON/TUE/WED... vertically and turning every date into a full-width box.
+   A calendar structurally needs 7 columns at every width; we shrink cell
+   size instead of collapsing columns.
+══════════════════════════════════════════════════════════════════════ */
+.cal-card { padding: 1.1rem 1.2rem; }
+.cal-toolbar { display: flex; align-items: center; justify-content: space-between; margin-bottom: .9rem; flex-wrap: wrap; gap: .5rem; }
+.cal-legend { display: flex; gap: .9rem; flex-wrap: wrap; }
+.cal-legend-item { font-size: .72rem; color: var(--text-light); display: flex; align-items: center; gap: .3rem; white-space: nowrap; }
+.cal-legend-dot { width: 9px; height: 9px; border-radius: 3px; display: inline-block; flex-shrink: 0; }
+
+.cal-grid { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: .35rem; }
+.cal-dow-row { margin-bottom: .3rem; }
+.cal-dow { font-size: .68rem; font-weight: 700; color: var(--text-muted); text-align: center; text-transform: uppercase; }
+
+.cal-cell {
+  min-height: 86px; border: 1px solid var(--border); border-radius: 9px;
+  padding: .35rem .45rem; overflow: hidden; min-width: 0;
+}
+.cal-cell-today { outline: 2px solid var(--primary); outline-offset: -2px; }
+.cal-cell-num { font-size: .72rem; font-weight: 700; color: var(--text-muted); }
+.cal-cell-num-today { color: var(--primary); }
+.cal-ev {
+  font-size: .66rem; margin-top: .2rem; padding: .1rem .3rem; border-radius: 4px;
+  color: var(--text); border-left: 2px solid; overflow: hidden;
+  text-overflow: ellipsis; white-space: nowrap;
+}
+.cal-ev-more { font-size: .62rem; color: var(--text-muted); margin-top: .15rem; }
+
+@media (max-width: 640px) {
+  .cal-card { padding: .8rem .6rem; }
+  .cal-grid { gap: 3px; }
+  .cal-cell { min-height: 52px; padding: .2rem .2rem; border-radius: 6px; }
+  .cal-cell-num { font-size: .64rem; }
+  .cal-dow { font-size: .56rem; letter-spacing: -.2px; }
+  .cal-ev { display: none; }        /* titles don't fit at 7-up on a phone; the dot on the day is enough */
+  .cal-cell.cal-has-events::after {
+    content: ''; display: block; width: 5px; height: 5px; border-radius: 50%;
+    background: var(--primary); margin-top: 2px;
+  }
+  .cal-ev-more { display: none; }
+  .cal-legend { gap: .5rem; }
+  .cal-legend-item { font-size: .64rem; }
+}
+@media (max-width: 380px) {
+  .cal-cell { min-height: 42px; }
+}
