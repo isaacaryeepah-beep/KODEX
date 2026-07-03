@@ -175,20 +175,20 @@ router.patch("/module-permissions", ...mw, adminOnly, asyncHandler(async (req, r
   res.json({ modulePermissions: company.modulePermissions });
 }));
 
-// Payroll settings
-router.patch("/payroll-settings", ...mw, adminOnly, asyncHandler(async (req, res) => {
-  const { currency, payPeriod, overtimeRate, standardHours } = req.body;
+// Attendance reporting settings — non-financial: just the cadence a company
+// wants its hours/attendance export packaged on. Never a pay amount or
+// currency; Dikly does not compute or store compensation.
+router.patch("/attendance-reporting-settings", ...mw, adminOnly, asyncHandler(async (req, res) => {
+  const { period, standardHours } = req.body;
   const update = {};
-  if (currency      !== undefined) update["payroll.currency"]      = currency;
-  if (payPeriod     !== undefined) update["payroll.payPeriod"]     = payPeriod;
-  if (overtimeRate  !== undefined) update["payroll.overtimeRate"]  = overtimeRate;
-  if (standardHours !== undefined) update["payroll.standardHours"] = standardHours;
+  if (period        !== undefined) update["attendanceReporting.period"]        = period;
+  if (standardHours !== undefined) update["attendanceReporting.standardHours"] = standardHours;
 
   const company = await Company.findByIdAndUpdate(
     req.user.company, { $set: update }, { new: true }
-  ).select("payroll");
+  ).select("attendanceReporting");
 
-  res.json({ payroll: company.payroll });
+  res.json({ attendanceReporting: company.attendanceReporting });
 }));
 
 // ─────────────────────────────────────────────────────────────

@@ -241,11 +241,12 @@ const companySchema = new mongoose.Schema(
       supportEmail:   { type: String, default: "" },
       website:        { type: String, default: "" },
     },
-    // ── Payroll Settings ──────────────────────────────────────
-    payroll: {
-      currency:      { type: String, default: "GHS" },
-      payPeriod:     { type: String, default: "monthly" },
-      overtimeRate:  { type: Number, default: 1.5 },
+    // ── Attendance Reporting Settings ──────────────────────────
+    // Dikly never stores pay amounts or currency here -- these are purely
+    // reporting-cadence settings for the attendance/hours export a company
+    // hands to its own payroll system.
+    attendanceReporting: {
+      period:        { type: String, default: "monthly" },
       standardHours: { type: Number, default: 160 },
     },
   },

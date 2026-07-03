@@ -3263,7 +3263,7 @@ function navigateTo(view) {
     case 'messages':      renderMessages(); break;
     case 'faq-center':      _safeRender(content, renderFAQCenter, 'FAQ Center');  break;
     case 'support':         _safeRender(content, renderSupport,   'Support');     break;
-    case 'payroll':         _safeRender(content, renderPayroll, 'Payroll');         break;
+    case 'attendance-summary': _safeRender(content, renderAttendanceSummary, 'Attendance Summary'); break;
     case 'audit-logs':      _safeRender(content, renderAuditLogs, 'Audit Logs');      break;
     case 'programmes':      _safeRender(content, renderProgrammes, 'Programmes');      break;
     case 'calendar-events': _safeRender(content, renderCalendarEvents, 'Calendar');        break;
@@ -7514,7 +7514,7 @@ async function renderManagerDashboard(content) {
           <button class="btn btn-secondary btn-sm" onclick="navigateTo('shifts')">Manage Shifts</button>
           <button class="btn btn-secondary btn-sm" onclick="navigateTo('leave-requests')">Leave Requests</button>
           <button class="btn btn-secondary btn-sm" onclick="navigateTo('performance')">Performance</button>
-          <button class="btn btn-secondary btn-sm" onclick="navigateTo('payroll')">Payroll</button>
+          <button class="btn btn-secondary btn-sm" onclick="navigateTo('attendance-summary')">Attendance Summary</button>
           <button class="btn btn-secondary btn-sm" onclick="navigateTo('messages')">Messages</button>
           <button class="btn btn-secondary btn-sm" onclick="navigateTo('users')">Team</button>
         </div>
@@ -22224,7 +22224,6 @@ buildSidebar = function() {
     analytics: `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="18" y="3" width="4" height="18"/><rect x="10" y="8" width="4" height="13"/><rect x="2" y="13" width="4" height="8"/></svg>`,
     branches:  `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="5" r="3"/><line x1="12" y1="8" x2="12" y2="12"/><circle cx="6" cy="17" r="3"/><circle cx="18" cy="17" r="3"/><path d="M12 12 L6 14"/><path d="M12 12 L18 14"/></svg>`,
     branding:  `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M8 14s1.5 2 4 2 4-2 4-2"/><line x1="9" y1="9" x2="9.01" y2="9"/><line x1="15" y1="9" x2="15.01" y2="9"/></svg>`,
-    payroll:   `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="5" width="20" height="14" rx="2"/><line x1="2" y1="10" x2="22" y2="10"/></svg>`,
   };
 
   const assetLink = document.getElementById('nav-assets');
@@ -22591,10 +22590,9 @@ async function renderBranding() {
   content.innerHTML = '<div class="loading">Loading…</div>';
   try {
     const { branding, companyName } = await api('/api/advanced/branding');
-    const payrollData = await api('/api/advanced/analytics').catch(() => null);
 
     content.innerHTML = `
-      <div class="page-header"><h2>Branding & Settings</h2><p>Customize your portal appearance and payroll configuration</p></div>
+      <div class="page-header"><h2>Branding & Settings</h2><p>Customize your portal appearance and attendance reporting</p></div>
 
       <!-- Branding -->
       <div class="card" style="margin-bottom:16px">
@@ -22643,18 +22641,16 @@ async function renderBranding() {
         </div>
       </div>
 
-      <!-- Payroll Settings -->
+      <!-- Attendance Reporting Settings -->
       <div class="card">
-        <h3 style="font-size:15px;font-weight:700;margin-bottom:14px">Payroll Configuration</h3>
+        <h3 style="font-size:15px;font-weight:700;margin-bottom:6px">Attendance Reporting</h3>
+        <p style="font-size:12.5px;color:#6b7280;margin-bottom:14px;line-height:1.6">
+          Dikly tracks time and attendance only -- no pay amounts, currency, or compensation data.
+          These settings just control how your hours/attendance export is packaged for handoff to your own payroll system.
+        </p>
         <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:12px;margin-bottom:14px">
           <div>
-            <label style="font-size:11px;font-weight:700;text-transform:uppercase;color:#6b7280;display:block;margin-bottom:4px">Currency</label>
-            <select id="pr-currency" style="width:100%;padding:8px;border:1px solid #d1d5db;border-radius:6px;font-size:13px">
-              ${['GHS','USD','EUR','GBP','NGN','KES','ZAR'].map(c=>`<option value="${c}">${c}</option>`).join('')}
-            </select>
-          </div>
-          <div>
-            <label style="font-size:11px;font-weight:700;text-transform:uppercase;color:#6b7280;display:block;margin-bottom:4px">Pay Period</label>
+            <label style="font-size:11px;font-weight:700;text-transform:uppercase;color:#6b7280;display:block;margin-bottom:4px">Reporting Period</label>
             <select id="pr-period" style="width:100%;padding:8px;border:1px solid #d1d5db;border-radius:6px;font-size:13px">
               <option value="weekly">Weekly</option>
               <option value="biweekly">Bi-weekly</option>
@@ -22665,13 +22661,9 @@ async function renderBranding() {
             <label style="font-size:11px;font-weight:700;text-transform:uppercase;color:#6b7280;display:block;margin-bottom:4px">Standard Hours/Month</label>
             <input id="pr-hours" type="number" value="160" min="1" style="width:100%;padding:8px;border:1px solid #d1d5db;border-radius:6px;font-size:13px">
           </div>
-          <div>
-            <label style="font-size:11px;font-weight:700;text-transform:uppercase;color:#6b7280;display:block;margin-bottom:4px">Overtime Rate (×)</label>
-            <input id="pr-ot" type="number" value="1.5" step="0.1" min="1" style="width:100%;padding:8px;border:1px solid #d1d5db;border-radius:6px;font-size:13px">
-          </div>
         </div>
         <div id="pr-error" style="color:#ef4444;font-size:13px;margin-bottom:8px;display:none"></div>
-        <button class="btn btn-primary" onclick="savePayrollSettings()">Save Payroll Settings</button>
+        <button class="btn btn-primary" onclick="saveAttendanceReportingSettings()">Save Settings</button>
       </div>
     `;
   } catch(e) {
@@ -22716,114 +22708,29 @@ async function saveBranding() {
   }
 }
 
-async function savePayrollSettings() {
+async function saveAttendanceReportingSettings() {
   const body = {
-    currency:      document.getElementById('pr-currency').value,
-    payPeriod:     document.getElementById('pr-period').value,
+    period:        document.getElementById('pr-period').value,
     standardHours: parseFloat(document.getElementById('pr-hours').value),
-    overtimeRate:  parseFloat(document.getElementById('pr-ot').value),
   };
   const errEl = document.getElementById('pr-error');
   errEl.style.display = 'none';
   const btn = event.target; btn.disabled = true; btn.textContent = 'Saving…';
   try {
-    await api('/api/advanced/payroll-settings', { method: 'PATCH', body: JSON.stringify(body) });
-    toast('Payroll settings saved!', 'ok');
-    btn.disabled = false; btn.textContent = 'Save Payroll Settings';
+    await api('/api/advanced/attendance-reporting-settings', { method: 'PATCH', body: JSON.stringify(body) });
+    toast('Attendance reporting settings saved!', 'ok');
+    btn.disabled = false; btn.textContent = 'Save Settings';
   } catch(e) {
     errEl.textContent = e.message; errEl.style.display = 'block';
-    btn.disabled = false; btn.textContent = 'Save Payroll Settings';
+    btn.disabled = false; btn.textContent = 'Save Settings';
   }
 }
 
-// ══════════════════════════════════════════════════════════════
-// PAYROLL EXPORT
-// ══════════════════════════════════════════════════════════════
-async function renderPayroll() {
-  const content = document.getElementById('main-content');
-  if (!content) return;
-
-  if (currentUser?.company?.mode === 'corporate') {
-    content.innerHTML = `<div class="card" style="margin-top:20px;text-align:center;padding:32px">
-      <div style="font-size:36px;margin-bottom:12px">🚫</div>
-      <h3>Payroll Not Available</h3>
-      <p style="color:var(--text-muted)">Payroll is not enabled for corporate accounts.</p>
-      <button class="btn btn-secondary" style="margin-top:14px" onclick="navigateTo('dashboard')">← Back</button>
-    </div>`;
-    return;
-  }
-
-  content.innerHTML = '<div class="loading">Loading payroll…</div>';
-
-  const period = new Date().toISOString().slice(0, 7);
-  const isAdmin = ['admin', 'superadmin'].includes(currentUser?.role);
-
-  try {
-    const [slipsData] = await Promise.all([
-      api('/api/payroll/my').catch(() => ({ payslips: [] })),
-    ]);
-    const payslips = slipsData.payslips || [];
-
-    const statusBadge = s => ({
-      draft:    '<span style="background:#f3f4f6;color:#6b7280;padding:2px 8px;border-radius:12px;font-size:11px;font-weight:600">Draft</span>',
-      approved: '<span style="background:#eff6ff;color:#1d4ed8;padding:2px 8px;border-radius:12px;font-size:11px;font-weight:600">Approved</span>',
-      paid:     '<span style="background:#f0fdf4;color:#16a34a;padding:2px 8px;border-radius:12px;font-size:11px;font-weight:600">Paid</span>',
-      cancelled:'<span style="background:#fef2f2;color:#dc2626;padding:2px 8px;border-radius:12px;font-size:11px;font-weight:600">Cancelled</span>',
-    }[s] || s);
-
-    content.innerHTML = `
-      <div class="page-header">
-        <h2>Payroll</h2>
-        <p>Your payslips and payroll export</p>
-      </div>
-
-      <!-- Payroll CSV Export -->
-      <div class="card" style="margin-bottom:20px;max-width:560px">
-        <h3 style="font-size:15px;font-weight:700;margin-bottom:12px">Generate Payroll Report</h3>
-        <p style="font-size:13px;color:#6b7280;margin-bottom:14px;line-height:1.6">
-          Export all <strong>approved timesheets</strong> and <strong>approved expenses</strong> for the selected period as a CSV file.
-        </p>
-        <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap">
-          <div>
-            <label style="font-size:11px;font-weight:700;text-transform:uppercase;color:#6b7280;display:block;margin-bottom:4px">Pay Period</label>
-            <input type="month" id="pr-period" value="${period}" style="padding:9px 12px;border:1px solid #d1d5db;border-radius:6px;font-size:14px">
-          </div>
-        </div>
-      </div>
-
-      <!-- My Payslips -->
-      <div class="card">
-        <h3 style="font-size:15px;font-weight:700;margin-bottom:14px">My Payslips (${payslips.length})</h3>
-        ${payslips.length ? `
-          <div style="overflow-x:auto">
-            <table style="width:100%;border-collapse:collapse;font-size:13px">
-              <thead><tr style="background:#f9fafb">
-                <th style="padding:10px;text-align:left;border-bottom:1px solid #e5e7eb">Period</th>
-                <th style="padding:10px;text-align:right;border-bottom:1px solid #e5e7eb">Regular Hrs</th>
-                <th style="padding:10px;text-align:right;border-bottom:1px solid #e5e7eb">Overtime Hrs</th>
-                <th style="padding:10px;text-align:right;border-bottom:1px solid #e5e7eb">Expenses</th>
-                <th style="padding:10px;text-align:center;border-bottom:1px solid #e5e7eb">Status</th>
-              </tr></thead>
-              <tbody>
-                ${payslips.map(p => `
-                  <tr style="border-bottom:1px solid #f3f4f6">
-                    <td style="padding:10px;font-weight:600">${p.period || '—'}</td>
-                    <td style="padding:10px;text-align:right">${p.regularHours ?? '—'}</td>
-                    <td style="padding:10px;text-align:right">${p.overtimeHours ?? '—'}</td>
-                    <td style="padding:10px;text-align:right">${p.totalExpenses != null ? 'GH₵' + Number(p.totalExpenses).toFixed(2) : '—'}</td>
-                    <td style="padding:10px;text-align:center">${statusBadge(p.status)}</td>
-                  </tr>
-                `).join('')}
-              </tbody>
-            </table>
-          </div>
-        ` : '<div class="empty-state"><p>No payslips yet. Payslips appear after your admin runs payroll.</p></div>'}
-      </div>
-    `;
-  } catch(e) {
-    content.innerHTML = `<div class="card"><p style="color:var(--danger)">Failed to load payroll: ${e.message}</p></div>`;
-  }
-}
+// Note: a renderPayroll() function previously lived here as a dead-code
+// duplicate (manager-portal.js's role-aware version, which loads after this
+// file, always won). It also stored/displayed pay amounts, which Dikly no
+// longer does. The live implementation is now renderAttendanceSummary() in
+// manager-portal.js -- hours, attendance, and leave data only, no money.
 
 // ── Meeting Attendance Modal ──────────────────────────────────────────────────
 async function viewMeetingAttendance(meetingId, title) {

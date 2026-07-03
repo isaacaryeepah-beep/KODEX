@@ -2,97 +2,13 @@
 /**
  * pages-corporate.js
  * Requires: app.js globals — api(), currentUser, toastError(), toastSuccess(), svgIcon()
- * Provides: renderPayroll(), renderAuditLogs(), renderProgrammes()
+ * Provides: renderAuditLogs(), renderProgrammes()
+ *
+ * Note: renderAttendanceSummary() (the "Payroll" page's successor) lives in
+ * manager-portal.js. An identically-named renderPayroll(), financial and
+ * dead code, previously lived here too and was removed to eliminate a
+ * naming collision (this file loads before both app.js and manager-portal.js).
  */
-
-// ════════════════════════════════════════════════════════════════════════════
-// PAYROLL  (admin / manager / employee — corporate mode)
-// ════════════════════════════════════════════════════════════════════════════
-
-async function renderPayroll() {
-  const content = document.getElementById('main-content');
-  if (!content) return;
-
-  const isAdmin = currentUser.role === 'admin' || currentUser.role === 'superadmin';
-
-  content.innerHTML = `
-    <div class="page-header">
-      <h2>Payroll</h2>
-      <p>${isAdmin ? 'Manage employee payroll and salary records' : 'Your payroll and salary history'}</p>
-    </div>
-    <div id="payroll-area"><div class="loading" style="padding:20px;text-align:center;font-size:13px">Loading payroll data…</div></div>`;
-
-  await _loadPayroll(isAdmin);
-}
-
-async function _loadPayroll(isAdmin) {
-  const area = document.getElementById('payroll-area');
-  if (!area) return;
-  const cacheKey = isAdmin ? 'corp_payroll_admin' : 'corp_payroll_my';
-  let _payrollOffline = false;
-  try {
-    let data;
-    if (!navigator.onLine) {
-      const cached = typeof offlineRead === 'function' ? offlineRead(cacheKey) : null;
-      if (!cached) {
-        area.innerHTML = '<div class="card"><div class="empty-state"><p>📶 Offline — no cached payroll data available.</p></div></div>';
-        return;
-      }
-      data = cached;
-      _payrollOffline = true;
-    } else {
-      const endpoint = isAdmin ? '/api/payroll' : '/api/payroll/my';
-      data = await api(endpoint);
-      if (typeof offlineCache === 'function') offlineCache(cacheKey, data);
-    }
-    const records = data.payroll || data.records || data.items || [];
-
-    if (!records.length) {
-      area.innerHTML = '<div class="card"><div class="empty-state"><p>No payroll records found.</p></div></div>';
-      return;
-    }
-
-    const statusColors = { paid: '#16a34a', pending: '#d97706', draft: '#6b7280', cancelled: '#dc2626' };
-
-    area.innerHTML = `
-      ${_payrollOffline ? '<div style="background:#fef3c7;border:1px solid #fcd34d;border-radius:8px;padding:8px 14px;font-size:12px;font-weight:600;color:#92400e;margin-bottom:12px">📶 Offline — showing cached payroll data</div>' : ''}
-      <div class="card" style="overflow-x:auto">
-        <table>
-          <thead><tr>
-            <th>Period</th>
-            ${isAdmin ? '<th>Employee</th>' : ''}
-            <th>Gross</th>
-            <th>Deductions</th>
-            <th>Net Pay</th>
-            <th>Status</th>
-            <th>Date</th>
-          </tr></thead>
-          <tbody>${records.map(r => {
-            const sc = statusColors[r.status] || 'var(--text-muted)';
-            const gross = r.grossPay ?? r.gross ?? 0;
-            const deductions = r.totalDeductions ?? r.deductions ?? 0;
-            const net = r.netPay ?? r.net ?? (gross - deductions);
-            return `<tr>
-              <td style="font-weight:600;font-size:13px">${r.period || r.payPeriod || '—'}</td>
-              ${isAdmin ? `<td style="font-size:13px">${r.employeeName || r.employee?.name || '—'}</td>` : ''}
-              <td style="font-size:13px">${_formatCurrency(gross)}</td>
-              <td style="font-size:13px;color:var(--danger)">${_formatCurrency(deductions)}</td>
-              <td style="font-size:13px;font-weight:700;color:var(--primary)">${_formatCurrency(net)}</td>
-              <td><span style="background:${sc}20;color:${sc};border:1px solid ${sc}40;padding:2px 8px;border-radius:20px;font-size:11px;font-weight:700;text-transform:capitalize">${r.status || 'draft'}</span></td>
-              <td style="font-size:12px;color:var(--text-muted)">${r.createdAt ? new Date(r.createdAt).toLocaleDateString('en-GB',{day:'2-digit',month:'short',year:'numeric'}) : '—'}</td>
-            </tr>`;
-          }).join('')}</tbody>
-        </table>
-      </div>`;
-  } catch(e) {
-    area.innerHTML = `<div class="card"><p style="color:var(--danger);font-size:13px">Error: ${e.message}</p></div>`;
-  }
-}
-
-function _formatCurrency(amount) {
-  if (amount == null || isNaN(amount)) return '—';
-  return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', minimumFractionDigits: 2 }).format(amount);
-}
 
 // ════════════════════════════════════════════════════════════════════════════
 // AUDIT LOGS  (admin / superadmin only)

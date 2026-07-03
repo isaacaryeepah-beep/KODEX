@@ -99,12 +99,6 @@ const employeeProfileSchema = new mongoose.Schema(
       default: null,
     },
 
-    // ── Compensation ─────────────────────────────────────────────────────
-    salaryBand:    { type: String, trim: true, default: "" }, // e.g. "L4", "Senior"
-    monthlySalary: { type: Number, default: null, min: 0 },  // gross monthly (salaried)
-    hourlyRate:    { type: Number, default: null, min: 0 },  // hourly pay (hourly workers)
-    currency:      { type: String, trim: true, default: "GHS" },
-
     // ── Personal ─────────────────────────────────────────────────────────
     dateOfBirth: { type: Date, default: null },
     gender:      {

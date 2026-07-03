@@ -24,7 +24,7 @@ DIKLY features include:
 - Grade books and academic transcripts
 - Course management and resource libraries
 - Virtual meetings (Zoom, Jitsi integration)
-- HR management: shifts, leave, payroll, employee profiles
+- HR management: shifts, leave, attendance summary export, employee profiles (Dikly tracks time and attendance only -- it never computes or stores pay amounts; that stays in the company's own payroll system)
 - Academic programmes and student progress tracking
 - Discussion forums, direct messaging, announcements
 - Support ticket system and calendar events

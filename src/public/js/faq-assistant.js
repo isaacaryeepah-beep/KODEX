@@ -44,7 +44,7 @@
     { q: 'How does messaging work?',           a: '<strong>Messages</strong> in the sidebar opens your inbox. Click <strong>+ New</strong> to message colleagues — you can only contact users in your team or role group.' },
     { q: 'How do I raise a support ticket?',   a: 'Go to <strong>Support</strong> in the sidebar → click <strong>"+ New Ticket"</strong> → describe the issue → Submit. Your admin will respond.' },
     { q: 'How do I reset my password?',        a: 'On the login screen click <strong>"Forgot password?"</strong> and enter your email. Or ask your admin to reset it from the Users panel.' },
-    { q: 'How do I view my pay slip?',         a: 'Go to <strong>My Attendance → Pay Slips</strong> or ask your admin to share it from the Payroll section.' },
+    { q: 'How do I view my attendance summary?', a: 'Go to <strong>Attendance Summary</strong> in the sidebar to see your hours, attendance, and leave by period. Dikly tracks time only -- pay is handled by your organisation\'s own payroll system.' },
   ];
 
   // ── Quick-answer maps ─────────────────────────────────────────────────────
