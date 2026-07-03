@@ -1325,6 +1325,14 @@ table tbody tr { transition: background .12s; }
 table tbody tr:hover { background: rgba(37,99,235,.02); }
 table tbody tr:last-child td { border-bottom: none; }
 
+/* Deep-link landing highlight -- e.g. a notification that navigates
+   straight to one specific row (see _applyUsersHighlight in app.js) */
+.row-highlight-flash { animation: row-highlight-flash 2.6s ease-out; }
+@keyframes row-highlight-flash {
+  0%, 15%  { background: rgba(79,110,247,.22); }
+  100%     { background: transparent; }
+}
+
 /* ══════════════════════════════════════════════════
    BADGES
 ══════════════════════════════════════════════════ */

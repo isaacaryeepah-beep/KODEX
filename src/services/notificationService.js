@@ -426,38 +426,47 @@ function _fmtDate(date) {
 exports.notify     = notify;
 exports.notifyMany = notifyMany;
 
+const ROLE_LABELS = {
+  student: "Student", employee: "Employee", manager: "Manager",
+  lecturer: "Lecturer", hod: "Head of Department",
+  admin: "Administrator", superadmin: "Super Administrator",
+};
+
 /**
- * Notify admin(s) and HOD(s) of the same company that a student's password
- * was reset (either by an admin or by the student themselves via reset code).
+ * Notify admin(s) and HOD(s) of the same company that a user's password
+ * was reset (either by an admin or by the user themselves via reset code).
+ * Title/wording adapts to the target's actual role -- this is shared by
+ * both academic (student) and corporate (employee/manager) resets.
  *
- * @param {{ _id, name, IndexNumber, company }} student
+ * @param {{ _id, name, IndexNumber, role, company }} targetUser
  * @param {"admin_reset"|"self_reset"} method
  * @param {string} [resetByName]  — name of admin who did it (admin_reset only)
  */
-exports.notifyPasswordReset = async (student, method, resetByName) => {
+exports.notifyPasswordReset = async (targetUser, method, resetByName) => {
   try {
     const User = require("../models/User");
     const admins = await User.find({
-      company: student.company,
+      company: targetUser.company,
       role: { $in: ["admin", "superadmin", "hod"] },
-      _id: { $ne: student._id },
+      _id: { $ne: targetUser._id },
     }).select("_id").lean();
 
     if (!admins.length) return;
     const recipientIds = admins.map(a => a._id);
 
-    const studentLabel = student.name || student.IndexNumber || "A student";
+    const roleLabel   = ROLE_LABELS[targetUser.role] || "User";
+    const targetLabel = targetUser.name || targetUser.IndexNumber || `A ${roleLabel.toLowerCase()}`;
     const body = method === "admin_reset"
-      ? `${studentLabel}'s password was reset by ${resetByName || "an admin"}.`
-      : `${studentLabel} (${student.IndexNumber || "unknown ID"}) reset their own password using a reset code.`;
+      ? `${targetLabel}'s password was reset by ${resetByName || "an admin"}.`
+      : `${targetLabel} (${targetUser.IndexNumber || "unknown ID"}) reset their own password using a reset code.`;
 
     await notifyMany(recipientIds, {
-      company: student.company,
+      company: targetUser.company,
       type:    NOTIFICATION_TYPES.PASSWORD_RESET,
-      title:   "Student password reset",
+      title:   `${roleLabel} password reset`,
       body,
-      link:    "/users",
-      data:    { studentId: student._id, method },
+      link:    `/users?highlight=${targetUser._id}`,
+      data:    { userId: targetUser._id, method },
     });
   } catch (err) {
     console.error("[NotificationService] notifyPasswordReset failed:", err.message);

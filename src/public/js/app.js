@@ -288,7 +288,21 @@ async function _notifPanelClick(id, link) {
   await api('/api/notifications/' + id + '/read', { method: 'PATCH' }).catch(() => {});
   _updateNotifBadge(Math.max(0, _notifUnread - 1));
   closeNotifPanel();
-  if (link) location.href = link;
+  if (!link) return;
+  // Known SPA views navigate in-place instead of a full page reload -- a
+  // hard location.href to these paths has no matching server route and
+  // just bounces back to the dashboard, which is exactly the "doesn't know
+  // where it should go" complaint this fixes. Anything else (real static
+  // pages, hash routes) keeps the previous full-navigation behavior.
+  const url = new URL(link, location.origin);
+  if (url.pathname === '/users') {
+    const highlight = url.searchParams.get('highlight');
+    if (highlight) window._usersHighlightId = highlight;
+    navigateTo('users');
+    return;
+  }
+  if (url.pathname === '/profile') { navigateTo('profile'); return; }
+  location.href = link;
 }
 
 function toggleNotifPanel() {
@@ -8917,6 +8931,21 @@ function _renderUsersCorporateTable(content, allUsers, filterRole='', filterDept
       `:`<div class="empty-state"><p>No users found</p></div>`}
     </div>
   `;
+  _applyUsersHighlight();
+}
+
+// Scrolls to and briefly flashes the row a notification deep-linked to
+// (e.g. "so-and-so's password was reset" → land right on that person
+// instead of a generic list they have to search through themselves).
+function _applyUsersHighlight() {
+  const id = window._usersHighlightId;
+  if (!id) return;
+  window._usersHighlightId = null;
+  const row = document.getElementById(`user-row-${id}`);
+  if (!row) return;
+  row.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  row.classList.add('row-highlight-flash');
+  setTimeout(() => row.classList.remove('row-highlight-flash'), 2600);
 }
 
 // ── HR capability — Grant / Revoke action button + modal (admin-only) ──────

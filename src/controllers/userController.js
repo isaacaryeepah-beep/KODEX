@@ -752,8 +752,9 @@ exports.adminResetStudentPassword = async (req, res) => {
       }
     } catch(_) {}
 
+    const recipientLabel = target.role === "student" ? "student" : "user";
     res.json({
-      message: "Temporary password generated. Give this to the student.",
+      message: `Temporary password generated. Give this to the ${recipientLabel}.`,
       tempPassword,
       userName: target.name,
       userEmail: target.email || target.IndexNumber,
