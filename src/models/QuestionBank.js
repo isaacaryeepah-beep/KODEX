@@ -73,13 +73,18 @@ const questionBankSchema = new mongoose.Schema(
     },
 
     // Optional image attachment (diagram or figure for the question)
+    // Served from Cloudinary — fileUrl is a CDN URL, publicId identifies the
+    // asset there for deletion. storageProvider defaults to 'local' for rows
+    // created before the Cloudinary migration (those files no longer exist).
     imageAttachment: {
       type: new mongoose.Schema({
-        fileName:     { type: String },
-        originalName: { type: String },
-        fileUrl:      { type: String },
-        mimeType:     { type: String },
-        fileSize:     { type: Number },
+        fileName:        { type: String },
+        originalName:    { type: String },
+        fileUrl:         { type: String },
+        publicId:        { type: String, default: null },
+        storageProvider: { type: String, default: "local" },
+        mimeType:        { type: String },
+        fileSize:        { type: Number },
       }, { _id: false }),
       default: null,
     },

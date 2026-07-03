@@ -43,13 +43,19 @@ const messageSchema = new mongoose.Schema(
     },
 
     // ── Optional file attachment ──────────────────────────────────────────────
+    // Images go to Cloudinary (fileUrl is a CDN URL, publicId set); PDFs/Word
+    // docs go through documentStorage (fileUrl is an internal serve route,
+    // fileRef is the storage-layer reference, publicId stays null).
     attachment: {
       type: new mongoose.Schema({
-        fileName:     { type: String },
-        originalName: { type: String },
-        fileUrl:      { type: String },
-        mimeType:     { type: String },
-        fileSize:     { type: Number },
+        fileName:        { type: String },
+        originalName:    { type: String },
+        fileUrl:         { type: String },
+        fileRef:         { type: String, default: null },
+        publicId:        { type: String, default: null },
+        storageProvider: { type: String, default: "local" },
+        mimeType:        { type: String },
+        fileSize:        { type: Number },
       }, { _id: false }),
       default: null,
     },

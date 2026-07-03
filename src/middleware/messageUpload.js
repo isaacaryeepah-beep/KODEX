@@ -2,26 +2,13 @@
 
 const multer = require('multer');
 const path   = require('path');
-const fs     = require('fs');
-const crypto = require('crypto');
 
 const MAX_SIZE_MB = parseInt(process.env.MSG_FILE_MAX_MB || '10', 10);
-const UPLOAD_DIR  = process.env.MSG_FILE_DIR || 'uploads/messages';
 
-if (!fs.existsSync(UPLOAD_DIR)) fs.mkdirSync(UPLOAD_DIR, { recursive: true });
-
-const storage = multer.diskStorage({
-  destination: (_req, _file, cb) => cb(null, UPLOAD_DIR),
-  filename: (_req, file, cb) => {
-    const unique = crypto.randomBytes(12).toString('hex');
-    const ext    = path.extname(file.originalname).toLowerCase();
-    cb(null, `msg_${unique}${ext}`);
-  },
-});
-
+const IMAGE_MIME = ['image/jpeg', 'image/png', 'image/webp', 'image/gif'];
 const ALLOWED_MIME = [
   'application/pdf',
-  'image/jpeg', 'image/png', 'image/webp', 'image/gif',
+  ...IMAGE_MIME,
   'application/msword',
   'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
 ];
@@ -37,13 +24,16 @@ function fileFilter(_req, file, cb) {
   cb(null, true);
 }
 
+// Memory storage — images go to Cloudinary, docs go through documentStorage.
+// Neither writes via multer directly, so no local disk path here at all.
 const upload = multer({
-  storage,
+  storage: multer.memoryStorage(),
   fileFilter,
   limits: { fileSize: MAX_SIZE_MB * 1024 * 1024 },
 });
 
 exports.uploadMessage = upload.single('attachment');
+exports.isImageMime = (mimeType) => IMAGE_MIME.includes(mimeType);
 
 exports.handleUploadError = (err, req, res, next) => {
   if (err instanceof multer.MulterError) {
@@ -56,5 +46,4 @@ exports.handleUploadError = (err, req, res, next) => {
   next();
 };
 
-exports.UPLOAD_DIR  = UPLOAD_DIR;
 exports.MAX_SIZE_MB = MAX_SIZE_MB;

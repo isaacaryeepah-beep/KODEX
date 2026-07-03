@@ -64,13 +64,16 @@ const assignmentSchema = new mongoose.Schema(
     dueDate:     { type: Date, required: true },
     isActive:    { type: Boolean, default: true },
 
-    // ── PDF brief (filesystem path) ───────────────────────────────────────
+    // ── PDF brief ─────────────────────────────────────────────────────────
+    // filePath is a documentStorage ref (relative to uploads/), not an
+    // absolute filesystem path — see src/services/storage/documentStorage.js.
     pdfBrief: {
-      filePath:     { type: String, default: null },
-      originalName: { type: String, default: null },
-      mimeType:     { type: String, default: null },
-      sizeBytes:    { type: Number, default: null },
-      uploadedAt:   { type: Date,   default: null },
+      filePath:        { type: String, default: null },
+      storageProvider: { type: String, default: "local" },
+      originalName:    { type: String, default: null },
+      mimeType:        { type: String, default: null },
+      sizeBytes:       { type: Number, default: null },
+      uploadedAt:      { type: Date,   default: null },
     },
 
     // ── Embedded MCQ questions ────────────────────────────────────────────

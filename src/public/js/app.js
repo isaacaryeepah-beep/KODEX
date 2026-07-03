@@ -13042,7 +13042,7 @@ function bankQuestionCard(q, i, L, typeColors, typeBg) {
             ${q.useCount > 0 ? `<span style="font-size:11px;color:#9ca3af;">Used ${q.useCount}×</span>` : ''}
           </div>
           <div class="math-content" style="font-size:13px;font-weight:600;margin-bottom:8px;line-height:1.5;">${q.questionText}</div>
-          ${q.imageAttachment ? `<div style="margin-bottom:8px;"><img src="${q.imageAttachment.fileUrl}?token=${typeof token !== 'undefined' ? token : ''}" alt="${q.imageAttachment.originalName}" style="max-width:100%;max-height:180px;border-radius:8px;border:1px solid var(--border);object-fit:contain;cursor:pointer;" onclick="window.open('${q.imageAttachment.fileUrl}?token=${typeof token !== 'undefined' ? token : ''}','_blank')"></div>` : ''}
+          ${q.imageAttachment ? `<div style="margin-bottom:8px;"><img src="${q.imageAttachment.fileUrl}" alt="${q.imageAttachment.originalName}" style="max-width:100%;max-height:180px;border-radius:8px;border:1px solid var(--border);object-fit:contain;cursor:pointer;" onclick="window.open('${q.imageAttachment.fileUrl}','_blank')"></div>` : ''}
           ${type === 'fill'
             ? `<div style="font-size:12px;color:#059669;padding:4px 10px;background:#f0fdf4;border-radius:6px;display:inline-block;">✓ ${q.correctAnswerText}${q.acceptedAnswers?.length ? ` (+${q.acceptedAnswers.length} alt)` : ''}</div>`
             : type === 'explain'
@@ -13124,7 +13124,7 @@ function openAddToBankModal(prefill) {
           <label style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;color:var(--text-light);margin-bottom:6px;display:block;">Question Image <span style="font-weight:400;text-transform:none;">(optional diagram or figure)</span></label>
           ${p.imageAttachment ? `
             <div id="bm-img-existing" style="margin-bottom:8px;">
-              <img src="${p.imageAttachment.fileUrl}?token=${typeof token !== 'undefined' ? token : ''}" style="max-width:100%;max-height:140px;border-radius:8px;border:1px solid var(--border);object-fit:contain;display:block;margin-bottom:6px;">
+              <img src="${p.imageAttachment.fileUrl}" style="max-width:100%;max-height:140px;border-radius:8px;border:1px solid var(--border);object-fit:contain;display:block;margin-bottom:6px;">
               <div style="display:flex;align-items:center;gap:8px;">
                 <span style="font-size:11px;color:var(--text-muted);">Current: ${p.imageAttachment.originalName}</span>
                 <button type="button" onclick="bmClearExistingImage()" style="font-size:11px;padding:2px 8px;border:1px solid #fecaca;background:#fef2f2;color:#dc2626;border-radius:5px;cursor:pointer;">Remove</button>
@@ -23346,8 +23346,12 @@ function _buildMsgRow(m, myId) {
 
 function _buildBubbleContent(bodyText, attachment, isMine) {
   if (!attachment) return (bodyText || '').replace(/\n/g, '<br>');
-  const t   = typeof token !== 'undefined' ? token : '';
-  const src = `${attachment.fileUrl}?token=${t}`;
+  const t = typeof token !== 'undefined' ? token : '';
+  // Cloudinary-hosted images are public CDN URLs — don't leak our access
+  // token to a third-party domain. Only our own /api/messages/attachment
+  // proxy route (used for PDFs/docs) needs the token appended.
+  const isExternal = attachment.storageProvider === 'cloudinary';
+  const src = isExternal ? attachment.fileUrl : `${attachment.fileUrl}?token=${t}`;
   const isImg  = attachment.mimeType?.startsWith('image/');
   const isPdf  = attachment.mimeType === 'application/pdf';
   const isDoc  = attachment.mimeType?.includes('word') || attachment.originalName?.match(/\.docx?$/i);
