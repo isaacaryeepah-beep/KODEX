@@ -160,6 +160,12 @@ function selectPortal(t){if(window._appLoaded)window._realSelectPortal(t);else w
   position: fixed; inset: 0; z-index: 99990;
   background: #000; overflow: hidden;
   font-family: 'Segoe UI', system-ui, sans-serif;
+  /* The intro plays for up to 9.5s (or until SKIP), but must never block
+     the real UI underneath — without this, every tap during that window
+     (e.g. the pre-login "Terms & Conditions" link) is silently swallowed.
+     #sp-skip explicitly re-enables pointer-events on itself once shown,
+     which still works correctly with the parent set to none here. */
+  pointer-events: none;
 }
 
 /* ── VIDEO INTRO ─────────────────────────────────────────── */
@@ -564,6 +570,7 @@ function dismissSplash() {
   el.style.pointerEvents = 'none';
   setTimeout(function () { if (el && el.parentNode) el.parentNode.removeChild(el); }, 700);
 }
+window.dismissSplash = dismissSplash; // exposed so real UI opened mid-intro (e.g. the legal modal) can clear it
 setTimeout(dismissSplash, 9500);
 
 /* Skip button — appears after 1.5 s, hidden once splash dismisses */
@@ -847,7 +854,7 @@ setTimeout(dismissSplash, 8400);
             macOS
           </a>
         </div>
-        <div style="font-size:11px;color:#94a3b8;margin-top:8px">📱 iOS — coming soon · use <a href="https://app.dikly.sbs" style="color:#60a5fa">app.dikly.sbs</a> for now</div>
+        <div style="font-size:11px;color:#94a3b8;margin-top:8px">📱 iOS — coming soon · use <a href="https://dikly.sbs" style="color:#60a5fa">dikly.sbs</a> for now</div>
       </div>
 
       By using DIKLY, you agree to our
@@ -855,7 +862,6 @@ setTimeout(dismissSplash, 8400);
       and
       <a onclick="showLegalModal('privacy')" style="color:#2563eb;cursor:pointer;text-decoration:underline;font-weight:500">Privacy Policy</a>.
       <div style="margin-top:4px">&copy; 2026 DIKLY Technologies. All rights reserved.</div>
-      <div style="margin-top:2px;font-size:11px;color:#94a3b8">Founded by Isaac Kweku Aryeepah</div>
     </div>
 
     <!-- ADMIN AUTH (Corporate & Academic) -->
@@ -1683,13 +1689,13 @@ setTimeout(dismissSplash, 8400);
     terms: {
       title: 'Terms & Conditions',
       html: `
-        <p style="color:#6b7280;font-size:12px;margin-bottom:20px">Last updated: April 28, 2025 &nbsp;·&nbsp; DIKLY Technologies</p>
+        <p style="color:#6b7280;font-size:12px;margin-bottom:20px">Last updated: August 2025 &nbsp;·&nbsp; DIKLY Technologies</p>
 
         <h3 style="font-size:15px;font-weight:700;color:#111827;margin:0 0 8px">1. Acceptance of Terms</h3>
         <p>By accessing or using the DIKLY platform ("Platform"), operated by <strong>DIKLY Technologies</strong>, you agree to be bound by these Terms and Conditions. If you do not agree, you may not use the Platform. These terms apply to all users including institution administrators, lecturers, heads of department, employees, and students.</p>
 
         <h3 style="font-size:15px;font-weight:700;color:#111827;margin:20px 0 8px">2. About DIKLY Technologies</h3>
-        <p>DIKLY Technologies — <em>Innovate · Connect · Empower</em> — is an enterprise technology platform providing smart attendance management, learning management, proctored assessments, and institutional analytics. The Platform is offered on a subscription basis to registered academic institutions, corporations, and public organisations.</p>
+        <p>DIKLY Technologies — <em>Innovate · Connect · Empower</em> — is an enterprise technology platform providing smart attendance management, learning management, proctored assessments, and institutional analytics. The Platform is offered on a subscription basis to registered academic institutions, corporations, and public organisations. DIKLY Technologies was founded by Isaac Kweku Aryeepah.</p>
 
         <h3 style="font-size:15px;font-weight:700;color:#111827;margin:20px 0 8px">3. User Accounts & Responsibilities</h3>
         <p>Users are responsible for the security of their login credentials. By registering, you agree to:</p>
@@ -1834,9 +1840,20 @@ setTimeout(dismissSplash, 8400);
   function showLegalModal(tab) {
     _currentLegalTab = tab || 'terms';
     const modal = document.getElementById('legal-modal');
+    // #legal-modal is markup-nested inside #dashboard-page, which is
+    // display:none pre-login — an ancestor's display:none hides this modal
+    // too no matter what its own display is set to, so pre-login clicks on
+    // "Terms & Conditions" silently did nothing. Re-parent it straight onto
+    // <body> the first time it opens; position:fixed makes this safe, and
+    // it only needs to happen once.
+    if (modal.parentElement !== document.body) document.body.appendChild(modal);
     modal.style.display = 'flex';
     document.body.style.overflow = 'hidden';
     _renderLegalTab(_currentLegalTab);
+    // If opened while the intro is still playing, clear it — a modal sitting
+    // underneath a still-animating full-screen splash looks broken even
+    // though it's genuinely open and interactive.
+    if (window.dismissSplash) window.dismissSplash();
   }
 
   function closeLegalModal() {
