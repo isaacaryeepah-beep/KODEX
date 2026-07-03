@@ -15319,7 +15319,7 @@ function renderContact() {
         <div style="font-size:36px;margin-bottom:12px">📧</div>
         <div style="font-size:16px;font-weight:700;margin-bottom:6px">Email</div>
         <p style="font-size:13px;color:var(--text-light);margin-bottom:12px">Send us an email anytime</p>
-        <a href="mailto:nelsonkel78@gmail.com" class="btn btn-primary btn-sm" style="display:inline-block;text-decoration:none">nelsonkel78@gmail.com</a>
+        <a href="mailto:info@dikly.sbs" class="btn btn-primary btn-sm" style="display:inline-block;text-decoration:none">info@dikly.sbs</a>
       </div>
 
       <div class="card" style="text-align:center">
@@ -16226,7 +16226,7 @@ function renderAbout() {
       <div class="card" style="margin-bottom:16px">
         <div style="font-weight:700;font-size:15px;margin-bottom:14px">Get in Touch</div>
         <div style="font-size:13px;color:var(--text-light);line-height:2">
-          <div>📧 <a href="mailto:nelsonkel78@gmail.com" style="color:var(--primary)">nelsonkel78@gmail.com</a></div>
+          <div>📧 <a href="mailto:info@dikly.sbs" style="color:var(--primary)">info@dikly.sbs</a></div>
           <div>🌐 <a href="https://dikly.sbs" onclick="openUrl('https://dikly.sbs')" style="color:var(--primary)">dikly.sbs</a></div>
         </div>
         <div style="margin-top:14px;padding-top:14px;border-top:1px solid var(--border);display:flex;gap:12px;font-size:12px">
