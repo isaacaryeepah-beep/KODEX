@@ -8843,6 +8843,7 @@ function _renderUsersCorporateTable(content, allUsers, filterRole='', filterDept
               <td><span class="role-badge role-${u.role}">${u.role}</span>${u.department?`<span style="font-size:10px;margin-left:5px;padding:2px 6px;border-radius:20px;background:#ecfeff;color:#0891b2;font-weight:600">${esc(u.department)}</span>`:''}</td>
               <td><span class="status-badge ${u.isActive?'status-active':'status-stopped'}">${u.isActive?'Active':'Inactive'}</span></td>
               ${canManage?`<td style="white-space:nowrap">${canActOn(u)?`
+                <button class="btn btn-sm" style="background:#4f6ef7;color:#fff;font-size:11px" onclick="showEditUserDeptModal('${u._id}','${esc(u.name).replace(/'/g,"\\'")}','${esc(u.department||'').replace(/'/g,"\\'")}')">Edit</button>
                 ${u.isActive?`<button class="btn btn-sm" style="background:#f59e0b;color:#fff;font-size:11px" onclick="deactivateUser('${u._id}')">Deactivate</button>`:`<button class="btn btn-sm" style="background:#22c55e;color:#fff;font-size:11px" onclick="activateUser('${u._id}')">Activate</button>`}
                 <button class="btn btn-sm" style="background:#6366f1;color:#fff;font-size:11px" onclick="adminResetStudentPassword('${u._id}',this)">🔑 Reset</button>
                 <button class="btn btn-danger btn-sm" style="font-size:11px" onclick="deleteUserPermanently('${u._id}',this)">Delete</button>
@@ -8855,6 +8856,50 @@ function _renderUsersCorporateTable(content, allUsers, filterRole='', filterDept
   `;
 }
 
+// ── Edit an existing user's department (corporate) ─────────────────────────
+async function showEditUserDeptModal(userId, userName, currentDept) {
+  let depts = [];
+  try { depts = (await api('/api/departments')).departments || []; }
+  catch(e) { depts = []; }
+
+  const matchesFormalDept = depts.some(d => d.name === currentDept);
+  const options = `<option value="">— No department —</option>` +
+    depts.map(d => `<option value="${esc(d.name)}" ${d.name === currentDept ? 'selected' : ''}>${esc(d.name)}</option>`).join('');
+  const staleNote = currentDept && !matchesFormalDept
+    ? `<p style="font-size:11.5px;color:#b54708;margin-top:5px">Currently set to "${esc(currentDept)}", which isn't one of the managed departments below — pick one to fix it, or leave as-is.</p>`
+    : '';
+
+  const container = document.getElementById('modal-container');
+  container.classList.remove('hidden');
+  container.innerHTML = `
+    <div class="modal-overlay" onclick="closeModal(event)">
+      <div class="modal" onclick="event.stopPropagation()">
+        <h3>Edit ${esc(userName)}</h3>
+        <div class="form-group">
+          <label>Department</label>
+          ${depts.length
+            ? `<select id="edit-user-dept" style="width:100%;padding:9px 12px;border:1.5px solid var(--border);border-radius:8px;font-size:13px">${options}</select>`
+            : `<p style="font-size:12.5px;color:var(--text-light)">No departments set up yet. Create one on the Departments page first.</p>`}
+          ${staleNote}
+        </div>
+        <div class="modal-actions">
+          <button class="btn btn-secondary btn-sm" onclick="closeModal()">Cancel</button>
+          <button class="btn btn-primary btn-sm" onclick="_saveEditUserDept('${userId}')" ${depts.length ? '' : 'disabled'}>Save</button>
+        </div>
+      </div>
+    </div>
+  `;
+}
+window._saveEditUserDept = async function(userId) {
+  const select = document.getElementById('edit-user-dept');
+  if (!select) return;
+  try {
+    await api(`/api/users/${userId}`, { method: 'PATCH', body: JSON.stringify({ department: select.value || null }) });
+    toastSuccess('Department updated');
+    closeModal();
+    renderUsers();
+  } catch (e) { toastError(e.message); }
+};
 
 async function renderResetLogs() {
   const content = document.getElementById('main-content');
@@ -8965,17 +9010,29 @@ async function showCreateUserModal() {
     roles = `<option value="student">Student</option><option value="lecturer">Lecturer</option><option value="hod">Head of Department (HOD)</option>`;
   }
 
-  // Fetch approved HODs to build department list
+  // Fetch approved HODs to build department list (academic mode)
   let hodDepts = [];
-  try {
-    const usersData = await api('/api/users');
-    hodDepts = (usersData.users || [])
-      .filter(u => u.role === 'hod' && u.department && u.isApproved)
-      .map(u => u.department)
-      .filter((d, i, a) => a.indexOf(d) === i) // unique
-      .sort();
-    window._hodDepts = hodDepts; // cache for onCreateUserRoleChange
-  } catch(e) { hodDepts = []; }
+  if (isAcademic) {
+    try {
+      const usersData = await api('/api/users');
+      hodDepts = (usersData.users || [])
+        .filter(u => u.role === 'hod' && u.department && u.isApproved)
+        .map(u => u.department)
+        .filter((d, i, a) => a.indexOf(d) === i) // unique
+        .sort();
+      window._hodDepts = hodDepts; // cache for onCreateUserRoleChange
+    } catch(e) { hodDepts = []; }
+  }
+
+  // Fetch the formal department list (corporate mode) so the dropdown here
+  // always matches the same names shown on the Departments page — a plain
+  // text field previously let admins type department names that never
+  // actually matched any department, so nobody ever showed up as a member.
+  let corpDepts = [];
+  if (!isAcademic) {
+    try { corpDepts = (await api('/api/departments')).departments || []; }
+    catch(e) { corpDepts = []; }
+  }
 
   const defaultRole = isManager ? 'employee' : (isAcademic ? 'student' : 'employee');
   const modalTitle = isManager ? 'Add Employee' : 'Add User';
@@ -9000,7 +9057,12 @@ async function showCreateUserModal() {
            </select>`
         : `<input type="text" id="new-user-dept" placeholder="Department (set up a HOD first)" disabled
             style="background:#f3f4f6;cursor:not-allowed">`)
-    : `<input type="text" id="new-user-dept" placeholder="e.g. Engineering">`;
+    : (corpDepts.length
+        ? `<select id="new-user-dept" style="width:100%;padding:9px 12px;border:1.5px solid var(--border);border-radius:8px;font-size:13px">
+            <option value="">— No department —</option>
+            ${corpDepts.map(d => `<option value="${esc(d.name)}">${esc(d.name)}</option>`).join('')}
+           </select>`
+        : `<input type="text" id="new-user-dept" placeholder="No departments set up yet — optional">`);
 
   const container = document.getElementById('modal-container');
   container.classList.remove('hidden');
@@ -9127,13 +9189,16 @@ function toggleUserFields() {
   const deptReq    = document.getElementById('new-user-dept-req');
   const deptHint   = document.getElementById('new-user-dept-hint');
   if (!deptGroup) return;
-  const showDept = ['lecturer','hod','student'].includes(role);
-  deptGroup.style.display = showDept ? 'block' : 'none';
+  // Always show the department field — it was previously hidden entirely
+  // for employee/manager roles, which meant corporate employees could never
+  // be given a department at creation time.
+  deptGroup.style.display = 'block';
   if (deptReq)  deptReq.style.display  = ['lecturer','hod','student'].includes(role) ? 'inline' : 'none';
   if (deptHint) {
     if (role === 'hod')           deptHint.textContent = 'Each department can only have one HOD.';
     else if (role === 'lecturer') deptHint.textContent = 'Lecturer will only be visible to the HOD of this department.';
     else if (role === 'student')  deptHint.textContent = 'Student will be visible to the HOD of this department.';
+    else if (role === 'employee' || role === 'manager') deptHint.textContent = 'Optional — assigns them to this department.';
     else                          deptHint.textContent = '';
   }
   // Show/hide student classification fields
@@ -24001,7 +24066,10 @@ async function renderDepartments() {
             <span>👥 ${d.headcount} member${d.headcount === 1 ? '' : 's'}</span>
             ${d.head?.name ? `<span>Head: ${esc(d.head.name)}</span>` : ''}
           </div>
-          <button class="btn btn-sm btn-ghost" style="margin-top:.7rem;font-size:.75rem" onclick="_deptEmployees('${d._id}','${esc(d.name)}')">View employees</button>
+          <div style="margin-top:.7rem;display:flex;gap:.5rem;flex-wrap:wrap">
+            <button class="btn btn-sm btn-ghost" style="font-size:.75rem" onclick="_deptEmployees('${d._id}','${esc(d.name)}')">View employees</button>
+            ${isAdmin ? `<button class="btn btn-sm btn-ghost" style="font-size:.75rem" onclick="_deptAssign('${d._id}','${esc(d.name).replace(/'/g,"\\'")}')">+ Assign employees</button>` : ''}
+          </div>
           <div id="dept-emps-${d._id}"></div>
         </div>`).join('') : '<div class="card" style="padding:2rem;text-align:center;color:var(--text-muted)">No departments yet — create your first one above.</div>'}
     </div>`;
@@ -24033,6 +24101,69 @@ window._deptEmployees = async function(id, name) {
       ? `<div style="margin-top:.5rem;border-top:1px solid var(--border);padding-top:.5rem;display:flex;flex-direction:column;gap:.3rem">${emps.map(u => `<div style="font-size:.78rem;color:var(--text-light)">• ${esc(u.name)}${u.role ? ` <span style="color:var(--text-muted)">(${u.role})</span>` : ''}</div>`).join('')}</div>`
       : '<div style="font-size:.75rem;color:var(--text-muted);padding:.4rem 0">No employees assigned yet.</div>';
   } catch (e) { box.innerHTML = `<div style="font-size:.75rem;color:var(--error)">${esc(e.message)}</div>`; }
+};
+
+// ── Assign existing employees to a department ──────────────────────────────
+window._deptAssign = async function(deptId, deptName) {
+  let users = [];
+  try { users = (await api('/api/users')).users || []; }
+  catch (e) { toastError(e.message); return; }
+
+  const candidates = users
+    .filter(u => ['employee', 'manager'].includes(u.role) && u.isActive)
+    .sort((a, b) => (a.name || '').localeCompare(b.name || ''));
+
+  const rows = candidates.length
+    ? candidates.map(u => `
+        <label style="display:flex;align-items:center;gap:8px;padding:7px 4px;border-bottom:1px solid var(--border);font-size:13px">
+          <input type="checkbox" class="dept-assign-cb" value="${u._id}" ${u.department === deptName ? 'checked' : ''}>
+          <span style="flex:1">${esc(u.name)}</span>
+          ${u.department && u.department !== deptName ? `<span style="font-size:11px;color:var(--text-muted)">currently: ${esc(u.department)}</span>` : ''}
+        </label>`).join('')
+    : `<p style="font-size:12.5px;color:var(--text-light);padding:8px 0">No employees or managers yet.</p>`;
+
+  const container = document.getElementById('modal-container');
+  container.classList.remove('hidden');
+  container.innerHTML = `
+    <div class="modal-overlay" onclick="closeModal(event)">
+      <div class="modal" onclick="event.stopPropagation()">
+        <h3>Assign employees to ${esc(deptName)}</h3>
+        <p style="font-size:12.5px;color:var(--text-light);margin-bottom:8px">Check who belongs in this department. Unchecking someone already here removes them from it.</p>
+        <div style="max-height:320px;overflow-y:auto">${rows}</div>
+        <div class="modal-actions">
+          <button class="btn btn-secondary btn-sm" onclick="closeModal()">Cancel</button>
+          <button class="btn btn-primary btn-sm" onclick="_saveDeptAssign('${deptId}','${deptName.replace(/'/g,"\\'")}')" ${candidates.length ? '' : 'disabled'}>Save</button>
+        </div>
+      </div>
+    </div>
+  `;
+  window._deptAssignCandidates = candidates; // stash for diffing on save
+};
+window._saveDeptAssign = async function(deptId, deptName) {
+  const boxes = Array.from(document.querySelectorAll('.dept-assign-cb'));
+  const candidates = window._deptAssignCandidates || [];
+  const byId = Object.fromEntries(candidates.map(u => [u._id, u]));
+
+  const changes = boxes
+    .map(cb => {
+      const u = byId[cb.value];
+      if (!u) return null;
+      const wasIn = u.department === deptName;
+      if (cb.checked === wasIn) return null; // unchanged
+      return { id: u._id, department: cb.checked ? deptName : null };
+    })
+    .filter(Boolean);
+
+  if (!changes.length) { closeModal(); return; }
+
+  try {
+    await Promise.all(changes.map(c =>
+      api(`/api/users/${c.id}`, { method: 'PATCH', body: JSON.stringify({ department: c.department }) })
+    ));
+    toastSuccess(`Updated ${changes.length} employee${changes.length === 1 ? '' : 's'}`);
+    closeModal();
+    renderDepartments();
+  } catch (e) { toastError(e.message); }
 };
 
 // ── Teams ───────────────────────────────────────────────────────────
