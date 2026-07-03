@@ -19,81 +19,163 @@ const FROM = _safeFrom.includes('no-reply@dikly.sbs') || _safeFrom.includes('no-
 const BASE_URL = process.env.APP_URL || 'https://dikly.sbs';
 
 // ── Colour palette ────────────────────────────────────────────────────────────
+// Matches the app's own indigo/violet brand system (see style.css --accent /
+// --accent2) so transactional email reads as the same product, not a
+// generic template. Every colour is applied via inline attributes as well
+// as CSS below, and the shell forces color-scheme:light — Gmail/Outlook
+// "smart" dark-mode inversion was flattening the white card into a harsh
+// black box with no contrast control, which is what actually made these
+// look unpolished, independent of the content design.
 const C = {
-  primary : '#4f46e5',
-  purple  : '#7c3aed',
-  green   : '#059669',
-  red     : '#dc2626',
-  orange  : '#d97706',
-  bg      : '#f1f5f9',
-  card    : '#ffffff',
-  text    : '#0f172a',
-  muted   : '#64748b',
-  border  : '#e2e8f0',
+  primary   : '#4f6ef7',
+  purple    : '#7c3aed',
+  green     : '#0a7c4a',
+  greenSoft : '#e9f9f1',
+  greenLine : '#b7ebd1',
+  red       : '#c0261f',
+  redSoft   : '#fdedec',
+  redLine   : '#f4c3c0',
+  amber     : '#a25a06',
+  amberSoft : '#fdf3e2',
+  amberLine : '#f2d8a2',
+  page      : '#f3f4f8',
+  card      : '#ffffff',
+  text      : '#12131a',
+  muted     : '#666a78',
+  faint     : '#9498a3',
+  border    : '#e7e8ef',
 };
+
+// ── Small shared components ───────────────────────────────────────────────────
+// Category label + title, replacing emoji-in-heading — matches how the rest
+// of the product (and how any professional transactional sender) signals
+// what an email is about: a short label, not a decorative glyph.
+function heading(eyebrow, title, tone = C.primary) {
+  return `
+    <div style="font-size:11px;font-weight:700;letter-spacing:1.6px;text-transform:uppercase;color:${tone};margin:0 0 10px">${eyebrow}</div>
+    <h1 style="font-size:23px;font-weight:800;letter-spacing:-.4px;color:${C.text};margin:0 0 10px;line-height:1.3">${title}</h1>`;
+}
+
+// Two-column label/value card — replaces the old cramped <p><strong> stack.
+// pairs: [[label, value], ...]
+function detailCard(pairs) {
+  const rows = pairs.filter(Boolean).map(([label, value], i, arr) => `
+    <tr>
+      <td style="padding:11px 0;${i < arr.length - 1 ? `border-bottom:1px solid ${C.border};` : ''}font-size:12.5px;color:${C.muted};vertical-align:top;white-space:nowrap">${label}</td>
+      <td style="padding:11px 0 11px 18px;${i < arr.length - 1 ? `border-bottom:1px solid ${C.border};` : ''}font-size:13.5px;color:${C.text};font-weight:600;text-align:right;word-break:break-word">${value}</td>
+    </tr>`).join('');
+  return `
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="width:100%;border-collapse:collapse;background:${C.page};border:1px solid ${C.border};border-radius:12px;margin:22px 0">
+      <tr><td style="padding:2px 20px">
+        <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="width:100%;border-collapse:collapse">${rows}</table>
+      </td></tr>
+    </table>`;
+}
+
+// One-time-code display — kept visually distinct from detailCard on purpose.
+function otpBox(code) {
+  return `
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="width:100%;border-collapse:collapse;background:${C.page};border:1px solid ${C.border};border-radius:12px;margin:22px 0">
+      <tr><td style="padding:24px;text-align:center">
+        <div style="font-size:11px;font-weight:700;letter-spacing:1.6px;text-transform:uppercase;color:${C.muted};margin-bottom:10px">Your reset code</div>
+        <div style="font-family:Consolas,'SF Mono',Menlo,monospace;font-size:32px;font-weight:800;letter-spacing:8px;color:${C.primary}">${code}</div>
+        <div style="font-size:12px;color:${C.faint};margin-top:10px">Valid for 1 hour · do not share this code</div>
+      </td></tr>
+    </table>`;
+}
+
+// Bulletproof-ish button: flat colour declared first as a fallback for
+// clients that don't parse gradients (Outlook desktop), gradient declared
+// second for everyone else — clients keep the last background they understand.
+function button(url, label, tone = 'primary') {
+  const flat = tone === 'green' ? C.green : C.primary;
+  const grad = tone === 'green' ? C.green : `linear-gradient(135deg, ${C.primary}, ${C.purple})`;
+  return `
+    <table role="presentation" cellpadding="0" cellspacing="0" style="margin:28px auto"><tr>
+      <td style="border-radius:10px;background:${flat};background:${grad}">
+        <a href="${url}" style="display:inline-block;padding:14px 30px;font-size:14.5px;font-weight:700;color:#ffffff;text-decoration:none;border-radius:10px;letter-spacing:.2px">${label}</a>
+      </td>
+    </tr></table>`;
+}
+
+// Faithful inline reproduction of dikly-icon.svg — a hosted image would be
+// more portable, but the source file is a 1536x1024 banner PNG (wrong shape
+// for a header mark) and inline SVG renders correctly in Gmail, Apple Mail,
+// and Outlook.com, which covers the overwhelming majority of this product's
+// mobile-first audience.
+const LOGO_SVG = `<svg width="30" height="30" viewBox="0 0 100 100" style="display:block">
+  <defs>
+    <linearGradient id="dg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#60a5fa"/><stop offset="45%" stop-color="#2563eb"/><stop offset="100%" stop-color="#1e40af"/>
+    </linearGradient>
+    <clipPath id="dc"><path d="M14,4 L14,96 L50,96 C97,93 97,7 50,4 Z"/></clipPath>
+  </defs>
+  <path d="M14,4 L14,96 L50,96 C97,93 97,7 50,4 Z" fill="url(#dg)"/>
+  <g clip-path="url(#dc)">
+    <polygon points="4,58 63,-2 89,-2 30,58" fill="#ffffff"/>
+    <polygon points="30,102 89,42 63,42 4,102" fill="#ffffff"/>
+  </g>
+</svg>`;
 
 // ── Shared HTML wrapper ───────────────────────────────────────────────────────
 function wrap(bodyHtml, previewText = '') {
   return `<!DOCTYPE html>
-<html lang="en">
+<html lang="en" style="color-scheme:light;supported-color-schemes:light">
 <head>
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width,initial-scale=1"/>
+<meta name="color-scheme" content="light"/>
+<meta name="supported-color-schemes" content="light"/>
 <title>DIKLY</title>
 <style>
-  * { box-sizing: border-box; margin: 0; padding: 0; }
-  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-         background: ${C.bg}; color: ${C.text}; -webkit-font-smoothing: antialiased; }
+  :root { color-scheme: light; supported-color-schemes: light; }
+  * { box-sizing: border-box; }
+  body { margin:0; padding:0; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+         background: ${C.page} !important; color: ${C.text} !important; -webkit-font-smoothing: antialiased; }
   a { color: ${C.primary}; text-decoration: none; }
-  .wrapper  { max-width: 560px; margin: 0 auto; padding: 32px 16px; }
-  .logo-row { text-align: center; margin-bottom: 24px; }
-  .logo     { display: inline-flex; align-items: center; gap: 10px; font-size: 22px;
-               font-weight: 800; color: ${C.text}; letter-spacing: -0.5px; }
-  .logo-icon{ width: 36px; height: 36px; border-radius: 10px;
-               background: linear-gradient(135deg, ${C.primary}, ${C.purple});
-               display: inline-flex; align-items: center; justify-content: center; }
-  .card     { background: ${C.card}; border-radius: 16px; padding: 36px 32px;
-               box-shadow: 0 4px 24px rgba(0,0,0,.07); border: 1px solid ${C.border}; }
-  h1        { font-size: 22px; font-weight: 700; margin-bottom: 8px; letter-spacing: -0.3px; }
-  p         { font-size: 15px; line-height: 1.7; color: ${C.muted}; margin-bottom: 16px; }
-  .btn      { display: inline-block; padding: 13px 28px; border-radius: 10px; font-size: 15px;
-               font-weight: 600; text-align: center; margin: 8px 0; }
-  .btn-primary { background: linear-gradient(135deg, ${C.primary}, ${C.purple}); color: #fff !important; }
-  .btn-green   { background: ${C.green}; color: #fff !important; }
-  .info-box { background: ${C.bg}; border-radius: 10px; padding: 16px 20px;
-               border: 1px solid ${C.border}; margin: 20px 0; }
-  .info-box p { margin: 0; font-size: 14px; }
+  h1, p, td, div { color: inherit; }
+  p { font-size: 14.5px; line-height: 1.7; color: ${C.muted}; margin: 0 0 16px; }
   .divider  { border: none; border-top: 1px solid ${C.border}; margin: 24px 0; }
-  .footer   { text-align: center; margin-top: 24px; font-size: 13px; color: ${C.muted}; line-height: 1.6; }
   .highlight{ color: ${C.text}; font-weight: 600; }
-  .badge    { display: inline-block; padding: 4px 10px; border-radius: 20px;
-               font-size: 12px; font-weight: 700; }
-  .badge-green  { background: #f0fdf4; color: #166534; border: 1px solid #bbf7d0; }
-  .badge-orange { background: #fff7ed; color: #9a3412; border: 1px solid #fed7aa; }
-  .badge-red    { background: #fef2f2; color: #991b1b; border: 1px solid #fecaca; }
+  .badge    { display: inline-block; padding: 4px 11px; border-radius: 20px; font-size: 11px; font-weight: 700; letter-spacing: .3px; }
+  .badge-green  { background: ${C.greenSoft}; color: ${C.green}; border: 1px solid ${C.greenLine}; }
+  .badge-orange { background: ${C.amberSoft}; color: ${C.amber}; border: 1px solid ${C.amberLine}; }
+  .badge-red    { background: ${C.redSoft}; color: ${C.red}; border: 1px solid ${C.redLine}; }
+  /* Neutralise Gmail/Outlook automatic dark-mode repainting so the card
+     always renders on the white/light surfaces it was actually designed for. */
+  [data-ogsc] body, [data-ogsb] body { background: ${C.page} !important; }
+  [data-ogsc] .dk-card, [data-ogsb] .dk-card { background: ${C.card} !important; }
+  [data-ogsc] .dk-card *, [data-ogsb] .dk-card * { color: inherit !important; }
+  u + .body .dk-card { background: ${C.card} !important; }
 </style>
 </head>
-<body>
-${previewText ? `<div style="display:none;max-height:0;overflow:hidden;color:#f1f5f9">${previewText}</div>` : ''}
-<div class="wrapper">
-  <div class="logo-row">
-    <span class="logo">
-      <span class="logo-icon">
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-          <polyline points="9 11 12 14 22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/>
-        </svg>
-      </span>
-      DIKLY
-    </span>
-  </div>
-  <div class="card">
+<body style="margin:0;padding:0;background:${C.page};color:${C.text}">
+${previewText ? `<div style="display:none;max-height:0;overflow:hidden;opacity:0;color:${C.page}">${previewText}&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;</div>` : ''}
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="width:100%;background:${C.page}">
+<tr><td align="center" style="padding:36px 16px">
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="width:100%;max-width:560px">
+
+  <tr><td align="center" style="padding-bottom:26px">
+    <table role="presentation" cellpadding="0" cellspacing="0"><tr>
+      <td style="padding-right:9px;vertical-align:middle">${LOGO_SVG}</td>
+      <td style="vertical-align:middle;font-size:20px;font-weight:800;letter-spacing:-.4px;color:${C.text}">DIKLY</td>
+    </tr></table>
+  </td></tr>
+
+  <tr><td class="dk-card" style="background:${C.card};border:1px solid ${C.border};border-radius:16px;padding:38px 34px;box-shadow:0 2px 10px rgba(15,23,42,.05)">
     ${bodyHtml}
-  </div>
-  <div class="footer">
-    <p>© ${new Date().getFullYear()} DIKLY · Smart Attendance & Assessment Platform</p>
-    <p style="margin-top:4px">Questions? Reply to this email or visit <a href="${BASE_URL}">${BASE_URL}</a></p>
-  </div>
-</div>
+  </td></tr>
+
+  <tr><td align="center" style="padding-top:26px">
+    <div style="font-size:12.5px;color:${C.faint};line-height:1.7">
+      © ${new Date().getFullYear()} DIKLY Technologies · Smart Attendance &amp; Assessment Platform<br/>
+      Questions? Reply to this email or visit <a href="${BASE_URL}" style="color:${C.muted};font-weight:600">${BASE_URL.replace(/^https?:\/\//, '')}</a>
+    </div>
+  </td></tr>
+
+</table>
+</td></tr>
+</table>
 </body>
 </html>`;
 }
@@ -284,101 +366,93 @@ async function send({ to, subject, html, textBody }) {
 async function sendWelcome({ email, name, institutionName, trialDays = 14, trialEndDate }) {
   const endStr = trialEndDate ? new Date(trialEndDate).toDateString() : `${trialDays} days from now`;
   const html = wrap(`
-    <h1>Welcome to DIKLY 🎉</h1>
-    <p>Hi <span class="highlight">${name}</span>, your account for <strong>${institutionName}</strong> is ready. You're on a <strong>${trialDays}-day free trial</strong> -- no card needed.</p>
+    ${heading('Account created', 'Welcome to DIKLY')}
+    <p>Hi <span class="highlight">${name}</span>, your account for <strong>${institutionName}</strong> is ready. You're on a <strong>${trialDays}-day free trial</strong> — no card needed.</p>
 
-    <div class="info-box">
-      <p><span class="badge badge-green">TRIAL ACTIVE</span></p>
-      <p style="margin-top:10px">Trial ends: <span class="highlight">${endStr}</span></p>
-    </div>
+    ${detailCard([
+      ['Status', '<span class="badge badge-green">TRIAL ACTIVE</span>'],
+      ['Trial ends', endStr],
+    ])}
 
     <p><strong>Get started in 3 steps:</strong></p>
-    <p>1️⃣ &nbsp;Create a course and invite your students<br/>
-       2️⃣ &nbsp;Start an attendance session -- students scan or mark themselves in<br/>
-       3️⃣ &nbsp;Create a quiz and let the AI generate your questions</p>
+    <p>1. Create a course and invite your students<br/>
+       2. Start an attendance session — students scan or mark themselves in<br/>
+       3. Create a quiz and let the AI generate your questions</p>
 
-    <div style="text-align:center;margin:28px 0">
-      <a href="${BASE_URL}" class="btn btn-primary">Open DIKLY →</a>
-    </div>
+    ${button(BASE_URL, 'Open DIKLY')}
 
     <hr class="divider"/>
     <p style="font-size:13px">Your trial runs until <strong>${endStr}</strong>. After that, subscribe for <strong>GHS 200/month</strong> to keep all your data and features.</p>
-  `, `Welcome to DIKLY -- your ${trialDays}-day trial has started`);
+  `, `Welcome to DIKLY — your ${trialDays}-day trial has started`);
 
-  return send({ to: email, subject: 'Welcome to DIKLY -- your free trial has started 🚀', html });
+  return send({ to: email, subject: 'Welcome to DIKLY — your free trial has started', html });
 }
 
 // 2. Trial ending soon (day 10 -- 4 days left)
 async function sendTrialEndingSoon({ email, name, daysLeft, trialEndDate }) {
   const endStr = trialEndDate ? new Date(trialEndDate).toDateString() : `in ${daysLeft} days`;
   const html = wrap(`
-    <h1>Your trial ends in ${daysLeft} day${daysLeft !== 1 ? 's' : ''} ⏳</h1>
-    <p>Hi <span class="highlight">${name}</span>, just a heads-up -- your DIKLY free trial expires on <strong>${endStr}</strong>.</p>
+    ${heading('Trial ending soon', `Your trial ends in ${daysLeft} day${daysLeft !== 1 ? 's' : ''}`, C.amber)}
+    <p>Hi <span class="highlight">${name}</span>, just a heads-up — your DIKLY free trial expires on <strong>${endStr}</strong>.</p>
 
-    <div class="info-box">
-      <p><span class="badge badge-orange">TRIAL ENDING SOON</span></p>
-      <p style="margin-top:10px">Subscribe before it expires and your sessions, quizzes, and student data stay exactly where they are.</p>
-    </div>
+    ${detailCard([
+      ['Status', '<span class="badge badge-orange">TRIAL ENDING SOON</span>'],
+      ['Expires', endStr],
+    ])}
 
     <p><strong>What you keep with a subscription:</strong></p>
-    <p>✅ &nbsp;All attendance session history<br/>
-       ✅ &nbsp;All quizzes and student results<br/>
-       ✅ &nbsp;All assignments and submissions<br/>
-       ✅ &nbsp;AI question generation<br/>
-       ✅ &nbsp;Live proctoring</p>
+    <p>All attendance session history<br/>
+       All quizzes and student results<br/>
+       All assignments and submissions<br/>
+       AI question generation<br/>
+       Live proctoring</p>
 
-    <div style="text-align:center;margin:28px 0">
-      <a href="${BASE_URL}/#subscription" class="btn btn-primary">Subscribe Now -- GHS 200/month →</a>
-    </div>
+    ${button(`${BASE_URL}/#subscription`, 'Subscribe Now — GHS 200/month')}
 
     <p style="font-size:13px">Prefer annual? Pay <strong>GHS 2,000/year</strong> and get 2 months free.</p>
-  `, `Your DIKLY trial ends in ${daysLeft} days -- subscribe to keep access`);
+  `, `Your DIKLY trial ends in ${daysLeft} days — subscribe to keep access`);
 
-  return send({ to: email, subject: `⏳ Your DIKLY trial ends in ${daysLeft} days`, html });
+  return send({ to: email, subject: `Your DIKLY trial ends in ${daysLeft} days`, html });
 }
 
 // 3. Trial expired
 async function sendTrialExpired({ email, name }) {
   const html = wrap(`
-    <h1>Your DIKLY trial has ended</h1>
+    ${heading('Trial expired', 'Your DIKLY trial has ended', C.red)}
     <p>Hi <span class="highlight">${name}</span>, your 14-day free trial has expired. Your account is currently paused.</p>
 
-    <div class="info-box">
-      <p><span class="badge badge-red">TRIAL EXPIRED</span></p>
-      <p style="margin-top:10px"><strong>Good news:</strong> All your data -- sessions, quizzes, assignments, student records -- is safely saved and waiting for you.</p>
-    </div>
+    ${detailCard([
+      ['Status', '<span class="badge badge-red">TRIAL EXPIRED</span>'],
+      ['Your data', 'Safely saved and waiting for you'],
+    ])}
 
     <p>Subscribe now to reactivate your account instantly. No setup needed.</p>
 
-    <div style="text-align:center;margin:28px 0">
-      <a href="${BASE_URL}/#subscription" class="btn btn-primary">Reactivate -- GHS 200/month →</a>
-    </div>
+    ${button(`${BASE_URL}/#subscription`, 'Reactivate — GHS 200/month')}
 
-    <p style="font-size:13px">Annual plan: <strong>GHS 2,000/year</strong> (save GHS 400 -- 2 months free)</p>
-  `, 'Your DIKLY trial has expired -- reactivate to keep your data');
+    <p style="font-size:13px">Annual plan: <strong>GHS 2,000/year</strong> (save GHS 400 — 2 months free)</p>
+  `, 'Your DIKLY trial has expired — reactivate to keep your data');
 
-  return send({ to: email, subject: 'Your DIKLY trial has ended -- reactivate your account', html });
+  return send({ to: email, subject: 'Your DIKLY trial has ended — reactivate your account', html });
 }
 
 // 4. Grace period nudge (day 16 -- 2 days after expiry)
 async function sendGraceNudge({ email, name }) {
   const html = wrap(`
-    <h1>Last chance -- your data is still here 🔒</h1>
+    ${heading('Final notice', 'Your data is still here', C.red)}
     <p>Hi <span class="highlight">${name}</span>, your DIKLY account has been paused for 2 days. We've kept all your data safe, but we wanted to check in one last time.</p>
 
-    <div class="info-box">
-      <p>📂 &nbsp;Your sessions, quizzes, and student records are all still saved.<br/>
-         ⚡ &nbsp;Subscribing reactivates everything instantly.</p>
-    </div>
+    ${detailCard([
+      ['Sessions & quizzes', 'All still saved'],
+      ['Reactivation', 'Instant — subscribe to restore access'],
+    ])}
 
-    <div style="text-align:center;margin:28px 0">
-      <a href="${BASE_URL}/#subscription" class="btn btn-green">Reactivate My Account →</a>
-    </div>
+    ${button(`${BASE_URL}/#subscription`, 'Reactivate My Account', 'green')}
 
     <p style="font-size:13px;text-align:center">GHS 200/month &nbsp;·&nbsp; GHS 2,000/year (2 months free)</p>
-  `, 'Last chance -- your DIKLY data is still waiting for you');
+  `, 'Last chance — your DIKLY data is still waiting for you');
 
-  return send({ to: email, subject: '🔒 Last chance -- your DIKLY data is still here', html });
+  return send({ to: email, subject: 'Last chance — your DIKLY data is still here', html });
 }
 
 // 5. Subscription confirmed (after payment)
@@ -386,29 +460,25 @@ async function sendSubscriptionConfirmed({ email, name, plan, endDate, amountGhs
   const endStr = endDate ? new Date(endDate).toDateString() : 'N/A';
   const planLabel = plan === 'yearly' ? 'Annual Plan' : 'Monthly Plan';
   const html = wrap(`
-    <h1>Subscription confirmed ✅</h1>
+    ${heading('Payment received', 'Subscription confirmed', C.green)}
     <p>Hi <span class="highlight">${name}</span>, your payment was successful. DIKLY is fully active.</p>
 
-    <div class="info-box">
-      <p><span class="badge badge-green">ACTIVE</span></p>
-      <p style="margin-top:12px">
-        <strong>Plan:</strong> ${planLabel}<br/>
-        <strong>Amount paid:</strong> GHS ${amountGhs}<br/>
-        <strong>Access until:</strong> ${endStr}
-      </p>
-    </div>
+    ${detailCard([
+      ['Status', '<span class="badge badge-green">ACTIVE</span>'],
+      ['Plan', planLabel],
+      ['Amount paid', `GHS ${amountGhs}`],
+      ['Access until', endStr],
+    ])}
 
     <p>Everything is exactly as you left it. Keep running sessions, creating quizzes, and tracking attendance.</p>
 
-    <div style="text-align:center;margin:28px 0">
-      <a href="${BASE_URL}" class="btn btn-primary">Go to DIKLY →</a>
-    </div>
+    ${button(BASE_URL, 'Go to DIKLY')}
 
     <hr class="divider"/>
     <p style="font-size:13px">We'll remind you before your next renewal. Thank you for subscribing to DIKLY.</p>
-  `, `DIKLY subscription confirmed -- active until ${endStr}`);
+  `, `DIKLY subscription confirmed — active until ${endStr}`);
 
-  return send({ to: email, subject: '✅ DIKLY subscription confirmed -- you\'re all set', html });
+  return send({ to: email, subject: `DIKLY subscription confirmed — you're all set`, html });
 }
 
 // 6. Renewal reminder (7 days before subscription end)
@@ -416,42 +486,33 @@ async function sendRenewalReminder({ email, name, plan, endDate }) {
   const endStr = endDate ? new Date(endDate).toDateString() : 'soon';
   const planLabel = plan === 'yearly' ? 'Annual Plan' : 'Monthly Plan';
   const html = wrap(`
-    <h1>Your subscription renews in 7 days</h1>
+    ${heading('Renewal reminder', 'Your subscription renews in 7 days', C.amber)}
     <p>Hi <span class="highlight">${name}</span>, your DIKLY <strong>${planLabel}</strong> expires on <strong>${endStr}</strong>.</p>
 
     <p>To avoid any interruption to your sessions and quizzes, renew before that date.</p>
 
-    <div style="text-align:center;margin:28px 0">
-      <a href="${BASE_URL}/#subscription" class="btn btn-primary">Renew Subscription →</a>
-    </div>
+    ${button(`${BASE_URL}/#subscription`, 'Renew Subscription')}
 
     <p style="font-size:13px">Monthly: GHS 200 &nbsp;·&nbsp; Annual: GHS 2,000 (save GHS 400)</p>
   `, `Your DIKLY subscription expires on ${endStr}`);
 
-  return send({ to: email, subject: `⏰ Your DIKLY subscription expires on ${endStr}`, html });
+  return send({ to: email, subject: `Your DIKLY subscription expires on ${endStr}`, html });
 }
 
 // ── Password Reset OTP Email ──────────────────────────────────────────────────
-async function sendPasswordReset({ email, name, resetCode, role, institutionName }) {
-  const roleLabel = role === 'admin' || role === 'superadmin' ? 'Admin' :
-                    role === 'lecturer' ? 'Lecturer' :
-                    role === 'manager' ? 'Manager' : 'Employee';
+async function sendPasswordReset({ email, name, resetCode, institutionName }) {
   const html = wrap(`
-    <h1>Password Reset Request 🔐</h1>
+    ${heading('Security', 'Password reset request')}
     <p>Hi <span class="highlight">${name || email}</span>, we received a request to reset your password${institutionName ? ` for <strong>${institutionName}</strong>` : ''}.</p>
 
-    <div class="info-box" style="text-align:center">
-      <p style="font-size:13px;color:#6b7280;margin-bottom:8px">YOUR RESET CODE</p>
-      <p style="font-size:36px;font-weight:800;letter-spacing:10px;color:#4f46e5;margin:0">${resetCode}</p>
-      <p style="font-size:12px;color:#9ca3af;margin-top:8px">Valid for 1 hour · Do not share this code</p>
-    </div>
+    ${otpBox(resetCode)}
 
     <p>Enter this code on the DIKLY password reset page to set a new password.</p>
-    <p>If you did not request this reset, you can safely ignore this email -- your password has not changed.</p>
+    <p>If you did not request this reset, you can safely ignore this email — your password has not changed.</p>
 
     <hr class="divider"/>
-    <p style="font-size:12px;color:#9ca3af">This code expires in 1 hour. If you need a new code, request another reset from the login page.</p>
-  `, `DIKLY Password Reset Code: ${resetCode}`);
+    <p style="font-size:12px;color:${C.faint}">This code expires in 1 hour. If you need a new code, request another reset from the login page.</p>
+  `, `DIKLY password reset code: ${resetCode}`);
 
   return send({ to: email, subject: `Your DIKLY password reset code: ${resetCode}`, html, textBody: `Your DIKLY password reset code is: ${resetCode}\n\nThis code expires in 1 hour. Do not share it with anyone.` });
 }
@@ -459,24 +520,22 @@ async function sendPasswordReset({ email, name, resetCode, role, institutionName
 // ── Admin: User password reset notification ───────────────────────────────────
 async function sendAdminPasswordResetNotice({ adminEmail, adminName, targetUserName, targetUserRole, targetUserEmail, institutionName }) {
   const html = wrap(`
-    <h1>Password Reset Performed 🔔</h1>
+    ${heading('Security alert', 'Password reset performed')}
     <p>Hi <span class="highlight">${adminName}</span>, this is a notification that a password reset was completed on your institution <strong>${institutionName}</strong>.</p>
 
-    <div class="info-box">
-      <p><strong>User:</strong> ${targetUserName}</p>
-      <p><strong>Role:</strong> ${targetUserRole}</p>
-      <p><strong>Email / ID:</strong> ${targetUserEmail}</p>
-      <p><strong>Time:</strong> ${new Date().toLocaleString()}</p>
-    </div>
+    ${detailCard([
+      ['User', targetUserName],
+      ['Role', targetUserRole],
+      ['Email / ID', targetUserEmail],
+      ['Time', new Date().toLocaleString()],
+    ])}
 
     <p>If you did not expect this reset, please review your institution's user activity in the DIKLY admin panel.</p>
 
-    <div style="text-align:center;margin:28px 0">
-      <a href="${BASE_URL}" class="btn btn-primary">Open DIKLY →</a>
-    </div>
-  `, `Password reset notification -- ${targetUserName}`);
+    ${button(BASE_URL, 'Open DIKLY')}
+  `, `Password reset notification — ${targetUserName}`);
 
-  return send({ to: adminEmail, subject: `🔔 DIKLY: Password reset by ${targetUserName}`, html });
+  return send({ to: adminEmail, subject: `DIKLY: Password reset by ${targetUserName}`, html });
 }
 
 
@@ -484,159 +543,151 @@ async function sendAdminPasswordResetNotice({ adminEmail, adminName, targetUserN
 async function sendPaymentFailed({ email, name, plan, institutionName }) {
   const planLabel = plan === 'annual' ? 'Annual' : 'Monthly';
   const html = wrap(`
-    <h1>Payment Failed ⚠️</h1>
+    ${heading('Action required', 'Payment failed', C.red)}
     <p>Hi <span class="highlight">${name || email}</span>, we were unable to process your ${planLabel} subscription payment for <strong>${institutionName || 'your institution'}</strong>.</p>
 
-    <div class="info-box" style="border-left:4px solid #dc2626">
-      <p style="color:#dc2626;font-weight:700;margin-bottom:4px">Action Required</p>
-      <p>Your subscription will be suspended if payment is not received. Please update your payment method in the DIKLY dashboard.</p>
-    </div>
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="width:100%;border-collapse:collapse;background:${C.redSoft};border:1px solid ${C.redLine};border-radius:12px;margin:22px 0">
+      <tr><td style="padding:16px 20px">
+        <p style="margin:0 0 4px;color:${C.red};font-weight:700;font-size:13px">Action required</p>
+        <p style="margin:0;color:${C.text};font-size:13.5px">Your subscription will be suspended if payment is not received. Please update your payment method in the DIKLY dashboard.</p>
+      </td></tr>
+    </table>
 
-    <div style="text-align:center;margin:28px 0">
-      <a href="${BASE_URL}" class="btn btn-primary">Update Payment →</a>
-    </div>
+    ${button(BASE_URL, 'Update Payment')}
 
     <p>If you believe this is an error, please contact your bank or try a different card. If the issue persists, contact us at <a href="mailto:${SUPPORT_EMAIL}">${SUPPORT_EMAIL}</a>.</p>
-  `, `Payment failed -- action required`);
+  `, 'Payment failed — action required');
 
-  return send({ to: email, subject: `⚠️ DIKLY: Payment failed -- action required`, html });
+  return send({ to: email, subject: 'DIKLY: Payment failed — action required', html });
 }
 
 
 // 10. New institution signup notification to superadmin
 async function sendNewInstitutionAlert({ institutionName, adminName, adminEmail, mode, institutionCode }) {
   const html = wrap(`
-    <h1>New Institution Signed Up 🎉</h1>
+    ${heading('New signup', 'New institution signed up', C.green)}
     <p>A new institution has registered on the DIKLY platform.</p>
-    <div class="info-box">
-      <p><strong>Institution:</strong> ${institutionName}</p>
-      <p><strong>Mode:</strong> ${mode === 'academic' ? 'Academic (School/University)' : 'Corporate (Company)'}</p>
-      <p><strong>Code:</strong> <span style="font-family:monospace;font-size:18px;font-weight:700;color:#4f46e5;letter-spacing:4px">${institutionCode}</span></p>
-      <p><strong>Admin:</strong> ${adminName}</p>
-      <p><strong>Admin Email:</strong> ${adminEmail}</p>
-    </div>
+    ${detailCard([
+      ['Institution', institutionName],
+      ['Mode', mode === 'academic' ? 'Academic (School/University)' : 'Corporate (Company)'],
+      ['Code', `<span style="font-family:Consolas,'SF Mono',Menlo,monospace;font-size:16px;font-weight:700;color:${C.primary};letter-spacing:3px">${institutionCode}</span>`],
+      ['Admin', adminName],
+      ['Admin email', adminEmail],
+    ])}
     <p>They are now on a 14-day free trial. Log in to the superadmin portal to manage their account.</p>
-    <div style="text-align:center;margin:24px 0">
-      <a href="${BASE_URL}/superadmin" class="btn btn-primary">Open Superadmin →</a>
-    </div>
+    ${button(`${BASE_URL}/superadmin`, 'Open Superadmin')}
   `, `New institution: ${institutionName}`);
-  return send({ to: GMAIL_USER, subject: `🎉 New institution on DIKLY: ${institutionName}`, html });
+  return send({ to: GMAIL_USER, subject: `New institution on DIKLY: ${institutionName}`, html });
 }
 
 
 // ── Lecturer welcome email ────────────────────────────────────────────────────
 async function sendLecturerWelcome({ email, name, institutionName, department, isApproved }) {
   const html = wrap(`
-    <h1>Welcome to DIKLY 👋</h1>
+    ${heading('Account created', 'Welcome to DIKLY')}
     <p>Hi <span class="highlight">${name}</span>, your lecturer account at <strong>${institutionName}</strong> has been created.</p>
 
-    <div class="info-box">
-      <p><strong>Institution:</strong> ${institutionName}</p>
-      ${department ? `<p><strong>Department:</strong> ${department}</p>` : ''}
-      <p><strong>Status:</strong> <span class="badge ${isApproved ? 'badge-green' : 'badge-orange'}">${isApproved ? 'APPROVED' : 'PENDING APPROVAL'}</span></p>
-    </div>
+    ${detailCard([
+      ['Institution', institutionName],
+      department ? ['Department', department] : null,
+      ['Status', `<span class="badge ${isApproved ? 'badge-green' : 'badge-orange'}">${isApproved ? 'APPROVED' : 'PENDING APPROVAL'}</span>`],
+    ])}
 
     ${isApproved
       ? `<p>You can log in now and start creating courses, attendance sessions, and quizzes.</p>
-         <div style="text-align:center;margin:28px 0">
-           <a href="${BASE_URL}" class="btn btn-primary">Open DIKLY →</a>
-         </div>`
+         ${button(BASE_URL, 'Open DIKLY')}`
       : `<p>Your account is pending approval by your institution admin. You will be able to log in once approved.</p>`
     }
 
     <hr class="divider"/>
     <p style="font-size:13px">Log in at <a href="${BASE_URL}">${BASE_URL}</a> using your email and the password you set during registration.</p>
-  `, `Welcome to DIKLY -- ${institutionName}`);
-  return send({ to: email, subject: `Welcome to DIKLY -- ${institutionName}`, html });
+  `, `Welcome to DIKLY — ${institutionName}`);
+  return send({ to: email, subject: `Welcome to DIKLY — ${institutionName}`, html });
 }
 
 // ── Student welcome email ─────────────────────────────────────────────────────
 async function sendStudentWelcome({ email, name, institutionName, IndexNumber }) {
   if (!email) return; // students may not have email
   const html = wrap(`
-    <h1>Welcome to DIKLY 🎓</h1>
+    ${heading('Account created', 'Welcome to DIKLY')}
     <p>Hi <span class="highlight">${name}</span>, your student account at <strong>${institutionName}</strong> is ready.</p>
 
-    <div class="info-box">
-      <p><strong>Institution:</strong> ${institutionName}</p>
-      <p><strong>Student ID:</strong> <span class="highlight">${IndexNumber}</span></p>
-    </div>
+    ${detailCard([
+      ['Institution', institutionName],
+      ['Student ID', `<span class="highlight">${IndexNumber}</span>`],
+    ])}
 
     <p><strong>What you can do on DIKLY:</strong></p>
-    <p>📋 &nbsp;Mark your attendance using QR code or entry code<br/>
-       📝 &nbsp;Take quizzes and see your results instantly<br/>
-       📌 &nbsp;Submit assignments and track your grades<br/>
-       📅 &nbsp;View your schedule and upcoming sessions</p>
+    <p>Mark your attendance using QR code or entry code<br/>
+       Take quizzes and see your results instantly<br/>
+       Submit assignments and track your grades<br/>
+       View your schedule and upcoming sessions</p>
 
-    <div style="text-align:center;margin:28px 0">
-      <a href="${BASE_URL}" class="btn btn-primary">Open DIKLY →</a>
-    </div>
+    ${button(BASE_URL, 'Open DIKLY')}
 
     <hr class="divider"/>
     <p style="font-size:13px">Log in using your <strong>Student ID: ${IndexNumber}</strong> and the password you set during registration.</p>
-  `, `Welcome to DIKLY -- ${institutionName}`);
-  return send({ to: email, subject: `Welcome to DIKLY -- ${institutionName}`, html });
+  `, `Welcome to DIKLY — ${institutionName}`);
+  return send({ to: email, subject: `Welcome to DIKLY — ${institutionName}`, html });
 }
 
 // ── Employee welcome email ────────────────────────────────────────────────────
 async function sendEmployeeWelcome({ email, name, companyName, employeeId }) {
   const html = wrap(`
-    <h1>Welcome to DIKLY 💼</h1>
+    ${heading('Account created', 'Welcome to DIKLY')}
     <p>Hi <span class="highlight">${name}</span>, your employee account at <strong>${companyName}</strong> has been created.</p>
 
-    <div class="info-box">
-      <p><strong>Company:</strong> ${companyName}</p>
-      <p><strong>Employee ID:</strong> <span class="highlight">${employeeId}</span></p>
-      <p><strong>Status:</strong> <span class="badge badge-orange">PENDING APPROVAL</span></p>
-    </div>
+    ${detailCard([
+      ['Company', companyName],
+      ['Employee ID', `<span class="highlight">${employeeId}</span>`],
+      ['Status', '<span class="badge badge-orange">PENDING APPROVAL</span>'],
+    ])}
 
     <p>Your account is pending approval by your company admin. Once approved you will be able to:</p>
-    <p>✅ &nbsp;Mark your daily attendance<br/>
-       ✅ &nbsp;Submit timesheets and expense claims<br/>
-       ✅ &nbsp;Request and track leave<br/>
-       ✅ &nbsp;Access company training materials</p>
+    <p>Mark your daily attendance<br/>
+       Submit timesheets and expense claims<br/>
+       Request and track leave<br/>
+       Access company training materials</p>
 
     <hr class="divider"/>
     <p style="font-size:13px">Log in at <a href="${BASE_URL}">${BASE_URL}</a> using your email and the password you set during registration.</p>
-  `, `Welcome to DIKLY -- ${companyName}`);
-  return send({ to: email, subject: `Welcome to DIKLY -- ${companyName}`, html });
+  `, `Welcome to DIKLY — ${companyName}`);
+  return send({ to: email, subject: `Welcome to DIKLY — ${companyName}`, html });
 }
 
 // ── HOD welcome email ─────────────────────────────────────────────────────────
 async function sendHodWelcome({ email, name, institutionName, department }) {
   const html = wrap(`
-    <h1>Welcome to DIKLY 🏛️</h1>
+    ${heading('Account created', 'Welcome to DIKLY')}
     <p>Hi <span class="highlight">${name}</span>, your Head of Department account at <strong>${institutionName}</strong> has been created.</p>
 
-    <div class="info-box">
-      <p><strong>Institution:</strong> ${institutionName}</p>
-      ${department ? `<p><strong>Department:</strong> ${department}</p>` : ''}
-      <p><strong>Role:</strong> <span class="badge badge-green">HEAD OF DEPARTMENT</span></p>
-    </div>
+    ${detailCard([
+      ['Institution', institutionName],
+      department ? ['Department', department] : null,
+      ['Role', '<span class="badge badge-green">HEAD OF DEPARTMENT</span>'],
+    ])}
 
     <p>As HOD you can approve lecturers in your department, monitor attendance, view department analytics, and manage courses.</p>
 
-    <div style="text-align:center;margin:28px 0">
-      <a href="${BASE_URL}" class="btn btn-primary">Open DIKLY →</a>
-    </div>
+    ${button(BASE_URL, 'Open DIKLY')}
 
     <hr class="divider"/>
     <p style="font-size:13px">Log in at <a href="${BASE_URL}">${BASE_URL}</a> using your email and the password you set.</p>
-  `, `Welcome to DIKLY -- ${institutionName}`);
-  return send({ to: email, subject: `Welcome to DIKLY -- ${institutionName}`, html });
+  `, `Welcome to DIKLY — ${institutionName}`);
+  return send({ to: email, subject: `Welcome to DIKLY — ${institutionName}`, html });
 }
 
 // ── Registration rejection email ──────────────────────────────────────────────
 async function sendRegistrationRejected({ email, name, orgName, reason }) {
   if (!email) return;
   const html = wrap(`
-    <h1>Registration Update</h1>
+    ${heading('Update', 'Registration update', C.red)}
     <p>Hi <span class="highlight">${name}</span>, we have reviewed your registration request for <strong>${orgName}</strong>.</p>
 
-    <div class="info-box" style="border-left:4px solid ${C.red}">
-      <p><strong>Status:</strong> <span class="badge" style="background:${C.red};color:#fff;padding:2px 8px;border-radius:4px;font-size:12px">NOT APPROVED</span></p>
-      ${reason ? `<p style="margin-top:8px"><strong>Reason:</strong> ${reason}</p>` : ''}
-    </div>
+    ${detailCard([
+      ['Status', '<span class="badge badge-red">NOT APPROVED</span>'],
+      reason ? ['Reason', reason] : null,
+    ])}
 
     <p>If you believe this is a mistake or have questions, please contact your institution administrator directly.</p>
 
@@ -651,14 +702,14 @@ async function sendSelfRegPending({ email, name, orgName, role }) {
   if (!email) return;
   const roleLabel = role === 'student' ? 'Student' : 'Employee';
   const html = wrap(`
-    <h1>Registration Received ✅</h1>
+    ${heading('Received', 'Registration received', C.green)}
     <p>Hi <span class="highlight">${name}</span>, your ${roleLabel.toLowerCase()} registration request for <strong>${orgName}</strong> has been received.</p>
 
-    <div class="info-box">
-      <p><strong>Organisation:</strong> ${orgName}</p>
-      <p><strong>Role:</strong> ${roleLabel}</p>
-      <p><strong>Status:</strong> <span class="badge badge-orange">PENDING APPROVAL</span></p>
-    </div>
+    ${detailCard([
+      ['Organisation', orgName],
+      ['Role', roleLabel],
+      ['Status', '<span class="badge badge-orange">PENDING APPROVAL</span>'],
+    ])}
 
     <p>An admin will review your request shortly. You will receive another email once your account is approved and ready to use.</p>
 
@@ -673,20 +724,18 @@ async function sendAdminNewSelfReg({ adminEmail, applicantName, role, orgName })
   if (!adminEmail) return;
   const roleLabel = role === 'student' ? 'Student' : 'Employee';
   const html = wrap(`
-    <h1>New Self-Registration Request 📋</h1>
+    ${heading('Action needed', 'New self-registration request')}
     <p>A new <strong>${roleLabel}</strong> has submitted a self-registration request for <strong>${orgName}</strong> on DIKLY.</p>
 
-    <div class="info-box">
-      <p><strong>Applicant:</strong> ${applicantName}</p>
-      <p><strong>Role:</strong> ${roleLabel}</p>
-      <p><strong>Organisation:</strong> ${orgName}</p>
-    </div>
+    ${detailCard([
+      ['Applicant', applicantName],
+      ['Role', roleLabel],
+      ['Organisation', orgName],
+    ])}
 
     <p>Log in to your admin portal to review and approve or reject the request.</p>
 
-    <div style="text-align:center;margin:28px 0">
-      <a href="${BASE_URL}" class="btn btn-primary">Review in DIKLY →</a>
-    </div>
+    ${button(BASE_URL, 'Review in DIKLY')}
   `, `New ${roleLabel} registration request`);
   return send({ to: adminEmail, subject: `New ${roleLabel} registration request — ${orgName}`, html });
 }
