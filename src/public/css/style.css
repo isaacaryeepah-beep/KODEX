@@ -2180,6 +2180,10 @@ input[type="checkbox"] {
   .skeleton-cards { grid-template-columns: 1fr 1fr; }
 }
 
+/* Hidden by default -- only shown on narrow screens (see media query
+   below) where the users table actually needs horizontal scrolling. */
+.table-scroll-hint { display: none; }
+
 /* ══════════════════════════════════════════════════
    MOBILE — FIT EVERYTHING IN PORTRAIT (no rotate)
    Targets phones up to 430px wide
@@ -2278,6 +2282,30 @@ input[type="checkbox"] {
     padding: 3px 7px !important;
     font-size: 10px !important;
     min-width: 0 !important;
+  }
+
+  /* Pin identity columns (checkbox + name) while the rest of a wide table
+     scrolls horizontally underneath -- without this, scrolling right to
+     reach action buttons loses all context for which row they act on. */
+  .sticky-col-1, .sticky-col-2 {
+    position: sticky;
+    z-index: 2;
+    background: var(--card);
+  }
+  .sticky-col-1 { left: 0; }
+  .sticky-col-2 { left: 40px; box-shadow: 2px 0 5px rgba(0,0,0,.08); }
+  tr:first-child .sticky-col-1,
+  tr:first-child .sticky-col-2 { z-index: 3; }
+
+  /* Scroll-for-more hint shown above any table wider than its card */
+  .table-scroll-hint {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    font-size: 10.5px;
+    font-weight: 600;
+    color: var(--text-light);
+    padding: 6px 12px 0;
   }
 
   /* ── Forms / modals ───────────────────────────── */
