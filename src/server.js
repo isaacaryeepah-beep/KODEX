@@ -92,7 +92,11 @@ app.use(helmet({
     useDefaults: true,
     directives: {
       "default-src":     ["'self'"],
-      "script-src":      ["'self'", "'unsafe-inline'", "'unsafe-eval'", "https://cdn.jsdelivr.net", "https://cdnjs.cloudflare.com", "https://meet.dikly.live"],
+      // 'unsafe-eval' was previously required by a client-side math-expression
+      // grapher that used new Function(); it's been rewritten to a small
+      // recursive-descent parser (src/public/js/app.js: _parseMathExpr /
+      // _evalMathAst), so 'unsafe-eval' is no longer needed anywhere.
+      "script-src":      ["'self'", "'unsafe-inline'", "https://cdn.jsdelivr.net", "https://cdnjs.cloudflare.com", "https://meet.dikly.live"],
       "script-src-attr": ["'unsafe-inline'"],
       "style-src":       ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com", "https://cdn.jsdelivr.net"],
       "font-src":        ["'self'", "https://fonts.gstatic.com", "https://cdn.jsdelivr.net", "data:"],
@@ -112,6 +116,27 @@ app.use(helmet({
   frameguard: { action: "sameorigin" },
   xssFilter: true,
 }));
+
+// Helmet 8 dropped Permissions-Policy support (the spec churned too much) —
+// set it directly. Only the APIs this app actually uses are allowed, and
+// only for same-origin: camera/microphone (AI proctoring), geolocation
+// (corporate geofence "detect location"), bluetooth (ESP32 attendance
+// beacon pairing), fullscreen/display-capture/picture-in-picture (exam
+// proctoring + meetings), clipboard, autoplay (splash/meeting video).
+app.use((req, res, next) => {
+  res.setHeader(
+    "Permissions-Policy",
+    [
+      "camera=(self)", "microphone=(self)", "geolocation=(self)",
+      "fullscreen=(self)", "bluetooth=(self)", "display-capture=(self)",
+      "picture-in-picture=(self)", "clipboard-read=(self)", "clipboard-write=(self)",
+      "autoplay=(self)", "payment=(self)",
+      "accelerometer=()", "gyroscope=()", "magnetometer=()", "usb=()", "midi=()",
+      "interest-cohort=()",
+    ].join(", ")
+  );
+  next();
+});
 
 const allowedOrigins = [
   // Production domains
