@@ -110,7 +110,7 @@ function parseAddress(addr) {
 async function sendViaGmail({ toEmail, toName, fromEmail, fromName, subject, html, textBody, replyTo }) {
   return new Promise((resolve, reject) => {
     const tls  = require('tls');
-    const user = GMAIL_USER; // use module-level constant (has nelsonkel78@gmail.com fallback)
+    const user = GMAIL_USER; // use module-level constant (resolved from GMAIL_USER env var)
     const pass = process.env.GMAIL_APP_PASSWORD;
 
     if (!pass) { reject(new Error('GMAIL_APP_PASSWORD not set')); return; }
@@ -211,7 +211,7 @@ async function send({ to, subject, html, textBody }) {
   }
   if (!subject) subject = '(no subject)';
 
-  // GMAIL_USER is already resolved at module level with nelsonkel78@gmail.com fallback.
+  // GMAIL_USER is already resolved at module level from the env var.
   const gmailPass = process.env.GMAIL_APP_PASSWORD;
   const mailerKey = process.env.MAILERSEND_API_KEY;
 
