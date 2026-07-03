@@ -7,6 +7,7 @@ const Goal   = require("../models/Goal");
 const Review = require("../models/Review");
 const User   = require("../models/User");
 const { asyncHandler } = require("../utils/errors");
+const { getVisibleUserIds, requirePeopleOpsAccess } = require("../utils/corporateScope");
 
 const mw        = [authenticate, requireMode("corporate"), requireActiveSubscription];
 const canManage = requireRole("admin", "manager", "superadmin");
@@ -15,13 +16,14 @@ const canManage = requireRole("admin", "manager", "superadmin");
 // GOALS
 // ─────────────────────────────────────────────────────────────
 
-// GET goals (admin/manager: for any employee; employee: own)
+// GET goals (admin/manager: for their scope; employee: own)
 router.get("/goals", ...mw, asyncHandler(async (req, res) => {
   const filter = { company: req.user.company };
   if (req.query.employeeId) {
     filter.employee = req.query.employeeId;
-  } else if (!["admin","manager","superadmin"].includes(req.user.role)) {
-    filter.employee = req.user._id;
+  } else {
+    const visibleIds = await getVisibleUserIds(req.user);
+    if (visibleIds) filter.employee = { $in: visibleIds };
   }
   if (req.query.period) filter.period = req.query.period;
 
@@ -94,9 +96,11 @@ router.delete("/goals/:id", ...mw, canManage, asyncHandler(async (req, res) => {
 // GET reviews
 router.get("/reviews", ...mw, asyncHandler(async (req, res) => {
   const filter = { company: req.user.company };
-  if (req.query.employeeId) filter.employee = req.query.employeeId;
-  else if (!["admin","manager","superadmin"].includes(req.user.role)) {
-    filter.$or = [{ employee: req.user._id }, { reviewer: req.user._id }];
+  if (req.query.employeeId) {
+    filter.employee = req.query.employeeId;
+  } else {
+    const visibleIds = await getVisibleUserIds(req.user);
+    if (visibleIds) filter.$or = [{ employee: { $in: visibleIds } }, { reviewer: req.user._id }];
   }
   if (req.query.period) filter.period = req.query.period;
 
@@ -200,7 +204,7 @@ router.get("/my-scorecard", ...mw, asyncHandler(async (req, res) => {
 // SCORECARD (manager dashboard — per employee overview)
 // ─────────────────────────────────────────────────────────────
 
-router.get("/scorecard/:employeeId", ...mw, canManage, asyncHandler(async (req, res) => {
+router.get("/scorecard/:employeeId", ...mw, requirePeopleOpsAccess, asyncHandler(async (req, res) => {
   const empId = req.params.employeeId;
   const employee = await User.findOne({ _id: empId, company: req.user.company })
     .select("name employeeId department role");
@@ -235,9 +239,10 @@ router.get("/scorecard/:employeeId", ...mw, canManage, asyncHandler(async (req, 
 }));
 
 // GET team overview (manager)
-router.get("/team-overview", ...mw, canManage, asyncHandler(async (req, res) => {
+router.get("/team-overview", ...mw, requirePeopleOpsAccess, asyncHandler(async (req, res) => {
   const filter = { company: req.user.company, role: { $in: ["employee","manager"] } };
-  if (req.user.role === "manager" && req.user.department) filter.department = req.user.department;
+  const visibleIds = await getVisibleUserIds(req.user);
+  if (visibleIds) filter._id = { $in: visibleIds };
 
   const employees = await User.find(filter).select("name employeeId department role");
 

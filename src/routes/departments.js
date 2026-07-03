@@ -24,13 +24,13 @@ const { requireRole, requireMode } = require("../middleware/role");
 const { requireActiveSubscription } = require("../middleware/subscription");
 const Department = require("../models/Department");
 const User       = require("../models/User");
+const { requirePeopleOpsAccess } = require("../utils/corporateScope");
 
 const mw        = [authenticate, requireMode("corporate"), requireActiveSubscription];
 const adminOnly = requireRole("admin", "superadmin");
-const canView   = requireRole("admin", "manager", "superadmin");
 
 // ── GET /  — list departments ────────────────────────────────────────────────
-router.get("/", ...mw, canView, async (req, res) => {
+router.get("/", ...mw, requirePeopleOpsAccess, async (req, res) => {
   try {
     const depts = await Department.find({ company: req.user.company, isActive: true })
       .populate("head",             "name employeeId")
@@ -82,7 +82,7 @@ router.post("/", ...mw, adminOnly, async (req, res) => {
 });
 
 // ── GET /:id  — single department ────────────────────────────────────────────
-router.get("/:id", ...mw, canView, async (req, res) => {
+router.get("/:id", ...mw, requirePeopleOpsAccess, async (req, res) => {
   try {
     const dept = await Department.findOne({ _id: req.params.id, company: req.user.company })
       .populate("head",             "name employeeId role")
@@ -141,7 +141,7 @@ router.delete("/:id", ...mw, adminOnly, async (req, res) => {
 });
 
 // ── GET /:id/employees  — list employees in department ───────────────────────
-router.get("/:id/employees", ...mw, canView, async (req, res) => {
+router.get("/:id/employees", ...mw, requirePeopleOpsAccess, async (req, res) => {
   try {
     const dept = await Department.findOne({ _id: req.params.id, company: req.user.company });
     if (!dept) return res.status(404).json({ error: "Department not found" });

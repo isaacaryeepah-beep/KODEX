@@ -2989,6 +2989,26 @@ function buildSidebar() {
       break;
   }
 
+  // ── HR capability override — inject people-ops nav for HR-flagged base roles ──
+  // Managers already have full corporate nav by default; an active HR grant
+  // just widens their *data* scope (see corporateScope.js), so only the
+  // portal link is added for them. Employees start with none of these, so
+  // the full set is added -- limited to pages that render read-only for
+  // non-manager/admin roles, so nothing here shows a button that would 403.
+  if (['employee', 'manager'].includes(role) && currentUser.hrAssignment && currentUser.company?.mode !== 'academic') {
+    const hrScope = currentUser.hrAssignment.scope === 'company' ? 'Company-wide' : (currentUser.hrAssignment.department?.name || 'Department');
+    links.push({ sep: true, label: `HR ACCESS · ${hrScope.toUpperCase()}` });
+    links.push({ id: 'hr-portal', label: 'HR Portal', icon: svgIcon('<path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/>') });
+    if (role === 'employee') {
+      links.push({ id: 'users',           label: 'Employees',        icon: usersIcon() });
+      links.push({ id: 'departments',     label: 'Departments',      icon: svgIcon('<path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><line x1="9" y1="22" x2="9" y2="12"/><line x1="15" y1="22" x2="15" y2="12"/>') });
+      links.push({ id: 'corp-teams',      label: 'Teams',            icon: svgIcon('<path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/>') });
+      links.push({ id: 'corp-attendance', label: 'Attendance',       icon: svgIcon('<path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/><polyline points="9 11 12 14 22 4"/>') });
+      links.push({ id: 'leave-requests',  label: 'Leave Management', icon: svgIcon('<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/>') });
+      links.push({ id: 'performance',     label: 'Performance Reviews', icon: svgIcon('<line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/>') });
+    }
+  }
+
   // Universal links shown for all roles
   const universalLinks = [
     { id: 'profile',  label: 'My Profile',  icon: svgIcon('<path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/>') },
@@ -3280,6 +3300,7 @@ function navigateTo(view) {
     case 'course-videos':        renderCourseVideos(); break;
     case 'ai-reports':           renderAIReports(); break;
     case 'executive-dashboard':  renderExecutiveDashboard(); break;
+    case 'hr-portal':            renderHRPortal(); break;
     case 'departments':          renderDepartments(); break;
     case 'corp-teams':           renderCorpTeams(); break;
     case 'tasks':                renderTasks(); break;
@@ -8422,6 +8443,18 @@ async function renderUsers(filterRole='', filterDept='', filterSearch='') {
     if (mode === 'academic') {
       _renderUserDeptCards(content, _cachedUsers, filterSearch);
     } else {
+      // Admin-only lookup — fails silently (empty map) for non-admins, who
+      // don't see the Grant/Revoke HR action anyway.
+      window._hrAssignmentsByUser = new Map();
+      if (['admin', 'superadmin'].includes(currentUser.role)) {
+        try {
+          const hrData = await api('/api/hr-assignments');
+          (hrData.assignments || []).forEach(a => {
+            const uid = a.user?._id || a.user;
+            if (uid) window._hrAssignmentsByUser.set(uid, a);
+          });
+        } catch (e) { /* non-fatal */ }
+      }
       _renderUsersCorporateTable(content, _cachedUsers, filterRole, filterDept, filterSearch);
     }
   } catch(e) {
@@ -8843,7 +8876,8 @@ function _renderUsersCorporateTable(content, allUsers, filterRole='', filterDept
               <td><span class="role-badge role-${u.role}">${u.role}</span>${u.department?`<span style="font-size:10px;margin-left:5px;padding:2px 6px;border-radius:20px;background:#ecfeff;color:#0891b2;font-weight:600">${esc(u.department)}</span>`:''}</td>
               <td><span class="status-badge ${u.isActive?'status-active':'status-stopped'}">${u.isActive?'Active':'Inactive'}</span></td>
               ${canManage?`<td style="white-space:nowrap">${canActOn(u)?`
-                <button class="btn btn-sm" style="background:#4f6ef7;color:#fff;font-size:11px" onclick="showEditUserDeptModal('${u._id}','${esc(u.name).replace(/'/g,"\\'")}','${esc(u.department||'').replace(/'/g,"\\'")}')">Edit</button>
+                <button class="btn btn-sm" style="background:#4f6ef7;color:#fff;font-size:11px" onclick="showEditUserModal('${u._id}')">Edit</button>
+                ${_hrButtonHtml(u)}
                 ${u.isActive?`<button class="btn btn-sm" style="background:#f59e0b;color:#fff;font-size:11px" onclick="deactivateUser('${u._id}')">Deactivate</button>`:`<button class="btn btn-sm" style="background:#22c55e;color:#fff;font-size:11px" onclick="activateUser('${u._id}')">Activate</button>`}
                 <button class="btn btn-sm" style="background:#6366f1;color:#fff;font-size:11px" onclick="adminResetStudentPassword('${u._id}',this)">🔑 Reset</button>
                 <button class="btn btn-danger btn-sm" style="font-size:11px" onclick="deleteUserPermanently('${u._id}',this)">Delete</button>
@@ -8856,18 +8890,103 @@ function _renderUsersCorporateTable(content, allUsers, filterRole='', filterDept
   `;
 }
 
+// ── HR capability — Grant / Revoke action button + modal (admin-only) ──────
+function _hrButtonHtml(u) {
+  if (!['admin','superadmin'].includes(currentUser.role)) return '';
+  if (!['employee','manager'].includes(u.role)) return '';
+  const safeName = esc(u.name).replace(/'/g,"\\'");
+  const hr = window._hrAssignmentsByUser && window._hrAssignmentsByUser.get(u._id);
+  if (hr) {
+    const scopeLabel = hr.scope === 'company' ? 'Company-wide' : `Dept: ${esc(hr.department?.name || '—')}`;
+    return `<button class="btn btn-sm" style="background:#7c3aed;color:#fff;font-size:11px" onclick="_revokeHR('${hr._id}','${safeName}')" title="HR access: ${scopeLabel}">Revoke HR</button>`;
+  }
+  return `<button class="btn btn-sm" style="background:transparent;border:1.5px solid #7c3aed;color:#7c3aed;font-size:11px" onclick="showGrantHRModal('${u._id}','${safeName}')">Grant HR</button>`;
+}
+
+async function showGrantHRModal(userId, userName) {
+  let depts = [];
+  try { depts = (await api('/api/departments')).departments || []; }
+  catch(e) { depts = []; }
+  const deptOptions = depts.map(d => `<option value="${d._id}">${esc(d.name)}</option>`).join('');
+
+  const container = document.getElementById('modal-container');
+  container.classList.remove('hidden');
+  container.innerHTML = `
+    <div class="modal-overlay" onclick="closeModal(event)">
+      <div class="modal" onclick="event.stopPropagation()">
+        <h3>Grant HR access — ${esc(userName)}</h3>
+        <p style="font-size:12.5px;color:var(--text-light);margin-bottom:10px">HR access overrides normal manager scoping, giving this person visibility into people-ops (leave, attendance, performance) across the scope you choose here — never billing, subscription, or institution settings.</p>
+        <div class="form-group">
+          <label>Scope</label>
+          <select id="grant-hr-scope" onchange="document.getElementById('grant-hr-dept-group').style.display=this.value==='department'?'block':'none'" style="width:100%;padding:9px 12px;border:1.5px solid var(--border);border-radius:8px;font-size:13px">
+            <option value="company">Whole company</option>
+            <option value="department">One department</option>
+          </select>
+        </div>
+        <div class="form-group" id="grant-hr-dept-group" style="display:none">
+          <label>Department</label>
+          ${depts.length
+            ? `<select id="grant-hr-dept" style="width:100%;padding:9px 12px;border:1.5px solid var(--border);border-radius:8px;font-size:13px">${deptOptions}</select>`
+            : `<p style="font-size:12.5px;color:var(--text-light)">No departments set up yet. Create one on the Departments page first.</p>`}
+        </div>
+        <div class="modal-actions">
+          <button class="btn btn-secondary btn-sm" onclick="closeModal()">Cancel</button>
+          <button class="btn btn-primary btn-sm" onclick="_saveGrantHR('${userId}')">Grant</button>
+        </div>
+      </div>
+    </div>
+  `;
+}
+window._saveGrantHR = async function(userId) {
+  const scope = document.getElementById('grant-hr-scope').value;
+  const deptSelect = document.getElementById('grant-hr-dept');
+  const departmentId = deptSelect ? deptSelect.value : '';
+  if (scope === 'department' && !departmentId) { toastError('Pick a department first'); return; }
+  try {
+    await api('/api/hr-assignments', { method: 'POST', body: JSON.stringify({ userId, scope, departmentId: scope === 'department' ? departmentId : undefined }) });
+    toastSuccess('HR access granted');
+    closeModal();
+    renderUsers();
+  } catch (e) {
+    toastError(e.message || 'Failed to grant HR access');
+  }
+};
+window._revokeHR = async function(assignmentId, userName) {
+  if (!confirm(`Revoke HR access from ${userName}?`)) return;
+  try {
+    await api(`/api/hr-assignments/${assignmentId}`, { method: 'DELETE' });
+    toastSuccess('HR access revoked');
+    renderUsers();
+  } catch (e) {
+    toastError(e.message || 'Failed to revoke HR access');
+  }
+};
+
 // ── Edit an existing user's department (corporate) ─────────────────────────
-async function showEditUserDeptModal(userId, userName, currentDept) {
+async function showEditUserModal(userId) {
+  const target = (window._cachedUsers || []).find(u => u._id === userId);
+  if (!target) { toastError('User not found — refresh and try again.'); return; }
+  const userName    = target.name || '';
+  const currentDept = target.department || '';
+  const currentMgrId = target.reportingManager?._id || target.reportingManager || '';
+
   let depts = [];
   try { depts = (await api('/api/departments')).departments || []; }
   catch(e) { depts = []; }
 
   const matchesFormalDept = depts.some(d => d.name === currentDept);
-  const options = `<option value="">— No department —</option>` +
+  const deptOptions = `<option value="">— No department —</option>` +
     depts.map(d => `<option value="${esc(d.name)}" ${d.name === currentDept ? 'selected' : ''}>${esc(d.name)}</option>`).join('');
   const staleNote = currentDept && !matchesFormalDept
     ? `<p style="font-size:11.5px;color:#b54708;margin-top:5px">Currently set to "${esc(currentDept)}", which isn't one of the managed departments below — pick one to fix it, or leave as-is.</p>`
     : '';
+
+  // Reporting manager candidates — any manager/admin in the company except the user themselves
+  const mgrCandidates = (window._cachedUsers || [])
+    .filter(u => ['manager', 'admin', 'superadmin'].includes(u.role) && u._id !== userId)
+    .sort((a, b) => (a.name || '').localeCompare(b.name || ''));
+  const mgrOptions = `<option value="">— No reporting manager —</option>` +
+    mgrCandidates.map(m => `<option value="${m._id}" ${m._id === currentMgrId ? 'selected' : ''}>${esc(m.name)} (${m.role})</option>`).join('');
 
   const container = document.getElementById('modal-container');
   container.classList.remove('hidden');
@@ -8878,24 +8997,34 @@ async function showEditUserDeptModal(userId, userName, currentDept) {
         <div class="form-group">
           <label>Department</label>
           ${depts.length
-            ? `<select id="edit-user-dept" style="width:100%;padding:9px 12px;border:1.5px solid var(--border);border-radius:8px;font-size:13px">${options}</select>`
+            ? `<select id="edit-user-dept" style="width:100%;padding:9px 12px;border:1.5px solid var(--border);border-radius:8px;font-size:13px">${deptOptions}</select>`
             : `<p style="font-size:12.5px;color:var(--text-light)">No departments set up yet. Create one on the Departments page first.</p>`}
           ${staleNote}
         </div>
+        <div class="form-group">
+          <label>Reporting Manager <span style="font-weight:400;color:var(--text-light)">(who they report to)</span></label>
+          ${mgrCandidates.length
+            ? `<select id="edit-user-mgr" style="width:100%;padding:9px 12px;border:1.5px solid var(--border);border-radius:8px;font-size:13px">${mgrOptions}</select>`
+            : `<p style="font-size:12.5px;color:var(--text-light)">No managers or admins to assign yet.</p>`}
+          <p style="font-size:11.5px;color:var(--text-light);margin-top:5px">Managers only see and approve requests from their own direct reports here — this is what sets that.</p>
+        </div>
         <div class="modal-actions">
           <button class="btn btn-secondary btn-sm" onclick="closeModal()">Cancel</button>
-          <button class="btn btn-primary btn-sm" onclick="_saveEditUserDept('${userId}')" ${depts.length ? '' : 'disabled'}>Save</button>
+          <button class="btn btn-primary btn-sm" onclick="_saveEditUser('${userId}')">Save</button>
         </div>
       </div>
     </div>
   `;
 }
-window._saveEditUserDept = async function(userId) {
-  const select = document.getElementById('edit-user-dept');
-  if (!select) return;
+window._saveEditUser = async function(userId) {
+  const deptSelect = document.getElementById('edit-user-dept');
+  const mgrSelect  = document.getElementById('edit-user-mgr');
+  const body = {};
+  if (deptSelect) body.department = deptSelect.value || null;
+  if (mgrSelect)  body.reportingManager = mgrSelect.value || null;
   try {
-    await api(`/api/users/${userId}`, { method: 'PATCH', body: JSON.stringify({ department: select.value || null }) });
-    toastSuccess('Department updated');
+    await api(`/api/users/${userId}`, { method: 'PATCH', body: JSON.stringify(body) });
+    toastSuccess('User updated');
     closeModal();
     renderUsers();
   } catch (e) { toastError(e.message); }
@@ -24634,6 +24763,75 @@ async function renderExecutiveDashboard() {
         ${leaveRow('Pending',  d.leaveStats.pending,  '#b45309', '⏳')}
         ${leaveRow('Rejected', d.leaveStats.rejected, '#d03b3b', '✗')}
         ${_exvTable([['Approved', d.leaveStats.approved], ['Pending', d.leaveStats.pending], ['Rejected', d.leaveStats.rejected]], ['Status', 'Requests'])}`)}
+    </div>`;
+}
+
+// ── HR Portal — dashboard for HR-flagged employees/managers ────────────────
+async function renderHRPortal() {
+  const content = document.getElementById('main-content');
+  if (!content) return;
+  content.innerHTML = '<div class="card" style="padding:2.5rem;text-align:center;color:var(--text-light)">Loading HR portal…</div>';
+
+  const hr = currentUser.hrAssignment;
+  const scopeLabel = hr?.scope === 'company' ? 'Company-wide' : (hr?.department?.name ? `${hr.department.name} department` : 'Department');
+
+  const [usersRes, leavesRes, todayRes, trainingRes] = await Promise.all([
+    api('/api/users').catch(() => ({ users: [] })),
+    api('/api/leaves/pending').catch(() => ({ leaves: [] })),
+    api('/api/corporate-attendance/today').catch(() => ({ summary: null, records: [] })),
+    api('/api/training/overview').catch(() => ({ stats: null })),
+  ]);
+
+  const headcount = (usersRes.users || []).filter(u => ['employee', 'manager'].includes(u.role)).length;
+  const pendingLeaves = (leavesRes.leaves || []).length;
+  const todayRecords = todayRes.records || [];
+  const todayRate = headcount > 0 && todayRes.summary
+    ? Math.round(((todayRes.summary.present || 0) + (todayRes.summary.late || 0)) / headcount * 100)
+    : null;
+  const overdueTraining = trainingRes.stats?.overdue ?? 0;
+
+  const tile = (label, value, sub, view) => `
+    <div class="card exv-tile"${view ? ` style="cursor:pointer" onclick="navigateTo('${view}')"` : ''}>
+      <div class="exv-tile-label">${label}</div>
+      <div class="exv-tile-value">${value}</div>
+      ${sub ? `<div class="exv-tile-sub">${sub}</div>` : ''}
+    </div>`;
+
+  const sparkle = '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l1.9 5.7L19.6 10l-5.7 1.9L12 17.6l-1.9-5.7L4.4 10l5.7-1.9z"/><path d="M19 3l.7 2.1L21.8 6l-2.1.7L19 8.8l-.7-2.1L16.2 6l2.1-.9z"/></svg>';
+
+  content.innerHTML = `
+    <div class="page-header" style="margin-bottom:1.2rem">
+      <div>
+        <h1 style="margin:0 0 .25rem">HR Portal</h1>
+        <p style="margin:0;color:var(--text-light);font-size:.9rem">${esc(scopeLabel)} people-ops view — leave, attendance, performance and training.</p>
+      </div>
+      <button class="btn btn-sm btn-ghost" onclick="renderHRPortal()">↻ Refresh</button>
+    </div>
+
+    <div class="adx-ai-band" onclick="navigateTo('ai-reports')" role="button" tabindex="0">
+      <div class="adx-ai-icon">${sparkle}</div>
+      <div class="adx-ai-body">
+        <div class="adx-ai-eyebrow">Dikly AI · HR Insights</div>
+        <div class="adx-ai-headline">Ask about attendance patterns, leave trends, or who needs a performance review.</div>
+      </div>
+      <div class="adx-ai-cta">Ask Dikly AI <span style="font-size:15px;line-height:1">→</span></div>
+    </div>
+
+    <div class="exv-kpis" style="margin-top:1rem">
+      ${tile('Headcount in scope', headcount, scopeLabel, 'users')}
+      ${tile('Pending leave requests', pendingLeaves, pendingLeaves ? 'Needs review' : 'All caught up', 'leave-requests')}
+      ${tile("Today's attendance rate", todayRate != null ? todayRate + '%' : '—', `${todayRecords.length} clocked in today`, 'corp-attendance')}
+      ${tile('Training overdue', overdueTraining, overdueTraining ? 'Follow up needed' : 'On track')}
+    </div>
+
+    <div class="card" style="padding:1.1rem 1.2rem;margin-top:1rem">
+      <div style="font-weight:700;font-size:.92rem;color:var(--text);margin-bottom:.7rem">Quick actions</div>
+      <div style="display:flex;gap:.6rem;flex-wrap:wrap">
+        <button class="btn btn-sm" onclick="navigateTo('leave-requests')">Review leave requests</button>
+        <button class="btn btn-sm" onclick="navigateTo('corp-attendance')">View attendance</button>
+        <button class="btn btn-sm" onclick="navigateTo('performance')">Performance reviews</button>
+        <button class="btn btn-sm" onclick="navigateTo('users')">Employee directory</button>
+      </div>
     </div>`;
 }
 

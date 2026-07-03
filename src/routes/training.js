@@ -2,6 +2,7 @@ const express = require("express");
 const router = express.Router();
 const authenticate = require("../middleware/auth");
 const { requireRole, requireMode } = require("../middleware/role");
+const { requirePeopleOpsAccess } = require("../utils/corporateScope");
 const { requireActiveSubscription } = require("../middleware/subscription");
 const TrainingModule = require("../models/TrainingModule");
 const TrainingProgress = require("../models/TrainingProgress");
@@ -132,7 +133,7 @@ router.post("/modules/:id/assign", ...mw, canManage, async (req, res) => {
 });
 
 // GET progress for a module (admin view)
-router.get("/modules/:id/progress", ...mw, canManage, async (req, res) => {
+router.get("/modules/:id/progress", ...mw, requirePeopleOpsAccess, async (req, res) => {
   try {
     const progress = await TrainingProgress.find({ module: req.params.id })
       .populate("employee", "name employeeId department")
@@ -144,7 +145,7 @@ router.get("/modules/:id/progress", ...mw, canManage, async (req, res) => {
 });
 
 // GET dashboard overview (admin)
-router.get("/overview", ...mw, canManage, async (req, res) => {
+router.get("/overview", ...mw, requirePeopleOpsAccess, async (req, res) => {
   try {
     const modules = await TrainingModule.countDocuments({ company: req.user.company, isActive: true });
     const totalAssigned = await TrainingProgress.countDocuments({ company: req.user.company });

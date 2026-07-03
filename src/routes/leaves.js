@@ -10,6 +10,7 @@ const User          = require("../models/User");
 const AuditLog = require("../models/AuditLog");
 const { AUDIT_ACTIONS } = AuditLog;
 const notificationService = require("../services/notificationService");
+const { getVisibleUserIds, requirePeopleOpsAccess } = require("../utils/corporateScope");
 
 const mw = [authenticate, requireMode("corporate"), requireActiveSubscription];
 
@@ -126,9 +127,13 @@ router.patch("/:id/cancel", ...mw, async (req, res) => {
 });
 
 // ── Manager/Admin: list all pending requests ───────────────────────────────
-router.get("/pending", ...mw, requireRole("admin", "manager", "superadmin"), async (req, res) => {
+// Managers see only their own direct reports' requests; admins and
+// company-wide HR grants see everyone. See src/utils/corporateScope.js.
+router.get("/pending", ...mw, requirePeopleOpsAccess, async (req, res) => {
   try {
     const filter = { company: req.user.company, status: "pending" };
+    const visibleIds = await getVisibleUserIds(req.user);
+    if (visibleIds) filter.employee = { $in: visibleIds };
     const leaves = await LeaveRequest.find(filter)
       .populate("employee", "name employeeId department")
       .sort({ createdAt: 1 });
@@ -139,11 +144,16 @@ router.get("/pending", ...mw, requireRole("admin", "manager", "superadmin"), asy
 });
 
 // ── Manager/Admin: list all requests (with optional filters) ───────────────
-router.get("/", ...mw, requireRole("admin", "manager", "superadmin"), async (req, res) => {
+router.get("/", ...mw, requirePeopleOpsAccess, async (req, res) => {
   try {
     const filter = { company: req.user.company };
     if (req.query.status) filter.status = req.query.status;
-    if (req.query.employeeId) filter.employee = req.query.employeeId;
+    const visibleIds = await getVisibleUserIds(req.user);
+    if (req.query.employeeId) {
+      filter.employee = req.query.employeeId;
+    } else if (visibleIds) {
+      filter.employee = { $in: visibleIds };
+    }
     const leaves = await LeaveRequest.find(filter)
       .populate("employee", "name employeeId department")
       .populate("reviewedBy", "name")
@@ -156,14 +166,21 @@ router.get("/", ...mw, requireRole("admin", "manager", "superadmin"), async (req
 });
 
 // ── Manager/Admin: approve or reject ──────────────────────────────────────
-router.patch("/:id/review", ...mw, requireRole("admin", "manager", "superadmin"), async (req, res) => {
+router.patch("/:id/review", ...mw, requirePeopleOpsAccess, async (req, res) => {
   try {
     const { action, note } = req.body; // action: 'approved' | 'rejected'
     if (!["approved", "rejected"].includes(action)) {
       return res.status(400).json({ error: "Action must be approved or rejected" });
     }
+
+    // Scope check: a manager (without an HR override) may only review
+    // requests from their own direct reports, even if they guess an id.
+    const visibleIds = await getVisibleUserIds(req.user);
+    const scopeFilter = { _id: req.params.id, company: req.user.company, status: "pending" };
+    if (visibleIds) scopeFilter.employee = { $in: visibleIds };
+
     const leave = await LeaveRequest.findOneAndUpdate(
-      { _id: req.params.id, company: req.user.company, status: "pending" },
+      scopeFilter,
       {
         status: action,
         reviewedBy: req.user._id,
@@ -172,7 +189,7 @@ router.patch("/:id/review", ...mw, requireRole("admin", "manager", "superadmin")
       },
       { new: true }
     ).populate("employee", "name employeeId department");
-    if (!leave) return res.status(404).json({ error: "Leave request not found or already reviewed" });
+    if (!leave) return res.status(404).json({ error: "Leave request not found, already reviewed, or outside your scope" });
 
     // Audit log (fire-and-forget)
     AuditLog.record({

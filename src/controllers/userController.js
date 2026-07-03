@@ -4,6 +4,7 @@ const User = require("../models/User");
 const Company = require("../models/Company");
 const Course = require("../models/Course");
 const { ROLE_HIERARCHY } = require("../middleware/role");
+const { getVisibleUserIds, getMyActiveHRAssignment } = require("../utils/corporateScope");
 
 const ALLOWED_ROLES = ['student', 'lecturer', 'admin', 'superadmin', 'hod', 'manager', 'employee', 'class_rep'];
 
@@ -33,6 +34,22 @@ exports.listUsers = async (req, res) => {
     // HOD sees only users in their department
     if (req.user.role === "hod" && req.user.department) {
       filter.department = req.user.department;
+    }
+    // Manager sees only their own direct reports (+ themselves), unless an
+    // active HR assignment grants broader reach. See corporateScope.js.
+    if (req.user.role === "manager") {
+      const visibleIds = await getVisibleUserIds(req.user);
+      if (visibleIds) filter._id = { $in: visibleIds };
+    }
+    // Employee: normally an unrestricted company directory (existing
+    // behaviour, unchanged). A department-scoped HR grant narrows that to
+    // their department; a company-scoped grant (or no grant at all) stays
+    // unrestricted -- see corporateScope.js.
+    if (req.user.role === "employee") {
+      const hr = await getMyActiveHRAssignment(req.user._id, req.user.company);
+      if (hr && hr.scope === "department" && hr.department) {
+        filter.department = hr.department.name;
+      }
     }
 
     const users = await User.find(filter).populate("company", "name mode");
@@ -246,7 +263,7 @@ exports.createUser = async (req, res) => {
 
 exports.updateUser = async (req, res) => {
   try {
-    const { name, role, isActive, department } = req.body;
+    const { name, role, isActive, department, reportingManager } = req.body;
 
     // Enforce role hierarchy on the target user, not just on role assignment
     const targetUser = await User.findOne({ _id: req.params.id, ...req.companyFilter });
@@ -258,6 +275,22 @@ exports.updateUser = async (req, res) => {
     const update = {};
     if (name) update.name = name;
     if (typeof isActive === "boolean") update.isActive = isActive;
+    if (reportingManager !== undefined) {
+      if (!reportingManager) {
+        update.reportingManager = null;
+      } else {
+        if (reportingManager === req.params.id) {
+          return res.status(400).json({ error: "A user cannot report to themselves" });
+        }
+        const mgr = await User.findOne({
+          _id: reportingManager,
+          company: req.user.company,
+          role: { $in: ["manager", "admin", "superadmin"] },
+        }).select("_id");
+        if (!mgr) return res.status(400).json({ error: "Reporting manager must be an existing manager or admin in this company" });
+        update.reportingManager = reportingManager;
+      }
+    }
     if (department !== undefined) {
       update.department = department ? department.trim() : null;
       // If changing department of an HOD, ensure no HOD already exists in target department

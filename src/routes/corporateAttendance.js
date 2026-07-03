@@ -31,6 +31,7 @@ const User                = require("../models/User");
 const antiCheat           = require("../utils/attendanceAntiCheat");
 const { AUDIT_ACTIONS }   = AuditLog;
 const notificationService = require("../services/notificationService");
+const { getVisibleUserIds, requirePeopleOpsAccess } = require("../utils/corporateScope");
 
 const mw        = [authenticate, requireMode("corporate"), requireActiveSubscription];
 const canManage = requireRole("admin", "manager", "superadmin");
@@ -422,16 +423,20 @@ router.post("/clock-out", ...mw, async (req, res) => {
 // ---------------------------------------------------------------------------
 // GET /today  — today's attendance summary (admin/manager)
 // ---------------------------------------------------------------------------
-router.get("/today", ...mw, canManage, async (req, res) => {
+router.get("/today", ...mw, requirePeopleOpsAccess, async (req, res) => {
   try {
     const today = toDay(new Date());
     const end   = new Date(today);
     end.setUTCHours(23, 59, 59, 999);
 
-    const records = await CorporateAttendance.find({
+    const filter = {
       company: req.user.company,
       date:    { $gte: today, $lte: end },
-    })
+    };
+    const visibleIds = await getVisibleUserIds(req.user);
+    if (visibleIds) filter.employee = { $in: visibleIds };
+
+    const records = await CorporateAttendance.find(filter)
       .populate("employee", "name employeeId department role")
       .populate("shift",    "name startTime endTime")
       .sort({ "employee.name": 1 });
@@ -455,11 +460,16 @@ router.get("/today", ...mw, canManage, async (req, res) => {
 // ---------------------------------------------------------------------------
 // GET /  — all records with optional filters (admin/manager)
 // ---------------------------------------------------------------------------
-router.get("/", ...mw, canManage, async (req, res) => {
+router.get("/", ...mw, requirePeopleOpsAccess, async (req, res) => {
   try {
     const filter = { company: req.user.company };
-    if (req.query.employeeId) filter.employee = req.query.employeeId;
-    if (req.query.status)     filter.status   = req.query.status;
+    if (req.query.status) filter.status = req.query.status;
+    const visibleIds = await getVisibleUserIds(req.user);
+    if (req.query.employeeId) {
+      filter.employee = req.query.employeeId;
+    } else if (visibleIds) {
+      filter.employee = { $in: visibleIds };
+    }
 
     const startDate = req.query.from ? toDay(req.query.from) : toDay(new Date(Date.now() - 30 * 86_400_000));
     const endDate   = req.query.to   ? toDay(req.query.to)   : toDay(new Date());
@@ -482,7 +492,7 @@ router.get("/", ...mw, canManage, async (req, res) => {
 // ---------------------------------------------------------------------------
 // GET /summary  — aggregate stats (admin/manager)
 // ---------------------------------------------------------------------------
-router.get("/summary", ...mw, canManage, async (req, res) => {
+router.get("/summary", ...mw, requirePeopleOpsAccess, async (req, res) => {
   try {
     const year  = parseInt(req.query.year)  || new Date().getFullYear();
     const month = parseInt(req.query.month) || new Date().getMonth() + 1;
@@ -490,11 +500,15 @@ router.get("/summary", ...mw, canManage, async (req, res) => {
     const startDate = new Date(Date.UTC(year, month - 1, 1));
     const endDate   = new Date(Date.UTC(year, month, 0, 23, 59, 59));
 
+    const visibleIds = await getVisibleUserIds(req.user);
+    const scopeMatch = visibleIds ? { employee: { $in: visibleIds } } : {};
+
     const agg = await CorporateAttendance.aggregate([
       {
         $match: {
           company: req.user.company,
           date:    { $gte: startDate, $lte: endDate },
+          ...scopeMatch,
         },
       },
       {
@@ -510,6 +524,7 @@ router.get("/summary", ...mw, canManage, async (req, res) => {
     const totalDays  = await CorporateAttendance.countDocuments({
       company: req.user.company,
       date:    { $gte: startDate, $lte: endDate },
+      ...scopeMatch,
     });
 
     const totalHours = await CorporateAttendance.aggregate([
@@ -518,6 +533,7 @@ router.get("/summary", ...mw, canManage, async (req, res) => {
           company:     req.user.company,
           date:        { $gte: startDate, $lte: endDate },
           hoursWorked: { $ne: null },
+          ...scopeMatch,
         },
       },
       { $group: { _id: null, total: { $sum: "$hoursWorked" } } },
