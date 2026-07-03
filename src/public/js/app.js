@@ -3043,8 +3043,12 @@ function buildSidebar() {
     }
     const ROLE_LABELS = { superadmin: 'Super Administrator', admin: 'Administrator', manager: 'Manager', hod: 'Head of Department', lecturer: 'Lecturer', student: 'Student', employee: 'Employee' };
     const _ini = (currentUser.name || 'U').trim().split(/\s+/).map(w => w[0]).join('').toUpperCase().slice(0, 2);
+    const _iniAvatar = `<div class='suc-avatar'>${_ini}</div>`;
+    const _sucAvatarHtml = currentUser.profilePhoto
+      ? `<img src="${esc(currentUser.profilePhoto)}" class="suc-avatar" style="object-fit:cover" onerror="this.outerHTML='${_iniAvatar.replace(/'/g,"\\'")}'">`
+      : _iniAvatar;
     const ucEl = document.getElementById('sidebar-user-card');
-    if (ucEl) ucEl.innerHTML = `<div class="suc-avatar">${_ini}</div><div class="suc-meta"><div class="suc-name">${esc(currentUser.name || '')}</div><div class="suc-role">${ROLE_LABELS[role] || role}</div></div>`;
+    if (ucEl) ucEl.innerHTML = `${_sucAvatarHtml}<div class="suc-meta"><div class="suc-name">${esc(currentUser.name || '')}</div><div class="suc-role">${ROLE_LABELS[role] || role}</div></div>`;
   }
 
   // Roles & Permissions: hide modules the admin has switched off for this role.
