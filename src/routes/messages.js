@@ -211,7 +211,7 @@ router.get("/users/messageable", ...mw, async (req, res) => {
         company,
         isActive: true,
         _id:      { $ne: myId },
-      }).select("_id name role department").sort({ name: 1 }).lean();
+      }).select("_id name role department profilePhoto").sort({ name: 1 }).lean();
       return res.json({ users, hodUsers: [], canDirectMessageHod: true });
     }
 
@@ -235,13 +235,13 @@ router.get("/users/messageable", ...mw, async (req, res) => {
         users = await User.find({
           _id:      { $in: lecturerIds },
           isActive: true,
-        }).select("_id name role department").lean();
+        }).select("_id name role department profilePhoto").lean();
         hodUsers = await User.find({
           company,
           role:       "hod",
           isActive:   true,
           ...(req.user.department ? { department: req.user.department } : { _id: null }),
-        }).select("_id name role department").lean();
+        }).select("_id name role department profilePhoto").lean();
       } else if (sRole === "lecturer") {
         const courses = await Course.find({
           companyId:  company,
@@ -252,7 +252,7 @@ router.get("/users/messageable", ...mw, async (req, res) => {
         const students = await User.find({
           _id:      { $in: studentIds },
           isActive: true,
-        }).select("_id name role department").lean();
+        }).select("_id name role department profilePhoto").lean();
         const hodFilter = req.user.department
           ? { role: "hod", department: req.user.department }
           : { _id: null };
@@ -264,7 +264,7 @@ router.get("/users/messageable", ...mw, async (req, res) => {
             { role: { $in: ["admin", "lecturer"] } },
             hodFilter,
           ],
-        }).select("_id name role department").lean();
+        }).select("_id name role department profilePhoto").lean();
         users = [...students, ...staff];
       }
     }
@@ -272,7 +272,7 @@ router.get("/users/messageable", ...mw, async (req, res) => {
     if (mode === "corporate" || (mode === "both" && corporateRoles.includes(sRole))) {
       if (sRole === "employee") {
         const managerUser = req.user.reportingManager
-          ? await User.findById(req.user.reportingManager).select("_id name role").lean()
+          ? await User.findById(req.user.reportingManager).select("_id name role profilePhoto").lean()
           : null;
         let teammates = [];
         if (req.user.corporateTeamRef) {
@@ -281,20 +281,20 @@ router.get("/users/messageable", ...mw, async (req, res) => {
             corporateTeamRef: req.user.corporateTeamRef,
             isActive:         true,
             _id:              { $ne: myId },
-          }).select("_id name role").lean();
+          }).select("_id name role profilePhoto").lean();
         }
         const admins = await User.find({
           company,
           role:     "admin",
           isActive: true,
-        }).select("_id name role").lean();
+        }).select("_id name role profilePhoto").lean();
         users = [...(managerUser ? [managerUser] : []), ...teammates, ...admins];
       } else if (sRole === "manager") {
         const directReports = await User.find({
           company,
           reportingManager: myId,
           isActive:         true,
-        }).select("_id name role designation").lean();
+        }).select("_id name role designation profilePhoto").lean();
         let teammates = [];
         if (req.user.corporateTeamRef) {
           teammates = await User.find({
@@ -302,13 +302,13 @@ router.get("/users/messageable", ...mw, async (req, res) => {
             corporateTeamRef: req.user.corporateTeamRef,
             isActive:         true,
             _id:              { $ne: myId },
-          }).select("_id name role").lean();
+          }).select("_id name role profilePhoto").lean();
         }
         const admins = await User.find({
           company,
           role:     "admin",
           isActive: true,
-        }).select("_id name role").lean();
+        }).select("_id name role profilePhoto").lean();
         users = [...directReports, ...teammates, ...admins];
       }
     }
@@ -380,9 +380,9 @@ router.post("/hod-request", ...mw, async (req, res) => {
         { _id: existing._id, "participants.user": hod._id },
         { $inc: { "participants.$.unreadCount": 1 } }
       );
-      await msg.populate("sender", "name role");
+      await msg.populate("sender", "name role profilePhoto");
       const populated = await Conversation.findById(existing._id)
-        .populate("participants.user", "name role").lean();
+        .populate("participants.user", "name role profilePhoto").lean();
       return res.status(200).json({ conversation: populated, message: msg, existing: true });
     }
 
@@ -401,8 +401,8 @@ router.post("/hod-request", ...mw, async (req, res) => {
     });
 
     const msg = await Message.create({ company, conversation: convo._id, sender: myId, body: bodyText });
-    await msg.populate("sender", "name role");
-    await convo.populate("participants.user", "name role");
+    await msg.populate("sender", "name role profilePhoto");
+    await convo.populate("participants.user", "name role profilePhoto");
 
     res.status(201).json({ conversation: convo, message: msg, existing: false });
   } catch (err) {
@@ -433,7 +433,7 @@ router.get("/conversations", ...mw, async (req, res) => {
 
     const [conversations, total] = await Promise.all([
       Conversation.find(filter)
-        .populate("participants.user", "name role")
+        .populate("participants.user", "name role profilePhoto")
         .populate("lastMessage.sender", "name")
         .sort({ "lastMessage.sentAt": -1, createdAt: -1 })
         .skip(skip)
@@ -546,9 +546,9 @@ router.post("/conversations", ...mw, async (req, res) => {
           { _id: existing._id, "participants.user": { $ne: myId } },
           { $inc: { "participants.$.unreadCount": 1 } }
         );
-        await msg.populate("sender", "name role");
+        await msg.populate("sender", "name role profilePhoto");
         const populated = await Conversation.findById(existing._id)
-          .populate("participants.user", "name role")
+          .populate("participants.user", "name role profilePhoto")
           .lean();
         return res.status(200).json({ conversation: populated, message: msg, existing: true });
       }
@@ -580,8 +580,8 @@ router.post("/conversations", ...mw, async (req, res) => {
       body:         message.trim(),
     });
 
-    await msg.populate("sender", "name role");
-    await convo.populate("participants.user", "name role");
+    await msg.populate("sender", "name role profilePhoto");
+    await convo.populate("participants.user", "name role profilePhoto");
 
     res.status(201).json({ conversation: convo, message: msg, existing: false });
   } catch (err) {
@@ -604,7 +604,7 @@ router.get("/conversations/:id", ...mw, async (req, res) => {
 
     const [messages, total] = await Promise.all([
       Message.find(filter)
-        .populate("sender", "name role")
+        .populate("sender", "name role profilePhoto")
         .sort({ createdAt: 1 })
         .skip(skip)
         .limit(limit)
@@ -612,7 +612,7 @@ router.get("/conversations/:id", ...mw, async (req, res) => {
       Message.countDocuments(filter),
     ]);
 
-    await convo.populate("participants.user", "name role");
+    await convo.populate("participants.user", "name role profilePhoto");
 
     const safeMsgs = messages.map(maskDeleted);
 
@@ -709,7 +709,7 @@ router.post("/conversations/:id/messages", ...mw, uploadMessage, handleUploadErr
       );
     }
 
-    await msg.populate("sender", "name role");
+    await msg.populate("sender", "name role profilePhoto");
 
     res.status(201).json({ message: msg });
   } catch (err) {
@@ -783,7 +783,7 @@ router.patch("/conversations/:id/messages/:msgId", ...mw, async (req, res) => {
     msg.editedAt = new Date();
     await msg.save();
 
-    await msg.populate("sender", "name role");
+    await msg.populate("sender", "name role profilePhoto");
     res.json({ message: msg });
   } catch (err) {
     console.error("edit message:", err);
