@@ -8859,18 +8859,19 @@ function _renderUsersCorporateTable(content, allUsers, filterRole='', filterDept
           <button class="btn btn-danger btn-sm" onclick="bulkUserAction('delete')">Delete</button>
         </div>`:''}
     </div>
+    ${users.length?`<div class="table-scroll-hint">⟷ Swipe to see status &amp; actions</div>`:''}
     <div class="card" style="padding:0;overflow:hidden">
       ${users.length?`
         <table>
           <thead><tr>
-            ${canManage?'<th style="width:40px"><input type="checkbox" id="select-all-users" onchange="toggleSelectAllUsers()"></th>':''}
-            <th>Name</th><th>Employee ID</th><th>Email</th><th>Role</th><th>Status</th>
+            ${canManage?'<th class="sticky-col-1" style="width:40px"><input type="checkbox" id="select-all-users" onchange="toggleSelectAllUsers()"></th>':''}
+            <th class="${canManage?'sticky-col-2':'sticky-col-1'}">Name</th><th>Employee ID</th><th>Email</th><th>Role</th><th>Status</th>
             ${canManage?'<th>Actions</th>':''}
           </tr></thead>
           <tbody>${users.map(u=>`
             <tr id="user-row-${u._id}">
-              ${canManage?`<td>${canActOn(u)?`<input type="checkbox" class="user-checkbox" value="${u._id}" onchange="updateBulkActions()">`:''}</td>`:''}
-              <td style="font-weight:500">${esc(u.name)}</td>
+              ${canManage?`<td class="sticky-col-1">${canActOn(u)?`<input type="checkbox" class="user-checkbox" value="${u._id}" onchange="updateBulkActions()">`:''}</td>`:''}
+              <td class="${canManage?'sticky-col-2':'sticky-col-1'}" style="font-weight:500">${esc(u.name)}</td>
               <td style="font-size:12px;color:var(--text-muted)">${esc(u.employeeId||'—')}</td>
               <td style="font-size:12px;color:var(--text-muted)">${esc(u.email||'—')}</td>
               <td><span class="role-badge role-${u.role}">${u.role}</span>${u.department?`<span style="font-size:10px;margin-left:5px;padding:2px 6px;border-radius:20px;background:#ecfeff;color:#0891b2;font-weight:600">${esc(u.department)}</span>`:''}</td>
