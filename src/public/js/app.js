@@ -22806,6 +22806,15 @@ function _avatarColor(str) {
 function _initials(name) {
   return (name || '?').split(' ').map(w => w[0]).join('').slice(0, 2).toUpperCase();
 }
+// Renders the user's live profile photo when set, falling back to an
+// initials circle (and falling back again on a broken/expired image).
+function _avatarHtml(photo, name, size) {
+  const initials = _initials(name);
+  const bg = _avatarColor(name || '?');
+  const fallback = `<div style='width:${size}px;height:${size}px;border-radius:50%;background:${bg};color:#fff;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:${Math.round(size * 0.36)}px;flex-shrink:0'>${initials}</div>`;
+  if (!photo) return fallback;
+  return `<img src="${esc(photo)}" style="width:${size}px;height:${size}px;border-radius:50%;object-fit:cover;flex-shrink:0" onerror="this.outerHTML='${fallback.replace(/'/g, "\\'")}'">`;
+}
 function _convoTypeLabel(type) {
   if (type === 'hod_request') return '<span class="msg-badge msg-badge--hod">HOD Request</span>';
   if (type === 'announcement') return '<span class="msg-badge msg-badge--ann">Announcement</span>';
@@ -22947,12 +22956,12 @@ function _renderConvoList(convos) {
       ? _msgRelTime(c.lastMessage.sentAt)
       : '';
     const isActive = _activeConvoId === c._id;
-    const color   = _avatarColor(name);
+    const photo   = !c.isGroup ? (others[0]?.user?.profilePhoto || null) : null;
     const typeBadge = _convoTypeLabel(c.type);
 
     return `<div class="msg-convo-item${isActive ? ' msg-convo-item--active' : ''}"
         onclick="openConvo('${c._id}','${name.replace(/'/g,"\\'")}','${c.type||'direct_message'}')">
-      <div class="msg-convo-avatar" style="background:${color}">${_initials(name)}</div>
+      <div class="msg-convo-avatar">${_avatarHtml(photo, name, 42)}</div>
       <div class="msg-convo-info">
         <div class="msg-convo-top">
           <span class="msg-convo-name${unread > 0 ? ' msg-convo-name--unread' : ''}">${name}</span>
@@ -23000,11 +23009,21 @@ async function openConvo(id, name, type) {
   bar.classList.remove('hidden');
   wrap?.classList.add('msg-thread-active');
 
-  // Thread header
-  const color    = _avatarColor(name);
+  // Thread header — look up the live conversation object (not just the
+  // name string passed in) so we can show the other participant's current
+  // profile photo rather than a generic initials circle.
+  const headConvo = (window._msgConvos || []).find(c => c._id === id);
+  let headPhoto = null;
+  if (headConvo && !headConvo.isGroup) {
+    const myId2 = currentUser._id || currentUser.id;
+    const headOther = (headConvo.participants || []).find(p => {
+      const uid = p.user?._id || p.user;
+      return uid?.toString() !== myId2?.toString() && p.user?.name;
+    });
+    headPhoto = headOther?.user?.profilePhoto || null;
+  }
   const typeLabel = type === 'hod_request' ? 'HOD Request' : type === 'group' || type === 'announcement' ? 'Group' : 'Direct message';
-  document.getElementById('msg-thread-avatar').innerHTML =
-    `<div style="width:38px;height:38px;border-radius:50%;background:${color};color:#fff;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:13px">${_initials(name)}</div>`;
+  document.getElementById('msg-thread-avatar').innerHTML = _avatarHtml(headPhoto, name, 38);
   document.getElementById('msg-thread-meta').innerHTML =
     `<div class="msg-thread-name">${name}</div>
      <div class="msg-thread-sub">${_convoTypeLabel(type) || typeLabel}</div>`;
@@ -23054,7 +23073,7 @@ function _buildMsgRow(m, myId) {
     </div>`;
   }
   return `<div class="msg-row msg-row--theirs">
-    <div class="msg-avatar-sm" style="background:${_avatarColor(senderName)}">${_initials(senderName)}</div>
+    <div class="msg-avatar-sm">${_avatarHtml(m.sender?.profilePhoto, senderName, 28)}</div>
     <div class="msg-bubble-wrap">
       <span class="msg-sender-name">${senderName}</span>
       <div class="msg-bubble msg-bubble--theirs">${content}</div>
@@ -23212,7 +23231,7 @@ async function showNewConvoModal() {
             ${users.length === 0 ? '<div class="msg-empty-recipients">No available recipients</div>' :
               users.map(u => `<label class="msg-user-opt" data-name="${u.name.toLowerCase()}" data-role="${u.role}">
                 <input type="checkbox" name="nc-rec" value="${u._id}">
-                <div class="msg-user-opt-avatar" style="background:${_avatarColor(u.name)}">${_initials(u.name)}</div>
+                <div class="msg-user-opt-avatar">${_avatarHtml(u.profilePhoto, u.name, 34)}</div>
                 <div class="msg-user-opt-info">
                   <div class="msg-user-opt-name">${u.name}</div>
                   <div class="msg-user-opt-role">${u.role}${u.department ? ' · ' + u.department : ''}</div>
