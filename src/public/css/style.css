@@ -908,6 +908,24 @@ body {
   border-bottom-color: #fca5a5;
   color: #991b1b;
 }
+/* HR capability granted */
+.hr-access-banner {
+  display: none;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 0 24px;
+  min-height: 42px;
+  font-size: 13px;
+  flex-shrink: 0;
+  border-bottom: 1px solid transparent;
+  cursor: pointer;
+  background: linear-gradient(90deg, #f5f3ff, #ede9fe);
+  border-bottom-color: #ddd6fe;
+  color: #5b21b6;
+}
+.sub-banner-icon--hr { background: #ede9fe; }
+.hr-access-banner .sub-banner-cta { background: #7c3aed; color: #fff; }
 
 .sub-banner-left {
   display: flex;
@@ -2349,7 +2367,8 @@ input[type="checkbox"] {
 
   /* ── Trial / expired banners ──────────────────── */
   .trial-banner,
-  .trial-expired-banner { font-size: 11px; padding: 6px 10px; }
+  .trial-expired-banner,
+  .hr-access-banner { font-size: 11px; padding: 6px 10px; }
 
   /* ── Bottom nav ───────────────────────────────── */
   .bottom-nav-item { gap: 3px; }
@@ -2432,7 +2451,8 @@ input[type="checkbox"] {
 
   /* Align banner with content area so fixed sidebar does not overlap text */
   .trial-banner,
-  .trial-expired-banner {
+  .trial-expired-banner,
+  .hr-access-banner {
     padding-left: 276px !important;
     padding-right: 28px !important;
     min-height: 46px !important;
@@ -4667,7 +4687,8 @@ table tr:hover td { background: #f8fafc !important; }
 /* Desktop: offset banner left-padding to clear the fixed 260px sidebar */
 @media (min-width: 769px) {
   .trial-banner,
-  .trial-expired-banner {
+  .trial-expired-banner,
+  .hr-access-banner {
     padding-left: 276px !important;
   }
 }

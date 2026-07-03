@@ -2718,6 +2718,30 @@ function showDashboard(data) {
       _hideBoth();
     }
 
+    // ── HR capability banner — makes an HR grant impossible to miss ────────
+    const _hrBannerEl = document.getElementById('hr-access-banner');
+    if (_hrBannerEl) {
+      const _hr = currentUser?.hrAssignment;
+      if (_hr) {
+        const _hrScopeLabel = _hr.scope === 'company' ? 'Company-wide' : `${_hr.department?.name || 'Department'} department`;
+        _hrBannerEl.innerHTML = `
+          <div class="sub-banner-left">
+            <div class="sub-banner-icon sub-banner-icon--hr">🛡️</div>
+            <div class="sub-banner-text">
+              <span class="sub-banner-title">HR Access Granted</span>
+              <span class="sub-banner-sep">·</span>
+              <span class="sub-banner-detail">${esc(_hrScopeLabel)} people-ops visibility</span>
+            </div>
+          </div>
+          <div class="sub-banner-right">
+            <button class="sub-banner-cta" onclick="navigateTo('hr-portal')">Open HR Portal</button>
+          </div>`;
+        _hrBannerEl.style.display = 'flex';
+      } else {
+        _hrBannerEl.style.display = 'none';
+      }
+    }
+
     buildSidebar();
     loadAnnBadge();
     startNotifPolling();
