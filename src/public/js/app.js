@@ -3658,102 +3658,113 @@ async function renderHodDashboard(content) {
           <h2>Department Overview</h2>
           <p>Welcome back, ${currentUser.name} · <strong style="color:#0891b2;">${currentUser.department || 'No Department Assigned'}</strong> — ${currentUser.company?.name || ''}</p>
         </div>
-        <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center;">
+        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:10px;">
           ${_diklyAiBtnHtml()}
-          <button onclick="navigateTo('announcements')" style="display:inline-flex;align-items:center;gap:8px;padding:10px 20px;background:linear-gradient(135deg,#0891b2,#0e7490);color:#fff;border:none;border-radius:10px;font-size:14px;font-weight:700;cursor:pointer;box-shadow:0 4px 14px rgba(8,145,178,.35);">
+          <button onclick="navigateTo('announcements')" style="display:inline-flex;align-items:center;justify-content:center;gap:8px;padding:10px 20px;background:linear-gradient(135deg,#0891b2,#0e7490);color:#fff;border:none;border-radius:10px;font-size:14px;font-weight:700;cursor:pointer;box-shadow:0 4px 14px rgba(8,145,178,.35);">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
             Announcements
           </button>
-          <button onclick="navigateTo('subscription')" style="display:inline-flex;align-items:center;gap:8px;padding:10px 20px;background:linear-gradient(135deg,#6366f1,#8b5cf6);color:#fff;border:none;border-radius:10px;font-size:14px;font-weight:700;cursor:pointer;box-shadow:0 4px 14px rgba(99,102,241,.35);">
+          <button onclick="navigateTo('subscription')" style="display:inline-flex;align-items:center;justify-content:center;gap:8px;padding:10px 20px;background:linear-gradient(135deg,#6366f1,#8b5cf6);color:#fff;border:none;border-radius:10px;font-size:14px;font-weight:700;cursor:pointer;box-shadow:0 4px 14px rgba(99,102,241,.35);">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>
             Subscription
           </button>
         </div>
       </div>
       ${_diklyAiBandHtml(hodInsights)}
-      <div class="stats-grid" style="margin-bottom:20px;">
-        <div class="stat-card" onclick="navigateTo('hod-lecturers')" style="cursor:pointer">
-          <div class="stat-value" style="color:#0891b2">${lecturers}</div>
-          <div class="stat-label">LECTURERS</div>
+      <div class="adx-kpi-grid" style="margin-bottom:20px;">
+        <div class="adx-kpi" onclick="navigateTo('hod-lecturers')">
+          <div class="adx-kpi-label">Lecturers</div>
+          <div class="adx-kpi-value">${lecturers}</div>
+          <div class="adx-kpi-sub">${currentUser.department || 'Institution-wide'}</div>
         </div>
-        <div class="stat-card" onclick="navigateTo('hod-students')" style="cursor:pointer">
-          <div class="stat-value" style="color:#0891b2">${students}</div>
-          <div class="stat-label">STUDENTS</div>
+        <div class="adx-kpi" onclick="navigateTo('hod-students')">
+          <div class="adx-kpi-label">Students</div>
+          <div class="adx-kpi-value">${students}</div>
+          <div class="adx-kpi-sub">${currentUser.department || 'Institution-wide'}</div>
         </div>
-        <div class="stat-card" onclick="navigateTo('hod-sessions')" style="cursor:pointer">
-          <div class="stat-value" style="color:#0891b2">${sessions.length}</div>
-          <div class="stat-label">SESSIONS (RECENT)</div>
+        <div class="adx-kpi" onclick="navigateTo('hod-sessions')">
+          <div class="adx-kpi-label">Sessions <span class="adx-kpi-hint">recent</span></div>
+          <div class="adx-kpi-value">${sessions.length}</div>
+          <div class="adx-kpi-sub">${sessions.length > 0 ? 'View all →' : 'No sessions yet'}</div>
         </div>
-        <div class="stat-card">
-          <div class="stat-value" style="color:${activeSess > 0 ? '#16a34a' : '#9ca3af'}">${activeSess}</div>
-          <div class="stat-label">LIVE NOW</div>
+        <div class="adx-kpi" onclick="navigateTo('hod-sessions')">
+          <div class="adx-kpi-label">Live now</div>
+          <div class="adx-kpi-value">${activeSess}</div>
+          <div class="adx-kpi-sub ${activeSess > 0 ? 'live' : ''}">${activeSess > 0 ? '<span class="adx-live-dot"></span>' + activeSess + ' live now' : 'None live right now'}</div>
         </div>
       </div>
 
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;flex-wrap:wrap;">
-        <div class="card">
-          <div style="font-size:13px;font-weight:700;margin-bottom:12px;">Recent Sessions</div>
-          ${sessions.length === 0 ? '<p style="color:var(--text-muted);font-size:13px;">No sessions yet.</p>' :
-            sessions.slice(0,5).map(s => `
-              <div style="display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:1px solid var(--border);">
-                <div>
-                  <div style="font-size:13px;font-weight:600;">${s.title || s.courseName || 'Untitled'}</div>
-                  <div style="font-size:11px;color:var(--text-muted);">${s.createdBy?.name || '—'} · ${timeAgo(s.createdAt)}</div>
-                </div>
-                <span class="tag ${['active','live','paused','locked'].includes(s.status) ? 'tag-green' : 'tag-gray'}">${['active','live','paused','locked'].includes(s.status) ? 'Live' : 'Ended'}</span>
-              </div>`).join('')
-          }
-          <button class="btn btn-secondary btn-sm" style="margin-top:12px;width:100%;" onclick="navigateTo('hod-sessions')">View All Sessions →</button>
+      <div class="adx-card">
+        <div class="adx-card-head">
+          <span class="adx-card-title">Recent sessions</span>
+          <span class="panel-link" onclick="navigateTo('hod-sessions')">View all →</span>
         </div>
+        ${sessions.length === 0 ? '<div class="empty-state" style="padding:28px 0"><p>No sessions yet.</p></div>' :
+          sessions.slice(0,5).map(s => {
+            const isLive = ['active','live','paused','locked'].includes(s.status);
+            return `
+              <div class="adx-session-row">
+                <span class="adx-status-pill ${isLive ? 'live' : 'ended'}">${isLive ? '<span class="adx-live-dot"></span>Live' : 'Ended'}</span>
+                <div class="adx-session-info">
+                  <div class="adx-session-title">${esc(s.title || s.courseName || 'Untitled session')}</div>
+                  <div class="adx-session-sub">${esc(s.createdBy?.name || '')}${s.createdAt ? ' · ' + timeAgo(s.createdAt) : ''}</div>
+                </div>
+                <button class="adx-row-btn ${isLive ? 'primary' : ''}" onclick="navigateTo('hod-sessions')">${isLive ? 'Monitor' : 'View'}</button>
+              </div>`;
+          }).join('')
+        }
+      </div>
 
-        <div class="card">
-          <div style="font-size:13px;font-weight:700;margin-bottom:12px;">Quick Actions</div>
-          <div style="display:flex;flex-direction:column;gap:8px;">
-            <button class="btn btn-secondary" onclick="navigateTo('hod-lecturers')">
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
-              View Lecturers
-            </button>
-            <button class="btn btn-secondary" onclick="navigateTo('hod-students')">
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
-              View Students
-            </button>
-            <button class="btn btn-secondary" onclick="navigateTo('hod-reports')">
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
-              Department Reports
-            </button>
-            <button class="btn btn-secondary" onclick="navigateTo('hod-performance')">
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>
-              Performance Dashboard
-            </button>
-            <button class="btn btn-secondary" onclick="navigateTo('hod-alerts')" id="hod-alerts-btn">
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
-              Smart Alerts
-            </button>
-            <button class="btn btn-secondary" onclick="navigateTo('hod-messaging')">
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
-              Dept. Messaging
-            </button>
-            <button class="btn btn-primary" onclick="navigateTo('announcements')">
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
-              Post Announcement
-            </button>
-            <button class="btn btn-secondary" onclick="navigateTo('approvals')" id="hod-approvals-btn">Pending Approvals</button>
-            <button class="btn btn-secondary" onclick="navigateTo('hod-course-approvals')" id="hod-course-approvals-btn">
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
-              Course Approvals
-            </button>
-            <button class="btn btn-secondary" onclick="navigateTo('hod-unlock-students')" id="hod-locked-btn">
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
-              Locked Students
-            </button>
-            <div style="border-top:1px solid var(--border);padding-top:8px;margin-top:4px;">
-              <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;color:var(--text-muted);margin-bottom:6px;">Export</div>
-              <div style="display:flex;gap:6px;flex-wrap:wrap;">
-                <button class="btn btn-xs btn-secondary" onclick="hodExportCSV('students')">Students CSV</button>
-                <button class="btn btn-xs btn-secondary" onclick="hodExportCSV('lecturers')">Lecturers CSV</button>
-                <button class="btn btn-xs btn-secondary" onclick="hodExportCSV('attendance')">Attendance CSV</button>
-              </div>
-            </div>
+      <div class="adx-card">
+        <div class="adx-card-head"><span class="adx-card-title">Quick actions</span></div>
+        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:8px;">
+          <button class="btn btn-secondary" onclick="navigateTo('hod-lecturers')">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+            View Lecturers
+          </button>
+          <button class="btn btn-secondary" onclick="navigateTo('hod-students')">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+            View Students
+          </button>
+          <button class="btn btn-secondary" onclick="navigateTo('hod-reports')">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+            Department Reports
+          </button>
+          <button class="btn btn-secondary" onclick="navigateTo('hod-performance')">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>
+            Performance Dashboard
+          </button>
+          <button class="btn btn-secondary" onclick="navigateTo('hod-alerts')" id="hod-alerts-btn">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+            Smart Alerts
+          </button>
+          <button class="btn btn-secondary" onclick="navigateTo('hod-messaging')">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+            Dept. Messaging
+          </button>
+          <button class="btn btn-primary" onclick="navigateTo('announcements')">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
+            Post Announcement
+          </button>
+          <button class="btn btn-secondary" onclick="navigateTo('approvals')" id="hod-approvals-btn">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
+            Pending Approvals
+          </button>
+          <button class="btn btn-secondary" onclick="navigateTo('hod-course-approvals')" id="hod-course-approvals-btn">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
+            Course Approvals
+          </button>
+          <button class="btn btn-secondary" onclick="navigateTo('hod-unlock-students')" id="hod-locked-btn">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+            Locked Students
+          </button>
+        </div>
+        <div style="border-top:1px solid var(--border);padding-top:12px;margin-top:12px;">
+          <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;color:var(--text-muted);margin-bottom:8px;">Export</div>
+          <div style="display:flex;gap:6px;flex-wrap:wrap;">
+            <button class="btn btn-xs btn-secondary" onclick="hodExportCSV('students')">Students CSV</button>
+            <button class="btn btn-xs btn-secondary" onclick="hodExportCSV('lecturers')">Lecturers CSV</button>
+            <button class="btn btn-xs btn-secondary" onclick="hodExportCSV('attendance')">Attendance CSV</button>
           </div>
         </div>
       </div>`;
