@@ -69,13 +69,16 @@ const assignmentSubmissionSchema = new mongoose.Schema(
       min: 1,
     },
 
-    // ── Legacy: single submitted file (filesystem path) ───────────────────
+    // ── Legacy: single submitted file ──────────────────────────────────────
     // Kept for backward compatibility with existing assignmentController.
+    // filePath is a documentStorage ref (relative to uploads/), not an
+    // absolute filesystem path — see src/services/storage/documentStorage.js.
     submittedFile: {
-      filePath:     { type: String, default: null },
-      originalName: { type: String, default: null },
-      mimeType:     { type: String, default: null },
-      sizeBytes:    { type: Number, default: null },
+      filePath:        { type: String, default: null },
+      storageProvider: { type: String, default: "local" },
+      originalName:    { type: String, default: null },
+      mimeType:        { type: String, default: null },
+      sizeBytes:       { type: Number, default: null },
     },
 
     // ── Phase 5: multiple cloud-uploaded files ────────────────────────────

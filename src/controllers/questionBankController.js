@@ -3,12 +3,12 @@
  * CRUD for the question bank + import-to-quiz action.
  */
 const mongoose  = require("mongoose");
-const fs        = require("fs");
-const path      = require("path");
 const QuestionBank = require("../models/QuestionBank");
 const Question  = require("../models/Question");
 const Quiz      = require("../models/Quiz");
-const { UPLOAD_DIR } = require("../middleware/questionBankUpload");
+const mediaStorage = require("../services/storage/mediaStorage");
+
+const QB_IMAGE_FOLDER = "dikly/question-bank";
 
 const escapeRegex = s => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
@@ -70,26 +70,30 @@ exports.list = async (req, res) => {
 exports.create = async (req, res) => {
   try {
     if (!req.body.questionText?.trim()) {
-      if (req.file) fs.unlink(req.file.path, () => {});
       return res.status(400).json({ error: "questionText is required" });
     }
     const doc = buildBankDoc(req.body, req.user._id, req.user.company);
 
     if (req.file) {
-      const baseUrl = process.env.SERVER_URL || "https://dikly.sbs";
-      doc.imageAttachment = {
-        fileName:     req.file.filename,
-        originalName: req.file.originalname,
-        fileUrl:      `${baseUrl}/api/lecturer/question-bank/image/${req.file.filename}`,
+      const uploaded = await mediaStorage.uploadImage(req.file.buffer, {
+        folder:       QB_IMAGE_FOLDER,
+        filenameHint: "qb",
         mimeType:     req.file.mimetype,
         fileSize:     req.file.size,
+      });
+      doc.imageAttachment = {
+        originalName:    req.file.originalname,
+        fileUrl:         uploaded.url,
+        publicId:        uploaded.publicId,
+        storageProvider: uploaded.provider,
+        mimeType:        uploaded.mimeType,
+        fileSize:        uploaded.fileSize,
       };
     }
 
     const q = await QuestionBank.create(doc);
     res.status(201).json({ question: q });
   } catch (err) {
-    if (req.file) fs.unlink(req.file.path, () => {});
     res.status(500).json({ error: err.message || "Failed to create question" });
   }
 };
@@ -101,7 +105,6 @@ exports.update = async (req, res) => {
       _id: req.params.id, company: req.user.company, createdBy: req.user._id,
     });
     if (!q) {
-      if (req.file) fs.unlink(req.file.path, () => {});
       return res.status(404).json({ error: "Question not found" });
     }
 
@@ -111,24 +114,30 @@ exports.update = async (req, res) => {
     arrayFields.forEach(f => { if (req.body[f] !== undefined) q[f] = parseJsonField(req.body[f], q[f]); });
 
     if (req.file) {
-      // Delete old image if present
-      if (q.imageAttachment?.fileName) {
-        fs.unlink(path.join(process.cwd(), UPLOAD_DIR, q.imageAttachment.fileName), () => {});
+      // Delete old image from Cloudinary if present
+      if (q.imageAttachment?.publicId) {
+        await mediaStorage.deleteImage(q.imageAttachment.publicId);
       }
-      const baseUrl = process.env.SERVER_URL || "https://dikly.sbs";
-      q.imageAttachment = {
-        fileName:     req.file.filename,
-        originalName: req.file.originalname,
-        fileUrl:      `${baseUrl}/api/lecturer/question-bank/image/${req.file.filename}`,
+      const uploaded = await mediaStorage.uploadImage(req.file.buffer, {
+        folder:       QB_IMAGE_FOLDER,
+        filenameHint: "qb",
         mimeType:     req.file.mimetype,
         fileSize:     req.file.size,
+      });
+      q.imageAttachment = {
+        originalName:    req.file.originalname,
+        fileUrl:         uploaded.url,
+        publicId:        uploaded.publicId,
+        storageProvider: uploaded.provider,
+        mimeType:        uploaded.mimeType,
+        fileSize:        uploaded.fileSize,
       };
     }
 
     // Allow removing image via removeImage=true body param
     if (req.body.removeImage === 'true' || req.body.removeImage === true) {
-      if (q.imageAttachment?.fileName) {
-        fs.unlink(path.join(process.cwd(), UPLOAD_DIR, q.imageAttachment.fileName), () => {});
+      if (q.imageAttachment?.publicId) {
+        await mediaStorage.deleteImage(q.imageAttachment.publicId);
       }
       q.imageAttachment = null;
     }
@@ -136,7 +145,6 @@ exports.update = async (req, res) => {
     await q.save();
     res.json({ question: q });
   } catch (err) {
-    if (req.file) fs.unlink(req.file.path, () => {});
     res.status(500).json({ error: "Failed to update question" });
   }
 };
@@ -148,8 +156,8 @@ exports.remove = async (req, res) => {
       _id: req.params.id, company: req.user.company, createdBy: req.user._id,
     });
     if (!q) return res.status(404).json({ error: "Question not found" });
-    if (q.imageAttachment?.fileName) {
-      fs.unlink(path.join(process.cwd(), UPLOAD_DIR, q.imageAttachment.fileName), () => {});
+    if (q.imageAttachment?.publicId) {
+      await mediaStorage.deleteImage(q.imageAttachment.publicId);
     }
     res.json({ message: "Deleted" });
   } catch (err) {
@@ -158,23 +166,18 @@ exports.remove = async (req, res) => {
 };
 
 // GET /api/lecturer/question-bank/image/:filename
+// Legacy route, kept for any old links still pointing at it — images are
+// now served directly from Cloudinary via imageAttachment.fileUrl, so this
+// just redirects there for records that have one.
 exports.serveImage = async (req, res) => {
   try {
     const { filename } = req.params;
     const q = await QuestionBank.findOne({
       company: req.user.company,
-      "imageAttachment.fileName": filename,
+      $or: [{ "imageAttachment.fileName": filename }, { "imageAttachment.publicId": filename }],
     }).lean();
-    if (!q) return res.status(404).json({ error: "Image not found." });
-
-    const filePath = path.join(process.cwd(), UPLOAD_DIR, filename);
-    if (!fs.existsSync(filePath)) {
-      return res.status(404).json({ error: "Image not found on disk." });
-    }
-
-    res.setHeader("Content-Type", q.imageAttachment.mimeType || "image/jpeg");
-    res.setHeader("Content-Disposition", `inline; filename="${q.imageAttachment.originalName}"`);
-    return res.sendFile(filePath);
+    if (!q?.imageAttachment?.fileUrl) return res.status(404).json({ error: "Image not found." });
+    return res.redirect(q.imageAttachment.fileUrl);
   } catch (err) {
     console.error("[serveImage]", err);
     res.status(500).json({ error: "Failed to serve image." });
@@ -187,16 +190,10 @@ exports.downloadImage = async (req, res) => {
     const { filename } = req.params;
     const q = await QuestionBank.findOne({
       company: req.user.company,
-      "imageAttachment.fileName": filename,
+      $or: [{ "imageAttachment.fileName": filename }, { "imageAttachment.publicId": filename }],
     }).lean();
-    if (!q) return res.status(404).json({ error: "Image not found." });
-
-    const filePath = path.join(process.cwd(), UPLOAD_DIR, filename);
-    if (!fs.existsSync(filePath)) {
-      return res.status(404).json({ error: "Image not found on disk." });
-    }
-
-    return res.download(filePath, q.imageAttachment.originalName);
+    if (!q?.imageAttachment?.fileUrl) return res.status(404).json({ error: "Image not found." });
+    return res.redirect(q.imageAttachment.fileUrl);
   } catch (err) {
     console.error("[downloadImage]", err);
     res.status(500).json({ error: "Failed to download image." });

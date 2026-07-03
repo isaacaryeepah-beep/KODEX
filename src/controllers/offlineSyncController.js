@@ -12,12 +12,13 @@
  *   GET  /:attemptId/status   — current sync state (lecturer / student poll)
  */
 
-const path     = require("path");
-const fs       = require("fs");
 const mongoose = require("mongoose");
 
 const OfflineSyncLog    = require("../models/OfflineSyncLog");
 const SnapQuizAttempt   = require("../models/SnapQuizAttempt");
+const documentStorage    = require("../services/storage/documentStorage");
+
+const RECORDINGS_FOLDER = "recordings";
 
 // Maximum events accepted in a single syncEvents POST to prevent O(n²) dedup.
 const MAX_EVENTS_PER_REQUEST = 500;
@@ -280,16 +281,12 @@ exports.syncChunk = async (req, res) => {
     const { attemptId } = req.params;
 
     if (!attemptId) {
-      if (req.file) fs.unlink(req.file.path, () => {});
       return res.status(400).json({ error: "attemptId is required" });
     }
 
     // Ownership check — must happen before we accept the uploaded file.
     const access = await verifyAttemptAccess(req, res);
-    if (!access) {
-      if (req.file) fs.unlink(req.file.path, () => {});
-      return;
-    }
+    if (!access) return;
 
     const {
       chunkIndex,
@@ -300,40 +297,49 @@ exports.syncChunk = async (req, res) => {
     } = req.body;
 
     if (uploadId === undefined || uploadId === null || uploadId === "") {
-      if (req.file) fs.unlink(req.file.path, () => {});
       return res.status(400).json({ error: "uploadId is required" });
     }
 
     if (typeof uploadId !== "string" || uploadId.length > 128) {
-      if (req.file) fs.unlink(req.file.path, () => {});
       return res.status(400).json({ error: "uploadId invalid" });
     }
 
     const parsedIndex    = parseInt(chunkIndex, 10);
     const parsedDuration = durationMs ? parseInt(durationMs, 10) : null;
 
-    // Dedup: reject if we already stored a chunk with this uploadId.
+    // Dedup: reject if we already stored a chunk with this uploadId. Checked
+    // before writing anything, so a duplicate never touches storage at all.
     const existing = await OfflineSyncLog.findOne(
       { attemptId, "chunks.uploadId": uploadId },
       { _id: 1 }
     );
 
     if (existing) {
-      // Remove the uploaded file from disk — it's a duplicate.
-      if (req.file && req.file.path) {
-        fs.unlink(req.file.path, () => {});
-      }
       return res.status(200).json({ ok: true, duplicate: true });
     }
 
-    const filePath = req.file ? req.file.path : null;
     const resolvedMime = mimeType || (req.file ? req.file.mimetype : null);
+
+    let filePath = null;
+    let storageProvider = null;
+    if (req.file) {
+      const safeAttemptId = String(attemptId).replace(/[^a-zA-Z0-9_-]/g, "_").slice(0, 64);
+      const ext = req.file.mimetype === "video/mp4" ? ".mp4" : ".webm";
+      const stored = await documentStorage.storeDocument(req.file.buffer, {
+        folder:       `${RECORDINGS_FOLDER}/${safeAttemptId}`,
+        filenameHint: `chunk_${isNaN(parsedIndex) ? 0 : parsedIndex}`,
+        ext,
+      });
+      filePath = stored.ref;
+      storageProvider = stored.provider;
+    }
 
     const chunkRecord = {
       chunkIndex:  isNaN(parsedIndex) ? 0 : parsedIndex,
       uploadId,
       storedAt:    new Date(),
       filePath,
+      storageProvider,
       durationMs:  parsedDuration,
       mimeType:    resolvedMime,
     };
@@ -350,10 +356,6 @@ exports.syncChunk = async (req, res) => {
     return res.status(200).json({ ok: true, stored: true });
   } catch (err) {
     console.error("[offlineSync] syncChunk error:", err);
-    // Clean up file if we errored after multer wrote it.
-    if (req.file && req.file.path) {
-      fs.unlink(req.file.path, () => {});
-    }
     return res.status(500).json({ error: "Failed to store chunk" });
   }
 };

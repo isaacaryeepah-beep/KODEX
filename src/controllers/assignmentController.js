@@ -5,9 +5,13 @@ const Assignment         = require("../models/Assignment");
 const AssignmentSubmission = require("../models/AssignmentSubmission");
 const Course   = require("../models/Course");
 const User     = require("../models/User");
-const { uploadBrief, uploadSubmission, BRIEF_DIR, SUBMISSION_DIR } = require("../config/uploadConfig");
+const { uploadBrief, uploadSubmission } = require("../config/uploadConfig");
 const notif    = require("../services/notificationService");
 const { validateObjectId, handleControllerError } = require("../utils/controllerHelpers");
+const documentStorage = require("../services/storage/documentStorage");
+
+const BRIEF_FOLDER      = "assignment-briefs";
+const SUBMISSION_FOLDER = "assignment-submissions";
 
 // ─── Grading helper ────────────────────────────────────────────────────────
 function gradeAnswers(questions, answers) {
@@ -67,14 +71,21 @@ function gradeAnswers(questions, answers) {
   return { totalScore, gradedAnswers };
 }
 
-// Helper: safely delete a file from the filesystem
-function safeDeleteFile(filePath) {
-  if (!filePath) return;
-  try { fs.unlinkSync(filePath); } catch (err) {
-    if (err.code !== 'ENOENT') {
-      console.warn('[assignment] Failed to delete file:', filePath, err.message);
+// Helper: safely delete a file from the filesystem.
+// Accepts a legacy absolute path (from records created before the
+// documentStorage migration) or a storage ref (folder/filename, relative to
+// uploads/) — either way, best-effort, fire-and-forget.
+function safeDeleteFile(filePathOrRef) {
+  if (!filePathOrRef) return;
+  if (path.isAbsolute(filePathOrRef)) {
+    try { fs.unlinkSync(filePathOrRef); } catch (err) {
+      if (err.code !== 'ENOENT') {
+        console.warn('[assignment] Failed to delete file:', filePathOrRef, err.message);
+      }
     }
+    return;
   }
+  documentStorage.deleteDocument(filePathOrRef).catch(() => {});
 }
 
 // ══════════════════════════════════════════════════════════════════════════
@@ -293,25 +304,30 @@ exports.uploadPdf = (req, res) => {
       if (req.user.role === "lecturer") pdfFilter.createdBy = req.user._id;
       const assignment = await Assignment.findOne(pdfFilter);
       if (!assignment) {
-        safeDeleteFile(req.file.path);
         return res.status(404).json({ error: "Assignment not found" });
       }
 
       // Delete old file if exists
       safeDeleteFile(assignment.pdfBrief?.filePath);
 
+      const stored = await documentStorage.storeDocument(req.file.buffer, {
+        folder:       BRIEF_FOLDER,
+        filenameHint: "brief",
+        ext:          path.extname(req.file.originalname).toLowerCase() || ".pdf",
+      });
+
       assignment.pdfBrief = {
-        filePath:     req.file.path,
-        originalName: req.file.originalname,
-        mimeType:     req.file.mimetype,
-        sizeBytes:    req.file.size,
-        uploadedAt:   new Date(),
+        filePath:        stored.ref,
+        storageProvider: stored.provider,
+        originalName:    req.file.originalname,
+        mimeType:        req.file.mimetype,
+        sizeBytes:        req.file.size,
+        uploadedAt:       new Date(),
       };
       await assignment.save();
 
       res.json({ message: "PDF uploaded", filename: req.file.originalname, sizeBytes: req.file.size });
     } catch (e) {
-      safeDeleteFile(req.file.path);
       console.error("uploadPdf:", e);
       res.status(500).json({ error: "Failed to save PDF" });
     }
@@ -329,12 +345,12 @@ exports.downloadPdf = async (req, res) => {
       return res.status(404).json({ error: "No PDF found for this assignment" });
 
     // Students must be enrolled — checked in route middleware (studentGetAssignment verifies enrollment)
-    if (!fs.existsSync(assignment.pdfBrief.filePath))
+    if (!documentStorage.documentExists(assignment.pdfBrief.filePath))
       return res.status(404).json({ error: "File not found on server" });
 
     res.setHeader("Content-Type", assignment.pdfBrief.mimeType || "application/pdf");
     res.setHeader("Content-Disposition", `attachment; filename="${assignment.pdfBrief.originalName || "brief.pdf"}"`);
-    fs.createReadStream(assignment.pdfBrief.filePath).pipe(res);
+    documentStorage.getDocumentStream(assignment.pdfBrief.filePath).pipe(res);
   } catch (err) {
     console.error("downloadPdf:", err);
     res.status(500).json({ error: "Failed to download PDF" });
@@ -532,12 +548,12 @@ exports.downloadSubmissionFile = async (req, res) => {
     if (!sub || !sub.submittedFile?.filePath) return res.status(404).json({ error: "No file found" });
     if (sub.assignment.company.toString() !== req.user.company.toString()) return res.status(403).json({ error: "Access denied" });
 
-    if (!fs.existsSync(sub.submittedFile.filePath))
+    if (!documentStorage.documentExists(sub.submittedFile.filePath))
       return res.status(404).json({ error: "File not found on server" });
 
     res.setHeader("Content-Type", sub.submittedFile.mimeType || "application/octet-stream");
     res.setHeader("Content-Disposition", `attachment; filename="${sub.submittedFile.originalName || "submission"}"`);
-    fs.createReadStream(sub.submittedFile.filePath).pipe(res);
+    documentStorage.getDocumentStream(sub.submittedFile.filePath).pipe(res);
   } catch (err) {
     console.error("downloadSubmissionFile:", err);
     res.status(500).json({ error: "Failed to download file" });
@@ -732,11 +748,17 @@ exports.studentSubmit = (req, res) => {
       };
 
       if (req.file) {
+        const stored = await documentStorage.storeDocument(req.file.buffer, {
+          folder:       SUBMISSION_FOLDER,
+          filenameHint: "sub",
+          ext:          path.extname(req.file.originalname).toLowerCase() || ".pdf",
+        });
         payload.submittedFile = {
-          filePath:     req.file.path,
-          originalName: req.file.originalname,
-          mimeType:     req.file.mimetype,
-          sizeBytes:    req.file.size,
+          filePath:        stored.ref,
+          storageProvider: stored.provider,
+          originalName:    req.file.originalname,
+          mimeType:        req.file.mimetype,
+          sizeBytes:        req.file.size,
         };
       } else if (existing?.submittedFile && !req.file) {
         // Keep old file if no new one uploaded

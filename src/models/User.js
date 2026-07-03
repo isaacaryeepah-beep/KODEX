@@ -67,6 +67,14 @@ const userSchema = new mongoose.Schema(
       type: String,
       default: null,
     },
+    // Cloudinary public_id for profilePhoto, so a replacement/removal can
+    // clean up the old asset. Null for photos uploaded before this field
+    // existed (nothing to clean up there — those were base64 blobs, not
+    // Cloudinary assets).
+    profilePhotoPublicId: {
+      type: String,
+      default: null,
+    },
     lastLoginAt: {
       type: Date,
       default: null,

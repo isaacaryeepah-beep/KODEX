@@ -11,6 +11,7 @@ const { sendWelcome, sendAdminPasswordResetNotice, sendPasswordReset, sendNewIns
 const { sendOtp, normalisePhone } = require("../services/smsService");
 const { syncStudentToRoster } = require("../utils/rosterSync");
 const { getMyActiveHRAssignment } = require("../utils/corporateScope");
+const mediaStorage = require("../services/storage/mediaStorage");
 
 const MODERATOR_ROLES = ['admin', 'lecturer', 'manager', 'hod', 'superadmin'];
 
@@ -1712,7 +1713,38 @@ exports.updateProfile = async (req, res) => {
       if (profilePhoto && profilePhoto.length > 2 * 1024 * 1024 * 1.4) {
         return res.status(400).json({ error: "Profile photo must be under 2MB" });
       }
-      user.profilePhoto = profilePhoto || null;
+
+      if (!profilePhoto) {
+        // Clearing the photo — clean up the old Cloudinary asset if any.
+        if (user.profilePhotoPublicId) {
+          await mediaStorage.deleteImage(user.profilePhotoPublicId).catch(() => {});
+        }
+        user.profilePhoto = null;
+        user.profilePhotoPublicId = null;
+      } else {
+        // Client sends a base64 data URI (unchanged from before) — decode it
+        // here and upload to Cloudinary instead of storing the blob in Mongo.
+        const match = /^data:(image\/[a-zA-Z0-9.+-]+);base64,(.+)$/.exec(profilePhoto);
+        if (!match) {
+          return res.status(400).json({ error: "profilePhoto must be a base64 image data URI" });
+        }
+        const [, mimeType, base64Data] = match;
+        const buffer = Buffer.from(base64Data, "base64");
+
+        const oldPublicId = user.profilePhotoPublicId;
+        const uploaded = await mediaStorage.uploadImage(buffer, {
+          folder:       "dikly/profile-photos",
+          filenameHint: String(user._id),
+          mimeType,
+          fileSize:     buffer.length,
+        });
+        user.profilePhoto = uploaded.url;
+        user.profilePhotoPublicId = uploaded.publicId;
+
+        if (oldPublicId) {
+          await mediaStorage.deleteImage(oldPublicId).catch(() => {});
+        }
+      }
     }
 
     if (department !== undefined && user.role === 'lecturer') {

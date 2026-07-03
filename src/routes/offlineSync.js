@@ -12,8 +12,6 @@
  */
 
 const express  = require("express");
-const path     = require("path");
-const fs       = require("fs");
 const multer   = require("multer");
 
 const authenticate          = require("../middleware/auth");
@@ -23,14 +21,10 @@ const ctrl                  = require("../controllers/offlineSyncController");
 const router = express.Router();
 
 // ---------------------------------------------------------------------------
-// Multer — disk storage for recording chunks
+// Multer — memory storage for recording chunks. The controller decides
+// where the buffer ends up via documentStorage.js (see offlineSyncController
+// syncChunk), so this file no longer touches the filesystem directly.
 // ---------------------------------------------------------------------------
-
-const UPLOAD_ROOT       = path.join(__dirname, "../../uploads");
-const RECORDINGS_ROOT   = path.join(UPLOAD_ROOT, "recordings");
-
-// Ensure the base recordings directory exists at startup (mkdirSync is idempotent with recursive).
-fs.mkdirSync(RECORDINGS_ROOT, { recursive: true });
 
 const ALLOWED_VIDEO_MIMES = new Set(["video/webm", "video/mp4"]);
 
@@ -47,30 +41,8 @@ function videoFileFilter(req, file, cb) {
   );
 }
 
-const chunkStorage = multer.diskStorage({
-  destination(req, file, cb) {
-    // Per-attempt subdirectory keeps chunks grouped and avoids a flat
-    // directory with potentially thousands of files.
-    const attemptId = req.params.attemptId || "unknown";
-    // Sanitise attemptId so it can safely be used as a directory name.
-    const safeName  = attemptId.replace(/[^a-zA-Z0-9_-]/g, "_").slice(0, 64);
-    const dest      = path.join(RECORDINGS_ROOT, safeName);
-
-    fs.mkdirSync(dest, { recursive: true });
-    cb(null, dest);
-  },
-
-  filename(req, file, cb) {
-    const chunkIndex = req.body.chunkIndex !== undefined
-      ? parseInt(req.body.chunkIndex, 10)
-      : 0;
-    const ext = file.mimetype === "video/mp4" ? ".mp4" : ".webm";
-    cb(null, `chunk_${chunkIndex}_${Date.now()}${ext}`);
-  },
-});
-
 const uploadChunk = multer({
-  storage:    chunkStorage,
+  storage:    multer.memoryStorage(),
   fileFilter: videoFileFilter,
   limits: {
     fileSize: 10 * 1024 * 1024, // 10 MB per chunk

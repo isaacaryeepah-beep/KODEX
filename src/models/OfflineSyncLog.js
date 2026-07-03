@@ -72,7 +72,12 @@ const chunkSchema = new mongoose.Schema(
       type: Date,
       default: Date.now,
     },
+    // Relative to uploads/ via documentStorage.js, not an absolute path.
     filePath: {
+      type: String,
+      default: null,
+    },
+    storageProvider: {
       type: String,
       default: null,
     },

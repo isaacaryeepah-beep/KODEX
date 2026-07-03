@@ -24,12 +24,16 @@
 const express  = require("express");
 const router   = express.Router();
 const mongoose = require("mongoose");
-const fs       = require("fs");
 const path     = require("path");
 const authenticate                  = require("../middleware/auth");
 const { requireActiveSubscription } = require("../middleware/subscription");
+const mediaStorage    = require("../services/storage/mediaStorage");
+const documentStorage = require("../services/storage/documentStorage");
+
+const MSG_IMAGE_FOLDER = "dikly/messages";
+const MSG_DOC_FOLDER   = "messages";
 const { companyIsolation }          = require("../middleware/companyIsolation");
-const { uploadMessage, handleUploadError, UPLOAD_DIR } = require("../middleware/messageUpload");
+const { uploadMessage, handleUploadError, isImageMime } = require("../middleware/messageUpload");
 const Conversation = require("../models/Conversation");
 const Message      = require("../models/Message");
 const User         = require("../models/User");
@@ -636,10 +640,7 @@ router.get("/conversations/:id", ...mw, async (req, res) => {
 router.post("/conversations/:id/messages", ...mw, uploadMessage, handleUploadError, async (req, res) => {
   try {
     const convo = await resolveConversation(req, res, req.params.id);
-    if (!convo) {
-      if (req.file) fs.unlink(req.file.path, () => {});
-      return;
-    }
+    if (!convo) return;
 
     const bodyText = (req.body.body || "").trim();
     const hasFile  = !!req.file;
@@ -651,7 +652,6 @@ router.post("/conversations/:id/messages", ...mw, uploadMessage, handleUploadErr
     // Roles allowed to send file attachments
     const FILE_ROLES = ["admin", "superadmin", "lecturer", "manager", "hod", "employee", "student"];
     if (hasFile && !FILE_ROLES.includes(req.user.role)) {
-      fs.unlink(req.file.path, () => {});
       return res.status(403).json({ error: "Your role is not allowed to send file attachments." });
     }
 
@@ -661,14 +661,40 @@ router.post("/conversations/:id/messages", ...mw, uploadMessage, handleUploadErr
 
     let attachment = null;
     if (hasFile) {
-      const baseUrl = process.env.SERVER_URL || "https://dikly.sbs";
-      attachment = {
-        fileName:     req.file.filename,
-        originalName: req.file.originalname,
-        fileUrl:      `${baseUrl}/api/messages/attachment/${req.file.filename}`,
-        mimeType:     req.file.mimetype,
-        fileSize:     req.file.size,
-      };
+      if (isImageMime(req.file.mimetype)) {
+        const uploaded = await mediaStorage.uploadImage(req.file.buffer, {
+          folder:       MSG_IMAGE_FOLDER,
+          filenameHint: "msg",
+          mimeType:     req.file.mimetype,
+          fileSize:     req.file.size,
+        });
+        attachment = {
+          originalName:    req.file.originalname,
+          fileUrl:         uploaded.url,
+          publicId:        uploaded.publicId,
+          storageProvider: uploaded.provider,
+          mimeType:        uploaded.mimeType,
+          fileSize:        uploaded.fileSize,
+        };
+      } else {
+        const ext = path.extname(req.file.originalname).toLowerCase();
+        const stored = await documentStorage.storeDocument(req.file.buffer, {
+          folder:       MSG_DOC_FOLDER,
+          filenameHint: "msg",
+          ext,
+        });
+        const baseUrl = process.env.SERVER_URL || "https://dikly.sbs";
+        const basename = path.basename(stored.ref);
+        attachment = {
+          fileName:        basename,
+          originalName:    req.file.originalname,
+          fileUrl:         `${baseUrl}/api/messages/attachment/${basename}`,
+          fileRef:         stored.ref,
+          storageProvider: stored.provider,
+          mimeType:        req.file.mimetype,
+          fileSize:        req.file.size,
+        };
+      }
     }
 
     const displayBody = bodyText || `📎 ${req.file.originalname}`;
@@ -837,14 +863,17 @@ router.get("/attachment/:filename", ...mw, async (req, res) => {
     }).lean();
     if (!msg) return res.status(404).json({ error: "File not found." });
 
-    const filePath = path.join(process.cwd(), UPLOAD_DIR, filename);
-    if (!fs.existsSync(filePath)) {
+    if (msg.attachment.storageProvider === "cloudinary" && msg.attachment.fileUrl) {
+      return res.redirect(msg.attachment.fileUrl);
+    }
+
+    if (!msg.attachment.fileRef || !documentStorage.documentExists(msg.attachment.fileRef)) {
       return res.status(404).json({ error: "File not found on disk." });
     }
 
     res.setHeader("Content-Type", msg.attachment.mimeType || "application/octet-stream");
     res.setHeader("Content-Disposition", `inline; filename="${msg.attachment.originalName}"`);
-    return res.sendFile(filePath);
+    return documentStorage.getDocumentStream(msg.attachment.fileRef).pipe(res);
   } catch (err) {
     console.error("serve message attachment:", err);
     res.status(500).json({ error: "Failed to serve attachment." });
@@ -864,12 +893,15 @@ router.get("/attachment/:filename/download", ...mw, async (req, res) => {
     }).lean();
     if (!msg) return res.status(404).json({ error: "File not found." });
 
-    const filePath = path.join(process.cwd(), UPLOAD_DIR, filename);
-    if (!fs.existsSync(filePath)) {
+    if (msg.attachment.storageProvider === "cloudinary" && msg.attachment.fileUrl) {
+      return res.redirect(msg.attachment.fileUrl);
+    }
+
+    if (!msg.attachment.fileRef || !documentStorage.documentExists(msg.attachment.fileRef)) {
       return res.status(404).json({ error: "File not found on disk." });
     }
 
-    return res.download(filePath, msg.attachment.originalName);
+    return res.download(documentStorage.getDocumentPath(msg.attachment.fileRef), msg.attachment.originalName);
   } catch (err) {
     console.error("download message attachment:", err);
     res.status(500).json({ error: "Failed to download attachment." });
