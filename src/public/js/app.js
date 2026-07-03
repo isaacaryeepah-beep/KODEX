@@ -18202,6 +18202,104 @@ function aiqGraphPlot() {
   aiqGraphDraw(true);
 }
 
+// ── Safe math expression parser (no eval / new Function — CSP-safe) ───────
+// Supports: + - * / ^, unary minus, parentheses, sin/cos/tan/sqrt/abs/log/exp, pi, e, x.
+function _parseMathExpr(str) {
+  const src = String(str).replace(/\s+/g, '');
+  let i = 0;
+  const peek = () => src[i];
+  const fail = (msg) => { throw new Error(msg + ' at position ' + i); };
+  const FUNCS = ['sin', 'cos', 'tan', 'sqrt', 'abs', 'log', 'exp'];
+
+  function parseExpr() {
+    let node = parseTerm();
+    while (peek() === '+' || peek() === '-') {
+      const op = src[i++];
+      node = { type: 'bin', op, left: node, right: parseTerm() };
+    }
+    return node;
+  }
+  function parseTerm() {
+    let node = parseUnary();
+    while (peek() === '*' || peek() === '/') {
+      const op = src[i++];
+      node = { type: 'bin', op, left: node, right: parseUnary() };
+    }
+    return node;
+  }
+  function parseUnary() {
+    if (peek() === '-') { i++; return { type: 'neg', arg: parseUnary() }; }
+    if (peek() === '+') { i++; return parseUnary(); }
+    return parsePower();
+  }
+  function parsePower() {
+    const node = parseAtom();
+    if (peek() === '^') { i++; return { type: 'bin', op: '^', left: node, right: parseUnary() }; }
+    return node;
+  }
+  function parseAtom() {
+    if (peek() === '(') {
+      i++;
+      const node = parseExpr();
+      if (peek() !== ')') fail('expected )');
+      i++;
+      return node;
+    }
+    const idMatch = /^[a-zA-Z]+/.exec(src.slice(i));
+    if (idMatch) {
+      const id = idMatch[0];
+      if (FUNCS.includes(id)) {
+        i += id.length;
+        if (peek() !== '(') fail('expected ( after ' + id);
+        i++;
+        const arg = parseExpr();
+        if (peek() !== ')') fail('expected )');
+        i++;
+        return { type: 'call', fn: id, arg };
+      }
+      if (id === 'pi') { i += 2; return { type: 'num', value: Math.PI }; }
+      if (id === 'e')  { i += 1; return { type: 'num', value: Math.E }; }
+      if (id === 'x')  { i += 1; return { type: 'var' }; }
+      fail('unknown identifier "' + id + '"');
+    }
+    const numMatch = /^\d+(\.\d+)?/.exec(src.slice(i));
+    if (numMatch) { i += numMatch[0].length; return { type: 'num', value: parseFloat(numMatch[0]) }; }
+    fail('unexpected character "' + peek() + '"');
+  }
+
+  const ast = parseExpr();
+  if (i < src.length) fail('trailing input');
+  return ast;
+}
+function _evalMathAst(node, x) {
+  switch (node.type) {
+    case 'num': return node.value;
+    case 'var': return x;
+    case 'neg': return -_evalMathAst(node.arg, x);
+    case 'call': {
+      const v = _evalMathAst(node.arg, x);
+      if (node.fn === 'sin')  return Math.sin(v);
+      if (node.fn === 'cos')  return Math.cos(v);
+      if (node.fn === 'tan')  return Math.tan(v);
+      if (node.fn === 'sqrt') return Math.sqrt(v);
+      if (node.fn === 'abs')  return Math.abs(v);
+      if (node.fn === 'log')  return Math.log(v);
+      if (node.fn === 'exp')  return Math.exp(v);
+      return NaN;
+    }
+    case 'bin': {
+      const l = _evalMathAst(node.left, x), r = _evalMathAst(node.right, x);
+      if (node.op === '+') return l + r;
+      if (node.op === '-') return l - r;
+      if (node.op === '*') return l * r;
+      if (node.op === '/') return l / r;
+      if (node.op === '^') return Math.pow(l, r);
+      return NaN;
+    }
+    default: return NaN;
+  }
+}
+
 function aiqGraphDraw(plotFn) {
   const canvas = document.getElementById('aiq-graph-canvas');
   if (!canvas) return;
@@ -18257,10 +18355,7 @@ function aiqGraphDraw(plotFn) {
     const fnStr = document.getElementById('aiq-graph-fn')?.value?.trim();
     if (fnStr) {
       try {
-        // Safe eval: allow only math expressions
-        const safeExpr = fnStr.replace(/\^/g, '**').replace(/sin/g,'Math.sin').replace(/cos/g,'Math.cos').replace(/tan/g,'Math.tan').replace(/sqrt/g,'Math.sqrt').replace(/abs/g,'Math.abs').replace(/log/g,'Math.log').replace(/exp/g,'Math.exp').replace(/pi/g,'Math.PI').replace(/e(?![a-zA-Z])/g,'Math.E');
-        // eslint-disable-next-line no-new-func
-        const fn = new Function('x', '"use strict"; return ' + safeExpr + ';');
+        const ast = _parseMathExpr(fnStr);
         ctx.strokeStyle = '#7c3aed';
         ctx.lineWidth = 2.5;
         ctx.beginPath();
@@ -18268,7 +18363,7 @@ function aiqGraphDraw(plotFn) {
         for (let px = 0; px <= W; px += 1) {
           const x = xmin + (px / W) * range;
           try {
-            const y = fn(x);
+            const y = _evalMathAst(ast, x);
             if (!isFinite(y)) { started = false; continue; }
             const py = toPixY(y);
             if (!started) { ctx.moveTo(px, py); started = true; } else { ctx.lineTo(px, py); }
