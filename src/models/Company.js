@@ -110,6 +110,10 @@ const companySchema = new mongoose.Schema(
       // Strict WiFi + GPS attendance enforcement
       strictAttendance:     { type: Boolean, default: false },
       allowedWifiIPs:       { type: [String], default: [] },
+      // VPN/proxy header heuristic -- off by default. Multi-hop
+      // X-Forwarded-For chains happen for entirely legitimate mobile
+      // carrier NAT/proxy setups, not just VPN apps, so this is opt-in.
+      vpnCheckEnabled:      { type: Boolean, default: false },
       officeLatitude:       { type: Number, default: null },
       officeLongitude:      { type: Number, default: null },
       geofenceRadiusMeters: { type: Number, default: 150 },

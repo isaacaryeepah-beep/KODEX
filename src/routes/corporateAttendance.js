@@ -630,7 +630,7 @@ router.patch("/:id/override", ...mw, requireRole("admin", "superadmin"), async (
 router.get("/settings", ...mw, canManage, async (req, res) => {
   try {
     const company = await Company.findById(req.user.company)
-      .select("corporateSettings.strictAttendance corporateSettings.allowedWifiIPs corporateSettings.officeLatitude corporateSettings.officeLongitude corporateSettings.geofenceRadiusMeters")
+      .select("corporateSettings.strictAttendance corporateSettings.allowedWifiIPs corporateSettings.officeLatitude corporateSettings.officeLongitude corporateSettings.geofenceRadiusMeters corporateSettings.vpnCheckEnabled")
       .lean();
     const s = company?.corporateSettings || {};
     res.json({
@@ -639,6 +639,7 @@ router.get("/settings", ...mw, canManage, async (req, res) => {
       officeLatitude:       s.officeLatitude        ?? null,
       officeLongitude:      s.officeLongitude       ?? null,
       geofenceRadiusMeters: s.geofenceRadiusMeters  || 150,
+      vpnCheckEnabled:      s.vpnCheckEnabled      || false,
     });
   } catch (e) {
     res.status(500).json({ error: "Failed to fetch attendance settings" });
@@ -650,13 +651,14 @@ router.get("/settings", ...mw, canManage, async (req, res) => {
 // ---------------------------------------------------------------------------
 router.patch("/settings", ...mw, adminOnly, async (req, res) => {
   try {
-    const { strictAttendance, allowedWifiIPs, officeLatitude, officeLongitude, geofenceRadiusMeters } = req.body;
+    const { strictAttendance, allowedWifiIPs, officeLatitude, officeLongitude, geofenceRadiusMeters, vpnCheckEnabled } = req.body;
     const update = {};
     if (strictAttendance     !== undefined) update["corporateSettings.strictAttendance"]     = Boolean(strictAttendance);
     if (allowedWifiIPs       !== undefined) update["corporateSettings.allowedWifiIPs"]       = Array.isArray(allowedWifiIPs) ? allowedWifiIPs.map(ip => ip.trim()).filter(Boolean) : [];
     if (officeLatitude       !== undefined) update["corporateSettings.officeLatitude"]       = officeLatitude  != null ? Number(officeLatitude)  : null;
     if (officeLongitude      !== undefined) update["corporateSettings.officeLongitude"]      = officeLongitude != null ? Number(officeLongitude) : null;
     if (geofenceRadiusMeters !== undefined) update["corporateSettings.geofenceRadiusMeters"] = Number(geofenceRadiusMeters) || 150;
+    if (vpnCheckEnabled      !== undefined) update["corporateSettings.vpnCheckEnabled"]      = Boolean(vpnCheckEnabled);
     await Company.findByIdAndUpdate(req.user.company, { $set: update });
     res.json({ message: "Attendance settings updated" });
   } catch (e) {
