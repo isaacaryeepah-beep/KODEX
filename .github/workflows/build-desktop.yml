@@ -2,7 +2,7 @@ name: Build Desktop App
 
 on:
   push:
-    branches: [main, claude/update-resume-aVv3d]
+    branches: [main, claude/are-you-there-hjdx9r]
   workflow_dispatch:
 
 concurrency:
