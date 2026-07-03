@@ -6091,11 +6091,27 @@ async function renderLecturerDashboard(content) {
       ${_diklyAiBtnHtml()}
     </div>
     ${_diklyAiBandHtml(lecInsights)}
-    <div class="stats-grid">
-      <div class="stat-card"><div class="stat-value">${totalStudents}</div><div class="stat-label">Students</div></div>
-      <div class="stat-card"><div class="stat-value">${activeCourses}</div><div class="stat-label">Courses</div></div>
-      <div class="stat-card"><div class="stat-value">${sessionsData.pagination.total}</div><div class="stat-label">Sessions</div></div>
-      <div class="stat-card"><div class="stat-value">${quizzesCreated}</div><div class="stat-label">Quizzes</div></div>
+    <div class="adx-kpi-grid">
+      <div class="adx-kpi" onclick="navigateTo('courses')">
+        <div class="adx-kpi-label">Students</div>
+        <div class="adx-kpi-value">${totalStudents}</div>
+        <div class="adx-kpi-sub">${activeCourses > 0 ? `Across ${activeCourses} course${activeCourses > 1 ? 's' : ''}` : 'No courses yet'}</div>
+      </div>
+      <div class="adx-kpi" onclick="navigateTo('courses')">
+        <div class="adx-kpi-label">Courses</div>
+        <div class="adx-kpi-value">${activeCourses}</div>
+        <div class="adx-kpi-sub">${activeCourses > 0 ? 'Active' : 'Create your first course'}</div>
+      </div>
+      <div class="adx-kpi" onclick="navigateTo('sessions')">
+        <div class="adx-kpi-label">Sessions</div>
+        <div class="adx-kpi-value">${sessionsData.pagination.total}</div>
+        <div class="adx-kpi-sub ${liveNow > 0 ? 'live' : ''}">${liveNow > 0 ? '<span class="adx-live-dot"></span>' + liveNow + ' live now' : 'None live right now'}</div>
+      </div>
+      <div class="adx-kpi" onclick="navigateTo('quizzes')">
+        <div class="adx-kpi-label">Quizzes</div>
+        <div class="adx-kpi-value">${quizzesCreated}</div>
+        <div class="adx-kpi-sub">${quizzesCreated > 0 ? 'Created' : 'None created yet'}</div>
+      </div>
     </div>
     <div class="quick-actions">
       <button class="btn btn-primary btn-sm" onclick="navigateTo('sessions'); showStartSessionModal()">${sessionsIcon()} Start Session</button>
