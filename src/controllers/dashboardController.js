@@ -36,8 +36,8 @@ const Announcement        = require("../models/Announcement");
 const CorporateAttendance = require("../models/CorporateAttendance");
 const LeaveRequest        = require("../models/LeaveRequest");
 const LeaveBalance        = require("../models/LeaveBalance");
-const PayrollRun          = require("../models/PayrollRun");
-const PaySlip             = require("../models/PaySlip");
+const AttendanceSummaryRun = require("../models/AttendanceSummaryRun");
+const AttendanceSummary    = require("../models/AttendanceSummary");
 const Goal                = require("../models/Goal");
 const TrainingProgress    = require("../models/TrainingProgress");
 
@@ -205,10 +205,10 @@ exports.corporateOverview = async (req, res) => {
       ? Math.round(((todayStats.present + todayStats.late) / totalEmployees) * 1000) / 10
       : 0;
 
-    // ── Latest payroll run ─────────────────────────────────────────────────
-    const latestRun = await PayrollRun.findOne({ company })
+    // ── Latest attendance summary run ──────────────────────────────────────
+    const latestRun = await AttendanceSummaryRun.findOne({ company })
       .sort({ year: -1, month: -1 })
-      .select("year month status totalGross totalNet employeeCount approvedAt paidAt")
+      .select("year month status employeeCount finalizedAt")
       .lean();
 
     // ── Leave stats (this month + pending) ─────────────────────────────────
@@ -275,7 +275,7 @@ exports.corporateOverview = async (req, res) => {
         ...todayStats,
         percentClockedIn: clockedIn,
       },
-      payrollSummary: latestRun,
+      attendanceSummary: latestRun,
       leaveStats: {
         pendingRequests:  pendingLeaves,
         approvedThisMonth,
@@ -542,10 +542,10 @@ exports.employeeDashboard = async (req, res) => {
       LeaveRequest.countDocuments({ company, employee: employeeId, status: "pending" }),
     ]);
 
-    // ── Latest payslip ─────────────────────────────────────────────────────
-    const latestSlip = await PaySlip.findOne({ company, employee: employeeId })
+    // ── Latest attendance summary ──────────────────────────────────────────
+    const latestSummary = await AttendanceSummary.findOne({ company, employee: employeeId })
       .sort({ year: -1, month: -1 })
-      .select("year month grossPay netPay status currency")
+      .select("year month daysPresent hoursWorked overtimeHours status")
       .lean();
 
     // ── Training modules ───────────────────────────────────────────────────
@@ -597,7 +597,7 @@ exports.employeeDashboard = async (req, res) => {
         remaining:   b.entitlement + (b.carryover || 0) + (b.adjustments || 0) - b.used - b.pending,
       })),
       pendingLeaveRequests: pendingLeaves,
-      latestPayslip:        latestSlip,
+      latestAttendanceSummary: latestSummary,
       training,
       activeGoals:          goals,
     });

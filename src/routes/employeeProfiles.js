@@ -19,8 +19,13 @@
  * Access rules:
  *   - admin/manager can read any profile in their company
  *   - employee can only read/edit their own profile (limited fields)
- *   - sensitive fields (salary band, national ID, notes) are hidden from
- *     non-admin employees in their own profile view
+ *   - sensitive fields (national ID, notes) are hidden from non-admin
+ *     employees in their own profile view
+ *
+ * Dikly does not store compensation data (salary, pay rate, currency) --
+ * that stays in the company's own payroll system. See AttendanceSummary
+ * (routes/attendanceSummary.js) for what Dikly exports instead: hours,
+ * attendance, and leave data only, never pay amounts.
  */
 
 const express = require("express");
@@ -37,7 +42,7 @@ const canManage = requireRole("admin", "manager", "superadmin");
 
 // Fields an employee is NOT allowed to edit on their own profile
 const SENSITIVE_FIELDS = new Set([
-  "salaryBand", "monthlySalary", "hourlyRate", "nationalId", "notes",
+  "nationalId", "notes",
   "terminationDate", "terminationReason",
   "hireDate", "probationEndDate", "employmentType",
 ]);
@@ -67,9 +72,6 @@ router.get("/my", ...mw, async (req, res) => {
     const isAdmin = ["admin", "superadmin"].includes(req.user.role);
     const obj = profile.toObject();
     if (!isAdmin) {
-      delete obj.salaryBand;
-      delete obj.monthlySalary;
-      delete obj.hourlyRate;
       delete obj.nationalId;
       delete obj.notes;
     }
@@ -116,7 +118,6 @@ router.post("/", ...mw, adminOnly, async (req, res) => {
     const {
       jobTitle, employmentType, hireDate, probationEndDate,
       departmentRef, teamRef, branchRef, manager,
-      salaryBand, currency,
       dateOfBirth, gender, nationality, nationalId, address, city, country,
       workPhone, workEmail, emergencyContact,
       notes,
@@ -135,8 +136,6 @@ router.post("/", ...mw, adminOnly, async (req, res) => {
           teamRef:        teamRef       || null,
           branchRef:      branchRef     || null,
           manager:        manager       || null,
-          salaryBand:     salaryBand    || "",
-          currency:       currency      || "GHS",
           dateOfBirth:    dateOfBirth ? new Date(dateOfBirth) : null,
           gender:         gender        || "",
           nationality:    nationality   || "",
@@ -190,7 +189,6 @@ router.get("/:userId", ...mw, async (req, res) => {
     const isAdmin = ["admin", "superadmin"].includes(req.user.role);
     const obj = profile.toObject({ virtuals: true });
     if (!isAdmin && isSelf) {
-      delete obj.salaryBand;
       delete obj.nationalId;
       delete obj.notes;
     }
@@ -217,7 +215,6 @@ router.patch("/:userId", ...mw, async (req, res) => {
       "jobTitle", "employmentType", "hireDate", "probationEndDate",
       "terminationDate", "terminationReason",
       "departmentRef", "teamRef", "branchRef", "manager",
-      "salaryBand", "currency",
       "dateOfBirth", "gender", "nationality", "nationalId",
       "address", "city", "country",
       "workPhone", "workEmail", "emergencyContact",
