@@ -81,11 +81,17 @@ function isLocalIp(ip) {
   return ip === "127.0.0.1" || ip === "::1" || ip === "" || ip == null || ip.startsWith("192.168.") || ip.startsWith("10.");
 }
 
+// Our own nginx reverse proxy always appends exactly one hop to
+// X-Forwarded-For ($proxy_add_x_forwarded_for), and many legitimate mobile
+// carriers add one more via a transparent data-compression proxy -- neither
+// indicates a user-installed VPN. Only flag chains deeper than that, and
+// only when explicit proxy headers are present too.
+const EXPECTED_PROXY_HOPS = 2;
+
 function detectProxy(req) {
   if (req.headers["via"] || req.headers["proxy-connection"]) return true;
-  // Multiple hops in x-forwarded-for beyond what the server's own proxy adds
   const fwd = (req.headers["x-forwarded-for"] || "").split(",").map(s => s.trim()).filter(Boolean);
-  return fwd.length > 1;
+  return fwd.length > EXPECTED_PROXY_HOPS;
 }
 
 function haversineMeters(lat1, lng1, lat2, lng2) {
@@ -186,8 +192,10 @@ function evaluateAttempt({ req, user, body, settings, lastEvent, eventType = "cl
     message = `${eventType === "clock_out" ? "Clock-out" : "Clock-in"} is only allowed between ${settings[startKey]} and ${settings[endKey]}.`;
   }
 
-  // 2. VPN / proxy
-  if (!blocked && !ipIsLocal && detectProxy(req)) {
+  // 2. VPN / proxy -- opt-in only (see detectProxy comment: header-hop
+  // heuristics are unreliable and false-positive on ordinary mobile
+  // networks, so this stays off unless the company explicitly enables it).
+  if (!blocked && settings?.vpnCheckEnabled && !ipIsLocal && detectProxy(req)) {
     flags.push("vpn");
     blocked = true; reason = "vpn_detected";
     message = "VPN or proxy detected. Disable it and try again.";

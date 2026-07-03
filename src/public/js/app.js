@@ -18964,6 +18964,12 @@ async function _caLoadSettings() {
           <input type="checkbox" id="cas-strict" ${s.strictAttendance ? 'checked' : ''} style="width:18px;height:18px;cursor:pointer">
         </div>
 
+        <div style="display:flex;align-items:center;gap:10px;margin-bottom:6px">
+          <label style="font-size:13px;font-weight:600">Block VPN / Proxy Connections</label>
+          <input type="checkbox" id="cas-vpn" ${s.vpnCheckEnabled ? 'checked' : ''} style="width:18px;height:18px;cursor:pointer">
+        </div>
+        <div style="font-size:11px;color:var(--text-light);margin-bottom:18px">Off by default — some mobile carriers route traffic through a proxy for entirely legitimate reasons, so this can false-positive and block real employees on mobile data. Only enable if you've confirmed it's not blocking your team.</div>
+
         <div class="form-group">
           <label style="font-size:11px;font-weight:700;text-transform:uppercase;color:var(--text-light)">Office WiFi Public IPs</label>
           <input type="text" id="cas-ips" value="${(s.allowedWifiIPs || []).join(', ')}"
@@ -19130,6 +19136,7 @@ async function _caDetectMyLocation() {
 
 async function _caSaveSettings() {
   const strict = document.getElementById('cas-strict')?.checked ?? false;
+  const vpn    = document.getElementById('cas-vpn')?.checked ?? false;
   const ipsRaw = document.getElementById('cas-ips')?.value || '';
   const lat    = document.getElementById('cas-lat')?.value;
   const lng    = document.getElementById('cas-lng')?.value;
@@ -19139,6 +19146,7 @@ async function _caSaveSettings() {
       method: 'PATCH',
       body: JSON.stringify({
         strictAttendance:     strict,
+        vpnCheckEnabled:      vpn,
         allowedWifiIPs:       ipsRaw.split(',').map(s => s.trim()).filter(Boolean),
         officeLatitude:       lat  ? parseFloat(lat)  : null,
         officeLongitude:      lng  ? parseFloat(lng)  : null,
@@ -19175,26 +19183,26 @@ async function renderCorpClockSettings() {
         <p style="font-size:12px;color:var(--text-light);margin-bottom:18px">Employees can only clock in when on company WiFi AND inside the office geofence.</p>
         <div style="display:flex;align-items:center;justify-content:space-between;padding:12px 0;border-bottom:1px solid var(--border)">
           <div>
-            <div style="font-weight:600;font-size:13px">Require Company WiFi</div>
-            <div style="font-size:11px;color:var(--text-light)">Employees must be on the company IP range to clock in</div>
+            <div style="font-weight:600;font-size:13px">Enable Strict Attendance</div>
+            <div style="font-size:11px;color:var(--text-light)">Requires company WiFi (if IPs are listed below) and enforces the geofence</div>
           </div>
           <label style="display:flex;align-items:center;gap:8px;cursor:pointer">
-            <input type="checkbox" id="cas-require-wifi" ${s.requireWifi ? 'checked' : ''} style="width:16px;height:16px;cursor:pointer">
+            <input type="checkbox" id="cas-strict" ${s.strictAttendance ? 'checked' : ''} style="width:16px;height:16px;cursor:pointer">
           </label>
         </div>
         <div style="display:flex;align-items:center;justify-content:space-between;padding:12px 0;border-bottom:1px solid var(--border)">
           <div>
-            <div style="font-weight:600;font-size:13px">Require Geofence</div>
-            <div style="font-size:11px;color:var(--text-light)">Employees must be within the office location radius</div>
+            <div style="font-weight:600;font-size:13px">Block VPN / Proxy Connections</div>
+            <div style="font-size:11px;color:var(--text-light)">Off by default — some mobile carriers proxy traffic for legitimate reasons, so this can false-positive and block real employees on mobile data</div>
           </div>
           <label style="display:flex;align-items:center;gap:8px;cursor:pointer">
-            <input type="checkbox" id="cas-require-geo" ${s.requireGeofence ? 'checked' : ''} style="width:16px;height:16px;cursor:pointer">
+            <input type="checkbox" id="cas-vpn" ${s.vpnCheckEnabled ? 'checked' : ''} style="width:16px;height:16px;cursor:pointer">
           </label>
         </div>
         <div style="padding:12px 0;border-bottom:1px solid var(--border)">
           <div style="font-weight:600;font-size:13px;margin-bottom:6px">Allowed IP Addresses</div>
-          <div style="font-size:11px;color:var(--text-light);margin-bottom:8px">Comma-separated list of allowed IPs (leave blank to allow all)</div>
-          <input id="cas-ips" value="${esc((s.allowedIPs||[]).join(', '))}" placeholder="e.g. 192.168.1.1, 10.0.0.1" style="width:100%;padding:8px 10px;border:1px solid var(--border);border-radius:6px;font-size:13px;font-family:monospace">
+          <div style="font-size:11px;color:var(--text-light);margin-bottom:8px">Comma-separated list of allowed IPs (leave blank to allow all, only enforced when Strict Attendance is on)</div>
+          <input id="cas-ips" value="${esc((s.allowedWifiIPs||[]).join(', '))}" placeholder="e.g. 192.168.1.1, 10.0.0.1" style="width:100%;padding:8px 10px;border:1px solid var(--border);border-radius:6px;font-size:13px;font-family:monospace">
           <div style="margin-top:6px;display:flex;align-items:center;gap:8px;font-size:12px;color:var(--text-muted)">
             My current IP: <strong id="cas-myip">—</strong>
             <button onclick="_caDetectMyIP(true)" style="background:#f1f5f9;border:none;border-radius:6px;padding:2px 8px;font-size:11px;cursor:pointer">Detect &amp; Add</button>
@@ -19202,15 +19210,15 @@ async function renderCorpClockSettings() {
         </div>
         <div style="padding:12px 0">
           <div style="font-weight:600;font-size:13px;margin-bottom:6px">Geofence</div>
-          <div style="font-size:11px;color:var(--text-light);margin-bottom:8px">Stand at the office location, then detect — this sets the exact anti-cheat boundary employees must be inside to clock in.</div>
+          <div style="font-size:11px;color:var(--text-light);margin-bottom:8px">Stand at the office location, then detect — this sets the exact anti-cheat boundary employees must be inside to clock in. Enforced automatically whenever latitude/longitude are set below.</div>
           <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:8px">
             <div>
               <label style="font-size:11px;font-weight:700;text-transform:uppercase;color:var(--text-muted)">Latitude</label>
-              <input id="cas-lat" type="number" step="any" value="${s.geofence?.lat||''}" placeholder="e.g. 5.6037" style="width:100%;padding:8px;border:1px solid var(--border);border-radius:6px;font-size:13px">
+              <input id="cas-lat" type="number" step="any" value="${s.officeLatitude??''}" placeholder="e.g. 5.6037" style="width:100%;padding:8px;border:1px solid var(--border);border-radius:6px;font-size:13px">
             </div>
             <div>
               <label style="font-size:11px;font-weight:700;text-transform:uppercase;color:var(--text-muted)">Longitude</label>
-              <input id="cas-lng" type="number" step="any" value="${s.geofence?.lng||''}" placeholder="e.g. -0.1870" style="width:100%;padding:8px;border:1px solid var(--border);border-radius:6px;font-size:13px">
+              <input id="cas-lng" type="number" step="any" value="${s.officeLongitude??''}" placeholder="e.g. -0.1870" style="width:100%;padding:8px;border:1px solid var(--border);border-radius:6px;font-size:13px">
             </div>
           </div>
           <div style="display:flex;align-items:center;gap:8px;margin-bottom:12px">
@@ -19219,7 +19227,7 @@ async function renderCorpClockSettings() {
           </div>
           <div>
             <label style="font-size:11px;font-weight:700;text-transform:uppercase;color:var(--text-muted)">Radius (metres)</label>
-            <input id="cas-radius" type="number" value="${s.geofence?.radius||100}" placeholder="100" style="width:120px;padding:8px;border:1px solid var(--border);border-radius:6px;font-size:13px">
+            <input id="cas-radius" type="number" value="${s.geofenceRadiusMeters||150}" placeholder="150" style="width:120px;padding:8px;border:1px solid var(--border);border-radius:6px;font-size:13px">
           </div>
         </div>
         <button class="btn btn-primary" onclick="_caSaveSettings()" style="margin-top:8px">Save Attendance Settings</button>
@@ -19232,17 +19240,17 @@ async function renderCorpClockSettings() {
           <div>
             <div style="font-weight:700;font-size:13px;margin-bottom:8px;color:#0891b2">Clock-In Window</div>
             <div style="display:flex;gap:8px;align-items:center;margin-bottom:6px">
-              <input type="time" id="cw-ci-start" value="${win.clockIn?.start||''}" style="flex:1;padding:7px;border:1px solid var(--border);border-radius:6px;font-size:13px">
+              <input type="time" id="cw-in-start" value="${win.clockInStart||''}" style="flex:1;padding:7px;border:1px solid var(--border);border-radius:6px;font-size:13px">
               <span style="color:var(--text-muted)">to</span>
-              <input type="time" id="cw-ci-end"   value="${win.clockIn?.end  ||''}" style="flex:1;padding:7px;border:1px solid var(--border);border-radius:6px;font-size:13px">
+              <input type="time" id="cw-in-end"   value="${win.clockInEnd  ||''}" style="flex:1;padding:7px;border:1px solid var(--border);border-radius:6px;font-size:13px">
             </div>
           </div>
           <div>
             <div style="font-weight:700;font-size:13px;margin-bottom:8px;color:#7c3aed">Clock-Out Window</div>
             <div style="display:flex;gap:8px;align-items:center;margin-bottom:6px">
-              <input type="time" id="cw-co-start" value="${win.clockOut?.start||''}" style="flex:1;padding:7px;border:1px solid var(--border);border-radius:6px;font-size:13px">
+              <input type="time" id="cw-out-start" value="${win.clockOutStart||''}" style="flex:1;padding:7px;border:1px solid var(--border);border-radius:6px;font-size:13px">
               <span style="color:var(--text-muted)">to</span>
-              <input type="time" id="cw-co-end"   value="${win.clockOut?.end  ||''}" style="flex:1;padding:7px;border:1px solid var(--border);border-radius:6px;font-size:13px">
+              <input type="time" id="cw-out-end"   value="${win.clockOutEnd  ||''}" style="flex:1;padding:7px;border:1px solid var(--border);border-radius:6px;font-size:13px">
             </div>
           </div>
         </div>
