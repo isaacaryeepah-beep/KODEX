@@ -102,6 +102,27 @@ const _notifSound = (() => {
       });
     } catch (_) {}
   }
+  // Mobile browsers (Safari especially) block AudioContext.resume() unless
+  // it's called from within a real user-gesture handler -- calling it later
+  // from an SSE push (see startSSE's onmessage) doesn't count, so a chime
+  // triggered by a notification that arrives before the user has tapped
+  // anything on the page silently never plays. Priming the context on the
+  // very first tap/click/keypress anywhere fixes that for the rest of the
+  // session, before any real notification needs to use it.
+  let _primed = false;
+  function _primeOnGesture() {
+    if (_primed) return;
+    _primed = true;
+    try {
+      const ctx = _getCtx();
+      if (ctx.state === 'suspended') ctx.resume();
+    } catch (_) {}
+    window.removeEventListener('pointerdown', _primeOnGesture);
+    window.removeEventListener('keydown', _primeOnGesture);
+  }
+  window.addEventListener('pointerdown', _primeOnGesture, { once: true });
+  window.addEventListener('keydown', _primeOnGesture, { once: true });
+
   function isMuted() { return localStorage.getItem('dikly_sound_muted') === '1'; }
   function toggleMute() {
     const muted = isMuted();
@@ -302,6 +323,13 @@ async function _notifPanelClick(id, link) {
     return;
   }
   if (url.pathname === '/profile') { navigateTo('profile'); return; }
+  if (url.pathname.startsWith('/leaves/')) {
+    // Reviewers land on the review queue; the requester lands on their own history.
+    const reviewerRoles = ['manager', 'admin', 'superadmin', 'hod'];
+    navigateTo(reviewerRoles.includes(currentUser?.role) ? 'leave-requests' : 'my-leaves');
+    return;
+  }
+  if (url.pathname.startsWith('/announcements/')) { navigateTo('announcements'); return; }
   location.href = link;
 }
 
