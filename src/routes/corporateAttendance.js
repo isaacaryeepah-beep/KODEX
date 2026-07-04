@@ -152,6 +152,21 @@ function hoursWorked(clockInTime, clockOutTime) {
   return Math.max(0, Math.round((ms / 3_600_000) * 100) / 100); // 2 decimal places
 }
 
+/**
+ * Check `at` (a Date) falls within a company-configured "HH:MM"-"HH:MM"
+ * clock-in/out window. Returns true (unrestricted) if either bound is unset
+ * — this is what corporateSettings.clockInStart/clockInEnd/clockOutStart/
+ * clockOutEnd document, but until now nothing actually enforced them.
+ */
+function withinClockWindow(at, startHHMM, endHHMM) {
+  if (!startHHMM || !endHHMM) return true;
+  const [sh, sm] = startHHMM.split(":").map(Number);
+  const [eh, em] = endHHMM.split(":").map(Number);
+  const start = new Date(at); start.setHours(sh, sm, 0, 0);
+  const end   = new Date(at); end.setHours(eh, em, 59, 999);
+  return at >= start && at <= end;
+}
+
 // ---------------------------------------------------------------------------
 // GET /my  — employee's own records
 // ---------------------------------------------------------------------------
@@ -200,6 +215,13 @@ router.post("/clock-in", ...mw, async (req, res) => {
     // Settings (used for geofence + WiFi + time windows)
     const company  = await Company.findById(req.user.company).select("corporateSettings").lean();
     const settings = company?.corporateSettings || {};
+
+    if (!withinClockWindow(now, settings.clockInStart, settings.clockInEnd)) {
+      return res.status(403).json({
+        error: `Clock-in is only allowed between ${settings.clockInStart} and ${settings.clockInEnd}.`,
+        reason: "outside_clock_window", blocked: true,
+      });
+    }
 
     // Anti-cheat evaluation
     const evalResult = antiCheat.evaluateAttempt({
@@ -334,6 +356,13 @@ router.post("/clock-out", ...mw, async (req, res) => {
 
     const company  = await Company.findById(req.user.company).select("corporateSettings").lean();
     const settings = company?.corporateSettings || {};
+
+    if (!withinClockWindow(now, settings.clockOutStart, settings.clockOutEnd)) {
+      return res.status(403).json({
+        error: `Clock-out is only allowed between ${settings.clockOutStart} and ${settings.clockOutEnd}.`,
+        reason: "outside_clock_window", blocked: true,
+      });
+    }
 
     // Anti-cheat (clock-out is also strict — same rules apply)
     const evalResult = antiCheat.evaluateAttempt({
