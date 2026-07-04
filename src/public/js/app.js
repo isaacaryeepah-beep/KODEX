@@ -17947,17 +17947,23 @@ function buildBottomNav(role) {
   // Priority items per role — most-used actions shown directly in bottom bar
   // Everything else is accessible via the sidebar (More button)
   const PRIORITY = {
+    // Corporate mode has no "sessions" (that's the academic QR/BLE session
+    // concept) -- employees clock in/out individually, viewed on the
+    // corp-attendance page. Pointing the bottom nav at 'sessions' here used
+    // to land admins/managers on the academic sessions page, always empty
+    // ("No sessions found") for a corporate company no matter how many
+    // employees had actually clocked in.
     admin: currentUser?.company?.mode === 'academic'
       ? ['dashboard', 'sessions', 'quizzes', 'reports']
-      : ['dashboard', 'sessions', 'users', 'reports'],
-    manager:    ['dashboard', 'sessions', 'reports', 'users'],
+      : ['dashboard', 'corp-attendance', 'users', 'reports'],
+    manager:    ['dashboard', 'corp-attendance', 'reports', 'users'],
     lecturer:   ['dashboard', 'sessions', 'quizzes', 'assignments'],
     hod:        ['hod-overview', 'hod-courses', 'hod-lecturers', 'hod-reports'],
     employee:   ['dashboard', 'sign-in-out', 'my-attendance', 'reports'],
     student:    ['dashboard', 'mark-attendance', 'quizzes', 'assignments'],
     superadmin: currentUser?.company?.mode === 'academic'
       ? ['dashboard', 'sessions', 'quizzes', 'reports']
-      : ['dashboard', 'sessions', 'users', 'reports'],
+      : ['dashboard', 'corp-attendance', 'users', 'reports'],
   };
 
   const ICONS = {
@@ -17968,6 +17974,7 @@ function buildBottomNav(role) {
     reports:         '<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/>',
     subscription:    '<rect x="1" y="4" width="22" height="16" rx="2"/><line x1="1" y1="10" x2="23" y2="10"/>',
     users:           '<path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/>',
+    'corp-attendance': '<path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/><polyline points="9 11 12 14 22 4"/>',
     'sign-in-out':   '<polyline points="9 11 12 14 22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/>',
     'my-attendance': '<circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>',
     'mark-attendance':'<polyline points="9 11 12 14 22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/>',
@@ -17997,7 +18004,7 @@ function buildBottomNav(role) {
   const LABELS = {
     'hod-overview': 'Overview', 'hod-sessions': 'Sessions', 'hod-courses': 'Courses', 'hod-lecturers': 'Lecturers', 'hod-lecturer-activity': 'Lecturer Activity', 'admin-lecturer-activity': 'Lecturer Activity',
     'hod-students': 'Students', 'hod-reports': 'Reports',
-    'sign-in-out': 'Sign In/Out', 'my-attendance': 'Attendance',
+    'sign-in-out': 'Sign In/Out', 'my-attendance': 'Attendance', 'corp-attendance': 'Attendance',
     'mark-attendance': 'Attendance', subscription: 'Subscribe',
     announcements: 'Notices', assignments: 'Assignment',
     quizzes: 'Proctored/Snap Quiz',
