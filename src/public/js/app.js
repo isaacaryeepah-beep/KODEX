@@ -24656,6 +24656,8 @@ async function renderCompanySettings() {
   let st;
   try { st = (await api('/api/advanced/company-settings')).settings || {}; }
   catch (e) { content.innerHTML += `<div class="card" style="padding:1rem;color:var(--error)">${esc(e.message)}</div>`; return; }
+  let selfReg = { enabled: false, institutionCode: '' };
+  try { selfReg = await api('/api/approvals/self-registration'); } catch (_) {}
 
   const TZS = ['Africa/Accra','Africa/Lagos','Africa/Nairobi','Africa/Johannesburg','Africa/Cairo','Europe/London','America/New_York','Asia/Dubai'];
   const holidayRow = (h, i) => `
@@ -24697,9 +24699,52 @@ async function renderCompanySettings() {
         <div id="cs-locations">${(st.officeLocations || []).map(locationRow).join('')}</div>
         <button class="btn btn-sm btn-ghost" onclick="document.getElementById('cs-locations').insertAdjacentHTML('beforeend', \`${locationRow(null).replace(/`/g, '\\`')}\`)">+ Add location</button>
       </div>
+      <div class="card" style="padding:1.2rem">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:.4rem">
+          <div style="font-weight:700">New user self-registration</div>
+          <label style="position:relative;display:inline-block;width:40px;height:22px;flex-shrink:0">
+            <input type="checkbox" id="cs-selfreg" ${selfReg.enabled ? 'checked' : ''} onchange="_csToggleSelfReg(this)" style="opacity:0;width:0;height:0">
+            <span id="cs-selfreg-track" style="position:absolute;inset:0;background:${selfReg.enabled ? 'var(--primary)' : 'var(--border)'};border-radius:22px;transition:background .18s ease;cursor:pointer" onclick="document.getElementById('cs-selfreg').click()"></span>
+            <span id="cs-selfreg-knob" style="position:absolute;top:2px;left:${selfReg.enabled ? '20px' : '2px'};width:18px;height:18px;background:#fff;border-radius:50%;transition:left .18s ease;box-shadow:0 1px 3px rgba(0,0,0,.3);pointer-events:none"></span>
+          </label>
+        </div>
+        <div style="font-size:.78rem;color:var(--text-muted);margin-bottom:.7rem">
+          When on, anyone with your institution code can create their own account at <code>/register.html</code> and will show up under Pending Approvals. When off, only admins/managers can add new users.
+        </div>
+        <div id="cs-selfreg-status" style="font-size:.78rem;font-weight:600;color:${selfReg.enabled ? 'var(--success, #16a34a)' : 'var(--text-light)'}">${selfReg.enabled ? 'Open — registration is currently accepting new users' : 'Closed — new users cannot self-register'}</div>
+        ${selfReg.institutionCode ? `
+        <div style="margin-top:.7rem;display:flex;align-items:center;gap:.5rem">
+          <span style="font-size:.75rem;color:var(--text-light)">Institution code:</span>
+          <code style="font-weight:700;letter-spacing:.5px">${esc(selfReg.institutionCode)}</code>
+          <button class="btn btn-sm btn-ghost" onclick="navigator.clipboard.writeText('${esc(selfReg.institutionCode)}').then(()=>toastSuccess('Code copied'))">Copy</button>
+        </div>` : ''}
+      </div>
     </div>
     <div style="margin-top:1rem"><button class="btn btn-primary" onclick="_csSave()">Save settings</button></div>`;
 }
+window._csToggleSelfReg = async function(checkbox) {
+  const enabled = checkbox.checked;
+  const track = document.getElementById('cs-selfreg-track');
+  const knob = document.getElementById('cs-selfreg-knob');
+  const status = document.getElementById('cs-selfreg-status');
+  checkbox.disabled = true;
+  try {
+    const res = await api('/api/approvals/self-registration', { method: 'PATCH', body: JSON.stringify({ enabled }) });
+    checkbox.checked = !!res.enabled;
+    if (track) track.style.background = res.enabled ? 'var(--primary)' : 'var(--border)';
+    if (knob) knob.style.left = res.enabled ? '20px' : '2px';
+    if (status) {
+      status.textContent = res.enabled ? 'Open — registration is currently accepting new users' : 'Closed — new users cannot self-register';
+      status.style.color = res.enabled ? 'var(--success, #16a34a)' : 'var(--text-light)';
+    }
+    toastSuccess(res.enabled ? 'Self-registration is now open' : 'Self-registration is now closed');
+  } catch (e) {
+    checkbox.checked = !enabled;
+    toastError(e.message);
+  } finally {
+    checkbox.disabled = false;
+  }
+};
 window._csSave = async function() {
   const publicHolidays = [...document.querySelectorAll('[data-holiday]')].map(r => ({
     name: r.querySelector('[data-h-name]')?.value?.trim(),
