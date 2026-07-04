@@ -25653,7 +25653,12 @@ async function _updateNavBadges() {
     const unread = Array.isArray(convs) ? convs.reduce((n, c) => n + (c.unread || c.unreadCount || 0), 0) : 0;
     _setNavBadge('messages', unread);
   } catch (_) {}
-  // Approvals: corporate admins/managers — reuse the executive snapshot (cached 2 min)
+  // Approvals: corporate admins/managers — must match what the Approvals
+  // page itself counts (pending employee/manager registrations via
+  // /api/approvals/pending), not the executive dashboard's `pendingApprovals`
+  // KPI, which is a sum of pending leave + expense + timesheet requests --
+  // a different thing entirely that just happens to share the name. Using
+  // that here made the sidebar badge disagree with the page it labels.
   try {
     if (currentUser?.company?.mode === 'corporate' && ['admin', 'superadmin', 'manager'].includes(currentUser.role)) {
       const cacheKey = 'dikly_approvals_badge';
@@ -25661,8 +25666,8 @@ async function _updateNavBadges() {
       let count;
       if (cached && Date.now() - cached.at < 120000) count = cached.count;
       else {
-        const d = await api('/api/executive/dashboard');
-        count = d.kpis?.pendingApprovals || 0;
+        const d = await api('/api/approvals/pending');
+        count = (d.pending || []).length;
         sessionStorage.setItem(cacheKey, JSON.stringify({ count, at: Date.now() }));
       }
       _setNavBadge('approvals', count);
