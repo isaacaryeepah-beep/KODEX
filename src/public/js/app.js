@@ -9061,34 +9061,38 @@ function _renderUsersCorporateTable(content, allUsers, filterRole='', filterDept
           <button class="btn btn-danger btn-sm" onclick="bulkUserAction('delete')">Delete</button>
         </div>`:''}
     </div>
-    ${users.length?`<div class="table-scroll-hint">⟷ Swipe to see status &amp; actions</div>`:''}
-    <div class="card" style="padding:0;overflow:hidden">
-      ${users.length?`
-        <table>
-          <thead><tr>
-            ${canManage?'<th class="sticky-col-1" style="width:40px"><input type="checkbox" id="select-all-users" onchange="toggleSelectAllUsers()"></th>':''}
-            <th class="${canManage?'sticky-col-2':'sticky-col-1'}">Name</th><th>Employee ID</th><th>Email</th><th>Role</th><th>Status</th>
-            ${canManage?'<th>Actions</th>':''}
-          </tr></thead>
-          <tbody>${users.map(u=>`
-            <tr id="user-row-${u._id}">
-              ${canManage?`<td class="sticky-col-1">${canActOn(u)?`<input type="checkbox" class="user-checkbox" value="${u._id}" onchange="updateBulkActions()">`:''}</td>`:''}
-              <td class="${canManage?'sticky-col-2':'sticky-col-1'}" style="font-weight:500">${esc(u.name)}</td>
-              <td style="font-size:12px;color:var(--text-muted)">${esc(u.employeeId||'—')}</td>
-              <td style="font-size:12px;color:var(--text-muted)">${esc(u.email||'—')}</td>
-              <td><span class="role-badge role-${u.role}">${u.role}</span>${u.department?`<span style="font-size:10px;margin-left:5px;padding:2px 6px;border-radius:20px;background:#ecfeff;color:#0891b2;font-weight:600">${esc(u.department)}</span>`:''}</td>
-              <td><span class="status-badge ${u.isActive?'status-active':'status-stopped'}">${u.isActive?'Active':'Inactive'}</span></td>
-              ${canManage?`<td style="white-space:nowrap">${canActOn(u)?`
-                <button class="btn btn-sm" style="background:#4f6ef7;color:#fff;font-size:11px" onclick="showEditUserModal('${u._id}')">Edit</button>
-                ${_hrButtonHtml(u)}
-                ${u.isActive?`<button class="btn btn-sm" style="background:#f59e0b;color:#fff;font-size:11px" onclick="deactivateUser('${u._id}')">Deactivate</button>`:`<button class="btn btn-sm" style="background:#22c55e;color:#fff;font-size:11px" onclick="activateUser('${u._id}')">Activate</button>`}
-                <button class="btn btn-sm" style="background:#6366f1;color:#fff;font-size:11px" onclick="adminResetStudentPassword('${u._id}',this)">🔑 Reset</button>
-                <button class="btn btn-danger btn-sm" style="font-size:11px" onclick="deleteUserPermanently('${u._id}',this)">Delete</button>
-              `:'—'}</td>`:''}
-            </tr>`).join('')}
-          </tbody>
-        </table>
-      `:`<div class="empty-state"><p>No users found</p></div>`}
+    ${canManage && users.some(canActOn)?`
+      <label class="adx-user-selectall">
+        <input type="checkbox" id="select-all-users" onchange="toggleSelectAllUsers()">
+        <span>Select all</span>
+      </label>`:''}
+    <div class="adx-user-list">
+      ${users.length?users.map(u=>{
+        const actionable = canManage && canActOn(u);
+        return `
+        <div class="adx-user-card" id="user-row-${u._id}">
+          <div class="adx-user-card-main">
+            ${actionable?`<input type="checkbox" class="user-checkbox adx-user-check" value="${u._id}" onchange="updateBulkActions()">`:''}
+            ${_avatarHtml(u.profilePhoto, u.name, 38)}
+            <div class="adx-user-info">
+              <div class="adx-user-name">
+                ${esc(u.name)}
+                <span class="role-badge role-${u.role}">${u.role}</span>
+                ${u.department?`<span class="adx-user-dept">${esc(u.department)}</span>`:''}
+              </div>
+              <div class="adx-user-sub">${esc(u.email||'—')}${u.employeeId?` · ID ${esc(u.employeeId)}`:''}</div>
+            </div>
+            <span class="adx-status-pill ${u.isActive?'live':'ended'}">${u.isActive?'Active':'Inactive'}</span>
+          </div>
+          ${canManage?`<div class="adx-user-card-actions">${actionable?`
+            <button class="adx-row-btn" onclick="showEditUserModal('${u._id}')">Edit</button>
+            ${_hrButtonHtml(u)}
+            ${u.isActive?`<button class="adx-row-btn" style="color:#b54708" onclick="deactivateUser('${u._id}')">Deactivate</button>`:`<button class="adx-row-btn" style="color:#067647" onclick="activateUser('${u._id}')">Activate</button>`}
+            <button class="adx-row-btn" onclick="adminResetStudentPassword('${u._id}',this)">🔑 Reset</button>
+            <button class="adx-row-btn" style="color:#b42318" onclick="deleteUserPermanently('${u._id}',this)">Delete</button>
+          `:'<span class="adx-user-noaction">No permission to manage this user</span>'}</div>`:''}
+        </div>`;
+      }).join(''):`<div class="empty-state"><p>No users found</p></div>`}
     </div>
   `;
   _applyUsersHighlight();

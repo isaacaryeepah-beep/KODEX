@@ -6885,6 +6885,41 @@ table tr:hover td { background: #f8fafc !important; }
 [data-theme="dark"] .adx-kpi-hint { background: #1a2130; }
 [data-theme="dark"] .adx-session-row { border-color: #1c2432; }
 
+/* ── User management cards (replaces the old horizontal-scroll table) ── */
+.adx-user-selectall {
+  display: inline-flex; align-items: center; gap: 7px;
+  font-size: 12.5px; font-weight: 600; color: var(--text-light, #6b7280);
+  margin-bottom: 10px; cursor: pointer; user-select: none;
+}
+.adx-user-selectall input { width: 15px; height: 15px; cursor: pointer; margin: 0; }
+.adx-user-list { display: flex; flex-direction: column; gap: 10px; }
+.adx-user-card {
+  background: var(--card, #fff); border: 1px solid var(--border, #e5e7eb);
+  border-radius: 14px; padding: 14px 16px; transition: border-color .15s, box-shadow .15s;
+}
+.adx-user-card:hover { border-color: #c7d2fe; box-shadow: 0 2px 10px rgba(16,24,40,.05); }
+.adx-user-card-main { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+.adx-user-check { width: 16px; height: 16px; flex-shrink: 0; cursor: pointer; margin: 0; }
+.adx-user-info { flex: 1; min-width: 160px; }
+.adx-user-name {
+  display: flex; align-items: center; flex-wrap: wrap; gap: 6px;
+  font-size: 13.5px; font-weight: 600; color: var(--text, #111827);
+}
+.adx-user-dept {
+  font-size: 10px; font-weight: 600; padding: 2px 8px; border-radius: 20px;
+  background: #ecfeff; color: #0891b2;
+}
+.adx-user-sub { font-size: 11.5px; color: var(--text-muted, #9ca3af); margin-top: 2px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.adx-user-card-actions {
+  display: flex; flex-wrap: wrap; gap: 6px;
+  margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--bg, #f3f4f6);
+}
+.adx-user-noaction { font-size: 11.5px; color: var(--text-muted, #9ca3af); font-style: italic; }
+[data-theme="dark"] .adx-user-card { background: #141a26; border-color: #232c3d; }
+[data-theme="dark"] .adx-user-card:hover { border-color: #2d3a52; }
+[data-theme="dark"] .adx-user-card-actions { border-color: #1c2432; }
+[data-theme="dark"] .adx-user-dept { background: #10222b; color: #22d3ee; }
+
 /* ══════════════════════════════════════════════════════════════════════
    FLOATING DIKLY AI ASSISTANT (replaces floating Help)
 ══════════════════════════════════════════════════════════════════════ */
