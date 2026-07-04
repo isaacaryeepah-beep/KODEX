@@ -91,68 +91,35 @@ async function renderManagerDashboard(content) {
         </div>` : ''}
 
         <!-- KPI grid -->
-        <div class="stats-grid" style="margin:0">
-          <div class="stat-card-v2" onclick="navigateTo('users')">
-            <div class="stat-top-bar" style="background:#3b82f6"></div>
-            <div class="stat-header">
-              <span class="stat-label">Total Employees</span>
-              <div class="stat-icon" style="background:#eff6ff">
-                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#3b82f6" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
-              </div>
-            </div>
-            <div class="stat-value">${employees.length}</div>
-            <div class="stat-trend">Active workforce</div>
+        <div class="adx-kpi-grid" style="margin:0">
+          <div class="adx-kpi" onclick="navigateTo('users')">
+            <div class="adx-kpi-label">Total employees</div>
+            <div class="adx-kpi-value">${employees.length}</div>
+            <div class="adx-kpi-sub">Active workforce</div>
           </div>
 
-          <div class="stat-card-v2" onclick="navigateTo('live-attendance')">
-            <div class="stat-top-bar" style="background:#10b981"></div>
-            <div class="stat-header">
-              <span class="stat-label">Active Sessions</span>
-              <div class="stat-icon" style="background:#f0fdf4">
-                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#10b981" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
-              </div>
-            </div>
-            <div class="stat-value">${activeSessions}</div>
-            <div class="stat-trend" style="color:${activeSessions>0?'#10b981':'var(--text-muted)'}">
-              ${activeSessions>0?'<span class="stat-live-dot"></span> Live now':'No active sessions'}
-            </div>
+          <div class="adx-kpi" onclick="navigateTo('live-attendance')">
+            <div class="adx-kpi-label">Active sessions</div>
+            <div class="adx-kpi-value">${activeSessions}</div>
+            <div class="adx-kpi-sub ${activeSessions>0?'live':''}">${activeSessions>0?'<span class="adx-live-dot"></span> Live now':'No active sessions'}</div>
           </div>
 
-
-          <div class="stat-card-v2" onclick="navigateTo('attendance-summary')">
-            <div class="stat-top-bar" style="background:#f59e0b"></div>
-            <div class="stat-header">
-              <span class="stat-label">Hours This Month</span>
-              <div class="stat-icon" style="background:#fffbeb">
-                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#f59e0b" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
-              </div>
-            </div>
-            <div class="stat-value">${totalHours.toFixed(0)}</div>
-            <div class="stat-trend">From approved timesheets</div>
+          <div class="adx-kpi" onclick="navigateTo('attendance-summary')">
+            <div class="adx-kpi-label">Hours this month</div>
+            <div class="adx-kpi-value">${totalHours.toFixed(0)}</div>
+            <div class="adx-kpi-sub">From approved timesheets</div>
           </div>
 
-          <div class="stat-card-v2" onclick="navigateTo('leave-requests')">
-            <div class="stat-top-bar" style="background:#ef4444"></div>
-            <div class="stat-header">
-              <span class="stat-label">Leave Requests</span>
-              <div class="stat-icon" style="background:#fef2f2">
-                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#ef4444" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
-              </div>
-            </div>
-            <div class="stat-value" style="color:${leaves.length>0?'#ef4444':'var(--text)'}">${leaves.length}</div>
-            <div class="stat-trend">Pending review</div>
+          <div class="adx-kpi ${leaves.length>0?'attention':''}" onclick="navigateTo('leave-requests')">
+            <div class="adx-kpi-label">Leave requests</div>
+            <div class="adx-kpi-value">${leaves.length}</div>
+            <div class="adx-kpi-sub ${leaves.length>0?'warn':''}">${leaves.length>0?'Pending review':'All clear'}</div>
           </div>
 
-          <div class="stat-card-v2" onclick="navigateTo('branches')">
-            <div class="stat-top-bar" style="background:#6366f1"></div>
-            <div class="stat-header">
-              <span class="stat-label">Departments</span>
-              <div class="stat-icon" style="background:#eef2ff">
-                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#6366f1" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
-              </div>
-            </div>
-            <div class="stat-value">${depts.length}</div>
-            <div class="stat-trend">Across company</div>
+          <div class="adx-kpi" onclick="navigateTo('branches')">
+            <div class="adx-kpi-label">Departments</div>
+            <div class="adx-kpi-value">${depts.length}</div>
+            <div class="adx-kpi-sub">Across company</div>
           </div>
         </div>
 
