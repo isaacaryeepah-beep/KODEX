@@ -2680,7 +2680,9 @@ function showDashboard(data) {
           </div>
           <div class="sub-banner-right">
             <div class="sub-banner-pill">${urgent ? 'Expiring' : 'Trial'}</div>
-            ${!_isEmployee ? `<button class="sub-banner-cta" onclick="navigateTo('subscription')">${urgent ? 'Subscribe Now' : 'Subscribe'}</button>` : ''}
+            ${!_isEmployee
+              ? `<button class="sub-banner-cta" onclick="navigateTo('subscription')">${urgent ? 'Subscribe Now' : 'Subscribe'}</button>`
+              : `<button class="sub-banner-cta" onclick="navigateTo('messages')">Message Manager</button>`}
           </div>`;
         _bannerEl.style.display = 'flex';
 
@@ -2697,7 +2699,9 @@ function showDashboard(data) {
             </div>
           </div>
           <div class="sub-banner-right">
-            <button class="sub-banner-cta" onclick="navigateTo('subscription')">Subscribe Now</button>
+            ${!_isEmployee
+              ? `<button class="sub-banner-cta" onclick="navigateTo('subscription')">Subscribe Now</button>`
+              : `<button class="sub-banner-cta" onclick="navigateTo('messages')">Message Manager</button>`}
           </div>`;
         _expiredEl.style.display = 'flex';
         // Populate live price asynchronously
