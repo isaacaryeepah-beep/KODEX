@@ -1038,6 +1038,11 @@ exports.login = async (req, res) => {
           name: company.name,
           mode: company.mode,
           institutionCode: company.institutionCode,
+          // Sidebar module visibility (Roles & Permissions page) — without this,
+          // a manager/employee's very first login after permissions are saved
+          // still shows every module until they refresh (which hits /api/auth/me
+          // instead, where this was already included).
+          modulePermissions: company.modulePermissions || null,
         } : null,
         deviceId: user.deviceId,
         lastLoginAt: user.lastLoginAt,
