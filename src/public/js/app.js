@@ -24678,6 +24678,8 @@ async function renderCompanySettings() {
       <input value="${esc(l?.address || '')}" placeholder="Address" style="flex:2;padding:.5rem .7rem;border:1px solid var(--border);border-radius:7px;background:var(--bg);color:var(--text)" data-l-addr />
       <button class="btn btn-sm btn-ghost" onclick="this.parentElement.remove()">✕</button>
     </div>`;
+  window._csAddHoliday = () => document.getElementById('cs-holidays').insertAdjacentHTML('beforeend', holidayRow(null));
+  window._csAddLocation = () => document.getElementById('cs-locations').insertAdjacentHTML('beforeend', locationRow(null));
 
   content.innerHTML = `
     ${_corpHeader('Company Settings', 'Organization-wide configuration')}
@@ -24698,12 +24700,12 @@ async function renderCompanySettings() {
       <div class="card" style="padding:1.2rem">
         <div style="font-weight:700;margin-bottom:.9rem">Public holidays <span style="font-weight:400;font-size:.75rem;color:var(--text-muted)">shown on the calendar</span></div>
         <div id="cs-holidays">${(st.publicHolidays || []).map(holidayRow).join('')}</div>
-        <button class="btn btn-sm btn-ghost" onclick="document.getElementById('cs-holidays').insertAdjacentHTML('beforeend', \`${holidayRow(null).replace(/`/g, '\\`')}\`)">+ Add holiday</button>
+        <button class="btn btn-sm btn-ghost" onclick="_csAddHoliday()">+ Add holiday</button>
       </div>
       <div class="card" style="padding:1.2rem">
         <div style="font-weight:700;margin-bottom:.9rem">Office locations</div>
         <div id="cs-locations">${(st.officeLocations || []).map(locationRow).join('')}</div>
-        <button class="btn btn-sm btn-ghost" onclick="document.getElementById('cs-locations').insertAdjacentHTML('beforeend', \`${locationRow(null).replace(/`/g, '\\`')}\`)">+ Add location</button>
+        <button class="btn btn-sm btn-ghost" onclick="_csAddLocation()">+ Add location</button>
       </div>
       <div class="card" style="padding:1.2rem">
         <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:.4rem">
