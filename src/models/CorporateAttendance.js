@@ -70,6 +70,11 @@ const clockEventSchema = new mongoose.Schema(
     lateMinutes:  { type: Number,  default: 0, min: 0 },
     // Clock-out specific early-leave field
     earlyLeaveMinutes: { type: Number, default: 0, min: 0 },
+    // Optional employee-supplied context for an out-of-pattern clock event
+    // (e.g. why a clock-in was late, or a clock-out was overtime/early) —
+    // purely informational, surfaced to managers. Never gates the record;
+    // there's nothing to re-evaluate or approve, it's just a note.
+    reason: { type: String, trim: true, maxlength: 300, default: "" },
     // Strict WiFi+GPS verification result
     verified:      { type: Boolean, default: null },  // null = not enforced, true = passed, false = blocked
     blockedReason: { type: String,  default: null },  // 'wifi_mismatch' | 'outside_geofence' | 'vpn_detected'
