@@ -87,7 +87,7 @@ services:
       - key: VAPID_SUBJECT
         sync: false
 
-      # ── Traffic (ArrivalIQ Phase 2 — not used yet) ──────────────────────────
+      # ── Traffic (ArrivalIQ) — src/services/traffic/providers/googleMapsProvider.js
       - key: GOOGLE_MAPS_API_KEY
         sync: false
 

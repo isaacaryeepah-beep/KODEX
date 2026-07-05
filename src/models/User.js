@@ -330,6 +330,19 @@ const userSchema = new mongoose.Schema(
       grantedAt:           { type: Date,    default: null },
       _id: false,
     },
+
+    // Single most-recent location reading, captured only when the employee
+    // has the app open (foreground-only — see POST /api/arrival-iq/location).
+    // Overwritten every time, never appended to: this is a snapshot for
+    // today's travel-time estimate, not a location history log. The sweep
+    // job (arrivalIQScheduler.js) ignores it once it's more than a few
+    // hours stale.
+    arrivalIQLocation: {
+      lat:        { type: Number, default: null },
+      lng:        { type: Number, default: null },
+      capturedAt: { type: Date,   default: null },
+      _id: false,
+    },
   },
   {
     timestamps: true,

@@ -4,16 +4,18 @@
  * arrivalIQ.js
  * Mounted at: /api/arrival-iq   (registered in server.js)
  *
- * Route summary (Phase 1 — config + consent only)
- * ------------------------------------------------
+ * Route summary
+ * -------------
  * GET    /status           any employee: is ArrivalIQ enabled for my company?
  * GET    /settings         admin/manager: read full ArrivalIQ config
  * PATCH  /settings         admin: update ArrivalIQ config
  * GET    /consent          employee: read my own consent state
  * POST   /consent          employee: grant/revoke notification + location consent
+ * POST   /location         employee: foreground-only location check-in (Phase 2)
+ * GET    /prediction/today employee: today's computed departure recommendation
  *
- * Later phases add: departure-time prediction, geofence-arrival events,
- * the late-arrival form + manager review queue, and punctuality analytics.
+ * Later phases add: geofence-arrival events, the late-arrival form + manager
+ * review queue, and punctuality analytics.
  *
  * Corporate mode only — reuses corporateSettings.officeLatitude/
  * officeLongitude/geofenceRadiusMeters (Company model) for office location,
@@ -28,8 +30,10 @@ const { requireRole, requireMode } = require("../middleware/role");
 const { requireActiveSubscription } = require("../middleware/subscription");
 const Company = require("../models/Company");
 const User = require("../models/User");
+const ArrivalPrediction = require("../models/ArrivalPrediction");
 const AuditLog = require("../models/AuditLog");
 const { AUDIT_ACTIONS } = AuditLog;
+const { todayKey } = require("../services/arrivalIQScheduler");
 
 const mw = [authenticate, requireMode("corporate"), requireActiveSubscription];
 const adminOnly = requireRole("admin", "superadmin");
@@ -183,6 +187,52 @@ router.post("/consent", ...mw, async (req, res) => {
   } catch (error) {
     console.error("ArrivalIQ update consent error:", error);
     res.status(500).json({ error: "Failed to update consent" });
+  }
+});
+
+// ---------------------------------------------------------------------------
+// POST /location — foreground-only location check-in (employee)
+//
+// Called by the client only while the app is actually open, within a
+// pre-shift window (see app.js's boot-time ArrivalIQ check). Overwrites
+// the single stored reading — never appended, no history table — and
+// requires location consent to already be granted. This is the only
+// write path for arrivalIQLocation; the sweep job (Phase 2) only reads it
+// and ignores anything older than a few hours.
+// ---------------------------------------------------------------------------
+router.post("/location", ...mw, async (req, res) => {
+  try {
+    const { lat, lng } = req.body;
+    if (typeof lat !== "number" || typeof lng !== "number") {
+      return res.status(400).json({ error: "lat and lng (numbers) are required" });
+    }
+    const user = await User.findById(req.user._id).select("arrivalIQConsent.locationGranted");
+    if (!user?.arrivalIQConsent?.locationGranted) {
+      return res.status(403).json({ error: "Location consent has not been granted" });
+    }
+    user.arrivalIQLocation = { lat, lng, capturedAt: new Date() };
+    await user.save();
+    res.json({ message: "Location updated" });
+  } catch (error) {
+    console.error("ArrivalIQ location check-in error:", error);
+    res.status(500).json({ error: "Failed to record location" });
+  }
+});
+
+// ---------------------------------------------------------------------------
+// GET /prediction/today — today's computed departure recommendation, if any
+// (employee). Written by the sweep job in arrivalIQScheduler.js.
+// ---------------------------------------------------------------------------
+router.get("/prediction/today", ...mw, async (req, res) => {
+  try {
+    const prediction = await ArrivalPrediction.findOne({
+      user: req.user._id,
+      date: todayKey(),
+    }).lean();
+    res.json({ prediction: prediction || null });
+  } catch (error) {
+    console.error("ArrivalIQ get prediction error:", error);
+    res.status(500).json({ error: "Failed to fetch today's prediction" });
   }
 });
 

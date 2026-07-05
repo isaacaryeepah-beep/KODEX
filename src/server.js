@@ -600,6 +600,12 @@ const start = async () => {
       logger.error("Scheduler failed to start", { error: e.message });
     }
 
+    try {
+      require("./services/arrivalIQScheduler").start();
+    } catch (e) {
+      logger.error("ArrivalIQ scheduler failed to start", { error: e.message });
+    }
+
     // Daily MongoDB backup at 02:00 (only when backup is configured)
     if (process.env.BACKUP_DIR || process.env.BACKUP_S3_BUCKET) {
       try {
