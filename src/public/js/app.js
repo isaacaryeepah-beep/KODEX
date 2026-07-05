@@ -19751,15 +19751,30 @@ window._pushSubscribeIfNeeded = async function() {
   const granted = await requestPushPermission();
   if (!granted) throw new Error('Notification permission was denied. Enable it in your browser/device settings.');
   const reg = await navigator.serviceWorker.ready;
+  const { publicKey } = await api('/api/push/vapid-public-key');
   let sub = await reg.pushManager.getSubscription();
+  // A locally-cached subscription can be stale — subscribed under a VAPID
+  // key that's since been rotated server-side. Sending to it would fail
+  // silently, so unsubscribe and re-subscribe under the current key.
+  if (sub) {
+    try {
+      const currentKey = _urlBase64ToUint8Array(publicKey);
+      const subKey = sub.options?.applicationServerKey ? new Uint8Array(sub.options.applicationServerKey) : null;
+      const stale = subKey && (subKey.length !== currentKey.length || !subKey.every((b, i) => b === currentKey[i]));
+      if (stale) { await sub.unsubscribe(); sub = null; }
+    } catch (_) { /* can't compare keys on this browser — keep the existing sub */ }
+  }
   if (!sub) {
-    const { publicKey } = await api('/api/push/vapid-public-key');
     sub = await reg.pushManager.subscribe({
       userVisibleOnly: true,
       applicationServerKey: _urlBase64ToUint8Array(publicKey),
     });
-    await api('/api/push/subscribe', { method: 'POST', body: JSON.stringify(sub.toJSON()) });
   }
+  // Always persist — covers a brand-new subscription AND one that already
+  // existed in the browser but was never saved server-side (e.g. an
+  // earlier attempt where pushManager.subscribe() succeeded but the
+  // follow-up POST failed or was never reached).
+  await api('/api/push/subscribe', { method: 'POST', body: JSON.stringify(sub.toJSON()) });
   return sub;
 };
 
