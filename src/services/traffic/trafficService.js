@@ -4,21 +4,36 @@
  * trafficService.js
  *
  * Public facade for travel-time estimation, independent of which mapping
- * provider is behind it. ArrivalIQ's prediction engine (Phase 2) calls
+ * provider is behind it. ArrivalIQ's prediction engine calls
  * getTravelTime() here rather than any provider module directly, so
- * swapping Google Maps for another provider (or adding a fallback chain)
- * later is a one-file change — the same pattern used for push delivery in
- * src/services/push/pushService.js.
+ * swapping providers (or adding a fallback chain) is a one-file change —
+ * the same pattern used for push delivery in src/services/push/pushService.js.
+ *
+ * TRAFFIC_PROVIDER=google-maps|mapbox|tomtom picks explicitly. Left unset,
+ * it auto-selects whichever provider actually has credentials configured
+ * (first match wins, in the order listed in PROVIDERS below) — set
+ * explicitly once you've chosen one so a stray credential for another
+ * doesn't silently take over.
  */
 
 const googleMapsProvider = require("./providers/googleMapsProvider");
+const mapboxProvider = require("./providers/mapboxProvider");
+const tomtomProvider = require("./providers/tomtomProvider");
 
-// Only one provider today; a TRAFFIC_PROVIDER env var could select between
-// registered providers here once a second one exists.
-const ACTIVE_PROVIDER = googleMapsProvider;
+const PROVIDERS = {
+  "google-maps": googleMapsProvider,
+  "mapbox": mapboxProvider,
+  "tomtom": tomtomProvider,
+};
+
+function activeProvider() {
+  const forced = process.env.TRAFFIC_PROVIDER && PROVIDERS[process.env.TRAFFIC_PROVIDER];
+  if (forced) return forced;
+  return Object.values(PROVIDERS).find((p) => p.isConfigured()) || googleMapsProvider;
+}
 
 function isConfigured() {
-  return ACTIVE_PROVIDER.isConfigured();
+  return activeProvider().isConfigured();
 }
 
 /**
@@ -29,10 +44,11 @@ function isConfigured() {
  * @returns {Promise<{durationMinutes:number, durationInTrafficMinutes:number, distanceMeters:number, trafficLevel:string}>}
  */
 async function getTravelTime(opts) {
-  if (!isConfigured()) {
-    throw new Error("No traffic provider is configured (set GOOGLE_MAPS_API_KEY)");
+  const provider = activeProvider();
+  if (!provider.isConfigured()) {
+    throw new Error("No traffic provider is configured (set GOOGLE_MAPS_API_KEY, MAPBOX_ACCESS_TOKEN, or TOMTOM_API_KEY)");
   }
-  return ACTIVE_PROVIDER.getTravelTime(opts);
+  return provider.getTravelTime(opts);
 }
 
 module.exports = { isConfigured, getTravelTime };
