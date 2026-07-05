@@ -152,6 +152,29 @@ function hoursWorked(clockInTime, clockOutTime) {
   return Math.max(0, Math.round((ms / 3_600_000) * 100) / 100); // 2 decimal places
 }
 
+/**
+ * Check `at` falls inside an "HH:MM"–"HH:MM" window. End may wrap past
+ * midnight (e.g. 22:00–02:00 for night shifts). Returns true (unrestricted)
+ * if either bound is unset or malformed.
+ *
+ * Only consulted when corporateSettings.enforceClockWindows is true — the
+ * windows are an OPTIONAL hard block, off by default, because a fixed
+ * window inherently also blocks overtime clock-outs. Off, out-of-hours
+ * events are simply labeled (late/overtime/early badges + optional note).
+ */
+function withinClockWindow(at, startHHMM, endHHMM) {
+  const parse = (s) => {
+    const m = typeof s === "string" && s.match(/^(\d{1,2}):(\d{2})$/);
+    if (!m || +m[1] > 23 || +m[2] > 59) return null;
+    return +m[1] * 60 + +m[2];
+  };
+  const start = parse(startHHMM), end = parse(endHHMM);
+  if (start == null || end == null) return true;
+  const cur = at.getHours() * 60 + at.getMinutes();
+  if (start <= end) return cur >= start && cur <= end;
+  return cur >= start || cur <= end; // wraps past midnight
+}
+
 // ---------------------------------------------------------------------------
 // GET /my  — employee's own records
 // ---------------------------------------------------------------------------
@@ -200,6 +223,15 @@ router.post("/clock-in", ...mw, async (req, res) => {
     // Settings (used for geofence + WiFi checks)
     const company  = await Company.findById(req.user.company).select("corporateSettings").lean();
     const settings = company?.corporateSettings || {};
+
+    // Optional hard time-window block — only when the admin explicitly
+    // enabled enforcement. Off (default), lateness is labeled, not blocked.
+    if (settings.enforceClockWindows && !withinClockWindow(now, settings.clockInStart, settings.clockInEnd)) {
+      return res.status(403).json({
+        error: `Clock-in is only allowed between ${settings.clockInStart} and ${settings.clockInEnd}.`,
+        reason: "outside_clock_window", blocked: true,
+      });
+    }
 
     // Anti-cheat evaluation
     const evalResult = antiCheat.evaluateAttempt({
@@ -334,6 +366,15 @@ router.post("/clock-out", ...mw, async (req, res) => {
 
     const company  = await Company.findById(req.user.company).select("corporateSettings").lean();
     const settings = company?.corporateSettings || {};
+
+    // Optional hard time-window block (admin opt-in only — blocking
+    // overtime clock-outs is the documented consequence of enabling this)
+    if (settings.enforceClockWindows && !withinClockWindow(now, settings.clockOutStart, settings.clockOutEnd)) {
+      return res.status(403).json({
+        error: `Clock-out is only allowed between ${settings.clockOutStart} and ${settings.clockOutEnd}.`,
+        reason: "outside_clock_window", blocked: true,
+      });
+    }
 
     // Anti-cheat (clock-out is also strict — same rules apply)
     const evalResult = antiCheat.evaluateAttempt({
@@ -781,6 +822,73 @@ router.patch("/trust/:userId/reset", ...mw, canManage, async (req, res) => {
   }
 });
 
+
+// ---------------------------------------------------------------------------
+// GET  /clock-window   — read clock-in/out windows + enforcement flag.
+//                        Readable by ANY corporate user so employee pages can
+//                        show the allowed times when enforcement is on
+//                        (an enforced-but-invisible window was the original
+//                        complaint that led to this design).
+// PATCH /clock-window  — admin/manager: update windows + enforcement toggle.
+// ---------------------------------------------------------------------------
+router.get("/clock-window", ...mw, async (req, res) => {
+  try {
+    const company = await Company.findById(req.user.company)
+      .select("corporateSettings.enforceClockWindows corporateSettings.clockInStart corporateSettings.clockInEnd corporateSettings.clockOutStart corporateSettings.clockOutEnd")
+      .lean();
+    const s = company?.corporateSettings || {};
+    res.json({
+      enforce:       !!s.enforceClockWindows,
+      clockInStart:  s.clockInStart  || "",
+      clockInEnd:    s.clockInEnd    || "",
+      clockOutStart: s.clockOutStart || "",
+      clockOutEnd:   s.clockOutEnd   || "",
+    });
+  } catch (e) {
+    res.status(500).json({ error: "Failed to fetch clock window" });
+  }
+});
+
+router.patch("/clock-window", ...mw, canManage, async (req, res) => {
+  try {
+    const { enforce, clockInStart, clockInEnd, clockOutStart, clockOutEnd } = req.body;
+    const validate = v => v === "" || v == null || /^\d{1,2}:\d{2}$/.test(v);
+    if (![clockInStart, clockInEnd, clockOutStart, clockOutEnd].every(validate)) {
+      return res.status(400).json({ error: "Times must be HH:MM (24-hour) or empty." });
+    }
+    // Both start+end must be set together for each pair
+    if (!!clockInStart !== !!clockInEnd || !!clockOutStart !== !!clockOutEnd) {
+      return res.status(400).json({ error: "Set both start and end (or leave both empty) for each window." });
+    }
+    const enforceOn = Boolean(enforce);
+    if (enforceOn && !clockInStart && !clockOutStart) {
+      return res.status(400).json({ error: "Enable enforcement only with at least one window set." });
+    }
+
+    await Company.findByIdAndUpdate(req.user.company, { $set: {
+      "corporateSettings.enforceClockWindows": enforceOn,
+      "corporateSettings.clockInStart":  clockInStart  || null,
+      "corporateSettings.clockInEnd":    clockInEnd    || null,
+      "corporateSettings.clockOutStart": clockOutStart || null,
+      "corporateSettings.clockOutEnd":   clockOutEnd   || null,
+    } });
+
+    await AuditLog.create({
+      company:  req.user.company,
+      actor:    req.user._id,
+      action:   AUDIT_ACTIONS.UPDATE,
+      resource: "Company",
+      resourceId: req.user.company,
+      resourceLabel: `Clock-in/out windows ${enforceOn ? "ENFORCED" : "updated (not enforced)"}`,
+      metadata: { enforce: enforceOn, clockInStart, clockInEnd, clockOutStart, clockOutEnd },
+    }).catch(() => {});
+
+    res.json({ message: "Clock window updated", enforce: enforceOn, clockInStart, clockInEnd, clockOutStart, clockOutEnd });
+  } catch (e) {
+    console.error("[clock-window]", e);
+    res.status(500).json({ error: "Failed to update clock window" });
+  }
+});
 
 // Return the caller's public IP as seen by the server (used by the admin UI "Detect My IP" button)
 router.get("/my-ip", ...mw, (req, res) => {

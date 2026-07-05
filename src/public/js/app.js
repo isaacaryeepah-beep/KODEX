@@ -6356,6 +6356,7 @@ async function renderEmployeeDashboard(content) {
   const today      = new Date().toISOString().slice(0, 10);
   const monthStart = new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString().slice(0, 10);
 
+  const clockWin = await api('/api/corporate-attendance/clock-window').catch(() => ({}));
   const [todayData, monthData, shiftData, leavesData] = await Promise.all([
     api(`/api/corporate-attendance/my?from=${today}&to=${today}`).catch(() => ({ records: [] })),
     api(`/api/corporate-attendance/my?from=${monthStart}&to=${today}`).catch(() => ({ records: [] })),
@@ -6465,6 +6466,7 @@ async function renderEmployeeDashboard(content) {
           <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
             ${attStatus ? `<span style="background:${attStatus.bg};color:${attStatus.color};border:1px solid ${attStatus.color}40;padding:3px 10px;border-radius:20px;font-size:11px;font-weight:700">${attStatus.label}</span>` : ''}
             ${shift ? `<span style="font-size:11px;color:var(--text-muted)">Shift: <strong>${esc(shift.name)}</strong> ${shift.startTime}–${shift.endTime}</span>` : ''}
+            ${clockWin.enforce && clockWin.clockInStart ? `<span style="background:#fffaeb;color:#b54708;padding:3px 10px;border-radius:20px;font-size:11px;font-weight:700" title="Your organization enforces clock-in/out time windows">🔒 Clock-in ${clockWin.clockInStart}–${clockWin.clockInEnd}${clockWin.clockOutStart ? ` · out ${clockWin.clockOutStart}–${clockWin.clockOutEnd}` : ''}</span>` : ''}
             ${isLate ? `<span style="background:#fef2f2;color:#dc2626;padding:3px 10px;border-radius:20px;font-size:11px;font-weight:700">${lateMin}m late</span>` : ''}
             ${isClockedOut && workedHrs != null ? `<span style="font-size:12px;color:var(--text-muted)">Worked <strong>${workedHrs}h</strong>${overtimeHrs > 0 ? ` · <span style="color:#8b5cf6">+${overtimeHrs}h OT</span>` : ''}</span>` : ''}
           </div>
@@ -19300,11 +19302,54 @@ async function _caLoadSettings() {
 
         <button class="btn btn-primary" style="margin-top:20px" onclick="_caSaveSettings()">Save Settings</button>
         <button class="btn btn-secondary btn-sm" style="margin-top:20px;margin-left:8px" onclick="_caDetectMyIP(true)">📡 Detect My IP</button>
+      </div>
+
+      <div class="card" style="max-width:560px">
+        <h3 style="font-size:15px;font-weight:700;margin-bottom:4px">Clock-In / Clock-Out Time Windows</h3>
+        <p style="font-size:12px;color:var(--text-light);margin-bottom:12px">Optional fixed windows for clocking in/out (off by default — out-of-hours events are labeled, not blocked). Configure on the full settings page.</p>
+        <button class="btn btn-secondary btn-sm" onclick="navigateTo('corp-clock-settings')">Open Clock In / Out Settings →</button>
       </div>`;
     _caDetectMyIP();
   } catch(e) {
     el.innerHTML = `<div class="card"><p style="color:var(--danger)">Failed to load settings.</p></div>`;
   }
+}
+
+async function _caSaveClockWindow() {
+  const enforce       = document.getElementById('cw-enforce')?.checked ?? false;
+  const clockInStart  = document.getElementById('cw-in-start')?.value  || '';
+  const clockInEnd    = document.getElementById('cw-in-end')?.value    || '';
+  const clockOutStart = document.getElementById('cw-out-start')?.value || '';
+  const clockOutEnd   = document.getElementById('cw-out-end')?.value   || '';
+
+  if (!!clockInStart !== !!clockInEnd) {
+    toastError('Set both start and end for clock-in window (or leave both empty).');
+    return;
+  }
+  if (!!clockOutStart !== !!clockOutEnd) {
+    toastError('Set both start and end for clock-out window (or leave both empty).');
+    return;
+  }
+  if (enforce && !clockInStart && !clockOutStart) {
+    toastError('Set at least one window before enabling enforcement.');
+    return;
+  }
+
+  try {
+    await api('/api/corporate-attendance/clock-window', {
+      method: 'PATCH',
+      body: JSON.stringify({ enforce, clockInStart, clockInEnd, clockOutStart, clockOutEnd }),
+    });
+    toastSuccess(enforce ? 'Time windows saved and ENFORCED' : 'Time windows saved (not enforced — labels only)');
+  } catch(e) { toastError(e.message || 'Failed to save time windows'); }
+}
+
+async function _caClearClockWindow() {
+  ['cw-in-start','cw-in-end','cw-out-start','cw-out-end'].forEach(id => {
+    const el = document.getElementById(id); if (el) el.value = '';
+  });
+  const enf = document.getElementById('cw-enforce'); if (enf) enf.checked = false;
+  await _caSaveClockWindow();
 }
 
 async function _caDetectMyIP(addToInput = false) {
@@ -19403,13 +19448,16 @@ async function renderCorpClockSettings() {
   if (!content) return;
   content.innerHTML = '<div class="loading">Loading settings…</div>';
   try {
-    const s = await api('/api/corporate-attendance/settings').catch(() => ({}));
+    const [s, win] = await Promise.all([
+      api('/api/corporate-attendance/settings').catch(() => ({})),
+      api('/api/corporate-attendance/clock-window').catch(() => ({})),
+    ]);
 
     content.innerHTML = `
       <div class="page-header" style="display:flex;align-items:flex-start;justify-content:space-between;flex-wrap:wrap;gap:12px;">
         <div>
           <h2>Clock In / Out Settings</h2>
-          <p>Configure attendance restrictions (WiFi, geofence).</p>
+          <p>Configure attendance restrictions (WiFi, geofence, optional time windows).</p>
         </div>
         <button class="btn btn-secondary btn-sm" onclick="navigateTo('corp-attendance')">← Team Attendance</button>
       </div>
@@ -19467,6 +19515,38 @@ async function renderCorpClockSettings() {
           </div>
         </div>
         <button class="btn btn-primary" onclick="_caSaveSettings()" style="margin-top:8px">Save Attendance Settings</button>
+      </div>
+
+      <div class="card" style="max-width:600px">
+        <h3 style="font-size:15px;font-weight:700;margin-bottom:4px">Clock-In / Clock-Out Time Windows <span style="font-size:11px;font-weight:600;color:var(--text-light)">(optional)</span></h3>
+        <p style="font-size:12px;color:var(--text-light);margin-bottom:14px">Off (default): employees can clock in/out anytime — lateness, overtime and early leave are simply labeled on their records, with an optional note. On: clock-in/out is <strong>blocked</strong> outside these windows.</p>
+        <div style="display:flex;align-items:center;justify-content:space-between;padding:10px 12px;background:var(--bg);border-radius:8px;margin-bottom:6px">
+          <div style="font-weight:600;font-size:13px">Enforce time windows</div>
+          <input type="checkbox" id="cw-enforce" ${win.enforce ? 'checked' : ''} style="width:16px;height:16px;cursor:pointer">
+        </div>
+        <div style="font-size:11px;color:#b54708;margin-bottom:14px">⚠ When enforced, employees can't clock out outside the clock-out window — including overtime. Only enable if fixed hours matter more than flexible overtime.</div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:16px">
+          <div>
+            <div style="font-weight:700;font-size:13px;margin-bottom:8px;color:#0891b2">Clock-In Window</div>
+            <div style="display:flex;gap:8px;align-items:center;margin-bottom:6px">
+              <input type="time" id="cw-in-start" value="${win.clockInStart||''}" style="flex:1;padding:7px;border:1px solid var(--border);border-radius:6px;font-size:13px">
+              <span style="color:var(--text-muted)">to</span>
+              <input type="time" id="cw-in-end"   value="${win.clockInEnd  ||''}" style="flex:1;padding:7px;border:1px solid var(--border);border-radius:6px;font-size:13px">
+            </div>
+          </div>
+          <div>
+            <div style="font-weight:700;font-size:13px;margin-bottom:8px;color:#7c3aed">Clock-Out Window</div>
+            <div style="display:flex;gap:8px;align-items:center;margin-bottom:6px">
+              <input type="time" id="cw-out-start" value="${win.clockOutStart||''}" style="flex:1;padding:7px;border:1px solid var(--border);border-radius:6px;font-size:13px">
+              <span style="color:var(--text-muted)">to</span>
+              <input type="time" id="cw-out-end"   value="${win.clockOutEnd  ||''}" style="flex:1;padding:7px;border:1px solid var(--border);border-radius:6px;font-size:13px">
+            </div>
+          </div>
+        </div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap">
+          <button class="btn btn-primary" onclick="_caSaveClockWindow()">Save Time Windows</button>
+          <button class="btn btn-secondary" onclick="_caClearClockWindow()">Clear &amp; Disable</button>
+        </div>
       </div>`;
 
     _caDetectMyIP(false);

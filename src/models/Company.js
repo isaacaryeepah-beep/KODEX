@@ -117,6 +117,20 @@ const companySchema = new mongoose.Schema(
       officeLatitude:       { type: Number, default: null },
       officeLongitude:      { type: Number, default: null },
       geofenceRadiusMeters: { type: Number, default: 150 },
+      // ── Clock-in / clock-out time windows (OPTIONAL hard block) ─────────
+      // Times stored as "HH:MM" 24-hour; end may wrap past midnight.
+      // enforceClockWindows gates everything and defaults to false: with it
+      // off, the times are inert and out-of-hours events are merely labeled
+      // (late / overtime / early-leave badges + optional employee note).
+      // Turning it ON restores hard blocking — including overtime
+      // clock-outs outside the window — which is the admin's explicit,
+      // informed choice. Default-off also keeps any stale window values
+      // left in older documents from silently blocking anyone.
+      enforceClockWindows: { type: Boolean, default: false },
+      clockInStart:  { type: String, default: null },   // e.g. "06:00"
+      clockInEnd:    { type: String, default: null },   // e.g. "10:00"
+      clockOutStart: { type: String, default: null },   // e.g. "16:00"
+      clockOutEnd:   { type: String, default: null },   // e.g. "22:00"
     },
     // ── ArrivalIQ (Smart Arrival Assistant) ─────────────────────────────────
     // Office location + geofence radius are shared with corporateSettings
