@@ -253,6 +253,29 @@
 const _p = new URLSearchParams(location.search);
 const MEETING_ID = _p.get('meeting') || _p.get('id') || '';
 
+// Corporate wording — the app appends corp=1 when a corporate-mode user
+// launches a meeting, so this shared page doesn't talk about "classes".
+const IS_CORP = _p.get('corp') === '1';
+if (IS_CORP) {
+  document.addEventListener('DOMContentLoaded', () => {
+    const t = document.getElementById('meetingTitle');
+    if (t) t.textContent = 'Starting your meeting…';
+    const et = document.querySelector('#errorScreen .error-title');
+    if (et) et.textContent = 'Cannot Start Meeting';
+  });
+}
+
+// Token handoff: this page can open in a browser context that doesn't share
+// the app's storage (iOS home-screen PWA → in-app Safari viewer, or a
+// different subdomain). Accept ?dikly_auth= from the opener, persist it for
+// this context, and strip it from the address bar.
+const _handoff = _p.get('dikly_auth');
+if (_handoff) {
+  try { localStorage.setItem('token', _handoff); } catch (_) {}
+  _p.delete('dikly_auth');
+  history.replaceState(null, '', location.pathname + (_p.toString() ? '?' + _p.toString() : ''));
+}
+
 function getAuthToken() {
   try {
     const s = JSON.parse(sessionStorage.getItem('dikly_jitsi_session') || 'null');
@@ -312,17 +335,19 @@ async function init() {
       if (startR.status === 402 && startBody.subscriptionExpired) { _subBlock(startBody.message, startBody.isAdmin); return; }
       if (startBody.status === 'ended' || startBody.status === 'cancelled') return showError('This meeting has ended or been cancelled.');
       // 403 from isOwner means this user is not the host
-      if (startR.status === 403) return showError('This page is for class hosts only. Students should use the Join Class link.');
+      if (startR.status === 403) return showError(IS_CORP
+        ? 'This page is for meeting hosts only. Participants should use the Join link.'
+        : 'This page is for class hosts only. Students should use the Join Class link.');
       throw new Error(startBody.error || startBody.message || `Server error (${startR.status})`);
     }
 
     const startData = startBody.data || startBody;
-    const meetingUrl = startData.meetingUrl;
+    let meetingUrl = startData.meetingUrl;
     if (!meetingUrl) return showError('No meeting room configured — ask your admin to set LIVEKIT_URL, LIVEKIT_API_KEY and LIVEKIT_API_SECRET.');
 
     setProgress(3, 90, 'Launching meeting room…');
     await delay(400);
-    setProgress(3, 100, 'Opening your class now…');
+    setProgress(3, 100, IS_CORP ? 'Opening your meeting now…' : 'Opening your class now…');
     await delay(300);
 
     // Capacitor WebView blocks navigation to external domains; open in system browser.
@@ -331,11 +356,15 @@ async function init() {
     if (window.Capacitor?.isNativePlatform?.()) {
       window.open(meetingUrl, '_system');
     } else {
-      // Cross-origin handoff: if stream-room is on a different domain (e.g. app.dikly.live)
-      // localStorage won't carry over — pass the token via URL so stream-room can store it.
+      // Token handoff to the room page — ALWAYS, not just cross-origin: this
+      // whole flow may be running in a context whose storage the room page
+      // can't rely on (iOS PWA → in-app Safari viewer). stream-room ingests
+      // ?dikly_auth= and strips it from the URL. (This block previously
+      // assigned to a const and the TypeError was silently swallowed by the
+      // catch — the handoff never actually fired.)
       try {
-        const destUrl = new URL(meetingUrl);
-        if (destUrl.origin !== location.origin && AUTH_TOKEN) {
+        const destUrl = new URL(meetingUrl, location.origin);
+        if (AUTH_TOKEN) {
           destUrl.searchParams.set('dikly_auth', AUTH_TOKEN);
           meetingUrl = destUrl.toString();
         }

@@ -258,6 +258,20 @@
 const _p = new URLSearchParams(location.search);
 const MEETING_ID = _p.get('meeting') || _p.get('id') || '';
 
+// Corporate wording — the app appends corp=1 for corporate-mode users so
+// this shared page doesn't talk about "classes"/"lecturers".
+const IS_CORP = _p.get('corp') === '1';
+
+// Token handoff: accept ?dikly_auth= from the opener (contexts that don't
+// share the app's storage, e.g. iOS PWA → in-app Safari viewer), persist it
+// for this context, and strip it from the address bar.
+const _handoff = _p.get('dikly_auth');
+if (_handoff) {
+  try { localStorage.setItem('token', _handoff); } catch (_) {}
+  _p.delete('dikly_auth');
+  history.replaceState(null, '', location.pathname + (_p.toString() ? '?' + _p.toString() : ''));
+}
+
 function getAuthToken() {
   try {
     const s = JSON.parse(sessionStorage.getItem('dikly_jitsi_session') || 'null');
@@ -297,14 +311,14 @@ async function init() {
     if (!r.ok) {
       if (r.status === 402 && body.subscriptionExpired) { _subBlock(body.message, body.isAdmin); return; }
       if (body.status === 'scheduled') return showWait(body.scheduledStart, body.hostName);
-      if (body.status === 'ended' || body.status === 'cancelled') return showError('This class has ended or been cancelled.');
+      if (body.status === 'ended' || body.status === 'cancelled') return showError(`This ${IS_CORP ? 'meeting' : 'class'} has ended or been cancelled.`);
       throw new Error(body.error || body.message || `Server error (${r.status})`);
     }
 
     const data = body.data || body;
 
     if (data.isModerator) {
-      window.location.replace(`/lecturer-meeting?meeting=${MEETING_ID}`);
+      window.location.replace(`/lecturer-meeting?meeting=${MEETING_ID}${IS_CORP ? '&corp=1' : ''}${AUTH_TOKEN ? '&dikly_auth=' + encodeURIComponent(AUTH_TOKEN) : ''}`);
       return;
     }
 
@@ -316,7 +330,7 @@ async function init() {
       document.getElementById('hostInfo').style.display = 'flex';
     }
 
-    setStatus('Launching secure classroom…', 80);
+    setStatus(IS_CORP ? 'Launching secure meeting room…' : 'Launching secure classroom…', 80);
 
     fetch(`/api/meetings/${MEETING_ID}/preflight`, {
       method: 'POST', headers: { Authorization: 'Bearer ' + AUTH_TOKEN, 'Content-Type': 'application/json' },
@@ -326,17 +340,20 @@ async function init() {
       method: 'POST', headers: { Authorization: 'Bearer ' + AUTH_TOKEN, 'Content-Type': 'application/json' },
     }).catch(() => {});
 
-    setStatus('Opening classroom…', 100);
+    setStatus(IS_CORP ? 'Opening meeting room…' : 'Opening classroom…', 100);
     await delay(400);
     // Capacitor WebView blocks navigation to external domains; open in system browser
     if (window.Capacitor?.isNativePlatform?.()) {
       window.open(data.meetingUrl, '_system');
     } else {
-      // Cross-origin handoff: pass auth token when stream-room is on a different domain
+      // Token handoff to the room page — ALWAYS, not just cross-origin: this
+      // flow may be running in a context whose storage the room page can't
+      // rely on (iOS PWA → in-app Safari viewer). stream-room ingests
+      // ?dikly_auth= and strips it from the URL.
       let joinUrl = data.meetingUrl;
       try {
-        const destUrl = new URL(joinUrl);
-        if (destUrl.origin !== location.origin && AUTH_TOKEN) {
+        const destUrl = new URL(joinUrl, location.origin);
+        if (AUTH_TOKEN) {
           destUrl.searchParams.set('dikly_auth', AUTH_TOKEN);
           joinUrl = destUrl.toString();
         }
@@ -351,7 +368,7 @@ async function init() {
 
 function showWait(scheduledStart, hostName) {
   show('waitScreen');
-  let msg = 'Your lecturer hasn\'t opened the room yet.\nYou\'ll be admitted automatically when they start.';
+  let msg = (IS_CORP ? 'The host hasn\'t opened the room yet.' : 'Your lecturer hasn\'t opened the room yet.') + '\nYou\'ll be admitted automatically when they start.';
   if (scheduledStart) {
     const d = new Date(scheduledStart);
     msg += `\n\nScheduled for ${d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}.`;
