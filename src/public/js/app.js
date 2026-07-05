@@ -2820,6 +2820,7 @@ function showDashboard(data) {
     startSSE();
     _notifSound.updateBtn();
     applyBranding(); // async — applies colors/logo in background
+    _aiqMaybeCheckIn(); // async, silent — see definition
     // Show offline banner immediately when logged in via cached credentials
     if (data?.offlineMode) { _appOfflineMode = true; showOfflineBanner(false); }
     // If student arrived via QR scan link, go straight to mark-attendance to auto-submit
@@ -19599,6 +19600,33 @@ function _urlBase64ToUint8Array(base64String) {
   return Uint8Array.from([...rawData].map(c => c.charCodeAt(0)));
 }
 
+// Opportunistic, once-per-day, silent location check-in — called once per
+// app open (see showDashboard). This is the only client-initiated write to
+// arrivalIQLocation; there is no background/continuous tracking. If the
+// employee never opens the app before their shift, the server sweep simply
+// has no fresh location and skips them for the day (surfaced as a
+// "couldn't estimate today" state, not a silent failure — see
+// arrivalIQScheduler.js's skipReason).
+async function _aiqMaybeCheckIn() {
+  try {
+    if (!['employee', 'manager'].includes(currentUser?.role) || currentUser.company?.mode !== 'corporate') return;
+    const todayStr = new Date().toDateString();
+    if (localStorage.getItem('dikly_aiq_checkin_date') === todayStr) return;
+
+    const status = await api('/api/arrival-iq/status').catch(() => ({ enabled: false }));
+    if (!status.enabled) return;
+    const consent = await api('/api/arrival-iq/consent').catch(() => ({ locationGranted: false }));
+    if (!consent.locationGranted) return;
+
+    const loc = await _getGPSLocation();
+    await api('/api/arrival-iq/location', { method: 'POST', body: JSON.stringify({ lat: loc.latitude, lng: loc.longitude }) });
+    localStorage.setItem('dikly_aiq_checkin_date', todayStr);
+  } catch (_) {
+    // Silent by design — this runs unattended on every app open, never
+    // interrupts the user with a GPS error dialog.
+  }
+}
+
 async function renderArrivalIQ() {
   const content = document.getElementById('main-content');
   if (!content) return;
@@ -19608,6 +19636,9 @@ async function renderArrivalIQ() {
       api('/api/arrival-iq/status').catch(() => ({ enabled: false, mandatory: false })),
       api('/api/arrival-iq/consent').catch(() => ({ locationGranted: false, notificationGranted: false })),
     ]);
+    const { prediction } = consent.locationGranted && consent.notificationGranted
+      ? await api('/api/arrival-iq/prediction/today').catch(() => ({ prediction: null }))
+      : { prediction: null };
 
     if (!status.enabled) {
       content.innerHTML = `
@@ -19663,14 +19694,53 @@ async function renderArrivalIQ() {
         ${locOn ? `<div style="padding:8px 0"><button class="btn btn-ghost btn-sm" onclick="_aiqTestLocation(this)">Test My Location</button></div>` : ''}
       </div>
 
-      ${bothOn ? `
-      <div class="card" style="max-width:520px">
-        <div style="font-weight:700;font-size:13px;margin-bottom:6px">You're all set 🎉</div>
-        <div style="font-size:12px;color:var(--text-light)">ArrivalIQ will send you a personalized departure reminder before your next shift.</div>
-      </div>` : ''}`;
+      ${bothOn ? _aiqPredictionCardHtml(prediction) : ''}`;
   } catch (e) {
     content.innerHTML = `<div class="card"><p style="color:var(--danger)">${esc(e.message)}</p></div>`;
   }
+}
+
+function _aiqPredictionCardHtml(prediction) {
+  const fmtTime = (iso) => iso ? new Date(iso).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' }) : '—';
+  const STATUS_PILL = {
+    on_time:     { label: 'On Time',      color: '#067647', bg: '#ecfdf3' },
+    at_risk:     { label: 'At Risk',      color: '#b54708', bg: '#fffaeb' },
+    likely_late: { label: 'Likely Late',  color: '#b42318', bg: '#fef3f2' },
+  };
+
+  if (!prediction || !prediction.recommendedDepartureAt) {
+    const reason = prediction?.skipReason === 'no_recent_location'
+      ? "We don't have a fresh location check-in for you yet today — this happens automatically when you open the app, and updates as your shift approaches."
+      : prediction?.skipReason === 'traffic_lookup_failed'
+      ? "We couldn't reach the traffic service just now — we'll retry automatically."
+      : "ArrivalIQ will send you a personalized departure reminder before your next shift.";
+    return `
+      <div class="card" style="max-width:520px">
+        <div style="font-weight:700;font-size:13px;margin-bottom:6px">You're all set 🎉</div>
+        <div style="font-size:12px;color:var(--text-light)">${esc(reason)}</div>
+      </div>`;
+  }
+
+  const pill = STATUS_PILL[prediction.status] || STATUS_PILL.on_time;
+  return `
+    <div class="card" style="max-width:520px">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
+        <div style="font-weight:700;font-size:13px">Today's shift (${esc(prediction.shiftStartTime)})</div>
+        <span style="font-size:11px;font-weight:700;padding:3px 10px;border-radius:12px;color:${pill.color};background:${pill.bg}">${pill.label}</span>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:10px">
+        <div>
+          <div style="font-size:10px;color:var(--text-muted);text-transform:uppercase;letter-spacing:.4px">Recommended departure</div>
+          <div style="font-size:18px;font-weight:800">${fmtTime(prediction.recommendedDepartureAt)}</div>
+        </div>
+        <div>
+          <div style="font-size:10px;color:var(--text-muted);text-transform:uppercase;letter-spacing:.4px">Estimated arrival</div>
+          <div style="font-size:18px;font-weight:800">${fmtTime(prediction.estimatedArrivalAt)}</div>
+        </div>
+      </div>
+      <div style="font-size:12px;color:var(--text-light)">${prediction.travelMinutesInTraffic ?? '—'} min drive · ${esc(prediction.trafficLevel || 'unknown')} traffic</div>
+      ${prediction.departureNotifiedAt ? `<div style="font-size:11px;color:var(--text-muted);margin-top:8px">Notified at ${fmtTime(prediction.departureNotifiedAt)}</div>` : ''}
+    </div>`;
 }
 
 // Subscribes to push if not already subscribed; returns the subscription.
