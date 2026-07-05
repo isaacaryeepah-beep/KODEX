@@ -13,6 +13,27 @@
 
 const webpush = require("web-push");
 
+const DEFAULT_VAPID_SUBJECT = "mailto:support@dikly.sbs";
+// Apple's web push relay (web.push.apple.com — used by every iOS/Safari
+// Home Screen PWA) validates the VAPID JWT's `sub` claim far more strictly
+// than Chrome/FCM or Firefox: it must be exactly `mailto:user@domain` or
+// `https://host`, with no surrounding whitespace/angle-brackets and no
+// `localhost`. Chrome/Firefox silently accept a malformed subject, so a bad
+// VAPID_SUBJECT env var can pass every test except on an iPhone — falling
+// back to a known-good default here means a mistyped env var degrades
+// gracefully instead of reproducing that exact "works everywhere but iOS"
+// symptom.
+function resolveVapidSubject() {
+  const raw = (process.env.VAPID_SUBJECT || "").trim();
+  if (/^mailto:[^\s<>]+@[^\s<>]+$/.test(raw) || (/^https:\/\/[^\s<>]+$/.test(raw) && !/localhost/i.test(raw))) {
+    return raw;
+  }
+  if (raw) {
+    console.warn(`[WebPush] VAPID_SUBJECT "${raw}" is not a valid mailto:/https: value (Apple's push service rejects malformed subjects with 403 BadJwtToken) — falling back to ${DEFAULT_VAPID_SUBJECT}`);
+  }
+  return DEFAULT_VAPID_SUBJECT;
+}
+
 let configured = false;
 if (process.env.VAPID_PUBLIC_KEY && process.env.VAPID_PRIVATE_KEY) {
   // web-push validates the key format synchronously and throws if it's
@@ -22,7 +43,7 @@ if (process.env.VAPID_PUBLIC_KEY && process.env.VAPID_PRIVATE_KEY) {
   // else keeps running.
   try {
     webpush.setVapidDetails(
-      process.env.VAPID_SUBJECT || "mailto:support@dikly.sbs",
+      resolveVapidSubject(),
       process.env.VAPID_PUBLIC_KEY.trim(),
       process.env.VAPID_PRIVATE_KEY.trim()
     );
