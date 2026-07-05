@@ -73,8 +73,9 @@ router.post("/test", authenticate, async (req, res) => {
     if (!pushService.isConfigured()) {
       return res.status(503).json({ error: "Push notifications are not configured" });
     }
+    // No title on purpose — pushService fills in the user's company name
+    // (and logo as the icon), so the test arrives branded like real sends.
     const result = await pushService.sendToUser(req.user._id, {
-      title: "Dikly",
       body: "Push notifications are set up correctly.",
       tag: "push-test",
     });
