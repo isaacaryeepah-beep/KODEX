@@ -11,7 +11,6 @@
  *   - impossible_move   → -25
  *   - failed_attempt    → -5
  *   - low_accuracy_gps  → -5
- *   - outside_window    → -5
  *   - clean event       → +1 (capped at 100)
  *
  * Lockouts:
@@ -22,7 +21,11 @@
  * Time rules:
  *   - Min 5 minutes between clock-in and clock-out
  *   - Max 16 hours of "open" clock-in (auto-flagged)
- *   - Clock-in / clock-out time windows enforced if configured at company level
+ *
+ * Deliberately NOT enforced here: clock-in/out time-of-day windows. Late
+ * arrivals, overtime, and early leaves are recorded as visible context on
+ * the attendance record (with an optional employee note) rather than
+ * hard-blocked — see corporateAttendance.js.
  */
 
 const MAX_HUMAN_SPEED_KMH         = 200;   // realistic ground/air travel ceiling
@@ -42,32 +45,7 @@ const PENALTIES = Object.freeze({
   impossible_move:   -25,
   failed_attempt:     -5,
   low_accuracy_gps:   -5,
-  outside_window:     -5,
 });
-
-// Parse "HH:MM" → minutes-since-midnight. Returns null if invalid.
-function parseHhmm(hhmm) {
-  if (typeof hhmm !== "string") return null;
-  const m = hhmm.match(/^(\d{1,2}):(\d{2})$/);
-  if (!m) return null;
-  const h = +m[1], mn = +m[2];
-  if (h < 0 || h > 23 || mn < 0 || mn > 59) return null;
-  return h * 60 + mn;
-}
-
-/**
- * Check if `now` falls inside a [start, end] window. End may wrap past midnight
- * (e.g. clockOutStart=22:00, clockOutEnd=02:00).
- * Returns null if window is not configured (start or end missing).
- */
-function isWithinWindow(now, startStr, endStr) {
-  const start = parseHhmm(startStr);
-  const end   = parseHhmm(endStr);
-  if (start == null || end == null) return null;
-  const cur = now.getHours() * 60 + now.getMinutes();
-  if (start <= end) return cur >= start && cur <= end;
-  return cur >= start || cur <= end;   // wraps past midnight
-}
 
 // ── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -144,7 +122,8 @@ function checkMovement(lastEvent, current) {
 /**
  * Validate a clock event with all anti-cheat rules. Pure function — does NOT mutate the user.
  *
- * `eventType` is "clock_in" or "clock_out" — used to enforce time windows.
+ * `eventType` is "clock_in" or "clock_out" (kept for callers/logging; the
+ * location/network rules below apply identically to both).
  *
  * Returns:
  *   {
@@ -181,18 +160,13 @@ function evaluateAttempt({ req, user, body, settings, lastEvent, eventType = "cl
     };
   }
 
-  // 1. Time window (only if configured for the relevant event)
-  const now = new Date();
-  const startKey = eventType === "clock_out" ? "clockOutStart" : "clockInStart";
-  const endKey   = eventType === "clock_out" ? "clockOutEnd"   : "clockInEnd";
-  const within   = isWithinWindow(now, settings?.[startKey], settings?.[endKey]);
-  if (within === false) {
-    flags.push("outside_window");
-    blocked = true; reason = "outside_window";
-    message = `${eventType === "clock_out" ? "Clock-out" : "Clock-in"} is only allowed between ${settings[startKey]} and ${settings[endKey]}.`;
-  }
+  // NOTE: clock-in/out time windows were removed as a hard block — being
+  // outside expected shift hours is now recorded as context (late arrival /
+  // overtime / early leave, with an optional employee note) instead of
+  // rejecting the event. Overtime and late stays would otherwise be
+  // physically impossible to clock. See corporateAttendance.js.
 
-  // 2. VPN / proxy -- opt-in only (see detectProxy comment: header-hop
+  // 1. VPN / proxy -- opt-in only (see detectProxy comment: header-hop
   // heuristics are unreliable and false-positive on ordinary mobile
   // networks, so this stays off unless the company explicitly enables it).
   if (!blocked && settings?.vpnCheckEnabled && !ipIsLocal && detectProxy(req)) {
@@ -201,7 +175,7 @@ function evaluateAttempt({ req, user, body, settings, lastEvent, eventType = "cl
     message = "VPN or proxy detected. Disable it and try again.";
   }
 
-  // 3. Strict WiFi (only if configured)
+  // 2. Strict WiFi (only if configured)
   const allowed = settings?.allowedWifiIPs || [];
   if (!blocked && settings?.strictAttendance && allowed.length > 0 && !ipIsLocal && !allowed.includes(clientIp)) {
     flags.push("wifi_mismatch");
@@ -209,7 +183,7 @@ function evaluateAttempt({ req, user, body, settings, lastEvent, eventType = "cl
     message = "You must be on company WiFi to clock in.";
   }
 
-  // 4. GPS required (always-on, strict)
+  // 3. GPS required (always-on, strict)
   if (!blocked) {
     if (latitude == null || longitude == null) {
       flags.push("location_missing");
@@ -226,7 +200,7 @@ function evaluateAttempt({ req, user, body, settings, lastEvent, eventType = "cl
     }
   }
 
-  // 5. Geofence (only if configured)
+  // 4. Geofence (only if configured)
   if (!blocked && settings?.officeLatitude != null && settings?.officeLongitude != null) {
     const dist = haversineMeters(settings.officeLatitude, settings.officeLongitude, latitude, longitude);
     const radius = settings.geofenceRadiusMeters || 150;
@@ -237,7 +211,7 @@ function evaluateAttempt({ req, user, body, settings, lastEvent, eventType = "cl
     }
   }
 
-  // 6. Impossible movement (against this user's last clock event)
+  // 5. Impossible movement (against this user's last clock event)
   const movement = checkMovement(lastEvent, { latitude, longitude });
   if (!blocked && !movement.possible) {
     flags.push("impossible_move");
@@ -314,8 +288,6 @@ module.exports = {
   applyTrustOutcome,
   extractClientIp,
   haversineMeters,
-  parseHhmm,
-  isWithinWindow,
   PENALTIES,
   MAX_HUMAN_SPEED_KMH,
   MAX_GPS_ACCURACY_METERS,

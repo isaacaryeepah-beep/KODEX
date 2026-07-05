@@ -6684,6 +6684,44 @@ function _showStrictBlockedModal(message) {
   document.body.appendChild(ol);
 }
 
+// Optional, non-blocking note the employee can attach to an out-of-pattern
+// clock event (late arrival, overtime, early leave). Purely informational —
+// surfaced to managers on the attendance report, never re-evaluated or
+// used to gate/approve anything. Skipping is always one tap away.
+function _showClockReasonModal(recordId, event, promptText, chips) {
+  document.getElementById('clock-reason-modal')?.remove();
+  const ol = document.createElement('div');
+  ol.id = 'clock-reason-modal';
+  ol.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.55);display:flex;align-items:center;justify-content:center;z-index:9999;padding:16px';
+  ol.innerHTML = `
+    <div style="background:var(--card,#fff);border-radius:16px;padding:28px 24px;max-width:380px;width:100%;box-shadow:0 24px 64px rgba(0,0,0,.35)">
+      <div style="font-size:14px;font-weight:700;margin-bottom:14px">${esc(promptText)}</div>
+      <div style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:12px">
+        ${chips.map(c => `<button type="button" class="btn btn-secondary btn-sm" onclick="document.getElementById('clock-reason-text').value=this.textContent">${esc(c)}</button>`).join('')}
+      </div>
+      <textarea id="clock-reason-text" rows="2" placeholder="Add a note (optional)"
+        style="width:100%;padding:10px;border:1px solid var(--border);border-radius:8px;font-size:13px;resize:vertical;box-sizing:border-box"></textarea>
+      <div style="display:flex;gap:8px;margin-top:14px;justify-content:flex-end">
+        <button class="btn btn-secondary btn-sm" onclick="document.getElementById('clock-reason-modal').remove()">Skip</button>
+        <button class="btn btn-primary btn-sm" onclick="_submitClockReason('${recordId}','${event}')">Save Note</button>
+      </div>
+    </div>`;
+  document.body.appendChild(ol);
+}
+
+async function _submitClockReason(recordId, event) {
+  const reason = document.getElementById('clock-reason-text')?.value || '';
+  document.getElementById('clock-reason-modal')?.remove();
+  if (!reason.trim()) return;
+  try {
+    await api(`/api/corporate-attendance/${recordId}/reason`, {
+      method: 'PATCH',
+      body: JSON.stringify({ event, reason: reason.trim() }),
+    });
+    toastSuccess('Note saved');
+  } catch (e) { toastError(e.message || 'Failed to save note'); }
+}
+
 async function employeeSignIn() {
   let gpsData;
   try {
@@ -6705,6 +6743,13 @@ async function employeeSignIn() {
     if (data.trustScore != null) msg += ` · Trust ${data.trustScore}`;
     if (data.reviewRequired) toastWarning(msg + ' (manager review pending)'); else toastSuccess(msg);
     renderSignInOut();
+    if (data.record?.clockIn?.isLate) {
+      _showClockReasonModal(
+        data.record._id, 'clockIn',
+        `You clocked in ${data.record.clockIn.lateMinutes}m late — add a note for your manager?`,
+        ['Traffic', 'Overslept', 'Public transport', 'Personal']
+      );
+    }
   } catch (e) {
     if (e.data?.blocked) {
       const flagsStr = (e.data.flags || []).length ? `\n\nSignals: ${e.data.flags.join(', ')}` : '';
@@ -6738,6 +6783,20 @@ async function employeeSignOut() {
     const trust = data.trustScore != null ? ` · Trust ${data.trustScore}` : '';
     toastSuccess((data.message || 'Clocked out successfully!') + hrs + trust);
     renderSignInOut();
+    const rec = data.record;
+    if (rec?.overtimeHours > 0.25) {
+      _showClockReasonModal(
+        rec._id, 'clockOut',
+        `You worked ${rec.overtimeHours}h overtime today — add a note for your manager?`,
+        ['Project deadline', 'Covering a shift', 'Meeting ran long']
+      );
+    } else if (rec?.earlyLeaveMinutes > 15) {
+      _showClockReasonModal(
+        rec._id, 'clockOut',
+        `You're clocking out ${rec.earlyLeaveMinutes}m before your shift ends — add a note?`,
+        ['Approved early leave', 'Feeling unwell', 'Personal emergency']
+      );
+    }
   } catch (e) {
     if (e.data?.blocked) {
       const flagsStr = (e.data.flags || []).length ? `\n\nSignals: ${e.data.flags.join(', ')}` : '';
@@ -19076,12 +19135,21 @@ async function renderCorporateAttendance() {
       const coLat = co.location?.latitude;  const coLng = co.location?.longitude;
       const ciAcc = ci.location?.accuracy  != null ? `<span style="color:var(--text-light);font-size:10px">(±${ci.location.accuracy}m)</span>` : '';
       const coAcc = co.location?.accuracy  != null ? `<span style="color:var(--text-light);font-size:10px">(±${co.location.accuracy}m)</span>` : '';
+      const lateBadge = ci.isLate
+        ? ` <span style="color:#d97706;font-size:10px" ${ci.reason ? `title="${esc(ci.reason)}"` : ''}>(+${ci.lateMinutes}m late${ci.reason ? ' 📝' : ''})</span>`
+        : '';
+      const overtimeBadge = r.overtimeHours > 0
+        ? ` <span style="color:#8b5cf6;font-size:10px" ${co.reason ? `title="${esc(co.reason)}"` : ''}>(+${r.overtimeHours}h OT${co.reason ? ' 📝' : ''})</span>`
+        : '';
+      const earlyLeaveBadge = !r.overtimeHours && r.earlyLeaveMinutes > 0
+        ? ` <span style="color:#0891b2;font-size:10px" ${co.reason ? `title="${esc(co.reason)}"` : ''}>(-${r.earlyLeaveMinutes}m early${co.reason ? ' 📝' : ''})</span>`
+        : '';
       return `<tr>
         <td><strong>${esc(emp.name || '—')}</strong><br><span style="font-size:11px;color:var(--text-light)">${esc(emp.employeeId || emp.department || '')}</span></td>
         <td style="white-space:nowrap">${new Date(r.date).toLocaleDateString('en-GB',{day:'numeric',month:'short',year:'numeric'})}</td>
         <td>${statusBadge(r.status)}</td>
-        <td style="white-space:nowrap">${fmtTime(ci.time)}${ci.isLate ? ` <span style="color:#d97706;font-size:10px">(+${ci.lateMinutes}m late)</span>` : ''}<br>${mapsLink(ciLat,ciLng)} ${ciAcc}</td>
-        <td style="white-space:nowrap">${fmtTime(co.time)}<br>${mapsLink(coLat,coLng)} ${coAcc}</td>
+        <td style="white-space:nowrap">${fmtTime(ci.time)}${lateBadge}<br>${mapsLink(ciLat,ciLng)} ${ciAcc}</td>
+        <td style="white-space:nowrap">${fmtTime(co.time)}${overtimeBadge}${earlyLeaveBadge}<br>${mapsLink(coLat,coLng)} ${coAcc}</td>
         <td>${r.hoursWorked != null ? `${r.hoursWorked}h` : '—'}</td>
         <td style="text-align:center">${verifiedBadge(ci.verified)}</td>
       </tr>`;
@@ -19186,10 +19254,7 @@ async function _caLoadSettings() {
   const el = document.getElementById('ca-settings-body');
   if (!el) return;
   try {
-    const [s, win] = await Promise.all([
-      api('/api/corporate-attendance/settings'),
-      api('/api/corporate-attendance/clock-window').catch(() => ({})),
-    ]);
+    const s = await api('/api/corporate-attendance/settings');
     el.innerHTML = `
       <div class="card" style="max-width:560px;margin-bottom:20px">
         <h3 style="font-size:15px;font-weight:700;margin-bottom:4px">Strict Attendance Settings</h3>
@@ -19235,73 +19300,11 @@ async function _caLoadSettings() {
 
         <button class="btn btn-primary" style="margin-top:20px" onclick="_caSaveSettings()">Save Settings</button>
         <button class="btn btn-secondary btn-sm" style="margin-top:20px;margin-left:8px" onclick="_caDetectMyIP(true)">📡 Detect My IP</button>
-      </div>
-
-      <div class="card" style="max-width:560px">
-        <h3 style="font-size:15px;font-weight:700;margin-bottom:4px">Clock-In / Clock-Out Time Windows</h3>
-        <p style="font-size:12px;color:var(--text-light);margin-bottom:18px">Restrict the times of day when employees can clock in or out. Leave both fields blank to allow any time. End may wrap past midnight (e.g. 22:00 → 02:00 for night shifts).</p>
-
-        <div style="margin-bottom:14px">
-          <div style="font-size:11px;font-weight:700;text-transform:uppercase;color:var(--text-light);margin-bottom:6px">Clock-In Window</div>
-          <div style="display:flex;gap:10px;align-items:center">
-            <input type="time" id="cw-in-start" value="${win.clockInStart || ''}"
-              style="padding:8px 10px;border:1.5px solid var(--border);border-radius:8px;font-size:13px">
-            <span style="color:var(--text-muted);font-size:13px">to</span>
-            <input type="time" id="cw-in-end" value="${win.clockInEnd || ''}"
-              style="padding:8px 10px;border:1.5px solid var(--border);border-radius:8px;font-size:13px">
-          </div>
-        </div>
-
-        <div style="margin-bottom:14px">
-          <div style="font-size:11px;font-weight:700;text-transform:uppercase;color:var(--text-light);margin-bottom:6px">Clock-Out Window</div>
-          <div style="display:flex;gap:10px;align-items:center">
-            <input type="time" id="cw-out-start" value="${win.clockOutStart || ''}"
-              style="padding:8px 10px;border:1.5px solid var(--border);border-radius:8px;font-size:13px">
-            <span style="color:var(--text-muted);font-size:13px">to</span>
-            <input type="time" id="cw-out-end" value="${win.clockOutEnd || ''}"
-              style="padding:8px 10px;border:1.5px solid var(--border);border-radius:8px;font-size:13px">
-          </div>
-        </div>
-
-        <button class="btn btn-primary" onclick="_caSaveClockWindow()">Save Time Windows</button>
-        <button class="btn btn-secondary btn-sm" style="margin-left:8px" onclick="_caClearClockWindow()">Clear (Allow Any Time)</button>
       </div>`;
     _caDetectMyIP();
   } catch(e) {
     el.innerHTML = `<div class="card"><p style="color:var(--danger)">Failed to load settings.</p></div>`;
   }
-}
-
-async function _caSaveClockWindow() {
-  const clockInStart  = document.getElementById('cw-in-start')?.value  || '';
-  const clockInEnd    = document.getElementById('cw-in-end')?.value    || '';
-  const clockOutStart = document.getElementById('cw-out-start')?.value || '';
-  const clockOutEnd   = document.getElementById('cw-out-end')?.value   || '';
-
-  // UI validation: both start and end must be set together for each pair
-  if (!!clockInStart !== !!clockInEnd) {
-    toastError('Set both start and end for clock-in window (or leave both empty).');
-    return;
-  }
-  if (!!clockOutStart !== !!clockOutEnd) {
-    toastError('Set both start and end for clock-out window (or leave both empty).');
-    return;
-  }
-
-  try {
-    await api('/api/corporate-attendance/clock-window', {
-      method: 'PATCH',
-      body: JSON.stringify({ clockInStart, clockInEnd, clockOutStart, clockOutEnd }),
-    });
-    toastSuccess('Clock-in / out time windows saved');
-  } catch(e) { toastError(e.message || 'Failed to save time windows'); }
-}
-
-async function _caClearClockWindow() {
-  ['cw-in-start','cw-in-end','cw-out-start','cw-out-end'].forEach(id => {
-    const el = document.getElementById(id); if (el) el.value = '';
-  });
-  await _caSaveClockWindow();
 }
 
 async function _caDetectMyIP(addToInput = false) {
@@ -19400,16 +19403,13 @@ async function renderCorpClockSettings() {
   if (!content) return;
   content.innerHTML = '<div class="loading">Loading settings…</div>';
   try {
-    const [s, win] = await Promise.all([
-      api('/api/corporate-attendance/settings').catch(() => ({})),
-      api('/api/corporate-attendance/clock-window').catch(() => ({})),
-    ]);
+    const s = await api('/api/corporate-attendance/settings').catch(() => ({}));
 
     content.innerHTML = `
       <div class="page-header" style="display:flex;align-items:flex-start;justify-content:space-between;flex-wrap:wrap;gap:12px;">
         <div>
           <h2>Clock In / Out Settings</h2>
-          <p>Configure attendance restrictions and allowed clock-in/out time windows.</p>
+          <p>Configure attendance restrictions (WiFi, geofence).</p>
         </div>
         <button class="btn btn-secondary btn-sm" onclick="navigateTo('corp-attendance')">← Team Attendance</button>
       </div>
@@ -19467,33 +19467,6 @@ async function renderCorpClockSettings() {
           </div>
         </div>
         <button class="btn btn-primary" onclick="_caSaveSettings()" style="margin-top:8px">Save Attendance Settings</button>
-      </div>
-
-      <div class="card" style="max-width:600px">
-        <h3 style="font-size:15px;font-weight:700;margin-bottom:4px">Clock-In / Clock-Out Time Windows</h3>
-        <p style="font-size:12px;color:var(--text-light);margin-bottom:18px">Restrict the times of day when employees can clock in or out. Leave blank for no restriction.</p>
-        <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:16px">
-          <div>
-            <div style="font-weight:700;font-size:13px;margin-bottom:8px;color:#0891b2">Clock-In Window</div>
-            <div style="display:flex;gap:8px;align-items:center;margin-bottom:6px">
-              <input type="time" id="cw-in-start" value="${win.clockInStart||''}" style="flex:1;padding:7px;border:1px solid var(--border);border-radius:6px;font-size:13px">
-              <span style="color:var(--text-muted)">to</span>
-              <input type="time" id="cw-in-end"   value="${win.clockInEnd  ||''}" style="flex:1;padding:7px;border:1px solid var(--border);border-radius:6px;font-size:13px">
-            </div>
-          </div>
-          <div>
-            <div style="font-weight:700;font-size:13px;margin-bottom:8px;color:#7c3aed">Clock-Out Window</div>
-            <div style="display:flex;gap:8px;align-items:center;margin-bottom:6px">
-              <input type="time" id="cw-out-start" value="${win.clockOutStart||''}" style="flex:1;padding:7px;border:1px solid var(--border);border-radius:6px;font-size:13px">
-              <span style="color:var(--text-muted)">to</span>
-              <input type="time" id="cw-out-end"   value="${win.clockOutEnd  ||''}" style="flex:1;padding:7px;border:1px solid var(--border);border-radius:6px;font-size:13px">
-            </div>
-          </div>
-        </div>
-        <div style="display:flex;gap:8px;flex-wrap:wrap">
-          <button class="btn btn-primary" onclick="_caSaveClockWindow()">Save Time Windows</button>
-          <button class="btn btn-secondary" onclick="_caClearClockWindow()">Clear All Windows</button>
-        </div>
       </div>`;
 
     _caDetectMyIP(false);

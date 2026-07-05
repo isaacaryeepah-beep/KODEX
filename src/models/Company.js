@@ -117,13 +117,6 @@ const companySchema = new mongoose.Schema(
       officeLatitude:       { type: Number, default: null },
       officeLongitude:      { type: Number, default: null },
       geofenceRadiusMeters: { type: Number, default: 150 },
-      // ── Clock-in / clock-out time windows ───────────────────────────────
-      // Times stored as "HH:MM" 24-hour. If both start and end set, attempts
-      // outside the window are rejected.
-      clockInStart:  { type: String, default: null },   // e.g. "06:00"
-      clockInEnd:    { type: String, default: null },   // e.g. "10:00"
-      clockOutStart: { type: String, default: null },   // e.g. "16:00"
-      clockOutEnd:   { type: String, default: null },   // e.g. "22:00"
     },
     // ── ArrivalIQ (Smart Arrival Assistant) ─────────────────────────────────
     // Office location + geofence radius are shared with corporateSettings

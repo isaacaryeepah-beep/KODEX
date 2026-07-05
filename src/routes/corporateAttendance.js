@@ -152,21 +152,6 @@ function hoursWorked(clockInTime, clockOutTime) {
   return Math.max(0, Math.round((ms / 3_600_000) * 100) / 100); // 2 decimal places
 }
 
-/**
- * Check `at` (a Date) falls within a company-configured "HH:MM"-"HH:MM"
- * clock-in/out window. Returns true (unrestricted) if either bound is unset
- * — this is what corporateSettings.clockInStart/clockInEnd/clockOutStart/
- * clockOutEnd document, but until now nothing actually enforced them.
- */
-function withinClockWindow(at, startHHMM, endHHMM) {
-  if (!startHHMM || !endHHMM) return true;
-  const [sh, sm] = startHHMM.split(":").map(Number);
-  const [eh, em] = endHHMM.split(":").map(Number);
-  const start = new Date(at); start.setHours(sh, sm, 0, 0);
-  const end   = new Date(at); end.setHours(eh, em, 59, 999);
-  return at >= start && at <= end;
-}
-
 // ---------------------------------------------------------------------------
 // GET /my  — employee's own records
 // ---------------------------------------------------------------------------
@@ -212,16 +197,9 @@ router.post("/clock-in", ...mw, async (req, res) => {
     const user = await User.findById(req.user._id);
     if (!user) return res.status(404).json({ error: "User not found" });
 
-    // Settings (used for geofence + WiFi + time windows)
+    // Settings (used for geofence + WiFi checks)
     const company  = await Company.findById(req.user.company).select("corporateSettings").lean();
     const settings = company?.corporateSettings || {};
-
-    if (!withinClockWindow(now, settings.clockInStart, settings.clockInEnd)) {
-      return res.status(403).json({
-        error: `Clock-in is only allowed between ${settings.clockInStart} and ${settings.clockInEnd}.`,
-        reason: "outside_clock_window", blocked: true,
-      });
-    }
 
     // Anti-cheat evaluation
     const evalResult = antiCheat.evaluateAttempt({
@@ -357,13 +335,6 @@ router.post("/clock-out", ...mw, async (req, res) => {
     const company  = await Company.findById(req.user.company).select("corporateSettings").lean();
     const settings = company?.corporateSettings || {};
 
-    if (!withinClockWindow(now, settings.clockOutStart, settings.clockOutEnd)) {
-      return res.status(403).json({
-        error: `Clock-out is only allowed between ${settings.clockOutStart} and ${settings.clockOutEnd}.`,
-        reason: "outside_clock_window", blocked: true,
-      });
-    }
-
     // Anti-cheat (clock-out is also strict — same rules apply)
     const evalResult = antiCheat.evaluateAttempt({
       req, user, body: req.body, settings, lastEvent: user.lastClockEvent,
@@ -446,6 +417,33 @@ router.post("/clock-out", ...mw, async (req, res) => {
   } catch (e) {
     console.error("[clock-out]", e);
     res.status(500).json({ error: "Failed to clock out" });
+  }
+});
+
+// ---------------------------------------------------------------------------
+// PATCH /:id/reason — employee attaches an optional note to their own
+// clock-in or clock-out event (e.g. why they were late, or worked over).
+// Purely informational — surfaced to managers on the attendance report,
+// never re-evaluated, never changes status or blocks anything.
+// ---------------------------------------------------------------------------
+router.patch("/:id/reason", ...mw, async (req, res) => {
+  try {
+    const { event, reason } = req.body;
+    if (!["clockIn", "clockOut"].includes(event)) {
+      return res.status(400).json({ error: "event must be 'clockIn' or 'clockOut'" });
+    }
+    const record = await CorporateAttendance.findOne({
+      _id: req.params.id, company: req.user.company, employee: req.user._id,
+    });
+    if (!record) return res.status(404).json({ error: "Record not found" });
+    if (!record[event]?.time) {
+      return res.status(400).json({ error: `No ${event === "clockIn" ? "clock-in" : "clock-out"} recorded yet` });
+    }
+    record[event].reason = (reason || "").trim().slice(0, 300);
+    await record.save();
+    res.json({ message: "Reason saved" });
+  } catch (e) {
+    res.status(500).json({ error: "Failed to save reason" });
   }
 });
 
@@ -783,65 +781,6 @@ router.patch("/trust/:userId/reset", ...mw, canManage, async (req, res) => {
   }
 });
 
-// ---------------------------------------------------------------------------
-// GET  /clock-window     — admin/manager: read clock-in/out time windows
-// PATCH /clock-window    — admin/manager: update clock-in/out time windows
-// ---------------------------------------------------------------------------
-router.get("/clock-window", ...mw, canManage, async (req, res) => {
-  try {
-    const company = await Company.findById(req.user.company)
-      .select("corporateSettings.clockInStart corporateSettings.clockInEnd corporateSettings.clockOutStart corporateSettings.clockOutEnd")
-      .lean();
-    const s = company?.corporateSettings || {};
-    res.json({
-      clockInStart:  s.clockInStart  || "",
-      clockInEnd:    s.clockInEnd    || "",
-      clockOutStart: s.clockOutStart || "",
-      clockOutEnd:   s.clockOutEnd   || "",
-    });
-  } catch (e) {
-    res.status(500).json({ error: "Failed to fetch clock window" });
-  }
-});
-
-router.patch("/clock-window", ...mw, canManage, async (req, res) => {
-  try {
-    const { clockInStart, clockInEnd, clockOutStart, clockOutEnd } = req.body;
-    const validate = v => v === "" || v == null || /^\d{1,2}:\d{2}$/.test(v);
-    if (![clockInStart, clockInEnd, clockOutStart, clockOutEnd].every(validate)) {
-      return res.status(400).json({ error: "Times must be HH:MM (24-hour) or empty." });
-    }
-    // Both start+end must be set together for each pair
-    const inSet  = !!clockInStart  !== !!clockInEnd;
-    const outSet = !!clockOutStart !== !!clockOutEnd;
-    if (inSet || outSet) {
-      return res.status(400).json({ error: "Set both start and end (or leave both empty) for each window." });
-    }
-
-    const update = {
-      "corporateSettings.clockInStart":  clockInStart  || null,
-      "corporateSettings.clockInEnd":    clockInEnd    || null,
-      "corporateSettings.clockOutStart": clockOutStart || null,
-      "corporateSettings.clockOutEnd":   clockOutEnd   || null,
-    };
-    await Company.findByIdAndUpdate(req.user.company, { $set: update });
-
-    await AuditLog.create({
-      company:  req.user.company,
-      actor:    req.user._id,
-      action:   AUDIT_ACTIONS.UPDATE,
-      resource: "Company",
-      resourceId: req.user.company,
-      resourceLabel: "Updated clock-in/out time windows",
-      metadata: { clockInStart, clockInEnd, clockOutStart, clockOutEnd },
-    }).catch(() => {});
-
-    res.json({ message: "Clock window updated", clockInStart, clockInEnd, clockOutStart, clockOutEnd });
-  } catch (e) {
-    console.error("[clock-window]", e);
-    res.status(500).json({ error: "Failed to update clock window" });
-  }
-});
 
 // Return the caller's public IP as seen by the server (used by the admin UI "Detect My IP" button)
 router.get("/my-ip", ...mw, (req, res) => {
