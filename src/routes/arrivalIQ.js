@@ -210,8 +210,14 @@ router.post("/location", ...mw, async (req, res) => {
     if (!user?.arrivalIQConsent?.locationGranted) {
       return res.status(403).json({ error: "Location consent has not been granted" });
     }
-    user.arrivalIQLocation = { lat, lng, capturedAt: new Date() };
-    await user.save();
+    // findByIdAndUpdate, not user.save() — the partial `.select()` above
+    // means this document doesn't have `email` loaded, and .save() runs
+    // full-document validation (including the required `email` field),
+    // failing on a field we never touched. Matches the update pattern
+    // already used elsewhere in this file (settings/consent routes).
+    await User.findByIdAndUpdate(req.user._id, {
+      $set: { arrivalIQLocation: { lat, lng, capturedAt: new Date() } },
+    });
     res.json({ message: "Location updated" });
   } catch (error) {
     console.error("ArrivalIQ location check-in error:", error);
