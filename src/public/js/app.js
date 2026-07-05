@@ -6159,7 +6159,7 @@ async function renderLecturerDashboard(content) {
     return d.toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' });
   };
   const _fmtTime = iso => new Date(iso).toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' });
-  const _joinUrl  = m => `/lecturer-meeting?meeting=${m._id}`;
+  const _joinUrl  = m => `/lecturer-meeting?meeting=${m._id}${_meetingCorpParam()}`;
 
   const _meetingStatusMeta = m => {
     if (m.status === 'live') return { label: 'Live', cls: 'sched-status--live' };
@@ -9819,7 +9819,7 @@ async function createInstantMeeting() {
     });
     const id = (data.data || data)._id;
     if (!id) throw new Error('No meeting ID returned');
-    window.location.href = `/lecturer-meeting?meeting=${encodeURIComponent(id)}`;
+    window.location.href = `/lecturer-meeting?meeting=${encodeURIComponent(id)}${_meetingCorpParam()}`;
   } catch (e) {
     toastError(e.message || 'Could not create meeting');
   }
@@ -10309,7 +10309,7 @@ async function createAndStartMeeting() {
     closeModal();
     const newId = (data.data || data.meeting || data)?._id;
     if (!newId) throw new Error('No meeting ID returned');
-    window.location.href = `/lecturer-meeting?meeting=${encodeURIComponent(newId)}`;
+    window.location.href = `/lecturer-meeting?meeting=${encodeURIComponent(newId)}${_meetingCorpParam()}`;
   } catch(e) {
     if (btn) { btn.textContent = 'Start Now'; btn.disabled = false; }
     errEl.textContent = e.message;
@@ -10317,8 +10317,14 @@ async function createAndStartMeeting() {
   }
 }
 
+// Corporate-mode users get meeting pages worded as "meetings" (not
+// "classes") — the shared launch pages read this flag from the URL.
+function _meetingCorpParam() {
+  return currentUser?.company?.mode === 'corporate' ? '&corp=1' : '';
+}
+
 function startMeeting(id) {
-  window.location.href = `/lecturer-meeting?meeting=${encodeURIComponent(id)}`;
+  window.location.href = `/lecturer-meeting?meeting=${encodeURIComponent(id)}${_meetingCorpParam()}`;
 }
 
 const PROCTORED_TYPES = ['proctored_quiz', 'snap_quiz', 'oral_exam', 'live_assessment'];
@@ -10349,7 +10355,7 @@ async function _joinMeetingMobile(roomUrl) {
 }
 
 function joinMeeting(id) {
-  window.location.href = `/student-meeting?meeting=${encodeURIComponent(id)}`;
+  window.location.href = `/student-meeting?meeting=${encodeURIComponent(id)}${_meetingCorpParam()}`;
 }
 
 // ── PROCTORING HELPERS ────────────────────────────────────────────────────────
@@ -10749,7 +10755,7 @@ async function viewMeetingDetail(id) {
           <p><strong>End:</strong> ${new Date(m.scheduledEnd).toLocaleString()}</p>
           <p><strong>Duration:</strong> ${detailDurationMin} minutes</p>
           ${m.course ? `<p><strong>Course:</strong> ${m.course.code} - ${m.course.title}</p>` : ''}
-          <p><strong>Join Link:</strong> <a href="${canManage ? '/lecturer-meeting?meeting=' + m._id : '/session-preflight?meeting=' + m._id}" target="_blank" style="color:#3b82f6;word-break:break-all;">${window.location.origin}${canManage ? '/lecturer-meeting?meeting=' + m._id : '/session-preflight?meeting=' + m._id}</a></p>
+          <p><strong>Join Link:</strong> <a href="${canManage ? '/lecturer-meeting?meeting=' + m._id + _meetingCorpParam() : '/session-preflight?meeting=' + m._id}" style="color:#3b82f6;word-break:break-all;">${window.location.origin}${canManage ? '/lecturer-meeting?meeting=' + m._id : '/session-preflight?meeting=' + m._id}</a></p>
           ${m.inviteLink ? `<p><strong>Invite Link:</strong> <a href="${m.inviteLink}" target="_blank" style="color:#16a34a;word-break:break-all;font-weight:600">▶ ${m.inviteLink}</a></p>` : ''}
           ${canManage ? `<button class="btn btn-sm" style="background:#0ea5e9;color:#fff;margin-top:4px" onclick="showInviteLinkForm('${m._id}', \`${m.inviteLink || ''}\`)">🔗 ${m.inviteLink ? 'Update' : 'Add'} Invite Link</button>` : ''}
           <div style="margin-top:12px;">
