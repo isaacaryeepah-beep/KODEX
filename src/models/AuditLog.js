@@ -76,6 +76,10 @@ const AUDIT_ACTIONS = Object.freeze({
   SETTINGS_CHANGED:  "SETTINGS_CHANGED",
   ROLE_CHANGED:      "ROLE_CHANGED",
   SUBSCRIPTION_CHANGED: "SUBSCRIPTION_CHANGED",
+
+  // Privacy / consent (e.g. ArrivalIQ location + notification opt-in)
+  CONSENT_GRANTED: "CONSENT_GRANTED",
+  CONSENT_REVOKED: "CONSENT_REVOKED",
 });
 
 const SEVERITY = Object.freeze({
@@ -117,6 +121,8 @@ const ACTION_SEVERITY_MAP = {
   SETTINGS_CHANGED:    SEVERITY.MEDIUM,
   ROLE_CHANGED:        SEVERITY.CRITICAL,
   SUBSCRIPTION_CHANGED: SEVERITY.CRITICAL,
+  CONSENT_GRANTED:     SEVERITY.MEDIUM,
+  CONSENT_REVOKED:     SEVERITY.MEDIUM,
 };
 
 // ---------------------------------------------------------------------------
