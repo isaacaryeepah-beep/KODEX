@@ -23372,8 +23372,13 @@ async function renderBranding() {
 
         <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:12px;margin-bottom:14px">
           <div>
-            <label style="font-size:11px;font-weight:700;text-transform:uppercase;color:#6b7280;display:block;margin-bottom:4px">Logo URL</label>
-            <input id="bd-logo" value="${branding.logoUrl||''}" placeholder="https://…" style="width:100%;padding:8px;border:1px solid #d1d5db;border-radius:6px;font-size:13px" oninput="updateBrandPreview()">
+            <label style="font-size:11px;font-weight:700;text-transform:uppercase;color:#6b7280;display:block;margin-bottom:4px">Company Logo</label>
+            <input type="file" id="bd-logo-file" accept="image/png,image/jpeg,image/webp,image/svg+xml" style="display:none" onchange="_bdUploadLogo(this)">
+            <div style="display:flex;gap:6px;align-items:center;margin-bottom:6px">
+              <button type="button" class="btn btn-secondary btn-sm" id="bd-upload-btn" onclick="document.getElementById('bd-logo-file').click()">📤 Upload logo</button>
+              <span style="font-size:11px;color:#6b7280">PNG/JPG/SVG, max 2 MB</span>
+            </div>
+            <input id="bd-logo" value="${branding.logoUrl||''}" placeholder="…or paste an image URL" style="width:100%;padding:8px;border:1px solid #d1d5db;border-radius:6px;font-size:13px" oninput="updateBrandPreview()">
           </div>
           <div>
             <label style="font-size:11px;font-weight:700;text-transform:uppercase;color:#6b7280;display:block;margin-bottom:4px">Primary Color</label>
@@ -23429,6 +23434,30 @@ async function renderBranding() {
     `;
   } catch(e) {
     content.innerHTML = `<div class="card"><p style="color:#ef4444">Error: ${e.message}</p></div>`;
+  }
+}
+
+async function _bdUploadLogo(input) {
+  const file = input.files?.[0];
+  if (!file) return;
+  if (file.size > 2 * 1024 * 1024) { toast('Logo must be under 2 MB', 'error'); input.value = ''; return; }
+  const btn = document.getElementById('bd-upload-btn');
+  const label = btn?.textContent;
+  if (btn) { btn.disabled = true; btn.textContent = 'Uploading…'; }
+  try {
+    const fd = new FormData();
+    fd.append('logo', file);
+    const res = await apiUpload('/api/advanced/branding/logo', fd);
+    const urlInput = document.getElementById('bd-logo');
+    if (urlInput) urlInput.value = res.logoUrl || '';
+    updateBrandPreview();
+    applyBranding(); // refresh topbar logo immediately
+    toast('Logo uploaded and saved!', 'ok');
+  } catch (e) {
+    toast(e.message || 'Logo upload failed', 'error');
+  } finally {
+    if (btn) { btn.disabled = false; btn.textContent = label; }
+    input.value = '';
   }
 }
 

@@ -159,7 +159,10 @@ async function sweepCompany(company) {
       prediction.status = "on_time";
       prediction.departureNotifiedAt = now;
       await pushService.sendToUser(employee._id, {
-        title: "🚗 DIKLY ArrivalIQ",
+        // No hardcoded platform name — pushService brands the notification
+        // with the employing company's name/logo when no icon is given, and
+        // the title keeps just the feature name.
+        title: "🚗 ArrivalIQ",
         body: `Time to leave for your ${shift.startTime} shift — ~${prediction.travelMinutesInTraffic} min drive (${prediction.trafficLevel} traffic). Estimated arrival ${formatClock(prediction.estimatedArrivalAt)}.`,
         url: "/?view=arrival-iq",
         tag: "arrivaliq-departure",
@@ -194,7 +197,7 @@ async function sweepLateRisk(company, dateKey, now) {
     if (clockedIn) continue;
 
     await pushService.sendToUser(p.user, {
-      title: "🚗 DIKLY ArrivalIQ",
+      title: "🚗 ArrivalIQ",
       body: `You may arrive late for your ${p.shiftStartTime} shift.`,
       url: "/?view=arrival-iq",
       tag: "arrivaliq-late-risk",

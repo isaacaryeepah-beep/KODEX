@@ -120,7 +120,38 @@ router.patch("/branding", ...mw, adminOnly, asyncHandler(async (req, res) => {
     req.user.company, { $set: update }, { new: true }
   ).select("name branding");
 
+  require("../services/push/pushService").clearBrandingCache(req.user.company);
   res.json({ branding: company.branding, companyName: company.name });
+}));
+
+// Direct logo file upload (multipart field "logo") — stores via the shared
+// media storage (Cloudinary) and saves the resulting URL to branding.logoUrl,
+// so admins don't need to host the image somewhere themselves and paste a URL.
+const multer = require("multer");
+const mediaStorage = require("../services/storage/mediaStorage");
+const logoUpload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 2 * 1024 * 1024 }, // 2 MB — logos are small
+});
+
+router.post("/branding/logo", ...mw, adminOnly, logoUpload.single("logo"), asyncHandler(async (req, res) => {
+  if (!req.file) return res.status(400).json({ error: "No file uploaded (field name: logo)" });
+  if (!/^image\/(png|jpe?g|webp|svg\+xml)$/.test(req.file.mimetype)) {
+    return res.status(400).json({ error: "Logo must be a PNG, JPG, WebP, or SVG image" });
+  }
+  const uploaded = await mediaStorage.uploadImage(req.file.buffer, {
+    folder:       "company-logos",
+    filenameHint: `logo-${req.user.company}`,
+    mimeType:     req.file.mimetype,
+    fileSize:     req.file.size,
+  });
+  const company = await Company.findByIdAndUpdate(
+    req.user.company,
+    { $set: { "branding.logoUrl": uploaded.url } },
+    { new: true }
+  ).select("name branding");
+  require("../services/push/pushService").clearBrandingCache(req.user.company);
+  res.json({ logoUrl: uploaded.url, branding: company.branding, companyName: company.name });
 }));
 
 // ─────────────────────────────────────────────────────────────

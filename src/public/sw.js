@@ -134,7 +134,9 @@ self.addEventListener('push', event => {
 
   const options = {
     body: data.body || '',
-    icon: '/icons/icon-192.png',
+    // Per-company branding: the server includes the organization's own logo
+    // as `icon` when one is configured (see pushService.sendToUser).
+    icon: data.icon || '/icons/icon-192.png',
     badge: '/icons/badge-72.png',
     tag: data.tag || 'dikly-notification',
     data: { url: data.url || '/' },

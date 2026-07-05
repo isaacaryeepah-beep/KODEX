@@ -15,7 +15,24 @@
  */
 
 const PushSubscription = require("../../models/PushSubscription");
+const Company = require("../../models/Company");
 const webPushProvider = require("./providers/webPushProvider");
+
+// Per-company branding for notifications, so pushes arrive titled/iconed as
+// the employer ("Acme Ltd" + their logo) rather than as Dikly. Cached for a
+// few minutes — branding changes rarely and sends can be bursty (sweep job).
+const BRANDING_TTL_MS = 5 * 60 * 1000;
+const _brandingCache = new Map(); // companyId → { at, name, logoUrl }
+async function companyBranding(companyId) {
+  if (!companyId) return null;
+  const key = String(companyId);
+  const hit = _brandingCache.get(key);
+  if (hit && Date.now() - hit.at < BRANDING_TTL_MS) return hit;
+  const company = await Company.findById(companyId).select("name branding.logoUrl").lean().catch(() => null);
+  const entry = { at: Date.now(), name: company?.name || null, logoUrl: company?.branding?.logoUrl || null };
+  _brandingCache.set(key, entry);
+  return entry;
+}
 
 const PROVIDERS = {
   webpush: webPushProvider,
@@ -39,6 +56,15 @@ function isConfigured() {
 async function sendToUser(userId, payload) {
   const subs = await PushSubscription.find({ user: userId }).lean();
   if (!subs.length) return { sent: 0, skipped: false };
+
+  // Brand the notification as the user's organization: their logo as the
+  // notification icon, and their company name as the title when the caller
+  // didn't set one. Explicit titles/icons from callers always win.
+  const brand = await companyBranding(subs[0].company);
+  if (brand) {
+    if (!payload.title && brand.name) payload = { ...payload, title: brand.name };
+    if (!payload.icon && brand.logoUrl) payload = { ...payload, icon: brand.logoUrl };
+  }
 
   const body = JSON.stringify(payload);
   let sent = 0;
@@ -65,4 +91,4 @@ async function sendToUser(userId, payload) {
   return { sent, skipped: sent === 0 && !isConfigured() };
 }
 
-module.exports = { sendToUser, isConfigured };
+module.exports = { sendToUser, isConfigured, clearBrandingCache: (companyId) => _brandingCache.delete(String(companyId)) };
