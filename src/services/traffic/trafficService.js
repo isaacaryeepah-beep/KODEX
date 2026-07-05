@@ -9,18 +9,21 @@
  * swapping providers (or adding a fallback chain) is a one-file change —
  * the same pattern used for push delivery in src/services/push/pushService.js.
  *
- * TRAFFIC_PROVIDER=google-maps|mapbox picks explicitly. Left unset, it
- * auto-selects whichever provider actually has credentials configured
- * (Google Maps first if both are set) — set explicitly once you've chosen
- * one so a stray credential for the other doesn't silently take over.
+ * TRAFFIC_PROVIDER=google-maps|mapbox|tomtom picks explicitly. Left unset,
+ * it auto-selects whichever provider actually has credentials configured
+ * (first match wins, in the order listed in PROVIDERS below) — set
+ * explicitly once you've chosen one so a stray credential for another
+ * doesn't silently take over.
  */
 
 const googleMapsProvider = require("./providers/googleMapsProvider");
 const mapboxProvider = require("./providers/mapboxProvider");
+const tomtomProvider = require("./providers/tomtomProvider");
 
 const PROVIDERS = {
   "google-maps": googleMapsProvider,
   "mapbox": mapboxProvider,
+  "tomtom": tomtomProvider,
 };
 
 function activeProvider() {
@@ -43,7 +46,7 @@ function isConfigured() {
 async function getTravelTime(opts) {
   const provider = activeProvider();
   if (!provider.isConfigured()) {
-    throw new Error("No traffic provider is configured (set GOOGLE_MAPS_API_KEY or MAPBOX_ACCESS_TOKEN)");
+    throw new Error("No traffic provider is configured (set GOOGLE_MAPS_API_KEY, MAPBOX_ACCESS_TOKEN, or TOMTOM_API_KEY)");
   }
   return provider.getTravelTime(opts);
 }

@@ -88,10 +88,12 @@ services:
         sync: false
 
       # ── Traffic (ArrivalIQ) — src/services/traffic/trafficService.js
-      # Pick one: Google Maps or Mapbox (see .env.example for the tradeoff)
+      # Pick one: Google Maps, Mapbox, or TomTom (see .env.example for the tradeoff)
       - key: GOOGLE_MAPS_API_KEY
         sync: false
       - key: MAPBOX_ACCESS_TOKEN
+        sync: false
+      - key: TOMTOM_API_KEY
         sync: false
       - key: TRAFFIC_PROVIDER
         sync: false
