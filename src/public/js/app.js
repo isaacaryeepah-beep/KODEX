@@ -19537,21 +19537,36 @@ async function renderArrivalIQSettings() {
             <input type="checkbox" id="aiq-push" ${s.pushEnabled ? 'checked' : ''} style="width:16px;height:16px;cursor:pointer">
           </label>
         </div>
+        <div style="display:flex;align-items:center;justify-content:space-between;padding:12px 0;border-bottom:1px solid var(--border)">
+          <div>
+            <div style="font-weight:600;font-size:13px">Mandatory for all employees</div>
+            <div style="font-size:11px;color:var(--text-light)">Employees can't disable ArrivalIQ notifications/location themselves once granted. Off = fully optional (employees can turn it off anytime).</div>
+          </div>
+          <label style="display:flex;align-items:center;gap:8px;cursor:pointer">
+            <input type="checkbox" id="aiq-mandatory" ${s.mandatory ? 'checked' : ''} style="width:16px;height:16px;cursor:pointer">
+          </label>
+        </div>
         <div style="padding:12px 0">
           <div style="font-weight:600;font-size:13px;margin-bottom:6px">Safety Buffer</div>
           <div style="font-size:11px;color:var(--text-light);margin-bottom:8px">Extra minutes added on top of the raw travel-time estimate before calculating the recommended departure time</div>
-          <input id="aiq-buffer" type="number" min="0" max="120" value="${s.bufferMinutes ?? 10}" style="width:120px;padding:8px;border:1px solid var(--border);border-radius:6px;font-size:13px"> minutes
+          <input id="aiq-buffer" type="number" min="5" max="60" value="${s.bufferMinutes ?? 10}" style="width:120px;padding:8px;border:1px solid var(--border);border-radius:6px;font-size:13px"> minutes
         </div>
         <button class="btn btn-primary" onclick="_aiqSaveSettings()" style="margin-top:8px">Save ArrivalIQ Settings</button>
       </div>
 
-      <div class="card" style="max-width:600px">
+      <div class="card" style="max-width:600px;margin-bottom:20px">
         <h3 style="font-size:15px;font-weight:700;margin-bottom:4px">Office Location</h3>
         <p style="font-size:12px;color:var(--text-light);margin-bottom:14px">ArrivalIQ calculates travel time to this same office location used for geofenced clock-in.</p>
         ${hasOffice
           ? `<div style="font-size:13px;margin-bottom:12px"><strong>${s.officeLatitude.toFixed(6)}, ${s.officeLongitude.toFixed(6)}</strong> · ${s.geofenceRadiusMeters}m geofence radius</div>`
           : `<div style="font-size:13px;color:#b54708;margin-bottom:12px">⚠ No office location set yet — ArrivalIQ can't estimate travel time until this is configured.</div>`}
         <button class="btn btn-secondary btn-sm" onclick="navigateTo('corp-clock-settings')">${hasOffice ? 'Edit' : 'Set'} office location →</button>
+      </div>
+
+      <div class="card" style="max-width:600px">
+        <h3 style="font-size:15px;font-weight:700;margin-bottom:4px">Verify Push Notifications</h3>
+        <p style="font-size:12px;color:var(--text-light);margin-bottom:14px">Send yourself a test push to confirm notifications are wired up correctly for this browser/device before rolling ArrivalIQ out to employees.</p>
+        <button class="btn btn-secondary btn-sm" onclick="_pushEnableAndTest(this)">Send Test Notification</button>
       </div>`;
   } catch(e) {
     content.innerHTML = `<div class="card"><p style="color:var(--danger)">${esc(e.message)}</p></div>`;
@@ -19560,6 +19575,7 @@ async function renderArrivalIQSettings() {
 window._aiqSaveSettings = async function() {
   const enabled       = document.getElementById('aiq-enabled')?.checked ?? false;
   const pushEnabled   = document.getElementById('aiq-push')?.checked ?? false;
+  const mandatory     = document.getElementById('aiq-mandatory')?.checked ?? false;
   const bufferMinutes = document.getElementById('aiq-buffer')?.value;
   try {
     await api('/api/arrival-iq/settings', {
@@ -19567,6 +19583,7 @@ window._aiqSaveSettings = async function() {
       body: JSON.stringify({
         enabled,
         pushEnabled,
+        mandatory,
         bufferMinutes: bufferMinutes ? parseInt(bufferMinutes, 10) : 10,
       }),
     });
@@ -19588,7 +19605,7 @@ async function renderArrivalIQ() {
   content.innerHTML = '<div class="loading">Loading…</div>';
   try {
     const [status, consent] = await Promise.all([
-      api('/api/arrival-iq/status').catch(() => ({ enabled: false })),
+      api('/api/arrival-iq/status').catch(() => ({ enabled: false, mandatory: false })),
       api('/api/arrival-iq/consent').catch(() => ({ locationGranted: false, notificationGranted: false })),
     ]);
 
@@ -19606,57 +19623,90 @@ async function renderArrivalIQ() {
     const notifOn = !!consent.notificationGranted;
     const locOn   = !!consent.locationGranted;
     const bothOn  = notifOn && locOn;
+    const mandatory = !!status.mandatory;
+
+    const grantedAction = (kind, on) => on
+      ? (mandatory
+          ? `<span style="font-size:12px;font-weight:700;color:#067647">✓ Granted <span style="font-weight:500;color:var(--text-light)">· required</span></span>`
+          : `<span style="display:flex;align-items:center;gap:10px"><span style="font-size:12px;font-weight:700;color:#067647">✓ Granted</span><button class="btn btn-ghost btn-sm" onclick="_aiqRevoke('${kind}')">Revoke</button></span>`)
+      : null;
 
     content.innerHTML = `
       <div class="page-header"><h2>ArrivalIQ</h2><p>Smart Arrival Assistant — personalized departure reminders based on live traffic</p></div>
 
       <div class="card" style="max-width:520px;margin-bottom:16px">
-        <div style="font-size:13px;color:var(--text-light);margin-bottom:16px">
-          ArrivalIQ estimates your travel time to the office and tells you exactly when to leave — like a personal assistant for your commute. It only checks your location around your shift time to estimate travel time; it never tracks you throughout the day or stores your location history.
+        <div style="font-size:13px;color:var(--text-light);margin-bottom:10px">
+          ArrivalIQ estimates your travel time to the office and tells you exactly when to leave — like a personal assistant for your commute.
         </div>
+        <div style="font-size:12px;color:var(--text-light);background:var(--bg);border-radius:8px;padding:10px 12px;margin-bottom:16px">
+          🔒 <strong>Your privacy:</strong> DIKLY does not continuously track your location. It's only ever checked around your working hours, solely to estimate travel time and confirm attendance — never stored as ongoing location history.
+          <a href="/privacy" target="_blank" rel="noopener" style="color:var(--primary);text-decoration:underline">Read the full privacy policy →</a>
+        </div>
+        ${mandatory ? `<div style="font-size:11px;color:#b54708;margin-bottom:14px">⚠ Your organization requires ArrivalIQ — these permissions can't be turned off once granted.</div>` : ''}
 
         <div style="display:flex;align-items:center;justify-content:space-between;padding:12px 0;border-bottom:1px solid var(--border)">
           <div>
             <div style="font-weight:600;font-size:13px">Notifications</div>
             <div style="font-size:11px;color:var(--text-light)">Required to receive departure reminders, even when the app is closed</div>
           </div>
-          ${notifOn
-            ? `<span style="display:flex;align-items:center;gap:10px"><span style="font-size:12px;font-weight:700;color:#067647">✓ Granted</span><button class="btn btn-ghost btn-sm" onclick="_aiqRevoke('notification')">Revoke</button></span>`
-            : `<button class="btn btn-primary btn-sm" onclick="_aiqGrantNotifications()">Grant</button>`}
+          ${notifOn ? grantedAction('notification', true) : `<button class="btn btn-primary btn-sm" onclick="_aiqGrantNotifications()">Grant</button>`}
         </div>
-        <div style="display:flex;align-items:center;justify-content:space-between;padding:12px 0">
+        ${notifOn ? `<div style="padding:8px 0;border-bottom:1px solid var(--border)"><button class="btn btn-ghost btn-sm" onclick="_pushEnableAndTest(this)">Test My Notification</button></div>` : ''}
+
+        <div style="display:flex;align-items:center;justify-content:space-between;padding:12px 0${locOn ? ';border-bottom:1px solid var(--border)' : ''}">
           <div>
             <div style="font-weight:600;font-size:13px">Location</div>
-            <div style="font-size:11px;color:var(--text-light)">Used only around shift time to estimate travel time — never tracked continuously</div>
+            <div style="font-size:11px;color:var(--text-light)">Used only around your working hours to estimate travel time — never tracked continuously</div>
           </div>
-          ${locOn
-            ? `<span style="display:flex;align-items:center;gap:10px"><span style="font-size:12px;font-weight:700;color:#067647">✓ Granted</span><button class="btn btn-ghost btn-sm" onclick="_aiqRevoke('location')">Revoke</button></span>`
-            : `<button class="btn btn-primary btn-sm" onclick="_aiqGrantLocation()">Grant</button>`}
+          ${locOn ? grantedAction('location', true) : `<button class="btn btn-primary btn-sm" onclick="_aiqGrantLocation()">Grant</button>`}
         </div>
+        ${locOn ? `<div style="padding:8px 0"><button class="btn btn-ghost btn-sm" onclick="_aiqTestLocation(this)">Test My Location</button></div>` : ''}
       </div>
 
       ${bothOn ? `
       <div class="card" style="max-width:520px">
-        <div style="font-weight:700;font-size:13px;margin-bottom:8px">You're all set 🎉</div>
-        <div style="font-size:12px;color:var(--text-light);margin-bottom:12px">ArrivalIQ will send you a personalized departure reminder before your next shift.</div>
-        <button class="btn btn-secondary btn-sm" onclick="_aiqSendTestPush()">Send test notification</button>
+        <div style="font-weight:700;font-size:13px;margin-bottom:6px">You're all set 🎉</div>
+        <div style="font-size:12px;color:var(--text-light)">ArrivalIQ will send you a personalized departure reminder before your next shift.</div>
       </div>` : ''}`;
   } catch (e) {
     content.innerHTML = `<div class="card"><p style="color:var(--danger)">${esc(e.message)}</p></div>`;
   }
 }
 
-window._aiqGrantNotifications = async function() {
-  try {
-    const granted = await requestPushPermission();
-    if (!granted) { toastError('Notification permission was denied. Enable it in your browser/device settings.'); return; }
-    const reg = await navigator.serviceWorker.ready;
+// Subscribes to push if not already subscribed; returns the subscription.
+// Shared by the employee grant flow and the plain "send test" buttons
+// (admin settings + employee "Test My Notification") so there's one path
+// that actually talks to pushManager/the backend.
+window._pushSubscribeIfNeeded = async function() {
+  const granted = await requestPushPermission();
+  if (!granted) throw new Error('Notification permission was denied. Enable it in your browser/device settings.');
+  const reg = await navigator.serviceWorker.ready;
+  let sub = await reg.pushManager.getSubscription();
+  if (!sub) {
     const { publicKey } = await api('/api/push/vapid-public-key');
-    const sub = await reg.pushManager.subscribe({
+    sub = await reg.pushManager.subscribe({
       userVisibleOnly: true,
       applicationServerKey: _urlBase64ToUint8Array(publicKey),
     });
     await api('/api/push/subscribe', { method: 'POST', body: JSON.stringify(sub.toJSON()) });
+  }
+  return sub;
+};
+
+window._pushEnableAndTest = async function(btn) {
+  const label = btn?.textContent;
+  if (btn) { btn.disabled = true; btn.textContent = 'Sending…'; }
+  try {
+    await _pushSubscribeIfNeeded();
+    await api('/api/push/test', { method: 'POST' });
+    toastSuccess('Test notification sent — check your device');
+  } catch (e) { toastError(e.message || 'Failed to send test notification'); }
+  finally { if (btn) { btn.disabled = false; btn.textContent = label; } }
+};
+
+window._aiqGrantNotifications = async function() {
+  try {
+    await _pushSubscribeIfNeeded();
     await api('/api/arrival-iq/consent', { method: 'POST', body: JSON.stringify({ notificationGranted: true }) });
     toastSuccess('Notifications enabled');
     renderArrivalIQ();
@@ -19672,11 +19722,14 @@ window._aiqGrantLocation = async function() {
   } catch (e) { _showGPSBlockedModal(e.message); }
 };
 
-window._aiqSendTestPush = async function() {
+window._aiqTestLocation = async function(btn) {
+  const label = btn?.textContent;
+  if (btn) { btn.disabled = true; btn.textContent = 'Checking…'; }
   try {
-    await api('/api/push/test', { method: 'POST' });
-    toastSuccess('Test notification sent — check your device');
-  } catch (e) { toastError(e.message || 'Failed to send test notification'); }
+    const loc = await _getGPSLocation();
+    toastSuccess(`Location OK — accuracy ±${loc.accuracy}m`);
+  } catch (e) { _showGPSBlockedModal(e.message); }
+  finally { if (btn) { btn.disabled = false; btn.textContent = label; } }
 };
 
 window._aiqRevoke = async function(kind) {

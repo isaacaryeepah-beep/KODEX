@@ -3,15 +3,22 @@
 /**
  * PushSubscription
  *
- * A single browser/device Web Push endpoint for a user, as returned by
- * `PushManager.subscribe()` on the client. A user can have several (one per
+ * A single device's push registration for a user, as returned by
+ * `PushManager.subscribe()` (Web Push) today, or a native FCM/APNs
+ * registration token in a future phase. A user can have several (one per
  * device/browser they've granted notification permission on).
  *
- * Written by `POST /api/push/subscribe`, consumed by `webPushService.js`
- * when sending a real push (ArrivalIQ and any future push-based feature).
+ * `provider` selects which transport src/services/push/pushService.js uses
+ * to deliver to this subscription — see providers/webPushProvider.js for
+ * the only one implemented so far. `endpoint`/`keys` are Web Push-specific;
+ * `deviceToken` is reserved for a future native provider.
+ *
+ * Written by `POST /api/push/subscribe`.
  */
 
 const mongoose = require("mongoose");
+
+const PROVIDERS = ["webpush", "fcm-android", "apns-ios"];
 
 const pushSubscriptionSchema = new mongoose.Schema(
   {
@@ -27,14 +34,26 @@ const pushSubscriptionSchema = new mongoose.Schema(
       required: true,
       index: true,
     },
+    provider: {
+      type: String,
+      enum: PROVIDERS,
+      default: "webpush",
+    },
+    // Web Push (provider: "webpush")
     endpoint: {
       type: String,
-      required: true,
+      required: function () { return this.provider === "webpush"; },
       unique: true,
+      sparse: true,
     },
     keys: {
-      p256dh: { type: String, required: true },
-      auth:   { type: String, required: true },
+      p256dh: { type: String },
+      auth:   { type: String },
+    },
+    // Reserved for a future native provider (FCM/APNs registration token).
+    deviceToken: {
+      type: String,
+      default: null,
     },
     userAgent: {
       type: String,
@@ -51,3 +70,4 @@ const pushSubscriptionSchema = new mongoose.Schema(
 pushSubscriptionSchema.index({ user: 1, createdAt: -1 });
 
 module.exports = mongoose.model("PushSubscription", pushSubscriptionSchema);
+module.exports.PROVIDERS = PROVIDERS;

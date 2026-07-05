@@ -131,9 +131,13 @@ const companySchema = new mongoose.Schema(
     // Per-shift start time / grace period already live on the Shift model.
     arrivalIQ: {
       enabled: { type: Boolean, default: false },
+      // When true, employees can't revoke consent themselves once granted
+      // (enforced in POST /api/arrival-iq/consent) — for organizations that
+      // require it rather than treat it as opt-in.
+      mandatory: { type: Boolean, default: false },
       // Extra safety margin (minutes) added on top of the raw Maps travel
       // time estimate before computing the recommended departure time.
-      bufferMinutes: { type: Number, default: 10, min: 0, max: 120 },
+      bufferMinutes: { type: Number, default: 10, min: 5, max: 60 },
       pushEnabled: { type: Boolean, default: true },
     },
     // ── Organization settings (Company Settings page) ─────────────────────

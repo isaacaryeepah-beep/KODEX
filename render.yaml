@@ -79,12 +79,16 @@ services:
       - key: CLOUDINARY_API_SECRET
         sync: false
 
-      # ── Web Push (VAPID) — src/services/webPushService.js ──────────────────
+      # ── Web Push (VAPID) — src/services/push/providers/webPushProvider.js ──
       - key: VAPID_PUBLIC_KEY
         sync: false
       - key: VAPID_PRIVATE_KEY
         sync: false
       - key: VAPID_SUBJECT
+        sync: false
+
+      # ── Traffic (ArrivalIQ Phase 2 — not used yet) ──────────────────────────
+      - key: GOOGLE_MAPS_API_KEY
         sync: false
 
       # ── Video — GetStream primary, LiveKit fallback ────────────────────────

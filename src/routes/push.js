@@ -14,14 +14,15 @@
  *
  * Generic push-subscription plumbing — not specific to any one feature.
  * ArrivalIQ (and any future push-based feature) sends through
- * webPushService.sendToUser(), which reads from PushSubscription.
+ * pushService.sendToUser(), which dispatches to whichever provider
+ * (webpush today; native FCM/APNs later) each subscription is for.
  */
 
 const express = require("express");
 const router = express.Router();
 const authenticate = require("../middleware/auth");
 const PushSubscription = require("../models/PushSubscription");
-const webPush = require("../services/webPushService");
+const pushService = require("../services/push/pushService");
 
 router.get("/vapid-public-key", authenticate, (req, res) => {
   if (!process.env.VAPID_PUBLIC_KEY) {
@@ -69,10 +70,10 @@ router.delete("/subscribe", authenticate, async (req, res) => {
 
 router.post("/test", authenticate, async (req, res) => {
   try {
-    if (!webPush.isConfigured()) {
+    if (!pushService.isConfigured()) {
       return res.status(503).json({ error: "Push notifications are not configured" });
     }
-    const result = await webPush.sendToUser(req.user._id, {
+    const result = await pushService.sendToUser(req.user._id, {
       title: "Dikly",
       body: "Push notifications are set up correctly.",
       tag: "push-test",
