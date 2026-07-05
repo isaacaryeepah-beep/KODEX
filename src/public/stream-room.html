@@ -269,9 +269,16 @@ window.addEventListener('unhandledrejection', function(e) {
 
 var _p        = new URLSearchParams(location.search);
 var meetingId = _p.get('meetingId') || '';
-var title     = _p.get('title')     || 'Class';
 var BASE_URL  = location.origin;
 var PROCTOR_TYPES = ['oral_exam', 'live_assessment', 'proctored_quiz', 'snap_quiz'];
+
+// Corporate wording — launch pages append corp=1 for corporate-mode users
+var IS_CORP = _p.get('corp') === '1';
+var title   = _p.get('title') || (IS_CORP ? 'Meeting' : 'Class');
+if (IS_CORP) {
+  var _cm = document.getElementById('connectMsg');
+  if (_cm) _cm.textContent = 'Joining meeting…';
+}
 
 // Cross-origin token handoff: the main app (dikly.sbs) passes its JWT via ?dikly_auth=
 // when navigating to a different domain (e.g. app.dikly.live). Save it, then strip it.
@@ -374,7 +381,7 @@ try {
   });
 } catch(e) { showError('Could not create room: ' + e.message); return; }
 
-setMsg('Joining class…');
+setMsg(IS_CORP ? 'Joining meeting…' : 'Joining class…');
 try {
   await room.connect(livekitUrl, token);
 } catch(e) { showError('Could not join: ' + e.message); return; }

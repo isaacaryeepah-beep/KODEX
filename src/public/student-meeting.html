@@ -353,10 +353,9 @@ async function init() {
       let joinUrl = data.meetingUrl;
       try {
         const destUrl = new URL(joinUrl, location.origin);
-        if (AUTH_TOKEN) {
-          destUrl.searchParams.set('dikly_auth', AUTH_TOKEN);
-          joinUrl = destUrl.toString();
-        }
+        if (AUTH_TOKEN) destUrl.searchParams.set('dikly_auth', AUTH_TOKEN);
+        if (IS_CORP) destUrl.searchParams.set('corp', '1');
+        joinUrl = destUrl.toString();
       } catch (_) {}
       window.location.href = joinUrl;
     }
