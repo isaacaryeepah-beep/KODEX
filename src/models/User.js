@@ -319,6 +319,17 @@ const userSchema = new mongoose.Schema(
       unlockedAt:    { type: Date,    default: null },
       _id: false,
     },
+
+    // ── ArrivalIQ consent (Smart Arrival Assistant) ─────────────────────────
+    // Explicit per-user opt-in, separate from company-level arrivalIQ.enabled.
+    // Location is only ever read around shift time for travel estimation —
+    // never tracked continuously or stored as history (see arrivalIQ.js).
+    arrivalIQConsent: {
+      locationGranted:     { type: Boolean, default: false },
+      notificationGranted: { type: Boolean, default: false },
+      grantedAt:           { type: Date,    default: null },
+      _id: false,
+    },
   },
   {
     timestamps: true,

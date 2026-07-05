@@ -125,6 +125,17 @@ const companySchema = new mongoose.Schema(
       clockOutStart: { type: String, default: null },   // e.g. "16:00"
       clockOutEnd:   { type: String, default: null },   // e.g. "22:00"
     },
+    // ── ArrivalIQ (Smart Arrival Assistant) ─────────────────────────────────
+    // Office location + geofence radius are shared with corporateSettings
+    // above (one physical office per company today) rather than duplicated.
+    // Per-shift start time / grace period already live on the Shift model.
+    arrivalIQ: {
+      enabled: { type: Boolean, default: false },
+      // Extra safety margin (minutes) added on top of the raw Maps travel
+      // time estimate before computing the recommended departure time.
+      bufferMinutes: { type: Number, default: 10, min: 0, max: 120 },
+      pushEnabled: { type: Boolean, default: true },
+    },
     // ── Organization settings (Company Settings page) ─────────────────────
     timezone: { type: String, default: "Africa/Accra" },
     publicHolidays: [{
