@@ -49,11 +49,16 @@ async function sendToUser(userId, payload) {
       await provider.send(sub, body);
       sent++;
     } catch (err) {
-      if (err.statusCode === 410 || err.statusCode === 404) {
-        // Subscription expired or was revoked on the client — clean it up.
+      // Any 4xx means the push service itself rejected this subscription —
+      // gone (404/410), or permanently invalid (400/403, e.g. a subscription
+      // whose applicationServerKey no longer matches our current VAPID key
+      // after a rotation). None of these will ever succeed on retry, so
+      // clean them up the same way; only 5xx/network errors are transient.
+      if (err.statusCode >= 400 && err.statusCode < 500) {
         await PushSubscription.deleteOne({ _id: sub._id }).catch(() => {});
+        console.warn(`[Push] removed dead subscription for user ${userId} via ${sub.provider || "webpush"} (${err.statusCode}): ${err.body || err.message}`);
       } else {
-        console.error(`[Push] send failed for user ${userId} via ${sub.provider || "webpush"}:`, err.message);
+        console.error(`[Push] send failed for user ${userId} via ${sub.provider || "webpush"} (status ${err.statusCode || "n/a"}):`, err.body || err.message);
       }
     }
   }));
