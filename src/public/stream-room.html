@@ -355,7 +355,17 @@ if (isMod) document.getElementById('callScreen').classList.add('is-mod');
 var room;
 var micOn = false, camOn = false, sharing = false, handRaised = false;
 var chatOpen = false, participantsOpen = false;
+// Elapsed timer counts from the meeting's TRUE start (server-stamped
+// actualStart, passed as ?startedAt=) — not from when this participant's
+// page loaded, which showed 00:00 to every late joiner and disagreed
+// between participants. Falls back to page-load time if the param is
+// missing/invalid; clamped so device clock skew can't produce a start
+// in the future (negative elapsed).
 var startedAt = Date.now();
+(function() {
+  var t = Date.parse(_p.get('startedAt') || '');
+  if (!isNaN(t) && t <= Date.now()) startedAt = t;
+})();
 var activeSpeakerSids = new Set();
 var encoder = new TextEncoder();
 var decoder = new TextDecoder();
