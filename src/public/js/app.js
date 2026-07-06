@@ -2889,6 +2889,7 @@ function buildSidebar() {
         links.push({ id: 'roles-permissions', label: 'Roles & Permissions', icon: svgIcon('<rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/>') });
         links.push({ id: 'company-settings',  label: 'Company Settings',    icon: svgIcon('<circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/>') });
         links.push({ id: 'branding',        label: 'Branding',            icon: svgIcon('<circle cx="12" cy="12" r="10"/><path d="M8 14s1.5 2 4 2 4-2 4-2"/><line x1="9" y1="9" x2="9.01" y2="9"/><line x1="15" y1="9" x2="15.01" y2="9"/>') });
+        links.push({ id: 'api-access',      label: 'API Access',          icon: svgIcon('<polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/>') });
         links.push({ id: 'search',          label: 'Search',              icon: svgIcon('<circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>') });
         links.push({ sep: true, label: 'SUPPORT' });
         links.push({ id: 'subscription',    label: 'Subscription',        icon: subscriptionIcon() });
@@ -2921,6 +2922,7 @@ function buildSidebar() {
       links.push({ id: 'ai-reports', label: 'Dikly AI', icon: svgIcon('<path d="M15 4V2"/><path d="M15 16v-2"/><path d="M8 9h2"/><path d="M20 9h2"/><path d="M17.8 11.8 19 13"/><path d="M15 9h.01"/><path d="M17.8 6.2 19 5"/><path d="M13.2 6.2 12 5"/><path d="M3 21l9-9"/>') });
       links.push({ sep: true, label: 'ADMINISTRATION' });
       links.push({ id: 'company-settings', label: 'Company Settings', icon: svgIcon('<circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/>') });
+      links.push({ id: 'api-access', label: 'API Access', icon: svgIcon('<polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/>') });
       links.push({ sep: true, label: 'SUPPORT' });
       links.push({ id: 'faq-center', label: 'FAQ Center', icon: svgIcon('<circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/>') });
       links.push({ id: 'subscription', label: 'Subscription', icon: subscriptionIcon() });
@@ -3337,6 +3339,7 @@ function navigateTo(view) {
     case 'corp-attendance': renderCorporateAttendance(); break;
     case 'corp-clock-settings': renderCorpClockSettings(); break;
     case 'arrival-iq-settings': renderArrivalIQSettings(); break;
+    case 'api-access': renderApiAccess(); break;
     case 'arrival-iq': renderArrivalIQ(); break;
     case 'subscription': renderSubscription(); break;
     case 'reports': renderReports(); break;
@@ -19650,6 +19653,128 @@ window._aiqSaveSettings = async function() {
     });
     toastSuccess('ArrivalIQ settings saved');
   } catch (e) { toastError(e.message || 'Failed to save settings'); }
+};
+
+// ── API Access (admin) — public API keys for /api/v1 integrations ──────────
+const _API_SCOPE_META = {
+  'read:attendance': 'Attendance records (clock-in/out, hours, overtime)',
+  'read:employees':  'Employee directory (names, emails, departments)',
+  'read:leaves':     'Leave requests and their statuses',
+  'read:shifts':     'Shift definitions',
+};
+
+async function renderApiAccess() {
+  const content = document.getElementById('main-content');
+  if (!content) return;
+  content.innerHTML = '<div class="loading">Loading…</div>';
+  try {
+    const { keys, scopes } = await api('/api/api-keys');
+
+    const scopeChip = s => `<span style="background:#eef2ff;color:#4338ca;border-radius:999px;padding:2px 8px;font-size:10px;font-weight:700;white-space:nowrap">${esc(s)}</span>`;
+    const rows = (keys || []).map(k => `
+      <tr style="${k.revokedAt ? 'opacity:.5' : ''}">
+        <td><strong>${esc(k.name)}</strong><br><span style="font-family:monospace;font-size:11px;color:var(--text-light)">${esc(k.prefix)}</span></td>
+        <td><div style="display:flex;gap:4px;flex-wrap:wrap">${(k.scopes||[]).map(scopeChip).join('')}</div></td>
+        <td style="font-size:12px;white-space:nowrap">${k.lastUsedAt ? timeAgo(k.lastUsedAt) : '—'}<br><span style="color:var(--text-light);font-size:11px">${k.requestCount || 0} requests</span></td>
+        <td>${k.revokedAt
+          ? '<span style="background:#fef2f2;color:#b91c1c;border-radius:999px;padding:2px 10px;font-size:11px;font-weight:700">Revoked</span>'
+          : `<button class="btn btn-sm" style="background:#fef2f2;color:#b91c1c;border:1px solid #fecaca" onclick="_akRevoke('${k._id}', '${esc(k.name).replace(/'/g, "\\'")}')">Revoke</button>`}
+        </td>
+      </tr>`).join('');
+
+    content.innerHTML = `
+      <div class="page-header">
+        <h2>API Access</h2>
+        <p>Issue keys so external systems (payroll, HR tools, dashboards) can read your organization's data via the Dikly API.</p>
+      </div>
+
+      <div class="card" style="max-width:760px;margin-bottom:20px">
+        <h3 style="font-size:15px;font-weight:700;margin-bottom:4px">Your API Keys</h3>
+        <p style="font-size:12px;color:var(--text-light);margin-bottom:14px">Each key is locked to this organization and only to the scopes you grant it. Revoking a key disables it immediately.</p>
+        ${(keys || []).length
+          ? `<div style="overflow-x:auto"><table><thead><tr><th>Key</th><th>Scopes</th><th>Usage</th><th></th></tr></thead><tbody>${rows}</tbody></table></div>`
+          : `<div class="empty-state" style="padding:20px 0"><p>No API keys yet — create your first one below.</p></div>`}
+      </div>
+
+      <div class="card" style="max-width:760px;margin-bottom:20px">
+        <h3 style="font-size:15px;font-weight:700;margin-bottom:4px">Create API Key</h3>
+        <p style="font-size:12px;color:var(--text-light);margin-bottom:14px">The full key is shown <strong>once</strong> after creation — copy it straight into the destination system. Dikly stores only a fingerprint, so it can never be shown again.</p>
+        <div class="form-group" style="margin-bottom:12px">
+          <label style="font-size:11px;font-weight:700;text-transform:uppercase;color:var(--text-light)">Key name</label>
+          <input id="ak-name" placeholder="e.g. Payroll integration" maxlength="80" style="width:100%;max-width:340px;padding:9px 12px;border:1.5px solid var(--border);border-radius:8px;font-size:13px;margin-top:4px">
+        </div>
+        <div style="font-size:11px;font-weight:700;text-transform:uppercase;color:var(--text-light);margin-bottom:6px">Scopes — grant only what the integration needs</div>
+        ${(scopes || []).map(s => `
+          <label style="display:flex;align-items:flex-start;gap:8px;padding:6px 0;cursor:pointer">
+            <input type="checkbox" class="ak-scope" value="${esc(s)}" style="width:15px;height:15px;margin-top:2px;cursor:pointer">
+            <span style="font-size:13px"><strong style="font-family:monospace;font-size:12px">${esc(s)}</strong><br><span style="font-size:11px;color:var(--text-light)">${esc(_API_SCOPE_META[s] || '')}</span></span>
+          </label>`).join('')}
+        <button class="btn btn-primary" style="margin-top:12px" onclick="_akCreate(this)">Create Key</button>
+      </div>
+
+      <div class="card" style="max-width:760px">
+        <h3 style="font-size:15px;font-weight:700;margin-bottom:4px">Quick Start</h3>
+        <p style="font-size:12px;color:var(--text-light);margin-bottom:10px">Send the key in the <code style="font-family:monospace">X-API-Key</code> header. All endpoints are read-only and return JSON with <code style="font-family:monospace">{ data, pagination }</code>.</p>
+        <pre style="background:var(--bg);border-radius:8px;padding:12px;font-size:11.5px;overflow-x:auto;line-height:1.6">curl https://dikly.sbs/api/v1/attendance?from=2026-07-01&amp;to=2026-07-31 \\
+  -H "X-API-Key: dk_live_…"</pre>
+        <div style="font-size:12px;line-height:2;margin-top:8px">
+          <div><code style="font-family:monospace">GET /api/v1/ping</code> — verify a key and list its scopes</div>
+          <div><code style="font-family:monospace">GET /api/v1/employees</code> — employee directory</div>
+          <div><code style="font-family:monospace">GET /api/v1/attendance?from=&amp;to=</code> — daily attendance records</div>
+          <div><code style="font-family:monospace">GET /api/v1/leaves?status=</code> — leave requests</div>
+          <div><code style="font-family:monospace">GET /api/v1/shifts</code> — shift definitions</div>
+        </div>
+        <div style="font-size:11px;color:var(--text-light);margin-top:10px">Limit: 120 requests/minute per key · pagination via <code style="font-family:monospace">?limit=</code> (max 200) and <code style="font-family:monospace">?offset=</code></div>
+      </div>`;
+  } catch (e) {
+    content.innerHTML = `<div class="card"><p style="color:var(--danger)">${esc(e.message)}</p></div>`;
+  }
+}
+
+window._akCreate = async function(btn) {
+  const name = document.getElementById('ak-name')?.value.trim();
+  const scopes = [...document.querySelectorAll('.ak-scope:checked')].map(c => c.value);
+  if (!name) { toastError('Give the key a name (e.g. "Payroll integration")'); return; }
+  if (!scopes.length) { toastError('Select at least one scope'); return; }
+  const label = btn?.textContent;
+  if (btn) { btn.disabled = true; btn.textContent = 'Creating…'; }
+  try {
+    const res = await api('/api/api-keys', { method: 'POST', body: JSON.stringify({ name, scopes }) });
+    _akShowKeyModal(res.apiKey, name);
+  } catch (e) {
+    toastError(e.message || 'Failed to create API key');
+  } finally {
+    if (btn) { btn.disabled = false; btn.textContent = label; }
+  }
+};
+
+// Shows the full key exactly once. Closing re-renders the page (the key is
+// gone for good after this — by design, it's stored only as a hash).
+window._akShowKeyModal = function(fullKey, name) {
+  document.getElementById('ak-key-modal')?.remove();
+  const ol = document.createElement('div');
+  ol.id = 'ak-key-modal';
+  ol.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.55);display:flex;align-items:center;justify-content:center;z-index:9999;padding:16px';
+  ol.innerHTML = `
+    <div style="background:var(--card,#fff);border-radius:16px;padding:28px 24px;max-width:460px;width:100%;box-shadow:0 24px 64px rgba(0,0,0,.35)">
+      <div style="font-size:15px;font-weight:800;margin-bottom:6px">🔑 "${esc(name)}" created</div>
+      <div style="font-size:12px;color:#b54708;margin-bottom:12px">⚠ Copy this key now — it will <strong>never</strong> be shown again.</div>
+      <div id="ak-key-value" style="font-family:monospace;font-size:12.5px;background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:12px;word-break:break-all;user-select:all">${esc(fullKey)}</div>
+      <div style="display:flex;gap:8px;margin-top:14px;justify-content:flex-end">
+        <button class="btn btn-primary btn-sm" onclick="navigator.clipboard.writeText(document.getElementById('ak-key-value').textContent).then(()=>toastSuccess('Key copied')).catch(()=>toastError('Copy failed — select and copy manually'))">Copy Key</button>
+        <button class="btn btn-secondary btn-sm" onclick="document.getElementById('ak-key-modal').remove();renderApiAccess()">Done</button>
+      </div>
+    </div>`;
+  document.body.appendChild(ol);
+};
+
+window._akRevoke = async function(id, name) {
+  if (!confirm(`Revoke "${name}"? Any integration using it stops working immediately.`)) return;
+  try {
+    await api(`/api/api-keys/${id}`, { method: 'DELETE' });
+    toastSuccess('API key revoked');
+    renderApiAccess();
+  } catch (e) { toastError(e.message || 'Failed to revoke key'); }
 };
 
 // ── ArrivalIQ (Smart Arrival Assistant) — employee opt-in ───────────────────
