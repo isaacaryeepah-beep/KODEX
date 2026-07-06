@@ -9,18 +9,12 @@
  * Each exported function maps to one of the 10 report types.
  */
 
-const Anthropic = require('@anthropic-ai/sdk');
 const mongoose  = require('mongoose');
 
 const AIReport  = require('../models/AIReport');
+const aiRouter  = require('./ai/aiRouter');
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
-
-function getClient() {
-  const apiKey = process.env.ANTHROPIC_API_KEY;
-  if (!apiKey) throw new Error('ANTHROPIC_API_KEY is not configured.');
-  return new Anthropic({ apiKey });
-}
 
 // ms since epoch → human-readable date string
 function fmtDate(d) { return d ? new Date(d).toDateString() : 'N/A'; }
@@ -41,15 +35,14 @@ Rules:
 - If data is thin or a metric is N/A, note it and move on — don't make things up.
 - Maximum 600 words unless the data warrants more.`;
 
-async function callClaude(userMessage) {
-  const client = getClient();
-  const msg = await client.messages.create({
-    model:      'claude-haiku-4-5-20251001',
-    max_tokens: 1200,
-    system:     SYSTEM_PROMPT,
-    messages:   [{ role: 'user', content: userMessage }],
-  });
-  return msg.content[0]?.text || '';
+// Routed through aiRouter (Gemini Flash by default, DeepSeek for
+// technical/coding-flavored questions, Claude as the resilient fallback) —
+// see src/services/ai/aiRouter.js. The 9 structured report types are all
+// "general" writing/analysis; custom_query's free-form question is where a
+// coding-flavored question would actually occur, and the router
+// auto-detects that from the prompt text.
+async function callAI(userMessage) {
+  return aiRouter.chat({ system: SYSTEM_PROMPT, prompt: userMessage, maxTokens: 1200 });
 }
 
 // ── Cache helper ─────────────────────────────────────────────────────────────
@@ -893,7 +886,7 @@ Analyse platform health, identify institutions at risk of churning (low users, e
       throw new Error(`Unknown report type: ${type}`);
   }
 
-  const report = await callClaude(prompt);
+  const report = await callAI(prompt);
 
   // Extract first sentence as summary
   const summary = report.replace(/^#+[^\n]*\n+/, '').replace(/\*\*/g, '').split('. ')[0].slice(0, 200);
