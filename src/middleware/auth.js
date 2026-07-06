@@ -1,5 +1,6 @@
 const { verifyToken } = require("../utils/jwt");
 const User = require("../models/User");
+const { getStudentTrialDays } = require("../utils/trialSettings");
 
 const authenticate = async (req, res, next) => {
   try {
@@ -53,10 +54,11 @@ const authenticate = async (req, res, next) => {
       // 3-day grace period — buffer for payment processing delays
       const GRACE_MS = 3 * 24 * 60 * 60 * 1000;
 
-      // ── Institution-wide check (all non-superadmin roles) ─────────────────
-      // When the company's trial and paid subscription have both expired, every
-      // user in that institution is blocked. Admin still passes so they can
-      // reach the subscription/payment pages to renew.
+      // ── Institution coverage — computed once, used by every role below.
+      // Defaults to true (fail open) when there's no company to check, or
+      // the lookup fails/finds nothing — a transient DB hiccup shouldn't
+      // lock out an entire institution.
+      let companyOk = true;
       if (user.company) {
         try {
           const Company = require('../models/Company');
@@ -73,24 +75,12 @@ const authenticate = async (req, res, next) => {
             // 'active'  → paid plan; also check end date hasn't passed (+ grace).
             // 'trial'   → only OK when trialEndDate is still in the future (+ grace).
             // anything else ('expired', 'inactive', 'past_due', '') → blocked.
-            let companyOk = false;
             if (status === 'active' || co.subscriptionActive) {
               companyOk = !subEnd || (subEnd.getTime() + GRACE_MS) > now;
             } else if (status === 'trial') {
               companyOk = !!(trialEnd && (trialEnd.getTime() + GRACE_MS) > now);
-            }
-            // 'expired' / 'inactive' / 'past_due' / unknown → companyOk stays false
-
-            if (!companyOk) {
-              const isAdmin = user.role === 'admin';
-              return res.status(402).json({
-                error: 'Subscription expired',
-                subscriptionExpired: true,
-                isAdmin,
-                message: isAdmin
-                  ? 'Your institution\'s subscription has expired. Renew now to restore access for all users.'
-                  : 'Your institution\'s subscription has expired. Contact your admin to renew.',
-              });
+            } else {
+              companyOk = false;
             }
           }
         } catch (err) {
@@ -98,34 +88,42 @@ const authenticate = async (req, res, next) => {
         }
       }
 
-      // ── Per-user checks (roles that pay individually) ──────────────────────
-
-      // Lecturers / managers / HODs / admins — personal trial or subscription
-      if (['lecturer', 'manager', 'admin', 'hod'].includes(user.role)) {
-        const trialEnd = user.trialEndDate
-          ? new Date(user.trialEndDate)
-          : new Date(new Date(user.createdAt).getTime() + 30 * 24 * 60 * 60 * 1000);
+      // ── Company-covered roles (lecturer / manager / hod / admin / employee) ──
+      // Company coverage (subscription or trial) always wins for these roles —
+      // none of them are gated by their own signup-time trial while their
+      // institution covers them. Only once company coverage has genuinely
+      // lapsed does a real PAID personal subscription offer a bypass. This
+      // mirrors requireActiveSubscription's exact precedence and the
+      // userTrial banner computed in authController.js, so all three now
+      // agree on when an account is actually locked — previously this check
+      // ran unconditionally (even with valid company coverage) against each
+      // person's own hardcoded 30-day trial window, so an admin/lecturer
+      // could see "Trial Expired" while every feature kept working, or in
+      // principle be blocked here despite their institution being fully
+      // paid up.
+      if (['lecturer', 'manager', 'admin', 'hod', 'employee'].includes(user.role) && !companyOk) {
         const subEnd = user.subscriptionExpiry ? new Date(user.subscriptionExpiry) : null;
-        const personalOk = ((trialEnd.getTime() + GRACE_MS) > now)
-          || (subEnd && (subEnd.getTime() + GRACE_MS) > now);
-
+        const personalOk = !!(subEnd && (subEnd.getTime() + GRACE_MS) > now);
         if (!personalOk) {
+          const isAdmin = user.role === 'admin';
           return res.status(402).json({
             error: 'Subscription expired',
             subscriptionExpired: true,
-            isAdmin: user.role === 'admin',
-            message: user.role === 'admin'
-              ? 'Your subscription has expired. Renew to restore access.'
-              : 'Your free trial has ended. Please subscribe to continue using DIKLY.',
+            isAdmin,
+            message: isAdmin
+              ? 'Your institution\'s subscription has expired. Renew now to restore access for all users.'
+              : 'Your institution\'s subscription has expired. Contact your admin to renew.',
           });
         }
       }
 
-      // Students — personal 45-day trial then individual payment
+      // ── Students — always individual: a per-signup trial then per-semester
+      // payment, regardless of any institution's own subscription status.
       if (user.role === 'student') {
+        const trialDays = await getStudentTrialDays();
         const trialEnd = user.trialEndDate
           ? new Date(user.trialEndDate)
-          : new Date(new Date(user.createdAt).getTime() + 45 * 24 * 60 * 60 * 1000);
+          : new Date(new Date(user.createdAt).getTime() + trialDays * 24 * 60 * 60 * 1000);
         const subEnd = user.subscriptionExpiry ? new Date(user.subscriptionExpiry) : null;
         const active = ((trialEnd.getTime() + GRACE_MS) > now) || (subEnd && (subEnd.getTime() + GRACE_MS) > now);
 
@@ -134,20 +132,7 @@ const authenticate = async (req, res, next) => {
             error: 'Subscription expired',
             subscriptionExpired: true,
             isAdmin: false,
-            message: 'Your 45-day free trial has ended. Pay ₵20 to continue for the semester.',
-          });
-        }
-      }
-
-      // Employees — covered by company plan; individual fallback above already handled
-      if (user.role === 'employee') {
-        const subEnd = user.subscriptionExpiry ? new Date(user.subscriptionExpiry) : null;
-        if (subEnd && (subEnd.getTime() + GRACE_MS) <= now) {
-          return res.status(402).json({
-            error: 'Subscription expired',
-            subscriptionExpired: true,
-            isAdmin: false,
-            message: 'Your access has expired. Contact your company admin.',
+            message: `Your ${trialDays}-day free trial has ended. Pay ₵20 to continue for the semester.`,
           });
         }
       }

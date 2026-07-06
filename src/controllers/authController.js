@@ -2,7 +2,6 @@ const crypto = require("crypto");
 const bcrypt = require("bcryptjs");
 const User = require("../models/User");
 const Company = require("../models/Company");
-const PlatformSettings = require("../models/PlatformSettings");
 const StudentRoster = require("../models/StudentRoster");
 const MeetingIdentity = require("../models/MeetingIdentity");
 const { generateToken, generateRefreshToken, verifyRefreshToken, hashToken } = require("../utils/jwt");
@@ -56,30 +55,12 @@ async function persistRefreshToken(token, userId, req) {
   }
 }
 
+const { TRIAL_DAYS, STUDENT_TRIAL_DAYS, getTrialDays, getStudentTrialDays } = require("../utils/trialSettings");
+
 const SIX_HOURS_MS = 6 * 60 * 60 * 1000;
 const PAID_ROLES         = ["lecturer", "manager", "admin", "hod"];
 const ALL_PAID_ROLES     = ["lecturer", "manager", "admin", "hod", "student", "employee"];
-const TRIAL_DAYS         = 30;
-const STUDENT_TRIAL_DAYS = 45;
 const SEMESTER_DAYS      = 112;
-
-async function getTrialDays() {
-  try {
-    const s = await PlatformSettings.findOne().lean();
-    return (s?.trialDays > 0) ? s.trialDays : TRIAL_DAYS;
-  } catch {
-    return TRIAL_DAYS;
-  }
-}
-
-async function getStudentTrialDays() {
-  try {
-    const s = await PlatformSettings.findOne().lean();
-    return (s?.studentTrialDays > 0) ? s.studentTrialDays : STUDENT_TRIAL_DAYS;
-  } catch {
-    return STUDENT_TRIAL_DAYS;
-  }
-}
 
 function computeUserTrial(user, company, fallbackTrialDays) {
   const now = Date.now();
