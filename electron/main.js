@@ -10,10 +10,19 @@ function createWindow() {
     title: 'DIKLY',
     icon: path.join(__dirname, 'icon.png'),
     autoHideMenuBar: true,
+    show: false,
     webPreferences: {
       nodeIntegration: false,
       contextIsolation: true,
     },
+  });
+
+  // Launch maximized (fills the whole screen, no letterboxing) instead of
+  // the fixed 1280x800 default — shown only once maximized to avoid a
+  // visible resize flash on startup.
+  win.once('ready-to-show', () => {
+    win.maximize();
+    win.show();
   });
 
   win.loadURL('https://dikly.sbs');
