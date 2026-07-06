@@ -19685,7 +19685,7 @@ async function renderApiAccess() {
     content.innerHTML = `
       <div class="page-header">
         <h2>API Access</h2>
-        <p>Issue keys so external systems (payroll, HR tools, dashboards) can read your organization's data via the Dikly API.</p>
+        <p>Issue keys so external systems (HR tools, dashboards, reporting systems) can read your organization's data via the Dikly API.</p>
       </div>
 
       <div class="card" style="max-width:760px;margin-bottom:20px">
@@ -19701,7 +19701,7 @@ async function renderApiAccess() {
         <p style="font-size:12px;color:var(--text-light);margin-bottom:14px">The full key is shown <strong>once</strong> after creation — copy it straight into the destination system. Dikly stores only a fingerprint, so it can never be shown again.</p>
         <div class="form-group" style="margin-bottom:12px">
           <label style="font-size:11px;font-weight:700;text-transform:uppercase;color:var(--text-light)">Key name</label>
-          <input id="ak-name" placeholder="e.g. Payroll integration" maxlength="80" style="width:100%;max-width:340px;padding:9px 12px;border:1.5px solid var(--border);border-radius:8px;font-size:13px;margin-top:4px">
+          <input id="ak-name" placeholder="e.g. HR system integration" maxlength="80" style="width:100%;max-width:340px;padding:9px 12px;border:1.5px solid var(--border);border-radius:8px;font-size:13px;margin-top:4px">
         </div>
         <div style="font-size:11px;font-weight:700;text-transform:uppercase;color:var(--text-light);margin-bottom:6px">Scopes — grant only what the integration needs</div>
         ${(scopes || []).map(s => `
@@ -19734,7 +19734,7 @@ async function renderApiAccess() {
 window._akCreate = async function(btn) {
   const name = document.getElementById('ak-name')?.value.trim();
   const scopes = [...document.querySelectorAll('.ak-scope:checked')].map(c => c.value);
-  if (!name) { toastError('Give the key a name (e.g. "Payroll integration")'); return; }
+  if (!name) { toastError('Give the key a name (e.g. "HR system integration")'); return; }
   if (!scopes.length) { toastError('Select at least one scope'); return; }
   const label = btn?.textContent;
   if (btn) { btn.disabled = true; btn.textContent = 'Creating…'; }

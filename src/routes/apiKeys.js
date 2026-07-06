@@ -46,7 +46,7 @@ router.post("/", ...mw, async (req, res) => {
   try {
     const name = (req.body.name || "").trim();
     const scopes = Array.isArray(req.body.scopes) ? req.body.scopes.filter((s) => API_SCOPES.includes(s)) : [];
-    if (!name) return res.status(400).json({ error: "Key name is required (e.g. \"Payroll integration\")" });
+    if (!name) return res.status(400).json({ error: "Key name is required (e.g. \"HR system integration\")" });
     if (!scopes.length) return res.status(400).json({ error: "Select at least one scope" });
 
     const activeCount = await ApiKey.countDocuments({ company: req.user.company, revokedAt: null });

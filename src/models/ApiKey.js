@@ -18,7 +18,7 @@
  *  - `company` binds the key to exactly one tenant at creation. The public
  *    API derives the tenant from the key server-side and never from any
  *    request parameter — cross-tenant access is structurally impossible.
- *  - `scopes` whitelist what the key may read. A payroll key with
+ *  - `scopes` whitelist what the key may read. A key issued with only
  *    read:attendance cannot list employees, and vice versa.
  *  - Revocation is soft (`revokedAt`) so the key's audit history survives;
  *    the auth middleware rejects revoked keys on the very next request.

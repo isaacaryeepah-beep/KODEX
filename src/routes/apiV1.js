@@ -4,8 +4,8 @@
  * apiV1.js
  * Mounted at: /api/v1   (registered in server.js)
  *
- * Dikly's PUBLIC API — consumed by customer integrations (payroll systems,
- * HR tools, custom dashboards) with an X-API-Key header, never by the web
+ * Dikly's PUBLIC API — consumed by customer integrations (HR tools,
+ * reporting systems, custom dashboards) with an X-API-Key header, never by the web
  * app itself. Deliberately a curated, versioned, read-only subset rather
  * than a re-export of the internal /api routes: everything under /v1 is a
  * compatibility promise to external developers, so nothing lands here
