@@ -390,6 +390,8 @@ const leaveBalanceRoutes       = require("./routes/leaveBalances");
 const corporateAttendanceRoutes = require("./routes/corporateAttendance");
 const pushRoutes                = require("./routes/push");
 const arrivalIQRoutes           = require("./routes/arrivalIQ");
+const apiKeyRoutes              = require("./routes/apiKeys");
+const apiV1Routes               = require("./routes/apiV1");
 const executiveRoutes           = require("./routes/executive");
 const taskRoutes                = require("./routes/tasks");
 const notificationRoutes        = require("./routes/notifications");
@@ -425,6 +427,10 @@ app.use("/api/leave-balances",       leaveBalanceRoutes);
 app.use("/api/corporate-attendance", corporateAttendanceRoutes);
 app.use("/api/push", pushRoutes);
 app.use("/api/arrival-iq", arrivalIQRoutes);
+app.use("/api/api-keys", apiKeyRoutes);
+// Public API (X-API-Key auth) — /api/v1 is a stability promise to external
+// integrations; only curated, versioned endpoints live here (routes/apiV1.js).
+app.use("/api/v1", apiV1Routes);
 app.use("/api/executive", executiveRoutes);
 app.use("/api/tasks", taskRoutes);
 app.use("/api/notifications",        notificationRoutes);
