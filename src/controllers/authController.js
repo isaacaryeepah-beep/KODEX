@@ -110,13 +110,29 @@ function computeUserTrial(user, company, fallbackTrialDays) {
     return { daysLeft, activeEnd: cEnd, status: cActive ? 'trial' : 'expired', isSubscribed: false, plan: 'employee_monthly', coveredByCompany: cActive };
   }
 
-  // lecturer / manager / admin (original logic)
-  const trialEnd = user.trialEndDate
-    ? new Date(user.trialEndDate)
-    : new Date(new Date(user.createdAt).getTime() + (fallbackTrialDays || TRIAL_DAYS) * 24 * 60 * 60 * 1000);
-  const activeEnd = inSub ? subEnd : trialEnd;
-  const daysLeft  = Math.max(0, Math.ceil((activeEnd - now) / 86400000));
-  return { daysLeft, activeEnd, status: inSub ? 'active' : trialEnd > now ? 'trial' : 'expired', isSubscribed: inSub };
+  // lecturer / manager / admin.
+  // Mirrors requireActiveSubscription's REAL enforcement precedence —
+  // company subscription, then company trial, then the individual's own
+  // paid subscription — instead of the individual's own trialEndDate.
+  // The middleware never actually honors a lecturer's personal trial
+  // window once company coverage lapses (only a personal paid
+  // subscription bypasses at that point), so basing this banner on the
+  // personal trial window let it say "Trial Expired" while the company's
+  // own trial/subscription was still actively keeping the account fully
+  // working — exactly the "expired but not locked" mismatch reported.
+  if (company?.subscriptionActive) {
+    return { daysLeft: 999, activeEnd: null, status: 'active', isSubscribed: false, coveredByCompany: true };
+  }
+  const cEnd = company?.trialEndDate ? new Date(company.trialEndDate) : null;
+  if (cEnd && cEnd > now) {
+    const daysLeft = Math.max(0, Math.ceil((cEnd - now) / 86400000));
+    return { daysLeft, activeEnd: cEnd, status: 'trial', isSubscribed: false, coveredByCompany: true };
+  }
+  if (inSub) {
+    const daysLeft = Math.max(0, Math.ceil((subEnd - now) / 86400000));
+    return { daysLeft, activeEnd: subEnd, status: 'active', isSubscribed: true };
+  }
+  return { daysLeft: 0, activeEnd: cEnd, status: 'expired', isSubscribed: false };
 }
 
 exports.register = async (req, res) => {
