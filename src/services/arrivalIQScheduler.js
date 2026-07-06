@@ -9,9 +9,13 @@
  * today's ArrivalPrediction from their last (foreground-captured, non-
  * stale) location via trafficService, and fires the personalized "time to
  * leave" push the moment each employee's own recommended departure time
- * arrives. A second pass sends a one-time late-risk follow-up to anyone
- * who was warned, is now past their shift start, and still hasn't clocked
- * in (reusing the existing CorporateAttendance record — no new tracking).
+ * arrives. If no fresh location exists yet (the employee hasn't opened the
+ * app today), a one-time "open Dikly" nudge push is sent instead the first
+ * time their shift enters the lookahead window — otherwise an employee who
+ * never opens the app before their shift would get no reminder at all. A
+ * second pass sends a one-time late-risk follow-up to anyone who was
+ * warned, is now past their shift start, and still hasn't clocked in
+ * (reusing the existing CorporateAttendance record — no new tracking).
  *
  * Time comparisons use the server's own local clock, the same convention
  * already used by computeStatus() in routes/corporateAttendance.js (no
@@ -152,6 +156,20 @@ async function sweepCompany(company) {
       }
     } else {
       prediction.skipReason = "no_recent_location";
+      // Without a fresh location there's nothing to compute a departure
+      // time from, so the employee would otherwise get no reminder at all
+      // today. Nudge them once to open the app — the resulting foreground
+      // check-in (app.js's _aiqMaybeCheckIn) feeds the next sweep, up to
+      // ~2h of lead time before this shift.
+      if (!prediction.checkInPromptedAt) {
+        prediction.checkInPromptedAt = now;
+        await pushService.sendToUser(employee._id, {
+          title: "🚗 ArrivalIQ",
+          body: `Open Dikly now so we can plan your commute for your ${shift.startTime} shift.`,
+          url: "/?view=arrival-iq",
+          tag: "arrivaliq-checkin",
+        });
+      }
     }
 
     // Fire the personalized "time to leave" push once we've reached it.
