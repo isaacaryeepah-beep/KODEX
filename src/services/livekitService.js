@@ -71,8 +71,8 @@ async function removeParticipantFromRoom(roomName, participantIdentity) {
 }
 
 // Clean URL for page navigation — no token exposed
-function buildLiveKitRoomUrl(meeting) {
-  const base = process.env.MEET_BASE_URL || process.env.APP_BASE_URL || 'https://dikly.sbs';
+function buildLiveKitRoomUrl(meeting, baseOverride) {
+  const base = baseOverride || process.env.MEET_BASE_URL || process.env.APP_BASE_URL || 'https://dikly.sbs';
   const qs = new URLSearchParams({
     meetingId: String(meeting._id),
     title:     meeting.title || 'Class',
@@ -80,9 +80,14 @@ function buildLiveKitRoomUrl(meeting) {
   return `${base}/stream-room.html?${qs.toString()}`;
 }
 
-// Full params URL returned inside JSON response only — never in a navigable link
-function buildLiveKitParamsUrl(meeting, user, token, isMod) {
-  const base = process.env.MEET_BASE_URL || process.env.APP_BASE_URL || 'https://dikly.sbs';
+// Full params URL returned inside JSON response only — never in a navigable link.
+// `baseOverride` lets the controller pass the requesting origin so the room
+// opens on the SAME domain the user is already on. A cross-origin hop (e.g.
+// dikly.sbs → app.dikly.live via a stale MEET_BASE_URL) forces iOS
+// home-screen PWAs into the in-app Safari viewer — a separate storage
+// context — and makes the room page show a foreign domain in the URL bar.
+function buildLiveKitParamsUrl(meeting, user, token, isMod, baseOverride) {
+  const base = baseOverride || process.env.MEET_BASE_URL || process.env.APP_BASE_URL || 'https://dikly.sbs';
   const qs = new URLSearchParams({
     roomName:    meeting.roomName,
     token,

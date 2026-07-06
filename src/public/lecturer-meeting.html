@@ -364,10 +364,9 @@ async function init() {
       // catch — the handoff never actually fired.)
       try {
         const destUrl = new URL(meetingUrl, location.origin);
-        if (AUTH_TOKEN) {
-          destUrl.searchParams.set('dikly_auth', AUTH_TOKEN);
-          meetingUrl = destUrl.toString();
-        }
+        if (AUTH_TOKEN) destUrl.searchParams.set('dikly_auth', AUTH_TOKEN);
+        if (IS_CORP) destUrl.searchParams.set('corp', '1');
+        meetingUrl = destUrl.toString();
       } catch (_) {}
       history.replaceState(null, '', '/index.html');
       window.location.href = meetingUrl;

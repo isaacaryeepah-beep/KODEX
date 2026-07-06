@@ -291,7 +291,9 @@ exports.startMeeting = async (req, res, next) => {
 
     const meetingToken = generateMeetingToken(req.user._id.toString(), meeting._id.toString(), req.user.deviceId || null);
     const livekitToken = await generateLiveKitToken(req.user._id, req.user.name || req.user.email, meeting.roomName, true);
-    const meetingUrl   = buildLiveKitParamsUrl(meeting, req.user, livekitToken, true);
+    // Keep the room on the caller's own origin — a cross-origin room URL
+    // breaks out of iOS home-screen PWAs into the in-app Safari viewer.
+    const meetingUrl   = buildLiveKitParamsUrl(meeting, req.user, livekitToken, true, `${req.protocol}://${req.get('host')}`);
 
     res.json({
       success: true, message: 'Meeting started',
@@ -441,7 +443,7 @@ exports.joinMeeting = async (req, res, next) => {
 
     const meetingToken = generateMeetingToken(user._id.toString(), meeting._id.toString(), user.deviceId || null);
     const livekitToken = await generateLiveKitToken(user._id, user.name || user.email, meeting.roomName, isMod, canPublish);
-    const meetingUrl   = buildLiveKitParamsUrl(meeting, user, livekitToken, isMod);
+    const meetingUrl   = buildLiveKitParamsUrl(meeting, user, livekitToken, isMod, `${req.protocol}://${req.get('host')}`);
 
     res.json({
       success: true,
