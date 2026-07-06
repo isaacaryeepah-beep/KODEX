@@ -136,8 +136,10 @@ const logoUpload = multer({
 
 router.post("/branding/logo", ...mw, adminOnly, logoUpload.single("logo"), asyncHandler(async (req, res) => {
   if (!req.file) return res.status(400).json({ error: "No file uploaded (field name: logo)" });
-  if (!/^image\/(png|jpe?g|webp|svg\+xml)$/.test(req.file.mimetype)) {
-    return res.status(400).json({ error: "Logo must be a PNG, JPG, WebP, or SVG image" });
+  // No SVG: Cloudinary refuses to deliver SVG originals by default (security
+  // setting), so an SVG upload "succeeds" but the logo never displays.
+  if (!/^image\/(png|jpe?g|webp)$/.test(req.file.mimetype)) {
+    return res.status(400).json({ error: "Logo must be a PNG, JPG, or WebP image (SVG isn't supported)" });
   }
   const uploaded = await mediaStorage.uploadImage(req.file.buffer, {
     folder:       "company-logos",

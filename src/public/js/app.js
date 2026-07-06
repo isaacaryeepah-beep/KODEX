@@ -23369,10 +23369,12 @@ async function renderBranding() {
         <!-- Live preview -->
         <div id="brand-preview" style="padding:16px;border-radius:10px;margin-bottom:20px;background:${branding.primaryColor||'#6366f1'}20;border:2px solid ${branding.primaryColor||'#6366f1'}40">
           <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap">
-            ${branding.logoUrl ? `<img src="${branding.logoUrl}" style="height:40px;width:auto;border-radius:6px" onerror="this.style.display='none'">` : `<div style="width:40px;height:40px;border-radius:8px;background:${branding.primaryColor||'#6366f1'};display:flex;align-items:center;justify-content:center;color:#fff;font-weight:800;font-size:18px">${companyName?.[0]||'K'}</div>`}
+            <div id="bd-preview-avatar" style="display:flex;align-items:center">
+              ${branding.logoUrl ? `<img src="${branding.logoUrl}" style="height:40px;width:auto;border-radius:6px" onerror="this.replaceWith(Object.assign(document.createElement('span'),{textContent:'⚠️ logo failed to load',style:'font-size:11px;color:#b54708'}))">` : `<div style="width:40px;height:40px;border-radius:8px;background:${branding.primaryColor||'#6366f1'};display:flex;align-items:center;justify-content:center;color:#fff;font-weight:800;font-size:18px">${esc(companyName?.[0]||'K')}</div>`}
+            </div>
             <div>
-              <div style="font-weight:800;font-size:16px">${companyName}</div>
-              <div style="font-size:12px;color:#6b7280">${branding.companyTagline||'Powered by DIKLY Technologies'}</div>
+              <div style="font-weight:800;font-size:16px">${esc(companyName || '')}</div>
+              <div id="bd-preview-tagline" style="font-size:12px;color:#6b7280">${esc(branding.companyTagline||'Powered by DIKLY Technologies')}</div>
             </div>
           </div>
         </div>
@@ -23380,10 +23382,10 @@ async function renderBranding() {
         <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:12px;margin-bottom:14px">
           <div>
             <label style="font-size:11px;font-weight:700;text-transform:uppercase;color:#6b7280;display:block;margin-bottom:4px">Company Logo</label>
-            <input type="file" id="bd-logo-file" accept="image/png,image/jpeg,image/webp,image/svg+xml" style="display:none" onchange="_bdUploadLogo(this)">
+            <input type="file" id="bd-logo-file" accept="image/png,image/jpeg,image/webp" style="display:none" onchange="_bdUploadLogo(this)">
             <div style="display:flex;gap:6px;align-items:center;margin-bottom:6px">
               <button type="button" class="btn btn-secondary btn-sm" id="bd-upload-btn" onclick="document.getElementById('bd-logo-file').click()">📤 Upload logo</button>
-              <span style="font-size:11px;color:#6b7280">PNG/JPG/SVG, max 2 MB</span>
+              <span style="font-size:11px;color:#6b7280">PNG/JPG/WebP, max 2 MB</span>
             </div>
             <input id="bd-logo" value="${branding.logoUrl||''}" placeholder="…or paste an image URL" style="width:100%;padding:8px;border:1px solid #d1d5db;border-radius:6px;font-size:13px" oninput="updateBrandPreview()">
           </div>
@@ -23469,18 +23471,29 @@ async function _bdUploadLogo(input) {
 }
 
 function updateBrandPreview() {
-  const logo  = document.getElementById('bd-logo')?.value;
+  const logo  = document.getElementById('bd-logo')?.value.trim();
   const color = document.getElementById('bd-color')?.value || '#6366f1';
   const tag   = document.getElementById('bd-tagline')?.value || 'Powered by DIKLY Technologies';
   const preview = document.getElementById('brand-preview');
   if (!preview) return;
   preview.style.background = `${color}20`;
   preview.style.borderColor = `${color}40`;
-  const img = preview.querySelector('img');
-  const box = preview.querySelector('div > div');
-  if (logo && img) { img.src = logo; img.style.display = ''; }
-  else if (box) box.style.background = color;
-  const tagEl = preview.querySelector('div:last-child div:last-child');
+  // Rebuild the avatar slot outright — the old version only mutated an
+  // existing <img>, so a logo added after page load never appeared.
+  const slot = document.getElementById('bd-preview-avatar');
+  if (slot) {
+    if (logo) {
+      slot.innerHTML = '';
+      const img = document.createElement('img');
+      img.src = logo;
+      img.style.cssText = 'height:40px;width:auto;border-radius:6px';
+      img.onerror = () => { slot.innerHTML = '<span style="font-size:11px;color:#b54708">⚠️ logo failed to load</span>'; };
+      slot.appendChild(img);
+    } else {
+      slot.innerHTML = `<div style="width:40px;height:40px;border-radius:8px;background:${color};display:flex;align-items:center;justify-content:center;color:#fff;font-weight:800;font-size:18px">${esc(currentUser?.company?.name?.[0] || 'K')}</div>`;
+    }
+  }
+  const tagEl = document.getElementById('bd-preview-tagline');
   if (tagEl) tagEl.textContent = tag;
 }
 
