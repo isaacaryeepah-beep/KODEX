@@ -285,8 +285,14 @@ exports.startMeeting = async (req, res, next) => {
 
     if (!streamConfigured) return res.status(503).json({ error: 'Video meetings are not configured. Set LIVEKIT_URL, LIVEKIT_API_KEY and LIVEKIT_API_SECRET.' });
 
-    meeting.status      = 'live';
-    meeting.actualStart = new Date();
+    // Only stamp actualStart the FIRST time the meeting goes live — the host
+    // re-entering an already-live meeting hits /start again, and overwriting
+    // actualStart here silently reset the meeting's true start time (and
+    // with it everyone's elapsed-time display).
+    if (meeting.status !== 'live' || !meeting.actualStart) {
+      meeting.actualStart = new Date();
+    }
+    meeting.status = 'live';
     await meeting.save();
 
     const meetingToken = generateMeetingToken(req.user._id.toString(), meeting._id.toString(), req.user.deviceId || null);

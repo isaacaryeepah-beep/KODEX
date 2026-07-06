@@ -98,6 +98,9 @@ function buildLiveKitParamsUrl(meeting, user, token, isMod, baseOverride) {
     title:       meeting.title || 'Class',
     livekitUrl:  LIVEKIT_URL || '',
     meetingType: meeting.meetingType || 'meeting',
+    // True meeting start — the room page's elapsed timer counts from this,
+    // so late joiners see the meeting's real running time, not 00:00.
+    startedAt:   meeting.actualStart ? new Date(meeting.actualStart).toISOString() : '',
   });
   return `${base}/stream-room.html?${qs.toString()}`;
 }
