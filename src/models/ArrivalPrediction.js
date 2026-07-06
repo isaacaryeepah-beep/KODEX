@@ -59,6 +59,12 @@ const arrivalPredictionSchema = new mongoose.Schema(
     // few minutes) from sending the same notification twice.
     departureNotifiedAt: { type: Date, default: null },
     lateRiskNotifiedAt: { type: Date, default: null },
+    // Fired once, the first sweep that finds this employee's shift inside
+    // the lookahead window with no fresh location yet — a "open Dikly so we
+    // can plan your commute" nudge. Without it, an employee who never opens
+    // the app before their shift gets no reminder at all (nothing to
+    // compute a departure time from) and the miss is silent.
+    checkInPromptedAt: { type: Date, default: null },
 
     // pending: not enough data yet (no fresh location, or not computed).
     status: {
