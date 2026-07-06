@@ -265,6 +265,7 @@ app.get("/contact",        (req, res) => sendVersionedHtml(res, path.join(__dirn
 app.get("/privacy",        (req, res) => sendVersionedHtml(res, path.join(__dirname, "public", "privacy.html")));
 app.get("/terms",          (req, res) => sendVersionedHtml(res, path.join(__dirname, "public", "terms.html")));
 app.get("/delete-account", (req, res) => sendVersionedHtml(res, path.join(__dirname, "public", "delete-account.html")));
+app.get("/api-docs",       (req, res) => sendVersionedHtml(res, path.join(__dirname, "public", "api-docs.html")));
 
 // Any other .html file under public/ that isn't explicitly routed above
 // (e.g. snap-quiz.html, stream-room.html) still gets version-stamped, so

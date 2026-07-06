@@ -19725,6 +19725,7 @@ async function renderApiAccess() {
           <div><code style="font-family:monospace">GET /api/v1/shifts</code> — shift definitions</div>
         </div>
         <div style="font-size:11px;color:var(--text-light);margin-top:10px">Limit: 120 requests/minute per key · pagination via <code style="font-family:monospace">?limit=</code> (max 200) and <code style="font-family:monospace">?offset=</code></div>
+        <a href="/api-docs" target="_blank" rel="noopener" class="btn btn-secondary btn-sm" style="margin-top:12px;display:inline-block;text-decoration:none">📄 View full API documentation →</a>
       </div>`;
   } catch (e) {
     content.innerHTML = `<div class="card"><p style="color:var(--danger)">${esc(e.message)}</p></div>`;
