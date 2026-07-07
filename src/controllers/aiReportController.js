@@ -114,7 +114,7 @@ function getAllowedTypes(role) {
     case 'manager':
       return ['workforce_attendance', 'leave_anomaly', 'shift_compliance', 'weekly_digest', 'custom_query'];
     case 'student':
-      return ['exam_readiness'];
+      return ['exam_readiness', 'custom_query'];
     default:
       return ['custom_query'];
   }
