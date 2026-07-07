@@ -284,6 +284,9 @@ exports.registerLecturer = async (req, res) => {
     if (!company.isActive) {
       return res.status(403).json({ error: "This institution is currently inactive." });
     }
+    if (!company.selfRegistrationEnabled) {
+      return res.status(403).json({ error: "Self-registration is not currently open for this institution. Contact your admin." });
+    }
 
     if (!department?.trim()) {
       return res.status(400).json({ error: "Department is required." });
@@ -399,6 +402,9 @@ exports.registerStudent = async (req, res) => {
     if (!company.isActive) {
       return res.status(403).json({ error: "This institution is currently inactive." });
     }
+    if (!company.selfRegistrationEnabled) {
+      return res.status(403).json({ error: "Self-registration is not currently open for this institution. Contact your admin." });
+    }
 
     // HOD-first enforcement
     if (department?.trim()) {
@@ -497,6 +503,9 @@ exports.registerEmployee = async (req, res) => {
     if (!company.isActive) {
       return res.status(403).json({ error: "This company is currently inactive." });
     }
+    if (!company.selfRegistrationEnabled) {
+      return res.status(403).json({ error: "Self-registration is not currently open for this company. Contact your admin." });
+    }
 
     const existingUser = await User.findOne({ email, company: company._id });
     if (existingUser) {
@@ -585,6 +594,9 @@ exports.registerManager = async (req, res) => {
     if (!company.isActive) {
       return res.status(403).json({ error: "This company is currently inactive." });
     }
+    if (!company.selfRegistrationEnabled) {
+      return res.status(403).json({ error: "Self-registration is not currently open for this company. Contact your admin." });
+    }
 
     const existingUser = await User.findOne({ email, company: company._id });
     if (existingUser) {
@@ -651,6 +663,9 @@ exports.registerHod = async (req, res) => {
     }
     if (!company.isActive) {
       return res.status(403).json({ error: 'This institution is currently inactive.' });
+    }
+    if (!company.selfRegistrationEnabled) {
+      return res.status(403).json({ error: 'Self-registration is not currently open for this institution. Contact your admin.' });
     }
 
     const existingUser = await User.findOne({ email, company: company._id });
