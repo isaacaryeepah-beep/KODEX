@@ -6614,34 +6614,23 @@ table tr:hover td { background: #f8fafc !important; }
 .sidebar-nav a.nav-mini { height: 32px; }
 .sidebar-nav a.nav-mini svg { width: 16px; height: 16px; }
 
-/* Accordion sections — rounded card headers, consistent bg, icon + title-case label */
-.nav-acc { margin: 3px 8px; }
+/* Section dividers — always-expanded, non-interactive: small icon + uppercase
+   label above each group, everything visible with no click required. */
+.nav-acc { margin: 14px 8px 2px; }
+.nav-acc:first-child { margin-top: 6px; }
 .nav-acc-hd {
-  display: flex; align-items: center; justify-content: space-between;
-  width: 100%; box-sizing: border-box; margin: 0; padding: 0 12px;
-  min-height: 50px;
-  background: rgba(148, 163, 184, .08); border: none; cursor: pointer; font-family: inherit;
-  font-size: 13px; font-weight: 700; letter-spacing: .1px; text-transform: none;
-  color: #4b5563; border-radius: 12px; transition: color .15s, background .15s;
-  -webkit-tap-highlight-color: transparent;
+  display: flex; align-items: center;
+  width: 100%; box-sizing: border-box; margin: 0 4px 6px; padding: 0 8px 7px;
+  border-bottom: 1px solid var(--border);
+  font-family: inherit; font-size: 11px; font-weight: 800; letter-spacing: .6px;
+  text-transform: uppercase; color: #9ca3af;
 }
-.nav-acc-hd-left { display: flex; align-items: center; gap: 10px; min-width: 0; }
-.nav-acc-hd-left svg { flex-shrink: 0; opacity: .8; }
+.nav-acc-hd-left { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.nav-acc-hd-left svg { flex-shrink: 0; opacity: .75; }
 .nav-acc-hd-left span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.nav-acc-hd:hover { color: #1f2937; background: rgba(37, 99, 235, .08); }
-.nav-acc-hd:active { transform: scale(.985); }
-[data-theme="dark"] .nav-acc-hd { background: rgba(255, 255, 255, .05); color: #9db3c8; }
-[data-theme="dark"] .nav-acc-hd:hover { color: #e5e7eb; background: rgba(79, 128, 240, .12); }
-.nav-acc.open .nav-acc-hd { background: rgba(37, 99, 235, .12); color: var(--primary, #2563eb); }
-.nav-acc.open .nav-acc-hd-left svg { opacity: 1; }
-[data-theme="dark"] .nav-acc.open .nav-acc-hd { background: rgba(79, 128, 240, .18); color: var(--primary, #4f80f0); }
-.nav-acc-ch { transition: transform .2s ease; opacity: .55; flex-shrink: 0; }
-.nav-acc.open .nav-acc-ch { transform: rotate(180deg); opacity: .9; }
-.nav-acc-body { display: grid; grid-template-rows: 0fr; transition: grid-template-rows .22s ease; }
-.nav-acc.open .nav-acc-body { grid-template-rows: 1fr; }
-.nav-acc-inner { overflow: hidden; min-height: 0; display: flex; flex-direction: column; padding-top: 3px; }
-.nav-searching .nav-acc-body { grid-template-rows: 1fr !important; }
-.nav-searching .nav-acc-ch { transform: rotate(180deg); }
+[data-theme="dark"] .nav-acc-hd { color: #6b7787; }
+.nav-acc-body { display: block; }
+.nav-acc-inner { display: flex; flex-direction: column; }
 
 /* Badges + pin stars */
 .sidebar-nav a .nav-badge {
