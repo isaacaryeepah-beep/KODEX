@@ -2412,6 +2412,12 @@ input[type="checkbox"] {
      pinned near the top with empty space below it. Restore full-bleed
      sizing for the splash video specifically. */
   #sp-bg-video { max-width: none !important; width: 100% !important; height: 100% !important; }
+
+  /* Same blanket rule also clobbered the topbar company logo (applyBranding()
+     in app.js sets an inline height:28px) -- forcing height:auto blew a
+     wide/short uploaded image up to full container width with a
+     proportionally huge height instead of stretching a small icon. */
+  #brand-logo { height: 28px !important; width: auto !important; max-width: 120px !important; object-fit: contain !important; }
 }
 
 /* Extra tiny — 360px and below */
