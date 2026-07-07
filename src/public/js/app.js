@@ -25319,31 +25319,44 @@ window._csToggleSelfReg = async function(checkbox) {
     checkbox.disabled = false;
   }
 };
+// Reads every row under containerSelector into a plain object per fieldMap
+// key -> input selector, trimmed. Shared by the holiday/location sections
+// below so the DOM-scraping shape lives in exactly one place.
+function _csExtractRows(containerSelector, fieldMap) {
+  return [...document.querySelectorAll(containerSelector)].map(row => {
+    const obj = {};
+    for (const key in fieldMap) obj[key] = row.querySelector(fieldMap[key])?.value?.trim() || '';
+    return obj;
+  });
+}
+// A row missing just one required field (e.g. a holiday name typed but no
+// date picked) used to be silently dropped from the save payload — the
+// request still "succeeded" so the admin saw a success toast, then the row
+// was simply gone on reload. Blocks the save and names the bad row instead
+// of quietly discarding it. Returns null (caller should abort) or the
+// original rows array (still including intentionally-empty untouched rows,
+// which are not "incomplete" — the caller filters those out separately).
+function _csRejectIncompleteRow(rows, isIncomplete, describe) {
+  const bad = rows.find(isIncomplete);
+  if (!bad) return rows;
+  toastError(describe(bad));
+  return null;
+}
 window._csSave = async function() {
-  // A row missing just one required field (e.g. a holiday name typed but no
-  // date picked) used to be silently dropped from the save payload — the
-  // request still "succeeded" so the admin saw a success toast, then the
-  // row was simply gone on reload. Block the save instead and say why.
-  const holidayRows = [...document.querySelectorAll('[data-holiday]')].map(r => ({
-    name: r.querySelector('[data-h-name]')?.value?.trim() || '',
-    date: r.querySelector('[data-h-date]')?.value || '',
-  }));
-  const incompleteHoliday = holidayRows.find(h => Boolean(h.name) !== Boolean(h.date));
-  if (incompleteHoliday) {
-    toastError(`Holiday "${incompleteHoliday.name || '(untitled)'}" needs both a name and a date — fill both in, or remove the row.`);
-    return;
-  }
+  const holidayRows = _csRejectIncompleteRow(
+    _csExtractRows('[data-holiday]', { name: '[data-h-name]', date: '[data-h-date]' }),
+    h => Boolean(h.name) !== Boolean(h.date),
+    h => `Holiday "${h.name || '(untitled)'}" needs both a name and a date — fill both in, or remove the row.`
+  );
+  if (!holidayRows) return;
   const publicHolidays = holidayRows.filter(h => h.name && h.date);
 
-  const locationRows = [...document.querySelectorAll('[data-location]')].map(r => ({
-    name: r.querySelector('[data-l-name]')?.value?.trim() || '',
-    address: r.querySelector('[data-l-addr]')?.value?.trim() || '',
-  }));
-  const incompleteLocation = locationRows.find(l => !l.name && l.address);
-  if (incompleteLocation) {
-    toastError(`An office location needs a name (address alone isn't enough) — fill it in, or remove the row.`);
-    return;
-  }
+  const locationRows = _csRejectIncompleteRow(
+    _csExtractRows('[data-location]', { name: '[data-l-name]', address: '[data-l-addr]' }),
+    l => !l.name && l.address,
+    () => `An office location needs a name (address alone isn't enough) — fill it in, or remove the row.`
+  );
+  if (!locationRows) return;
   const officeLocations = locationRows.filter(l => l.name);
 
   try {
