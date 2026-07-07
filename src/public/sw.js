@@ -4,7 +4,7 @@
 //  API requests are NOT cached here (handled in app.js with localStorage)
 // ════════════════════════════════════════════════════════════════════
 
-const CACHE_NAME = 'dikly-v15';
+const CACHE_NAME = 'dikly-v16';
 
 // App shell files to cache on install.
 // IMPORTANT: index.html loads its scripts with cache-busting query strings
@@ -93,7 +93,7 @@ self.addEventListener('fetch', event => {
           }
           return res;
         })
-        .catch(() => caches.match(event.request, { ignoreSearch: true }))
+        .catch(() => caches.match(event.request, { ignoreSearch: true }).then(cached => cached || Response.error()))
     );
     return;
   }
@@ -122,7 +122,7 @@ self.addEventListener('fetch', event => {
         }
         return res;
       })
-      .catch(() => caches.match(event.request, { ignoreSearch: true }))
+      .catch(() => caches.match(event.request, { ignoreSearch: true }).then(cached => cached || Response.error()))
   );
 });
 

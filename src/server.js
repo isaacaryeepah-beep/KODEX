@@ -101,7 +101,13 @@ app.use(helmet({
       "style-src":       ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com", "https://cdn.jsdelivr.net"],
       "font-src":        ["'self'", "https://fonts.gstatic.com", "https://cdn.jsdelivr.net", "data:"],
       "img-src":         ["'self'", "data:", "blob:", "https:"],
-      "connect-src":     ["'self'", "https://api.anthropic.com", "https://*.dikly.sbs", "https://*.dikly.live", "wss://*.dikly.sbs", "wss://*.dikly.live", "wss://*.livekit.cloud", "https://cdn.jsdelivr.net", "https://cdnjs.cloudflare.com"],
+      // res.cloudinary.com: sw.js's catch-all fetch handler re-issues every
+      // request (including cross-origin <img> loads like uploaded logos)
+      // via a script-initiated fetch() inside the service worker, which
+      // connect-src governs regardless of img-src — without this, every
+      // Cloudinary-hosted image silently fails once the service worker is
+      // active, indistinguishable from the upload itself having failed.
+      "connect-src":     ["'self'", "https://api.anthropic.com", "https://res.cloudinary.com", "https://*.dikly.sbs", "https://*.dikly.live", "wss://*.dikly.sbs", "wss://*.dikly.live", "wss://*.livekit.cloud", "https://cdn.jsdelivr.net", "https://cdnjs.cloudflare.com"],
       "frame-src":       ["'self'", "https://meet.dikly.live", "https://*.livekit.cloud"],
       "media-src":       ["'self'", "blob:"],
       "object-src":      ["'none'"],
