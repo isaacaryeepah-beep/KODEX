@@ -25320,14 +25320,32 @@ window._csToggleSelfReg = async function(checkbox) {
   }
 };
 window._csSave = async function() {
-  const publicHolidays = [...document.querySelectorAll('[data-holiday]')].map(r => ({
-    name: r.querySelector('[data-h-name]')?.value?.trim(),
-    date: r.querySelector('[data-h-date]')?.value,
-  })).filter(h => h.name && h.date);
-  const officeLocations = [...document.querySelectorAll('[data-location]')].map(r => ({
-    name: r.querySelector('[data-l-name]')?.value?.trim(),
-    address: r.querySelector('[data-l-addr]')?.value?.trim(),
-  })).filter(l => l.name);
+  // A row missing just one required field (e.g. a holiday name typed but no
+  // date picked) used to be silently dropped from the save payload — the
+  // request still "succeeded" so the admin saw a success toast, then the
+  // row was simply gone on reload. Block the save instead and say why.
+  const holidayRows = [...document.querySelectorAll('[data-holiday]')].map(r => ({
+    name: r.querySelector('[data-h-name]')?.value?.trim() || '',
+    date: r.querySelector('[data-h-date]')?.value || '',
+  }));
+  const incompleteHoliday = holidayRows.find(h => Boolean(h.name) !== Boolean(h.date));
+  if (incompleteHoliday) {
+    toastError(`Holiday "${incompleteHoliday.name || '(untitled)'}" needs both a name and a date — fill both in, or remove the row.`);
+    return;
+  }
+  const publicHolidays = holidayRows.filter(h => h.name && h.date);
+
+  const locationRows = [...document.querySelectorAll('[data-location]')].map(r => ({
+    name: r.querySelector('[data-l-name]')?.value?.trim() || '',
+    address: r.querySelector('[data-l-addr]')?.value?.trim() || '',
+  }));
+  const incompleteLocation = locationRows.find(l => !l.name && l.address);
+  if (incompleteLocation) {
+    toastError(`An office location needs a name (address alone isn't enough) — fill it in, or remove the row.`);
+    return;
+  }
+  const officeLocations = locationRows.filter(l => l.name);
+
   try {
     await api('/api/advanced/company-settings', { method: 'PATCH', body: JSON.stringify({
       name: document.getElementById('cs-name')?.value,
