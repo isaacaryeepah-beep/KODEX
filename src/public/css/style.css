@@ -6309,6 +6309,11 @@ table tr:hover td { background: #f8fafc !important; }
   box-sizing: border-box !important;
   flex-shrink: 0 !important;
 }
+/* Higher specificity than the base rule above (both !important, so
+   specificity — not source order — decides): lets JS actually hide a nav
+   item directly (e.g. sidebar search filtering) instead of only working
+   when its whole parent section is hidden too. */
+.sidebar-nav a.nav-hidden { display: none !important; }
 
 .sidebar-nav a span {
   font-size: 13px !important;
@@ -6631,6 +6636,15 @@ table tr:hover td { background: #f8fafc !important; }
 [data-theme="dark"] .nav-acc-hd { color: #6b7787; }
 .nav-acc-body { display: block; }
 .nav-acc-inner { display: flex; flex-direction: column; }
+
+/* Flat, relevance-sorted search results (replaces the scattered
+   in-place-filter view — see _sidebarSearch) */
+#nav-search-results { display: flex; flex-direction: column; margin: 2px 0; }
+.nav-search-empty {
+  padding: 14px 20px; text-align: center; font-size: 12px;
+  color: #9ca3af;
+}
+[data-theme="dark"] .nav-search-empty { color: #6b7787; }
 
 /* Badges + pin stars */
 .sidebar-nav a .nav-badge {

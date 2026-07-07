@@ -3275,17 +3275,78 @@ function _sidebarSearch(q) {
   const quick = document.getElementById('nav-quick');
   if (quick) quick.style.display = term ? 'none' : '';
 
-  nav.querySelectorAll('a[data-view]').forEach(el => {
-    if (!term) { el.style.display = ''; return; }
-    const label = (el.querySelector('span') || el).textContent.toLowerCase();
-    el.style.display = label.includes(term) ? '' : 'none';
+  let results = document.getElementById('nav-search-results');
+
+  if (!term) {
+    // Put every item back exactly where it came from, in its original
+    // relative order. Grouped by original parent and replayed in original
+    // order via appendChild (which *moves* an existing node) rather than
+    // insertBefore against a stored sibling reference — that sibling may
+    // itself be one of the items still waiting to be restored, which would
+    // throw (it's not currently a child of that parent yet).
+    if (window._navSearchOrig) {
+      const byParent = new Map();
+      window._navSearchOrig.forEach((pos, el) => {
+        if (!byParent.has(pos.parent)) byParent.set(pos.parent, []);
+        byParent.get(pos.parent).push({ el, order: pos.order });
+      });
+      byParent.forEach((list, parent) => {
+        list.sort((a, b) => a.order - b.order).forEach(x => parent.appendChild(x.el));
+      });
+      window._navSearchOrig.forEach((pos, el) => { el.classList.remove('nav-hidden'); });
+      window._navSearchOrig = null;
+    }
+    if (results) results.remove();
+    nav.querySelectorAll('.nav-acc').forEach(acc => { acc.style.display = ''; });
+    return;
+  }
+
+  // Starting a fresh search: remember exactly where every item lives (its
+  // parent + original position within that parent) so it can go back once
+  // the search clears.
+  if (!window._navSearchOrig) {
+    window._navSearchOrig = new Map();
+    let order = 0;
+    nav.querySelectorAll('a[data-view]').forEach(el => {
+      if (el.closest('#nav-quick')) return; // pinned/recent copies, not real slots
+      window._navSearchOrig.set(el, { parent: el.parentElement, order: order++ });
+    });
+  }
+
+  // Rank every item — exact label match, then starts-with, then contains
+  // anywhere — and collapse matches into one flat list in that order.
+  // Previously a match kept its original position inside its own (now
+  // filtered) section, so the one result you actually wanted could end up
+  // buried after unrelated sections that simply came first in the sidebar's
+  // natural order. Now the best match is always first.
+  const scored = [];
+  window._navSearchOrig.forEach((pos, el) => {
+    const label = (el.querySelector('span') || el).textContent.trim().toLowerCase();
+    let rank = -1;
+    if (label === term) rank = 0;
+    else if (label.startsWith(term)) rank = 1;
+    else if (label.includes(term)) rank = 2;
+    if (rank !== -1) scored.push({ el, rank, label });
   });
-  // Hide accordion sections with no visible matches
-  nav.querySelectorAll('.nav-acc').forEach(acc => {
-    if (!term) { acc.style.display = ''; return; }
-    const any = [...acc.querySelectorAll('a[data-view]')].some(a => a.style.display !== 'none');
-    acc.style.display = any ? '' : 'none';
+  scored.sort((a, b) => a.rank - b.rank || a.label.localeCompare(b.label));
+
+  if (!results) {
+    results = document.createElement('div');
+    results.id = 'nav-search-results';
+  }
+  nav.insertBefore(results, allRow ? allRow.nextSibling : nav.firstChild);
+  scored.forEach(s => { s.el.classList.remove('nav-hidden'); results.appendChild(s.el); });
+
+  // Everything else stays put but hidden — its whole section is hidden too.
+  window._navSearchOrig.forEach((pos, el) => {
+    if (!scored.some(s => s.el === el)) el.classList.add('nav-hidden');
   });
+  nav.querySelectorAll('.nav-acc').forEach(acc => { acc.style.display = 'none'; });
+
+  results.querySelector('.nav-search-empty')?.remove();
+  if (!scored.length) {
+    results.insertAdjacentHTML('beforeend', '<div class="nav-search-empty">No matches</div>');
+  }
 }
 
 function navigateTo(view) {
