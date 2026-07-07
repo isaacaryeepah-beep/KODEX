@@ -15735,10 +15735,10 @@ async function removeDevice(deviceId) {
   if (!confirm('Remove this device from your trusted list?')) return;
   try {
     await api(`/api/auth/my-devices/${encodeURIComponent(deviceId)}`, { method: 'DELETE' });
-    showToast('Device removed', 'success');
+    toastSuccess('Device removed');
     loadMyDevices();
   } catch (e) {
-    showToast('Failed to remove device', 'error');
+    toastError('Failed to remove device');
   }
 }
 
