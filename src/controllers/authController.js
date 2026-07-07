@@ -14,6 +14,17 @@ const mediaStorage = require("../services/storage/mediaStorage");
 
 const MODERATOR_ROLES = ['admin', 'lecturer', 'manager', 'hod', 'superadmin'];
 
+// Shared by every role-specific self-serve registration endpoint
+// (registerEmployee/registerStudent/registerManager/registerLecturer/
+// registerHod) — the one place the "New user self-registration" toggle is
+// actually enforced. registerSelfService (register.html) checks the same
+// flag inline since it already has its own bespoke response shape.
+function rejectIfSelfRegistrationDisabled(company, res, noun) {
+  if (company.selfRegistrationEnabled) return false;
+  res.status(403).json({ error: `Self-registration is not currently open for this ${noun}. Contact your admin.` });
+  return true;
+}
+
 async function createMeetingIdentity(user, companyId) {
   try {
     const initials = (user.name || '')
@@ -284,9 +295,7 @@ exports.registerLecturer = async (req, res) => {
     if (!company.isActive) {
       return res.status(403).json({ error: "This institution is currently inactive." });
     }
-    if (!company.selfRegistrationEnabled) {
-      return res.status(403).json({ error: "Self-registration is not currently open for this institution. Contact your admin." });
-    }
+    if (rejectIfSelfRegistrationDisabled(company, res, "institution")) return;
 
     if (!department?.trim()) {
       return res.status(400).json({ error: "Department is required." });
@@ -402,9 +411,7 @@ exports.registerStudent = async (req, res) => {
     if (!company.isActive) {
       return res.status(403).json({ error: "This institution is currently inactive." });
     }
-    if (!company.selfRegistrationEnabled) {
-      return res.status(403).json({ error: "Self-registration is not currently open for this institution. Contact your admin." });
-    }
+    if (rejectIfSelfRegistrationDisabled(company, res, "institution")) return;
 
     // HOD-first enforcement
     if (department?.trim()) {
@@ -503,9 +510,7 @@ exports.registerEmployee = async (req, res) => {
     if (!company.isActive) {
       return res.status(403).json({ error: "This company is currently inactive." });
     }
-    if (!company.selfRegistrationEnabled) {
-      return res.status(403).json({ error: "Self-registration is not currently open for this company. Contact your admin." });
-    }
+    if (rejectIfSelfRegistrationDisabled(company, res, "company")) return;
 
     const existingUser = await User.findOne({ email, company: company._id });
     if (existingUser) {
@@ -594,9 +599,7 @@ exports.registerManager = async (req, res) => {
     if (!company.isActive) {
       return res.status(403).json({ error: "This company is currently inactive." });
     }
-    if (!company.selfRegistrationEnabled) {
-      return res.status(403).json({ error: "Self-registration is not currently open for this company. Contact your admin." });
-    }
+    if (rejectIfSelfRegistrationDisabled(company, res, "company")) return;
 
     const existingUser = await User.findOne({ email, company: company._id });
     if (existingUser) {
@@ -664,9 +667,7 @@ exports.registerHod = async (req, res) => {
     if (!company.isActive) {
       return res.status(403).json({ error: 'This institution is currently inactive.' });
     }
-    if (!company.selfRegistrationEnabled) {
-      return res.status(403).json({ error: 'Self-registration is not currently open for this institution. Contact your admin.' });
-    }
+    if (rejectIfSelfRegistrationDisabled(company, res, "institution")) return;
 
     const existingUser = await User.findOne({ email, company: company._id });
     if (existingUser) {
