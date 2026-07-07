@@ -3190,13 +3190,12 @@ function buildSidebar() {
     '</a>';
   window._navItemHtml = navItemHtml;
 
-  const openLabel = _navAccOpenLabel(navSections);
   nav.innerHTML =
     '<div id="nav-quick"></div>' +
     navTop.map(l => navItemHtml(l)).join('') +
     navSections.map(sec => `
-      <div class="nav-acc ${sec.label === openLabel ? 'open' : ''}" data-acc="${sec.label}">
-        <button class="nav-acc-hd" onclick="_navAccToggle('${sec.label}')"><span class="nav-acc-hd-left">${_navSecIcon(sec.label)}<span>${_navSecTitle(sec.label)}</span></span><svg class="nav-acc-ch" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg></button>
+      <div class="nav-acc" data-acc="${sec.label}">
+        <div class="nav-acc-hd"><span class="nav-acc-hd-left">${_navSecIcon(sec.label)}<span>${_navSecTitle(sec.label)}</span></span></div>
         <div class="nav-acc-body"><div class="nav-acc-inner">${sec.items.map(l => navItemHtml(l)).join('')}</div></div>
       </div>`).join('');
 
@@ -26258,40 +26257,6 @@ window._navTogglePin = function(id) {
   buildSidebar();
 };
 
-function _navAccOpenLabel(sections) {
-  const saved = localStorage.getItem('dikly_acc::' + _navUid());
-  if (saved && sections.some(x => x.label === saved)) return saved;
-  const holding = sections.find(x => x.items.some(i => i.id === (window.currentView || 'dashboard')));
-  return holding ? holding.label : (sections[0] && sections[0].label);
-}
-
-window._navAccToggle = function(label) {
-  const nav = document.getElementById('sidebar-nav');
-  if (!nav) return;
-  const acc = [...nav.querySelectorAll('.nav-acc')].find(x => x.dataset.acc === label);
-  if (!acc) return;
-  const wasOpen = acc.classList.contains('open');
-  nav.querySelectorAll('.nav-acc.open').forEach(x => x.classList.remove('open'));
-  if (!wasOpen) {
-    acc.classList.add('open');
-    localStorage.setItem('dikly_acc::' + _navUid(), label);
-  } else {
-    localStorage.removeItem('dikly_acc::' + _navUid());
-  }
-};
-
-// Expand the accordion that contains the active view (without collapsing on
-// plain re-renders when the view is top-level or pinned).
-function _navExpandFor(view) {
-  const nav = document.getElementById('sidebar-nav');
-  const el = document.getElementById('nav-' + view);
-  const acc = el && el.closest('.nav-acc');
-  if (!nav || !acc || acc.classList.contains('open')) return;
-  nav.querySelectorAll('.nav-acc.open').forEach(x => x.classList.remove('open'));
-  acc.classList.add('open');
-  localStorage.setItem('dikly_acc::' + _navUid(), acc.dataset.acc || '');
-}
-
 // Pinned + Recent quick-access block at the very top of the nav
 function _navRenderQuick() {
   const box = document.getElementById('nav-quick');
@@ -26359,7 +26324,6 @@ async function _updateNavBadges() {
     try {
       document.querySelectorAll('.sidebar-nav a[data-view]').forEach(a =>
         a.classList.toggle('active', a.dataset.view === view));
-      _navExpandFor(view);
       if (!['dashboard', 'emp-home'].includes(view)) {
         let rec = _navGetRecent().filter(x => x !== view);
         rec.unshift(view);
