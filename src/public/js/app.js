@@ -7227,18 +7227,37 @@ async function renderStudentDashboard(content) {
     ` : ''}
     
     <div class="stats-grid">
-      <div class="stat-card"><div class="stat-value">${totalCheckins}</div><div class="stat-label">Total Check-ins</div></div>
-      <div class="stat-card"><div class="stat-value">${attendanceRate}%</div><div class="stat-label">Attendance Rate</div></div>
-      <div class="stat-card"><div class="stat-value">${enrolledCourses}</div><div class="stat-label">Enrolled Courses</div></div>
-      <div class="stat-card"><div class="stat-value">${quizzesTaken}</div><div class="stat-label">Quizzes Taken</div></div>
+      <div class="stat-card-v2">
+        <div class="stat-top-bar" style="background:#16a34a"></div>
+        <div class="stat-header"><span class="stat-label">Total Check-ins</span></div>
+        <div class="stat-value" style="color:#16a34a">${totalCheckins}</div>
+      </div>
+      <div class="stat-card-v2">
+        <div class="stat-top-bar" style="background:#2563eb"></div>
+        <div class="stat-header"><span class="stat-label">Attendance Rate</span></div>
+        <div class="stat-value" style="color:#2563eb">${attendanceRate}%</div>
+      </div>
+      <div class="stat-card-v2">
+        <div class="stat-top-bar" style="background:#7c3aed"></div>
+        <div class="stat-header"><span class="stat-label">Enrolled Courses</span></div>
+        <div class="stat-value" style="color:#7c3aed">${enrolledCourses}</div>
+      </div>
+      <div class="stat-card-v2">
+        <div class="stat-top-bar" style="background:#d97706"></div>
+        <div class="stat-header"><span class="stat-label">Quizzes Taken</span></div>
+        <div class="stat-value" style="color:#d97706">${quizzesTaken}</div>
+      </div>
     </div>
-    
-    <div class="quick-actions">
-      <button class="btn btn-primary btn-sm" onclick="navigateTo('mark-attendance')">Mark Attendance</button>
-      <button class="btn btn-secondary btn-sm" onclick="navigateTo('my-attendance')">View History</button>
-      <button class="btn btn-secondary btn-sm" onclick="navigateTo('courses')">My Courses</button>
-      <button class="btn btn-secondary btn-sm" onclick="navigateTo('quizzes')">Quizzes</button>
-      <button class="btn btn-secondary btn-sm" onclick="generateAttendanceReportCard()">📋 Report Card</button>
+
+    <div class="card quick-actions-bar">
+      <div class="section-label">Quick Actions</div>
+      <div class="actions-row">
+        <button class="btn btn-primary btn-sm" onclick="navigateTo('mark-attendance')">Mark Attendance</button>
+        <button class="btn btn-secondary btn-sm" onclick="navigateTo('my-attendance')">View History</button>
+        <button class="btn btn-secondary btn-sm" onclick="navigateTo('courses')">My Courses</button>
+        <button class="btn btn-secondary btn-sm" onclick="navigateTo('quizzes')">Quizzes</button>
+        <button class="btn btn-secondary btn-sm" onclick="generateAttendanceReportCard()">📋 Report Card</button>
+      </div>
     </div>
     
     ${upcomingMeetings.length > 0 ? `
