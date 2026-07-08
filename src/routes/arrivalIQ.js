@@ -13,6 +13,13 @@
  * POST   /consent          employee: grant/revoke notification + location consent
  * POST   /location         employee: foreground-only location check-in (Phase 2)
  * GET    /prediction/today employee: today's computed departure recommendation
+ * GET    /live-consent     employee: read my own live-trip-tracking consent
+ * POST   /live-consent     employee: grant/revoke live-trip-tracking consent
+ * GET    /map-key          employee: TomTom key for the live-trip map
+ * POST   /trip/start       employee: start a live trip to the office
+ * POST   /trip/:id/ping    employee: live-trip position update
+ * POST   /trip/:id/end     employee: end a live trip manually
+ * GET    /trip/active      employee: my current active trip, if any
  *
  * Later phases add: geofence-arrival events, the late-arrival form + manager
  * review queue, and punctuality analytics.
@@ -31,9 +38,12 @@ const { requireActiveSubscription } = require("../middleware/subscription");
 const Company = require("../models/Company");
 const User = require("../models/User");
 const ArrivalPrediction = require("../models/ArrivalPrediction");
+const LiveTrackingSession = require("../models/LiveTrackingSession");
 const AuditLog = require("../models/AuditLog");
 const { AUDIT_ACTIONS } = AuditLog;
 const { todayKey } = require("../services/arrivalIQScheduler");
+const tomtomProvider = require("../services/traffic/providers/tomtomProvider");
+const { haversineMeters } = require("../utils/attendanceAntiCheat");
 
 const mw = [authenticate, requireMode("corporate"), requireActiveSubscription];
 const adminOnly = requireRole("admin", "superadmin");
@@ -239,6 +249,198 @@ router.get("/prediction/today", ...mw, async (req, res) => {
   } catch (error) {
     console.error("ArrivalIQ get prediction error:", error);
     res.status(500).json({ error: "Failed to fetch today's prediction" });
+  }
+});
+
+// ---------------------------------------------------------------------------
+// GET /live-consent — read my own live-trip-tracking consent (employee)
+// ---------------------------------------------------------------------------
+router.get("/live-consent", ...mw, async (req, res) => {
+  try {
+    const user = await User.findById(req.user._id).select("arrivalIQLiveTrackingConsent").lean();
+    const c = user?.arrivalIQLiveTrackingConsent || {};
+    res.json({ granted: c.granted || false, grantedAt: c.grantedAt || null });
+  } catch (error) {
+    console.error("ArrivalIQ get live-consent error:", error);
+    res.status(500).json({ error: "Failed to fetch live-tracking consent status" });
+  }
+});
+
+// ---------------------------------------------------------------------------
+// POST /live-consent — grant/revoke live-trip-tracking consent (employee)
+// Deliberately never company-mandatory, unlike the regular location consent
+// above — continuous tracking is a materially bigger privacy step than a
+// once-around-shift-time check, so a company can't force it on.
+// ---------------------------------------------------------------------------
+router.post("/live-consent", ...mw, async (req, res) => {
+  try {
+    const { granted } = req.body;
+    if (typeof granted !== "boolean") {
+      return res.status(400).json({ error: "granted (boolean) is required" });
+    }
+    await User.findByIdAndUpdate(req.user._id, {
+      $set: {
+        "arrivalIQLiveTrackingConsent.granted":   granted,
+        "arrivalIQLiveTrackingConsent.grantedAt": new Date(),
+      },
+    });
+    AuditLog.record({
+      company: req.user.company,
+      actor: req.user,
+      action: granted ? AUDIT_ACTIONS.CONSENT_GRANTED : AUDIT_ACTIONS.CONSENT_REVOKED,
+      resource: "User",
+      resourceId: req.user._id,
+      resourceLabel: "ArrivalIQ live-trip tracking consent",
+      metadata: { feature: "arrivalIQ", permission: "liveTracking" },
+      req,
+    });
+    res.json({ message: "Live-tracking consent updated" });
+  } catch (error) {
+    console.error("ArrivalIQ update live-consent error:", error);
+    res.status(500).json({ error: "Failed to update live-tracking consent" });
+  }
+});
+
+// ---------------------------------------------------------------------------
+// GET /map-key — TomTom key for the live-trip map (any authenticated
+// employee with the feature available). Live trips always use TomTom for
+// the route/map regardless of which provider TRAFFIC_PROVIDER selects for
+// the periodic ETA sweep (see tomtomProvider.js's getRoute comment).
+// ---------------------------------------------------------------------------
+router.get("/map-key", ...mw, (req, res) => {
+  if (!tomtomProvider.isConfigured()) {
+    return res.status(503).json({ error: "Live trip tracking is not configured (TOMTOM_API_KEY missing)" });
+  }
+  res.json({ provider: "tomtom", key: process.env.TOMTOM_API_KEY });
+});
+
+// ---------------------------------------------------------------------------
+// POST /trip/start — start a live trip to the office (employee)
+// ---------------------------------------------------------------------------
+router.post("/trip/start", ...mw, async (req, res) => {
+  try {
+    const { lat, lng } = req.body;
+    if (typeof lat !== "number" || typeof lng !== "number") {
+      return res.status(400).json({ error: "lat and lng (numbers) are required" });
+    }
+
+    const user = await User.findById(req.user._id).select("arrivalIQLiveTrackingConsent.granted");
+    if (!user?.arrivalIQLiveTrackingConsent?.granted) {
+      return res.status(403).json({ error: "Live-trip tracking consent has not been granted" });
+    }
+
+    const company = await Company.findById(req.user.company)
+      .select("corporateSettings.officeLatitude corporateSettings.officeLongitude")
+      .lean();
+    const officeLat = company?.corporateSettings?.officeLatitude;
+    const officeLng = company?.corporateSettings?.officeLongitude;
+    if (officeLat == null || officeLng == null) {
+      return res.status(400).json({ error: "Your organization hasn't set an office location yet" });
+    }
+
+    // Only one active trip per employee at a time — an orphaned prior
+    // session (tab closed without hitting End) shouldn't linger forever.
+    await LiveTrackingSession.updateMany(
+      { user: req.user._id, status: "active" },
+      { $set: { status: "ended", endedAt: new Date(), endReason: "manual" } }
+    );
+
+    const route = await tomtomProvider.getRoute({
+      origin: { lat, lng },
+      destination: { lat: officeLat, lng: officeLng },
+    });
+
+    const session = await LiveTrackingSession.create({
+      company: req.user.company,
+      user: req.user._id,
+      origin: { lat, lng },
+      destination: { lat: officeLat, lng: officeLng },
+      routeCoordinates: route.coordinates,
+      distanceMeters: route.distanceMeters,
+      durationSeconds: route.durationSeconds,
+      lastPosition: { lat, lng, capturedAt: new Date() },
+    });
+
+    res.json({
+      tripId: session._id,
+      destination: session.destination,
+      routeCoordinates: session.routeCoordinates,
+      distanceMeters: session.distanceMeters,
+      durationSeconds: session.durationSeconds,
+      startedAt: session.startedAt,
+    });
+  } catch (error) {
+    console.error("ArrivalIQ trip start error:", error);
+    res.status(500).json({ error: error.message || "Failed to start live trip" });
+  }
+});
+
+// ---------------------------------------------------------------------------
+// POST /trip/:id/ping — live-trip position update (employee)
+// Throttled client-side (~every 15-30s) — the map's own live movement comes
+// straight from the browser's navigator.geolocation.watchPosition, this
+// just persists the latest fix server-side and detects arrival.
+// ---------------------------------------------------------------------------
+router.post("/trip/:id/ping", ...mw, async (req, res) => {
+  try {
+    const { lat, lng } = req.body;
+    if (typeof lat !== "number" || typeof lng !== "number") {
+      return res.status(400).json({ error: "lat and lng (numbers) are required" });
+    }
+    const session = await LiveTrackingSession.findOne({ _id: req.params.id, user: req.user._id });
+    if (!session) return res.status(404).json({ error: "Trip not found" });
+    if (session.status !== "active") return res.status(400).json({ error: "Trip has already ended" });
+
+    session.lastPosition = { lat, lng, capturedAt: new Date() };
+
+    const geofenceRadius = 150; // matches ArrivalIQ settings default (see GET /settings)
+    const distanceToOffice = haversineMeters(lat, lng, session.destination.lat, session.destination.lng);
+    let arrived = false;
+    if (distanceToOffice <= geofenceRadius) {
+      session.status    = "ended";
+      session.endedAt   = new Date();
+      session.endReason = "arrived";
+      arrived = true;
+    }
+    await session.save();
+
+    res.json({ arrived, distanceToOfficeMeters: Math.round(distanceToOffice) });
+  } catch (error) {
+    console.error("ArrivalIQ trip ping error:", error);
+    res.status(500).json({ error: "Failed to update trip position" });
+  }
+});
+
+// ---------------------------------------------------------------------------
+// POST /trip/:id/end — end a live trip manually (employee)
+// ---------------------------------------------------------------------------
+router.post("/trip/:id/end", ...mw, async (req, res) => {
+  try {
+    const session = await LiveTrackingSession.findOne({ _id: req.params.id, user: req.user._id });
+    if (!session) return res.status(404).json({ error: "Trip not found" });
+    if (session.status !== "active") return res.status(400).json({ error: "Trip has already ended" });
+    session.status    = "ended";
+    session.endedAt   = new Date();
+    session.endReason = "manual";
+    await session.save();
+    res.json({ message: "Trip ended" });
+  } catch (error) {
+    console.error("ArrivalIQ trip end error:", error);
+    res.status(500).json({ error: "Failed to end trip" });
+  }
+});
+
+// ---------------------------------------------------------------------------
+// GET /trip/active — my current active trip, if any (employee) — lets the
+// page resume a live trip after a reload instead of losing it.
+// ---------------------------------------------------------------------------
+router.get("/trip/active", ...mw, async (req, res) => {
+  try {
+    const session = await LiveTrackingSession.findOne({ user: req.user._id, status: "active" }).lean();
+    res.json({ trip: session || null });
+  } catch (error) {
+    console.error("ArrivalIQ get active trip error:", error);
+    res.status(500).json({ error: "Failed to fetch active trip" });
   }
 });
 

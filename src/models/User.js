@@ -331,6 +331,17 @@ const userSchema = new mongoose.Schema(
       _id: false,
     },
 
+    // Separate opt-in for "Live Trip" tracking (LiveTrackingSession) — a
+    // deliberately distinct flag from arrivalIQConsent above, which
+    // explicitly promises location is never tracked continuously. A live
+    // trip genuinely IS continuous tracking for its duration, so granting
+    // the regular consent must never imply this one, and vice versa.
+    arrivalIQLiveTrackingConsent: {
+      granted:   { type: Boolean, default: false },
+      grantedAt: { type: Date,    default: null },
+      _id: false,
+    },
+
     // Single most-recent location reading, captured only when the employee
     // has the app open (foreground-only — see POST /api/arrival-iq/location).
     // Overwritten every time, never appended to: this is a snapshot for
