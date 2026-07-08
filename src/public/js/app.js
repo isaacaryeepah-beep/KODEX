@@ -15914,13 +15914,19 @@ function renderContact() {
 
     <div class="card">
       <h3 style="margin-bottom:16px">Frequently Asked Questions</h3>
-      ${[
+      ${(currentUser?.company?.mode === 'corporate' ? [
+        ["How do I reset an employee's password?", 'Go to Users, find the employee, and use the Reset Password action. The employee will receive a reset code.'],
+        ["Why can't an employee clock in?", 'Employees can only clock in when on company WiFi and inside the office geofence. Confirm both are configured correctly in Clock Settings.'],
+        ['How do I add employees to the company?', 'Go to Users and use the Add Employee button, or turn on self-registration in Company Settings and share your institution code.'],
+        ['What happens when the subscription expires?', 'Access is suspended after the trial/subscription period. You can renew anytime from the Subscription page in your dashboard — payments are processed instantly via Paystack.'],
+        ['Can employees use the system offline?', 'Yes — employees can clock in/out offline. It will sync automatically once they reconnect.'],
+      ] : [
         ["How do I reset a student's password?", 'Go to Users, find the student, and use the Reset Password action. The student will receive a reset code.'],
         ["Why can't a student mark attendance?", 'Ensure there is an active session running and the student is enrolled in the correct course roster.'],
         ['How do I add students to a course?', 'Go to Courses, select the course, and use the Upload Students button to add students via CSV or manually.'],
         ['What happens when the subscription expires?', 'Access is suspended after the trial/subscription period. You can renew anytime from the Subscription page in your dashboard — payments are processed instantly via Paystack.'],
         ['Can students use the system offline?', 'Yes — students can mark attendance offline using a code. It will sync automatically when they reconnect.'],
-      ].map(([q, a]) => `
+      ]).map(([q, a]) => `
         <div style="padding:14px 0;border-bottom:1px solid var(--border)">
           <div style="font-weight:600;font-size:14px;margin-bottom:4px">❓ ${q}</div>
           <div style="font-size:13px;color:var(--text-light)">${a}</div>
