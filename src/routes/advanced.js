@@ -7,7 +7,6 @@ const Branch     = require("../models/Branch");
 const Company    = require("../models/Company");
 const User       = require("../models/User");
 const Timesheet  = require("../models/Timesheet");
-const Expense    = require("../models/Expense");
 const LeaveRequest = require("../models/LeaveRequest");
 const Goal       = require("../models/Goal");
 const Review     = require("../models/Review");
@@ -268,15 +267,7 @@ router.get("/analytics", ...mw, canManage, asyncHandler(async (req, res) => {
     const completedGoals = await Goal.countDocuments({ company: cId, status: "completed" });
     const goalRate = totalGoals > 0 ? Math.round((completedGoals / totalGoals) * 100) : 0;
 
-    // Expense totals (current month)
     const period = new Date().toISOString().slice(0, 7);
-    const [yr, mo] = period.split('-').map(Number);
-    const expAgg = await Expense.aggregate([
-      { $match: { company: cId, status: "approved",
-          date: { $gte: new Date(yr, mo-1, 1), $lte: new Date(yr, mo, 0, 23, 59, 59) } } },
-      { $group: { _id: "$category", total: { $sum: "$amount" }, count: { $sum: 1 } } },
-      { $sort: { total: -1 } },
-    ]);
 
     // Timesheet hours this month
     const tsAgg = await Timesheet.aggregate([
@@ -296,7 +287,6 @@ router.get("/analytics", ...mw, canManage, asyncHandler(async (req, res) => {
       leave: { byStatus: leaveByStatus, trend: leaveTrend },
       training: { total: totalTraining, completed: completedTraining, rate: trainingRate },
       performance: { avgReview, totalReviews: reviewAgg[0]?.count || 0, goalRate, totalGoals, completedGoals },
-      expenses: { byCategory: expAgg, period },
       timesheets: { totalHours: tsAgg[0]?.totalHours || 0, count: tsAgg[0]?.count || 0, period },
     });
 }));

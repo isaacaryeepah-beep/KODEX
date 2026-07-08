@@ -29,7 +29,6 @@ const FAQ_CATEGORIES = Object.freeze([
   // corporate-only
   "hr",
   "leave",
-  "expenses",
   "timesheet",
   "performance",
   "messages",
@@ -47,7 +46,7 @@ const FAQ_CATEGORIES = Object.freeze([
 // Which categories belong to each mode (used for server-side filtering)
 const CORPORATE_CATEGORIES = new Set([
   "attendance", "gps_attendance", "billing", "meetings", "password_reset", "general",
-  "hr", "leave", "expenses", "timesheet", "performance", "messages", "support",
+  "hr", "leave", "timesheet", "performance", "messages", "support",
 ]);
 const ACADEMIC_CATEGORIES = new Set([
   "attendance", "gps_attendance", "billing", "meetings", "password_reset", "general",

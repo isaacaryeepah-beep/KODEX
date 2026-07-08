@@ -15,7 +15,6 @@ const User                = require("../models/User");
 const Branch              = require("../models/Branch");
 const CorporateAttendance = require("../models/CorporateAttendance");
 const LeaveRequest        = require("../models/LeaveRequest");
-const Expense             = require("../models/Expense");
 const Timesheet           = require("../models/Timesheet");
 const Meeting             = require("../models/Meeting");
 
@@ -31,10 +30,9 @@ async function computeExecutiveSnapshot(companyId) {
     const todayE    = dayEnd(now);
     const trendFrom = dayStart(new Date(now.getTime() - 13 * 86400000)); // 14 days incl. today
     const perfFrom  = dayStart(new Date(now.getTime() - 29 * 86400000)); // 30-day window
-    const expFrom   = new Date(now.getFullYear(), now.getMonth() - 5, 1); // 6 calendar months
     const leaveFrom = new Date(now.getTime() - 90 * 86400000);
 
-    const [staff, branches, attendance, leaves, expenses, pendingLeave, pendingExpense, pendingTimesheet, meetingsToday] = await Promise.all([
+    const [staff, branches, attendance, leaves, pendingLeave, pendingTimesheet, meetingsToday] = await Promise.all([
       User.find({ company: companyId, role: { $in: ["employee", "manager"] }, isActive: true })
         .select("name department branch").lean(),
       Branch.find({ company: companyId, isActive: true }).select("name").lean(),
@@ -42,10 +40,7 @@ async function computeExecutiveSnapshot(companyId) {
         .select("employee date status isLate").lean(),
       LeaveRequest.find({ company: companyId, createdAt: { $gte: leaveFrom } })
         .select("status").lean(),
-      Expense.find({ company: companyId, createdAt: { $gte: expFrom } })
-        .select("amount status createdAt").lean(),
       LeaveRequest.countDocuments({ company: companyId, status: "pending" }),
-      Expense.countDocuments({ company: companyId, status: "pending" }),
       Timesheet.countDocuments({ company: companyId, status: "submitted" }),
       Meeting.countDocuments({
         company: companyId,
@@ -127,20 +122,6 @@ async function computeExecutiveSnapshot(companyId) {
     const departmentPerformance = toPerf(deptHead, deptPresent);
     const branchPerformance     = toPerf(branchHead, branchPresent);
 
-    // ── Monthly expenses (6 months, approved only) ────────────────────────
-    const monthly = new Map();
-    for (let i = 5; i >= 0; i--) {
-      const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
-      monthly.set(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`, 0);
-    }
-    for (const e of expenses) {
-      if (e.status !== "approved") continue;
-      const d = new Date(e.createdAt);
-      const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
-      if (monthly.has(key)) monthly.set(key, monthly.get(key) + (e.amount || 0));
-    }
-    const monthlyExpenses = [...monthly.entries()].map(([month, total]) => ({ month, total: Math.round(total * 100) / 100 }));
-
     // ── Leave statistics (last 90 days) ───────────────────────────────────
     const leaveStats = { pending: 0, approved: 0, rejected: 0, cancelled: 0 };
     for (const l of leaves) if (leaveStats[l.status] !== undefined) leaveStats[l.status]++;
@@ -150,7 +131,7 @@ async function computeExecutiveSnapshot(companyId) {
       staff.map(u => (u.department || "").trim()).filter(Boolean)
     ).size;
 
-    const pendingApprovals = pendingLeave + pendingExpense + pendingTimesheet;
+    const pendingApprovals = pendingLeave + pendingTimesheet;
 
     // ── Company health score ──────────────────────────────────────────────
     // Weighted composite: today's attendance (55%), punctuality (25%),
@@ -170,7 +151,7 @@ async function computeExecutiveSnapshot(companyId) {
       alerts.push({ level: "warning", text: `${absentToday} employee${absentToday === 1 ? " has" : "s have"} not clocked in today.` });
     }
     if (pendingApprovals > 0) {
-      alerts.push({ level: "warning", text: `${pendingApprovals} approval${pendingApprovals === 1 ? " is" : "s are"} pending (leave, expenses, timesheets).` });
+      alerts.push({ level: "warning", text: `${pendingApprovals} approval${pendingApprovals === 1 ? " is" : "s are"} pending (leave, timesheets).` });
     }
     // Branch that hit 100% today
     const branchToday = new Map();
@@ -211,7 +192,6 @@ async function computeExecutiveSnapshot(companyId) {
       attendanceTrend: trend,
       departmentPerformance,
       branchPerformance,
-      monthlyExpenses,
       leaveStats,
       alerts,
       absentNames,

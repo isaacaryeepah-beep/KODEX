@@ -258,7 +258,6 @@
         <!-- corporate-only -->
         <span class="kfaq-cat-chip" data-cat="hr" data-mode="corporate">HR</span>
         <span class="kfaq-cat-chip" data-cat="leave" data-mode="corporate">Leave</span>
-        <span class="kfaq-cat-chip" data-cat="expenses" data-mode="corporate">Expenses</span>
         <span class="kfaq-cat-chip" data-cat="timesheet" data-mode="corporate">Timesheet</span>
         <span class="kfaq-cat-chip" data-cat="performance" data-mode="corporate">Performance</span>
         <span class="kfaq-cat-chip" data-cat="messages" data-mode="corporate">Messages</span>
@@ -517,7 +516,7 @@
 
   function _welcomeMsg() {
     var mode = _getMode();
-    if (mode === "corporate") return "Hi! I'm your DIKLY assistant. Ask me about attendance, clock in/out, leave, expenses, timesheet, performance, meetings, or any other feature.";
+    if (mode === "corporate") return "Hi! I'm your DIKLY assistant. Ask me about attendance, clock in/out, leave, timesheet, performance, meetings, or any other feature.";
     if (mode === "academic")  return "Hi! I'm your DIKLY assistant. Ask me about courses, students, sessions, quizzes, assignments, grade book, or any other feature.";
     return "Hi! I'm your DIKLY AI assistant. Ask me anything about the platform.";
   }
