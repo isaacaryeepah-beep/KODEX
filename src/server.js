@@ -614,6 +614,17 @@ const start = async () => {
     }
 
     try {
+      // Auto-closes meetings left "live" forever by a host who never hit
+      // End (or whose tab just died) — see runMeetingWatchdog's own
+      // comment for the exact rule. Not time-critical like attendance
+      // heartbeats, so a 5-minute tick is plenty.
+      const { runMeetingWatchdog } = require("./controllers/meetingController");
+      setInterval(runMeetingWatchdog, 5 * 60 * 1000);
+    } catch (e) {
+      logger.error("Meeting watchdog failed to start", { error: e.message });
+    }
+
+    try {
       require("./services/arrivalIQScheduler").start();
     } catch (e) {
       logger.error("ArrivalIQ scheduler failed to start", { error: e.message });
