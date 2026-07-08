@@ -11,13 +11,18 @@
 //  ever touching ipcRenderer/Node directly.
 // ════════════════════════════════════════════════════════════════════
 const { contextBridge, ipcRenderer } = require('electron');
-const {
-  START_NOTIFICATION_SERVICE,
-  NOTIFICATION_SERVICE_STARTED,
-  NOTIFICATION_SERVICE_ERROR,
-  NOTIFICATION_RECEIVED,
-  TOKEN_UPDATED,
-} = require('electron-push-receiver/src/constants');
+// Electron 20+ runs preload scripts in a sandboxed context by default —
+// require() there only resolves a small built-in allowlist (electron, Node
+// core modules), NOT arbitrary npm packages from node_modules. Requiring
+// electron-push-receiver/src/constants here throws "module not found" at
+// runtime in a packaged build (works fine in main.js, which is never
+// sandboxed). These 5 strings are electron-push-receiver's whole constants
+// module (see its src/constants/index.js) — inlined to avoid that require.
+const START_NOTIFICATION_SERVICE = 'PUSH_RECEIVER:::START_NOTIFICATION_SERVICE';
+const NOTIFICATION_SERVICE_STARTED = 'PUSH_RECEIVER:::NOTIFICATION_SERVICE_STARTED';
+const NOTIFICATION_SERVICE_ERROR = 'PUSH_RECEIVER:::NOTIFICATION_SERVICE_ERROR';
+const NOTIFICATION_RECEIVED = 'PUSH_RECEIVER:::NOTIFICATION_RECEIVED';
+const TOKEN_UPDATED = 'PUSH_RECEIVER:::TOKEN_UPDATED';
 
 contextBridge.exposeInMainWorld('electronPush', {
   isElectron: true,
