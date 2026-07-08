@@ -20241,7 +20241,17 @@ async function _aiqHandlePosition(lat, lng) {
       method: 'POST',
       body: JSON.stringify({ lat, lng }),
     });
-    if (r.arrived) _aiqTripArrived();
+    if (r.arrived) {
+      _aiqTripArrived(r.distanceToOfficeMeters);
+    } else {
+      // Surfaced so a screenshot shows the real distance-to-office number —
+      // the only way to tell "arrived instantly because already close" apart
+      // from "arrived instantly because of a bug" without device devtools.
+      const eta = document.getElementById('aiq-trip-eta');
+      if (eta && typeof r.distanceToOfficeMeters === 'number') {
+        eta.textContent = `${(r.distanceToOfficeMeters / 1000).toFixed(2)} km from office`;
+      }
+    }
   } catch (e) {
     console.warn('[ArrivalIQ] Live trip ping failed:', e.message);
   }
@@ -20254,14 +20264,15 @@ function _aiqUpdateEtaLabel() {
   el.textContent = `Arrive by ${arriveBy.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })}`;
 }
 
-function _aiqTripArrived() {
+function _aiqTripArrived(distanceMeters) {
   _aiqStopWatch();
   const status = document.getElementById('aiq-trip-status');
   const eta = document.getElementById('aiq-trip-eta');
   if (status) status.textContent = '✓ Arrived';
   if (eta) eta.textContent = '';
-  toastSuccess("You've arrived — live trip ended");
-  setTimeout(() => { if (currentView === 'arrival-iq') renderArrivalIQ(); }, 1500);
+  const distanceNote = typeof distanceMeters === 'number' ? ` (${Math.round(distanceMeters)}m from office)` : '';
+  toastSuccess(`You've arrived — live trip ended${distanceNote}`);
+  setTimeout(() => { if (currentView === 'arrival-iq') renderArrivalIQ(); }, 3500);
 }
 
 function _aiqStopWatch() {
