@@ -31,11 +31,21 @@ jobs:
         run: npm install
         working-directory: electron
 
+      # electron-updater needs a version that strictly increases release to
+      # release to detect an update is available — there's no manual bump
+      # process, so derive one from the run number (monotonic across every
+      # build regardless of branch).
+      - name: Set build version
+        run: npm version 1.0.${{ github.run_number }} --no-git-tag-version --allow-same-version
+        working-directory: electron
+        shell: pwsh
+
       - name: Build Windows installer
-        run: npm run dist
+        run: npm run dist:publish
         working-directory: electron
         env:
           CSC_IDENTITY_AUTO_DISCOVERY: false
+          GH_TOKEN: ${{ secrets.RELEASES_PAT }}
 
       - name: List dist folder
         run: dir electron\dist /s /b
@@ -113,11 +123,18 @@ jobs:
         run: npm install
         working-directory: electron
 
+      # Keep in lockstep with the Windows job's versioning (see its comment)
+      # so both platforms publish under the same version per build.
+      - name: Set build version
+        run: npm version 1.0.${{ github.run_number }} --no-git-tag-version --allow-same-version
+        working-directory: electron
+
       - name: Build Mac DMG
-        run: npm run dist
+        run: npm run dist:publish
         working-directory: electron
         env:
           CSC_IDENTITY_AUTO_DISCOVERY: false
+          GH_TOKEN: ${{ secrets.RELEASES_PAT }}
 
       - name: List dist folder
         run: ls -la electron/dist/

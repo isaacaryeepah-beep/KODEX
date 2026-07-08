@@ -1,6 +1,49 @@
-const { app, BrowserWindow, shell } = require('electron');
+const { app, BrowserWindow, shell, dialog } = require('electron');
 const path = require('path');
 const { setup: setupPushReceiver } = require('electron-push-receiver');
+const { autoUpdater } = require('electron-updater');
+
+// Silent background auto-update — checks on launch and every 4h while the
+// app stays open, downloads in the background, then asks once to restart
+// (or installs on next quit if the user picks "Later"). Publishing is done
+// by `electron-builder --publish always` in build-desktop.yml, which
+// creates a versioned GitHub release (separate from the fixed
+// windows-latest/mac-latest ones used for first-time manual downloads) with
+// the latest.yml/latest-mac.yml metadata this relies on to detect updates.
+//
+// Known limitation: the app is built unsigned (CSC_IDENTITY_AUTO_DISCOVERY:
+// false in CI — no Apple Developer certificate), and Squirrel.Mac requires
+// a signed bundle to apply updates at all. Auto-update works on Windows;
+// on macOS checkForUpdates() will just error out below and get swallowed,
+// so Mac users still update via a fresh manual download for now.
+function setupAutoUpdate(win) {
+  if (!app.isPackaged) return; // no publish feed when running unpackaged
+
+  autoUpdater.autoDownload = true;
+  autoUpdater.autoInstallOnAppQuit = true;
+
+  autoUpdater.on('update-downloaded', () => {
+    dialog.showMessageBox(win, {
+      type: 'info',
+      title: 'Update ready',
+      message: 'A new version of DIKLY has been downloaded.',
+      detail: 'Restart now to install it, or it will install automatically the next time you quit DIKLY.',
+      buttons: ['Restart Now', 'Later'],
+      defaultId: 0,
+      cancelId: 1,
+    }).then(({ response }) => {
+      if (response === 0) autoUpdater.quitAndInstall();
+    });
+  });
+
+  autoUpdater.on('error', err => {
+    console.error('[AutoUpdater]', err instanceof Error ? err.stack : err);
+  });
+
+  const check = () => autoUpdater.checkForUpdates().catch(() => {});
+  check();
+  setInterval(check, 4 * 60 * 60 * 1000);
+}
 
 function createWindow() {
   const win = new BrowserWindow({
@@ -32,6 +75,8 @@ function createWindow() {
     win.maximize();
     win.show();
   });
+
+  setupAutoUpdate(win);
 
   win.loadURL('https://dikly.sbs');
 
