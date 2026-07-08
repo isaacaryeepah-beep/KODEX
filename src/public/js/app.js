@@ -19706,13 +19706,38 @@ async function renderArrivalIQSettings() {
         <button class="btn btn-secondary btn-sm" onclick="navigateTo('corp-clock-settings')">${hasOffice ? 'Edit' : 'Set'} office location →</button>
       </div>
 
+      <div class="card" style="max-width:600px;margin-bottom:20px">
+        <h3 style="font-size:15px;font-weight:700;margin-bottom:4px">Active Live Trips</h3>
+        <p style="font-size:12px;color:var(--text-light);margin-bottom:14px">Employees currently tracking a live trip to the office. Status only — their exact route/position isn't shown here, matching what they consented to when they opted in.</p>
+        <div id="aiq-active-trips">Loading…</div>
+      </div>
+
       <div class="card" style="max-width:600px">
         <h3 style="font-size:15px;font-weight:700;margin-bottom:4px">Verify Push Notifications</h3>
         <p style="font-size:12px;color:var(--text-light);margin-bottom:14px">Send yourself a test push to confirm notifications are wired up correctly for this browser/device before rolling ArrivalIQ out to employees.</p>
         <button class="btn btn-secondary btn-sm" onclick="_pushEnableAndTest(this)">Send Test Notification</button>
       </div>`;
+    _aiqLoadActiveTrips();
   } catch(e) {
     content.innerHTML = `<div class="card"><p style="color:var(--danger)">${esc(e.message)}</p></div>`;
+  }
+}
+async function _aiqLoadActiveTrips() {
+  const el = document.getElementById('aiq-active-trips');
+  if (!el) return;
+  try {
+    const { trips } = await api('/api/arrival-iq/admin/active-trips');
+    if (!trips.length) {
+      el.innerHTML = `<div style="font-size:12px;color:var(--text-light)">No one is currently on a live trip.</div>`;
+      return;
+    }
+    el.innerHTML = trips.map(t => `
+      <div style="display:flex;align-items:center;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--border)">
+        <div style="font-size:13px;font-weight:600">${esc(t.name)}</div>
+        <div style="font-size:12px;color:var(--text-light)">On the way · ETA ${new Date(t.etaAt).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })}</div>
+      </div>`).join('');
+  } catch (e) {
+    el.innerHTML = `<div style="font-size:12px;color:var(--danger)">${esc(e.message)}</div>`;
   }
 }
 window._aiqSaveSettings = async function() {

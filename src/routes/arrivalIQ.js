@@ -20,6 +20,8 @@
  * POST   /trip/:id/ping    employee: live-trip position update
  * POST   /trip/:id/end     employee: end a live trip manually
  * GET    /trip/active      employee: my current active trip, if any
+ * GET    /admin/active-trips admin/manager: status badges (name + ETA only,
+ *                             no location) for employees currently on a live trip
  *
  * Later phases add: geofence-arrival events, the late-arrival form + manager
  * review queue, and punctuality analytics.
@@ -441,6 +443,34 @@ router.get("/trip/active", ...mw, async (req, res) => {
   } catch (error) {
     console.error("ArrivalIQ get active trip error:", error);
     res.status(500).json({ error: "Failed to fetch active trip" });
+  }
+});
+
+// ---------------------------------------------------------------------------
+// GET /admin/active-trips — status badges for currently-active live trips
+// (admin/manager). Deliberately a status list, not a location feed: name,
+// "on the way"/ETA only — no lat/lng, no route. Employees only ever
+// consented to their own device showing their live position; showing that
+// same position to a manager is a materially bigger privacy surface this
+// feature was never scoped or worded for, so it stays out on purpose.
+// ---------------------------------------------------------------------------
+router.get("/admin/active-trips", ...mw, canManage, async (req, res) => {
+  try {
+    const sessions = await LiveTrackingSession.find({ company: req.user.company, status: "active" })
+      .select("user startedAt durationSeconds")
+      .populate("user", "name email")
+      .lean();
+    res.json({
+      trips: sessions.map(s => ({
+        userId: s.user?._id,
+        name: s.user?.name || s.user?.email || "Unknown",
+        startedAt: s.startedAt,
+        etaAt: new Date(new Date(s.startedAt).getTime() + (s.durationSeconds || 0) * 1000),
+      })),
+    });
+  } catch (error) {
+    console.error("ArrivalIQ get active trips error:", error);
+    res.status(500).json({ error: "Failed to fetch active trips" });
   }
 });
 
