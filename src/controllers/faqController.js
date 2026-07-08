@@ -72,6 +72,15 @@ exports.ask = async (req, res) => {
 
     // Mode filter — only return FAQs that belong to this company's mode
     const allowedCategories = await _modeFilter(req);
+
+    // The AI fallback below needs the mode itself (not just the category
+    // set) so its system prompt only lists features that mode actually
+    // has — otherwise a corporate account asking "Hi" gets a welcome
+    // message listing quizzes/SnapQuiz/course management, which don't
+    // exist for them.
+    const companyMode = req.user.role === "superadmin"
+      ? null
+      : (await Company.findById(req.user.company).select("mode").lean())?.mode || "academic";
     if (allowedCategories) {
       faqFilter.category = { $in: Array.from(allowedCategories) };
     }
@@ -143,7 +152,7 @@ exports.ask = async (req, res) => {
     let confidenceHigh = false;
 
     try {
-      const result = await callAI(q, contextFAQs);
+      const result = await callAI(q, contextFAQs, companyMode);
       aiText         = result.text;
       confidenceHigh = result.confidenceHigh;
     } catch (aiErr) {
