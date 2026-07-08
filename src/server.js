@@ -96,9 +96,12 @@ app.use(helmet({
       // grapher that used new Function(); it's been rewritten to a small
       // recursive-descent parser (src/public/js/app.js: _parseMathExpr /
       // _evalMathAst), so 'unsafe-eval' is no longer needed anywhere.
-      "script-src":      ["'self'", "'unsafe-inline'", "https://cdn.jsdelivr.net", "https://cdnjs.cloudflare.com", "https://meet.dikly.live"],
+      // api.tomtom.com: ArrivalIQ's live trip map — the Maps SDK script/CSS
+      // (script-src/style-src) plus the SDK's own runtime calls for map
+      // tiles and route/geofence lookups (connect-src) all hit this host.
+      "script-src":      ["'self'", "'unsafe-inline'", "https://cdn.jsdelivr.net", "https://cdnjs.cloudflare.com", "https://meet.dikly.live", "https://api.tomtom.com"],
       "script-src-attr": ["'unsafe-inline'"],
-      "style-src":       ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com", "https://cdn.jsdelivr.net"],
+      "style-src":       ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com", "https://cdn.jsdelivr.net", "https://api.tomtom.com"],
       "font-src":        ["'self'", "https://fonts.gstatic.com", "https://cdn.jsdelivr.net", "data:"],
       "img-src":         ["'self'", "data:", "blob:", "https:"],
       // res.cloudinary.com: sw.js's catch-all fetch handler re-issues every
@@ -107,7 +110,7 @@ app.use(helmet({
       // connect-src governs regardless of img-src — without this, every
       // Cloudinary-hosted image silently fails once the service worker is
       // active, indistinguishable from the upload itself having failed.
-      "connect-src":     ["'self'", "https://api.anthropic.com", "https://res.cloudinary.com", "https://*.dikly.sbs", "https://*.dikly.live", "wss://*.dikly.sbs", "wss://*.dikly.live", "wss://*.livekit.cloud", "https://cdn.jsdelivr.net", "https://cdnjs.cloudflare.com"],
+      "connect-src":     ["'self'", "https://api.anthropic.com", "https://res.cloudinary.com", "https://*.dikly.sbs", "https://*.dikly.live", "wss://*.dikly.sbs", "wss://*.dikly.live", "wss://*.livekit.cloud", "https://cdn.jsdelivr.net", "https://cdnjs.cloudflare.com", "https://api.tomtom.com"],
       "frame-src":       ["'self'", "https://meet.dikly.live", "https://*.livekit.cloud"],
       "media-src":       ["'self'", "blob:"],
       "object-src":      ["'none'"],
