@@ -17,6 +17,7 @@
 const PushSubscription = require("../../models/PushSubscription");
 const Company = require("../../models/Company");
 const webPushProvider = require("./providers/webPushProvider");
+const fcmProvider = require("./providers/fcmProvider");
 
 // Per-company branding for notifications, so pushes arrive titled/iconed as
 // the employer ("Acme Ltd" + their logo) rather than as Dikly. Cached for a
@@ -36,8 +37,9 @@ async function companyBranding(companyId) {
 
 const PROVIDERS = {
   webpush: webPushProvider,
-  // fcm-android: require("./providers/fcmProvider"),
-  // apns-ios:    require("./providers/apnsProvider"),
+  "fcm-desktop": fcmProvider,
+  "fcm-android": fcmProvider,
+  // apns-ios: require("./providers/apnsProvider"),
 };
 
 function isConfigured() {
