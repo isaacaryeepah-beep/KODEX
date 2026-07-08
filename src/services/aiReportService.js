@@ -625,7 +625,6 @@ async function gatherCustomQuery(companyId, question, role) {
         lateToday: s.lateNames,
         departmentAttendance30d: s.departmentPerformance,
         branchAttendance30d: s.branchPerformance,
-        monthlyApprovedExpenses: s.monthlyExpenses,
         leaveLast90d: s.leaveStats,
         alerts: s.alerts.map(a => `[${a.level}] ${a.text}`),
       };

@@ -10,7 +10,7 @@
 // ════════════════════════════════════════════════════════════════════════════
 
 const _FAQ_CATEGORIES_CORPORATE = new Set([
-  'attendance', 'gps_attendance', 'hr', 'leave', 'expenses', 'timesheet',
+  'attendance', 'gps_attendance', 'hr', 'leave', 'timesheet',
   'performance', 'meetings', 'messages', 'support', 'billing', 'password_reset', 'general',
 ]);
 const _FAQ_CATEGORIES_ACADEMIC = new Set([
@@ -40,7 +40,6 @@ const _FAQ_ALL_CATEGORIES = [
   // corporate-only
   { value: 'hr',             label: 'HR & Clock In/Out',  mode: 'corporate' },
   { value: 'leave',          label: 'Leave',              mode: 'corporate' },
-  { value: 'expenses',       label: 'Expenses',           mode: 'corporate' },
   { value: 'timesheet',      label: 'Timesheet',          mode: 'corporate' },
   { value: 'performance',    label: 'Performance',        mode: 'corporate' },
   { value: 'messages',       label: 'Messages',           mode: 'corporate' },

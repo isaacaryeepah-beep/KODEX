@@ -38,7 +38,6 @@
     { q: 'How do I clock in or out?',          a: 'Go to <strong>Clock In / Out</strong> in the sidebar and tap the button. Your location is recorded automatically if GPS is enabled.' },
     { q: 'How do I apply for leave?',          a: 'Go to <strong>Leave</strong> in the sidebar → click <strong>"+ New Request"</strong> → select type and dates → Submit. Your manager will approve or reject.' },
     { q: 'How do I view my timesheet?',        a: 'Open <strong>My Attendance</strong> in the sidebar. Your daily clock-in/out times, hours worked, and any late arrivals are listed there.' },
-    { q: 'How do I submit expenses?',          a: 'Go to <strong>Expenses</strong> in the sidebar → click <strong>"+ Add Expense"</strong> → fill in amount, category, and attach a receipt → Submit for approval.' },
     { q: 'How does performance tracking work?', a: 'Open <strong>Performance</strong> in the sidebar. Your attendance rate, punctuality, and task completion are summarised. Managers set targets.' },
     { q: 'How do I join a meeting?',           a: 'Go to <strong>Meetings</strong> in the sidebar. Active meetings show a <strong>"Join"</strong> button. You will also see upcoming scheduled meetings.' },
     { q: 'How does messaging work?',           a: '<strong>Messages</strong> in the sidebar opens your inbox. Click <strong>+ New</strong> to message colleagues — you can only contact users in your team or role group.' },

@@ -2868,7 +2868,6 @@ function buildSidebar() {
         links.push({ id: 'performance',     label: 'Performance Reviews', icon: svgIcon('<line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/>') });
         links.push({ sep: true, label: 'OPERATIONS' });
         links.push({ id: 'branches',        label: 'Branches',            icon: svgIcon('<line x1="6" y1="3" x2="6" y2="15"/><circle cx="18" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><path d="M18 9a9 9 0 0 1-9 9"/>') });
-        links.push({ id: 'expenses-mgr',    label: 'Expenses',            icon: svgIcon('<line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/>') });
         links.push({ id: 'assets',          label: 'Assets',              icon: svgIcon('<path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><polyline points="3.27 6.96 12 12.01 20.73 6.96"/><line x1="12" y1="22.08" x2="12" y2="12"/>') });
         links.push({ id: 'timesheets',      label: 'Timesheets',          icon: svgIcon('<rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/><line x1="8" y1="14" x2="16" y2="14"/>') });
         links.push({ id: 'approvals',       label: 'Approvals',           icon: approvalsIcon() });
@@ -2943,7 +2942,6 @@ function buildSidebar() {
         links.push({ id: 'performance',     label: 'Performance Reviews', icon: svgIcon('<line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/>') });
         links.push({ sep: true, label: 'OPERATIONS' });
         links.push({ id: 'branches',        label: 'Branches',            icon: svgIcon('<line x1="6" y1="3" x2="6" y2="15"/><circle cx="18" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><path d="M18 9a9 9 0 0 1-9 9"/>') });
-        links.push({ id: 'expenses-mgr',    label: 'Expenses',            icon: svgIcon('<line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/>') });
         links.push({ id: 'assets',          label: 'Assets',              icon: svgIcon('<path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><polyline points="3.27 6.96 12 12.01 20.73 6.96"/><line x1="12" y1="22.08" x2="12" y2="12"/>') });
         links.push({ id: 'timesheets',      label: 'Timesheets',          icon: svgIcon('<rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/><line x1="8" y1="14" x2="16" y2="14"/>') });
         links.push({ id: 'approvals',       label: 'Approvals',           icon: approvalsIcon() });
@@ -3447,8 +3445,6 @@ function navigateTo(view) {
       break;
     case 'timesheets':     renderTimesheets(); break;
     case 'my-timesheet':   renderMyTimesheet(); break;
-    case 'expenses-mgr':   renderExpensesMgr(); break;
-    case 'my-expenses':    renderMyExpenses(); break;
     case 'assets':         renderAssets(); break;
     case 'my-assets':      renderMyAssets(); break;
     case 'messages':      renderMessages(); break;
@@ -15288,9 +15284,9 @@ async function renderSubscription() {
     const planFeatures = isStudent
       ? ['Full student portal access', 'Attend classes &amp; mark attendance', 'Take quizzes &amp; assignments', 'View grades &amp; results', 'Access the secure exam portal']
       : isEmployee
-      ? ['Full employee portal access', 'Clock in/out &amp; attendance tracking', 'Leave &amp; expense management', 'Performance tracking', 'Internal messaging &amp; announcements']
+      ? ['Full employee portal access', 'Clock in/out &amp; attendance tracking', 'Leave management', 'Performance tracking', 'Internal messaging &amp; announcements']
       : isCorp
-      ? ['Full platform access', 'Attendance &amp; clock in/out management', 'Leave &amp; expense management', 'Performance tracking &amp; reporting', 'Renew any time — days stack up']
+      ? ['Full platform access', 'Attendance &amp; clock in/out management', 'Leave management', 'Performance tracking &amp; reporting', 'Renew any time — days stack up']
       : ['Full platform access', 'Attendance marking &amp; session management', 'Assessment creation &amp; grading', 'Grade book &amp; reports', 'Renew any time — days stack up'];
 
     const statusColor = status === 'active' ? 'var(--success)' : status === 'trial' ? '#f59e0b' : 'var(--danger)';
@@ -22760,7 +22756,7 @@ function showSelfUpdateGoal(goalId, title, current, target, unit) {
 }
 
 // ══════════════════════════════════════════════════════════════════════════════
-//  CORPORATE PHASE 4 — OPERATIONS (Timesheets, Expenses, Assets)
+//  CORPORATE PHASE 4 — OPERATIONS (Timesheets, Assets)
 // ══════════════════════════════════════════════════════════════════════════════
 
 // ── Patch buildSidebar for Phase 4 ───────────────────────────────────────────
@@ -22784,19 +22780,12 @@ buildSidebar = function() {
         a.onclick = () => navigateTo('timesheets');
         perfLink.insertAdjacentElement('afterend', a);
       }
-      if (!document.getElementById('nav-expenses-mgr')) {
-        const a = document.createElement('a');
-        a.id = 'nav-expenses-mgr';
-        a.innerHTML = `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg><span>Expenses</span>`; a.dataset.tooltip = "Expenses";
-        a.onclick = () => navigateTo('expenses-mgr');
-        document.getElementById('nav-timesheets').insertAdjacentElement('afterend', a);
-      }
       if (!document.getElementById('nav-assets')) {
         const a = document.createElement('a');
         a.id = 'nav-assets';
         a.innerHTML = `${assetIcon}<span>Assets</span>`; a.dataset.tooltip = "Assets";
         a.onclick = () => navigateTo('assets');
-        document.getElementById('nav-expenses-mgr').insertAdjacentElement('afterend', a);
+        document.getElementById('nav-timesheets').insertAdjacentElement('afterend', a);
       }
     }
   } else if (role === 'employee') {
@@ -22809,19 +22798,12 @@ buildSidebar = function() {
         a.onclick = () => navigateTo('my-timesheet');
         myPerfLink.insertAdjacentElement('afterend', a);
       }
-      if (!document.getElementById('nav-my-expenses')) {
-        const a = document.createElement('a');
-        a.id = 'nav-my-expenses';
-        a.innerHTML = `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg><span>Expenses</span>`; a.dataset.tooltip = "Expenses";
-        a.onclick = () => navigateTo('my-expenses');
-        document.getElementById('nav-my-timesheet').insertAdjacentElement('afterend', a);
-      }
       if (!document.getElementById('nav-my-assets')) {
         const a = document.createElement('a');
         a.id = 'nav-my-assets';
         a.innerHTML = `${assetIcon}<span>My Assets</span>`; a.dataset.tooltip = "My Assets";
         a.onclick = () => navigateTo('my-assets');
-        document.getElementById('nav-my-expenses').insertAdjacentElement('afterend', a);
+        document.getElementById('nav-my-timesheet').insertAdjacentElement('afterend', a);
       }
     }
   }
@@ -22831,10 +22813,8 @@ buildSidebar = function() {
 const _p4NavigateTo = navigateTo;
 navigateTo = function(view) {
   if (view === 'timesheets')   { currentView = view; _setNavActive(view); renderTimesheets(); return; }
-  if (view === 'expenses-mgr') { currentView = view; _setNavActive('expenses-mgr'); renderExpensesMgr(); return; }
   if (view === 'assets')       { currentView = view; _setNavActive(view); renderAssets(); return; }
   if (view === 'my-timesheet') { currentView = view; _setNavActive('my-timesheet'); renderMyTimesheet(); return; }
-  if (view === 'my-expenses')  { currentView = view; _setNavActive('my-expenses'); renderMyExpenses(); return; }
   if (view === 'my-assets')    { currentView = view; _setNavActive('my-assets'); renderMyAssets(); return; }
   _p4NavigateTo(view);
 };
@@ -22994,98 +22974,6 @@ async function reviewTimesheet(id, action) {
 function exportTimesheet(id) {
   const token = localStorage.getItem('dikly_token') || localStorage.getItem('token');
   window.open(`/api/operations/timesheets/${id}/export?token=${token}`, '_blank');
-}
-
-// ══════════════════════════════════════════════════════════════
-// MANAGER — EXPENSES
-// ══════════════════════════════════════════════════════════════
-async function renderExpensesMgr() {
-  const content = document.getElementById('main-content');
-  content.innerHTML = '<div class="loading">Loading…</div>';
-  try {
-    const { expenses } = await api('/api/operations/expenses');
-    const pending  = expenses.filter(e => e.status === 'pending');
-    const approved = expenses.filter(e => e.status === 'approved');
-    const totalPending  = pending.reduce((s,e)=>s+e.amount,0);
-    const totalApproved = approved.reduce((s,e)=>s+e.amount,0);
-
-    const catIcon = c => ({travel:'✈️',meals:'🍽️',equipment:'🖥️',software:'💿',training:'📚',other:'📎'}[c]||'📎');
-
-    content.innerHTML = `
-      <div class="page-header"><h2>Expense Claims</h2><p>Review and approve employee expense claims</p></div>
-
-      <div class="stats-grid" style="margin-bottom:20px">
-        <div class="stat-card"><div class="stat-value">${expenses.length}</div><div class="stat-label">Total Claims</div></div>
-        <div class="stat-card" style="border-left:3px solid #f59e0b"><div class="stat-value" style="color:#f59e0b">${pending.length}</div><div class="stat-label">Pending</div></div>
-        <div class="stat-card"><div class="stat-value" style="color:#16a34a">${approved.length}</div><div class="stat-label">Approved</div></div>
-        <div class="stat-card"><div class="stat-value">${totalApproved.toFixed(2)}</div><div class="stat-label">Total Approved (GHS)</div></div>
-      </div>
-
-      ${pending.length ? `
-      <div class="card" style="margin-bottom:16px">
-        <h3 style="font-size:15px;font-weight:700;margin-bottom:12px">Pending Review (${pending.length})</h3>
-        ${pending.map(e => `
-          <div style="padding:14px;border:1px solid #fde68a;border-radius:10px;background:#fffbeb;margin-bottom:10px">
-            <div style="display:flex;align-items:flex-start;justify-content:space-between;flex-wrap:wrap;gap:8px">
-              <div>
-                <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px">
-                  <span style="font-size:16px">${catIcon(e.category)}</span>
-                  <span style="font-weight:700">${e.title}</span>
-                </div>
-                <div style="font-size:12px;color:#6b7280">${e.employee?.name||'—'} · ${new Date(e.date).toLocaleDateString()} · ${e.currency} <strong>${e.amount.toFixed(2)}</strong></div>
-                ${e.notes ? `<div style="font-size:12px;color:#9ca3af;margin-top:4px">${e.notes}</div>` : ''}
-              </div>
-              <div style="display:flex;gap:6px">
-                <button class="btn btn-sm" style="background:#f0fdf4;color:#16a34a;border:1px solid #bbf7d0" onclick="reviewExpense('${e._id}','approved')">✓ Approve</button>
-                <button class="btn btn-sm" style="background:#fef2f2;color:#dc2626;border:1px solid #fecaca" onclick="reviewExpense('${e._id}','rejected')">✗ Reject</button>
-              </div>
-            </div>
-          </div>
-        `).join('')}
-      </div>` : ''}
-
-      <div class="card">
-        <h3 style="font-size:15px;font-weight:700;margin-bottom:12px">All Claims</h3>
-        ${expenses.length ? `
-        <div style="overflow-x:auto">
-          <table style="width:100%;border-collapse:collapse;font-size:13px">
-            <thead><tr style="background:#f9fafb">
-              <th style="padding:10px;text-align:left;border-bottom:1px solid #e5e7eb">Employee</th>
-              <th style="padding:10px;text-align:left;border-bottom:1px solid #e5e7eb">Title</th>
-              <th style="padding:10px;text-align:left;border-bottom:1px solid #e5e7eb">Category</th>
-              <th style="padding:10px;text-align:right;border-bottom:1px solid #e5e7eb">Amount</th>
-              <th style="padding:10px;text-align:center;border-bottom:1px solid #e5e7eb">Status</th>
-              <th style="padding:10px;text-align:left;border-bottom:1px solid #e5e7eb">Date</th>
-            </tr></thead>
-            <tbody>
-              ${expenses.map(e=>`
-                <tr style="border-bottom:1px solid #f3f4f6">
-                  <td style="padding:10px;font-weight:600">${e.employee?.name||'—'}</td>
-                  <td style="padding:10px">${e.title}</td>
-                  <td style="padding:10px">${catIcon(e.category)} ${e.category}</td>
-                  <td style="padding:10px;text-align:right;font-weight:700">${e.currency} ${e.amount.toFixed(2)}</td>
-                  <td style="padding:10px;text-align:center">${_pill(e.status,e.status)}</td>
-                  <td style="padding:10px;font-size:12px;color:#6b7280">${new Date(e.date).toLocaleDateString()}</td>
-                </tr>
-              `).join('')}
-            </tbody>
-          </table>
-        </div>
-        ` : '<p style="color:#9ca3af;font-size:13px">No expense claims yet.</p>'}
-      </div>
-    `;
-  } catch(e) {
-    content.innerHTML = `<div class="card"><p style="color:#ef4444">Error: ${e.message}</p></div>`;
-  }
-}
-
-async function reviewExpense(id, action) {
-  const note = action === 'rejected' ? prompt('Reason for rejection (optional):') || '' : '';
-  try {
-    await api(`/api/operations/expenses/${id}/review`, { method: 'PATCH', body: JSON.stringify({ action, note }) });
-    toast(`Expense ${action}!`, 'ok');
-    renderExpensesMgr();
-  } catch(e) { toast(e.message, 'err'); }
 }
 
 // ══════════════════════════════════════════════════════════════
@@ -23388,106 +23276,6 @@ async function submitMyTimesheet(period) {
 }
 
 // ══════════════════════════════════════════════════════════════
-// EMPLOYEE — EXPENSES
-// ══════════════════════════════════════════════════════════════
-async function renderMyExpenses() {
-  const content = document.getElementById('main-content');
-  content.innerHTML = '<div class="loading">Loading…</div>';
-  try {
-    const { expenses } = await api('/api/operations/expenses/my');
-    const total    = expenses.reduce((s,e)=>s+e.amount, 0);
-    const approved = expenses.filter(e=>e.status==='approved').reduce((s,e)=>s+e.amount,0);
-    const pending  = expenses.filter(e=>e.status==='pending').length;
-
-    const catIcon = c => ({travel:'✈️',meals:'🍽️',equipment:'🖥️',software:'💿',training:'📚',other:'📎'}[c]||'📎');
-
-    content.innerHTML = `
-      <div class="page-header"><h2>My Expenses</h2><p>Submit and track expense claims</p></div>
-
-      <div class="stats-grid" style="margin-bottom:20px">
-        <div class="stat-card"><div class="stat-value">${expenses.length}</div><div class="stat-label">Claims</div></div>
-        <div class="stat-card"><div class="stat-value" style="color:#f59e0b">${pending}</div><div class="stat-label">Pending</div></div>
-        <div class="stat-card"><div class="stat-value" style="color:#16a34a">${approved.toFixed(2)}</div><div class="stat-label">Approved (GHS)</div></div>
-      </div>
-
-      <!-- Submit expense -->
-      <div class="card" style="margin-bottom:16px">
-        <h3 style="font-size:14px;font-weight:700;margin-bottom:12px">New Expense Claim</h3>
-        <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:10px;margin-bottom:10px">
-          <div style="grid-column:1/-1">
-            <label style="font-size:11px;font-weight:700;text-transform:uppercase;color:#6b7280;display:block;margin-bottom:4px">Title *</label>
-            <input id="exp-title" placeholder="e.g. Uber to client site" style="width:100%;padding:8px;border:1px solid #d1d5db;border-radius:6px;font-size:13px">
-          </div>
-          <div>
-            <label style="font-size:11px;font-weight:700;text-transform:uppercase;color:#6b7280;display:block;margin-bottom:4px">Category</label>
-            <select id="exp-cat" style="width:100%;padding:8px;border:1px solid #d1d5db;border-radius:6px;font-size:13px">
-              ${['travel','meals','equipment','software','training','other'].map(c=>`<option value="${c}">${c}</option>`).join('')}
-            </select>
-          </div>
-          <div>
-            <label style="font-size:11px;font-weight:700;text-transform:uppercase;color:#6b7280;display:block;margin-bottom:4px">Amount (GHS) *</label>
-            <input id="exp-amount" type="number" min="0" step="0.01" placeholder="0.00" style="width:100%;padding:8px;border:1px solid #d1d5db;border-radius:6px;font-size:13px">
-          </div>
-          <div>
-            <label style="font-size:11px;font-weight:700;text-transform:uppercase;color:#6b7280;display:block;margin-bottom:4px">Date *</label>
-            <input id="exp-date" type="date" value="${new Date().toISOString().slice(0,10)}" style="width:100%;padding:8px;border:1px solid #d1d5db;border-radius:6px;font-size:13px">
-          </div>
-          <div style="grid-column:1/-1">
-            <label style="font-size:11px;font-weight:700;text-transform:uppercase;color:#6b7280;display:block;margin-bottom:4px">Notes</label>
-            <input id="exp-notes" placeholder="Optional details" style="width:100%;padding:8px;border:1px solid #d1d5db;border-radius:6px;font-size:13px">
-          </div>
-        </div>
-        <div id="exp-error" style="color:#ef4444;font-size:13px;margin-bottom:8px;display:none"></div>
-        <button class="btn btn-primary" onclick="submitExpense()">Submit Claim</button>
-      </div>
-
-      <!-- My claims -->
-      <div class="card">
-        <h3 style="font-size:14px;font-weight:700;margin-bottom:12px">My Claims</h3>
-        ${expenses.length ? expenses.map(e => `
-          <div style="padding:12px;border:1px solid #e5e7eb;border-radius:8px;margin-bottom:8px">
-            <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:6px">
-              <div>
-                <span style="font-size:15px;margin-right:6px">${catIcon(e.category)}</span>
-                <span style="font-weight:600">${e.title}</span>
-                <span style="font-size:12px;color:#6b7280;margin-left:8px">${new Date(e.date).toLocaleDateString()}</span>
-              </div>
-              <div style="display:flex;align-items:center;gap:8px">
-                <span style="font-weight:700">GHS ${e.amount.toFixed(2)}</span>
-                ${_pill(e.status, e.status)}
-              </div>
-            </div>
-            ${e.reviewNote ? `<p style="font-size:12px;color:#6b7280;margin:4px 0 0">Note: ${e.reviewNote}</p>` : ''}
-          </div>
-        `).join('') : '<p style="color:#9ca3af;font-size:13px">No claims yet.</p>'}
-      </div>
-    `;
-  } catch(e) {
-    content.innerHTML = `<div class="card"><p style="color:#ef4444">Error: ${e.message}</p></div>`;
-  }
-}
-
-async function submitExpense() {
-  const title  = document.getElementById('exp-title').value.trim();
-  const amount = document.getElementById('exp-amount').value;
-  const date   = document.getElementById('exp-date').value;
-  const cat    = document.getElementById('exp-cat').value;
-  const notes  = document.getElementById('exp-notes').value.trim();
-  const errEl  = document.getElementById('exp-error');
-  errEl.style.display = 'none';
-  if (!title || !amount || !date) { errEl.textContent = 'Title, amount and date are required.'; errEl.style.display = 'block'; return; }
-  const btn = event.target; btn.disabled = true; btn.textContent = 'Submitting…';
-  try {
-    await api('/api/operations/expenses', { method: 'POST', body: JSON.stringify({ title, category: cat, amount, date, notes }) });
-    toast('Expense claim submitted!', 'ok');
-    renderMyExpenses();
-  } catch(e) {
-    errEl.textContent = e.message; errEl.style.display = 'block';
-    btn.disabled = false; btn.textContent = 'Submit Claim';
-  }
-}
-
-// ══════════════════════════════════════════════════════════════
 // EMPLOYEE — MY ASSETS
 // ══════════════════════════════════════════════════════════════
 async function renderMyAssets() {
@@ -23600,11 +23388,10 @@ async function renderAnalytics() {
   content.innerHTML = '<div class="loading">Loading analytics…</div>';
   try {
     const data = await api('/api/advanced/analytics');
-    const { headcount, leave, training, performance, expenses, timesheets } = data;
+    const { headcount, leave, training, performance, timesheets } = data;
 
     const leaveMap = {};
     (leave.byStatus || []).forEach(l => leaveMap[l._id] = l.count);
-    const expTotal = (expenses.byCategory || []).reduce((s,e) => s + e.total, 0);
 
     content.innerHTML = `
       <div class="page-header"><h2>Analytics Dashboard</h2><p>Company-wide performance insights</p></div>
@@ -23616,7 +23403,6 @@ async function renderAnalytics() {
         <div class="stat-card"><div class="stat-value">${performance.goalRate}%</div><div class="stat-label">Goal Completion</div></div>
         <div class="stat-card"><div class="stat-value">${performance.avgReview ? `${performance.avgReview}/5` : '—'}</div><div class="stat-label">Avg Review Score</div></div>
         <div class="stat-card"><div class="stat-value">${timesheets.totalHours}</div><div class="stat-label">Hours This Month</div></div>
-        <div class="stat-card"><div class="stat-value">${expTotal.toFixed(0)}</div><div class="stat-label">Expenses This Month</div></div>
       </div>
 
       <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(320px,1fr));gap:16px;margin-bottom:16px">
@@ -23694,20 +23480,6 @@ async function renderAnalytics() {
               <div style="font-size:11px;color:#9ca3af">${performance.completedGoals}/${performance.totalGoals}</div>
             </div>
           </div>
-        </div>
-
-        <!-- Expenses breakdown -->
-        <div class="card">
-          <div style="font-size:14px;font-weight:700;margin-bottom:14px">💳 Expense Breakdown (${expenses.period})</div>
-          ${expenses.byCategory.length ? `
-            <div style="margin-bottom:10px">
-              ${_miniBarChart(expenses.byCategory.map(e => ({...e, label: e._id})), 'label', 'total',
-                () => '#f59e0b')}
-            </div>
-            <div style="font-size:12px;font-weight:700;color:#6b7280;border-top:1px solid #f3f4f6;padding-top:10px">
-              Total Approved: <span style="color:var(--text)">${expTotal.toFixed(2)} GHS</span>
-            </div>
-          ` : '<p style="color:#9ca3af;font-size:12px">No approved expenses this month.</p>'}
         </div>
 
         <!-- Timesheets -->
@@ -25800,7 +25572,7 @@ const CORP_MODULES = [
   ['users', 'Employees / Team'], ['departments', 'Departments'], ['corp-teams', 'Teams'],
   ['corp-attendance', 'Attendance'], ['sign-in-out', 'Clock In / Out'], ['shifts', 'Shifts'],
   ['leave-requests', 'Leave Management'], ['training', 'Training & Assessments'], ['performance', 'Performance Reviews'],
-  ['branches', 'Branches'], ['expenses-mgr', 'Expenses'], ['assets', 'Assets'], ['timesheets', 'Timesheets'],
+  ['branches', 'Branches'], ['assets', 'Assets'], ['timesheets', 'Timesheets'],
   ['approvals', 'Approvals'], ['tasks', 'Tasks'], ['messages', 'Messages'], ['meetings', 'Meetings'],
   ['corp-calendar', 'Calendar'], ['announcements', 'Announcements'], ['reports', 'Reports'],
   ['audit-logs', 'Audit Logs'], ['ai-reports', 'Dikly AI'],
@@ -25948,36 +25720,6 @@ function _exvHBars(items, { unit = '%', max = 100 } = {}) {
   ${_exvTable(items.map(it => [esc(it.name), it.value + unit]), ['Name', 'Rate'])}`;
 }
 
-// ── Columns: single hue, ≤24px wide, rounded cap, label the extreme only ──
-function _exvColumns(items, { prefix = '' } = {}) {
-  if (!items.length || items.every(i => !i.total)) return '<div style="padding:1.6rem;text-align:center;color:var(--text-muted);font-size:.82rem">No data yet</div>';
-  const W = 560, H = 180, PL = 46, PR = 10, PT = 14, PB = 26;
-  const iw = W - PL - PR, ih = H - PT - PB;
-  const rawMax = Math.max(...items.map(i => i.total), 1);
-  const pow = Math.pow(10, String(Math.ceil(rawMax)).length - 1);
-  const yMax = Math.ceil(rawMax / pow) * pow;
-  const maxIdx = items.findIndex(i => i.total === rawMax);
-  const bw = Math.min(24, (iw / items.length) * 0.55);
-  const cx = i => PL + (i + 0.5) * (iw / items.length);
-  const y = v => PT + ih - (v / yMax) * ih;
-  const mLbl = m => new Date(m + '-02').toLocaleDateString(undefined, { month: 'short' });
-  const fmt = v => v >= 1000 ? (v / 1000).toFixed(v >= 10000 ? 0 : 1) + 'K' : String(Math.round(v));
-  return `
-  <svg viewBox="0 0 ${W} ${H}" style="width:100%;height:auto;display:block" role="img" aria-label="Monthly expenses, last 6 months">
-    ${[0, 0.5, 1].map(f => `<line x1="${PL}" y1="${y(yMax * f)}" x2="${W - PR}" y2="${y(yMax * f)}" stroke="var(--border)" stroke-width="1"/>
-      <text x="${PL - 6}" y="${y(yMax * f) + 3}" text-anchor="end" font-size="9" fill="var(--text-muted)" style="font-variant-numeric:tabular-nums">${prefix}${fmt(yMax * f)}</text>`).join('')}
-    ${items.map((it, i) => {
-      const h = Math.max(it.total > 0 ? 3 : 0, (it.total / yMax) * ih);
-      return `<path d="M${(cx(i) - bw / 2).toFixed(1)},${PT + ih} v${-Math.max(0, h - 4)} q0,-4 4,-4 h${(bw - 8).toFixed(1)} q4,0 4,4 v${Math.max(0, h - 4)} Z"
-        fill="var(--primary, #4f6ef7)" onmousemove="_exvShowTip(event,'${mLbl(it.month)}: <b>${prefix}${it.total.toLocaleString()}</b>')" onmouseleave="_exvHideTip()"/>
-      ${i === maxIdx && it.total > 0 ? `<text x="${cx(i)}" y="${y(it.total) - 6}" text-anchor="middle" font-size="10" font-weight="700" fill="var(--text)">${prefix}${fmt(it.total)}</text>` : ''}
-      <text x="${cx(i)}" y="${H - 8}" text-anchor="middle" font-size="9" fill="var(--text-muted)">${mLbl(it.month)}</text>`;
-    }).join('')}
-    <line x1="${PL}" y1="${PT + ih}" x2="${W - PR}" y2="${PT + ih}" stroke="var(--text-muted)" stroke-width="1" opacity=".5"/>
-  </svg>
-  ${_exvTable(items.map(it => [mLbl(it.month), prefix + it.total.toLocaleString()]), ['Month', 'Approved expenses'])}`;
-}
-
 async function renderExecutiveDashboard() {
   const content = document.getElementById('main-content');
   if (!content) return;
@@ -26049,7 +25791,7 @@ async function renderExecutiveDashboard() {
         ${tile('Late arrivals', k.lateToday)}
         ${tile('Active employees', k.activeEmployees)}
         ${tile('Active branches', k.activeBranches)}
-        ${tile('Pending approvals', k.pendingApprovals, 'leave · expenses · timesheets')}
+        ${tile('Pending approvals', k.pendingApprovals, 'leave · timesheets')}
         ${tile("Today's meetings", k.meetingsToday)}
         ${tile('Departments', k.totalDepartments)}
       </div>
@@ -26070,7 +25812,6 @@ async function renderExecutiveDashboard() {
 
     <div class="exv-charts">
       ${chartCard('Attendance trend', 'Daily attendance rate, last 14 days', _exvLineChart(d.attendanceTrend))}
-      ${chartCard('Monthly expenses', 'Approved expenses, last 6 months', _exvColumns(d.monthlyExpenses, { prefix: '₵' }))}
       ${chartCard('Department performance', '30-day attendance rate by department', _exvHBars(d.departmentPerformance.map(x => ({ name: x.name, value: x.rate }))))}
       ${chartCard('Branch performance', '30-day attendance rate by branch', _exvHBars(d.branchPerformance.map(x => ({ name: x.name, value: x.rate }))))}
       ${chartCard('Leave statistics', 'Requests in the last 90 days', `
@@ -26724,7 +26465,7 @@ async function _updateNavBadges() {
   // Approvals: corporate admins/managers — must match what the Approvals
   // page itself counts (pending employee/manager registrations via
   // /api/approvals/pending), not the executive dashboard's `pendingApprovals`
-  // KPI, which is a sum of pending leave + expense + timesheet requests --
+  // KPI, which is a sum of pending leave + timesheet requests --
   // a different thing entirely that just happens to share the name. Using
   // that here made the sidebar badge disagree with the page it labels.
   try {

@@ -4,7 +4,6 @@ const authenticate = require("../middleware/auth");
 const { requireRole, requireMode } = require("../middleware/role");
 const { requireActiveSubscription } = require("../middleware/subscription");
 const Timesheet = require("../models/Timesheet");
-const Expense   = require("../models/Expense");
 const Asset     = require("../models/Asset");
 const User      = require("../models/User");
 const { asyncHandler } = require("../utils/errors");
@@ -102,53 +101,6 @@ router.get("/timesheets/:id/export", ...mw, canManage, asyncHandler(async (req, 
   res.setHeader("Content-Type", "text/csv");
   res.setHeader("Content-Disposition", `attachment; filename="timesheet-${ts.employee.name}-${ts.period}.csv"`);
   res.send(csv);
-}));
-
-// ─────────────────────────────────────────────────────────────
-// EXPENSES
-// ─────────────────────────────────────────────────────────────
-
-// GET my expenses
-router.get("/expenses/my", ...mw, asyncHandler(async (req, res) => {
-  const expenses = await Expense.find({ employee: req.user._id, company: req.user.company })
-    .sort({ date: -1 });
-  res.json({ expenses });
-}));
-
-// SUBMIT expense claim
-router.post("/expenses", ...mw, asyncHandler(async (req, res) => {
-  const { title, category, amount, currency, date, notes } = req.body;
-  if (!title || !amount || !date) return res.status(400).json({ error: "Title, amount and date are required" });
-  const expense = await Expense.create({
-    company: req.user.company, employee: req.user._id,
-    title, category: category || "other",
-    amount: parseFloat(amount), currency: currency || "GHS",
-    date: new Date(date), notes: notes || "",
-  });
-  res.status(201).json({ expense });
-}));
-
-// GET all expenses (manager)
-router.get("/expenses", ...mw, canManage, asyncHandler(async (req, res) => {
-  const filter = { company: req.user.company };
-  if (req.query.status) filter.status = req.query.status;
-  const expenses = await Expense.find(filter)
-    .populate("employee", "name employeeId department")
-    .sort({ date: -1 });
-  res.json({ expenses });
-}));
-
-// REVIEW expense
-router.patch("/expenses/:id/review", ...mw, canManage, asyncHandler(async (req, res) => {
-  const { action, note } = req.body;
-  if (!["approved","rejected"].includes(action)) return res.status(400).json({ error: "action must be approved or rejected" });
-  const expense = await Expense.findOneAndUpdate(
-    { _id: req.params.id, company: req.user.company },
-    { status: action, reviewedBy: req.user._id, reviewedAt: new Date(), reviewNote: note || "" },
-    { new: true }
-  ).populate("employee", "name employeeId");
-  if (!expense) return res.status(404).json({ error: "Expense not found" });
-  res.json({ expense });
 }));
 
 // ─────────────────────────────────────────────────────────────

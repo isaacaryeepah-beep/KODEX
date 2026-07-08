@@ -645,7 +645,7 @@ async function sendEmployeeWelcome({ email, name, companyName, employeeId }) {
 
     <p>Your account is pending approval by your company admin. Once approved you will be able to:</p>
     <p>Mark your daily attendance<br/>
-       Submit timesheets and expense claims<br/>
+       Submit timesheets<br/>
        Request and track leave<br/>
        Access company training materials</p>
 
