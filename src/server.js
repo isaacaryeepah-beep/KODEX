@@ -109,6 +109,15 @@ app.use(helmet({
       // active, indistinguishable from the upload itself having failed.
       "connect-src":     ["'self'", "https://api.anthropic.com", "https://res.cloudinary.com", "https://*.dikly.sbs", "https://*.dikly.live", "wss://*.dikly.sbs", "wss://*.dikly.live", "wss://*.livekit.cloud", "https://cdn.jsdelivr.net", "https://cdnjs.cloudflare.com", "https://api.tomtom.com"],
       "frame-src":       ["'self'", "https://meet.dikly.live", "https://*.livekit.cloud"],
+      // worker-src isn't in Helmet's defaults, so without this it falls
+      // back to default-src 'self' — which does NOT cover blob:. The
+      // TomTom Maps SDK (MapLibre GL under the hood) creates its
+      // tile-decoding Web Worker from a blob: URL internally; Safari/
+      // WebKit enforces the missing blob: grant far more strictly than
+      // Chromium, throwing "SecurityError: The operation is insecure."
+      // from inside the SDK's own minified code with no CSP violation
+      // message to explain why.
+      "worker-src":      ["'self'", "blob:"],
       "media-src":       ["'self'", "blob:"],
       "object-src":      ["'none'"],
       "base-uri":        ["'self'"],
