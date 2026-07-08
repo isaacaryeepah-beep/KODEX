@@ -20020,23 +20020,20 @@ async function _electronPushSubscribeIfNeeded() {
   } else if (Notification.permission === 'denied') {
     throw new Error('Notification permission was denied. Enable it in your OS notification settings for DIKLY.');
   }
-  const { senderId } = await api('/api/push/fcm-sender-id');
-  const token = await window.electronPush.registerToken(senderId);
+  const firebaseConfig = await api('/api/push/fcm-config');
+  const token = await window.electronPush.registerToken(firebaseConfig);
   await api('/api/push/subscribe', { method: 'POST', body: JSON.stringify({ provider: 'fcm-desktop', deviceToken: token }) });
   return token;
 }
 
 // Displays incoming pushes while the desktop app is in the foreground —
-// electron-push-receiver hands us the raw data payload only (unlike a
+// @eneris/push-receiver hands us the raw data payload only (unlike a
 // browser's SW `push` event, nothing auto-displays an OS notification), and
 // this only needs wiring once per app session, not per subscribe attempt.
 if (window.electronPush) {
   window.electronPush.onNotificationReceived(data => {
     const n = new Notification(data.title || 'DIKLY', { body: data.body || '', tag: data.tag || 'dikly-notification' });
     n.onclick = () => { window.focus(); if (data.url) location.href = data.url; };
-  });
-  window.electronPush.onTokenUpdated(token => {
-    api('/api/push/subscribe', { method: 'POST', body: JSON.stringify({ provider: 'fcm-desktop', deviceToken: token }) }).catch(() => {});
   });
 }
 

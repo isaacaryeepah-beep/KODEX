@@ -35,11 +35,11 @@
     ]
   },
   "dependencies": {
-    "electron-push-receiver": "^2.1.3",
+    "@eneris/push-receiver": "^4.3.1",
     "electron-updater": "^6.8.9"
   },
   "devDependencies": {
-    "electron": "^28.0.0",
+    "electron": "^30.0.0",
     "electron-builder": "^24.0.0"
   }
 }

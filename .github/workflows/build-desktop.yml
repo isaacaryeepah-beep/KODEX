@@ -68,15 +68,24 @@ jobs:
           Write-Output "Found: $EXE"
         shell: pwsh
 
+      # Upsert instead of delete-then-create: a delete followed immediately
+      # by a create of the same tag can race against another build doing
+      # the same thing (this workflow's own concurrency cancellation isn't
+      # instant), which once left windows-latest deleted with nothing to
+      # replace it — `gh release create` failed with "already exists"
+      # because a concurrent run's create had already recreated it in the
+      # gap. Uploading with --clobber to an existing release has no such
+      # gap: whichever run finishes last just wins, no error either way.
       - name: Publish Windows to Dikly_releases
         run: |
-          gh release delete windows-latest --yes --repo isaacaryeepah-beep/Dikly_releases 2>$null; $true
-          gh api -X DELETE /repos/isaacaryeepah-beep/Dikly_releases/git/refs/tags/windows-latest 2>$null; $true
-          gh release create windows-latest dikly-windows-setup.exe `
-            --repo isaacaryeepah-beep/Dikly_releases `
-            --title "DIKLY Desktop — Windows (Latest)" `
-            --notes "**DIKLY Desktop App for Windows** — build #${{ github.run_number }}.`n`n### How to install`n1. Download **dikly-windows-setup.exe** below`n2. Run the installer and follow the prompts`n3. Launch DIKLY from your Start Menu or Desktop shortcut" `
-            --latest=false
+          $notes = "**DIKLY Desktop App for Windows** — build #${{ github.run_number }}.`n`n### How to install`n1. Download **dikly-windows-setup.exe** below`n2. Run the installer and follow the prompts`n3. Launch DIKLY from your Start Menu or Desktop shortcut"
+          gh release view windows-latest --repo isaacaryeepah-beep/Dikly_releases *> $null
+          if ($LASTEXITCODE -eq 0) {
+            gh release upload windows-latest dikly-windows-setup.exe --repo isaacaryeepah-beep/Dikly_releases --clobber
+            gh release edit windows-latest --repo isaacaryeepah-beep/Dikly_releases --title "DIKLY Desktop — Windows (Latest)" --notes $notes
+          } else {
+            gh release create windows-latest dikly-windows-setup.exe --repo isaacaryeepah-beep/Dikly_releases --title "DIKLY Desktop — Windows (Latest)" --notes $notes --latest=false
+          }
         shell: pwsh
         env:
           GH_TOKEN: ${{ secrets.RELEASES_PAT }}
@@ -155,21 +164,24 @@ jobs:
           cp "$DMG" dikly-mac.dmg
           echo "Found: $DMG ($(du -sh dikly-mac.dmg | cut -f1))"
 
+      # Upsert instead of delete-then-create — see the matching comment in
+      # the Windows job for why (a delete+create race once left
+      # windows-latest deleted with nothing to replace it).
       - name: Publish Mac to Dikly_releases
         run: |
-          gh release delete mac-latest --yes --repo isaacaryeepah-beep/Dikly_releases 2>/dev/null || true
-          gh api -X DELETE /repos/isaacaryeepah-beep/Dikly_releases/git/refs/tags/mac-latest 2>/dev/null || true
-          gh release create mac-latest dikly-mac.dmg \
-            --repo isaacaryeepah-beep/Dikly_releases \
-            --title "DIKLY Desktop — macOS (Latest)" \
-            --notes "**DIKLY Desktop App for macOS** — build #${{ github.run_number }}.
+          NOTES="**DIKLY Desktop App for macOS** — build #${{ github.run_number }}.
 
           ### How to install
           1. Download **dikly-mac.dmg** below
           2. Open the DMG and drag DIKLY to your Applications folder
           3. Launch DIKLY from Applications
 
-          > If macOS shows \"app can't be opened\", right-click → Open → Open anyway." \
-            --latest=false
+          > If macOS shows \"app can't be opened\", right-click → Open → Open anyway."
+          if gh release view mac-latest --repo isaacaryeepah-beep/Dikly_releases >/dev/null 2>&1; then
+            gh release upload mac-latest dikly-mac.dmg --repo isaacaryeepah-beep/Dikly_releases --clobber
+            gh release edit mac-latest --repo isaacaryeepah-beep/Dikly_releases --title "DIKLY Desktop — macOS (Latest)" --notes "$NOTES"
+          else
+            gh release create mac-latest dikly-mac.dmg --repo isaacaryeepah-beep/Dikly_releases --title "DIKLY Desktop — macOS (Latest)" --notes "$NOTES" --latest=false
+          fi
         env:
           GH_TOKEN: ${{ secrets.RELEASES_PAT }}

@@ -8,8 +8,8 @@
  * -------------
  * GET    /vapid-public-key   the public VAPID key the client needs for
  *                            pushManager.subscribe({ applicationServerKey })
- * GET    /fcm-sender-id      the Firebase messagingSenderId the Electron
- *                            desktop app needs to register with FCM
+ * GET    /fcm-config         the Firebase web config the Electron desktop
+ *                            app needs to register with FCM
  * POST   /subscribe          register/refresh a push subscription — either
  *                            a browser's { endpoint, keys } (Web Push) or a
  *                            native client's { provider, deviceToken } (FCM)
@@ -36,15 +36,24 @@ router.get("/vapid-public-key", authenticate, (req, res) => {
   res.json({ publicKey: process.env.VAPID_PUBLIC_KEY });
 });
 
-// The Electron desktop app needs this to call electron-push-receiver's
-// registration (it mimics an Android GCM/FCM client checkin, keyed by
-// Firebase's numeric messagingSenderId — not secret, but kept server-side
-// and admin-configurable rather than hardcoded into the shipped binary).
-router.get("/fcm-sender-id", authenticate, (req, res) => {
-  if (!process.env.FIREBASE_SENDER_ID) {
+// The Electron desktop app needs this to register with FCM via
+// @eneris/push-receiver (electron/main.js), which takes the same web
+// config object the Firebase JS SDK does. None of these values are secret
+// (they're the same ones baked into any Firebase web app's client bundle),
+// but keeping them server-side means they can change without a new
+// desktop build.
+router.get("/fcm-config", authenticate, (req, res) => {
+  const { FIREBASE_API_KEY, FIREBASE_PROJECT_ID, FIREBASE_APP_ID, FIREBASE_SENDER_ID } = process.env;
+  if (!FIREBASE_API_KEY || !FIREBASE_PROJECT_ID || !FIREBASE_APP_ID || !FIREBASE_SENDER_ID) {
     return res.status(503).json({ error: "FCM is not configured" });
   }
-  res.json({ senderId: process.env.FIREBASE_SENDER_ID });
+  res.json({
+    apiKey: FIREBASE_API_KEY,
+    projectId: FIREBASE_PROJECT_ID,
+    appId: FIREBASE_APP_ID,
+    messagingSenderId: FIREBASE_SENDER_ID,
+    authDomain: process.env.FIREBASE_AUTH_DOMAIN || `${FIREBASE_PROJECT_ID}.firebaseapp.com`,
+  });
 });
 
 router.post("/subscribe", authenticate, async (req, res) => {
