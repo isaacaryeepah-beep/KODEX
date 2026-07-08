@@ -19897,13 +19897,17 @@ async function renderArrivalIQ() {
   if (!content) return;
   content.innerHTML = '<div class="loading">Loading…</div>';
   try {
-    const [status, consent] = await Promise.all([
+    const [status, consent, liveConsent] = await Promise.all([
       api('/api/arrival-iq/status').catch(() => ({ enabled: false, mandatory: false })),
       api('/api/arrival-iq/consent').catch(() => ({ locationGranted: false, notificationGranted: false })),
+      api('/api/arrival-iq/live-consent').catch(() => ({ granted: false })),
     ]);
     const { prediction } = consent.locationGranted && consent.notificationGranted
       ? await api('/api/arrival-iq/prediction/today').catch(() => ({ prediction: null }))
       : { prediction: null };
+    const { trip: activeTrip } = liveConsent.granted
+      ? await api('/api/arrival-iq/trip/active').catch(() => ({ trip: null }))
+      : { trip: null };
 
     if (!status.enabled) {
       content.innerHTML = `
@@ -19959,7 +19963,25 @@ async function renderArrivalIQ() {
         ${locOn ? `<div style="padding:8px 0"><button class="btn btn-ghost btn-sm" onclick="_aiqTestLocation(this)">Test My Location</button></div>` : ''}
       </div>
 
+      <div class="card" style="max-width:520px;margin-bottom:16px">
+        <div style="display:flex;align-items:center;justify-content:space-between;padding-bottom:${liveConsent.granted ? '0' : '4px'}">
+          <div>
+            <div style="font-weight:600;font-size:13px">Live Trip Tracking <span style="font-weight:500;color:var(--text-light);font-size:11px">(optional)</span></div>
+            <div style="font-size:11px;color:var(--text-light);max-width:380px">A different, bigger permission than Location above — while a live trip is running, your position is checked continuously (every ~20s) so you can watch your route to the office on a live map. This is a separate opt-in and can never be made mandatory by your organization.</div>
+          </div>
+          ${liveConsent.granted
+            ? `<span style="display:flex;align-items:center;gap:10px;flex-shrink:0"><span style="font-size:12px;font-weight:700;color:#067647">✓ Granted</span><button class="btn btn-ghost btn-sm" onclick="_aiqRevoke('liveTracking')">Revoke</button></span>`
+            : `<button class="btn btn-primary btn-sm" style="flex-shrink:0" onclick="_aiqGrantLiveTracking()">Grant</button>`}
+        </div>
+      </div>
+
+      ${liveConsent.granted ? `<div id="aiq-live-trip">${_aiqLiveTripIdleHtml()}</div>` : ''}
+
       ${bothOn ? _aiqPredictionCardHtml(prediction) : ''}`;
+
+    if (liveConsent.granted && activeTrip) {
+      _aiqResumeLiveTrip(activeTrip);
+    }
   } catch (e) {
     content.innerHTML = `<div class="card"><p style="color:var(--danger)">${esc(e.message)}</p></div>`;
   }
@@ -20007,6 +20029,225 @@ function _aiqPredictionCardHtml(prediction) {
       ${prediction.departureNotifiedAt ? `<div style="font-size:11px;color:var(--text-muted);margin-top:8px">Notified at ${fmtTime(prediction.departureNotifiedAt)}</div>` : ''}
     </div>`;
 }
+
+// ═══════════════════════════════════════════════════════════════════════════
+//  ArrivalIQ — Live Trip Tracking
+//
+//  window._aiqTrip holds the live session state and survives SPA navigation
+//  (this is one page, #main-content is just swapped — geolocation.watchPosition
+//  keeps firing regardless of what's currently rendered). Only "End Trip" or
+//  arrival stops it. Re-opening the ArrivalIQ page while a trip is already
+//  running re-attaches a fresh map to the same ongoing watch via onPosition,
+//  rather than starting a second ­watchPosition.
+// ═══════════════════════════════════════════════════════════════════════════
+window._aiqTrip = null; // { tripId, watchId, destination, routeCoordinates, startedAt, durationSeconds, lastPingAt, map, marker, onPosition }
+
+function _aiqLiveTripIdleHtml() {
+  return `
+    <div class="card" style="max-width:520px;margin-bottom:16px;text-align:center;padding:24px">
+      <div style="font-size:28px;margin-bottom:6px">🗺️</div>
+      <div style="font-weight:700;font-size:13px;margin-bottom:4px">Track your trip live</div>
+      <div style="font-size:12px;color:var(--text-light);margin-bottom:14px">See your route to the office on a live map, with a running ETA.</div>
+      <button class="btn btn-primary btn-sm" onclick="_aiqStartLiveTrip(this)">Start Live Trip</button>
+    </div>`;
+}
+
+function _aiqLiveTripMapShellHtml() {
+  return `
+    <div class="card" style="max-width:520px;margin-bottom:16px;padding:0;overflow:hidden">
+      <div id="aiq-trip-map" style="width:100%;height:280px;background:var(--bg)"></div>
+      <div style="padding:14px 16px">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px">
+          <div style="font-weight:700;font-size:13px" id="aiq-trip-status">On the way</div>
+          <div style="font-size:11px;color:var(--text-light)" id="aiq-trip-eta">—</div>
+        </div>
+        <button class="btn btn-ghost btn-sm" style="width:100%;margin-top:8px" onclick="_aiqEndLiveTrip()">End Trip</button>
+      </div>
+    </div>`;
+}
+
+let _aiqTomTomLoadPromise = null;
+function _aiqLoadTomTomSDK() {
+  if (window.tt) return Promise.resolve();
+  if (_aiqTomTomLoadPromise) return _aiqTomTomLoadPromise;
+  _aiqTomTomLoadPromise = new Promise((resolve, reject) => {
+    const css = document.createElement('link');
+    css.rel = 'stylesheet';
+    css.href = 'https://api.tomtom.com/maps-sdk-for-web/6.25.0/maps.css';
+    document.head.appendChild(css);
+    const script = document.createElement('script');
+    script.src = 'https://api.tomtom.com/maps-sdk-for-web/6.25.0/maps-web.min.js';
+    script.onload = () => resolve();
+    script.onerror = () => reject(new Error('Failed to load the map. Check your connection and try again.'));
+    document.head.appendChild(script);
+  });
+  return _aiqTomTomLoadPromise;
+}
+
+window._aiqGrantLiveTracking = async function() {
+  try {
+    await _getGPSLocation();
+    await api('/api/arrival-iq/live-consent', { method: 'POST', body: JSON.stringify({ granted: true }) });
+    toastSuccess('Live trip tracking enabled');
+    renderArrivalIQ();
+  } catch (e) { _showGPSBlockedModal(e.message); }
+};
+
+window._aiqStartLiveTrip = async function(btn) {
+  const label = btn?.textContent;
+  if (btn) { btn.disabled = true; btn.textContent = 'Starting…'; }
+  try {
+    const loc = await _getGPSLocation();
+    const trip = await api('/api/arrival-iq/trip/start', {
+      method: 'POST',
+      body: JSON.stringify({ lat: loc.latitude, lng: loc.longitude }),
+    });
+    await _aiqAttachTrip({
+      _id: trip.tripId,
+      destination: trip.destination,
+      routeCoordinates: trip.routeCoordinates,
+      durationSeconds: trip.durationSeconds,
+      startedAt: trip.startedAt,
+    }, { lat: loc.latitude, lng: loc.longitude });
+  } catch (e) {
+    toastError(e.message || 'Failed to start live trip');
+    if (btn) { btn.disabled = false; btn.textContent = label; }
+  }
+};
+
+// Re-render of the ArrivalIQ page while a trip is already active server-side
+// — reuses the existing watch (if this tab started it) or just shows the
+// map anchored on the trip's last known position (if a different tab/reload
+// lost the in-memory watch reference; a fresh watchPosition is started).
+async function _aiqResumeLiveTrip(trip) {
+  const anchor = trip.lastPosition?.lat != null
+    ? { lat: trip.lastPosition.lat, lng: trip.lastPosition.lng }
+    : trip.origin;
+  await _aiqAttachTrip(trip, anchor);
+}
+
+async function _aiqAttachTrip(trip, currentPos) {
+  const container = document.getElementById('aiq-live-trip');
+  if (!container) return;
+  container.innerHTML = _aiqLiveTripMapShellHtml();
+
+  try {
+    await _aiqLoadTomTomSDK();
+    const { key } = await api('/api/arrival-iq/map-key');
+
+    const map = window.tt.map({
+      key,
+      container: 'aiq-trip-map',
+      center: [currentPos.lng, currentPos.lat],
+      zoom: 14,
+    });
+
+    map.on('load', () => {
+      map.addLayer({
+        id: 'aiq-route',
+        type: 'line',
+        source: {
+          type: 'geojson',
+          data: {
+            type: 'Feature',
+            geometry: {
+              type: 'LineString',
+              coordinates: (trip.routeCoordinates || []).map(p => [p.lng, p.lat]),
+            },
+          },
+        },
+        paint: { 'line-color': '#2563eb', 'line-width': 5 },
+      });
+      new window.tt.Marker({ color: '#16a34a' }).setLngLat([trip.destination.lng, trip.destination.lat]).addTo(map);
+    });
+
+    const marker = new window.tt.Marker().setLngLat([currentPos.lng, currentPos.lat]).addTo(map);
+
+    const wasAlreadyWatching = window._aiqTrip && window._aiqTrip.tripId === String(trip._id) && window._aiqTrip.watchId != null;
+
+    window._aiqTrip = {
+      ...(wasAlreadyWatching ? window._aiqTrip : {}),
+      tripId: String(trip._id),
+      destination: trip.destination,
+      durationSeconds: trip.durationSeconds,
+      startedAt: trip.startedAt,
+      map,
+      marker,
+      onPosition: (lat, lng) => {
+        marker.setLngLat([lng, lat]);
+        map.panTo([lng, lat]);
+      },
+    };
+    _aiqUpdateEtaLabel();
+
+    if (!wasAlreadyWatching) _aiqStartWatch();
+  } catch (e) {
+    container.innerHTML = `<div class="card" style="max-width:520px;margin-bottom:16px"><p style="color:var(--danger);font-size:13px">${esc(e.message || 'Failed to load live map')}</p></div>`;
+  }
+}
+
+function _aiqStartWatch() {
+  if (!navigator.geolocation || (window._aiqTrip && window._aiqTrip.watchId != null)) return;
+  window._aiqTrip.watchId = navigator.geolocation.watchPosition(
+    pos => _aiqHandlePosition(pos.coords.latitude, pos.coords.longitude),
+    err => console.warn('[ArrivalIQ] Live trip watchPosition error:', err.message),
+    { enableHighAccuracy: true, maximumAge: 5000, timeout: 20000 }
+  );
+}
+
+async function _aiqHandlePosition(lat, lng) {
+  if (!window._aiqTrip) return;
+  if (window._aiqTrip.onPosition) window._aiqTrip.onPosition(lat, lng);
+
+  const now = Date.now();
+  if (window._aiqTrip.lastPingAt && now - window._aiqTrip.lastPingAt < 20000) return;
+  window._aiqTrip.lastPingAt = now;
+
+  try {
+    const r = await api(`/api/arrival-iq/trip/${window._aiqTrip.tripId}/ping`, {
+      method: 'POST',
+      body: JSON.stringify({ lat, lng }),
+    });
+    if (r.arrived) _aiqTripArrived();
+  } catch (e) {
+    console.warn('[ArrivalIQ] Live trip ping failed:', e.message);
+  }
+}
+
+function _aiqUpdateEtaLabel() {
+  const el = document.getElementById('aiq-trip-eta');
+  if (!el || !window._aiqTrip) return;
+  const arriveBy = new Date(new Date(window._aiqTrip.startedAt).getTime() + window._aiqTrip.durationSeconds * 1000);
+  el.textContent = `Arrive by ${arriveBy.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })}`;
+}
+
+function _aiqTripArrived() {
+  _aiqStopWatch();
+  const status = document.getElementById('aiq-trip-status');
+  const eta = document.getElementById('aiq-trip-eta');
+  if (status) status.textContent = '✓ Arrived';
+  if (eta) eta.textContent = '';
+  toastSuccess("You've arrived — live trip ended");
+  setTimeout(() => { if (currentView === 'arrival-iq') renderArrivalIQ(); }, 1500);
+}
+
+function _aiqStopWatch() {
+  if (window._aiqTrip?.watchId != null) {
+    navigator.geolocation.clearWatch(window._aiqTrip.watchId);
+  }
+  window._aiqTrip = null;
+}
+
+window._aiqEndLiveTrip = async function() {
+  if (!window._aiqTrip) return;
+  const tripId = window._aiqTrip.tripId;
+  _aiqStopWatch();
+  try {
+    await api(`/api/arrival-iq/trip/${tripId}/end`, { method: 'POST' });
+  } catch (e) { /* already ended server-side is fine */ }
+  toastSuccess('Live trip ended');
+  if (currentView === 'arrival-iq') renderArrivalIQ();
+};
 
 // Registers for native push via the Electron desktop app's FCM bridge
 // (electron/preload.js) instead of the browser Push API — pushManager.
@@ -20122,6 +20363,13 @@ window._aiqRevoke = async function(kind) {
         await sub.unsubscribe().catch(() => {});
       }
       await api('/api/arrival-iq/consent', { method: 'POST', body: JSON.stringify({ notificationGranted: false }) });
+    } else if (kind === 'liveTracking') {
+      if (window._aiqTrip) {
+        const tripId = window._aiqTrip.tripId;
+        _aiqStopWatch();
+        await api(`/api/arrival-iq/trip/${tripId}/end`, { method: 'POST' }).catch(() => {});
+      }
+      await api('/api/arrival-iq/live-consent', { method: 'POST', body: JSON.stringify({ granted: false }) });
     } else {
       await api('/api/arrival-iq/consent', { method: 'POST', body: JSON.stringify({ locationGranted: false }) });
     }

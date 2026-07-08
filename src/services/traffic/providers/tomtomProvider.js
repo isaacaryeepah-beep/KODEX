@@ -66,4 +66,48 @@ async function getTravelTime({ origin, destination } = {}) {
   };
 }
 
-module.exports = { name: "tomtom", isConfigured, getTravelTime };
+// Live trip tracking (ArrivalIQ "full live tracking") always uses TomTom
+// directly for the route path, regardless of which provider TRAFFIC_PROVIDER
+// selects for the periodic ETA-prediction sweep — TomTom's free-tier key
+// needs no card, so it's the one this feature was built against. Same
+// endpoint as getTravelTime(); TomTom includes the route's lat/lng points
+// in the response by default (only omitted if routeRepresentation=none is
+// passed, which we don't), so no extra request or polyline decoding needed.
+async function getRoute({ origin, destination } = {}) {
+  if (!isConfigured()) {
+    throw new Error("TOMTOM_API_KEY is not set");
+  }
+  if (!origin?.lat || !origin?.lng || !destination?.lat || !destination?.lng) {
+    throw new Error("origin and destination ({lat, lng}) are required");
+  }
+
+  const locations = `${origin.lat},${origin.lng}:${destination.lat},${destination.lng}`;
+  const resp = await axios.get(`${ROUTING_BASE}/${locations}/json`, {
+    params: {
+      key: process.env.TOMTOM_API_KEY,
+      traffic: true,
+      travelMode: "car",
+    },
+    timeout: 8000,
+  });
+
+  const route = resp.data?.routes?.[0];
+  if (!route) {
+    throw new Error(`TomTom Routing error: ${resp.data?.error?.description || "no route found"}`);
+  }
+
+  const coordinates = (route.legs || []).flatMap(leg =>
+    (leg.points || []).map(p => ({ lat: p.latitude, lng: p.longitude }))
+  );
+  if (!coordinates.length) {
+    throw new Error("TomTom Routing response had no route geometry");
+  }
+
+  return {
+    coordinates,
+    durationSeconds: route.summary.travelTimeInSeconds,
+    distanceMeters: route.summary.lengthInMeters,
+  };
+}
+
+module.exports = { name: "tomtom", isConfigured, getTravelTime, getRoute };
