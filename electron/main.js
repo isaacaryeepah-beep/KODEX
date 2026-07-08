@@ -1,7 +1,57 @@
-const { app, BrowserWindow, shell, dialog } = require('electron');
+const { app, BrowserWindow, shell, dialog, ipcMain } = require('electron');
 const path = require('path');
-const { setup: setupPushReceiver } = require('electron-push-receiver');
+const fs = require('fs');
+const { PushReceiver } = require('@eneris/push-receiver');
 const { autoUpdater } = require('electron-updater');
+
+// ── Native push (FCM) ────────────────────────────────────────────────
+// Standard Web Push (pushManager.subscribe) always fails inside Electron —
+// its bundled Chromium has no Google push-service credentials. This talks
+// to FCM directly instead, via @eneris/push-receiver (an actively
+// maintained client that mimics a real Android/Chrome FCM registration).
+// A previous attempt used electron-push-receiver, which is abandoned
+// (last published 2019) and POSTs to a Google endpoint
+// (fcm.googleapis.com/fcm/connect/subscribe) that Google has since
+// retired — every registration attempt 404'd. @eneris/push-receiver uses
+// Firebase's current Installations + registration APIs instead.
+//
+// One receiver per app run, created lazily on the renderer's first
+// registerToken() call (see preload.js) rather than at startup, since it
+// needs the Firebase web config the renderer fetches from our own backend
+// (GET /api/push/fcm-config) — keeping it server-configurable rather than
+// hardcoded into the shipped binary.
+const pushCredsPath = () => path.join(app.getPath('userData'), 'push-credentials.json');
+const pushIdsPath = () => path.join(app.getPath('userData'), 'push-persistent-ids.json');
+
+function readJSON(file, fallback) {
+  try { return JSON.parse(fs.readFileSync(file, 'utf8')); } catch { return fallback; }
+}
+function writeJSON(file, data) {
+  try { fs.writeFileSync(file, JSON.stringify(data)); } catch (err) { console.error('[Push] failed to persist', file, err.message); }
+}
+
+let pushReceiver = null;
+
+async function getOrCreatePushReceiver(firebaseConfig, webContents) {
+  if (pushReceiver) return pushReceiver;
+  pushReceiver = new PushReceiver({
+    firebase: firebaseConfig,
+    credentials: readJSON(pushCredsPath(), undefined),
+    persistentIds: readJSON(pushIdsPath(), []),
+  });
+  pushReceiver.onCredentialsChanged(({ newCredentials }) => writeJSON(pushCredsPath(), newCredentials));
+  pushReceiver.onNotification(({ message }) => {
+    writeJSON(pushIdsPath(), pushReceiver.persistentIds);
+    if (!webContents.isDestroyed()) webContents.send('push:notification', message.data || {});
+  });
+  await pushReceiver.connect();
+  return pushReceiver;
+}
+
+ipcMain.handle('push:register', async (event, firebaseConfig) => {
+  const receiver = await getOrCreatePushReceiver(firebaseConfig, event.sender);
+  return receiver.fcmToken;
+});
 
 // Silent background auto-update — checks on launch and every 4h while the
 // app stays open, downloads in the background, then asks once to restart
@@ -61,12 +111,6 @@ function createWindow() {
       preload: path.join(__dirname, 'preload.js'),
     },
   });
-
-  // Must be set up before the page finishes loading — wires the IPC
-  // listeners that window.electronPush (preload.js) talks to, so the web
-  // app can register for real FCM push instead of the browser Push API
-  // (which always fails inside Electron — see src/services/push/).
-  setupPushReceiver(win.webContents);
 
   // Launch maximized (fills the whole screen, no letterboxing) instead of
   // the fixed 1280x800 default — shown only once maximized to avoid a
