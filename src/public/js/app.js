@@ -20148,23 +20148,37 @@ async function _aiqAttachTrip(trip, currentPos) {
       zoom: 14,
     });
 
+    // The SDK's own async internals (WebGL/tile loading) run outside this
+    // function's call stack by the time 'load'/'error' fire, so a throw in
+    // here — or an internal SDK failure reported via 'error' — would
+    // otherwise surface as a bare, contextless uncaught error (exactly what
+    // showed up as a plain "The operation is insecure." toast with no
+    // stack). Both paths now render the same detailed error card the
+    // top-level catch below shows for synchronous failures.
+    map.on('error', (e) => {
+      _aiqShowMapError(container, e?.error || e);
+    });
     map.on('load', () => {
-      map.addLayer({
-        id: 'aiq-route',
-        type: 'line',
-        source: {
-          type: 'geojson',
-          data: {
-            type: 'Feature',
-            geometry: {
-              type: 'LineString',
-              coordinates: (trip.routeCoordinates || []).map(p => [p.lng, p.lat]),
+      try {
+        map.addLayer({
+          id: 'aiq-route',
+          type: 'line',
+          source: {
+            type: 'geojson',
+            data: {
+              type: 'Feature',
+              geometry: {
+                type: 'LineString',
+                coordinates: (trip.routeCoordinates || []).map(p => [p.lng, p.lat]),
+              },
             },
           },
-        },
-        paint: { 'line-color': '#2563eb', 'line-width': 5 },
-      });
-      new window.tt.Marker({ color: '#16a34a' }).setLngLat([trip.destination.lng, trip.destination.lat]).addTo(map);
+          paint: { 'line-color': '#2563eb', 'line-width': 5 },
+        });
+        new window.tt.Marker({ color: '#16a34a' }).setLngLat([trip.destination.lng, trip.destination.lat]).addTo(map);
+      } catch (e) {
+        _aiqShowMapError(container, e);
+      }
     });
 
     const marker = new window.tt.Marker().setLngLat([currentPos.lng, currentPos.lat]).addTo(map);
@@ -20188,8 +20202,21 @@ async function _aiqAttachTrip(trip, currentPos) {
 
     if (!wasAlreadyWatching) _aiqStartWatch();
   } catch (e) {
-    container.innerHTML = `<div class="card" style="max-width:520px;margin-bottom:16px"><p style="color:var(--danger);font-size:13px">${esc(e.message || 'Failed to load live map')}</p></div>`;
+    _aiqShowMapError(container, e);
   }
+}
+
+// Shows name + message + first stack line so a screenshot of this card is
+// enough to diagnose a live-map failure without needing device devtools
+// (iOS home-screen PWAs have no remote-debugging path without a Mac).
+function _aiqShowMapError(container, e) {
+  const name = e?.name || 'Error';
+  const message = e?.message || String(e) || 'Failed to load live map';
+  const stackLine = (e?.stack || '').split('\n')[1]?.trim() || '';
+  container.innerHTML = `<div class="card" style="max-width:520px;margin-bottom:16px">
+    <p style="color:var(--danger);font-size:13px;margin-bottom:4px">${esc(name)}: ${esc(message)}</p>
+    ${stackLine ? `<p style="color:var(--text-light);font-size:10px;font-family:monospace;word-break:break-all">${esc(stackLine)}</p>` : ''}
+  </div>`;
 }
 
 function _aiqStartWatch() {
