@@ -950,7 +950,7 @@ function showOfflineBanner(hasPending) {
     banner.style.borderBottom = '2px solid #fbbf24';
     banner.innerHTML = `
       <span>📶</span>
-      <span>You're offline — attendance changes will sync when you reconnect</span>
+      <span>You're offline — changes will sync when you reconnect</span>
       ${count > 0 ? `<span style="background:#f59e0b;color:#fff;padding:2px 8px;border-radius:999px;font-size:11px">${count} pending</span>` : ''}
     `;
     banner.style.display = 'flex';
