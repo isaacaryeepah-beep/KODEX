@@ -8,14 +8,19 @@
  * -------------
  * GET    /vapid-public-key   the public VAPID key the client needs for
  *                            pushManager.subscribe({ applicationServerKey })
- * POST   /subscribe          register/refresh a browser's push subscription
- * DELETE /subscribe          unregister a subscription (endpoint in body)
+ * GET    /fcm-sender-id      the Firebase messagingSenderId the Electron
+ *                            desktop app needs to register with FCM
+ * POST   /subscribe          register/refresh a push subscription — either
+ *                            a browser's { endpoint, keys } (Web Push) or a
+ *                            native client's { provider, deviceToken } (FCM)
+ * DELETE /subscribe          unregister a subscription (endpoint or
+ *                            deviceToken in body)
  * POST   /test               send a one-off test push to the caller
  *
  * Generic push-subscription plumbing — not specific to any one feature.
  * ArrivalIQ (and any future push-based feature) sends through
  * pushService.sendToUser(), which dispatches to whichever provider
- * (webpush today; native FCM/APNs later) each subscription is for.
+ * (webpush, fcm-desktop, ...) each subscription is for.
  */
 
 const express = require("express");
@@ -31,9 +36,38 @@ router.get("/vapid-public-key", authenticate, (req, res) => {
   res.json({ publicKey: process.env.VAPID_PUBLIC_KEY });
 });
 
+// The Electron desktop app needs this to call electron-push-receiver's
+// registration (it mimics an Android GCM/FCM client checkin, keyed by
+// Firebase's numeric messagingSenderId — not secret, but kept server-side
+// and admin-configurable rather than hardcoded into the shipped binary).
+router.get("/fcm-sender-id", authenticate, (req, res) => {
+  if (!process.env.FIREBASE_SENDER_ID) {
+    return res.status(503).json({ error: "FCM is not configured" });
+  }
+  res.json({ senderId: process.env.FIREBASE_SENDER_ID });
+});
+
 router.post("/subscribe", authenticate, async (req, res) => {
   try {
-    const { endpoint, keys } = req.body || {};
+    const { provider, endpoint, keys, deviceToken } = req.body || {};
+
+    if (provider === "fcm-desktop" || provider === "fcm-android") {
+      if (!deviceToken) return res.status(400).json({ error: "deviceToken is required" });
+      await PushSubscription.findOneAndUpdate(
+        { deviceToken },
+        {
+          user: req.user._id,
+          company: req.user.company,
+          provider,
+          deviceToken,
+          userAgent: (req.headers["user-agent"] || "").slice(0, 300),
+          lastSeenAt: new Date(),
+        },
+        { upsert: true, new: true, setDefaultsOnInsert: true }
+      );
+      return res.json({ ok: true });
+    }
+
     if (!endpoint || !keys?.p256dh || !keys?.auth) {
       return res.status(400).json({ error: "endpoint and keys.{p256dh,auth} are required" });
     }
@@ -42,6 +76,7 @@ router.post("/subscribe", authenticate, async (req, res) => {
       {
         user: req.user._id,
         company: req.user.company,
+        provider: "webpush",
         endpoint,
         keys: { p256dh: keys.p256dh, auth: keys.auth },
         userAgent: (req.headers["user-agent"] || "").slice(0, 300),
@@ -58,9 +93,14 @@ router.post("/subscribe", authenticate, async (req, res) => {
 
 router.delete("/subscribe", authenticate, async (req, res) => {
   try {
-    const { endpoint } = req.body || {};
-    if (!endpoint) return res.status(400).json({ error: "endpoint is required" });
-    await PushSubscription.deleteOne({ endpoint, user: req.user._id });
+    const { endpoint, deviceToken } = req.body || {};
+    if (!endpoint && !deviceToken) {
+      return res.status(400).json({ error: "endpoint or deviceToken is required" });
+    }
+    await PushSubscription.deleteOne({
+      user: req.user._id,
+      ...(endpoint ? { endpoint } : { deviceToken }),
+    });
     res.json({ ok: true });
   } catch (error) {
     console.error("Push unsubscribe error:", error);

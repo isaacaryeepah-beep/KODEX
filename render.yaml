@@ -87,6 +87,17 @@ services:
       - key: VAPID_SUBJECT
         sync: false
 
+      # ── FCM (Electron desktop push) — src/services/push/providers/fcmProvider.js
+      # See .env.example for how to obtain these from a Firebase project.
+      - key: FIREBASE_PROJECT_ID
+        sync: false
+      - key: FIREBASE_CLIENT_EMAIL
+        sync: false
+      - key: FIREBASE_PRIVATE_KEY
+        sync: false
+      - key: FIREBASE_SENDER_ID
+        sync: false
+
       # ── Traffic (ArrivalIQ) — src/services/traffic/trafficService.js
       # Pick one: Google Maps, Mapbox, or TomTom (see .env.example for the tradeoff)
       - key: GOOGLE_MAPS_API_KEY

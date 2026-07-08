@@ -1,5 +1,6 @@
 const { app, BrowserWindow, shell } = require('electron');
 const path = require('path');
+const { setup: setupPushReceiver } = require('electron-push-receiver');
 
 function createWindow() {
   const win = new BrowserWindow({
@@ -14,8 +15,15 @@ function createWindow() {
     webPreferences: {
       nodeIntegration: false,
       contextIsolation: true,
+      preload: path.join(__dirname, 'preload.js'),
     },
   });
+
+  // Must be set up before the page finishes loading — wires the IPC
+  // listeners that window.electronPush (preload.js) talks to, so the web
+  // app can register for real FCM push instead of the browser Push API
+  // (which always fails inside Electron — see src/services/push/).
+  setupPushReceiver(win.webContents);
 
   // Launch maximized (fills the whole screen, no letterboxing) instead of
   // the fixed 1280x800 default — shown only once maximized to avoid a

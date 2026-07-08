@@ -4,21 +4,24 @@
  * PushSubscription
  *
  * A single device's push registration for a user, as returned by
- * `PushManager.subscribe()` (Web Push) today, or a native FCM/APNs
- * registration token in a future phase. A user can have several (one per
- * device/browser they've granted notification permission on).
+ * `PushManager.subscribe()` (Web Push, provider: "webpush") or a native FCM
+ * registration token (provider: "fcm-desktop" — the Electron app, via
+ * electron-push-receiver; "fcm-android" reserved for a future native
+ * Android client). A user can have several (one per device/browser/app
+ * they've granted notification permission on).
  *
  * `provider` selects which transport src/services/push/pushService.js uses
- * to deliver to this subscription — see providers/webPushProvider.js for
- * the only one implemented so far. `endpoint`/`keys` are Web Push-specific;
- * `deviceToken` is reserved for a future native provider.
+ * to deliver to this subscription — see providers/webPushProvider.js and
+ * providers/fcmProvider.js. `endpoint`/`keys` are Web Push-specific;
+ * `deviceToken` is the FCM registration token for the fcm-* providers.
  *
  * Written by `POST /api/push/subscribe`.
  */
 
 const mongoose = require("mongoose");
 
-const PROVIDERS = ["webpush", "fcm-android", "apns-ios"];
+const PROVIDERS = ["webpush", "fcm-desktop", "fcm-android", "apns-ios"];
+const FCM_PROVIDERS = ["fcm-desktop", "fcm-android"];
 
 const pushSubscriptionSchema = new mongoose.Schema(
   {
@@ -50,10 +53,12 @@ const pushSubscriptionSchema = new mongoose.Schema(
       p256dh: { type: String },
       auth:   { type: String },
     },
-    // Reserved for a future native provider (FCM/APNs registration token).
+    // FCM registration token (provider: "fcm-desktop" / "fcm-android").
     deviceToken: {
       type: String,
-      default: null,
+      required: function () { return FCM_PROVIDERS.includes(this.provider); },
+      unique: true,
+      sparse: true,
     },
     userAgent: {
       type: String,
