@@ -96,12 +96,9 @@ app.use(helmet({
       // grapher that used new Function(); it's been rewritten to a small
       // recursive-descent parser (src/public/js/app.js: _parseMathExpr /
       // _evalMathAst), so 'unsafe-eval' is no longer needed anywhere.
-      // api.tomtom.com: ArrivalIQ's live trip map — the Maps SDK script/CSS
-      // (script-src/style-src) plus the SDK's own runtime calls for map
-      // tiles and route/geofence lookups (connect-src) all hit this host.
-      "script-src":      ["'self'", "'unsafe-inline'", "https://cdn.jsdelivr.net", "https://cdnjs.cloudflare.com", "https://meet.dikly.live", "https://api.tomtom.com"],
+      "script-src":      ["'self'", "'unsafe-inline'", "https://cdn.jsdelivr.net", "https://cdnjs.cloudflare.com", "https://meet.dikly.live"],
       "script-src-attr": ["'unsafe-inline'"],
-      "style-src":       ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com", "https://cdn.jsdelivr.net", "https://api.tomtom.com"],
+      "style-src":       ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com", "https://cdn.jsdelivr.net"],
       "font-src":        ["'self'", "https://fonts.gstatic.com", "https://cdn.jsdelivr.net", "data:"],
       "img-src":         ["'self'", "data:", "blob:", "https:"],
       // res.cloudinary.com: sw.js's catch-all fetch handler re-issues every

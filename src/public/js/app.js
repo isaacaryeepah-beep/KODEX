@@ -20066,6 +20066,12 @@ function _aiqLiveTripMapShellHtml() {
     </div>`;
 }
 
+// Self-hosted, not loaded from api.tomtom.com — TomTom's own SDK README
+// doesn't document a public CDN path for maps-web.min.js/maps.css (it only
+// covers module-bundler imports or "copy the dist files into your project"),
+// and api.tomtom.com/maps-sdk-for-web/{version}/... turned out to be an S3
+// path that 403s with AccessDenied. The API key is only needed once the SDK
+// is running and fetches tiles/routes, not to download the SDK bundle itself.
 let _aiqTomTomLoadPromise = null;
 function _aiqLoadTomTomSDK() {
   if (window.tt) return Promise.resolve();
@@ -20073,10 +20079,10 @@ function _aiqLoadTomTomSDK() {
   _aiqTomTomLoadPromise = new Promise((resolve, reject) => {
     const css = document.createElement('link');
     css.rel = 'stylesheet';
-    css.href = 'https://api.tomtom.com/maps-sdk-for-web/6.25.0/maps.css';
+    css.href = '/css/vendor/tomtom-maps.css';
     document.head.appendChild(css);
     const script = document.createElement('script');
-    script.src = 'https://api.tomtom.com/maps-sdk-for-web/6.25.0/maps-web.min.js';
+    script.src = '/js/vendor/tomtom-maps-web.min.js';
     script.onload = () => resolve();
     script.onerror = () => reject(new Error('Failed to load the map. Check your connection and try again.'));
     document.head.appendChild(script);
