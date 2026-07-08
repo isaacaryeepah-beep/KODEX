@@ -3949,6 +3949,10 @@ table tr:hover td { background: #f8fafc !important; }
   font-size: 13px !important;
 }
 
+/* Headings inside an empty state must stay legible — the muted color above
+   is meant for the supporting text, not the heading it also cascades into. */
+.empty-state h3 { color: var(--text) !important; }
+
 /* ── Dark mode ── */
 [data-theme="dark"] .sidebar {
   background: rgba(255,255,255,0.12) !important;
@@ -4676,7 +4680,7 @@ table tr:hover td { background: #f8fafc !important; }
 }
 
 .content {
-  background: #f0f4f8 !important;
+  background: var(--bg) !important;
   flex: 1 !important;
   min-height: 0 !important;
   overflow-y: auto !important;
