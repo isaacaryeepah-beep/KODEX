@@ -107,7 +107,13 @@ app.use(helmet({
       // connect-src governs regardless of img-src — without this, every
       // Cloudinary-hosted image silently fails once the service worker is
       // active, indistinguishable from the upload itself having failed.
-      "connect-src":     ["'self'", "https://api.anthropic.com", "https://res.cloudinary.com", "https://*.dikly.sbs", "https://*.dikly.live", "wss://*.dikly.sbs", "wss://*.dikly.live", "wss://*.livekit.cloud", "https://cdn.jsdelivr.net", "https://cdnjs.cloudflare.com", "https://api.tomtom.com"],
+      // https://*.api.tomtom.com (not just the bare api.tomtom.com): the
+      // Maps SDK fans map-tile requests out across lettered subdomains
+      // (a/b/c/d.api.tomtom.com) to get more parallel connections than one
+      // hostname allows — confirmed via real "Refused to connect" CSP
+      // violations in the browser console for b./c.api.tomtom.com tile URLs
+      // that the bare-domain grant didn't cover.
+      "connect-src":     ["'self'", "https://api.anthropic.com", "https://res.cloudinary.com", "https://*.dikly.sbs", "https://*.dikly.live", "wss://*.dikly.sbs", "wss://*.dikly.live", "wss://*.livekit.cloud", "https://cdn.jsdelivr.net", "https://cdnjs.cloudflare.com", "https://api.tomtom.com", "https://*.api.tomtom.com"],
       "frame-src":       ["'self'", "https://meet.dikly.live", "https://*.livekit.cloud"],
       // worker-src isn't in Helmet's defaults, so without this it falls
       // back to default-src 'self' — which does NOT cover blob:. The
