@@ -44,7 +44,22 @@ async function getOrCreatePushReceiver(firebaseConfig, webContents) {
     writeJSON(pushIdsPath(), pushReceiver.persistentIds);
     if (!webContents.isDestroyed()) webContents.send('push:notification', message.data || {});
   });
-  await pushReceiver.connect();
+
+  // registerIfNeeded() is the fast, HTTPS-only part (Firebase Installations
+  // + FCM registration) — it alone is enough to get a usable token, which
+  // is all POST /api/push/subscribe needs. connect() does that AND THEN
+  // opens a persistent TLS socket to mtalk.google.com:5228 for live
+  // delivery while the app is open; that's a non-standard port plenty of
+  // networks block outright, and @eneris/push-receiver's connect() has no
+  // timeout on that step — on a blocked network it retries with backoff
+  // forever and its promise never resolves *or* rejects. Awaiting it here
+  // would hang this whole function (and the renderer's button) forever, so
+  // registration and the live socket are decoupled: connect() still runs,
+  // but in the background — a blocked port only costs live delivery while
+  // the app is in the foreground, never the ability to register at all.
+  await pushReceiver.registerIfNeeded();
+  pushReceiver.connect().catch(err => console.error('[Push] MCS connect failed:', err.message));
+
   return pushReceiver;
 }
 
