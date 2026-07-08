@@ -313,50 +313,87 @@ exports.startMeeting = async (req, res, next) => {
   } catch (err) { next(err); }
 };
 
+// Shared by the manual /end route and runMeetingWatchdog below, so an
+// auto-close does exactly the same cleanup (attendance finalization,
+// participant disconnect, monitor/participant broadcasts) a moderator
+// clicking "End" would trigger — not just a bare status flip.
+async function finalizeMeetingEnd(meeting) {
+  meeting.status    = 'ended';
+  meeting.actualEnd = new Date();
+  await meeting.save();
+
+  const now = new Date();
+
+  // Finalise MeetingAttendance open sessions
+  const openAttendance = await MeetingAttendance.find({ meeting: meeting._id, lastAction: 'joined' });
+  for (const rec of openAttendance) {
+    const last = rec.sessions[rec.sessions.length - 1];
+    if (last && !last.leftAt) {
+      last.leftAt  = now;
+      last.minutes = Math.round((now - new Date(last.joinedAt)) / 60000);
+    }
+    rec.leftAt       = now;
+    rec.lastAction   = 'left';
+    rec.totalMinutes = rec.sessions.reduce((t, s) => t + (s.minutes || 0), 0);
+    try {
+      const { calculateStatus } = require('../utils/attendanceCalculator');
+      rec.attendanceStatus = calculateStatus(rec.totalMinutes, meeting.scheduledStart, meeting.scheduledEnd);
+    } catch (err) {
+      console.warn('[meeting:end] Failed to calculate attendance status:', err.message);
+    }
+    await rec.save();
+  }
+
+  // Finalise MeetingParticipant open sessions
+  await MeetingParticipant.updateMany(
+    { meeting: meeting._id, status: 'connected', leftAt: null },
+    { $set: { status: 'disconnected', leftAt: now } }
+  );
+
+  // Notify all monitor dashboards and all connected participants
+  broadcastMonitor(meeting._id.toString(), 'meeting_ended', { meetingId: meeting._id });
+  broadcastAllParticipants(meeting._id.toString(), 'meeting_ended', { meetingId: meeting._id });
+}
+
 // ─── END ──────────────────────────────────────────────────────────────────────
 exports.endMeeting = async (req, res, next) => {
   try {
     const meeting = req.meeting;
     if (meeting.status === 'ended') return res.status(400).json({ error: 'Meeting already ended' });
-
-    meeting.status    = 'ended';
-    meeting.actualEnd = new Date();
-    await meeting.save();
-
-    const now = new Date();
-
-    // Finalise MeetingAttendance open sessions
-    const openAttendance = await MeetingAttendance.find({ meeting: meeting._id, lastAction: 'joined' });
-    for (const rec of openAttendance) {
-      const last = rec.sessions[rec.sessions.length - 1];
-      if (last && !last.leftAt) {
-        last.leftAt  = now;
-        last.minutes = Math.round((now - new Date(last.joinedAt)) / 60000);
-      }
-      rec.leftAt       = now;
-      rec.lastAction   = 'left';
-      rec.totalMinutes = rec.sessions.reduce((t, s) => t + (s.minutes || 0), 0);
-      try {
-        const { calculateStatus } = require('../utils/attendanceCalculator');
-        rec.attendanceStatus = calculateStatus(rec.totalMinutes, meeting.scheduledStart, meeting.scheduledEnd);
-      } catch (err) {
-        console.warn('[meeting:end] Failed to calculate attendance status:', err.message);
-      }
-      await rec.save();
-    }
-
-    // Finalise MeetingParticipant open sessions
-    await MeetingParticipant.updateMany(
-      { meeting: meeting._id, status: 'connected', leftAt: null },
-      { $set: { status: 'disconnected', leftAt: now } }
-    );
-
-    // Notify all monitor dashboards and all connected participants
-    broadcastMonitor(meeting._id.toString(), 'meeting_ended', { meetingId: meeting._id });
-    broadcastAllParticipants(meeting._id.toString(), 'meeting_ended', { meetingId: meeting._id });
-
+    await finalizeMeetingEnd(meeting);
     res.json({ success: true, message: 'Meeting ended', data: meeting });
   } catch (err) { next(err); }
+};
+
+// ─── WATCHDOG ─────────────────────────────────────────────────────────────────
+// Nothing else auto-closes a meeting once it's "live" — status only ever
+// moves there via /start, and back via a moderator manually hitting /end.
+// A host who forgets to end a call (or whose browser/tab just dies) leaves
+// it "live" forever, which is exactly what surfaced this: a meeting from
+// days ago still showing LIVE with a Rejoin/Monitor/End card, 0 people in
+// it. Runs on a timer from server.js, same pattern as sessionController's
+// runWatchdog for attendance sessions.
+//
+// Deliberately conservative: only force-ends a meeting that is BOTH past
+// its scheduled end time AND has nobody currently connected — a meeting
+// still running past its scheduled slot with real participants in it is
+// left alone no matter how long it's overrun.
+exports.runMeetingWatchdog = async function runMeetingWatchdog() {
+  try {
+    const stale = await Meeting.find({ status: 'live', scheduledEnd: { $lt: new Date() } }).select('_id scheduledStart scheduledEnd');
+    for (const meeting of stale) {
+      const connected = await MeetingParticipant.countDocuments({ meeting: meeting._id, status: 'connected' });
+      if (connected > 0) continue;
+      try {
+        await finalizeMeetingEnd(meeting);
+        console.log(`[meeting:watchdog] Auto-ended stale live meeting ${meeting._id} (scheduled end ${meeting.scheduledEnd.toISOString()})`);
+      } catch (err) {
+        console.error(`[meeting:watchdog] Failed to auto-end meeting ${meeting._id}:`, err.message);
+      }
+    }
+  } catch (err) {
+    console.error('[meeting:watchdog] Query failed:', err.message);
+  }
 };
 
 // ─── CANCEL ───────────────────────────────────────────────────────────────────
