@@ -3182,6 +3182,12 @@ function buildSidebar() {
     links = links.filter((l, i) => !l.sep || (links[i + 1] && !links[i + 1].sep));
   }
 
+  // Corporate pilots: no Subscription link either, matching the dashboard
+  // banner suppression — same reasoning, remove once piloting wraps up.
+  if (currentUser.company?.mode === 'corporate') {
+    links = links.filter(l => l.id !== 'subscription');
+  }
+
   // ── Structured render: pinned/recent quick access, top items, accordions ──
   window._navLinkMeta = {};
   const allNavLinks = [...links];
@@ -15162,6 +15168,26 @@ async function paySubscription() {
 async function renderSubscription() {
   const content = document.getElementById('main-content');
   if (!content) return;
+
+  // Corporate pilots: no paid-plan/Pay-with-Paystack nagging while we're
+  // piloting — matches the sidebar link and dashboard banner being hidden.
+  // This page can still be reached directly (e.g. a stale bookmark, or the
+  // "Renew Subscription" button inside showSubscriptionBlock's hard-block
+  // overlay), so it needs its own guard, not just a hidden nav link.
+  // Remove this early return once piloting wraps up.
+  if (currentUser?.company?.mode === 'corporate') {
+    content.innerHTML = `
+      <div class="page-header">
+        <h2>Subscription</h2>
+        <p>Institution access plan · ${esc(currentUser.company?.name || 'Your Institution')}</p>
+      </div>
+      <div class="card" style="max-width:520px;text-align:center;padding:32px 24px">
+        <div style="font-size:32px;margin-bottom:8px">✓</div>
+        <div style="font-weight:700;margin-bottom:6px">You're all set</div>
+        <div style="font-size:13px;color:var(--text-light)">Your organization is currently part of an extended pilot program with full access to Dikly. There's nothing to subscribe to right now — we'll follow up before this changes.</div>
+      </div>`;
+    return;
+  }
 
   // HODs see the institution subscription status
   if (currentUser && currentUser.role === 'hod') {
