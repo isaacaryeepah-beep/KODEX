@@ -96,7 +96,15 @@ app.use(helmet({
       // grapher that used new Function(); it's been rewritten to a small
       // recursive-descent parser (src/public/js/app.js: _parseMathExpr /
       // _evalMathAst), so 'unsafe-eval' is no longer needed anywhere.
-      "script-src":      ["'self'", "'unsafe-inline'", "https://cdn.jsdelivr.net", "https://cdnjs.cloudflare.com", "https://meet.dikly.live"],
+      // blob: — worker-src blob: (below) only covers *creating* the TomTom
+      // tile-decoding Worker from a blob: URL. Once running, that worker
+      // calls importScripts() on a second blob: URL internally, which
+      // script-src (script-src-elem falls back to it since it's not set
+      // explicitly) governs separately — confirmed via a real "Loading the
+      // script 'blob:...' violates ... script-src" console violation plus
+      // an uncaught "Failed to execute 'importScripts' ... script ...
+      // failed to load" thrown from tomtom-maps-web.min.js.
+      "script-src":      ["'self'", "'unsafe-inline'", "https://cdn.jsdelivr.net", "https://cdnjs.cloudflare.com", "https://meet.dikly.live", "blob:"],
       "script-src-attr": ["'unsafe-inline'"],
       "style-src":       ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com", "https://cdn.jsdelivr.net"],
       "font-src":        ["'self'", "https://fonts.gstatic.com", "https://cdn.jsdelivr.net", "data:"],
