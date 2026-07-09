@@ -20086,6 +20086,7 @@ function _aiqLiveTripMapShellHtml() {
           <div style="font-weight:700;font-size:13px" id="aiq-trip-status">On the way</div>
           <div style="font-size:11px;color:var(--text-light)" id="aiq-trip-eta">—</div>
         </div>
+        <div style="font-size:10px;color:var(--text-muted)" id="aiq-trip-accuracy"></div>
         <button class="btn btn-ghost btn-sm" style="width:100%;margin-top:8px" onclick="_aiqEndLiveTrip()">End Trip</button>
       </div>
     </div>`;
@@ -20247,15 +20248,29 @@ function _aiqShowMapError(container, e) {
 function _aiqStartWatch() {
   if (!navigator.geolocation || (window._aiqTrip && window._aiqTrip.watchId != null)) return;
   window._aiqTrip.watchId = navigator.geolocation.watchPosition(
-    pos => _aiqHandlePosition(pos.coords.latitude, pos.coords.longitude),
+    pos => _aiqHandlePosition(pos.coords.latitude, pos.coords.longitude, pos.coords.accuracy),
     err => console.warn('[ArrivalIQ] Live trip watchPosition error:', err.message),
     { enableHighAccuracy: true, maximumAge: 5000, timeout: 20000 }
   );
 }
 
-async function _aiqHandlePosition(lat, lng) {
+// Desktop/laptop browsers have no GPS chip and fall back to WiFi/IP-based
+// positioning, which can be off by 1km+ (worse where the WiFi-location
+// database is sparse) — surfacing accuracy here is the only way to tell
+// "the map/distance is wrong" apart from "the position fix itself is just
+// low-precision" without device devtools.
+function _aiqUpdateAccuracyLabel(accuracy) {
+  const el = document.getElementById('aiq-trip-accuracy');
+  if (!el || typeof accuracy !== 'number') return;
+  const rounded = Math.round(accuracy);
+  el.textContent = `±${rounded}m GPS accuracy`;
+  el.style.color = accuracy > 500 ? 'var(--danger)' : 'var(--text-muted)';
+}
+
+async function _aiqHandlePosition(lat, lng, accuracy) {
   if (!window._aiqTrip) return;
   if (window._aiqTrip.onPosition) window._aiqTrip.onPosition(lat, lng);
+  _aiqUpdateAccuracyLabel(accuracy);
 
   const now = Date.now();
   if (window._aiqTrip.lastPingAt && now - window._aiqTrip.lastPingAt < 20000) return;

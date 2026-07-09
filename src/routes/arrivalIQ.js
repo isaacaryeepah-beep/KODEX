@@ -395,7 +395,12 @@ router.post("/trip/:id/ping", ...mw, async (req, res) => {
 
     session.lastPosition = { lat, lng, capturedAt: new Date() };
 
-    const geofenceRadius = 150; // matches ArrivalIQ settings default (see GET /settings)
+    // Was hardcoded to 150 regardless of the company's actual configured
+    // radius (corporateSettings.geofenceRadiusMeters, shown in Admin ->
+    // ArrivalIQ Settings -> Office Location) — a live trip could report
+    // "arrived" up to 100m early/late versus what the org actually set.
+    const company = await Company.findById(session.company).select("corporateSettings.geofenceRadiusMeters").lean();
+    const geofenceRadius = company?.corporateSettings?.geofenceRadiusMeters || 150;
     const distanceToOffice = haversineMeters(lat, lng, session.destination.lat, session.destination.lng);
     let arrived = false;
     if (distanceToOffice <= geofenceRadius) {
