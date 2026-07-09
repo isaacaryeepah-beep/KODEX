@@ -6652,7 +6652,7 @@ async function renderEmployeeDashboard(content) {
             const sc = statusColors[r.status] || '#9ca3af';
             return `<tr style="border-bottom:1px solid var(--border)">
               <td style="padding:8px 10px">${r.date ? new Date(r.date).toLocaleDateString('en-GB',{weekday:'short',day:'2-digit',month:'short'}) : '—'}</td>
-              <td style="padding:8px 10px"><span style="background:${sc}20;color:${sc};border:1px solid ${sc}40;padding:2px 8px;border-radius:20px;font-size:10px;font-weight:700;text-transform:capitalize">${r.status||'—'}</span></td>
+              <td style="padding:8px 10px"><span style="background:${sc}20;color:${sc};border:1px solid ${sc}40;padding:2px 8px;border-radius:20px;font-size:10px;font-weight:700;text-transform:capitalize">${(r.status||'—').replace(/_/g,' ')}</span></td>
               <td style="padding:8px 10px">${ci ? ci.toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'}) : '—'}</td>
               <td style="padding:8px 10px">${co ? co.toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'}) : (ci ? '<span style="color:#f59e0b;font-size:11px">Active</span>' : '—')}</td>
               <td style="padding:8px 10px">${r.hoursWorked != null ? r.hoursWorked+'h' : '—'}</td>
@@ -6893,14 +6893,12 @@ async function renderSignInOut() {
     const workedHrs    = todayRecord?.hoursWorked != null ? todayRecord.hoursWorked : null;
     const overtimeHrs  = todayRecord?.overtimeHours || 0;
 
-    // Live elapsed time if currently clocked in
-    let elapsedLabel = '';
-    if (isClockedIn && clockInTime) {
-      const elapsedMs  = Date.now() - clockInTime.getTime();
-      const elapsedH   = Math.floor(elapsedMs / 3600000);
-      const elapsedM   = Math.floor((elapsedMs % 3600000) / 60000);
-      elapsedLabel = `${elapsedH}h ${elapsedM}m elapsed`;
-    }
+    // Live elapsed time if currently clocked in — the "elapsed" suffix
+    // lives in the template below (line ~6949), not here, since
+    // _empStartTimer's 30s refresh writes _empElapsed()'s bare "Xh Ym"
+    // straight into this same span; baking "elapsed" into both produced
+    // "Xh Ym elapsed elapsed" on first render.
+    const elapsedLabel = isClockedIn && clockInTime ? _empElapsed(clockInTime) : '';
 
     const statusColor = isClockedIn ? 'var(--success)' : (isClockedOut ? 'var(--primary)' : 'var(--text-light)');
     const statusText  = isClockedIn ? 'Currently Clocked In' : (isClockedOut ? 'Clocked Out Today' : 'Not Clocked In');
@@ -6977,7 +6975,7 @@ async function renderSignInOut() {
               const sc = statusColors[r.status] || 'var(--text-light)';
               return `<tr>
                 <td style="font-size:13px;font-weight:600">${dateStr}</td>
-                <td><span class="status-badge" style="background:${sc}20;color:${sc};border:1px solid ${sc}40;padding:2px 8px;border-radius:20px;font-size:11px;font-weight:700;text-transform:capitalize">${r.status || '—'}</span></td>
+                <td><span class="status-badge" style="background:${sc}20;color:${sc};border:1px solid ${sc}40;padding:2px 8px;border-radius:20px;font-size:11px;font-weight:700;text-transform:capitalize">${(r.status || '—').replace(/_/g,' ')}</span></td>
                 <td style="font-size:13px">${ci ? ci.toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'}) : '—'}</td>
                 <td style="font-size:13px">${co ? co.toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'}) : (ci ? '<span style="color:#f59e0b;font-size:11px;font-weight:600">Active</span>' : '—')}</td>
                 <td style="font-size:13px">${r.hoursWorked != null ? r.hoursWorked+'h' : '—'}</td>
@@ -13035,7 +13033,7 @@ async function renderMyCorporateAttendance(content) {
               const sc  = statusColors[r.status] || 'var(--text-light)';
               return `<tr>
                 <td style="font-size:13px;font-weight:600;white-space:nowrap">${dateStr}</td>
-                <td><span style="background:${sc}20;color:${sc};border:1px solid ${sc}40;padding:2px 8px;border-radius:20px;font-size:11px;font-weight:700;text-transform:capitalize;white-space:nowrap">${r.status || '—'}</span></td>
+                <td><span style="background:${sc}20;color:${sc};border:1px solid ${sc}40;padding:2px 8px;border-radius:20px;font-size:11px;font-weight:700;text-transform:capitalize;white-space:nowrap">${(r.status || '—').replace(/_/g,' ')}</span></td>
                 <td style="font-size:12px;color:var(--text-muted)">${r.shift?.name || '—'}</td>
                 <td style="font-size:13px">${ci ? ci.toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'}) : '—'}</td>
                 <td style="font-size:13px">${co ? co.toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'}) : (ci ? '<span style="color:#f59e0b;font-size:11px;font-weight:600">Active</span>' : '—')}</td>

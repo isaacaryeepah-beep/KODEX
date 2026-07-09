@@ -14,26 +14,49 @@
 const Anthropic = require("@anthropic-ai/sdk");
 
 // ── System prompt ────────────────────────────────────────────────────────────
-const SYSTEM_PROMPT = `You are a helpful AI support assistant for DIKLY, a multi-tenant educational and HR management platform.
+// Built per-request from the asking company's mode, not one static list —
+// a corporate account has no quizzes/courses/grades, and an academic
+// account has no shifts/leave, so naming the other mode's features in the
+// welcome/fallback answer is both wrong and confusing. superadmin (mode =
+// null) is platform-level and genuinely spans both, so it keeps the full list.
+const COMMON_FEATURES = `- Attendance tracking (QR code, GPS, ESP32 hardware)
+- Virtual meetings (Zoom, Jitsi integration)
+- Discussion forums, direct messaging, announcements
+- Support ticket system and calendar events
+- Badge and achievement system
+- Password reset via email`;
 
-DIKLY features include:
-- Attendance tracking (QR code, GPS, ESP32 hardware)
-- SnapQuiz (strict exam mode with proctoring)
+const ACADEMIC_FEATURES = `- SnapQuiz (strict exam mode with proctoring)
 - Normal quizzes and question banks
 - Assignments with grading
 - Grade books and academic transcripts
 - Course management and resource libraries
-- Virtual meetings (Zoom, Jitsi integration)
-- HR management: shifts, leave, attendance summary export, employee profiles (Dikly tracks time and attendance only -- it never computes or stores pay amounts; that stays in the company's own payroll system)
-- Academic programmes and student progress tracking
-- Discussion forums, direct messaging, announcements
-- Support ticket system and calendar events
-- Badge and achievement system
-- Password reset via email
+- Academic programmes and student progress tracking`;
+
+const CORPORATE_FEATURES = `- HR management: shifts, leave, attendance summary export, employee profiles (Dikly tracks time and attendance only -- it never computes or stores pay amounts; that stays in the company's own payroll system)`;
+
+function buildSystemPrompt(mode) {
+  const platformDesc = mode === "corporate"
+    ? "a multi-tenant HR and workforce management platform"
+    : mode === "academic"
+    ? "a multi-tenant educational management platform"
+    : "a multi-tenant educational and HR management platform";
+
+  const featureList = mode === "corporate"
+    ? `${CORPORATE_FEATURES}\n${COMMON_FEATURES}`
+    : mode === "academic"
+    ? `${ACADEMIC_FEATURES}\n${COMMON_FEATURES}`
+    : `${ACADEMIC_FEATURES}\n${CORPORATE_FEATURES}\n${COMMON_FEATURES}`;
+
+  return `You are a helpful AI support assistant for DIKLY, ${platformDesc}.
+
+DIKLY features include:
+${featureList}
 
 Answer questions clearly and concisely (under 150 words). Be friendly and professional.
 If the question is outside DIKLY's scope or you genuinely don't know, say so honestly and suggest the user create a support ticket.
 Never make up features or settings that you are not sure about.`;
+}
 
 // ── Phrases that signal low confidence ───────────────────────────────────────
 const LOW_CONFIDENCE_PHRASES = [
@@ -74,9 +97,12 @@ function assessConfidence(text) {
  * @param {string}   question    Raw user question
  * @param {Object[]} contextFAQs Up to 5 related FAQ objects {question, answer}
  *                               used as few-shot context when no exact match found
+ * @param {?string}  mode        Asking company's mode ('corporate' | 'academic'),
+ *                               or null for superadmin/unknown — picks which
+ *                               feature list the system prompt names.
  * @returns {{ text: string, confidenceHigh: boolean }}
  */
-async function callAI(question, contextFAQs = []) {
+async function callAI(question, contextFAQs = [], mode = null) {
   const apiKey = process.env.ANTHROPIC_API_KEY;
   if (!apiKey) throw new Error("ANTHROPIC_API_KEY is not configured");
 
@@ -94,7 +120,7 @@ async function callAI(question, contextFAQs = []) {
   const message = await client.messages.create({
     model:      "claude-haiku-4-5-20251001",
     max_tokens: 512,
-    system:     SYSTEM_PROMPT,
+    system:     buildSystemPrompt(mode),
     messages:   [{ role: "user", content: userMessage }],
   });
 

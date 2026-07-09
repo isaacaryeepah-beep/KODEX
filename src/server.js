@@ -113,7 +113,16 @@ app.use(helmet({
       // hostname allows — confirmed via real "Refused to connect" CSP
       // violations in the browser console for b./c.api.tomtom.com tile URLs
       // that the bare-domain grant didn't cover.
-      "connect-src":     ["'self'", "https://api.anthropic.com", "https://res.cloudinary.com", "https://*.dikly.sbs", "https://*.dikly.live", "wss://*.dikly.sbs", "wss://*.dikly.live", "wss://*.livekit.cloud", "https://cdn.jsdelivr.net", "https://cdnjs.cloudflare.com", "https://api.tomtom.com", "https://*.api.tomtom.com"],
+      // blob: — worker-src blob: (below) only covers *creating* a Worker
+      // from a blob: URL; it does NOT cover fetch()/XHR calls made to
+      // blob: URLs from regular page code or from inside that worker.
+      // offline-idb.js (the offline-caching layer) fetches its cached
+      // blob: URLs directly, and the TomTom SDK's tile-decoding worker
+      // does the same internally — both were being silently blocked here,
+      // confirmed via a real "Fetch API cannot load blob:... Refused to
+      // connect" console violation plus an uncaught "Failed to fetch"
+      // thrown from inside tomtom-maps-web.min.js.
+      "connect-src":     ["'self'", "https://api.anthropic.com", "https://res.cloudinary.com", "https://*.dikly.sbs", "https://*.dikly.live", "wss://*.dikly.sbs", "wss://*.dikly.live", "wss://*.livekit.cloud", "https://cdn.jsdelivr.net", "https://cdnjs.cloudflare.com", "https://api.tomtom.com", "https://*.api.tomtom.com", "blob:"],
       "frame-src":       ["'self'", "https://meet.dikly.live", "https://*.livekit.cloud"],
       // worker-src isn't in Helmet's defaults, so without this it falls
       // back to default-src 'self' — which does NOT cover blob:. The
