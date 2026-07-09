@@ -66,7 +66,7 @@ async function persistRefreshToken(token, userId, req) {
   }
 }
 
-const { TRIAL_DAYS, STUDENT_TRIAL_DAYS, getTrialDays, getStudentTrialDays } = require("../utils/trialSettings");
+const { TRIAL_DAYS, STUDENT_TRIAL_DAYS, CORPORATE_PILOT_TRIAL_DAYS, getTrialDays, getStudentTrialDays } = require("../utils/trialSettings");
 
 const SIX_HOURS_MS = 6 * 60 * 60 * 1000;
 const PAID_ROLES         = ["lecturer", "manager", "admin", "hod"];
@@ -152,7 +152,10 @@ exports.register = async (req, res) => {
       return res.status(400).json({ error: "An institution with this name already exists. Use your institution code to join instead." });
     }
 
-    const trialDays = await getTrialDays();
+    // Corporate companies get the longer pilot-phase trial (see
+    // trialSettings.js); academic keeps the normal, superadmin-configurable
+    // length.
+    const trialDays = companyMode === "corporate" ? CORPORATE_PILOT_TRIAL_DAYS : await getTrialDays();
     const trialEndDate = new Date(Date.now() + trialDays * 24 * 60 * 60 * 1000);
 
     const company = await Company.create({
