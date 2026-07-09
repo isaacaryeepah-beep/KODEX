@@ -16,7 +16,12 @@ const authenticate = async (req, res, next) => {
       // Query-param token allowed for download paths and SSE streams
       // (both cases cannot send an Authorization header)
       const isDownload = /\/(export|download|csv|pdf|report|attachment)/i.test(path);
-      const isStream   = /\/(monitor\/stream|participant-stream)/.test(path);
+      // notifications/stream: the bell-icon SSE feed (app.js startSSE) — like
+      // the other two, EventSource can't set an Authorization header, so its
+      // token has to travel in the query string. Missing here meant every
+      // SSE connection got a 401 "No token provided" despite a valid token
+      // being sent, confirmed via repeated 401s in a live browser console.
+      const isStream   = /\/(monitor\/stream|participant-stream|notifications\/stream)/.test(path);
       if (isDownload || isStream) {
         token = req.query.token;
       } else {
