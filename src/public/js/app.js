@@ -2703,8 +2703,13 @@ function showDashboard(data) {
     const _hideBoth   = () => { _bannerEl.style.display = 'none'; _expiredEl.style.display = 'none'; };
     const _dayLabel   = n => `${n} day${n !== 1 ? 's' : ''}`;
 
-    // HODs are fully free — no banners needed
-    if (role === 'hod') {
+    // Corporate pilots: trial/subscribe nagging is suppressed entirely
+    // while we're piloting with real companies — remove this block once
+    // piloting wraps up and normal corporate billing prompts should resume.
+    if (currentUser?.company?.mode === 'corporate') {
+      _hideBoth();
+    } else if (role === 'hod') {
+      // HODs are fully free — no banners needed
       _hideBoth();
     } else if ((PAID_FE.includes(role) || role === 'student' || role === 'employee') && userTrial) {
       const daysLeft = userTrial.daysLeft || 0;
