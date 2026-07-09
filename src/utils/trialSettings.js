@@ -18,6 +18,14 @@ const PlatformSettings = require("../models/PlatformSettings");
 const TRIAL_DAYS         = 30;
 const STUDENT_TRIAL_DAYS = 45;
 
+// Temporary, pilot-phase override: new corporate companies get a much
+// longer trial window so real pilot customers don't hit a trial-expiry
+// wall (and the resulting hard subscription-block screen) mid-pilot.
+// Academic is untouched — still governed by TRIAL_DAYS/getTrialDays()
+// above. Remove this override once the pilot phase ends and normal
+// corporate trial length should resume.
+const CORPORATE_PILOT_TRIAL_DAYS = 188;
+
 async function getTrialDays() {
   try {
     const s = await PlatformSettings.findOne().lean();
@@ -36,4 +44,4 @@ async function getStudentTrialDays() {
   }
 }
 
-module.exports = { TRIAL_DAYS, STUDENT_TRIAL_DAYS, getTrialDays, getStudentTrialDays };
+module.exports = { TRIAL_DAYS, STUDENT_TRIAL_DAYS, CORPORATE_PILOT_TRIAL_DAYS, getTrialDays, getStudentTrialDays };
