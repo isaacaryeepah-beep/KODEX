@@ -19301,14 +19301,14 @@ async function renderCorporateAttendance() {
              onclick="_caForceClockOut('${r._id}','${esc(emp.name || 'this employee').replace(/'/g,"\\'")}','${dateStr.replace(/'/g,"\\'")}')">Clock Out</button>`
         : '';
       return `<tr>
-        <td><strong>${esc(emp.name || '—')}</strong><br><span style="font-size:11px;color:var(--text-light)">${esc(emp.employeeId || emp.department || '')}</span></td>
-        <td style="white-space:nowrap">${dateStr}</td>
-        <td>${statusBadge(r.status)}${isStaleOpen ? ` <span style="color:#dc2626;font-size:10px;font-weight:700" title="Never clocked out — blocks this employee from clocking in again">⚠ Open</span>` : ''}</td>
-        <td style="white-space:nowrap">${fmtTime(ci.time)}${lateBadge}<br>${mapsLink(ciLat,ciLng)} ${ciAcc}</td>
-        <td style="white-space:nowrap">${fmtTime(co.time)}${overtimeBadge}${earlyLeaveBadge}<br>${mapsLink(coLat,coLng)} ${coAcc}</td>
-        <td>${r.hoursWorked != null ? `${r.hoursWorked}h` : '—'}</td>
-        <td style="text-align:center">${verifiedBadge(ci.verified)}</td>
-        ${isAdmin ? `<td style="text-align:center">${forceClockOutBtn}</td>` : ''}
+        <td data-label="Employee"><strong>${esc(emp.name || '—')}</strong><br><span style="font-size:11px;color:var(--text-light)">${esc(emp.employeeId || emp.department || '')}</span></td>
+        <td data-label="Date" style="white-space:nowrap">${dateStr}</td>
+        <td data-label="Status">${statusBadge(r.status)}${isStaleOpen ? ` <span style="color:#dc2626;font-size:10px;font-weight:700" title="Never clocked out — blocks this employee from clocking in again">⚠ Open</span>` : ''}</td>
+        <td data-label="Clock In" style="white-space:nowrap">${fmtTime(ci.time)}${lateBadge}<br>${mapsLink(ciLat,ciLng)} ${ciAcc}</td>
+        <td data-label="Clock Out" style="white-space:nowrap">${fmtTime(co.time)}${overtimeBadge}${earlyLeaveBadge}<br>${mapsLink(coLat,coLng)} ${coAcc}</td>
+        <td data-label="Hours">${r.hoursWorked != null ? `${r.hoursWorked}h` : '—'}</td>
+        <td data-label="Verified" style="text-align:center">${verifiedBadge(ci.verified)}</td>
+        ${isAdmin ? `<td data-label="Actions" style="text-align:center">${forceClockOutBtn}</td>` : ''}
       </tr>`;
     }).join('');
 
@@ -19333,10 +19333,10 @@ async function renderCorporateAttendance() {
           <input type="date" id="corp-att-to" value="${toParam}" style="border:1px solid var(--border);border-radius:8px;padding:6px 10px;font-size:13px">
           <button class="btn btn-primary btn-sm" onclick="(()=>{const f=document.getElementById('corp-att-from').value,t=document.getElementById('corp-att-to').value;renderCorporateAttendance();})()">Filter</button>
         </div>
-        <div class="card" style="overflow-x:auto">
+        <div class="card ca-records-card" style="overflow-x:auto">
           ${records.length === 0
             ? `<div class="empty-state"><p>No attendance records found for this period.</p></div>`
-            : `<table>
+            : `<table class="ca-records-table">
                 <thead><tr>
                   <th>Employee</th><th>Date</th><th>Status</th>
                   <th>Clock In / Location</th><th>Clock Out / Location</th><th>Hours</th><th>Verified</th>${isAdmin ? '<th>Actions</th>' : ''}

@@ -7065,3 +7065,65 @@ table tr:hover td { background: #f8fafc !important; }
 @media (max-width: 380px) {
   .cal-cell { min-height: 42px; }
 }
+
+/* ── Team Attendance records table → mobile cards ──────────────────────────
+   On a phone, the plain 7-8 column attendance table was unusably cramped —
+   horizontal scroll left column headers cut off mid-word and forced users
+   to swipe sideways to see clock-in vs clock-out for the same employee.
+   Transforms each <tr> into a self-contained card at narrow widths, with
+   the employee name as a header and every other column as a labeled row
+   (label from data-label, driven by CSS content — no separate mobile
+   markup to keep in sync with the desktop table). */
+@media (max-width: 768px) {
+  .ca-records-card { overflow-x: visible !important; padding: 0 !important; background: transparent !important; box-shadow: none !important; border: none !important; }
+  .ca-records-table thead { display: none; }
+  .ca-records-table, .ca-records-table tbody { display: block; width: 100%; }
+  .ca-records-table tr {
+    display: block;
+    background: #fff;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-md);
+    padding: 14px 16px;
+    margin-bottom: 12px;
+    box-shadow: var(--shadow-sm);
+  }
+  [data-theme="dark"] .ca-records-table tr { background: var(--card); }
+  .ca-records-table td {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    text-align: right;
+    padding: 9px 0;
+    border-bottom: 1px solid var(--border);
+  }
+  .ca-records-table td:last-child { border-bottom: none; padding-bottom: 0; }
+  .ca-records-table td::before {
+    content: attr(data-label);
+    flex-shrink: 0;
+    text-align: left;
+    font-size: 10.5px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: .4px;
+    color: var(--text-light);
+  }
+  /* Employee name reads as the card's header, not just another labeled row */
+  .ca-records-table td[data-label="Employee"] {
+    flex-direction: column;
+    align-items: flex-start;
+    text-align: left;
+    border-bottom: 1.5px solid var(--border);
+    padding-bottom: 12px;
+    margin-bottom: 2px;
+  }
+  .ca-records-table td[data-label="Employee"]::before { display: none; }
+  /* Clock Out action spans the full card width instead of squeezing next to a label */
+  .ca-records-table td[data-label="Actions"] {
+    flex-direction: column;
+    align-items: stretch;
+    padding-top: 12px;
+  }
+  .ca-records-table td[data-label="Actions"]::before { display: none; }
+  .ca-records-table td[data-label="Actions"] button { width: 100%; }
+}
