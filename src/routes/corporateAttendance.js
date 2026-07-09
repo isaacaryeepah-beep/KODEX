@@ -216,6 +216,28 @@ router.post("/clock-in", ...mw, async (req, res) => {
       return res.status(400).json({ error: "Already clocked in. Clock out first." });
     }
 
+    // /clock-out only ever looks at *today's* record (date: today) — a
+    // shift clocked in on a prior day that never got clocked out (e.g. the
+    // clock-out window closed, or the employee just forgot) becomes
+    // permanently unclosable through the normal flow once the day rolls
+    // over, since there's no route path that can reach it again. Left
+    // unblocked, the employee's dashboard shows "Not Clocked In" (true for
+    // today) while a still-"Active" row silently rots in their history
+    // forever, and clocking in today creates a second, independent open
+    // shift on top of it. Block and point them at their admin, who can
+    // close the stale one via PATCH /:id/override.
+    const staleOpen = await CorporateAttendance.findOne({
+      company: req.user.company, employee: req.user._id, date: { $lt: today },
+      "clockIn.time": { $ne: null }, "clockOut.time": null,
+    }).sort({ date: -1 }).select("date").lean();
+    if (staleOpen) {
+      const staleDateStr = new Date(staleOpen.date).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
+      return res.status(400).json({
+        error: `You have an unclosed clock-in from ${staleDateStr} that was never clocked out. Contact your admin or manager to resolve it before clocking in again.`,
+        reason: "stale_open_shift", blocked: true,
+      });
+    }
+
     // Load user fresh for anti-cheat state
     const user = await User.findById(req.user._id);
     if (!user) return res.status(404).json({ error: "User not found" });

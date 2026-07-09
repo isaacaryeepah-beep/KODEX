@@ -6703,7 +6703,15 @@ function _getGPSLocation() {
         const codes = { 1: 'GPS_DENIED', 2: 'GPS_UNAVAILABLE', 3: 'GPS_TIMEOUT' };
         reject(new Error(codes[err.code] || 'GPS_ERROR'));
       },
-      { enableHighAccuracy: true, timeout: 12000, maximumAge: 0 }
+      // enableHighAccuracy holds out for a real GPS chip lock rather than
+      // settling for a faster network-based fix — worth it here since a
+      // weak/network fix would likely fail the downstream 500m accuracy
+      // check anyway, but it means indoor/weak-signal users can genuinely
+      // need more than 12s. A real device screenshot showed both an
+      // admin's "Detect Location" and an employee's clock-in time out on
+      // the same weak-LTE indoor connection despite standing at the right
+      // spot — 20s gives a real fix more room to land before giving up.
+      { enableHighAccuracy: true, timeout: 20000, maximumAge: 0 }
     );
   });
 }
@@ -19518,7 +19526,7 @@ async function _caDetectMyLocation() {
       if (status) { status.textContent = msg; status.style.color = 'var(--danger)'; }
       toastError(msg);
     },
-    { enableHighAccuracy: true, timeout: 15000, maximumAge: 0 }
+    { enableHighAccuracy: true, timeout: 20000, maximumAge: 0 }
   );
 }
 
