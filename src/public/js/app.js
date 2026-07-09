@@ -1186,11 +1186,26 @@ async function _tryRefreshToken() {
   const rt = localStorage.getItem('refreshToken');
   if (!rt) return false;
   try {
-    const r = await fetch(`${API}/api/auth/refresh`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ refreshToken: rt }),
-    });
+    // Unlike every other request (routed through _doFetch's 15s
+    // AbortController), this fetch had no timeout — and api() awaits the
+    // single shared `_refreshing` promise on every 401, app-wide. A stalled
+    // refresh request (not an outright network error, just a connection
+    // that never completes) hung that shared promise forever, freezing
+    // every authenticated API call in the app on an indefinite "Loading…"
+    // with nothing in the console to explain why.
+    const ctrl = new AbortController();
+    const timer = setTimeout(() => ctrl.abort(), 15000);
+    let r;
+    try {
+      r = await fetch(`${API}/api/auth/refresh`, {
+        method: 'POST',
+        signal: ctrl.signal,
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ refreshToken: rt }),
+      });
+    } finally {
+      clearTimeout(timer);
+    }
     if (!r.ok) return false;
     const d = await r.json();
     token = d.token;
