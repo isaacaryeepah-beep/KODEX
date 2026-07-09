@@ -19258,14 +19258,26 @@ async function renderCorporateAttendance() {
       const earlyLeaveBadge = !r.overtimeHours && r.earlyLeaveMinutes > 0
         ? ` <span style="color:#0891b2;font-size:10px" ${co.reason ? `title="${esc(co.reason)}"` : ''}>(-${r.earlyLeaveMinutes}m early${co.reason ? ' 📝' : ''})</span>`
         : '';
+      // An open shift (clocked in, never clocked out) blocks the employee
+      // from clocking in again on any later day (see /clock-in's
+      // stale_open_shift check) — but until now there was no UI anywhere
+      // that could actually close one out, only the raw PATCH .../override
+      // API. Admin-only, matching that route's own role gate.
+      const isStaleOpen = !!ci.time && !co.time;
+      const dateStr = new Date(r.date).toLocaleDateString('en-GB',{day:'numeric',month:'short',year:'numeric'});
+      const forceClockOutBtn = isAdmin && isStaleOpen
+        ? `<button class="btn btn-ghost btn-sm" style="font-size:11px;padding:4px 8px;color:#dc2626"
+             onclick="_caForceClockOut('${r._id}','${esc(emp.name || 'this employee').replace(/'/g,"\\'")}','${dateStr.replace(/'/g,"\\'")}')">Clock Out</button>`
+        : '';
       return `<tr>
         <td><strong>${esc(emp.name || '—')}</strong><br><span style="font-size:11px;color:var(--text-light)">${esc(emp.employeeId || emp.department || '')}</span></td>
-        <td style="white-space:nowrap">${new Date(r.date).toLocaleDateString('en-GB',{day:'numeric',month:'short',year:'numeric'})}</td>
-        <td>${statusBadge(r.status)}</td>
+        <td style="white-space:nowrap">${dateStr}</td>
+        <td>${statusBadge(r.status)}${isStaleOpen ? ` <span style="color:#dc2626;font-size:10px;font-weight:700" title="Never clocked out — blocks this employee from clocking in again">⚠ Open</span>` : ''}</td>
         <td style="white-space:nowrap">${fmtTime(ci.time)}${lateBadge}<br>${mapsLink(ciLat,ciLng)} ${ciAcc}</td>
         <td style="white-space:nowrap">${fmtTime(co.time)}${overtimeBadge}${earlyLeaveBadge}<br>${mapsLink(coLat,coLng)} ${coAcc}</td>
         <td>${r.hoursWorked != null ? `${r.hoursWorked}h` : '—'}</td>
         <td style="text-align:center">${verifiedBadge(ci.verified)}</td>
+        ${isAdmin ? `<td style="text-align:center">${forceClockOutBtn}</td>` : ''}
       </tr>`;
     }).join('');
 
@@ -19296,7 +19308,7 @@ async function renderCorporateAttendance() {
             : `<table>
                 <thead><tr>
                   <th>Employee</th><th>Date</th><th>Status</th>
-                  <th>Clock In / Location</th><th>Clock Out / Location</th><th>Hours</th><th>Verified</th>
+                  <th>Clock In / Location</th><th>Clock Out / Location</th><th>Hours</th><th>Verified</th>${isAdmin ? '<th>Actions</th>' : ''}
                 </tr></thead>
                 <tbody>${rows}</tbody>
                </table>`}
@@ -19315,6 +19327,26 @@ async function renderCorporateAttendance() {
     content.innerHTML = `<div class="card"><p style="color:var(--danger)">Failed to load attendance records.</p></div>`;
   }
 }
+
+// Closes out a shift that was clocked in but never clocked out — the only
+// way one of these becomes resolvable again, since /clock-out only ever
+// looks at *today's* record and can never reach a stale prior-day one.
+// Sets clockOut to now via the existing admin-only override route (audit
+// trail + employee notification already handled server-side).
+window._caForceClockOut = async function(recordId, employeeName, dateStr) {
+  if (!confirm(`Clock out ${employeeName} now for their ${dateStr} shift? This closes the record using the current time and unblocks them from clocking in again.`)) return;
+  try {
+    await api(`/api/corporate-attendance/${recordId}/override`, {
+      method: 'PATCH',
+      body: JSON.stringify({
+        clockOutTime: new Date().toISOString(),
+        reason: 'Manually clocked out by admin — employee never clocked out',
+      }),
+    });
+    toastSuccess(`${employeeName} clocked out`);
+    renderCorporateAttendance();
+  } catch (e) { toastError(e.message || 'Failed to clock out employee'); }
+};
 
 function _caTab(tab) {
   ['records','blocked','settings'].forEach(t => {
