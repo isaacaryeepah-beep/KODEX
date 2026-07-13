@@ -31,8 +31,14 @@ class _MeetingRoomScreenState extends State<MeetingRoomScreen> {
 
   void _init() {
     final encodedTitle = Uri.encodeComponent(widget.title);
+    // dikly_auth is stream-room.html's purpose-built cross-origin token
+    // handoff — the page copies it into localStorage itself before its auth
+    // check runs. More reliable than only injecting localStorage from
+    // onPageStarted, which can race the page's own scripts on some Android
+    // WebView versions; the injection below stays as a fallback.
     final url = 'https://dikly.sbs/stream-room.html'
-        '?meetingId=${widget.meetingId}&title=$encodedTitle';
+        '?meetingId=${widget.meetingId}&title=$encodedTitle'
+        '&dikly_auth=${Uri.encodeComponent(widget.token)}';
     // Escape token for safe embedding in a JS string literal
     final safeToken = widget.token.replaceAll(r'\', r'\\').replaceAll('"', r'\"');
 
