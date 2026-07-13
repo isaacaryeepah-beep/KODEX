@@ -111,9 +111,80 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
         );
   }
 
+  Future<void> _show2FADialog() async {
+    final codeCtrl = TextEditingController();
+    String? errText;
+    final ok = await showDialog<bool>(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setDialogState) => AlertDialog(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          title: const Column(
+            children: [
+              Text('🔐', style: TextStyle(fontSize: 40)),
+              SizedBox(height: 8),
+              Text('Two-Factor Authentication', style: TextStyle(fontSize: 17, fontWeight: FontWeight.w700)),
+            ],
+          ),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Text('A 6-digit code was sent to your email.',
+                  textAlign: TextAlign.center, style: TextStyle(fontSize: 13, color: Color(0xFF6B7280))),
+              const SizedBox(height: 16),
+              TextField(
+                controller: codeCtrl,
+                keyboardType: TextInputType.number,
+                maxLength: 6,
+                textAlign: TextAlign.center,
+                style: const TextStyle(fontSize: 22, letterSpacing: 10, fontFamily: 'monospace'),
+                decoration: const InputDecoration(counterText: '', hintText: '······'),
+              ),
+              if (errText != null)
+                Padding(
+                  padding: const EdgeInsets.only(top: 8),
+                  child: Text(errText!, style: const TextStyle(color: Color(0xFFDC2626), fontSize: 13)),
+                ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(ctx).pop(false),
+              child: const Text('Cancel'),
+            ),
+            FilledButton(
+              onPressed: () async {
+                final verified = await ref
+                    .read(authProvider.notifier)
+                    .completeTwoFactor(codeCtrl.text.trim());
+                if (verified) {
+                  if (ctx.mounted) Navigator.of(ctx).pop(true);
+                } else {
+                  setDialogState(() => errText = 'Invalid or expired code. Try again.');
+                }
+              },
+              child: const Text('Verify'),
+            ),
+          ],
+        ),
+      ),
+    );
+    if (ok != true) {
+      await ref.read(authProvider.notifier).cancelTwoFactor();
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final authState = ref.watch(authProvider);
+    // Password accepted but the account needs its emailed 6-digit code —
+    // pop the verification dialog (mirrors the web's blocking 2FA modal).
+    ref.listen(authProvider, (prev, next) {
+      if (prev?.status != AuthStatus.requires2FA && next.status == AuthStatus.requires2FA) {
+        _show2FADialog();
+      }
+    });
     final color = _info['color'] as Color;
     final icon = _info['icon'] as IconData;
     final badge = _info['badge'] as String;

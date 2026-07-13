@@ -6,7 +6,10 @@ import '../models/user.dart';
 import 'api.dart';
 import 'cache.dart';
 
-enum AuthStatus { unknown, authenticated, unauthenticated }
+// requires2FA: password accepted but the account has two-factor enabled —
+// a 6-digit emailed code must be verified before the session is treated as
+// signed in (mirrors the web's initiate2FA modal gate).
+enum AuthStatus { unknown, authenticated, unauthenticated, requires2FA }
 
 class AuthState {
   final AuthStatus status;
@@ -43,6 +46,7 @@ class AuthState {
 class AuthNotifier extends StateNotifier<AuthState> {
   final ApiService _api;
   static const FlutterSecureStorage _storage = FlutterSecureStorage();
+  User? _pending2FAUser;
 
   AuthNotifier(this._api) : super(const AuthState()) {
     _init();
@@ -112,6 +116,12 @@ class AuthNotifier extends StateNotifier<AuthState> {
 
       final token = result['token']?.toString() ?? '';
       await _storage.write(key: 'auth_token', value: token);
+      // Access tokens expire after 15 minutes — the refresh token (30 days)
+      // is what keeps the session alive via the 401-refresh interceptor.
+      final refreshToken = result['refreshToken']?.toString();
+      if (refreshToken != null && refreshToken.isNotEmpty) {
+        await _storage.write(key: 'refresh_token', value: refreshToken);
+      }
 
       final rawUser = result['user'];
       final userData = (rawUser is Map<String, dynamic> ? rawUser : <String, dynamic>{});
@@ -123,6 +133,27 @@ class AuthNotifier extends StateNotifier<AuthState> {
         userData['role'] = loginRole;
       }
       final user = User.fromJson(userData);
+
+      // Two-factor gate — same contract as the web's initiate2FA: the login
+      // response carries user.twoFactorEnabled; when true, email the code and
+      // hold at requires2FA until verify2FACode succeeds.
+      if (userData['twoFactorEnabled'] == true) {
+        _pending2FAUser = user;
+        try {
+          await _api.send2FACode();
+        } catch (_) {
+          await _storage.delete(key: 'auth_token');
+          await _storage.delete(key: 'refresh_token');
+          state = state.copyWith(
+            status: AuthStatus.unauthenticated,
+            isLoading: false,
+            error: 'Failed to send 2FA code. Please try again.',
+          );
+          return false;
+        }
+        state = AuthState(status: AuthStatus.requires2FA, token: token);
+        return true;
+      }
 
       await _cacheUser(user);
       state = AuthState(
@@ -154,10 +185,37 @@ class AuthNotifier extends StateNotifier<AuthState> {
     }
   }
 
+  /// Verifies the emailed 6-digit code and completes the sign-in that
+  /// login() left parked at requires2FA.
+  Future<bool> completeTwoFactor(String code) async {
+    final user = _pending2FAUser;
+    if (user == null) return false;
+    try {
+      await _api.verify2FACode(code);
+    } catch (_) {
+      state = state.copyWith(error: 'Invalid or expired code. Try again.');
+      return false;
+    }
+    _pending2FAUser = null;
+    await _cacheUser(user);
+    state = AuthState(status: AuthStatus.authenticated, user: user, token: state.token);
+    return true;
+  }
+
+  /// Abandons a pending 2FA challenge — discards the tokens issued at the
+  /// password step so a half-authenticated session can't linger.
+  Future<void> cancelTwoFactor() async {
+    _pending2FAUser = null;
+    await _storage.delete(key: 'auth_token');
+    await _storage.delete(key: 'refresh_token');
+    state = const AuthState(status: AuthStatus.unauthenticated);
+  }
+
   Future<void> logout() async {
     state = state.copyWith(isLoading: true);
     await _api.logout();
     await _storage.delete(key: 'auth_token');
+    await _storage.delete(key: 'refresh_token');
     state = const AuthState(status: AuthStatus.unauthenticated);
   }
 

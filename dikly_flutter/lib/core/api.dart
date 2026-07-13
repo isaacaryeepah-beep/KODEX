@@ -17,6 +17,13 @@ const FlutterSecureStorage _storage = FlutterSecureStorage();
 class ApiService {
   late final Dio _dio;
 
+  // Single-flight refresh, mirroring the web's shared `_refreshing` promise:
+  // concurrent 401s trigger exactly one POST /api/auth/refresh, and every
+  // caller awaits the same result. Access tokens live only 15 minutes
+  // server-side — without this the app silently 401s out of every screen
+  // a quarter-hour after login.
+  Future<bool>? _refreshing;
+
   ApiService() {
     _dio = Dio(BaseOptions(
       baseUrl: _baseUrl,
@@ -33,10 +40,60 @@ class ApiService {
         }
         handler.next(options);
       },
-      onError: (error, handler) {
+      onError: (error, handler) async {
+        final status = error.response?.statusCode;
+        final path = error.requestOptions.path;
+        final alreadyRetried = error.requestOptions.extra['retried'] == true;
+        final isAuthCall = path.contains('/api/auth/login') || path.contains('/api/auth/refresh');
+        if (status == 401 && !alreadyRetried && !isAuthCall) {
+          _refreshing ??= _tryRefreshToken();
+          final refreshed = await _refreshing!;
+          _refreshing = null;
+          if (refreshed) {
+            try {
+              final opts = error.requestOptions;
+              opts.extra['retried'] = true;
+              final newToken = await _storage.read(key: 'auth_token');
+              if (newToken != null) opts.headers['Authorization'] = 'Bearer $newToken';
+              final response = await _dio.fetch(opts);
+              return handler.resolve(response);
+            } catch (_) {
+              // fall through to the original error
+            }
+          }
+        }
         handler.next(error);
       },
     ));
+  }
+
+  /// POST /api/auth/refresh with the stored refresh token — same contract as
+  /// the web's _tryRefreshToken: body {refreshToken}, response {token,
+  /// refreshToken?}. Uses a bare Dio so this call itself never recurses
+  /// through the 401 interceptor.
+  Future<bool> _tryRefreshToken() async {
+    final rt = await _storage.read(key: 'refresh_token');
+    if (rt == null || rt.isEmpty) return false;
+    try {
+      final bare = Dio(BaseOptions(
+        baseUrl: _baseUrl,
+        connectTimeout: const Duration(seconds: 15),
+        receiveTimeout: const Duration(seconds: 15),
+        headers: {'Content-Type': 'application/json'},
+      ));
+      final r = await bare.post('/api/auth/refresh', data: {'refreshToken': rt});
+      final data = r.data;
+      final newToken = data['token']?.toString();
+      if (newToken == null || newToken.isEmpty) return false;
+      await _storage.write(key: 'auth_token', value: newToken);
+      final newRefresh = data['refreshToken']?.toString();
+      if (newRefresh != null && newRefresh.isNotEmpty) {
+        await _storage.write(key: 'refresh_token', value: newRefresh);
+      }
+      return true;
+    } catch (_) {
+      return false;
+    }
   }
 
   bool _isOfflineError(Object e) {
@@ -1117,6 +1174,18 @@ class ApiService {
   // 2FA
   Future<void> toggle2FA(bool enable) async {
     await _dio.post('/api/auth/2fa/toggle', data: {'enable': enable});
+  }
+
+  /// Sends the 6-digit 2FA code to the user's email. Called right after a
+  /// password login when user.twoFactorEnabled is true — same flow as the
+  /// web's initiate2FA.
+  Future<void> send2FACode() async {
+    await _dio.post('/api/auth/2fa/send');
+  }
+
+  /// Verifies the emailed code. Throws on invalid/expired code.
+  Future<void> verify2FACode(String code) async {
+    await _dio.post('/api/auth/2fa/verify', data: {'code': code});
   }
 
   // Signed-in devices
