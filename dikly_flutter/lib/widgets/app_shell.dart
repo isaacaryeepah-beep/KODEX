@@ -135,7 +135,6 @@ List<NavItem> _drawerItems(String role) {
         NavItem(label: 'Leave',               icon: Icons.event_note_outlined,     selectedIcon: Icons.event_note,     route: '/manager/leave-requests'),
         NavItem(label: 'Training & Assessments', icon: Icons.school_outlined,      selectedIcon: Icons.school,         route: '/performance'),
         NavItem(label: 'Timesheets',          icon: Icons.schedule_outlined,       selectedIcon: Icons.schedule,       route: '/manager/timesheets'),
-        NavItem(label: 'Expenses',            icon: Icons.receipt_long_outlined,   selectedIcon: Icons.receipt_long,   route: '/expenses'),
         NavItem(label: 'Messages',            icon: Icons.message_outlined,        selectedIcon: Icons.message,        route: '/messages',               section: 'COMMUNICATE'),
         NavItem(label: 'Meetings',            icon: Icons.groups_outlined,         selectedIcon: Icons.groups,         route: '/meetings'),
         NavItem(label: 'Announcements',       icon: Icons.campaign_outlined,       selectedIcon: Icons.campaign,       route: '/announcements'),

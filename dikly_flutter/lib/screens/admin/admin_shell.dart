@@ -65,7 +65,6 @@ class _AdminShellState extends ConsumerState<AdminShell> {
         DrawerItem(Icons.schedule_outlined, 'Shifts', '/shifts'),
         DrawerItem(Icons.beach_access_outlined, 'Leave Requests', '/manager/leave-requests'),
         DrawerItem(Icons.access_time_outlined, 'Timesheets', '/manager/timesheets'),
-        DrawerItem(Icons.receipt_long_outlined, 'Expenses', '/expenses'),
         DrawerItem(Icons.inventory_2_outlined, 'Assets', '/admin/assets'),
         DrawerItem(Icons.campaign_outlined, 'Announcements', '/announcements'),
         DrawerItem(Icons.palette_outlined, 'Branding', '/admin/branding'),

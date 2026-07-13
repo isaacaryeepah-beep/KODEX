@@ -547,7 +547,9 @@ class ApiService {
   }
 
   Future<List<Message>> getConversationMessages(String conversationId) async {
-    final response = await _dio.get('/api/messages/conversations/$conversationId/messages');
+    // GET /conversations/:id returns { conversation, messages, ... } —
+    // there is no GET .../messages sub-route on the server (only POST).
+    final response = await _dio.get('/api/messages/conversations/$conversationId');
     final data = response.data;
     final list = data['messages'] ?? data['data'] ?? [];
     return (list as List).map((e) => Message.fromJson(e as Map<String, dynamic>)).toList();
@@ -614,11 +616,8 @@ class ApiService {
     return data['shifts'] ?? data['data'] ?? [];
   }
 
-  // Expenses
-  Future<List<dynamic>> getExpenses() async {
-    final data = await _cachedGet('/api/operations/expenses/my', 'expenses');
-    return data['expenses'] ?? data['data'] ?? [];
-  }
+  // Expenses feature removed — the product excludes finance/payroll, and the
+  // /api/operations/expenses backend routes were deleted along with the web UI.
 
   // HOD
   Future<Map<String, dynamic>> getHodOverview() async {
@@ -875,8 +874,21 @@ class ApiService {
 
   // Subscription
   Future<Map<String, dynamic>> getSubscription() async {
-    final data = await _cachedGet('/api/subscription/status', 'subscription');
-    return (data['subscription'] ?? data['data'] ?? data) as Map<String, dynamic>;
+    // No /api/subscription/status route exists on the server. The web app
+    // derives subscription state from /api/auth/me's userTrial/subscription
+    // payload (authController.getMe), so mirror that mapping here.
+    final data = await _cachedGet('/api/auth/me', 'subscription');
+    final userTrial = (data['userTrial'] as Map<String, dynamic>?) ?? {};
+    final sub = (data['subscription'] as Map<String, dynamic>?) ?? {};
+    final user = (data['user'] as Map<String, dynamic>?) ?? {};
+    final company = (user['company'] as Map<String, dynamic>?) ?? {};
+    return {
+      'status': userTrial['status'] ?? sub['status'] ?? 'trial',
+      'plan': sub['plan'] ?? 'Free Trial',
+      'daysLeft': userTrial['daysLeft'] ?? 0,
+      'trialEnds': userTrial['subscriptionExpiry'] ?? '—',
+      if (company['name'] != null) 'institution': company['name'],
+    };
   }
 
   // Lecturer device
@@ -901,7 +913,9 @@ class ApiService {
   // Branches
   Future<List<Map<String, dynamic>>> getAdminDevices() async {
     try {
-      final response = await _dio.get('/api/devices');
+      // Bare GET /api/devices doesn't exist — the admin list is /devices/all
+      // (deviceSessionRoutes), returning { success, devices }.
+      final response = await _dio.get('/api/devices/all');
       final data = response.data;
       final list = data['devices'] ?? data['data'] ?? [];
       return (list as List).cast<Map<String, dynamic>>();
@@ -911,14 +925,16 @@ class ApiService {
   }
 
   Future<List<Map<String, dynamic>>> getBranches() async {
-    final response = await _dio.get('/api/branches');
+    // Branch routes live in advanced.js, mounted at /api/advanced — a bare
+    // /api/branches mount doesn't exist (web uses /api/advanced/branches too).
+    final response = await _dio.get('/api/advanced/branches');
     final data = response.data;
     final list = data['branches'] ?? data['data'] ?? [];
     return (list as List).cast<Map<String, dynamic>>();
   }
 
   Future<void> createBranch(Map<String, dynamic> body) async {
-    await _dio.post('/api/branches', data: body);
+    await _dio.post('/api/advanced/branches', data: body);
   }
 
   // Audit logs
@@ -990,10 +1006,6 @@ class ApiService {
 
   Future<void> createLeaveRequest(Map<String, dynamic> body) async {
     await _queueablePost('/api/leaves', body);
-  }
-
-  Future<void> createExpense(Map<String, dynamic> body) async {
-    await _queueablePost('/api/operations/expenses', body);
   }
 
   Future<void> createShift(Map<String, dynamic> body) async {
@@ -1097,10 +1109,10 @@ class ApiService {
   }
 
 
-  Future<Map<String, dynamic>> getStudentStats() async {
-    final data = await _cachedGet('/api/students/dashboard-stats', 'student_stats');
-    return (data['stats'] ?? data['data'] ?? data) as Map<String, dynamic>;
-  }
+  // getStudentStats removed: it called /api/students/dashboard-stats, which
+  // has never existed on the server, and nothing in the app referenced it —
+  // the student dashboard composes its stats from real endpoints instead
+  // (see getStudentDashboard above).
 
   // 2FA
   Future<void> toggle2FA(bool enable) async {

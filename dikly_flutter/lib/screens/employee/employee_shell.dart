@@ -49,7 +49,6 @@ class _EmployeeShellState extends ConsumerState<EmployeeShell> {
     DrawerSection(header: 'INSIGHTS', items: [
       DrawerItem(Icons.trending_up_outlined, 'My Performance', '/performance'),
       DrawerItem(Icons.receipt_long_outlined, 'Timesheet', '/manager/timesheets'),
-      DrawerItem(Icons.attach_money_outlined, 'Expenses', '/expenses'),
       DrawerItem(Icons.inventory_2_outlined, 'My Assets', '/reports'),
     ]),
     DrawerSection(header: 'SUPPORT', items: [

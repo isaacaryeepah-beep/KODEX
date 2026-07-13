@@ -46,7 +46,6 @@ import '../screens/shared/support_screen.dart';
 import '../screens/shared/sign_in_out_screen.dart';
 import '../screens/shared/corporate_attendance_screen.dart';
 import '../screens/shared/shifts_screen.dart';
-import '../screens/shared/expenses_screen.dart';
 import '../screens/shared/performance_screen.dart';
 import '../screens/gradebook/grade_book_screen.dart';
 import '../screens/hod/hod_approvals_screen.dart';
@@ -212,7 +211,6 @@ final routerProvider = Provider<GoRouter>((ref) {
       GoRoute(path: '/sign-in-out',           builder: (context, state) => const SignInOutScreen()),
       GoRoute(path: '/corporate-attendance',  builder: (context, state) => const CorporateAttendanceScreen()),
       GoRoute(path: '/shifts',                builder: (context, state) => const ShiftsScreen()),
-      GoRoute(path: '/expenses',              builder: (context, state) => const ExpensesScreen()),
 
       // Admin
       GoRoute(path: '/admin/users',       builder: (context, state) => const UsersScreen()),
