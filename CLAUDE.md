@@ -10,7 +10,7 @@ This file is the single source of truth for Claude Code sessions. Read it at the
 
 - **Backend**: Node.js / Express / MongoDB / Redis — `src/server.js`
 - **Frontend**: Vanilla HTML/CSS/JS served by Express — `src/public/`
-- **Mobile app**: Flutter — `dikly_flutter/` — **STOPPED. Do not work on Flutter. User has decided to stop Flutter development.**
+- **Mobile app**: Flutter — `dikly_flutter/` — **ACTIVE again (owner reversed the earlier stop decision).** Goal: every page matches the web app exactly, verified against the web code — no guessing. Builds on Flutter 3.44.6 stable; requires `dl.google.com` in the environment's network allowlist for Gradle/AGP artifact downloads.
 - **Firmware**: ESP32 Arduino for BLE + WiFi attendance devices — `firmware/`
 - **Primary domain**: `dikly.sbs` (subdomains: `app`, `api`, `admin`, `monitor`, `meet`)
 
@@ -117,9 +117,9 @@ This file is the single source of truth for Claude Code sessions. Read it at the
 
 ## Pending / Next Steps
 
-1. **Flutter — STOPPED** — User has decided to stop Flutter development entirely. Do not suggest or work on Flutter.
-2. **Production deployment** — Set `JWT_REFRESH_SECRET` to a real 64-char random string before first deploy.
-3. No other outstanding bugs or blockers known.
+1. **Flutter — ACTIVE (revived)** — Bring `dikly_flutter/` to exact parity with the web app, page by page, tracing every claim to real web/server code. Done so far: 5 dead API endpoints fixed, Expenses/Payroll removed (no-finance rule), 401→refresh-token session survival added, 2FA login gate added, meeting-room `dikly_auth` token handoff hardened; analyzer clean on Flutter 3.44.6. Remaining: screen-by-screen UI/behavior parity (web page inventory: 89 pages via `navigateTo` switch; Flutter: ~70 routes), then release APK. APK builds need `dl.google.com` allowed in the Claude Code environment network policy (maven.google.com 301s every artifact there); Gradle 8.9 itself is already seeded in the build cache, SHA-256-verified against the official checksum.
+2. **Corporate pilot phase** — trial extended to 188 days for new corporate signups; subscription banner/link/page hidden in corporate mode. Remove those guards when piloting ends.
+3. **Production deployment** — Set `JWT_REFRESH_SECRET` to a real 64-char random string before first deploy.
 
 ---
 
