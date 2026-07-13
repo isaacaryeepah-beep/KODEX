@@ -104,7 +104,6 @@ class ManagerHomeScreen extends ConsumerWidget {
                 DiklyQuickChip(icon: Icons.person_add_outlined, label: 'Add Employee', color: theme.primary, onTap: () => context.push('/manager/team')),
                 DiklyQuickChip(icon: Icons.campaign_outlined, label: 'Announce', color: theme.primary, onTap: () => context.push('/announcements')),
                 DiklyQuickChip(icon: Icons.schedule_outlined, label: 'Manage Shifts', color: theme.primary, onTap: () => context.push('/shifts')),
-                DiklyQuickChip(icon: Icons.attach_money_outlined, label: 'Payroll', color: theme.primary, onTap: () => context.push('/expenses')),
               ],
             ),
           ),
