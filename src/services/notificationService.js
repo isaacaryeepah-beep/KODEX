@@ -31,6 +31,7 @@
 const Notification = require("../models/Notification");
 const { NOTIFICATION_TYPES } = Notification;
 const sse = require("./sseRegistry");
+const pushService = require("./push/pushService");
 
 // ---------------------------------------------------------------------------
 // Core
@@ -304,6 +305,14 @@ exports.notifyClassStartingSoon = async (slot, studentIds) => {
       link:    `/index.html#timetable`,
       data:    { slotId: slot._id, courseId: slot.course },
     });
+    for (const studentId of studentIds) {
+      pushService.sendToUser(studentId, {
+        title: `${label} starts in 30 minutes`,
+        body,
+        url: "/?view=timetable",
+        tag: "class-reminder",
+      }).catch((err) => console.error("[NotificationService] Class reminder push failed:", err.message));
+    }
   }
 
   // Notify lecturer
@@ -316,6 +325,14 @@ exports.notifyClassStartingSoon = async (slot, studentIds) => {
     link:      `/index.html#timetable`,
     data:      { slotId: slot._id, courseId: slot.course },
   });
+  if (slot.lecturer) {
+    pushService.sendToUser(slot.lecturer, {
+      title: `Your class starts in 30 minutes`,
+      body,
+      url: "/?view=timetable",
+      tag: "class-reminder",
+    }).catch((err) => console.error("[NotificationService] Class reminder push failed:", err.message));
+  }
 };
 
 // ---------------------------------------------------------------------------

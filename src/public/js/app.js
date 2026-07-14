@@ -7177,8 +7177,8 @@ async function viewStudentQuizResult(quizId) {
 async function renderStudentDashboard(content) {
   let _sd = !isOnline() ? offlineRead('student_dashboard') : null;
   if (!isOnline() && !_sd) { content.innerHTML = `<div style="text-align:center;padding:60px 20px"><div style="font-size:48px;margin-bottom:12px">📡</div><div style="font-size:18px;font-weight:700">You're Offline</div><p style="color:var(--text-muted);margin-top:8px">Connect once while online to cache this page.</p></div>`; return; }
-  const [attendance, coursesData, quizzesData, meetingsData, activeSessionData, upcomingAsgData] = _sd
-    ? [_sd.attendance, _sd.coursesData, _sd.quizzesData, _sd.meetingsData, _sd.activeSessionData, _sd.upcomingAsgData]
+  const [attendance, coursesData, quizzesData, meetingsData, activeSessionData, upcomingAsgData, timetableData] = _sd
+    ? [_sd.attendance, _sd.coursesData, _sd.quizzesData, _sd.meetingsData, _sd.activeSessionData, _sd.upcomingAsgData, _sd.timetableData || { slots: [] }]
     : await Promise.all([
     api('/api/attendance-sessions/my-attendance?limit=5').catch(() => ({ records: [], pagination: { total: 0 } })),
     api('/api/courses').catch(() => ({ courses: [] })),
@@ -7186,8 +7186,9 @@ async function renderStudentDashboard(content) {
     api('/api/meetings').catch(() => ({ data: [] })),
     api('/api/attendance-sessions/active').catch(() => ({ session: null })),
     api('/api/student/assignments/upcoming').catch(() => ({ assignments: [] })),
+    api('/api/timetable').catch(() => ({ slots: [] })),
   ]);
-  if (!_sd) offlineCache('student_dashboard', { attendance, coursesData, quizzesData, meetingsData, activeSessionData, upcomingAsgData });
+  if (!_sd) offlineCache('student_dashboard', { attendance, coursesData, quizzesData, meetingsData, activeSessionData, upcomingAsgData, timetableData });
 
   const totalCheckins = attendance.pagination.total;
   const enrolledCourses = coursesData.courses.length;
@@ -7196,6 +7197,72 @@ async function renderStudentDashboard(content) {
   const activeSession = activeSessionData.session;
   const upcomingAssignments = upcomingAsgData.assignments || [];
   const attendanceRate = totalCheckins > 0 ? Math.round((attendance.records.filter(r => r.status === 'present').length / attendance.records.length) * 100) : 0;
+
+  // ── Greeting + department chip ───────────────────────────────────────────
+  const firstName = currentUser.name.split(' ')[0];
+  const hour = new Date().getHours();
+  const greeting = hour < 12 ? 'Good morning' : hour < 17 ? 'Good afternoon' : 'Good evening';
+  const deptChip = currentUser.department ? `
+    <div class="sd-dept-chip">
+      ${svgIcon('<path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/>', 15)}
+      <span>${esc(currentUser.department.toUpperCase())}</span>
+    </div>` : '';
+
+  // ── Today's schedule hero card ───────────────────────────────────────────
+  const pad2 = (n) => String(n).padStart(2, '0');
+  const now = new Date();
+  const nowStr = `${pad2(now.getHours())}:${pad2(now.getMinutes())}`;
+  const todaySlots = (timetableData.slots || [])
+    .filter(s => s.dayOfWeek === now.getDay())
+    .sort((a, b) => a.startTime.localeCompare(b.startTime));
+  const liveSlot = todaySlots.find(s => s.startTime <= nowStr && s.endTime > nowStr);
+  const nextSlot = todaySlots.find(s => s.startTime > nowStr);
+  const fmtTime = (t) => { const [h, m] = t.split(':').map(Number); const ap = h >= 12 ? 'PM' : 'AM'; const h12 = h % 12 || 12; return `${h12}:${pad2(m)} ${ap}`; };
+
+  let heroEyebrow, heroTitle, heroBody, heroIcon;
+  if (liveSlot) {
+    heroEyebrow = 'HAPPENING NOW';
+    heroTitle = esc(liveSlot.title || liveSlot.course?.title || 'Class in progress');
+    heroBody = `${liveSlot.room ? 'Room ' + esc(liveSlot.room) + ' · ' : ''}until ${fmtTime(liveSlot.endTime)}`;
+    heroIcon = '<circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>';
+  } else if (nextSlot) {
+    const [nextH, nextM] = nextSlot.startTime.split(':').map(Number);
+    const diffMin = Math.max(0, (nextH * 60 + nextM) - (now.getHours() * 60 + now.getMinutes()));
+    const diffLabel = diffMin >= 60 ? `${Math.floor(diffMin / 60)}h ${diffMin % 60}m` : `${diffMin}m`;
+    heroEyebrow = 'NEXT CLASS';
+    heroTitle = esc(nextSlot.title || nextSlot.course?.title || 'Upcoming class');
+    heroBody = `${fmtTime(nextSlot.startTime)}${nextSlot.room ? ' · Room ' + esc(nextSlot.room) : ''} — in ${diffLabel}`;
+    heroIcon = '<circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>';
+  } else if (todaySlots.length > 0) {
+    heroEyebrow = 'ALL DONE';
+    heroTitle = 'No more classes today';
+    heroBody = 'Enjoy the rest of your day 🎉';
+    heroIcon = '<rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/><polyline points="9 16 11 18 15 14"/>';
+  } else {
+    heroEyebrow = 'NO CLASSES TODAY';
+    heroTitle = 'Nothing on your timetable';
+    heroBody = 'Enjoy the rest of your day 🎉';
+    heroIcon = '<rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/><polyline points="9 16 11 18 15 14"/>';
+  }
+
+  // ── Dikly AI smart insights ───────────────────────────────────────────────
+  const studentInsights = [];
+  if (upcomingAssignments.length > 0) {
+    const soonest = upcomingAssignments[0];
+    const hoursLeft = Math.round((new Date(soonest.dueDate) - Date.now()) / 3600000);
+    if (hoursLeft <= 48) {
+      studentInsights.push({ tone: 'warn', text: `<strong>${esc(soonest.title)}</strong> is due ${hoursLeft <= 24 ? 'in ' + Math.max(1, hoursLeft) + 'h' : 'soon'} — don't miss it.` });
+    }
+  }
+  if (totalCheckins > 0) {
+    studentInsights.push({ tone: attendanceRate >= 85 ? 'good' : attendanceRate >= 60 ? 'warn' : 'bad', text: `You're at ${attendanceRate}% attendance with ${totalCheckins} check-in${totalCheckins === 1 ? '' : 's'}—${attendanceRate >= 85 ? 'great work keeping it up!' : 'aim for a few more this week to boost that rate!'} 🎯` });
+  }
+  if (quizzesTaken === 0 && enrolledCourses > 0) {
+    studentInsights.push({ tone: 'info', text: `No quizzes taken yet this term — check your courses for anything open.` });
+  }
+  if (!studentInsights.length) {
+    studentInsights.push({ tone: 'good', text: `All clear — nothing urgent needs your attention right now. Ask me anything about your courses.` });
+  }
 
   const methodLabel = (m) => {
     const labels = { qr_mark: 'QR Code', code_mark: 'Code Entry', ble_mark: 'BLE Proximity', jitsi_join: 'Meeting Join', manual: 'Manual', qr: 'QR Code', ble: 'BLE', zoom: 'Meeting' };
@@ -7236,11 +7303,22 @@ async function renderStudentDashboard(content) {
 
   content.innerHTML = `
     <div class="page-header">
-      <h2>Welcome back, ${currentUser.name.split(' ')[0]}</h2>
-      <p>${currentUser.company?.name || 'Your institution'}${currentUser.indexNumber ? ' \u2022 ' + currentUser.indexNumber : ''}</p>
+      <h2>${greeting}, ${esc(firstName)} \ud83d\udc4b</h2>
+      <p>Here's what's happening at ${esc(currentUser.company?.name || 'your institution')} today.</p>
     </div>
+    ${deptChip}
     ${classRepBanner}
     ${devLockBanner}
+
+    <div class="sd-hero-card">
+      <div class="sd-hero-icon">${svgIcon(heroIcon, 22)}</div>
+      <div class="sd-hero-eyebrow">${heroEyebrow}</div>
+      <div class="sd-hero-title">${heroTitle}</div>
+      <div class="sd-hero-body">${heroBody}</div>
+      <button class="btn sd-hero-btn" onclick="navigateTo('courses')">My Courses <span style="font-size:14px">\u203a</span></button>
+    </div>
+
+    ${_diklyAiBandHtml(studentInsights)}
 
     ${activeSession ? `
       <div class="card" style="border-left:4px solid var(--success);background:linear-gradient(135deg,#f0fdf4,#ecfdf5);cursor:pointer" onclick="navigateTo('mark-attendance')">
@@ -7281,6 +7359,17 @@ async function renderStudentDashboard(content) {
       </div>
     </div>
 
+    <div class="section-label" style="margin-top:4px">Notifications</div>
+    <div class="card sd-notif-card">
+      <div style="font-weight:700;font-size:14px">Class reminders</div>
+      <div style="font-size:12px;color:var(--text-light);margin-top:2px">Push notifications before your classes start.</div>
+      <div style="display:flex;gap:10px;margin-top:12px;flex-wrap:wrap">
+        <button class="btn btn-secondary btn-sm" onclick="_sdEnableClassReminders(this)">Enable reminders</button>
+        <button class="btn btn-primary btn-sm" onclick="_pushEnableAndTest(this)">Send test push</button>
+      </div>
+      <div id="sd-push-status" style="font-size:12px;color:var(--text-light);margin-top:10px"></div>
+    </div>
+
     <div class="card quick-actions-bar">
       <div class="section-label">Quick Actions</div>
       <div class="actions-row">
@@ -7291,7 +7380,7 @@ async function renderStudentDashboard(content) {
         <button class="btn btn-secondary btn-sm" onclick="generateAttendanceReportCard()">📋 Report Card</button>
       </div>
     </div>
-    
+
     ${upcomingMeetings.length > 0 ? `
       <div class="card">
         <div class="card-title">Upcoming Meetings</div>
@@ -7353,7 +7442,39 @@ async function renderStudentDashboard(content) {
       ` : '<div class="empty-state"><p>No attendance records yet. Mark attendance when a session is active.</p></div>'}
     </div>
   `;
+  _sdRefreshPushStatus();
 }
+
+// Reflects this device's actual push-subscription state into the Class
+// Reminders card — separate from ArrivalIQ's server-side consent flag,
+// since a plain "enable reminders" opt-in has no server state of its own
+// beyond the PushSubscription that _pushSubscribeIfNeeded() creates.
+window._sdRefreshPushStatus = async function() {
+  const el = document.getElementById('sd-push-status');
+  if (!el) return;
+  try {
+    if (!('serviceWorker' in navigator) || !('PushManager' in window)) {
+      el.textContent = 'Push notifications aren\'t supported on this browser.';
+      return;
+    }
+    const reg = await navigator.serviceWorker.ready;
+    const sub = await reg.pushManager.getSubscription();
+    el.textContent = sub
+      ? 'You\'re all set — class reminders are enabled on this device.'
+      : 'No push subscription found for your account — enable notifications first.';
+  } catch (_) { el.textContent = ''; }
+};
+
+window._sdEnableClassReminders = async function(btn) {
+  const label = btn?.textContent;
+  if (btn) { btn.disabled = true; btn.textContent = 'Enabling…'; }
+  try {
+    await _pushSubscribeIfNeeded();
+    toastSuccess('Class reminders enabled');
+    _sdRefreshPushStatus();
+  } catch (e) { toastError(e.message || 'Failed to enable reminders'); }
+  finally { if (btn) { btn.disabled = false; btn.textContent = label; } }
+};
 
 async function renderAdminDashboard(content) {
   let _ad = !isOnline() ? offlineRead('admin_dashboard_v2') : null;

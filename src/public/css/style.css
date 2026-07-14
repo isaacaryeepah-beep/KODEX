@@ -6898,6 +6898,45 @@ table tr:hover td { background: #f8fafc !important; }
 [data-theme="dark"] .adx-kpi-hint { background: #1a2130; }
 [data-theme="dark"] .adx-session-row { border-color: #1c2432; }
 
+/* ── Student dashboard: department chip, today's-schedule hero card, notif card ── */
+.sd-dept-chip {
+  display: inline-flex; align-items: center; gap: 6px;
+  background: var(--bg, #f3f4f6); border: 1px solid var(--border, #e5e7eb);
+  border-radius: 20px; padding: 6px 12px; margin-bottom: 14px;
+  font-size: 11px; font-weight: 700; letter-spacing: .3px; color: var(--text-light, #6b7280);
+}
+.sd-dept-chip svg { width: 15px; height: 15px; color: #7c3aed; flex-shrink: 0; }
+
+.sd-hero-card {
+  background: linear-gradient(135deg, #4f6ef7, #7c3aed);
+  color: #fff; border-radius: 16px; padding: 20px 22px; margin-bottom: 16px;
+  box-shadow: 0 6px 20px rgba(79,110,247,.28);
+}
+.sd-hero-icon {
+  width: 40px; height: 40px; border-radius: 11px; background: rgba(255,255,255,.18);
+  display: flex; align-items: center; justify-content: center; margin-bottom: 12px;
+}
+.sd-hero-eyebrow { font-size: 11px; font-weight: 700; letter-spacing: 1px; text-transform: uppercase; opacity: .85; }
+.sd-hero-title { font-size: 19px; font-weight: 800; margin-top: 4px; }
+.sd-hero-body { font-size: 13px; opacity: .9; margin-top: 4px; display: flex; align-items: center; gap: 6px; }
+.sd-hero-btn {
+  display: inline-flex; align-items: center; gap: 6px;
+  background: #fff; color: #4f46e5; border: none; border-radius: 10px;
+  padding: 10px 18px; font-size: 13.5px; font-weight: 700; cursor: pointer;
+  margin-top: 16px; width: 100%; justify-content: center;
+  transition: transform .12s;
+}
+.sd-hero-btn:hover { transform: translateY(-1px); }
+
+.sd-notif-card { margin-top: 8px; }
+
+@media (max-width: 900px) {
+  .sd-hero-card { padding: 18px 18px; }
+  .sd-hero-title { font-size: 17px; }
+}
+
+[data-theme="dark"] .sd-dept-chip { background: #141a26; border-color: #232c3d; }
+
 /* ── User management cards (replaces the old horizontal-scroll table) ── */
 .adx-user-selectall {
   display: inline-flex; align-items: center; gap: 7px;
