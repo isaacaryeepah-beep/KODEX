@@ -490,6 +490,7 @@ app.use("/api/staff-notes",         staffNoteRoutes);
 app.use("/api/programmes",          programmeRoutes);
 app.use("/api/engagement",          engagementRoutes);
 app.use("/api/faq",                 faqRoutes);
+app.use("/api/exam-timetable",      require("./routes/examTimetable"));
 
 const deviceSessionRoutes = require("./routes/deviceSessionRoutes");
 app.use("/api", deviceSessionRoutes);
