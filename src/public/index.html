@@ -95,6 +95,15 @@
   ]
   </script>
 
+  <!-- Fonts otherwise load through style.css's @import — a serial chain
+       (HTML -> style.css -> font CSS -> font files) that blocks first text
+       render for 3-4 round-trips. Preconnecting and linking the SAME font
+       URL directly lets the browser fetch fonts in parallel with style.css;
+       the @import then resolves instantly from cache. Other pages keep
+       their own font links, so the @import must stay in style.css. -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700;0,9..40,800;1,9..40,400&family=DM+Mono:wght@400;500&display=swap">
   <link rel="stylesheet" href="/css/style.css">
   <script>window.MathJax = { tex: { inlineMath: [["\\(","\\)"]], displayMath: [["\\[","\\]"]], processEscapes: true }, options: { skipHtmlTags: ["script","noscript","style","textarea"] } };</script>
   <script id="MathJax-script" async src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-chtml.js"></script>
