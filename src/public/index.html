@@ -12,7 +12,7 @@
 
   <!-- ── Primary SEO ───────────────────────────────────────────── -->
   <title>DIKLY — Smart Attendance & Education Management | DIKLY Technologies</title>
-  <meta name="description" content="DIKLY by DIKLY Technologies is an enterprise platform for smart attendance tracking and education management. QR codes, Bluetooth, video meetings, quizzes, and analytics — built for schools, universities, and businesses.">
+  <meta name="description" content="DIKLY Technologies: smart attendance tracking and education management for schools, universities, and businesses — QR, Bluetooth, meetings, quizzes.">
   <meta name="keywords" content="DIKLY, DIKLY Technologies, attendance management, smart attendance, quiz management, LMS, learning management system, QR attendance, BLE attendance, school management, corporate attendance, Isaac Kweku Aryeepah">
   <meta name="author" content="Isaac Kweku Aryeepah — DIKLY Technologies">
   <meta name="robots" content="index, follow">
@@ -257,14 +257,14 @@ function selectPortal(t){if(window._appLoaded)window._realSelectPortal(t);else w
   width: 100%; text-align: center; z-index: 15;
   pointer-events: none;
 }
-#sp-text h1 {
+#sp-text h2 {
   font-size: clamp(2.2rem,7vw,4.5rem); font-weight: 900;
   color: #fff; letter-spacing: -0.02em;
   text-shadow: 0 4px 40px rgba(0,0,0,0.6); margin: 0;
   opacity: 0; transform: translateY(36px);
   transition: opacity 0.8s ease, transform 0.8s ease;
 }
-#sp-text h1.sp-show { opacity: 1; transform: translateY(0); }
+#sp-text h2.sp-show { opacity: 1; transform: translateY(0); }
 #sp-text p {
   font-size: clamp(0.78rem,1.9vw,1.1rem); font-weight: 300;
   color: rgba(255,255,255,0.55); letter-spacing: 0.35em;
@@ -502,16 +502,16 @@ function selectPortal(t){if(window._appLoaded)window._realSelectPortal(t);else w
   <div id="sp-vid-over"></div>
 
   <div id="sp-icons">
-    <img id="sp-icon-dk" class="sp-icon" src="/icon-dikly.png" alt="">
-    <img id="sp-icon-bl" class="sp-icon" src="/icon-blue.png"  alt="">
-    <img id="sp-icon-gr" class="sp-icon" src="/icon-green.png" alt="">
-    <img id="sp-icon-or" class="sp-icon" src="/icon-orange.png" alt="">
+    <img id="sp-icon-dk" class="sp-icon" src="/icon-dikly.png" alt="DIKLY icon">
+    <img id="sp-icon-bl" class="sp-icon" src="/icon-blue.png"  alt="DIKLY icon">
+    <img id="sp-icon-gr" class="sp-icon" src="/icon-green.png" alt="DIKLY icon">
+    <img id="sp-icon-or" class="sp-icon" src="/icon-orange.png" alt="DIKLY icon">
   </div>
 
   <!-- Scene 0: PRECISION MEETS POWER -->
   <div id="sp-rule"></div>
   <div id="sp-text">
-    <h1 id="sp-h1">PRECISION</h1>
+    <h2 id="sp-h1">PRECISION</h2>
     <p id="sp-p1">MEETS POWER</p>
   </div>
 
@@ -882,7 +882,7 @@ setTimeout(dismissSplash, 8400);
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="19" y1="12" x2="5" y2="12"/><polyline points="12 19 5 12 12 5"/></svg>
         Back
       </div>
-      <h1 id="admin-portal-title">Admin Portal</h1>
+      <h2 id="admin-portal-title">Admin Portal</h2>
       <p class="subtitle" id="admin-portal-subtitle">Institution Admin Access</p>
 
       <div id="admin-auth-error" class="error-msg"></div>
@@ -989,7 +989,7 @@ setTimeout(dismissSplash, 8400);
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="19" y1="12" x2="5" y2="12"/><polyline points="12 19 5 12 12 5"/></svg>
         Back
       </div>
-      <h1>HOD Portal</h1>
+      <h2>HOD Portal</h2>
       <p class="subtitle">Head of Department Access</p>
       <div id="hod-auth-error" class="error-msg"></div>
       <form id="hod-login-form" onsubmit="event.preventDefault(); handleHodLogin();">
@@ -1073,7 +1073,7 @@ setTimeout(dismissSplash, 8400);
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="19" y1="12" x2="5" y2="12"/><polyline points="12 19 5 12 12 5"/></svg>
         Back
       </div>
-      <h1>Lecturer Portal</h1>
+      <h2>Lecturer Portal</h2>
       <p class="subtitle">Lecturer Access</p>
 
       <div id="lecturer-auth-error" class="error-msg"></div>
@@ -1162,7 +1162,7 @@ setTimeout(dismissSplash, 8400);
         Back
       </div>
       <div class="employee-portal-badge" style="background:#4f46e5;color:#fff;">Manager Portal</div>
-      <h1 class="employee-heading">Welcome, Manager</h1>
+      <h2 class="employee-heading">Welcome, Manager</h2>
       <p class="subtitle">Sign in with your work email</p>
 
       <div id="manager-auth-error" class="error-msg"></div>
@@ -1217,7 +1217,7 @@ setTimeout(dismissSplash, 8400);
         Back
       </div>
       <div class="employee-portal-badge">Employee Portal</div>
-      <h1 class="employee-heading">Welcome, Employee</h1>
+      <h2 class="employee-heading">Welcome, Employee</h2>
       <p class="subtitle">Sign in with your work email</p>
 
       <div id="employee-auth-error" class="error-msg"></div>
@@ -1304,7 +1304,7 @@ setTimeout(dismissSplash, 8400);
         Back
       </div>
       <div class="student-portal-badge">Student Portal</div>
-      <h1 class="student-heading">Welcome, Student</h1>
+      <h2 class="student-heading">Welcome, Student</h2>
       <p class="subtitle">Sign in with your student ID</p>
 
       <div id="student-auth-error" class="error-msg"></div>
