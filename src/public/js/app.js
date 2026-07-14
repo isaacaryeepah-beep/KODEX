@@ -3001,6 +3001,7 @@ function buildSidebar() {
       links.push({ id: 'hod-sessions',     label: 'Sessions',       icon: sessionsIcon() });
       links.push({ id: 'hod-courses',      label: 'Courses',        icon: coursesIcon() });
       links.push({ id: 'timetable',        label: 'Timetable',      icon: svgIcon('<rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/>') });
+      links.push({ id: 'exam-timetable',   label: 'Exams Timetable', icon: svgIcon('<rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/><path d="M9 15l2 2 4-4"/>') });
       links.push({ id: 'hod-lecturers',    label: 'Lecturers',      icon: svgIcon('<path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/>') });
       links.push({ id: 'hod-students',     label: 'Students',       icon: usersIcon() });
       links.push({ sep: true, label: 'INSIGHTS' });
@@ -3035,6 +3036,7 @@ function buildSidebar() {
       links.push({ id: 'quizzes', label: 'Proctored/Snap Quiz', icon: quizzesIcon() });
       links.push({ id: 'quiz-monitor', label: 'Quiz Monitor 🔴', icon: svgIcon('<path d="M1 6s4-2 11-2 11 2 11 2v3s-4 2-11 2S1 9 1 9V6z"/><path d="M1 6v12s4 2 11 2 11-2 11-2V6"/><line x1="12" y1="12" x2="12" y2="20"/>') });
       links.push({ id: 'timetable', label: 'Timetable', icon: svgIcon('<rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/>') });
+      links.push({ id: 'exam-timetable', label: 'Exams Timetable', icon: svgIcon('<rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/><path d="M9 15l2 2 4-4"/>') });
       links.push({ id: 'question-bank', label: 'Question Bank', icon: svgIcon('<ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"/><path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"/>') });
       links.push({ id: 'assignments', label: 'Assignment', icon: assignmentsIcon() });
       links.push({ id: 'gradebook', label: 'Grade Book', icon: svgIcon('<path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/>') });
@@ -3081,6 +3083,7 @@ function buildSidebar() {
       links.push({ sep: true, label: 'ACADEMIC' });
       links.push({ id: 'courses', label: 'My Courses', icon: coursesIcon() });
       links.push({ id: 'timetable', label: 'Timetable', icon: svgIcon('<rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/>') });
+      links.push({ id: 'exam-timetable', label: 'Exams Timetable', icon: svgIcon('<rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/><path d="M9 15l2 2 4-4"/>') });
       links.push({ id: 'quizzes', label: 'Proctored/Snap Quiz', icon: quizzesIcon() });
       links.push({ id: 'assignments', label: 'Assignment', icon: assignmentsIcon() });
       links.push({ id: 'gradebook', label: 'My Grades', icon: svgIcon('<path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/>') });
@@ -3490,6 +3493,7 @@ function navigateTo(view) {
     case 'class-device':         renderClassDevice(); break;
     case 'class-announcements':  renderClassAnnouncements(); break;
     case 'class-timetable':      renderClassTimetable(); break;
+    case 'exam-timetable':       renderExamTimetable(); break;
     case 'course-videos':        renderCourseVideos(); break;
     case 'ai-reports':           renderAIReports(); break;
     case 'executive-dashboard':  renderExecutiveDashboard(); break;
@@ -26608,3 +26612,163 @@ async function _updateNavBadges() {
   };
 })();
 
+
+// ═══════════════════════════════════════════════════════════════════════════
+//  EXAMS TIMETABLE — date-specific exam sittings, distinct from the weekly
+//  class Timetable. Editable by HODs (their department), class reps (their
+//  own class's courses only), and admins; everyone else views their scope.
+//  All permission rules are enforced server-side (routes/examTimetable.js);
+//  the UI just mirrors them via each entry's `canEdit` and the
+//  /editable-courses list (empty = read-only user, no Add button).
+// ═══════════════════════════════════════════════════════════════════════════
+let _examTTCourses = [];
+
+async function renderExamTimetable() {
+  const content = document.getElementById('main-content');
+  if (!content) return;
+  content.innerHTML = '<div class="loading">Loading exams timetable…</div>';
+  try {
+    const [listData, coursesData] = await Promise.all([
+      api('/api/exam-timetable'),
+      api('/api/exam-timetable/editable-courses').catch(() => ({ courses: [] })),
+    ]);
+    const entries = listData.entries || [];
+    _examTTCourses = coursesData.courses || [];
+    const canAdd = _examTTCourses.length > 0;
+
+    const now = new Date(); now.setHours(0, 0, 0, 0);
+    const upcoming = entries.filter(e => new Date(e.examDate) >= now);
+    const past     = entries.filter(e => new Date(e.examDate) < now);
+
+    const fmtDate = d => new Date(d).toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
+
+    const entryCard = (e, faded) => {
+      const c = e.course || {};
+      const cls = [c.level ? `L${esc(c.level)}` : null, c.group ? `Grp ${esc(c.group)}` : null].filter(Boolean).join(' · ');
+      const safe = esc(JSON.stringify({
+        _id: e._id, courseId: c._id, examDate: (e.examDate || '').slice(0, 10),
+        startTime: e.startTime, endTime: e.endTime, venue: e.venue || '', notes: e.notes || '',
+      }));
+      return `
+        <div class="card" style="display:flex;align-items:center;gap:14px;${faded ? 'opacity:.55;' : ''}margin-bottom:10px">
+          <div style="text-align:center;min-width:64px;background:var(--bg);border-radius:10px;padding:8px 10px">
+            <div style="font-size:18px;font-weight:800">${new Date(e.examDate).getDate()}</div>
+            <div style="font-size:10px;text-transform:uppercase;color:var(--text-light)">${new Date(e.examDate).toLocaleDateString('en-GB', { month: 'short' })}</div>
+          </div>
+          <div style="flex:1;min-width:0">
+            <div style="font-weight:700;font-size:14px">${esc(c.code || '')} — ${esc(c.title || 'Unknown course')}</div>
+            <div style="font-size:12px;color:var(--text-light);margin-top:2px">
+              🕐 ${esc(e.startTime)}–${esc(e.endTime)}
+              ${e.venue ? ` · 📍 ${esc(e.venue)}` : ''}
+              ${cls ? ` · <span style="background:#eef2ff;color:#4f46e5;border-radius:10px;padding:1px 8px;font-size:11px;font-weight:600">${cls}</span>` : ''}
+            </div>
+            ${e.notes ? `<div style="font-size:12px;color:var(--text-light);margin-top:4px">${esc(e.notes)}</div>` : ''}
+            ${e.createdBy?.name ? `<div style="font-size:10px;color:var(--text-muted);margin-top:4px">Added by ${esc(e.createdBy.name)}${e.createdBy.role === 'student' ? ' (class rep)' : e.createdBy.role === 'hod' ? ' (HOD)' : ''}</div>` : ''}
+          </div>
+          ${e.canEdit ? `
+            <div style="display:flex;flex-direction:column;gap:6px">
+              <button class="btn btn-ghost btn-sm" style="font-size:12px" onclick='_examTTOpenModal(${safe})'>Edit</button>
+              <button class="btn btn-ghost btn-sm" style="font-size:12px;color:#dc2626" onclick="_examTTDelete('${e._id}')">Delete</button>
+            </div>` : ''}
+        </div>`;
+    };
+
+    const groupByDate = list => {
+      const groups = new Map();
+      for (const e of list) {
+        const k = fmtDate(e.examDate);
+        if (!groups.has(k)) groups.set(k, []);
+        groups.get(k).push(e);
+      }
+      return [...groups.entries()].map(([date, items]) => `
+        <div style="font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--text-light);margin:18px 0 8px">${date}</div>
+        ${items.map(e => entryCard(e, false)).join('')}`).join('');
+    };
+
+    content.innerHTML = `
+      <div class="page-header" style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px">
+        <div><h2>Exams Timetable</h2><p>Scheduled exam sittings${canAdd ? ' — you can add and edit entries for your scope' : ''}</p></div>
+        ${canAdd ? `<button class="btn btn-primary" onclick="_examTTOpenModal()">+ Schedule Exam</button>` : ''}
+      </div>
+      ${entries.length === 0 ? `
+        <div class="card" style="max-width:520px;text-align:center;padding:32px 24px">
+          <div style="font-size:32px;margin-bottom:8px">📅</div>
+          <div style="font-weight:700;margin-bottom:6px">No exams scheduled yet</div>
+          <div style="font-size:13px;color:var(--text-light)">${canAdd ? 'Use “Schedule Exam” to add the first sitting.' : 'Your HOD or class rep hasn\'t published any exam dates yet.'}</div>
+        </div>` : `
+        ${upcoming.length ? groupByDate(upcoming) : '<div class="card" style="max-width:520px"><p style="color:var(--text-light);font-size:13px">No upcoming exams.</p></div>'}
+        ${past.length ? `
+          <details style="margin-top:22px">
+            <summary style="cursor:pointer;font-size:13px;color:var(--text-light);font-weight:600">Past exams (${past.length})</summary>
+            ${past.map(e => entryCard(e, true)).join('')}
+          </details>` : ''}`}`;
+  } catch (e) {
+    content.innerHTML = `<div class="card"><p style="color:var(--danger)">${esc(e.message || 'Failed to load exams timetable')}</p></div>`;
+  }
+}
+
+window._examTTOpenModal = function(entry) {
+  document.getElementById('examtt-modal')?.remove();
+  const isEdit = !!entry;
+  const courseOptions = _examTTCourses.map(c =>
+    `<option value="${c._id}" ${entry && entry.courseId === c._id ? 'selected' : ''}>${esc(c.code || '')} — ${esc(c.title || '')}${c.level ? ` (L${esc(c.level)}${c.group ? ` ${esc(c.group)}` : ''})` : ''}</option>`).join('');
+  const ol = document.createElement('div');
+  ol.id = 'examtt-modal';
+  ol.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.55);display:flex;align-items:center;justify-content:center;z-index:9999;padding:16px';
+  ol.innerHTML = `
+    <div style="background:var(--card,#fff);border-radius:16px;padding:26px 22px;max-width:440px;width:100%;max-height:90vh;overflow-y:auto">
+      <div style="font-size:16px;font-weight:800;margin-bottom:16px">${isEdit ? 'Edit Exam' : 'Schedule Exam'}</div>
+      <label style="font-size:12px;font-weight:600;color:var(--text-light)">Course</label>
+      <select id="examtt-course" style="width:100%;border:1px solid var(--border);border-radius:8px;padding:9px 10px;font-size:13px;margin:4px 0 12px">${courseOptions}</select>
+      <label style="font-size:12px;font-weight:600;color:var(--text-light)">Date</label>
+      <input type="date" id="examtt-date" value="${entry?.examDate || ''}" style="width:100%;border:1px solid var(--border);border-radius:8px;padding:9px 10px;font-size:13px;margin:4px 0 12px">
+      <div style="display:flex;gap:10px">
+        <div style="flex:1"><label style="font-size:12px;font-weight:600;color:var(--text-light)">Start</label>
+          <input type="time" id="examtt-start" value="${entry?.startTime || '09:00'}" style="width:100%;border:1px solid var(--border);border-radius:8px;padding:9px 10px;font-size:13px;margin:4px 0 12px"></div>
+        <div style="flex:1"><label style="font-size:12px;font-weight:600;color:var(--text-light)">End</label>
+          <input type="time" id="examtt-end" value="${entry?.endTime || '11:00'}" style="width:100%;border:1px solid var(--border);border-radius:8px;padding:9px 10px;font-size:13px;margin:4px 0 12px"></div>
+      </div>
+      <label style="font-size:12px;font-weight:600;color:var(--text-light)">Venue (optional)</label>
+      <input type="text" id="examtt-venue" maxlength="120" value="${entry ? esc(entry.venue) : ''}" placeholder="e.g. Main Hall / Lab 2" style="width:100%;border:1px solid var(--border);border-radius:8px;padding:9px 10px;font-size:13px;margin:4px 0 12px">
+      <label style="font-size:12px;font-weight:600;color:var(--text-light)">Notes (optional)</label>
+      <input type="text" id="examtt-notes" maxlength="500" value="${entry ? esc(entry.notes) : ''}" placeholder="e.g. Bring calculators" style="width:100%;border:1px solid var(--border);border-radius:8px;padding:9px 10px;font-size:13px;margin:4px 0 18px">
+      <div style="display:flex;gap:10px;justify-content:flex-end">
+        <button class="btn btn-secondary btn-sm" onclick="document.getElementById('examtt-modal').remove()">Cancel</button>
+        <button class="btn btn-primary btn-sm" onclick="_examTTSave(${isEdit ? `'${entry._id}'` : 'null'})">${isEdit ? 'Save Changes' : 'Schedule'}</button>
+      </div>
+    </div>`;
+  document.body.appendChild(ol);
+};
+
+window._examTTSave = async function(entryId) {
+  const body = {
+    courseId:  document.getElementById('examtt-course')?.value,
+    examDate:  document.getElementById('examtt-date')?.value,
+    startTime: document.getElementById('examtt-start')?.value,
+    endTime:   document.getElementById('examtt-end')?.value,
+    venue:     document.getElementById('examtt-venue')?.value,
+    notes:     document.getElementById('examtt-notes')?.value,
+  };
+  if (!body.courseId) return toastError('Pick a course');
+  if (!body.examDate) return toastError('Pick a date');
+  try {
+    if (entryId) {
+      await api(`/api/exam-timetable/${entryId}`, { method: 'PATCH', body: JSON.stringify(body) });
+      toastSuccess('Exam updated');
+    } else {
+      await api('/api/exam-timetable', { method: 'POST', body: JSON.stringify(body) });
+      toastSuccess('Exam scheduled');
+    }
+    document.getElementById('examtt-modal')?.remove();
+    renderExamTimetable();
+  } catch (e) { toastError(e.message || 'Failed to save exam'); }
+};
+
+window._examTTDelete = async function(id) {
+  if (!confirm('Remove this exam from the timetable?')) return;
+  try {
+    await api(`/api/exam-timetable/${id}`, { method: 'DELETE' });
+    toastSuccess('Exam removed');
+    renderExamTimetable();
+  } catch (e) { toastError(e.message || 'Failed to delete exam'); }
+};
