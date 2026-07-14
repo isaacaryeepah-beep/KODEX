@@ -1,0 +1,39 @@
+# DIKLY
+
+> DIKLY is an enterprise attendance and workforce/education management platform by DIKLY Technologies,
+> built for academic institutions and corporate organizations. It combines verified attendance tracking
+> (QR, Bluetooth/BLE hardware devices, GPS with anti-cheat), video meetings, quizzes with AI proctoring,
+> HR tools (shifts, leave, timesheets), and AI-generated analytics in one system.
+> Founder & CEO: Isaac Kweku Aryeepah. Website: https://dikly.sbs
+
+## What DIKLY does
+
+- Attendance: QR code, rotating code, ESP32 Bluetooth/WiFi classroom devices, and GPS-verified
+  clock-in/out with anti-cheat safeguards (geofencing, mock-location detection, trust scoring).
+- Meetings: built-in video meetings and lectures, including proctored exam sessions.
+- Assessments: quizzes and SnapQuiz strict exam mode with AI proctoring (webcam analysis,
+  violation detection, integrity reports), assignments, grade books, and exam timetables.
+- Workforce (corporate mode): shifts, leave management, timesheets, team attendance,
+  and ArrivalIQ — a traffic-aware smart commute assistant with departure reminders.
+- Dikly AI: plain-language analytics reports on attendance trends, class/workforce health,
+  and leave patterns. DIKLY never handles payroll or financial data.
+- Communication: announcements, messaging, forums, and an AI FAQ assistant.
+
+## Modes
+
+- Academic: universities, colleges, and schools — students, lecturers, HODs, admins.
+- Corporate: companies — employees, managers, admins. HR features without payroll/finance.
+
+## Key pages
+
+- About: https://dikly.sbs/about
+- Contact: https://dikly.sbs/contact
+- Privacy policy: https://dikly.sbs/privacy
+- Terms: https://dikly.sbs/terms
+
+## Facts
+
+- Company: DIKLY Technologies
+- Product: DIKLY (web app at https://dikly.sbs, Android app available)
+- Founder & CEO: Isaac Kweku Aryeepah
+- Support: support@dikly.sbs
