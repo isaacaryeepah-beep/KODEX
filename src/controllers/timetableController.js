@@ -18,7 +18,7 @@ exports.list = async (req, res) => {
     } else if (req.user.role === 'student') {
       // Students see slots for courses they're enrolled in
       const enrolledCourses = await Course.find({
-        company: req.user.company,
+        companyId: req.user.company,
         enrolledStudents: req.user._id,
       }).select('_id').lean();
       filter.course = { $in: enrolledCourses.map(c => c._id) };
