@@ -36,5 +36,5 @@
 
 - Company: DIKLY Technologies
 - Product: DIKLY (web app at https://dikly.sbs, Android app available)
-- Founder & CEO: Isaac Kweku Aryeepah
+- Founder & CEO: Isaac Kweku Aryeepah (LinkedIn: https://www.linkedin.com/in/isaac-aryeepah-bb7580378)
 - Support: support@dikly.sbs
