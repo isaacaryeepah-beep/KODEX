@@ -1,0 +1,45 @@
+name: Backend Tests
+
+on:
+  push:
+    branches: [main, claude/are-you-there-hjdx9r]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: backend-tests-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    name: Jest (unit + auth integration)
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      # mongodb-memory-server downloads a mongod binary on first run;
+      # cache it so subsequent runs start in seconds.
+      - name: Cache mongodb-memory-server binaries
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/mongodb-binaries
+          key: mongodb-binaries-${{ runner.os }}
+
+      - name: Run tests
+        run: npm test
+        env:
+          JWT_SECRET: ci-test-jwt-secret-not-used-anywhere-real-0001
+          JWT_REFRESH_SECRET: ci-test-jwt-refresh-secret-not-real-0001
+          NODE_ENV: test

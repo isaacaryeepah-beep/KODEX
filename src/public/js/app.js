@@ -2274,6 +2274,7 @@ async function handleStudentLogin() {
 async function handleStudentRegister() {
   try {
     const name = document.getElementById('student-reg-name').value.trim();
+    const email = document.getElementById('student-reg-email').value.trim();
     const indexNumber = document.getElementById('student-reg-index').value.trim().toUpperCase();
     const institutionCode = document.getElementById('student-reg-code').value.trim();
     const password = document.getElementById('student-reg-password').value;
@@ -2285,6 +2286,8 @@ async function handleStudentRegister() {
     const sessionType = document.getElementById('student-reg-session-type')?.value?.trim();
     const semester = document.getElementById('student-reg-semester')?.value?.trim();
     if (!name) return showStudentError('Please enter your full name.');
+    if (!email) return showStudentError('Please enter your email address.');
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return showStudentError('Please enter a valid email address.');
     if (!institutionCode) return showStudentError('Please enter your Institution Code.');
     if (!indexNumber) return showStudentError('Student ID / Index Number is required.');
     if (indexNumber.length < 3) return showStudentError('Student ID looks too short. Please check and enter your full index number.');
@@ -2297,7 +2300,7 @@ async function handleStudentRegister() {
     if (!studentGroup) return showStudentError('Please enter your group (e.g. A, B, C).');
     if (!sessionType) return showStudentError('Please select your session type.');
     if (!semester) return showStudentError('Please select your semester.');
-    const data = await api('/api/auth/register-student', { method: 'POST', body: JSON.stringify({ name, indexNumber, password, institutionCode, department, programme, studentLevel, studentGroup, sessionType, semester }) });
+    const data = await api('/api/auth/register-student', { method: 'POST', body: JSON.stringify({ name, email, indexNumber, password, institutionCode, department, programme, studentLevel, studentGroup, sessionType, semester }) });
     if (data.token) {
       token = data.token;
       localStorage.setItem('token', token);
@@ -17251,50 +17254,113 @@ async function exportAllAttendanceToExcel() {
 const TIMETABLE_DAYS = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
 const TIMETABLE_DAYS_SHORT = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
 const TIMETABLE_COLORS = ['#6366f1','#0ea5e9','#10b981','#f59e0b','#ef4444','#8b5cf6','#ec4899','#14b8a6'];
+const TT_HOUR_PX = 64; // pixel height of one hour row in the day timeline
+
+// Caches the inputs of the most recent _timetableGrid() call so the day-pill
+// click handler can re-render just the "This Week" card — the three pages
+// that call _timetableGrid (lecturer/admin, student/HOD, class rep) each
+// keep their own local `slots` variable, so this is the one place both the
+// initial render and the re-render agree on what to draw.
+let _ttCache = { slots: [], canEdit: false };
+let _ttSelectedDay = new Date().getDay();
 
 function _timetableGrid(slots, canEdit) {
-  // Show Mon-Sat (1-6) only — skip Sunday unless there are Sunday slots
-  const hasSunday = slots.some(s => s.dayOfWeek === 0);
-  const daysToShow = hasSunday ? [0,1,2,3,4,5,6] : [1,2,3,4,5,6];
+  _ttCache = { slots, canEdit };
+  return `<div class="tt-week-card" id="tt-week-card">${_ttWeekCardInner()}</div>`;
+}
+
+function _ttFmtHour(h) {
+  const ap = h >= 12 ? 'PM' : 'AM';
+  const h12 = h % 12 || 12;
+  return `${h12} ${ap}`;
+}
+
+// Greedy interval-graph column packing so overlapping slots on the same day
+// sit side by side instead of stacking on top of each other.
+function _ttPackColumns(dayEvents) {
+  const sorted = [...dayEvents].sort((a, b) => a._startMin - b._startMin);
+  const columns = []; // each entry: last event's _endMin
+  sorted.forEach(ev => {
+    let col = columns.findIndex(endMin => endMin <= ev._startMin);
+    if (col === -1) { col = columns.length; columns.push(0); }
+    columns[col] = ev._endMin;
+    ev._col = col;
+  });
+  const totalCols = columns.length || 1;
+  sorted.forEach(ev => { ev._totalCols = totalCols; });
+  return sorted;
+}
+
+function _ttWeekCardInner() {
+  const { slots, canEdit } = _ttCache;
   const today = new Date().getDay();
+  const days = [0, 1, 2, 3, 4, 5, 6];
+  const toMin = (t) => { const [h, m] = (t || '0:0').split(':').map(Number); return h * 60 + m; };
+
+  const dayEvents = slots
+    .filter(s => s.dayOfWeek === _ttSelectedDay)
+    .map(s => ({ ...s, _startMin: toMin(s.startTime), _endMin: Math.max(toMin(s.endTime), toMin(s.startTime) + 20) }));
+  const packed = _ttPackColumns(dayEvents);
+
+  const nowMin = new Date().getHours() * 60 + new Date().getMinutes();
+  const showNowLine = _ttSelectedDay === today;
+
+  const pillsHtml = days.map(d => {
+    const isSelected = d === _ttSelectedDay;
+    const isToday = d === today;
+    return `<button class="tt-pill${isSelected ? ' active' : ''}${!isSelected && isToday ? ' is-today' : ''}" onclick="_ttSelectDay(${d})">
+      ${TIMETABLE_DAYS_SHORT[d]}${isToday ? '<span class="tt-pill-dot"></span>' : ''}
+    </button>`;
+  }).join('');
+
+  const eventsHtml = packed.map(ev => {
+    const top = (ev._startMin / 60) * TT_HOUR_PX;
+    const height = Math.max(((ev._endMin - ev._startMin) / 60) * TT_HOUR_PX, 30);
+    const widthPct = 100 / ev._totalCols;
+    const leftPct = ev._col * widthPct;
+    const color = ev.color || '#6366f1';
+    const label = esc(ev.title || ev.course?.title || 'Class');
+    const sub = [ev.startTime + '–' + ev.endTime, ev.room].filter(Boolean).map(esc).join(' · ');
+    return `
+      <div class="tt-event-block" style="top:${top}px;height:${height}px;left:calc(${leftPct}% + 2px);width:calc(${widthPct}% - 4px);background:${color}1c;border-left-color:${color};cursor:${canEdit ? 'pointer' : 'default'}"
+        ${canEdit ? `onclick="openEditSlotModal('${ev._id}')"` : ''} title="${label} — ${sub}">
+        <div class="tt-event-title" style="color:${color}">${label}</div>
+        <div class="tt-event-sub">${sub}</div>
+        ${canEdit ? `<button onclick="event.stopPropagation();deleteSlot('${ev._id}')" class="tt-event-del">×</button>` : ''}
+      </div>`;
+  }).join('');
+
+  const nowLineHtml = showNowLine ? `<div class="tt-now-line" style="top:${(nowMin / 60) * TT_HOUR_PX}px"><span class="tt-now-dot"></span></div>` : '';
+
+  const hourRows = Array.from({ length: 24 }, (_, h) => `
+    <div class="tt-hour-row" style="height:${TT_HOUR_PX}px">
+      <div class="tt-hour-label">${_ttFmtHour(h)}</div>
+      <div class="tt-hour-line"></div>
+    </div>`).join('');
 
   return `
-    <div style="display:grid;grid-template-columns:${daysToShow.map(()=>'1fr').join(' ')};gap:8px;margin-bottom:20px;">
-      ${daysToShow.map(d => `
-        <div style="text-align:center;">
-          <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;
-            color:${d===today?'var(--primary)':'var(--text-muted)'};
-            margin-bottom:8px;padding-bottom:6px;border-bottom:2px solid ${d===today?'var(--primary)':'var(--border)'}">
-            ${TIMETABLE_DAYS_SHORT[d]}
-          </div>
-          ${slots.filter(s=>s.dayOfWeek===d).sort((a,b)=>a.startTime.localeCompare(b.startTime)).map(s=>`
-            <div style="background:${s.color}18;border-left:3px solid ${s.color};border-radius:6px;
-              padding:8px 10px;margin-bottom:6px;text-align:left;position:relative;cursor:${canEdit?'pointer':'default'}"
-              ${canEdit ? `onclick="openEditSlotModal('${s._id}')"` : ''}>
-              <div style="font-size:12px;font-weight:700;color:${s.color};margin-bottom:2px;">
-                ${s.startTime} – ${s.endTime}
-              </div>
-              <div style="font-size:12px;font-weight:600;color:var(--text-primary);line-height:1.3;">
-                ${esc(s.title || s.course?.title || 'Class')}
-              </div>
-              ${s.course?.code ? `<div style="font-size:10px;color:var(--text-muted);">${esc(s.course.code)}</div>` : ''}
-              ${s.room ? `<div style="font-size:10px;color:var(--text-muted);">📍 ${esc(s.room)}</div>` : ''}
-              ${s.lecturer?.name ? `<div style="font-size:10px;color:var(--text-muted);">👤 ${esc(s.lecturer.name)}</div>` : ''}
-              ${canEdit ? `<button onclick="event.stopPropagation();deleteSlot('${s._id}')"
-                style="position:absolute;top:4px;right:4px;background:none;border:none;cursor:pointer;
-                color:var(--text-muted);font-size:14px;line-height:1;padding:2px;">×</button>` : ''}
-            </div>
-          `).join('')}
-          ${canEdit ? `
-            <button onclick="openAddSlotModal(${d})"
-              style="width:100%;padding:6px;background:transparent;border:1.5px dashed var(--border);
-              border-radius:6px;font-size:11px;color:var(--text-muted);cursor:pointer;margin-top:2px">
-              + Add
-            </button>` : ''}
-        </div>
-      `).join('')}
-    </div>`;
+    <div class="tt-week-head">
+      ${svgIcon('<circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>', 16)}
+      <span>This Week</span>
+    </div>
+    <div class="tt-pills-row">${pillsHtml}</div>
+    <div class="tt-day-label">${TIMETABLE_DAYS_SHORT[_ttSelectedDay].toUpperCase()}</div>
+    <div class="tt-hourgrid-wrap">
+      <div class="tt-hourgrid">
+        ${hourRows}
+        <div class="tt-events-layer">${eventsHtml}</div>
+        ${nowLineHtml}
+      </div>
+    </div>
+    ${canEdit ? `<button class="btn btn-secondary btn-sm tt-add-btn" onclick="openAddSlotModal(${_ttSelectedDay})">+ Add class on ${TIMETABLE_DAYS[_ttSelectedDay]}</button>` : ''}
+  `;
 }
+
+window._ttSelectDay = function(d) {
+  _ttSelectedDay = d;
+  const card = document.getElementById('tt-week-card');
+  if (card) card.innerHTML = _ttWeekCardInner();
+};
 
 // ── Timetable ICS calendar export ────────────────────────────────────────────
 function exportTimetableICS(slots) {
@@ -17415,7 +17481,7 @@ async function renderLecturerTimetable() {
               Add Your First Class
             </button>
           </div>`
-        : `<div style="background:#fff;border:1px solid #e8eaed;border-radius:14px;overflow-x:auto;box-shadow:0 1px 4px rgba(0,0,0,.05)">${_timetableGrid(_timetableSlots, true)}</div>`
+        : _timetableGrid(_timetableSlots, true)
       }`;
   }
 }
@@ -17468,7 +17534,7 @@ async function renderStudentTimetable() {
             <h3 style="font-size:16px;font-weight:700;color:#0f172a;margin-bottom:6px">No classes scheduled yet</h3>
             <p style="color:#64748b;font-size:13px">Your lecturers haven't added timetable slots yet. Check back soon.</p>
           </div>`
-        : `<div style="background:#fff;border:1px solid #e8eaed;border-radius:14px;overflow-x:auto;box-shadow:0 1px 4px rgba(0,0,0,.05)">${_timetableGrid(slots, false)}</div>`
+        : _timetableGrid(slots, false)
       }`;
   }
 }
@@ -25287,7 +25353,7 @@ async function renderClassTimetable() {
             <h3 style="font-size:16px;font-weight:700;color:#0f172a;margin-bottom:6px">No timetable slots yet</h3>
             <p style="color:#64748b;font-size:13px">Click "Add Slot" to create the first class entry.</p>
           </div>`
-        : `<div style="background:#fff;border:1px solid #e8eaed;border-radius:14px;overflow-x:auto;box-shadow:0 1px 4px rgba(0,0,0,.05)">${_timetableGrid(_timetableSlots, true)}</div>`
+        : _timetableGrid(_timetableSlots, true)
       }`;
   } catch(e) {
     content.innerHTML = `<div class="card"><p style="color:var(--danger)">${esc(e.message)}</p></div>`;

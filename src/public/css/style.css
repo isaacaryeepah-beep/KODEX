@@ -6937,6 +6937,72 @@ table tr:hover td { background: #f8fafc !important; }
 
 [data-theme="dark"] .sd-dept-chip { background: #141a26; border-color: #232c3d; }
 
+/* ── Timetable day view (pill selector + hourly calendar) ── */
+.tt-week-card {
+  background: var(--bg, #f8f9fb); border: 1px solid var(--border, #e5e7eb);
+  border-radius: 16px; padding: 18px 16px 16px;
+}
+.tt-week-head {
+  display: flex; align-items: center; gap: 8px; margin-bottom: 14px;
+  font-size: 14px; font-weight: 700; color: var(--text, #111827);
+}
+.tt-week-head svg {
+  width: 26px; height: 26px; padding: 5px; border-radius: 8px;
+  background: linear-gradient(135deg, #4f6ef7, #7c3aed); color: #fff; flex-shrink: 0;
+}
+.tt-pills-row {
+  display: flex; gap: 8px; overflow-x: auto; padding-bottom: 4px; margin-bottom: 14px;
+  scrollbar-width: thin;
+}
+.tt-pill {
+  flex-shrink: 0; position: relative;
+  background: var(--card, #fff); border: 1.5px solid var(--border, #e5e7eb);
+  color: var(--text, #111827); font-size: 13px; font-weight: 700;
+  padding: 9px 16px; border-radius: 20px; cursor: pointer;
+  transition: background .12s, border-color .12s, color .12s;
+}
+.tt-pill:hover { border-color: #c7d2fe; }
+.tt-pill.active {
+  background: linear-gradient(135deg, #4f6ef7, #7c3aed); border-color: transparent; color: #fff;
+}
+.tt-pill.is-today { border-color: #4f6ef7; color: #4f6ef7; }
+.tt-pill-dot {
+  position: absolute; top: 5px; right: 7px; width: 6px; height: 6px;
+  border-radius: 50%; background: #fff; box-shadow: 0 0 0 1.5px #4f6ef7;
+}
+.tt-pill.active .tt-pill-dot { background: #fff; box-shadow: 0 0 0 1.5px rgba(255,255,255,.6); }
+.tt-day-label {
+  text-align: center; font-size: 11px; font-weight: 700; letter-spacing: 1px;
+  color: var(--text-muted, #9ca3af); margin-bottom: 8px;
+}
+.tt-hourgrid-wrap { max-height: 560px; overflow-y: auto; border-radius: 10px; }
+.tt-hourgrid { position: relative; }
+.tt-hour-row { display: flex; align-items: flex-start; }
+.tt-hour-label {
+  flex-shrink: 0; width: 52px; padding-right: 8px; text-align: right;
+  font-size: 10.5px; font-weight: 600; color: var(--text-muted, #9ca3af);
+  transform: translateY(-6px);
+}
+.tt-hour-line { flex: 1; border-top: 1px solid var(--border, #e5e7eb); margin-top: 1px; }
+.tt-events-layer { position: absolute; top: 0; left: 60px; right: 4px; bottom: 0; }
+.tt-event-block {
+  position: absolute; border-radius: 8px; border-left: 3px solid;
+  padding: 6px 9px; overflow: hidden; box-sizing: border-box;
+}
+.tt-event-title { font-size: 12px; font-weight: 700; line-height: 1.25; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.tt-event-sub { font-size: 10.5px; color: var(--text-light, #6b7280); margin-top: 1px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.tt-event-del {
+  position: absolute; top: 3px; right: 4px; background: none; border: none; cursor: pointer;
+  color: var(--text-muted, #9ca3af); font-size: 13px; line-height: 1; padding: 2px;
+}
+.tt-now-line { position: absolute; left: 60px; right: 4px; height: 0; border-top: 2px solid #ef4444; z-index: 2; }
+.tt-now-dot { position: absolute; left: -5px; top: -4px; width: 8px; height: 8px; border-radius: 50%; background: #ef4444; }
+.tt-add-btn { width: 100%; margin-top: 12px; }
+
+[data-theme="dark"] .tt-week-card { background: #10151f; border-color: #232c3d; }
+[data-theme="dark"] .tt-pill { background: #141a26; border-color: #232c3d; }
+[data-theme="dark"] .tt-hour-line { border-color: #1c2432; }
+
 /* ── User management cards (replaces the old horizontal-scroll table) ── */
 .adx-user-selectall {
   display: inline-flex; align-items: center; gap: 7px;
