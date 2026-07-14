@@ -707,4 +707,11 @@ process.on("uncaughtException", (err) => {
   process.exit(1);
 });
 
-start();
+// Only boot when run directly (`node src/server.js`). Tests require this file
+// for the exported `app` and manage their own DB connection — booting here
+// would bind the port and start every cron job inside jest.
+if (require.main === module) {
+  start();
+}
+
+module.exports = { app, server, start };

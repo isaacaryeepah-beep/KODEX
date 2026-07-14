@@ -28,8 +28,12 @@ const _refreshSecret = () => {
 const generateToken = (userId) =>
   jwt.sign({ id: userId, type: "access" }, _secret(), { expiresIn: ACCESS_TOKEN_EXPIRY });
 
+// jti makes every refresh token unique even when two are minted for the same
+// user within the same second (iat has second granularity) — without it,
+// rotation could issue a byte-identical token whose hash collides with the
+// just-revoked one, breaking the reuse-detection logic in /auth/refresh.
 const generateRefreshToken = (userId) =>
-  jwt.sign({ id: userId, type: "refresh" }, _refreshSecret(), { expiresIn: REFRESH_TOKEN_EXPIRY });
+  jwt.sign({ id: userId, type: "refresh", jti: crypto.randomUUID() }, _refreshSecret(), { expiresIn: REFRESH_TOKEN_EXPIRY });
 
 const verifyToken = (token) => {
   const decoded = jwt.verify(token, _secret());

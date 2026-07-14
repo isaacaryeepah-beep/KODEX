@@ -1657,9 +1657,10 @@ exports.resetPasswordEmail = async (req, res) => {
 exports.toggle2FA = async (req, res) => {
   try {
     const { enable } = req.body;
-    await User.findByIdAndUpdate(req.user._id, { twoFactorEnabled: !!enable });
+    await User.updateOne({ _id: req.user._id }, { twoFactorEnabled: !!enable });
     res.json({ ok: true, twoFactorEnabled: !!enable });
   } catch(e) {
+    console.error("2FA toggle error:", e);
     res.status(500).json({ error: "Failed to update 2FA setting" });
   }
 };
