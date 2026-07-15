@@ -1490,13 +1490,19 @@ async function handleManagerRegister() {
       method: 'POST',
       body: JSON.stringify({ name, email, phone: phone || undefined, password, institutionCode }),
     });
-    const el = document.getElementById('admin-auth-error');
-    el.textContent = data.message || 'Registration submitted! Your account is pending admin approval.';
-    el.style.background = '#f0fdf4';
-    el.style.color = '#15803d';
-    el.style.border = '1px solid #86efac';
-    el.style.display = 'block';
-    showAdminLogin();
+    promptEmailVerification({
+      email: data.email,
+      institutionCode,
+      onVerified: (verifyData) => {
+        const el = document.getElementById('admin-auth-error');
+        el.textContent = verifyData.message || 'Registration submitted! Your account is pending admin approval.';
+        el.style.background = '#f0fdf4';
+        el.style.color = '#15803d';
+        el.style.border = '1px solid #86efac';
+        el.style.display = 'block';
+        showAdminLogin();
+      },
+    });
   } catch (e) {
     showAdminError(e.message || 'Registration failed');
   }
@@ -1827,6 +1833,12 @@ async function handleAdminLogin() {
     showDashboard(data);
     requestPushPermission().catch(() => {});
   } catch (e) {
+    if (e.data?.emailNotVerified) {
+      return promptEmailVerification({
+        email: e.data.email,
+        onVerified: () => handleAdminLogin(),
+      });
+    }
     const msg = e.message || '';
     const m = msg.toLowerCase();
 
@@ -1846,6 +1858,85 @@ async function handleAdminLogin() {
   }
 }
 
+// Shown after any self-registration (every role) whose response includes
+// requiresVerification:true. Collects the 6-digit code emailed to the new
+// account, calls /api/auth/verify-email, and hands the verify response to
+// onVerified so each caller can resume exactly what it used to do
+// immediately with the (now-removed) direct registration response --
+// auto-login for the admin/institution-creation flow, or show the
+// pending-approval message for every other role.
+function promptEmailVerification({ email, institutionCode, onVerified }) {
+  const existing = document.getElementById('_verify-email-overlay');
+  if (existing) existing.remove();
+
+  const overlay = document.createElement('div');
+  overlay.id = '_verify-email-overlay';
+  overlay.style.cssText = [
+    'position:fixed', 'inset:0', 'z-index:99998',
+    'background:rgba(15,23,42,0.97)',
+    'display:flex', 'align-items:center', 'justify-content:center',
+    'padding:24px', 'box-sizing:border-box',
+  ].join(';');
+
+  overlay.innerHTML = `
+    <div style="background:#fff;border-radius:16px;max-width:420px;width:100%;padding:40px 32px;text-align:center;box-shadow:0 25px 60px rgba(0,0,0,.5)">
+      <div style="width:64px;height:64px;border-radius:50%;background:#eff6ff;display:flex;align-items:center;justify-content:center;margin:0 auto 20px;font-size:28px">✉️</div>
+      <h2 style="margin:0 0 8px;font-size:20px;font-weight:700;color:#0f172a">Verify your email</h2>
+      <p style="margin:0 0 20px;font-size:13.5px;color:#475569;line-height:1.6">We sent a 6-digit code to <strong>${esc(email)}</strong>. Enter it below to finish creating your account.</p>
+      <div id="_verify-email-error" style="display:none;margin-bottom:14px;padding:10px 14px;border-radius:8px;font-size:13px;text-align:left"></div>
+      <input id="_verify-email-code" type="text" inputmode="numeric" maxlength="6" placeholder="000000"
+        style="width:100%;box-sizing:border-box;padding:14px;font-size:24px;letter-spacing:8px;text-align:center;border:1.5px solid #e2e8f0;border-radius:10px;margin-bottom:16px;font-family:monospace">
+      <button id="_verify-email-btn" style="background:#6366f1;color:#fff;border:none;border-radius:8px;padding:12px 24px;font-size:14px;font-weight:600;cursor:pointer;width:100%;margin-bottom:12px">Verify</button>
+      <p style="margin:0;font-size:13px;color:#64748b">Didn't get it? <a id="_verify-email-resend" style="color:#6366f1;font-weight:600;cursor:pointer">Resend code</a></p>
+    </div>
+  `;
+  document.body.appendChild(overlay);
+  document.body.style.overflow = 'hidden';
+
+  const codeInput   = document.getElementById('_verify-email-code');
+  const errEl       = document.getElementById('_verify-email-error');
+  const btn         = document.getElementById('_verify-email-btn');
+  const resendLink  = document.getElementById('_verify-email-resend');
+
+  function showMsg(msg, ok) {
+    errEl.textContent = msg;
+    errEl.style.display = 'block';
+    errEl.style.background = ok ? '#f0fdf4' : '#fef2f2';
+    errEl.style.color = ok ? '#15803d' : '#dc2626';
+  }
+
+  async function doVerify() {
+    const code = codeInput.value.trim();
+    if (!/^\d{6}$/.test(code)) return showMsg('Enter the 6-digit code from your email.', false);
+    btn.disabled = true; btn.textContent = 'Verifying…';
+    try {
+      const data = await api('/api/auth/verify-email', { method: 'POST', body: JSON.stringify({ email, institutionCode, code }) });
+      overlay.remove();
+      document.body.style.overflow = '';
+      onVerified(data);
+    } catch (e) {
+      showMsg(e.message || 'Verification failed', false);
+      btn.disabled = false; btn.textContent = 'Verify';
+    }
+  }
+
+  btn.onclick = doVerify;
+  codeInput.addEventListener('keydown', (ev) => { if (ev.key === 'Enter') doVerify(); });
+  codeInput.focus();
+
+  resendLink.onclick = async () => {
+    resendLink.textContent = 'Sending…';
+    try {
+      const data = await api('/api/auth/resend-verification-code', { method: 'POST', body: JSON.stringify({ email, institutionCode }) });
+      showMsg(data.message || 'A new code has been sent.', true);
+    } catch (e) {
+      showMsg(e.message || 'Failed to resend code', false);
+    } finally {
+      resendLink.textContent = 'Resend code';
+    }
+  };
+}
+
 async function handleAdminRegister() {
   try {
     const name = document.getElementById('admin-reg-name').value;
@@ -1862,11 +1953,17 @@ async function handleAdminRegister() {
     }
     const body = { name, email, phone, password, companyName, mode };
     const data = await api('/api/auth/register', { method: 'POST', body: JSON.stringify(body) });
-    token = data.token;
-    localStorage.setItem('token', token);
-    if (data.refreshToken) localStorage.setItem('refreshToken', data.refreshToken);
-    currentUser = data.user;
-    showDashboard(data);
+    promptEmailVerification({
+      email: data.email,
+      institutionCode: data.institutionCode,
+      onVerified: (verifyData) => {
+        token = verifyData.token;
+        localStorage.setItem('token', token);
+        if (verifyData.refreshToken) localStorage.setItem('refreshToken', verifyData.refreshToken);
+        currentUser = verifyData.user;
+        showDashboard(verifyData);
+      },
+    });
   } catch (e) {
     showAdminError(e.message || 'Registration failed');
   }
@@ -1902,6 +1999,12 @@ async function handleLecturerLogin() {
     currentUser = data.user;
     showDashboard(data);
   } catch (e) {
+    if (e.data?.emailNotVerified) {
+      return promptEmailVerification({
+        email: e.data.email,
+        onVerified: () => handleLecturerLogin(),
+      });
+    }
     const msg = e.message || '';
     const m = msg.toLowerCase();
     if (m.includes('pending approval')) {
@@ -1943,12 +2046,18 @@ async function handleLecturerRegister() {
 
     const data = await api('/api/auth/register-lecturer', { method: 'POST', body: JSON.stringify(body) });
 
-    const el = document.getElementById('lecturer-auth-error');
-    el.textContent = data.message || 'Registration successful! Your account is pending admin approval.';
-    el.style.display = 'block';
-    el.style.background = '#f0fdf4';
-    el.style.color = '#15803d';
-    showLecturerLogin();
+    promptEmailVerification({
+      email: data.email,
+      institutionCode,
+      onVerified: (verifyData) => {
+        const el = document.getElementById('lecturer-auth-error');
+        el.textContent = verifyData.message || 'Registration successful! Your account is pending admin approval.';
+        el.style.display = 'block';
+        el.style.background = '#f0fdf4';
+        el.style.color = '#15803d';
+        showLecturerLogin();
+      },
+    });
   } catch (e) {
     showLecturerError(e.message || 'Registration failed');
   }
@@ -2104,13 +2213,19 @@ async function handleHodRegister() {
       body: JSON.stringify({ name, email, password, institutionCode: code, department: dept, phone: phone || undefined }),
     });
 
-    if (errEl) {
-      errEl.textContent = data.message || 'Registration successful! Your account is pending admin approval.';
-      errEl.style.display = 'block';
-      errEl.style.background = '#f0fdf4';
-      errEl.style.color = '#15803d';
-    }
-    showHodLogin();
+    promptEmailVerification({
+      email: data.email,
+      institutionCode: code,
+      onVerified: (verifyData) => {
+        if (errEl) {
+          errEl.textContent = verifyData.message || 'Registration successful! Your account is pending admin approval.';
+          errEl.style.display = 'block';
+          errEl.style.background = '#f0fdf4';
+          errEl.style.color = '#15803d';
+        }
+        showHodLogin();
+      },
+    });
   } catch(e) {
     setErr(e.message || 'Registration failed');
     if (btn) { btn.textContent = 'Register'; btn.disabled = false; }
@@ -2152,6 +2267,12 @@ async function handleHodLogin() {
     currentUser = data.user;
     showDashboard(data);
   } catch (e) {
+    if (e.data?.emailNotVerified) {
+      return promptEmailVerification({
+        email: e.data.email,
+        onVerified: () => handleHodLogin(),
+      });
+    }
     showHodError(friendlyError(e.message) || 'Wrong Email or Password.');
   } finally {
     if (btn) { btn.textContent = 'Sign In'; btn.disabled = false; }
@@ -2230,6 +2351,13 @@ async function handleEmployeeLogin() {
     currentUser = data.user;
     showDashboard(data);
   } catch (e) {
+    if (e.data?.emailNotVerified) {
+      return promptEmailVerification({
+        email: e.data.email,
+        institutionCode,
+        onVerified: () => handleEmployeeLogin(),
+      });
+    }
     const msg2 = e.message || '';
     const m2 = msg2.toLowerCase();
     if (m2.includes('too many')) {
@@ -2260,13 +2388,19 @@ async function handleEmployeeRegister() {
     }
     const phone = document.getElementById('employee-reg-phone')?.value?.trim();
     const data = await api('/api/auth/register-employee', { method: 'POST', body: JSON.stringify({ name, email, phone, password, institutionCode }) });
-    const el = document.getElementById('employee-auth-error');
-    el.textContent = data.message || 'Registration successful! Your account is pending admin approval.';
-    el.style.display = 'block';
-    el.style.background = '#f0fdf4';
-    el.style.color = '#15803d';
-    showEmployeeLogin();
-    document.getElementById('employee-auth-error').style.display = 'block';
+    promptEmailVerification({
+      email: data.email,
+      institutionCode,
+      onVerified: (verifyData) => {
+        const el = document.getElementById('employee-auth-error');
+        el.textContent = verifyData.message || 'Registration successful! Your account is pending admin approval.';
+        el.style.display = 'block';
+        el.style.background = '#f0fdf4';
+        el.style.color = '#15803d';
+        showEmployeeLogin();
+        document.getElementById('employee-auth-error').style.display = 'block';
+      },
+    });
   } catch (e) {
     showEmployeeError(e.message || 'Registration failed');
   }
@@ -2301,6 +2435,13 @@ async function handleStudentLogin() {
     currentUser = data.user;
     showDashboard(data);
   } catch (e) {
+    if (e.data?.emailNotVerified) {
+      return promptEmailVerification({
+        email: e.data.email,
+        institutionCode,
+        onVerified: () => handleStudentLogin(),
+      });
+    }
     const msg3 = e.message || '';
     const m3 = msg3.toLowerCase();
     if (m3.includes('too many')) {
@@ -2349,28 +2490,25 @@ async function handleStudentRegister() {
     if (!sessionType) return showStudentError('Please select your session type.');
     if (!semester) return showStudentError('Please select your semester.');
     const data = await api('/api/auth/register-student', { method: 'POST', body: JSON.stringify({ name, email, indexNumber, password, institutionCode, department, programme, studentLevel, studentGroup, sessionType, semester }) });
-    if (data.token) {
-      token = data.token;
-      localStorage.setItem('token', token);
-      if (data.refreshToken) localStorage.setItem('refreshToken', data.refreshToken);
-      currentUser = data.user;
-      showDashboard(data);
-      if (data.departmentNote) toastWarning(data.departmentNote);
-    } else {
-      const el = document.getElementById('student-auth-error');
-      el.textContent = data.message || 'Registration successful!';
-      el.style.display = 'block';
-      el.style.background = '#f0fdf4';
-      el.style.color = '#15803d';
-      showStudentLogin();
-      document.getElementById('student-auth-error').style.display = 'block';
-      if (data.departmentNote) {
-        const warn = document.createElement('div');
-        warn.style.cssText = 'margin-top:8px;padding:10px 14px;background:#fffbeb;border:1px solid #fde68a;border-radius:8px;font-size:12px;color:#92400e;';
-        warn.textContent = data.departmentNote;
-        el.after(warn);
-      }
-    }
+    promptEmailVerification({
+      email: data.email,
+      institutionCode,
+      onVerified: (verifyData) => {
+        const el = document.getElementById('student-auth-error');
+        el.textContent = verifyData.message || 'Registration successful!';
+        el.style.display = 'block';
+        el.style.background = '#f0fdf4';
+        el.style.color = '#15803d';
+        showStudentLogin();
+        document.getElementById('student-auth-error').style.display = 'block';
+        if (verifyData.departmentNote) {
+          const warn = document.createElement('div');
+          warn.style.cssText = 'margin-top:8px;padding:10px 14px;background:#fffbeb;border:1px solid #fde68a;border-radius:8px;font-size:12px;color:#92400e;';
+          warn.textContent = verifyData.departmentNote;
+          el.after(warn);
+        }
+      },
+    });
   } catch (e) {
     showStudentError(e.message || 'Registration failed');
   }

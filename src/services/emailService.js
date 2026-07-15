@@ -239,6 +239,15 @@ async function sendViaGmail({ toEmail, toName, fromEmail, fromName, subject, htm
       socket.on('error', reject);
     });
 
+    // Neither a blocked outbound connection nor an unresponsive Gmail server
+    // ever fires 'error' -- they just sit idle -- so without an explicit
+    // timeout this promise (and every await-er of it) hangs forever. Covers
+    // the TLS handshake too since it's set immediately on the raw socket,
+    // not inside the connect callback.
+    socket.setTimeout(15000, () => {
+      socket.destroy();
+      reject(new Error('Gmail SMTP timed out — no response within 15s'));
+    });
     socket.on('error', reject);
   });
 }
@@ -280,6 +289,7 @@ async function sendViaMailerSend({ toEmail, toName, fromEmail, fromName, subject
       });
     });
     req.on('error', reject);
+    req.setTimeout(15000, () => req.destroy(new Error('MailerSend request timed out')));
     req.write(payload);
     req.end();
   });
@@ -517,6 +527,24 @@ async function sendPasswordReset({ email, name, resetCode, institutionName }) {
   return send({ to: email, subject: `Your DIKLY password reset code: ${resetCode}`, html, textBody: `Your DIKLY password reset code is: ${resetCode}\n\nThis code expires in 1 hour. Do not share it with anyone.` });
 }
 
+// ── Registration: Email Verification OTP ───────────────────────────────────────
+async function sendEmailVerification({ email, name, code, institutionName }) {
+  const html = wrap(`
+    ${heading('Welcome', 'Verify your email address')}
+    <p>Hi <span class="highlight">${name || email}</span>, thanks for signing up${institutionName ? ` with <strong>${institutionName}</strong>` : ''} on DIKLY.</p>
+
+    ${otpBox(code)}
+
+    <p>Enter this code on the sign-up page to verify your email and finish creating your account.</p>
+    <p>If you did not create a DIKLY account, you can safely ignore this email.</p>
+
+    <hr class="divider"/>
+    <p style="font-size:12px;color:${C.faint}">This code expires in 15 minutes. If it expires, request a new one from the sign-up page.</p>
+  `, `DIKLY email verification code: ${code}`);
+
+  return send({ to: email, subject: `Your DIKLY verification code: ${code}`, html, textBody: `Your DIKLY email verification code is: ${code}\n\nThis code expires in 15 minutes. Do not share it with anyone.` });
+}
+
 // ── Admin: User password reset notification ───────────────────────────────────
 async function sendAdminPasswordResetNotice({ adminEmail, adminName, targetUserName, targetUserRole, targetUserEmail, institutionName }) {
   const html = wrap(`
@@ -749,6 +777,7 @@ module.exports = {
   sendSubscriptionConfirmed,
   sendRenewalReminder,
   sendPasswordReset,
+  sendEmailVerification,
   sendAdminPasswordResetNotice,
   sendPaymentFailed,
   sendNewInstitutionAlert,

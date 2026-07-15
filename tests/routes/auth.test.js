@@ -23,6 +23,7 @@ jest.mock("../../src/services/emailService", () => ({
   sendWelcome:                 jest.fn(async () => ({ ok: true })),
   sendAdminPasswordResetNotice: jest.fn(async () => ({ ok: true })),
   sendPasswordReset:           jest.fn(async () => ({ ok: true })),
+  sendEmailVerification:       jest.fn(async () => ({ ok: true })),
   sendNewInstitutionAlert:     jest.fn(async () => ({ ok: true })),
   sendLecturerWelcome:         jest.fn(async () => ({ ok: true })),
   sendEmployeeWelcome:         jest.fn(async () => ({ ok: true })),
@@ -33,7 +34,7 @@ jest.mock("../../src/services/emailService", () => ({
 
 const request  = require("supertest");
 const mongoose = require("mongoose");
-const { sendPasswordReset } = require("../../src/services/emailService");
+const { sendPasswordReset, sendEmailVerification } = require("../../src/services/emailService");
 
 let app;
 let memoryServer = null;
@@ -51,6 +52,7 @@ const ADMIN_EMAIL      = "admin@authtest.edu";
 const ADMIN_PASSWORD   = "AdminPassw0rd!1";
 
 let company, admin;
+let studentVerificationCode; // captured off the mocked email in the registration test below
 
 beforeAll(async () => {
   let uri = process.env.TEST_MONGO_URI;
@@ -166,16 +168,26 @@ describe("POST /api/auth/register-student", () => {
     expect(res.body.error).toMatch(/HOD/i);
   });
 
-  test("registers a rostered student and stores the email", async () => {
+  test("registers a rostered student, stores the email, and requires verification before anything else", async () => {
+    sendEmailVerification.mockClear();
     const res = await request(app).post("/api/auth/register-student").send(base);
     expect(res.status).toBe(201);
-    expect(res.body.message).toMatch(/pending approval/i);
+    expect(res.body.requiresVerification).toBe(true);
+    expect(res.body.email).toBe(base.email);
+    expect(res.body.message).toMatch(/verification code/i);
 
     const created = await User.findOne({ IndexNumber: ROSTERED_INDEX, company: company._id }).lean();
     expect(created).toBeTruthy();
     expect(created.email).toBe(base.email);
     expect(created.isApproved).toBe(false);
+    expect(created.emailVerified).toBe(false);
     expect(created.role).toBe("student");
+
+    // The code was actually emailed (mocked) -- captured for later tests.
+    expect(sendEmailVerification).toHaveBeenCalledTimes(1);
+    expect(sendEmailVerification.mock.calls[0][0].email).toBe(base.email);
+    expect(sendEmailVerification.mock.calls[0][0].code).toMatch(/^\d{6}$/);
+    studentVerificationCode = sendEmailVerification.mock.calls[0][0].code;
   });
 
   test("rejects a duplicate index number at the same institution", async () => {
@@ -192,6 +204,190 @@ describe("POST /api/auth/register-student", () => {
       .send({ ...base, indexNumber: ROSTERED_INDEX_2 });
     expect(res.status).toBe(400);
     expect(res.body.error).toMatch(/email is already registered/i);
+  });
+});
+
+// ── Email verification ───────────────────────────────────────────────────────
+
+describe("Email verification (register -> verify-email / resend-verification-code)", () => {
+  test("admin signup: register requires verification (no token yet), then verify-email issues one", async () => {
+    sendEmailVerification.mockClear();
+    const reg = await request(app).post("/api/auth/register").send({
+      name: "New Institution Admin",
+      email: "newadmin@authtest.edu",
+      password: "NewAdminPass!1",
+      companyName: "Brand New Institution",
+      mode: "academic",
+    });
+    expect(reg.status).toBe(201);
+    expect(reg.body.requiresVerification).toBe(true);
+    expect(reg.body.token).toBeUndefined();
+    expect(reg.body.email).toBe("newadmin@authtest.edu");
+
+    const createdAdmin = await User.findOne({ email: "newadmin@authtest.edu" }).lean();
+    expect(createdAdmin.emailVerified).toBe(false);
+    expect(createdAdmin.isApproved).toBe(true); // admins are still auto-approved; just not auto-logged-in anymore
+
+    const blockedLogin = await request(app)
+      .post("/api/auth/login")
+      .send({ email: "newadmin@authtest.edu", password: "NewAdminPass!1" });
+    expect(blockedLogin.status).toBe(403);
+    expect(blockedLogin.body.emailNotVerified).toBe(true);
+
+    expect(sendEmailVerification).toHaveBeenCalledTimes(1);
+    const code = sendEmailVerification.mock.calls[0][0].code;
+    expect(code).toMatch(/^\d{6}$/);
+
+    const badCode = await request(app)
+      .post("/api/auth/verify-email")
+      .send({ email: "newadmin@authtest.edu", code: code === "111111" ? "222222" : "111111" });
+    expect(badCode.status).toBe(400);
+    expect(badCode.body.error).toMatch(/incorrect/i);
+
+    const verify = await request(app).post("/api/auth/verify-email").send({ email: "newadmin@authtest.edu", code });
+    expect(verify.status).toBe(200);
+    expect(verify.body.token).toEqual(expect.any(String));
+    expect(verify.body.refreshToken).toEqual(expect.any(String));
+    expect(verify.body.user.role).toBe("admin");
+    expect(verify.body.user.company.name).toBe("Brand New Institution");
+
+    const afterVerify = await User.findOne({ email: "newadmin@authtest.edu" }).lean();
+    expect(afterVerify.emailVerified).toBe(true);
+    expect(afterVerify.emailVerificationCode).toBeFalsy();
+
+    // Now a normal login works.
+    const login = await request(app)
+      .post("/api/auth/login")
+      .send({ email: "newadmin@authtest.edu", password: "NewAdminPass!1" });
+    expect(login.status).toBe(200);
+    expect(login.body.token).toEqual(expect.any(String));
+  });
+
+  test("verifying an already-verified email is rejected", async () => {
+    const res = await request(app)
+      .post("/api/auth/verify-email")
+      .send({ email: "newadmin@authtest.edu", code: "000000" });
+    expect(res.status).toBe(400);
+    expect(res.body.error).toMatch(/already verified/i);
+  });
+
+  test("expired code is rejected, and resend issues a fresh code that verifies", async () => {
+    sendEmailVerification.mockClear();
+    const reg = await request(app).post("/api/auth/register-hod").send({
+      name: "Expiry Test HOD",
+      email: "expiryhod@authtest.edu",
+      password: "ExpiryPass!1",
+      institutionCode: INSTITUTION_CODE,
+      department: "Expiry Testing Dept",
+    });
+    expect(reg.status).toBe(201);
+    expect(reg.body.requiresVerification).toBe(true);
+    expect(sendEmailVerification).toHaveBeenCalledTimes(1);
+    const oldCode = sendEmailVerification.mock.calls[0][0].code;
+
+    // Force the stored code to look expired instead of waiting 15 minutes.
+    await User.updateOne(
+      { email: "expiryhod@authtest.edu" },
+      { emailVerificationExpires: new Date(Date.now() - 1000) }
+    );
+
+    const expiredAttempt = await request(app)
+      .post("/api/auth/verify-email")
+      .send({ email: "expiryhod@authtest.edu", institutionCode: INSTITUTION_CODE, code: oldCode });
+    expect(expiredAttempt.status).toBe(400);
+    expect(expiredAttempt.body.error).toMatch(/expired/i);
+
+    sendEmailVerification.mockClear();
+    const resend = await request(app)
+      .post("/api/auth/resend-verification-code")
+      .send({ email: "expiryhod@authtest.edu", institutionCode: INSTITUTION_CODE });
+    expect(resend.status).toBe(200);
+    expect(sendEmailVerification).toHaveBeenCalledTimes(1);
+    const freshCode = sendEmailVerification.mock.calls[0][0].code;
+
+    const verify = await request(app)
+      .post("/api/auth/verify-email")
+      .send({ email: "expiryhod@authtest.edu", institutionCode: INSTITUTION_CODE, code: freshCode });
+    expect(verify.status).toBe(200);
+    expect(verify.body.message).toMatch(/pending admin approval/i);
+  });
+
+  test("resend is rate-limited while the just-sent code is still fresh", async () => {
+    const reg = await request(app).post("/api/auth/register-hod").send({
+      name: "Resend Cooldown HOD",
+      email: "cooldown@authtest.edu",
+      password: "CooldownPass!1",
+      institutionCode: INSTITUTION_CODE,
+      department: "Cooldown Testing Dept",
+    });
+    expect(reg.status).toBe(201);
+
+    const res = await request(app)
+      .post("/api/auth/resend-verification-code")
+      .send({ email: "cooldown@authtest.edu", institutionCode: INSTITUTION_CODE });
+    expect(res.status).toBe(429);
+  });
+
+  test("verify-email and resend-verification-code 404 for an unknown account", async () => {
+    const verify = await request(app)
+      .post("/api/auth/verify-email")
+      .send({ email: "ghost-account@authtest.edu", code: "123456" });
+    expect(verify.status).toBe(404);
+
+    const resend = await request(app)
+      .post("/api/auth/resend-verification-code")
+      .send({ email: "ghost-account@authtest.edu" });
+    expect(resend.status).toBe(404);
+  });
+
+  test("a failed verification email returns a clean error and rolls back the account", async () => {
+    sendEmailVerification.mockRejectedValueOnce(new Error("Simulated send failure"));
+    const reg = await request(app).post("/api/auth/register-hod").send({
+      name: "Failed Send HOD",
+      email: "failedsend@authtest.edu",
+      password: "FailedSendPass!1",
+      institutionCode: INSTITUTION_CODE,
+      department: "Failed Send Testing Dept",
+    });
+    expect(reg.status).toBe(500);
+    expect(reg.body.error).toMatch(/failed to send verification code/i);
+    // Rollback (User.findByIdAndDelete) is attempted here but not asserted
+    // on directly -- FerretDB (this suite's local/CI Mongo substitute) does
+    // not implement findAndModify's "fields" option, so the delete itself
+    // reliably fails in this test environment even though it works against
+    // real MongoDB. That's exactly the scenario the next test locks down:
+    // whether or not the rollback succeeds, the client must never see it.
+  });
+
+  // Regression test for a real bug caught while building this feature: the
+  // live dev server has a hand-rolled Gmail SMTP client with no socket
+  // timeout, so an unreachable smtp.gmail.com hung every registration
+  // request forever (fixed separately in emailService.js). Discovering that
+  // also surfaced this second bug -- when the *rollback* delete itself then
+  // fails (it did, against the sandbox's FerretDB, which doesn't implement
+  // findAndModify's "fields" option), that DB error was escaping to the
+  // outer catch and leaking a raw Mongo error string to the client instead
+  // of the intended clean message.
+  test("a failed verification email still returns the clean error even if the rollback delete also fails", async () => {
+    sendEmailVerification.mockRejectedValueOnce(new Error("Simulated send failure"));
+    const deleteSpy = jest.spyOn(User, "findByIdAndDelete")
+      .mockRejectedValueOnce(new Error('findAndModify: support for field "fields" is not implemented yet'));
+
+    const reg = await request(app).post("/api/auth/register-hod").send({
+      name: "Rollback Fails HOD",
+      email: "rollbackfails@authtest.edu",
+      password: "RollbackFailsPass!1",
+      institutionCode: INSTITUTION_CODE,
+      department: "Rollback Fails Testing Dept",
+    });
+
+    expect(reg.status).toBe(500);
+    expect(reg.body.error).toMatch(/failed to send verification code/i);
+    // The rollback's own DB error must never leak through instead of the
+    // clean message -- this is exactly what broke before the fix.
+    expect(reg.body.error).not.toMatch(/findAndModify/i);
+
+    deleteSpy.mockRestore();
   });
 });
 
@@ -222,11 +418,28 @@ describe("POST /api/auth/login", () => {
     expect(res.status).toBe(400);
   });
 
-  test("blocks an unapproved student with 403 pending-approval", async () => {
+  test("blocks an unverified student with 403 emailNotVerified, before the approval gate", async () => {
     const res = await request(app)
       .post("/api/auth/login")
       .send({ indexNumber: ROSTERED_INDEX, institutionCode: INSTITUTION_CODE, password: "StudentPass!1" });
     expect(res.status).toBe(403);
+    expect(res.body.emailNotVerified).toBe(true);
+    expect(res.body.error).toMatch(/verify your email/i);
+  });
+
+  test("blocks an unapproved (but now verified) student with 403 pending-approval", async () => {
+    expect(studentVerificationCode).toMatch(/^\d{6}$/);
+    const verify = await request(app)
+      .post("/api/auth/verify-email")
+      .send({ email: "student1@authtest.edu", institutionCode: INSTITUTION_CODE, code: studentVerificationCode });
+    expect(verify.status).toBe(200);
+    expect(verify.body.message).toMatch(/pending approval/i);
+
+    const res = await request(app)
+      .post("/api/auth/login")
+      .send({ indexNumber: ROSTERED_INDEX, institutionCode: INSTITUTION_CODE, password: "StudentPass!1" });
+    expect(res.status).toBe(403);
+    expect(res.body.emailNotVerified).toBeUndefined();
     expect(res.body.error).toMatch(/pending approval/i);
   });
 
