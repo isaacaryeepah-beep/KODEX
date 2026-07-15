@@ -155,7 +155,7 @@ exports.attendanceReport = async (req, res) => {
         const sessionTitle = record.session ? record.session.title || "Untitled" : "N/A";
         const checkIn = record.checkInTime ? new Date(record.checkInTime).toLocaleDateString() : "N/A";
         const status = record.status || "N/A";
-        const methodLabels = { qr_mark: "QR", code_mark: "Code", ble_mark: "BLE", jitsi_join: "Jitsi", manual: "Manual" };
+        const methodLabels = { qr_mark: "QR", code_mark: "Code", ble_mark: "BLE", jitsi_join: "Jitsi", manual: "Manual", gps_mark: "GPS" };
         const method = methodLabels[record.method] || record.method || "N/A";
 
         const row = [
@@ -412,7 +412,7 @@ exports.attendanceCsv = async (req, res) => {
       .populate("session", "title startedAt stoppedAt")
       .sort({ checkInTime: -1 });
 
-    const methodLabels = { qr_mark: "QR", code_mark: "Code", ble_mark: "BLE", jitsi_join: "Jitsi", manual: "Manual" };
+    const methodLabels = { qr_mark: "QR", code_mark: "Code", ble_mark: "BLE", jitsi_join: "Jitsi", manual: "Manual", gps_mark: "GPS" };
 
     const escape = (v) => {
       const s = String(v ?? "");

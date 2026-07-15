@@ -106,6 +106,24 @@ const attendanceSessionSchema = new mongoose.Schema(
       type: String,
       default: null,
     },
+    // ── GPS geofence mode (hardware-free backup) ─────────────────────────────
+    // When all three are set the session accepts gps_mark: students submit
+    // their own position and the server checks distance-from-center. Used as
+    // the lecturer-selectable fallback when no ESP32 is available.
+    geoLat: {
+      type: Number,
+      default: null,
+    },
+    geoLng: {
+      type: Number,
+      default: null,
+    },
+    geoRadiusMeters: {
+      type: Number,
+      default: null,
+      min: 20,
+      max: 1000,
+    },
     // Rotating code (current)
     currentCode: {
       type: String,

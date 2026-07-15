@@ -185,7 +185,7 @@ exports.attendanceOverview = async (req, res) => {
         { text: "Method", width: 60 },
       ];
       let y2 = drawTableHeader(doc, detailCols, doc.y);
-      const methodLabels = { qr_mark: "QR Code", code_mark: "6-Digit Code", ble_mark: "BLE", jitsi_join: "Jitsi", manual: "Manual" };
+      const methodLabels = { qr_mark: "QR Code", code_mark: "6-Digit Code", ble_mark: "BLE", jitsi_join: "Jitsi", manual: "Manual", gps_mark: "GPS Check-in" };
 
       records.forEach((r, i) => {
         y2 = checkPage(doc, y2, detailCols);
@@ -927,7 +927,7 @@ exports.institutionSummary = async (req, res) => {
     doc.moveDown(0.5);
     drawSectionTitle(doc, "Check-in Methods");
     doc.moveDown(0.3);
-    const methodLabels = { qr_mark: "QR Code", code_mark: "6-Digit Code", ble_mark: "BLE", jitsi_join: "Jitsi", manual: "Manual" };
+    const methodLabels = { qr_mark: "QR Code", code_mark: "6-Digit Code", ble_mark: "BLE", jitsi_join: "Jitsi", manual: "Manual", gps_mark: "GPS Check-in" };
     Object.entries(methodCounts).forEach(([method, count]) => {
       const pct = records.length > 0 ? ((count / records.length) * 100).toFixed(1) : "0";
       doc.fontSize(10).font("Helvetica").text(`${methodLabels[method] || method}: ${count} (${pct}%)`, 58);
