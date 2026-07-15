@@ -14,6 +14,8 @@ router.post("/register-employee",      registerLimiter,       authController.reg
 router.post("/register-manager",       registerLimiter,       authController.registerManager);
 router.post("/register-hod",           registerLimiter,       authController.registerHod);
 router.post("/self-register",          registerLimiter,       authController.registerSelfService);
+router.post("/verify-email",           passwordResetLimiter,  authController.verifyEmail);
+router.post("/resend-verification-code", passwordResetLimiter, authController.resendVerificationCode);
 router.get("/lookup-institution",                             authController.lookupInstitution);
 router.post("/login",                  loginLimiter,          authController.login);
 router.post("/refresh",                loginLimiter,          authController.refresh);

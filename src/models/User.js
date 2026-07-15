@@ -82,6 +82,18 @@ const userSchema = new mongoose.Schema(
     twoFactorEnabled: { type: Boolean, default: false },
     twoFactorCode:    { type: String, default: null, select: false },
     twoFactorExpires: { type: Date, default: null },
+    // Email verification at registration — every self-created account must
+    // enter the code emailed to them before they can log in. Default is
+    // `true` (not false) specifically so every account that already exists
+    // in the database — created before this field existed, and therefore
+    // missing it entirely in Mongo — hydrates as verified via this schema
+    // default and is never retroactively locked out. Registration
+    // controllers explicitly set `emailVerified: false` at creation time
+    // for brand-new accounts, which is the only place this should ever be
+    // false.
+    emailVerified:           { type: Boolean, default: true },
+    emailVerificationCode:   { type: String, default: null, select: false },
+    emailVerificationExpires:{ type: Date, default: null },
     phone: {
       type: String,
       trim: true,

@@ -6,7 +6,7 @@ const StudentRoster = require("../models/StudentRoster");
 const MeetingIdentity = require("../models/MeetingIdentity");
 const { generateToken, generateRefreshToken, verifyRefreshToken, hashToken } = require("../utils/jwt");
 const RefreshToken = require("../models/RefreshToken");
-const { sendWelcome, sendAdminPasswordResetNotice, sendPasswordReset, sendNewInstitutionAlert, sendLecturerWelcome, sendEmployeeWelcome, sendHodWelcome, sendSelfRegPending, sendAdminNewSelfReg } = require("../services/emailService");
+const { sendWelcome, sendAdminPasswordResetNotice, sendPasswordReset, sendEmailVerification, sendNewInstitutionAlert, sendLecturerWelcome, sendEmployeeWelcome, sendHodWelcome, sendSelfRegPending, sendAdminNewSelfReg } = require("../services/emailService");
 const { sendOtp, normalisePhone } = require("../services/smsService");
 const { syncStudentToRoster } = require("../utils/rosterSync");
 const { getMyActiveHRAssignment } = require("../utils/corporateScope");
@@ -64,6 +64,34 @@ async function persistRefreshToken(token, userId, req) {
   } catch (e) {
     console.error("[RefreshToken] Failed to persist token:", e.message);
   }
+}
+
+// Generates a fresh 6-digit code, hashes it onto the user doc (mirrors the
+// twoFactorCode/resetPasswordToken pattern elsewhere in this file), and
+// emails it. Shared by every self-registration endpoint plus the
+// resend-code endpoint. `user` must be a full Mongoose document (not
+// .lean()) since it calls .save() on it.
+async function issueVerificationCode(user, institutionName) {
+  const code = String(crypto.randomInt(100000, 1000000));
+  const hashedCode = await bcrypt.hash(code, 10);
+  user.emailVerificationCode = hashedCode;
+  user.emailVerificationExpires = new Date(Date.now() + 15 * 60 * 1000);
+  await user.save({ validateBeforeSave: false });
+
+  if (!user.email) return { ok: false, error: "No email on file" };
+
+  const emailResult = await sendEmailVerification({
+    email: user.email,
+    name: user.name,
+    code,
+    institutionName: institutionName || "",
+  }).catch(err => ({ ok: false, error: err.message }));
+
+  if (!emailResult || emailResult.ok === false) {
+    console.error(`[EmailVerification] Send failed for ${user.email}:`, emailResult?.error);
+    return { ok: false, error: emailResult?.error || "Failed to send verification email" };
+  }
+  return { ok: true };
 }
 
 const { TRIAL_DAYS, STUDENT_TRIAL_DAYS, CORPORATE_PILOT_TRIAL_DAYS, getTrialDays, getStudentTrialDays } = require("../utils/trialSettings");
@@ -190,6 +218,7 @@ exports.register = async (req, res) => {
         company: company._id,
         role: "admin",
         isApproved: true,
+        emailVerified: false,
         trialEndDate,
         subscriptionStatus: "trial",
       });
@@ -198,56 +227,24 @@ exports.register = async (req, res) => {
       throw userError;
     }
 
-    const token        = generateToken(user._id);
-    const refreshToken = generateRefreshToken(user._id);
-    await persistRefreshToken(refreshToken, user._id, req);
-
-    // Auto-create Jitsi meeting identity for the new admin
+    // Auto-create Jitsi meeting identity for the new admin (harmless ahead
+    // of verification -- it's just an identity record, not access)
     await createMeetingIdentity(user, company._id);
 
-    sendWelcome({
-      email:           user.email,
-      name:            user.name || user.email.split('@')[0],
-      institutionName: company.name,
-      trialDays:       trialDays,
-      trialEndDate:    company.trialEndDate,
-    }).catch(err => console.error('Welcome email failed:', err.message));
-
-    sendNewInstitutionAlert({
-      institutionName: company.name,
-      adminName:       user.name,
-      adminEmail:      user.email,
-      mode:            company.mode,
-      institutionCode: company.institutionCode,
-    }).catch(err => console.error('Superadmin alert failed:', err.message));
+    const codeResult = await issueVerificationCode(user, company.name);
+    if (!codeResult.ok) {
+      // Best-effort cleanup -- a failure here must never mask the real
+      // "email failed to send" error behind a raw DB error message.
+      await Company.findByIdAndDelete(company._id).catch(err => console.error('[cleanup] Failed to roll back company after verification-email failure:', err.message));
+      await User.findByIdAndDelete(user._id).catch(err => console.error('[cleanup] Failed to roll back user after verification-email failure:', err.message));
+      return res.status(500).json({ error: `Failed to send verification code${codeResult.error ? ` (${codeResult.error})` : ''}. Please try again.` });
+    }
 
     res.status(201).json({
-      token,
-      refreshToken,
-      user: {
-        id: user._id,
-        email: user.email,
-        name: user.name,
-        role: user.role,
-        isApproved: user.isApproved,
-        mustChangePassword: user.mustChangePassword || false,
-        company: {
-          id: company._id,
-          name: company.name,
-          mode: company.mode,
-          institutionCode: company.institutionCode,
-        },
-      },
-      trial: {
-        active: company.isTrialActive,
-        daysRemaining: company.trialDaysRemaining,
-        timeRemaining: company.trialTimeRemaining,
-      },
-      subscription: {
-        active: company.subscriptionActive,
-        status: company.subscriptionStatus,
-        plan: company.subscriptionPlan,
-      },
+      requiresVerification: true,
+      email: user.email,
+      institutionCode: company.institutionCode,
+      message: "Account created! Check your email for a verification code to finish setting up your institution.",
     });
   } catch (error) {
     if (error.name === "ValidationError") {
@@ -261,6 +258,162 @@ exports.register = async (req, res) => {
     }
     console.error("Register error:", error.message, error.stack);
     res.status(500).json({ error: error.message || "Registration failed" });
+  }
+};
+
+// Per-role message shown once verification succeeds for accounts that still
+// need admin/HOD approval afterward (everyone except the institution-creating
+// admin, who gets logged straight in below instead).
+const POST_VERIFY_PENDING_MESSAGE = {
+  lecturer: "Email verified! Your account is pending admin approval.",
+  hod:      "Email verified! Your HOD account is pending admin approval.",
+  student:  "Email verified! Your account is pending approval from your HOD or admin.",
+  employee: "Email verified! Your account is pending admin approval.",
+  manager:  "Email verified! Your account is pending admin approval.",
+};
+
+exports.verifyEmail = async (req, res) => {
+  try {
+    const emailRaw = req.body.email;
+    const institutionCode = req.body.institutionCode;
+    const code = req.body.code;
+    const email = emailRaw ? emailRaw.trim().toLowerCase() : null;
+    if (!email || !code) {
+      return res.status(400).json({ error: "Email and code are required" });
+    }
+
+    const companyFilter = {};
+    if (institutionCode) {
+      const codeCompany = await Company.findOne({ institutionCode: institutionCode.toUpperCase() });
+      if (codeCompany) companyFilter.company = codeCompany._id;
+    }
+
+    const user = await User.findOne({ email, ...companyFilter }).select("+emailVerificationCode +emailVerificationExpires");
+    if (!user) {
+      return res.status(404).json({ error: "Account not found" });
+    }
+    if (user.emailVerified) {
+      return res.status(400).json({ error: "This email is already verified. You can sign in." });
+    }
+    if (!user.emailVerificationCode || !user.emailVerificationExpires) {
+      return res.status(400).json({ error: "No verification code pending. Please request a new one." });
+    }
+    if (user.emailVerificationExpires < new Date()) {
+      return res.status(400).json({ error: "Code expired. Please request a new one." });
+    }
+
+    const isValid = await bcrypt.compare(String(code).trim(), user.emailVerificationCode);
+    if (!isValid) {
+      return res.status(400).json({ error: "Incorrect code" });
+    }
+
+    user.emailVerified = true;
+    user.emailVerificationCode = null;
+    user.emailVerificationExpires = null;
+    await user.save({ validateBeforeSave: false });
+
+    // Institution-creating admin: verification is the last step of
+    // registration, so this is where auto-login (previously issued
+    // immediately by exports.register) now happens.
+    if (user.role === "admin") {
+      const company = await Company.findById(user.company);
+
+      const token        = generateToken(user._id);
+      const refreshToken = generateRefreshToken(user._id);
+      await persistRefreshToken(refreshToken, user._id, req);
+
+      sendWelcome({
+        email:           user.email,
+        name:            user.name || user.email.split('@')[0],
+        institutionName: company?.name,
+        trialDays:       company ? Math.ceil((new Date(company.trialEndDate) - new Date(user.createdAt)) / 86400000) : undefined,
+        trialEndDate:    company?.trialEndDate,
+      }).catch(err => console.error('Welcome email failed:', err.message));
+
+      sendNewInstitutionAlert({
+        institutionName: company?.name,
+        adminName:       user.name,
+        adminEmail:      user.email,
+        mode:            company?.mode,
+        institutionCode: company?.institutionCode,
+      }).catch(err => console.error('Superadmin alert failed:', err.message));
+
+      return res.json({
+        token,
+        refreshToken,
+        user: {
+          id: user._id,
+          email: user.email,
+          name: user.name,
+          role: user.role,
+          isApproved: user.isApproved,
+          mustChangePassword: user.mustChangePassword || false,
+          company: company ? {
+            id: company._id,
+            name: company.name,
+            mode: company.mode,
+            institutionCode: company.institutionCode,
+          } : undefined,
+        },
+        trial: company ? {
+          active: company.isTrialActive,
+          daysRemaining: company.trialDaysRemaining,
+          timeRemaining: company.trialTimeRemaining,
+        } : undefined,
+        subscription: company ? {
+          active: company.subscriptionActive,
+          status: company.subscriptionStatus,
+          plan: company.subscriptionPlan,
+        } : undefined,
+      });
+    }
+
+    res.json({ ok: true, message: POST_VERIFY_PENDING_MESSAGE[user.role] || "Email verified successfully." });
+  } catch (error) {
+    console.error("verifyEmail error:", error);
+    res.status(500).json({ error: "Verification failed" });
+  }
+};
+
+exports.resendVerificationCode = async (req, res) => {
+  try {
+    const emailRaw = req.body.email;
+    const institutionCode = req.body.institutionCode;
+    const email = emailRaw ? emailRaw.trim().toLowerCase() : null;
+    if (!email) {
+      return res.status(400).json({ error: "Email is required" });
+    }
+
+    let company = null;
+    const companyFilter = {};
+    if (institutionCode) {
+      company = await Company.findOne({ institutionCode: institutionCode.toUpperCase() });
+      if (company) companyFilter.company = company._id;
+    }
+
+    const user = await User.findOne({ email, ...companyFilter }).select("+emailVerificationExpires");
+    if (!user) {
+      return res.status(404).json({ error: "Account not found" });
+    }
+    if (user.emailVerified) {
+      return res.status(400).json({ error: "This email is already verified. You can sign in." });
+    }
+    // Codes last 15 minutes; block resend while more than 14 of those
+    // minutes are still left (i.e. one was just sent seconds ago).
+    if (user.emailVerificationExpires && (user.emailVerificationExpires - Date.now()) > 14 * 60 * 1000) {
+      return res.status(429).json({ error: "A code was just sent. Please wait a moment before requesting another." });
+    }
+
+    if (!company) company = await Company.findById(user.company);
+    const result = await issueVerificationCode(user, company?.name);
+    if (!result.ok) {
+      return res.status(500).json({ error: `Failed to send verification code${result.error ? ` (${result.error})` : ''}. Please try again.` });
+    }
+
+    res.json({ ok: true, message: "A new verification code has been sent to your email." });
+  } catch (error) {
+    console.error("resendVerificationCode error:", error);
+    res.status(500).json({ error: "Failed to resend verification code" });
   }
 };
 
@@ -334,6 +487,7 @@ exports.registerLecturer = async (req, res) => {
       company: company._id,
       role: "lecturer",
       isApproved: false,
+      emailVerified: false,
       department: department.trim(),
       trialEndDate,
       subscriptionStatus: "trial",
@@ -358,19 +512,16 @@ exports.registerLecturer = async (req, res) => {
       }).catch(err => console.error('Lecturer welcome email failed:', err.message));
     }
 
+    const codeResult = await issueVerificationCode(user, company.name);
+    if (!codeResult.ok) {
+      await User.findByIdAndDelete(user._id).catch(err => console.error('[cleanup] Failed to roll back user after verification-email failure:', err.message));
+      return res.status(500).json({ error: `Failed to send verification code${codeResult.error ? ` (${codeResult.error})` : ''}. Please try again.` });
+    }
+
     res.status(201).json({
-      user: {
-        id: user._id,
-        email: user.email,
-        name: user.name,
-        role: user.role,
-        isApproved: user.isApproved,
-        mustChangePassword: user.mustChangePassword || false,
-        company: { id: company._id, name: company.name, mode: company.mode },
-      },
-      message: department
-        ? "Registration successful. Your HOD and institution admin will review your account."
-        : "Registration successful. Your account is pending admin approval.",
+      requiresVerification: true,
+      email: user.email,
+      message: "Check your email for a verification code to confirm your address.",
     });
   } catch (error) {
     if (error.name === "ValidationError") {
@@ -463,6 +614,7 @@ exports.registerStudent = async (req, res) => {
       company: company._id,
       role: "student",
       isApproved: false,
+      emailVerified: false,
       department: department ? department.trim() : null,
       programme: programme ? programme.trim() : null,
       studentLevel: studentLevel ? studentLevel.trim() : null,
@@ -474,8 +626,16 @@ exports.registerStudent = async (req, res) => {
     });
 
     // Welcome email is sent when the account is approved, not at registration.
+    const codeResult = await issueVerificationCode(user, company.name);
+    if (!codeResult.ok) {
+      await User.findByIdAndDelete(user._id).catch(err => console.error('[cleanup] Failed to roll back user after verification-email failure:', err.message));
+      return res.status(500).json({ error: `Failed to send verification code${codeResult.error ? ` (${codeResult.error})` : ''}. Please try again.` });
+    }
+
     return res.status(201).json({
-      message: "Registration successful! Your account is pending approval. Your HOD or admin will review and approve your account before you can sign in.",
+      requiresVerification: true,
+      email: user.email,
+      message: "Check your email for a verification code to confirm your address.",
     });
   } catch (error) {
     if (error.name === "ValidationError") {
@@ -546,6 +706,7 @@ exports.registerEmployee = async (req, res) => {
       role: "employee",
       employeeId,
       isApproved: false,
+      emailVerified: false,
     });
 
     sendEmployeeWelcome({
@@ -555,18 +716,16 @@ exports.registerEmployee = async (req, res) => {
       employeeId: user.employeeId,
     }).catch(err => console.error('Employee welcome email failed:', err.message));
 
+    const codeResult = await issueVerificationCode(user, company.name);
+    if (!codeResult.ok) {
+      await User.findByIdAndDelete(user._id).catch(err => console.error('[cleanup] Failed to roll back user after verification-email failure:', err.message));
+      return res.status(500).json({ error: `Failed to send verification code${codeResult.error ? ` (${codeResult.error})` : ''}. Please try again.` });
+    }
+
     res.status(201).json({
-      user: {
-        id: user._id,
-        email: user.email,
-        employeeId: user.employeeId,
-        name: user.name,
-        role: user.role,
-        isApproved: user.isApproved,
-        mustChangePassword: user.mustChangePassword || false,
-        company: { id: company._id, name: company.name, mode: company.mode },
-      },
-      message: "Registration successful. Your account is pending admin approval.",
+      requiresVerification: true,
+      email: user.email,
+      message: "Check your email for a verification code to confirm your address.",
     });
   } catch (error) {
     if (error.name === "ValidationError") {
@@ -623,18 +782,19 @@ exports.registerManager = async (req, res) => {
       company: company._id,
       role: "manager",
       isApproved: false,
+      emailVerified: false,
     });
 
+    const codeResult = await issueVerificationCode(user, company.name);
+    if (!codeResult.ok) {
+      await User.findByIdAndDelete(user._id).catch(err => console.error('[cleanup] Failed to roll back user after verification-email failure:', err.message));
+      return res.status(500).json({ error: `Failed to send verification code${codeResult.error ? ` (${codeResult.error})` : ''}. Please try again.` });
+    }
+
     res.status(201).json({
-      user: {
-        id: user._id,
-        email: user.email,
-        name: user.name,
-        role: user.role,
-        isApproved: user.isApproved,
-        company: { id: company._id, name: company.name, mode: company.mode },
-      },
-      message: "Registration successful. Your account is pending admin approval.",
+      requiresVerification: true,
+      email: user.email,
+      message: "Check your email for a verification code to confirm your address.",
     });
   } catch (error) {
     if (error.name === "ValidationError") {
@@ -700,6 +860,7 @@ exports.registerHod = async (req, res) => {
       role: 'hod',
       department: department.trim(),
       isApproved: false,
+      emailVerified: false,
       trialEndDate,
       subscriptionStatus: 'trial',
     });
@@ -717,17 +878,16 @@ exports.registerHod = async (req, res) => {
       }).catch(err => console.error('HOD welcome email failed:', err.message));
     }
 
+    const codeResult = await issueVerificationCode(user, company.name);
+    if (!codeResult.ok) {
+      await User.findByIdAndDelete(user._id).catch(err => console.error('[cleanup] Failed to roll back user after verification-email failure:', err.message));
+      return res.status(500).json({ error: `Failed to send verification code${codeResult.error ? ` (${codeResult.error})` : ''}. Please try again.` });
+    }
+
     res.status(201).json({
-      user: {
-        id: user._id,
-        email: user.email,
-        name: user.name,
-        role: user.role,
-        department: user.department,
-        isApproved: user.isApproved,
-        company: { id: company._id, name: company.name, mode: company.mode },
-      },
-      message: 'Registration successful. Your HOD account is pending admin approval.',
+      requiresVerification: true,
+      email: user.email,
+      message: 'Check your email for a verification code to confirm your address.',
     });
   } catch (error) {
     if (error.name === 'ValidationError') {
@@ -837,6 +997,14 @@ exports.login = async (req, res) => {
       user.failedLoginAttempts = 0;
       user.lastFailedLoginAt = null;
       await user.save().catch(() => {});
+    }
+
+    if (!user.emailVerified) {
+      return res.status(403).json({
+        error: "Please verify your email before signing in. We've sent a code to your email — enter it to continue.",
+        emailNotVerified: true,
+        email: user.email,
+      });
     }
 
     if (!user.isApproved) {
@@ -2006,6 +2174,11 @@ exports.registerSelfService = async (req, res) => {
       role,
       isApproved: false,
       selfRegistered: true,
+      // Only self-service student registrations can omit email (Index
+      // Number is enough for them) -- nothing to verify in that case, so
+      // leave emailVerified at its schema default (true) rather than
+      // gating login on a code that could never be sent.
+      emailVerified: email ? false : true,
     };
 
     if (role === 'student') {
@@ -2032,7 +2205,9 @@ exports.registerSelfService = async (req, res) => {
     const user = await User.create(userData);
 
     // Email: confirmation to applicant
-    sendSelfRegPending({ email: user.email, name: user.name, orgName: company.displayName || company.name, role }).catch(() => {});
+    if (user.email) {
+      sendSelfRegPending({ email: user.email, name: user.name, orgName: company.displayName || company.name, role }).catch(() => {});
+    }
 
     // Email: notify the first active admin of this institution
     User.findOne({ company: company._id, role: 'admin', isApproved: true, isActive: true }).lean()
@@ -2046,6 +2221,19 @@ exports.registerSelfService = async (req, res) => {
           }).catch(() => {});
         }
       }).catch(() => {});
+
+    if (user.email) {
+      const codeResult = await issueVerificationCode(user, company.displayName || company.name);
+      if (!codeResult.ok) {
+        await User.findByIdAndDelete(user._id).catch(err => console.error('[cleanup] Failed to roll back user after verification-email failure:', err.message));
+        return res.status(500).json({ error: `Failed to send verification code${codeResult.error ? ` (${codeResult.error})` : ''}. Please try again.` });
+      }
+      return res.status(201).json({
+        requiresVerification: true,
+        email: user.email,
+        message: 'Check your email for a verification code to confirm your address.',
+      });
+    }
 
     return res.status(201).json({
       message: 'Registration submitted! Your account is pending approval. You will receive an email once approved.',
