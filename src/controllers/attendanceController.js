@@ -110,6 +110,82 @@ exports.startSession = async (req, res) => {
       return res.status(404).json({ error: "Company not found or inactive" });
     }
 
+    // ── GPS geofence mode (hardware-free backup) ─────────────────────────────
+    // Lecturer-selectable alternative to the ESP32 flow: the session is
+    // anchored to a lat/lng + radius and students mark by submitting their own
+    // GPS position (validated server-side in markAttendance). Deliberately
+    // skips every device check below — this mode exists precisely for when no
+    // classroom device is available. Course authorization is intentionally
+    // duplicated from the device path below so neither path depends on the
+    // other's control flow.
+    if (req.body.gpsGeofence) {
+      const { latitude, longitude, radiusMeters } = req.body.gpsGeofence || {};
+      const lat = Number(latitude);
+      const lng = Number(longitude);
+      const radius = Math.round(Number(radiusMeters) || 100);
+      if (!Number.isFinite(lat) || !Number.isFinite(lng) || lat < -90 || lat > 90 || lng < -180 || lng > 180) {
+        return res.status(400).json({ error: "A valid latitude/longitude is required for GPS geofence sessions." });
+      }
+      if (radius < 20 || radius > 1000) {
+        return res.status(400).json({ error: "Geofence radius must be between 20 and 1000 meters." });
+      }
+
+      if (!req.body.courseId) {
+        return res.status(400).json({ error: "Please select a course to start attendance for" });
+      }
+      const Course = require("../models/Course");
+      const CourseLecturerAssignment = require("../models/CourseLecturerAssignment");
+      const course = await Course.findOne({ _id: req.body.courseId, companyId });
+      if (!course) {
+        return res.status(400).json({ error: "Course not found." });
+      }
+      if (req.user.role === "lecturer") {
+        const isLegacyOwner = course.lecturerId?.toString() === req.user._id.toString();
+        const assignment = isLegacyOwner
+          ? true
+          : await CourseLecturerAssignment.findActiveAssignment(companyId, course._id, req.user._id);
+        if (!assignment) {
+          return res.status(403).json({
+            error: "You are not assigned to teach this course.",
+            message: "Ask your admin or HOD to assign you to this course via the Course Management page.",
+          });
+        }
+      }
+      if (course.needsApproval && course.approvalStatus !== "approved") {
+        const label = course.approvalStatus === "pending" ? "pending HOD approval" : "rejected";
+        return res.status(403).json({
+          error: `This course is ${label} and cannot have active sessions until it is approved.`,
+        });
+      }
+
+      const session = await AttendanceSession.create({
+        company: companyId,
+        createdBy: req.user._id,
+        title: req.body.title || "",
+        course: course._id,
+        deviceId: null,
+        esp32Seed: null,
+        durationSeconds: Number(req.body.durationSeconds) || 300,
+        status: "active",
+        startedAt: new Date(),
+        mode: "online",
+        requiresDeviceOnline: false,
+        targetGroup: req.body.targetGroup || null,
+        geoLat: lat,
+        geoLng: lng,
+        geoRadiusMeters: radius,
+      });
+
+      const populated = await session.populate([
+        { path: "company", select: "name" },
+        { path: "createdBy", select: "name email" },
+        { path: "course", select: "title code" },
+      ]);
+
+      console.log(`[SESSION START] ✓ GPS geofence session for ${company.name} — center=(${lat.toFixed(5)},${lng.toFixed(5)}) radius=${radius}m, no device required`);
+      return res.status(201).json({ session: populated, gpsMode: true });
+    }
+
     // ── STRICT device check — always enforced, no bypass ──
     // The lecturer's paired ESP32 must be powered on and actively sending
     // heartbeats before any attendance session can start. The Device model
@@ -669,6 +745,7 @@ exports.markAttendance = async (req, res) => {
       code:           "code_mark",
       ble:            "ble_mark",
       esp32_hotspot:  "esp32_ap",
+      gps:            "gps_mark",
     };
 
     // ── ESP32 liveness + same-network enforcement ─────────────────────────
@@ -720,11 +797,13 @@ exports.markAttendance = async (req, res) => {
     // QR scans, manual marks, and meeting-join marks carry their own proof and
     // do not require device-hotspot proximity. All other paths (code, BLE) must
     // go through the device.
-    const proximityExempt = ['qr_mark', 'manual', 'jitsi_join'].includes(resolvedMethod);
+    // gps_mark carries its own proof — the server-side geofence distance
+    // check below — so it needs no device-hotspot proximity.
+    const proximityExempt = ['qr_mark', 'manual', 'jitsi_join', 'gps_mark'].includes(resolvedMethod);
 
-    // Students cannot self-declare a proximity-exempt method other than QR —
-    // manual and jitsi marks are lecturer/admin-initiated actions only.
-    if (proximityExempt && req.user.role === 'student' && resolvedMethod !== 'qr_mark') {
+    // Students cannot self-declare a proximity-exempt method other than QR or
+    // GPS — manual and jitsi marks are lecturer/admin-initiated actions only.
+    if (proximityExempt && req.user.role === 'student' && !['qr_mark', 'gps_mark'].includes(resolvedMethod)) {
       return res.status(403).json({
         error: 'Connect to the classroom device WiFi hotspot to mark attendance.',
         requiresHotspot: true,
@@ -1171,8 +1250,46 @@ exports.markAttendance = async (req, res) => {
 
     let attendanceMethod = resolvedMethod;
     let qrTokenRef = null;
+    let gpsDistanceMeters = null;
+    let gpsAccuracy = null;
 
-    if (attendanceMethod === "qr_mark") {
+    if (attendanceMethod === "gps_mark") {
+      // ── GPS geofence check ─────────────────────────────────────────────
+      // The session must have been started in GPS mode, and the student's
+      // submitted position must fall inside the geofence.
+      if (session.geoLat == null || session.geoLng == null || !session.geoRadiusMeters) {
+        return res.status(400).json({
+          error: "This session does not accept GPS check-in. Use the method your lecturer selected.",
+        });
+      }
+      const lat = Number(req.body.latitude);
+      const lng = Number(req.body.longitude);
+      const accuracy = req.body.accuracy != null ? Number(req.body.accuracy) : null;
+      if (!Number.isFinite(lat) || !Number.isFinite(lng) || lat < -90 || lat > 90 || lng < -180 || lng > 180) {
+        return res.status(400).json({ error: "A valid GPS position (latitude/longitude) is required." });
+      }
+      // A reading whose uncertainty dwarfs the geofence proves nothing —
+      // ask the student to move to open sky rather than guessing.
+      const maxAccuracy = Math.max(200, session.geoRadiusMeters * 2);
+      if (accuracy != null && Number.isFinite(accuracy) && accuracy > maxAccuracy) {
+        return res.status(422).json({
+          error: `GPS reading too imprecise (±${Math.round(accuracy)}m). Move outdoors or near a window and try again.`,
+          gpsAccuracyMeters: Math.round(accuracy),
+        });
+      }
+      const { haversineMeters } = require("../utils/attendanceAntiCheat");
+      const distance = haversineMeters(session.geoLat, session.geoLng, lat, lng);
+      if (distance > session.geoRadiusMeters) {
+        return res.status(403).json({
+          error: `You appear to be ${Math.round(distance)}m from the class location — attendance requires being within ${session.geoRadiusMeters}m.`,
+          outsideGeofence: true,
+          distanceMeters: Math.round(distance),
+          radiusMeters: session.geoRadiusMeters,
+        });
+      }
+      gpsDistanceMeters = Math.round(distance);
+      gpsAccuracy = accuracy != null && Number.isFinite(accuracy) ? Math.round(accuracy) : null;
+    } else if (attendanceMethod === "qr_mark") {
       if (!qrToken) {
         return res.status(400).json({ error: "QR token is required for qr_mark method" });
       }
@@ -1237,6 +1354,7 @@ exports.markAttendance = async (req, res) => {
       deviceId: clientDeviceId,
       qrToken: qrTokenRef,
       ...(attendanceMethod === 'code_mark' && code ? { codeUsed: String(code) } : {}),
+      ...(attendanceMethod === 'gps_mark' ? { gpsDistanceMeters, gpsAccuracy } : {}),
     });
 
     const populated = await record.populate([

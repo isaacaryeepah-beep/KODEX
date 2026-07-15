@@ -35,11 +35,22 @@ const attendanceRecordSchema = new mongoose.Schema(
     },
     method: {
       type: String,
-      enum: ["qr_mark", "code_mark", "ble_mark", "jitsi_join", "manual", "esp32_ap"],
+      enum: ["qr_mark", "code_mark", "ble_mark", "jitsi_join", "manual", "esp32_ap", "gps_mark"],
       default: "manual",
     },
     deviceId: {
       type: String,
+      default: null,
+    },
+    // GPS geofence marking (gps_mark) audit trail. Only the computed
+    // distance-from-center and the device-reported accuracy are stored —
+    // never the student's raw coordinates.
+    gpsDistanceMeters: {
+      type: Number,
+      default: null,
+    },
+    gpsAccuracy: {
+      type: Number,
       default: null,
     },
     qrToken: {

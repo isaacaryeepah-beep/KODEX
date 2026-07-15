@@ -7268,7 +7268,7 @@ async function renderStudentDashboard(content) {
   }
 
   const methodLabel = (m) => {
-    const labels = { qr_mark: 'QR Code', code_mark: 'Code Entry', ble_mark: 'BLE Proximity', jitsi_join: 'Meeting Join', manual: 'Manual', qr: 'QR Code', ble: 'BLE', zoom: 'Meeting' };
+    const labels = { qr_mark: 'QR Code', code_mark: 'Code Entry', ble_mark: 'BLE Proximity', jitsi_join: 'Meeting Join', manual: 'Manual', gps_mark: 'GPS Check-in', qr: 'QR Code', ble: 'BLE', zoom: 'Meeting' };
     return labels[m] || m;
   };
 
@@ -8352,10 +8352,11 @@ async function showStartSessionModal(offlineOverride) {
             No attendance device is connected to your session yet.<br><br>
             Ask your <strong>class rep</strong> to open the app, go to <strong>Class Device</strong>, and connect the device to you before you start.
           </p>
-          <div style="display:flex;gap:8px;justify-content:center">
+          <div style="display:flex;gap:8px;justify-content:center;flex-wrap:wrap">
             <button class="btn btn-secondary btn-sm" onclick="closeModal()">Cancel</button>
             <button class="btn btn-primary btn-sm" onclick="showStartSessionModal()">↻ Retry</button>
           </div>
+          <button class="btn btn-secondary btn-sm" style="margin-top:10px;width:100%" onclick="showGpsSessionModal()">📍 Use GPS Check-in Instead — No Device Needed</button>
         </div>
       </div>`;
     return;
@@ -8483,9 +8484,112 @@ async function showStartSessionModal(offlineOverride) {
           <button class="btn btn-secondary btn-sm" onclick="closeModal()">Cancel</button>
           <button class="btn btn-primary btn-sm" onclick="startSession()">Start Session</button>
         </div>
+        <div style="text-align:center;margin-top:12px;padding-top:12px;border-top:1px solid var(--border)">
+          <button onclick="showGpsSessionModal()" style="background:none;border:none;color:var(--primary);font-size:12.5px;font-weight:600;cursor:pointer">📍 Or use GPS check-in instead — no classroom device needed</button>
+        </div>
       </div>
     </div>
   `;
+}
+
+// ── GPS geofence session (hardware-free backup) ──────────────────────────────
+// The lecturer's own position anchors the geofence; students self-mark by
+// submitting GPS from their phones and the server checks the distance.
+async function showGpsSessionModal() {
+  const container = document.getElementById('modal-container');
+  if (!container) return;
+  container.classList.remove('hidden');
+  container.innerHTML = `<div class="modal-overlay"><div class="modal"><p style="color:var(--text-muted);text-align:center;padding:16px 0">📍 Getting your location…</p></div></div>`;
+
+  let loc;
+  try {
+    loc = await _getGPSLocation();
+  } catch (e) {
+    container.innerHTML = `
+      <div class="modal-overlay" onclick="closeModal(event)">
+        <div class="modal" onclick="event.stopPropagation()" style="text-align:center;max-width:400px">
+          <div style="font-size:40px;margin-bottom:12px">📍</div>
+          <h3 style="margin-bottom:8px">Location Unavailable</h3>
+          <p style="font-size:13px;color:var(--text-muted);margin-bottom:20px;line-height:1.6">${esc(e.message || 'Could not get your GPS position. Enable location access and try again.')}</p>
+          <div style="display:flex;gap:8px;justify-content:center">
+            <button class="btn btn-secondary btn-sm" onclick="closeModal()">Cancel</button>
+            <button class="btn btn-primary btn-sm" onclick="showGpsSessionModal()">↻ Retry</button>
+          </div>
+        </div>
+      </div>`;
+    return;
+  }
+
+  let courses = [];
+  try {
+    const d = await api('/api/courses');
+    courses = (d.courses || d || []).filter(c => !c.needsApproval || c.approvalStatus === 'approved');
+  } catch (_) {}
+  if (!courses.length) {
+    container.innerHTML = `
+      <div class="modal-overlay" onclick="closeModal(event)">
+        <div class="modal" onclick="event.stopPropagation()" style="text-align:center;max-width:400px">
+          <div style="font-size:40px;margin-bottom:12px">📡</div>
+          <h3 style="margin-bottom:8px">No Courses Found</h3>
+          <p style="font-size:13px;color:var(--text-muted);margin-bottom:20px">Could not load your courses. Check your connection and try again.</p>
+          <button class="btn btn-secondary btn-sm" onclick="closeModal()">Close</button>
+        </div>
+      </div>`;
+    return;
+  }
+
+  container.innerHTML = `
+    <div class="modal-overlay" onclick="closeModal(event)">
+      <div class="modal" onclick="event.stopPropagation()" style="max-width:440px">
+        <h3>Start GPS Check-in Session</h3>
+        <div style="background:#eff6ff;border:1px solid #bfdbfe;border-radius:8px;padding:10px 14px;font-size:12px;color:#1e40af;margin:10px 0 14px;display:flex;gap:8px;align-items:flex-start">
+          <span style="font-size:16px;flex-shrink:0">📍</span>
+          <div>Students mark attendance by sharing their GPS position — anyone outside the radius is rejected. No classroom device needed. Your current location (±${Math.round(loc.accuracy)}m) is the class center.</div>
+        </div>
+        <div class="form-group">
+          <label>Course <span style="color:red">*</span></label>
+          <select id="gps-session-course" style="width:100%;padding:9px 12px;border:1.5px solid var(--border);border-radius:8px;font-size:13px">
+            <option value="">— Select Course —</option>
+            ${courses.map(c => `<option value="${c._id}">${esc(c.title)}${c.level ? ' · L' + c.level : ''}${c.group ? ' · Grp ' + c.group : ''}</option>`).join('')}
+          </select>
+        </div>
+        <div class="form-group">
+          <label>Check-in Radius</label>
+          <select id="gps-session-radius" style="width:100%;padding:9px 12px;border:1.5px solid var(--border);border-radius:8px;font-size:13px">
+            <option value="50">50 m — single classroom</option>
+            <option value="100" selected>100 m — building</option>
+            <option value="200">200 m — large hall / block</option>
+            <option value="500">500 m — campus area</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>Session Title <span style="font-weight:400;color:var(--text-muted);font-size:12px">(optional)</span></label>
+          <input type="text" id="gps-session-title" placeholder="e.g., Week 5 Lecture">
+        </div>
+        <div class="modal-actions">
+          <button class="btn btn-secondary btn-sm" onclick="closeModal()">Cancel</button>
+          <button class="btn btn-primary btn-sm" onclick="startGpsSession(${loc.latitude}, ${loc.longitude})">Start GPS Session</button>
+        </div>
+      </div>
+    </div>`;
+}
+
+async function startGpsSession(latitude, longitude) {
+  const courseId = document.getElementById('gps-session-course')?.value;
+  const radius   = Number(document.getElementById('gps-session-radius')?.value) || 100;
+  const title    = document.getElementById('gps-session-title')?.value?.trim() || '';
+  if (!courseId) { toastWarning('Please select a course.'); return; }
+  try {
+    await api('/api/attendance-sessions/start', {
+      method: 'POST',
+      body: JSON.stringify({ title, courseId, gpsGeofence: { latitude, longitude, radiusMeters: radius } }),
+    });
+    closeModal();
+    toastSuccess('GPS session started — students can now check in with their location.');
+    renderSessions();
+  } catch (e) {
+    toastError(e.message || 'Failed to start GPS session');
+  }
 }
 
 async function loadSessionDevices(courseId) {
@@ -14575,6 +14679,79 @@ window.crConnectWifi = async function(localIp, ssid, idx, isOpen = false) {
   }
 };
 // ─────────────────────────────────────────────────────────────────────────────
+// ── GPS geofence check-in (student side) ─────────────────────────────────────
+async function _renderGpsMarkAttendance(session) {
+  const content = document.getElementById('main-content');
+  if (!content) return;
+
+  let alreadyMarked = false;
+  if (isOnline()) {
+    alreadyMarked = await api('/api/attendance-sessions/my-attendance?limit=100')
+      .then(d => d.records.some(r => r.session?._id === session._id))
+      .catch(() => false);
+  }
+
+  content.innerHTML = `
+    <div class="page-header"><h2>Mark Attendance</h2><p>GPS check-in session</p></div>
+    <div class="card" style="border-left:4px solid var(--primary);margin-bottom:16px;padding:14px 16px">
+      <div style="font-size:11px;text-transform:uppercase;color:var(--primary);font-weight:700">Active Session · GPS Check-in</div>
+      <div style="font-size:16px;font-weight:700;margin-top:4px">${esc(session.title || session.course?.title || 'Attendance Session')}</div>
+      <div style="font-size:12px;color:var(--text-muted);margin-top:2px">Started ${new Date(session.startedAt).toLocaleTimeString()} · you must be within ${session.geoRadiusMeters}m of the class</div>
+    </div>
+    ${alreadyMarked ? `
+      <div class="card" style="text-align:center;padding:40px 20px;border-left:4px solid var(--success)">
+        <div style="font-size:52px;margin-bottom:12px">✅</div>
+        <div style="font-size:18px;font-weight:700;color:var(--success)">Already Marked</div>
+        <p style="font-size:13px;color:var(--text-light);margin-top:6px">You've checked in to this session.</p>
+        <button class="btn btn-primary btn-sm" style="margin-top:16px" onclick="navigateTo('my-attendance')">View My Attendance</button>
+      </div>` : `
+      <div class="card" style="text-align:center;padding:40px 20px">
+        <div style="font-size:52px;margin-bottom:14px">📍</div>
+        <div style="font-size:18px;font-weight:700;margin-bottom:10px">Check In with Your Location</div>
+        <p style="font-size:13px;color:var(--text-light);max-width:320px;margin:0 auto;line-height:1.7">
+          Your lecturer started a GPS session — no classroom device or code needed.
+          Tap below and allow location access. You must be physically at the class location.
+        </p>
+        <div id="gps-mark-status" style="font-size:12px;color:var(--text-light);margin-top:14px"></div>
+        <button class="btn btn-primary" id="gps-mark-btn" style="margin-top:14px" onclick="_gpsMarkCheckIn('${session._id}')">📍 Check In Now</button>
+      </div>`}
+  `;
+}
+
+window._gpsMarkCheckIn = async function(sessionId) {
+  const btn = document.getElementById('gps-mark-btn');
+  const status = document.getElementById('gps-mark-status');
+  if (btn) { btn.disabled = true; btn.textContent = 'Getting your location…'; }
+  try {
+    const loc = await _getGPSLocation();
+    if (status) status.textContent = `Position acquired (±${Math.round(loc.accuracy)}m) — checking in…`;
+    if (btn) btn.textContent = 'Checking in…';
+    await api('/api/attendance-sessions/mark', {
+      method: 'POST',
+      body: JSON.stringify({
+        sessionId,
+        method: 'gps',
+        latitude: loc.latitude,
+        longitude: loc.longitude,
+        accuracy: loc.accuracy,
+        deviceId: getDeviceFingerprint(),
+      }),
+    });
+    toastSuccess('Attendance marked successfully!');
+    renderMarkAttendance();
+  } catch (e) {
+    if (e.data?.outsideGeofence) {
+      toastError(e.message);
+      if (status) status.textContent = `You're ${e.data.distanceMeters}m away — required: within ${e.data.radiusMeters}m.`;
+    } else if (e.message?.toLowerCase().includes('denied') || e.message?.toLowerCase().includes('location')) {
+      _showGPSBlockedModal ? _showGPSBlockedModal(e.message) : toastError(e.message);
+    } else {
+      toastError(e.message || 'Check-in failed');
+    }
+    if (btn) { btn.disabled = false; btn.textContent = '📍 Check In Now'; }
+  }
+};
+
 async function renderMarkAttendance() {
   const content = document.getElementById('main-content');
   if (!content) return;
@@ -14602,6 +14779,12 @@ async function renderMarkAttendance() {
     } catch (e) { /* server unreachable */ }
   } else {
     serverSession = offlineCache('activeSession') || null;
+  }
+
+  // GPS geofence session — no device discovery, no code entry. The student
+  // shares their position and the server does the distance check.
+  if (serverSession?.geoRadiusMeters && serverSession?.geoLat != null) {
+    return _renderGpsMarkAttendance(serverSession);
   }
 
   // Does this session require an ESP32 device for proximity?
