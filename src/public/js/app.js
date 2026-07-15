@@ -1666,30 +1666,49 @@ function showEmployeeError(msg) {
   el._hideTimer = setTimeout(() => { el.style.display = 'none'; el.classList.remove('shake'); }, 8000);
 }
 
+// Restarts the fade-in animation on the form that just became visible, and
+// drives the split-panel overlay (desktop) via data-mode on the container —
+// see the "STUDENT AUTH — SPLIT-PANEL" block in style.css.
+function _playStudentAuthTransition(mode, formEl) {
+  const container = document.getElementById('student-auth');
+  if (container) container.setAttribute('data-mode', mode);
+  if (formEl) {
+    formEl.classList.remove('auth-form-entering');
+    void formEl.offsetWidth; // restart the animation even if the same mode fires twice
+    formEl.classList.add('auth-form-entering');
+  }
+}
+
 function showStudentRegister() {
   document.getElementById('student-login-form').classList.add('hidden');
   document.getElementById('student-forgot-form').classList.add('hidden');
-  document.getElementById('student-register-form').classList.remove('hidden');
+  const form = document.getElementById('student-register-form');
+  form.classList.remove('hidden');
   document.getElementById('student-auth-error').style.display = 'none';
+  _playStudentAuthTransition('register', form);
 }
 
 function showStudentLogin() {
   document.getElementById('student-register-form').classList.add('hidden');
   document.getElementById('student-forgot-form').classList.add('hidden');
-  document.getElementById('student-login-form').classList.remove('hidden');
+  const form = document.getElementById('student-login-form');
+  form.classList.remove('hidden');
   document.getElementById('student-auth-error').style.display = 'none';
   studentForgotStep = 'request';
+  _playStudentAuthTransition('login', form);
 }
 
 function showStudentForgot() {
   document.getElementById('student-login-form').classList.add('hidden');
   document.getElementById('student-register-form').classList.add('hidden');
-  document.getElementById('student-forgot-form').classList.remove('hidden');
+  const form = document.getElementById('student-forgot-form');
+  form.classList.remove('hidden');
   document.getElementById('student-auth-error').style.display = 'none';
   document.getElementById('student-reset-code-group').classList.add('hidden');
   document.getElementById('student-new-password-group').classList.add('hidden');
   document.getElementById('student-forgot-btn').textContent = 'Request Reset Code';
   studentForgotStep = 'request';
+  _playStudentAuthTransition('forgot', form);
 }
 
 function showStudentError(msg) {

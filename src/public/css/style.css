@@ -7232,3 +7232,198 @@ table tr:hover td { background: #f8fafc !important; }
   .ca-records-table td[data-label="Actions"]::before { display: none; }
   .ca-records-table td[data-label="Actions"] button { width: 100%; }
 }
+
+/* ══════════════════════════════════════════════════════════════════════
+   STUDENT AUTH — SPLIT-PANEL SIGN IN / REGISTER (desktop only)
+   A gradient panel glides between sides with a subtle 3D turn when
+   switching between login and register — the form column itself never
+   moves, so it's decoupled from the login form (short) vs register form
+   (long) height mismatch. Mobile falls back to the original single
+   column with a light fade-in on each form swap.
+══════════════════════════════════════════════════════════════════════ */
+
+#student-auth.auth-split {
+  overflow: hidden;
+}
+
+.auth-split-formcol {
+  min-width: 0;
+}
+
+/* Fade-in on every form swap (login/register/forgot), all breakpoints */
+@keyframes authFormFadeIn {
+  from { opacity: 0; transform: translateY(8px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.auth-split-formcol form.auth-form-entering {
+  animation: authFormFadeIn .35s var(--ease, ease) both;
+}
+
+/* Overlay is desktop-only; hidden entirely below the split breakpoint */
+.auth-split-overlay { display: none; }
+
+@media (min-width: 900px) {
+  #student-auth.auth-split {
+    display: flex;
+    align-items: stretch;
+    justify-content: flex-start;
+    max-width: 860px;
+    width: 100%;
+    padding: 0;
+    position: relative;
+  }
+
+  /* Register mode: overlay slides to occupy the LEFT half, so the form
+     column must swap to the right half or the two would overlap. */
+  #student-auth.auth-split[data-mode="register"] {
+    justify-content: flex-end;
+  }
+
+  #student-auth.auth-split .auth-split-formcol {
+    width: 50%;
+    flex: 0 0 50%;
+    padding: 40px 40px;
+    box-sizing: border-box;
+  }
+
+  #student-auth.auth-split .auth-back { margin-top: -4px; }
+
+  .auth-split-overlay {
+    display: block;
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    left: 0;
+    width: 50%;
+    overflow: hidden;
+    border-radius: var(--radius-xl, 18px);
+    transform: translate3d(100%, 0, 0);
+    perspective: 1400px;
+  }
+
+  .auth-split-overlay-inner {
+    position: relative;
+    width: 100%;
+    height: 100%;
+    background: linear-gradient(150deg, #4f6ef7 0%, #7c3aed 100%);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 40px 36px;
+    box-sizing: border-box;
+  }
+
+  .auth-split-overlay-inner::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background:
+      radial-gradient(ellipse 70% 50% at 20% 15%, rgba(255,255,255,.16) 0%, transparent 60%),
+      radial-gradient(ellipse 60% 60% at 90% 90%, rgba(255,255,255,.10) 0%, transparent 60%);
+    pointer-events: none;
+  }
+
+  .auth-split-panel {
+    position: absolute;
+    inset: 40px 36px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+    color: #fff;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity .22s ease;
+  }
+
+  .auth-split-icon {
+    width: 52px;
+    height: 52px;
+    border-radius: 14px;
+    background: rgba(255,255,255,.16);
+    border: 1px solid rgba(255,255,255,.3);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin-bottom: 16px;
+  }
+
+  .auth-split-eyebrow {
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 1.5px;
+    text-transform: uppercase;
+    opacity: .85;
+    margin-bottom: 8px;
+  }
+
+  .auth-split-panel h3 {
+    font-size: 21px;
+    font-weight: 800;
+    line-height: 1.25;
+    margin-bottom: 10px;
+    letter-spacing: -.3px;
+  }
+
+  .auth-split-panel p {
+    font-size: 13px;
+    line-height: 1.6;
+    opacity: .92;
+    max-width: 260px;
+    margin-bottom: 22px;
+  }
+
+  .auth-split-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    background: #fff;
+    color: #4f46e5;
+    border: none;
+    border-radius: 10px;
+    padding: 11px 22px;
+    font-size: 13.5px;
+    font-weight: 700;
+    cursor: pointer;
+    transition: transform .15s;
+  }
+  .auth-split-btn:hover { transform: translateY(-1px); }
+
+  /* Default (login / forgot): overlay rests on the right, inviting registration */
+  #student-auth.auth-split[data-mode="login"] .auth-split-overlay,
+  #student-auth.auth-split[data-mode="forgot"] .auth-split-overlay {
+    animation: authOverlaySlideRight 640ms var(--ease, ease) forwards;
+  }
+  #student-auth.auth-split[data-mode="login"] .auth-split-panel-login,
+  #student-auth.auth-split[data-mode="forgot"] .auth-split-panel-login {
+    opacity: 1;
+    pointer-events: auto;
+    transition-delay: .3s;
+  }
+
+  /* Register: overlay glides to the left, inviting sign-in */
+  #student-auth.auth-split[data-mode="register"] .auth-split-overlay {
+    animation: authOverlaySlideLeft 640ms var(--ease, ease) forwards;
+  }
+  #student-auth.auth-split[data-mode="register"] .auth-split-panel-register {
+    opacity: 1;
+    pointer-events: auto;
+    transition-delay: .3s;
+  }
+
+  @keyframes authOverlaySlideLeft {
+    0%   { transform: translate3d(100%, 0, 0) rotateY(0deg); }
+    45%  { transform: translate3d(50%, 0, 0)  rotateY(-8deg); }
+    100% { transform: translate3d(0%, 0, 0)   rotateY(0deg); }
+  }
+  @keyframes authOverlaySlideRight {
+    0%   { transform: translate3d(0%, 0, 0)   rotateY(0deg); }
+    45%  { transform: translate3d(50%, 0, 0)  rotateY(8deg); }
+    100% { transform: translate3d(100%, 0, 0) rotateY(0deg); }
+  }
+}
+
+@media (min-width: 900px) and (prefers-color-scheme: dark) {
+  .auth-split-overlay-inner { background: linear-gradient(150deg, #3d5ce0 0%, #6d28d9 100%); }
+}
