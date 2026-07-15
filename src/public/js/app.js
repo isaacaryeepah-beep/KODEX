@@ -1275,6 +1275,12 @@ function showSubscriptionBlock(message, isAdmin) {
 
   const msg = message || 'Your subscription has expired. Access is suspended.';
   const isAdminUser = isAdmin || (currentUser && currentUser.role === 'admin');
+  // Every role except HOD has its own self-serve Paystack subscription (see
+  // renderSubscription's "My Subscription" branch) -- HOD access rides on
+  // the institution's plan with no individual pay option, so that's the
+  // only role still pointed at "ask your admin" instead of a pay button.
+  const isHodUser = currentUser && currentUser.role === 'hod';
+  const canSelfServe = !isHodUser;
   const institutionName = currentUser?.company?.name || currentUser?.institutionName || '';
 
   // Remove any existing block overlay
@@ -1296,13 +1302,13 @@ function showSubscriptionBlock(message, isAdmin) {
       <h2 style="margin:0 0 8px;font-size:22px;font-weight:700;color:#0f172a">Subscription Expired</h2>
       ${institutionName ? `<p style="margin:0 0 16px;font-size:13px;font-weight:600;color:#6366f1;letter-spacing:.4px;text-transform:uppercase">${esc(institutionName)}</p>` : ''}
       <p style="margin:0 0 28px;font-size:14px;color:#475569;line-height:1.6">${esc(msg)}</p>
-      ${isAdminUser
+      ${canSelfServe
         ? `<div style="display:flex;flex-direction:column;gap:10px">
             <button onclick="(function(){var o=document.getElementById('_sub-block-overlay');if(o)o.remove();_subBlockActive=false;document.body.style.overflow='';navigateTo('subscription');})();"
               style="background:#6366f1;color:#fff;border:none;border-radius:8px;padding:12px 24px;font-size:14px;font-weight:600;cursor:pointer;width:100%">
-              Renew Subscription
+              ${isAdminUser ? 'Renew Subscription' : 'Subscribe Now'}
             </button>
-            <p style="margin:0;font-size:12px;color:#94a3b8">Renewing will immediately restore access for all users.</p>
+            <p style="margin:0;font-size:12px;color:#94a3b8">${isAdminUser ? 'Renewing will immediately restore access for all users.' : 'Subscribing restores your personal access immediately — paid via Paystack.'}</p>
           </div>`
         : `<div style="background:#f8fafc;border-radius:8px;padding:14px 16px;text-align:left">
             <p style="margin:0 0 4px;font-size:13px;font-weight:600;color:#0f172a">What to do</p>
