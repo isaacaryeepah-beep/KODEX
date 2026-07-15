@@ -7271,13 +7271,19 @@ table tr:hover td { background: #f8fafc !important; }
 .auth-split-overlay { display: none; }
 
 @media (min-width: 900px) {
-  .auth-container.auth-split {
+  /* !important + the extra specificity of ".auth-split" is required here to
+     beat the legacy ".auth-container { max-width:440px!important; padding:
+     36px 32px!important }" premium-card rule earlier in this file — without
+     it, every split-panel portal silently renders as a cramped 440px card
+     no matter what these declarations say. */
+  .auth-container.auth-split:not(.hidden) {
     display: flex;
     align-items: stretch;
     justify-content: flex-start;
-    max-width: 860px;
-    width: 100%;
-    padding: 0;
+    max-width: 1160px !important;
+    min-height: 640px;
+    width: 92% !important;
+    padding: 0 !important;
     position: relative;
   }
 
@@ -7290,8 +7296,19 @@ table tr:hover td { background: #f8fafc !important; }
   .auth-container.auth-split .auth-split-formcol {
     width: 50%;
     flex: 0 0 50%;
-    padding: 40px 40px;
+    padding: 64px 64px;
     box-sizing: border-box;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+  }
+
+  /* Register forms are much taller than login — let them sit at a natural
+     top-anchored flow instead of being vertically centered (which would
+     push their tops off-screen), while short login/forgot stays centered. */
+  .auth-container.auth-split .auth-split-formcol:has(form[id$="-register-form"]:not(.hidden)) {
+    justify-content: flex-start;
+    padding-top: 56px;
   }
 
   .auth-container.auth-split .auth-back { margin-top: -4px; }
@@ -7317,7 +7334,7 @@ table tr:hover td { background: #f8fafc !important; }
     display: flex;
     align-items: center;
     justify-content: center;
-    padding: 40px 36px;
+    padding: 56px 52px;
     box-sizing: border-box;
   }
 
@@ -7333,7 +7350,7 @@ table tr:hover td { background: #f8fafc !important; }
 
   .auth-split-panel {
     position: absolute;
-    inset: 40px 36px;
+    inset: 56px 48px;
     display: flex;
     flex-direction: column;
     align-items: center;
@@ -7346,40 +7363,41 @@ table tr:hover td { background: #f8fafc !important; }
   }
 
   .auth-split-icon {
-    width: 52px;
-    height: 52px;
-    border-radius: 14px;
+    width: 68px;
+    height: 68px;
+    border-radius: 18px;
     background: rgba(255,255,255,.16);
     border: 1px solid rgba(255,255,255,.3);
     display: flex;
     align-items: center;
     justify-content: center;
-    margin-bottom: 16px;
+    margin-bottom: 22px;
   }
+  .auth-split-icon svg { width: 32px; height: 32px; }
 
   .auth-split-eyebrow {
-    font-size: 11px;
+    font-size: 12px;
     font-weight: 700;
     letter-spacing: 1.5px;
     text-transform: uppercase;
     opacity: .85;
-    margin-bottom: 8px;
+    margin-bottom: 10px;
   }
 
   .auth-split-panel h3 {
-    font-size: 21px;
+    font-size: 27px;
     font-weight: 800;
     line-height: 1.25;
-    margin-bottom: 10px;
+    margin-bottom: 14px;
     letter-spacing: -.3px;
   }
 
   .auth-split-panel p {
-    font-size: 13px;
-    line-height: 1.6;
+    font-size: 14.5px;
+    line-height: 1.65;
     opacity: .92;
-    max-width: 260px;
-    margin-bottom: 22px;
+    max-width: 300px;
+    margin-bottom: 28px;
   }
 
   .auth-split-btn {
@@ -7390,13 +7408,19 @@ table tr:hover td { background: #f8fafc !important; }
     color: #4f46e5;
     border: none;
     border-radius: 10px;
-    padding: 11px 22px;
-    font-size: 13.5px;
+    padding: 13px 26px;
+    font-size: 14.5px;
     font-weight: 700;
     cursor: pointer;
     transition: transform .15s;
   }
   .auth-split-btn:hover { transform: translateY(-1px); }
+
+  /* Extra headroom on very large screens so the card doesn't feel small
+     relative to the viewport, without letting it sprawl indefinitely. */
+  @media (min-width: 1400px) {
+    .auth-container.auth-split { max-width: 1240px !important; min-height: 680px; }
+  }
 
   /* Default (login / forgot): overlay rests on the right, inviting registration */
   .auth-container.auth-split[data-mode="login"] .auth-split-overlay,
