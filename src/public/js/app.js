@@ -653,15 +653,39 @@ const OFFLINE_LOGIN_KEY = 'dikly_offline_profiles';  // stores cached user profi
 const OFFLINE_LOGIN_MAX_AGE_DAYS = 30;               // cached profile expires after 30 days
 
 // ── Hash a password with SHA-256 (async, no library needed) ──────────────────
+// crypto.subtle only exists in a secure context (HTTPS/localhost); dikly.sbs
+// always qualifies, but a defensive fallback costs nothing and means a
+// missing/blocked Web Crypto API degrades to a weaker hash instead of
+// silently killing offline-profile caching outright.
+function _fallbackHash(str) {
+  let h1 = 0xdeadbeef, h2 = 0x41c6ce57;
+  for (let i = 0; i < str.length; i++) {
+    const ch = str.charCodeAt(i);
+    h1 = Math.imul(h1 ^ ch, 2654435761);
+    h2 = Math.imul(h2 ^ ch, 1597334677);
+  }
+  h1 = Math.imul(h1 ^ (h1 >>> 16), 2246822507) ^ Math.imul(h2 ^ (h2 >>> 13), 3266489909);
+  h2 = Math.imul(h2 ^ (h2 >>> 16), 2246822507) ^ Math.imul(h1 ^ (h1 >>> 13), 3266489909);
+  return (h1 >>> 0).toString(16).padStart(8, '0') + (h2 >>> 0).toString(16).padStart(8, '0');
+}
+
 async function hashPassword(password) {
+  const salted = password + 'DIKLY_SALT_2025'; // salted hash
+  if (!window.crypto?.subtle) {
+    console.warn('[OfflineLogin] crypto.subtle unavailable — using fallback hash');
+    return 'fb1:' + _fallbackHash(salted);
+  }
   const encoder = new TextEncoder();
-  const data = encoder.encode(password + 'DIKLY_SALT_2025'); // salted hash
+  const data = encoder.encode(salted);
   const hashBuffer = await crypto.subtle.digest('SHA-256', data);
   const hashArray = Array.from(new Uint8Array(hashBuffer));
   return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
 }
 
 // ── Save user profile after successful online login ───────────────────────────
+// Returns true/false so callers can tell the user when caching genuinely
+// failed, instead of them only discovering it's broken the next time they
+// need offline access and get "No offline profile found."
 async function saveOfflineProfile(credentials, userData) {
   try {
     const profiles = JSON.parse(localStorage.getItem(OFFLINE_LOGIN_KEY) || '{}');
@@ -691,8 +715,10 @@ async function saveOfflineProfile(credentials, userData) {
 
     localStorage.setItem(OFFLINE_LOGIN_KEY, JSON.stringify(profiles));
     console.log('[OfflineLogin] Profile cached for', credentials.email || credentials.indexNumber);
+    return true;
   } catch (e) {
     console.warn('[OfflineLogin] Failed to save profile:', e);
+    return false;
   }
 }
 
@@ -880,7 +906,10 @@ function _isNetworkError(e) {
 async function loginOnlineWithOfflineFallback(credentials, formId) {
   try {
     const data = await initiate2FA(credentials);
-    await saveOfflineProfile(credentials, data);
+    const cached = await saveOfflineProfile(credentials, data);
+    if (!cached) {
+      showToastNotif('Could not save offline access on this device — you may need to reconnect to sign in next time.', 'warn');
+    }
     return data;
   } catch (e) {
     if (!_isNetworkError(e)) throw e;
