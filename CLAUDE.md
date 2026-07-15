@@ -112,6 +112,12 @@ This file is the single source of truth for Claude Code sessions. Read it at the
 - User is the owner: `isaacaryeepah-beep` on GitHub, repo: `isaacaryeepah-beep/KODEX`
 - Working branch: `claude/update-resume-aVv3d`
 - User email: kellywest251@gmail.com
+- **TDD is mandatory for every backend feature/logic change** (user directive: "remember to do it for everything"). Any new controller, service, cron job, or route handler ships in the same PR as a permanent Jest test under `tests/` — never a throwaway scratchpad script only. Follow the established pattern:
+  - Real MongoDB, not mocks of the code under test: `mongodb-memory-server` in CI (auto, via `.github/workflows/tests.yml`, which runs `npm test` on every push/PR to main), with a `TEST_MONGO_URI` env var override for fast local runs against the sandbox's FerretDB.
+  - Mock only true externals (email/SMS send functions) — see `tests/routes/auth.test.js`'s `jest.mock("../../src/services/emailService", ...)`.
+  - Fire-and-forget writes (`notificationService.notify*`) aren't awaited by the code under test either — tests give them a brief `setTimeout` beat before asserting, then read back the real DB rows.
+  - Reference suites: `tests/routes/auth.test.js` (HTTP layer, supertest), `tests/services/timetableReminder.test.js` and `tests/services/quizReminder.test.js` (cron/service layer, direct invocation — these have no HTTP surface, so the exported function *is* the surface to test).
+  - Known gap, not yet solved: the vanilla-JS SPA frontend (`src/public/js/app.js`) has no permanent test framework (Jest here is `testEnvironment: node`, no jsdom/testing-library). Frontend changes are verified via Playwright against a live seeded server instead, but that verification is currently throwaway (scratchpad scripts), not committed. If asked to close this gap too, it needs new test infra, not a bolt-on to the existing backend suite.
 
 ---
 
