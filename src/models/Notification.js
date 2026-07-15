@@ -43,6 +43,8 @@ const NOTIFICATION_TYPES = Object.freeze({
   QUIZ_PUBLISHED:        "quiz_published",         // → enrolled students
   QUIZ_RESULT_RELEASED:  "quiz_result_released",   // → student
   QUIZ_VIOLATION:        "quiz_violation",         // → lecturer (proctoring event)
+  QUIZ_OPENING_SOON:     "quiz_opening_soon",      // → enrolled students (reminder)
+  QUIZ_CLOSING_SOON:     "quiz_closing_soon",      // → students who haven't attempted yet (reminder)
 
   // Academic: general
   GRADE_RELEASED:        "grade_released",         // → student (gradebook update)

@@ -358,6 +358,56 @@ exports.notifyQuizPublished = async (quiz, studentIds, quizType = "normal") => {
 };
 
 /**
+ * Notify enrolled students that a quiz opens in ~30 minutes.
+ */
+exports.notifyQuizOpeningSoon = async (quiz, studentIds) => {
+  if (!studentIds || studentIds.length === 0) return;
+  const title = `Quiz opens soon: ${quiz.title}`;
+  const body  = "Opens in about 30 minutes";
+  await notifyMany(studentIds, {
+    company: quiz.company,
+    type:    NOTIFICATION_TYPES.QUIZ_OPENING_SOON,
+    title,
+    body,
+    link:    `/quizzes`,
+    data:    { quizId: quiz._id, courseId: quiz.course },
+  });
+  for (const studentId of studentIds) {
+    pushService.sendToUser(studentId, {
+      title,
+      body,
+      url: "/quizzes",
+      tag: "quiz-reminder",
+    }).catch((err) => console.error("[NotificationService] Quiz opening push failed:", err.message));
+  }
+};
+
+/**
+ * Notify students who haven't attempted yet that a quiz closes in ~30 minutes.
+ */
+exports.notifyQuizClosingSoon = async (quiz, studentIds) => {
+  if (!studentIds || studentIds.length === 0) return;
+  const title = `Quiz closing soon: ${quiz.title}`;
+  const body  = "Closes in about 30 minutes — you haven't attempted it yet";
+  await notifyMany(studentIds, {
+    company: quiz.company,
+    type:    NOTIFICATION_TYPES.QUIZ_CLOSING_SOON,
+    title,
+    body,
+    link:    `/quizzes`,
+    data:    { quizId: quiz._id, courseId: quiz.course },
+  });
+  for (const studentId of studentIds) {
+    pushService.sendToUser(studentId, {
+      title,
+      body,
+      url: "/quizzes",
+      tag: "quiz-reminder",
+    }).catch((err) => console.error("[NotificationService] Quiz closing push failed:", err.message));
+  }
+};
+
+/**
  * Notify a student that their quiz result has been released.
  */
 exports.notifyQuizResultReleased = async (result, studentId, quizType = "normal") => {

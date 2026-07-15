@@ -669,6 +669,12 @@ const start = async () => {
       logger.error("Timetable reminder scheduler failed to start", { error: e.message });
     }
 
+    try {
+      require("./services/quizReminder").startQuizReminder();
+    } catch (e) {
+      logger.error("Quiz reminder scheduler failed to start", { error: e.message });
+    }
+
     // Daily MongoDB backup at 02:00 (only when backup is configured)
     if (process.env.BACKUP_DIR || process.env.BACKUP_S3_BUCKET) {
       try {
