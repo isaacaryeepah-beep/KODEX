@@ -7234,15 +7234,23 @@ table tr:hover td { background: #f8fafc !important; }
 }
 
 /* ══════════════════════════════════════════════════════════════════════
-   STUDENT AUTH — SPLIT-PANEL SIGN IN / REGISTER (desktop only)
+   AUTH — SPLIT-PANEL SIGN IN / REGISTER (desktop only)
+   Shared across every portal's auth container (student, admin, lecturer,
+   hod, employee): add class "auth-split" + a data-mode attribute
+   ("login" | "register" | "forgot") to the container, wrap its existing
+   content in .auth-split-formcol, and add a sibling .auth-split-overlay
+   with two .auth-split-panel variants (-login / -register).
+
    A gradient panel glides between sides with a subtle 3D turn when
-   switching between login and register — the form column itself never
-   moves, so it's decoupled from the login form (short) vs register form
-   (long) height mismatch. Mobile falls back to the original single
-   column with a light fade-in on each form swap.
+   switching between login and register. The form column swaps sides via
+   justify-content (not its own transform) so it's decoupled from the
+   login form (short) vs register form (long) height mismatch — the
+   overlay always ends up on the opposite side from the form. Mobile
+   falls back to the original single column with a light fade-in on
+   each form swap (overlay is display:none below 900px).
 ══════════════════════════════════════════════════════════════════════ */
 
-#student-auth.auth-split {
+.auth-container.auth-split {
   overflow: hidden;
 }
 
@@ -7263,7 +7271,7 @@ table tr:hover td { background: #f8fafc !important; }
 .auth-split-overlay { display: none; }
 
 @media (min-width: 900px) {
-  #student-auth.auth-split {
+  .auth-container.auth-split {
     display: flex;
     align-items: stretch;
     justify-content: flex-start;
@@ -7275,18 +7283,18 @@ table tr:hover td { background: #f8fafc !important; }
 
   /* Register mode: overlay slides to occupy the LEFT half, so the form
      column must swap to the right half or the two would overlap. */
-  #student-auth.auth-split[data-mode="register"] {
+  .auth-container.auth-split[data-mode="register"] {
     justify-content: flex-end;
   }
 
-  #student-auth.auth-split .auth-split-formcol {
+  .auth-container.auth-split .auth-split-formcol {
     width: 50%;
     flex: 0 0 50%;
     padding: 40px 40px;
     box-sizing: border-box;
   }
 
-  #student-auth.auth-split .auth-back { margin-top: -4px; }
+  .auth-container.auth-split .auth-back { margin-top: -4px; }
 
   .auth-split-overlay {
     display: block;
@@ -7391,22 +7399,22 @@ table tr:hover td { background: #f8fafc !important; }
   .auth-split-btn:hover { transform: translateY(-1px); }
 
   /* Default (login / forgot): overlay rests on the right, inviting registration */
-  #student-auth.auth-split[data-mode="login"] .auth-split-overlay,
-  #student-auth.auth-split[data-mode="forgot"] .auth-split-overlay {
+  .auth-container.auth-split[data-mode="login"] .auth-split-overlay,
+  .auth-container.auth-split[data-mode="forgot"] .auth-split-overlay {
     animation: authOverlaySlideRight 640ms var(--ease, ease) forwards;
   }
-  #student-auth.auth-split[data-mode="login"] .auth-split-panel-login,
-  #student-auth.auth-split[data-mode="forgot"] .auth-split-panel-login {
+  .auth-container.auth-split[data-mode="login"] .auth-split-panel-login,
+  .auth-container.auth-split[data-mode="forgot"] .auth-split-panel-login {
     opacity: 1;
     pointer-events: auto;
     transition-delay: .3s;
   }
 
   /* Register: overlay glides to the left, inviting sign-in */
-  #student-auth.auth-split[data-mode="register"] .auth-split-overlay {
+  .auth-container.auth-split[data-mode="register"] .auth-split-overlay {
     animation: authOverlaySlideLeft 640ms var(--ease, ease) forwards;
   }
-  #student-auth.auth-split[data-mode="register"] .auth-split-panel-register {
+  .auth-container.auth-split[data-mode="register"] .auth-split-panel-register {
     opacity: 1;
     pointer-events: auto;
     transition-delay: .3s;

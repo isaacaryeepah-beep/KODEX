@@ -1444,21 +1444,27 @@ function backToPortalSelector() {
 function showAdminRegister() {
   document.getElementById('admin-login-form').classList.add('hidden');
   document.getElementById('admin-auth-error').style.display = 'none';
+  let form;
   if (selectedPortalType === 'manager') {
     document.getElementById('admin-register-form').classList.add('hidden');
-    document.getElementById('manager-register-form').classList.remove('hidden');
+    form = document.getElementById('manager-register-form');
+    form.classList.remove('hidden');
   } else {
     document.getElementById('manager-register-form').classList.add('hidden');
-    document.getElementById('admin-register-form').classList.remove('hidden');
+    form = document.getElementById('admin-register-form');
+    form.classList.remove('hidden');
   }
+  _playAuthTransition('admin-auth', 'register', form);
 }
 
 function showAdminLogin() {
   document.getElementById('admin-register-form').classList.add('hidden');
   document.getElementById('manager-register-form').classList.add('hidden');
-  document.getElementById('admin-login-form').classList.remove('hidden');
+  const form = document.getElementById('admin-login-form');
+  form.classList.remove('hidden');
   document.getElementById('admin-auth-error').style.display = 'none';
   const f = document.getElementById('admin-forgot-form'); if(f) f.classList.add('hidden');
+  _playAuthTransition('admin-auth', 'login', form);
 }
 
 async function handleManagerRegister() {
@@ -1498,6 +1504,7 @@ function showAdminForgot() {
   const np = document.getElementById('admin-new-password-group'); if(np) np.classList.add('hidden');
   const btn = document.getElementById('admin-forgot-btn'); if(btn) btn.textContent = 'Request Reset Code';
   adminForgotStep = 'request';
+  _playAuthTransition('admin-auth', 'forgot', f);
 }
 
 let adminForgotEmail = '', adminForgotEmailAddr = '', adminForgotStep = 'request';
@@ -1565,15 +1572,19 @@ function showAdminError(msg) {
 
 function showLecturerRegister() {
   document.getElementById('lecturer-login-form').classList.add('hidden');
-  document.getElementById('lecturer-register-form').classList.remove('hidden');
+  const form = document.getElementById('lecturer-register-form');
+  form.classList.remove('hidden');
   document.getElementById('lecturer-auth-error').style.display = 'none';
+  _playAuthTransition('lecturer-auth', 'register', form);
 }
 
 function showLecturerLogin() {
   document.getElementById('lecturer-register-form').classList.add('hidden');
-  document.getElementById('lecturer-login-form').classList.remove('hidden');
+  const form = document.getElementById('lecturer-login-form');
+  form.classList.remove('hidden');
   document.getElementById('lecturer-auth-error').style.display = 'none';
   const f = document.getElementById('lecturer-forgot-form'); if(f) f.classList.add('hidden');
+  _playAuthTransition('lecturer-auth', 'login', form);
 }
 
 function showLecturerForgot() {
@@ -1584,6 +1595,7 @@ function showLecturerForgot() {
   const np = document.getElementById('lecturer-new-password-group'); if(np) np.classList.add('hidden');
   const btn = document.getElementById('lecturer-forgot-btn'); if(btn) btn.textContent = 'Request Reset Code';
   lecturerForgotStep = 'request';
+  _playAuthTransition('lecturer-auth', 'forgot', f);
 }
 
 let lecturerForgotEmail = '', lecturerForgotIsEmail = false, lecturerForgotStep = 'request';
@@ -1668,9 +1680,10 @@ function showEmployeeError(msg) {
 
 // Restarts the fade-in animation on the form that just became visible, and
 // drives the split-panel overlay (desktop) via data-mode on the container —
-// see the "STUDENT AUTH — SPLIT-PANEL" block in style.css.
-function _playStudentAuthTransition(mode, formEl) {
-  const container = document.getElementById('student-auth');
+// see the "AUTH — SPLIT-PANEL" block in style.css. Shared by every portal's
+// auth container (student, admin, lecturer, hod, employee).
+function _playAuthTransition(containerId, mode, formEl) {
+  const container = document.getElementById(containerId);
   if (container) container.setAttribute('data-mode', mode);
   if (formEl) {
     formEl.classList.remove('auth-form-entering');
@@ -1685,7 +1698,7 @@ function showStudentRegister() {
   const form = document.getElementById('student-register-form');
   form.classList.remove('hidden');
   document.getElementById('student-auth-error').style.display = 'none';
-  _playStudentAuthTransition('register', form);
+  _playAuthTransition('student-auth', 'register', form);
 }
 
 function showStudentLogin() {
@@ -1695,7 +1708,7 @@ function showStudentLogin() {
   form.classList.remove('hidden');
   document.getElementById('student-auth-error').style.display = 'none';
   studentForgotStep = 'request';
-  _playStudentAuthTransition('login', form);
+  _playAuthTransition('student-auth', 'login', form);
 }
 
 function showStudentForgot() {
@@ -1708,7 +1721,7 @@ function showStudentForgot() {
   document.getElementById('student-new-password-group').classList.add('hidden');
   document.getElementById('student-forgot-btn').textContent = 'Request Reset Code';
   studentForgotStep = 'request';
-  _playStudentAuthTransition('forgot', form);
+  _playAuthTransition('student-auth', 'forgot', form);
 }
 
 function showStudentError(msg) {
@@ -1960,7 +1973,9 @@ async function loadDeptDropdown(institutionCode, targetId, placeholder) {
 
 function showEmployeeRegister() {
   document.getElementById('employee-login-form').classList.add('hidden');
-  document.getElementById('employee-register-form').classList.remove('hidden');
+  const form = document.getElementById('employee-register-form');
+  form.classList.remove('hidden');
+  _playAuthTransition('employee-auth', 'register', form);
 }
 
 function showEmployeeForgot() {
@@ -1972,13 +1987,16 @@ function showEmployeeForgot() {
   employeeForgotStep = 'request';
   const btn = document.getElementById('employee-forgot-btn');
   if (btn) btn.textContent = 'Request Reset Code';
+  _playAuthTransition('employee-auth', 'forgot', f);
 }
 
 function showEmployeeLogin() {
   const f = document.getElementById('employee-forgot-form');
   if (f) f.classList.add('hidden');
   document.getElementById('employee-register-form').classList.add('hidden');
-  document.getElementById('employee-login-form').classList.remove('hidden');
+  const form = document.getElementById('employee-login-form');
+  form.classList.remove('hidden');
+  _playAuthTransition('employee-auth', 'login', form);
 }
 
 let employeeForgotStep = 'request';
@@ -2031,10 +2049,12 @@ async function handleEmployeeForgotPassword() {
 //  HOD AUTH
 // ════════════════════════════════════════════════════════════════════════════
 function showHodLogin() {
-  document.getElementById('hod-login-form').classList.remove('hidden');
+  const form = document.getElementById('hod-login-form');
+  form.classList.remove('hidden');
   document.getElementById('hod-forgot-form').classList.add('hidden');
   const regForm = document.getElementById('hod-register-form');
   if (regForm) regForm.classList.add('hidden');
+  _playAuthTransition('hod-auth', 'login', form);
 }
 
 function showHodRegister() {
@@ -2042,6 +2062,7 @@ function showHodRegister() {
   document.getElementById('hod-forgot-form').classList.add('hidden');
   const regForm = document.getElementById('hod-register-form');
   if (regForm) regForm.classList.remove('hidden');
+  _playAuthTransition('hod-auth', 'register', regForm);
 }
 
 async function handleHodRegister() {
@@ -2091,7 +2112,9 @@ async function handleHodRegister() {
 }
 function showHodForgot() {
   document.getElementById('hod-login-form').classList.add('hidden');
-  document.getElementById('hod-forgot-form').classList.remove('hidden');
+  const form = document.getElementById('hod-forgot-form');
+  form.classList.remove('hidden');
+  _playAuthTransition('hod-auth', 'forgot', form);
 }
 function showHodError(msg) {
   const el = document.getElementById('hod-auth-error');
