@@ -1,8 +1,14 @@
 name: Build Flutter APK
 
+# Path-filtered (see build-android.yml for why): this was firing on every
+# backend/unrelated push, and its artifacts share the same account-wide
+# GitHub Actions storage quota that build-android.yml was exhausting.
 on:
   push:
     branches: [main, claude/update-resume-aVv3d]
+    paths:
+      - 'dikly_flutter/**'
+      - '.github/workflows/build-flutter.yml'
   workflow_dispatch:
 
 concurrency:
@@ -60,7 +66,7 @@ jobs:
         with:
           name: Dikly-Android-APK
           path: dikly_flutter/build/app/outputs/flutter-apk/app-release.apk
-          retention-days: 30
+          retention-days: 3
 
       - name: Build Release AAB (Play Store)
         working-directory: dikly_flutter
@@ -71,7 +77,7 @@ jobs:
         with:
           name: Dikly-Android-AAB
           path: dikly_flutter/build/app/outputs/bundle/release/app-release.aab
-          retention-days: 30
+          retention-days: 3
 
       - name: Publish APK to public Dikly_releases repo
         run: |

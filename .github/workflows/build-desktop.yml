@@ -1,8 +1,15 @@
 name: Build Desktop App
 
+# Path-filtered (see build-android.yml for why): this was firing on every
+# backend/unrelated push, and its artifacts share the same account-wide
+# GitHub Actions storage quota that build-android.yml was exhausting.
 on:
   push:
     branches: [main, claude/are-you-there-hjdx9r]
+    paths:
+      - 'electron/**'
+      - 'resources/**'
+      - '.github/workflows/build-desktop.yml'
   workflow_dispatch:
 
 concurrency:
@@ -56,7 +63,7 @@ jobs:
         with:
           name: DIKLY-Windows
           path: electron/dist/
-          retention-days: 30
+          retention-days: 3
 
       # ── Publish Windows to GitHub Releases ────────────────────────────────
       - name: Find Windows installer
@@ -153,7 +160,7 @@ jobs:
         with:
           name: DIKLY-Mac
           path: electron/dist/
-          retention-days: 30
+          retention-days: 3
 
       # ── Publish Mac to GitHub Releases ────────────────────────────────────
       - name: Find Mac DMG

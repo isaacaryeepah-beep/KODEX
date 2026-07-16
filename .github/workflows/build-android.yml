@@ -1,8 +1,27 @@
 name: Build Android (Capacitor)
 
+# Path-filtered on purpose: this workflow used to fire on every push to
+# main/claude/are-you-there-hjdx9r regardless of whether anything mobile-
+# relevant changed, racking up 1400+ runs. Each run uploads an AAB + APK as
+# workflow artifacts, and those artifacts (not just the published release)
+# ate into the account's shared GitHub Actions storage quota until uploads
+# started failing outright ("Artifact storage quota has been hit"), which
+# silently broke the "Publish to Dikly_releases" step that makes the APK
+# downloadable -- the app's live download link 404'd with no build ever
+# having failed loudly enough to notice.
 on:
   push:
     branches: [main, claude/are-you-there-hjdx9r]
+    paths:
+      - 'src/public/**'
+      - 'scripts/gen_icons.py'
+      - 'scripts/gen_splash.py'
+      - 'scripts/patch-android-splash.sh'
+      - 'capacitor.config.json'
+      - 'package.json'
+      - 'package-lock.json'
+      - 'android/**'
+      - '.github/workflows/build-android.yml'
   workflow_dispatch:
 
 jobs:
@@ -285,7 +304,7 @@ jobs:
         with:
           name: DIKLY-release-AAB
           path: android/app/build/outputs/bundle/release/app-release.aab
-          retention-days: 60
+          retention-days: 3
 
       # ── APK (for sideloading / testing) ───────────────────────────────────
       - name: Build Release APK
@@ -296,7 +315,7 @@ jobs:
         with:
           name: DIKLY-release-APK
           path: android/app/build/outputs/apk/release/app-release.apk
-          retention-days: 60
+          retention-days: 3
 
       # ── GitHub Release (publicly downloadable APK) ────────────────────────
       - name: Rename APK for release
