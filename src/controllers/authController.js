@@ -945,25 +945,36 @@ exports.login = async (req, res) => {
       }
       user = await User.findOne({ email, company: company._id, role: "employee" }).select("+password");
     } else if (email && loginRole === "lecturer") {
+      // When institutionCode is given, scope to that company only -- never fall
+      // back to a global (cross-tenant) search, since the same email can
+      // legitimately belong to a lecturer at a different institution.
       if (institutionCode) {
         const company = await Company.findOne({ institutionCode: institutionCode.toUpperCase() });
-        if (company) {
-          user = await User.findOne({ email, company: company._id, role: "lecturer" }).select("+password");
+        if (!company) {
+          return res.status(401).json({ error: "Institution not found" });
         }
-      }
-      if (!user) {
+        user = await User.findOne({ email, company: company._id, role: "lecturer" }).select("+password");
+      } else {
         user = await User.findOne({ email, role: "lecturer" }).select("+password");
       }
     } else if (email && loginRole === "hod") {
       if (institutionCode) {
         const company = await Company.findOne({ institutionCode: institutionCode.toUpperCase() });
-        if (company) {
-          user = await User.findOne({ email, company: company._id, role: "hod" }).select("+password");
+        if (!company) {
+          return res.status(401).json({ error: "Institution not found" });
         }
-      }
-      if (!user) {
+        user = await User.findOne({ email, company: company._id, role: "hod" }).select("+password");
+      } else {
         user = await User.findOne({ email, role: "hod" }).select("+password");
       }
+    } else if (email && institutionCode) {
+      // Admin/generic portal login with an institution code supplied -- scope
+      // to that company instead of silently searching every tenant by email.
+      const company = await Company.findOne({ institutionCode: institutionCode.toUpperCase() });
+      if (!company) {
+        return res.status(401).json({ error: "Institution not found" });
+      }
+      user = await User.findOne({ email, company: company._id }).select("+password");
     } else {
       user = await User.findOne({ email }).select("+password");
     }

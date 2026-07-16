@@ -4,6 +4,7 @@ const { requireRole, requireMode } = require("../middleware/role");
 const { requireActiveSubscription } = require("../middleware/subscription");
 const ctrl    = require("../controllers/lecturerQuizController");
 const aiCtrl  = require("../controllers/aiQuizController");
+const { aiGenerateLimiter, uploadLimiter } = require("../middleware/rateLimiter");
 
 const router = express.Router();
 
@@ -32,6 +33,8 @@ router.delete("/:id/questions/:questionId", ctrl.deleteQuestion);
 
 router.get("/:id/results", ctrl.getQuizResults);
 router.get("/:id/results/:attemptId", ctrl.getStudentAnswers);
-router.post("/:id/ai-generate", aiCtrl.generateQuestions);
+// Rate-limited to match its sibling /api/lecturer/ai-generator/generate
+// (same paid-API cost profile: PDF/image upload + Claude call).
+router.post("/:id/ai-generate", aiGenerateLimiter, uploadLimiter, aiCtrl.generateQuestions);
 
 module.exports = router;

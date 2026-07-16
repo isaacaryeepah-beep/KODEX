@@ -9,6 +9,7 @@
 const requestCounts = new Map();
 
 // Clean up old entries every 5 minutes to prevent memory leaks
+// unref() so this timer never keeps the process (or a test runner) alive.
 setInterval(() => {
   const now = Date.now();
   for (const [key, data] of requestCounts.entries()) {
@@ -16,7 +17,7 @@ setInterval(() => {
       requestCounts.delete(key);
     }
   }
-}, 5 * 60 * 1000);
+}, 5 * 60 * 1000).unref();
 
 function createRateLimiter({ windowMs, max, message }) {
   return (req, res, next) => {
@@ -75,7 +76,7 @@ const passwordResetLimiter = (() => {
   setInterval(() => {
     const now = Date.now();
     for (const [k, v] of _counts.entries()) if (now - v.start > 60 * 60 * 1000) _counts.delete(k);
-  }, 5 * 60 * 1000);
+  }, 5 * 60 * 1000).unref();
   return (req, res, next) => {
     const id = (req.body?.phone || req.body?.email || req.body?.indexNumber || '').toLowerCase().trim();
     if (!id) return next(); // no identifier — controller will reject; don't pollute rate-limit bucket
@@ -134,6 +135,15 @@ const aiGenerateLimiter = createRateLimiter({
   message: 'Too many AI generation requests. Please wait before generating more quizzes.',
 });
 
+// AI chat (FAQ assistant): 30 req per 15 minutes per IP -- looser than
+// aiGenerateLimiter since this is interactive back-and-forth, not bulk
+// content generation, but still bounds paid-API cost per caller.
+const aiChatLimiter = createRateLimiter({
+  windowMs: 15 * 60 * 1000,
+  max: 30,
+  message: 'Too many AI chat requests. Please wait a moment before asking again.',
+});
+
 // Attendance mark: 60 req per 10 minutes per IP
 const attendanceMarkLimiter = createRateLimiter({
   windowMs: 10 * 60 * 1000,
@@ -148,6 +158,24 @@ const uploadLimiter = createRateLimiter({
   message: 'Too many file uploads. Please wait before uploading more files.',
 });
 
+// Device pairing (unauthenticated -- gated only by pairingCode + institutionCode):
+// 20 req per hour per IP. Generous enough for legitimate firmware retries,
+// tight enough to bound brute-forcing the pairing code space.
+const devicePairLimiter = createRateLimiter({
+  windowMs: 60 * 60 * 1000,
+  max: 20,
+  message: 'Too many pairing attempts. Please wait before trying again.',
+});
+
+// Institution lookup (unauthenticated, public by design): 30 req per 15 minutes
+// per IP -- throttles bulk enumeration of institutionCodes without blocking
+// normal typo/retry use on the login screen.
+const institutionLookupLimiter = createRateLimiter({
+  windowMs: 15 * 60 * 1000,
+  max: 30,
+  message: 'Too many requests. Please wait before trying again.',
+});
+
 module.exports = {
   loginLimiter,
   registerLimiter,
@@ -157,6 +185,9 @@ module.exports = {
   snapshotLimiter,
   reportLimiter,
   aiGenerateLimiter,
+  aiChatLimiter,
   attendanceMarkLimiter,
   uploadLimiter,
+  devicePairLimiter,
+  institutionLookupLimiter,
 };

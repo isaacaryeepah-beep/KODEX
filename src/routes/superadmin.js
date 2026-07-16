@@ -23,8 +23,26 @@ router.post("/login", loginLimiter, async (req, res) => {
     if (!email || !password) return res.status(400).json({ error: "Email and password required" });
     const user = await User.findOne({ email, role: "superadmin" }).select("+password");
     if (!user) return res.status(401).json({ error: "Invalid credentials" });
+    if (user.isLocked) {
+      return res.status(403).json({ error: "This account is locked after repeated failed logins. Contact another superadmin to unlock it." });
+    }
     const match = await bcrypt.compare(password, user.password);
-    if (!match) return res.status(401).json({ error: "Invalid credentials" });
+    if (!match) {
+      user.failedLoginAttempts = (user.failedLoginAttempts || 0) + 1;
+      user.lastFailedLoginAt = new Date();
+      if (user.failedLoginAttempts >= 5) {
+        user.isLocked = true;
+        user.lockedAt = new Date();
+        user.lockReason = "Account locked after 5 failed login attempts.";
+      }
+      await user.save().catch(() => {});
+      return res.status(401).json({ error: "Invalid credentials" });
+    }
+    if (user.failedLoginAttempts > 0) {
+      user.failedLoginAttempts = 0;
+      user.lastFailedLoginAt = null;
+      await user.save().catch(() => {});
+    }
     const token = jwt.sign({ id: user._id }, process.env.JWT_SECRET, { expiresIn: "8h" });
     res.json({
       token,

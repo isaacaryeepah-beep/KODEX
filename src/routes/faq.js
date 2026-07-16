@@ -37,6 +37,7 @@ const authenticate                  = require("../middleware/auth");
 const { requireRole }               = require("../middleware/role");
 const { companyIsolation }          = require("../middleware/companyIsolation");
 const { requireActiveSubscription } = require("../middleware/subscription");
+const { aiChatLimiter } = require("../middleware/rateLimiter");
 const ctrl = require("../controllers/faqController");
 const { FAQ_CATEGORIES, CORPORATE_CATEGORIES, ACADEMIC_CATEGORIES } = require("../models/FAQ");
 const Company = require("../models/Company");
@@ -70,7 +71,8 @@ router.get("/admin/queries", ...mw, requireRole(...ADMIN), ctrl.getQueries);
 router.post("/admin/promote/:queryId", ...mw, requireRole(...ADMIN), ctrl.promoteToFAQ);
 
 // ── Chat endpoints — declared before /:id ────────────────────────────────────
-router.post("/ask",                ...mw, ctrl.ask);
+// Rate-limited: each /ask can trigger a paid Claude call (AI fallback).
+router.post("/ask",                ...mw, aiChatLimiter, ctrl.ask);
 router.post("/escalate/:queryId",  ...mw, ctrl.escalate);
 router.patch("/rate/:queryId",     ...mw, ctrl.rateAnswer);
 router.get("/my-queries",          ...mw, ctrl.getMyQueries);

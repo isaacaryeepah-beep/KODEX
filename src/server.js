@@ -363,6 +363,22 @@ app.get("/health", (req, res) => {
   res.json({ status: "ok", timestamp: new Date().toISOString() });
 });
 
+// Deep health check for external monitors -- verifies MongoDB connectivity
+// instead of just process liveness. Intentionally NOT wired to Render's
+// healthCheckPath (that stays on the fast /health above): a transient DB
+// blip failing this endpoint would otherwise cause Render to kill/restart
+// an otherwise-fine process.
+app.get("/health/deep", async (req, res) => {
+  const mongoose = require("mongoose");
+  const mongoState = mongoose.connection.readyState; // 1 = connected
+  const mongoOk = mongoState === 1;
+  res.status(mongoOk ? 200 : 503).json({
+    status: mongoOk ? "ok" : "degraded",
+    mongo: mongoOk ? "connected" : ["disconnected", "connecting", "disconnecting"][mongoState] || "unknown",
+    timestamp: new Date().toISOString(),
+  });
+});
+
 app.use("/api/auth", authRoutes);
 app.use("/api/users", userRoutes);
 app.use("/api/attendance-sessions", attendanceSessionRoutes);

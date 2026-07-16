@@ -464,6 +464,83 @@ describe("POST /api/auth/login", () => {
   });
 });
 
+// ── Tenant isolation: the same email can legitimately belong to a lecturer/hod
+// at two different institutions (company-scoped uniqueness, not global). Login
+// must never fall back to an unscoped, cross-tenant search once an
+// institutionCode is supplied. Regression coverage for a real gap: the
+// lecturer/hod branches used to search every company by email whenever the
+// scoped lookup came up empty.
+describe("POST /api/auth/login — tenant isolation across institutions", () => {
+  const SHARED_EMAIL = "shared.lecturer@multitenant.test";
+  let companyB, lecturerB;
+
+  beforeAll(async () => {
+    companyB = await Company.create({
+      name: "Second Test Institution",
+      mode: "academic",
+      institutionCode: "AUTHTEST2",
+      selfRegistrationEnabled: true,
+      subscriptionActive: true,
+      subscriptionStatus: "active",
+    });
+
+    await User.create({
+      name: "Lecturer At Company A",
+      email: SHARED_EMAIL,
+      password: "LecturerAPass!1",
+      role: "lecturer",
+      company: company._id,
+      department: "Computer Science",
+      isActive: true,
+      isApproved: true,
+    });
+
+    lecturerB = await User.create({
+      name: "Lecturer At Company B",
+      email: SHARED_EMAIL,
+      password: "LecturerBPass!1",
+      role: "lecturer",
+      company: companyB._id,
+      department: "Computer Science",
+      isActive: true,
+      isApproved: true,
+    });
+  });
+
+  test("logs in as the company the institutionCode names, not the other tenant's account with the same email", async () => {
+    const res = await request(app).post("/api/auth/login").send({
+      email: SHARED_EMAIL,
+      password: "LecturerBPass!1",
+      loginRole: "lecturer",
+      institutionCode: "AUTHTEST2",
+    });
+    expect(res.status).toBe(200);
+    const decoded = require("jsonwebtoken").decode(res.body.token);
+    expect(decoded.id).toBe(String(lecturerB._id));
+  });
+
+  test("rejects a password that only matches the OTHER tenant's same-email account", async () => {
+    const res = await request(app).post("/api/auth/login").send({
+      email: SHARED_EMAIL,
+      password: "LecturerAPass!1", // valid for company A's account, not B's
+      loginRole: "lecturer",
+      institutionCode: "AUTHTEST2",
+    });
+    expect(res.status).toBe(401);
+  });
+
+  test("an unknown institutionCode is rejected instead of silently searching every tenant", async () => {
+    const res = await request(app).post("/api/auth/login").send({
+      email: SHARED_EMAIL,
+      password: "LecturerBPass!1",
+      loginRole: "lecturer",
+      institutionCode: "NOPE-DOES-NOT-EXIST",
+    });
+    expect(res.status).toBe(401);
+    expect(res.body.error).toMatch(/institution not found/i);
+  });
+});
+
 // ── Refresh-token rotation ───────────────────────────────────────────────────
 
 describe("POST /api/auth/refresh", () => {

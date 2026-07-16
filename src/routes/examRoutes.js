@@ -4,12 +4,14 @@ const router     = express.Router();
 const examCtrl   = require('../controllers/examController');
 const auth       = require('../middleware/auth');
 const { companyIsolation } = require('../middleware/companyIsolation');
+const { snapshotLimiter } = require('../middleware/rateLimiter');
 
 router.use(auth, companyIsolation);
 
 // Student routes
 router.post('/sessions',                         examCtrl.startSession);
-router.post('/sessions/:id/snapshot',            examCtrl.submitSnapshot);
+// Rate-limited: each snapshot triggers a paid Claude vision-model call.
+router.post('/sessions/:id/snapshot',            snapshotLimiter, examCtrl.submitSnapshot);
 router.post('/sessions/:id/event',               examCtrl.submitEvent);
 router.post('/sessions/:id/end',                 examCtrl.endSession);
 
