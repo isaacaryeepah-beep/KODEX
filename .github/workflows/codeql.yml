@@ -1,13 +1,12 @@
 name: CodeQL Security Audit
 
+# Disabled automatic triggers: this repo is private and GitHub Advanced
+# Security (required for CodeQL's SARIF upload / code-scanning results on
+# private repos) isn't enabled, so every run fails at the upload step with
+# "Code scanning is not enabled for this repository." Left as
+# workflow_dispatch-only so it's a one-line change to restore push/PR/
+# schedule triggers once Advanced Security is turned on.
 on:
-  push:
-    branches: [main]
-  pull_request:
-    branches: [main]
-  schedule:
-    # Run every Monday at 02:00 UTC for ongoing coverage
-    - cron: "0 2 * * 1"
   workflow_dispatch:
 
 jobs:
