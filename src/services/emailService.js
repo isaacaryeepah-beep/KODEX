@@ -306,8 +306,17 @@ async function send({ to, subject, html, textBody }) {
   // GMAIL_USER is already resolved at module level from the env var.
   const gmailPass = process.env.GMAIL_APP_PASSWORD;
   const mailerKey = process.env.MAILERSEND_API_KEY;
+  const isProduction = process.env.NODE_ENV === 'production' || !!process.env.RENDER;
 
   if (!gmailPass && !mailerKey) {
+    if (isProduction) {
+      // Never fake success in production -- a caller that thinks an OTP/2FA
+      // code was delivered when it wasn't (e.g. send2FACode showing the
+      // "code sent" modal) leaves the user stuck with no way to know why
+      // nothing arrived. Fail loudly so it surfaces as a visible error instead.
+      console.error(`[EmailService] No email credentials configured in production -- cannot send to ${to}: "${subject}"`);
+      return { ok: false, error: 'Email service not configured' };
+    }
     console.log(`[EmailService] No credentials -- would send to ${to}: "${subject}"`);
     return { ok: true, dev: true };
   }
