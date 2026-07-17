@@ -1,20 +1,26 @@
 ## Render Blueprint for Dikly/KODEX.
 ##
 ## What this deploys: the Node/Express app only (src/server.js + src/public/).
-## MongoDB is Atlas (external, not managed here). Redis is not used by the
-## app code (see src/middleware/rateLimiter.js — in-memory by design), so
-## there is deliberately no Redis service in this blueprint.
+## MongoDB is Atlas (external, not managed here).
 ##
 ## This file only holds non-secret configuration. Every real secret
 ## (API keys, JWT secrets, DB URI) is marked `sync: false`, meaning Render
 ## will prompt for it once in the dashboard and never store the value in
 ## this repo — this repo is public.
 ##
-## Single instance is intentional, not a placeholder: the rate limiter
-## (src/middleware/rateLimiter.js) and the node-cron jobs (src/server.js)
-## both assume one process. Scaling to multiple instances needs that
-## rate limiter moved to a shared store and the cron jobs guarded against
-## running once per instance — neither exists yet.
+## Single instance is still the current setting, but NOT for the reason it
+## used to be. Both prior blockers to horizontal scaling are now fixed:
+##   - The rate limiter (src/middleware/rateLimiter.js) is Redis-backed when
+##     REDIS_URL is set, with an in-memory fallback -- no longer per-process-only.
+##   - The cron jobs / recurring intervals in server.js now run behind Redis
+##     leader election (src/services/leaderElection.js), so exactly one
+##     instance runs them instead of once per instance.
+## Both are no-ops (exact original single-instance behavior) as long as
+## REDIS_URL is unset, which is why numInstances is still 1 here: raising it
+## requires actually provisioning a REDIS_URL first (a Render Key Value
+## instance, or any external Redis), and directly changes the monthly bill --
+## left as a deliberate choice for whoever owns that decision, not something
+## to flip silently in this file.
 ##
 ## Video: GetStream is primary, LiveKit is the fallback (see
 ## src/services/livekitService.js, .env.example). Self-hosted Jitsi is a
@@ -60,6 +66,14 @@ services:
 
       # ── Database (Atlas, external — same cluster the data already lives on)
       - key: MONGODB_URI
+        sync: false
+
+      # ── Redis (optional — dashboard caching + Redis-backed rate limiting +
+      # leader election for cron jobs). Unset by default: the app falls back
+      # to exact single-instance behavior everywhere Redis would be used
+      # (src/services/cacheService.js, rateLimiter.js, leaderElection.js).
+      # Required before raising numInstances above 1.
+      - key: REDIS_URL
         sync: false
 
       # ── Auth tokens — JWT_REFRESH_SECRET is a hard requirement, the app

@@ -40,6 +40,17 @@ function isEnabled() {
 }
 
 /**
+ * Exposes the underlying ioredis client for callers that need raw Redis
+ * commands (e.g. INCR/EXPIRE for rate limiting) rather than the
+ * get/set-JSON cache contract above. Returns null when Redis isn't
+ * configured -- callers must handle that the same way they'd handle any
+ * other cache-disabled state.
+ */
+function getRawClient() {
+  return getClient();
+}
+
+/**
  * Returns the cached value for `key` if present, otherwise calls `fetchFn`,
  * caches the result for `ttlSeconds`, and returns it. On any Redis error
  * (or when Redis isn't configured), falls through to calling `fetchFn`
@@ -91,4 +102,4 @@ async function invalidatePattern(prefix) {
   }
 }
 
-module.exports = { getOrSetCache, invalidateCache, invalidatePattern, isEnabled };
+module.exports = { getOrSetCache, invalidateCache, invalidatePattern, isEnabled, getRawClient };

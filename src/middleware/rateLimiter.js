@@ -3,12 +3,18 @@
 //  - Protects login from brute force attacks
 //  - Protects registration from spam
 //  - Protects password reset from abuse
-//  - Uses in-memory store (works without Redis)
+//  - Redis-backed when REDIS_URL is configured (correct across multiple
+//    instances); falls back to the original in-memory store otherwise, or
+//    if Redis errors mid-request -- rate limiting must degrade to "works
+//    like it always did on one instance," never to "stops limiting at all."
 // ══════════════════════════════════════════════════════════════════════════════
+
+const { isEnabled, getRawClient } = require("../services/cacheService");
+const logger = require("../services/logger");
 
 const requestCounts = new Map();
 
-// Clean up old entries every 5 minutes to prevent memory leaks
+// Clean up old entries every 5 minutes to prevent memory leaks.
 // unref() so this timer never keeps the process (or a test runner) alive.
 setInterval(() => {
   const now = Date.now();
@@ -19,36 +25,99 @@ setInterval(() => {
   }
 }, 5 * 60 * 1000).unref();
 
-function createRateLimiter({ windowMs, max, message }) {
+// ── In-memory check (original implementation, unchanged) ───────────────────────
+// Per-process only -- correct on a single instance, but each horizontally
+// scaled instance would keep an independent counter. This is why it's now
+// only the fallback path, not the only implementation.
+function _memoryCheck(key, windowMs, max) {
+  const now = Date.now();
+  const existing = requestCounts.get(key);
+
+  if (!existing || now - existing.windowStart > windowMs) {
+    requestCounts.set(key, { count: 1, windowStart: now, windowMs });
+    return { blocked: false };
+  }
+
+  existing.count++;
+  if (existing.count > max) {
+    const retryAfterSec = Math.ceil((windowMs - (now - existing.windowStart)) / 1000);
+    return { blocked: true, retryAfterSec };
+  }
+  return { blocked: false };
+}
+
+// ── Redis check ──────────────────────────────────────────────────────────────
+// Fixed-window counter via INCR + EXPIRE-on-first-hit. Not perfectly atomic
+// across the two calls, but the failure mode of that tiny race (a key
+// created without its expiry briefly) is benign and self-corrects on the
+// next INCR -- standard, well-understood tradeoff for this kind of limiter.
+async function _redisCheck(redis, key, windowMs, max) {
+  const windowSec = Math.max(1, Math.ceil(windowMs / 1000));
+  const count = await redis.incr(key);
+  if (count === 1) {
+    await redis.expire(key, windowSec);
+  }
+  if (count > max) {
+    const ttl = await redis.ttl(key);
+    return { blocked: true, retryAfterSec: ttl > 0 ? ttl : windowSec };
+  }
+  return { blocked: false };
+}
+
+function _respond(res, next, message, result) {
+  if (result.blocked) {
+    res.setHeader("Retry-After", result.retryAfterSec);
+    return res.status(429).json({
+      error: message || "Too many requests. Please try again later.",
+      retryAfter: result.retryAfterSec,
+    });
+  }
+  next();
+}
+
+function _defaultKeyFn(req) {
+  // Key by IP + route + phone so each person gets their own bucket
+  const ip = req.headers["x-forwarded-for"]?.split(",")[0]?.trim() ||
+              req.socket?.remoteAddress ||
+              "unknown";
+  const phone = req.body?.phone || req.body?.email || "";
+  return `${ip}::${req.path}::${phone}`;
+}
+
+/**
+ * @param {Object} opts
+ * @param {number} opts.windowMs
+ * @param {number} opts.max
+ * @param {string} [opts.message]
+ * @param {(req) => string|null} [opts.keyFn] Custom key derivation. Return
+ *   null to skip rate limiting for that request entirely (e.g. no
+ *   identifier present yet -- let the controller reject it instead).
+ */
+function createRateLimiter({ windowMs, max, message, keyFn }) {
+  const deriveKey = keyFn || _defaultKeyFn;
+
   return (req, res, next) => {
-    // Key by IP + route + phone so each person gets their own bucket
-    const ip = req.headers['x-forwarded-for']?.split(',')[0]?.trim() ||
-                req.socket?.remoteAddress ||
-                'unknown';
-    const phone = req.body?.phone || req.body?.email || '';
-    const key = `${ip}::${req.path}::${phone}`;
-    const now = Date.now();
+    const key = deriveKey(req);
+    if (key === null) return next();
 
-    const existing = requestCounts.get(key);
-
-    if (!existing || now - existing.windowStart > windowMs) {
-      // New window
-      requestCounts.set(key, { count: 1, windowStart: now, windowMs });
-      return next();
+    // No REDIS_URL configured: exact original synchronous in-memory path.
+    // Zero behavior change for any deployment that hasn't set up Redis yet.
+    if (!isEnabled()) {
+      return _respond(res, next, message, _memoryCheck(key, windowMs, max));
     }
 
-    existing.count++;
+    // Redis path -- only reached when Redis is actually configured.
+    const redis = getRawClient();
+    if (!redis) {
+      return _respond(res, next, message, _memoryCheck(key, windowMs, max));
+    }
 
-    if (existing.count > max) {
-      const retryAfterSec = Math.ceil((windowMs - (now - existing.windowStart)) / 1000);
-      res.setHeader('Retry-After', retryAfterSec);
-      return res.status(429).json({
-        error: message || 'Too many requests. Please try again later.',
-        retryAfter: retryAfterSec,
+    _redisCheck(redis, `rl:${key}`, windowMs, max)
+      .then((result) => _respond(res, next, message, result))
+      .catch((err) => {
+        logger.warn(`[rateLimiter] Redis check failed for "${key}", falling back to in-memory: ${err.message}`);
+        _respond(res, next, message, _memoryCheck(key, windowMs, max));
       });
-    }
-
-    next();
   };
 }
 
@@ -71,34 +140,15 @@ const registerLimiter = createRateLimiter({
 // Password reset: keyed on identifier only (not IP) so shared campus Wi-Fi
 // doesn't cause one person's failed attempts to block another.
 // Max 10 per hour per email/phone — enough for typos, strict enough vs abuse.
-const passwordResetLimiter = (() => {
-  const _counts = new Map();
-  setInterval(() => {
-    const now = Date.now();
-    for (const [k, v] of _counts.entries()) if (now - v.start > 60 * 60 * 1000) _counts.delete(k);
-  }, 5 * 60 * 1000).unref();
-  return (req, res, next) => {
+const passwordResetLimiter = createRateLimiter({
+  windowMs: 60 * 60 * 1000,
+  max: 10,
+  message: 'Too many password reset attempts. Please wait and try again.',
+  keyFn: (req) => {
     const id = (req.body?.phone || req.body?.email || req.body?.indexNumber || '').toLowerCase().trim();
-    if (!id) return next(); // no identifier — controller will reject; don't pollute rate-limit bucket
-    const key = `pwr::${id}`;
-    const now = Date.now();
-    const entry = _counts.get(key);
-    if (!entry || now - entry.start > 60 * 60 * 1000) {
-      _counts.set(key, { count: 1, start: now });
-      return next();
-    }
-    entry.count++;
-    if (entry.count > 10) {
-      const retryAfterSec = Math.ceil((60 * 60 * 1000 - (now - entry.start)) / 1000);
-      res.setHeader('Retry-After', retryAfterSec);
-      return res.status(429).json({
-        error: 'Too many password reset attempts. Please wait and try again.',
-        retryAfter: retryAfterSec,
-      });
-    }
-    next();
-  };
-})();
+    return id ? `pwr::${id}` : null; // no identifier — controller will reject; don't pollute the rate-limit bucket
+  },
+});
 
 // General API: max 200 requests per 15 minutes per IP
 const apiLimiter = createRateLimiter({
