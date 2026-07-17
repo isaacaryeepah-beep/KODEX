@@ -18,6 +18,19 @@ const FROM = _safeFrom.includes('no-reply@dikly.sbs') || _safeFrom.includes('no-
 
 const BASE_URL = process.env.APP_URL || 'https://dikly.sbs';
 
+// Boot-time credential check, matching every sibling provider (Cloudinary,
+// WebPush, FCM, LiveKit all log a ✓/WARNING at require-time) -- this one
+// never had one, which is exactly why a live "2FA email failed" incident
+// couldn't be distinguished from a missing-credentials deploy by the boot
+// log alone. Logged once, here, so it always shows up on every restart.
+const _hasGmail  = !!process.env.GMAIL_APP_PASSWORD;
+const _hasMailerSend = !!process.env.MAILERSEND_API_KEY;
+if (_hasGmail || _hasMailerSend) {
+  console.log(`[EmailService] ✓ Configured — Gmail:${_hasGmail ? 'yes' : 'no'} MailerSend:${_hasMailerSend ? 'yes' : 'no'}`);
+} else {
+  console.warn('[EmailService] WARNING: neither GMAIL_APP_PASSWORD nor MAILERSEND_API_KEY is set. All email sends (2FA, password reset, verification codes, welcome emails) will fail in production.');
+}
+
 // ── Colour palette ────────────────────────────────────────────────────────────
 // Matches the app's own indigo/violet brand system (see style.css --accent /
 // --accent2) so transactional email reads as the same product, not a
