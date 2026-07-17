@@ -111,7 +111,6 @@ This file is the single source of truth for Claude Code sessions. Read it at the
 - Always create a draft PR after pushing, then mark ready + merge when user says "Merge"
 - User is the owner: `isaacaryeepah-beep` on GitHub, repo: `isaacaryeepah-beep/KODEX`
 - Working branch: `claude/update-resume-aVv3d`
-- User email: kellywest251@gmail.com
 - **TDD is mandatory for every backend feature/logic change** (user directive: "remember to do it for everything"). Any new controller, service, cron job, or route handler ships in the same PR as a permanent Jest test under `tests/` — never a throwaway scratchpad script only. Follow the established pattern:
   - Real MongoDB, not mocks of the code under test: `mongodb-memory-server` in CI (auto, via `.github/workflows/tests.yml`, which runs `npm test` on every push/PR to main), with a `TEST_MONGO_URI` env var override for fast local runs against the sandbox's FerretDB.
   - Mock only true externals (email/SMS send functions) — see `tests/routes/auth.test.js`'s `jest.mock("../../src/services/emailService", ...)`.
