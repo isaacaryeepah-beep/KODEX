@@ -643,6 +643,13 @@ const start = async () => {
         logger.info(`Dropping stale unique assignment index: ${idx.name}`);
         await assignmentsCol.dropIndex(idx.name);
       }
+      // Superseded by {company, course, dueDate, status} (ESR fix -- the
+      // sort key must precede the $ne'd status key). Mongoose creates the
+      // new index but never drops the old definition, so clean it up here.
+      if (idx.name === "company_1_course_1_status_1_dueDate_1") {
+        logger.info("Dropping superseded assignment index: " + idx.name);
+        await assignmentsCol.dropIndex(idx.name);
+      }
     }
   } catch (e) {
     if (e.codeName !== "IndexNotFound" && e.code !== 26) {

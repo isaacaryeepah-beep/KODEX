@@ -541,6 +541,45 @@ describe("POST /api/auth/login — tenant isolation across institutions", () => 
   });
 });
 
+// ── Login mode self-heal must not downgrade hybrid ("both") companies ─────────
+// Regression for a real bug caught by CI: the self-heal that corrects a
+// mis-set corporate mode to "academic" also fired for mode "both", silently
+// killing every corporate feature (clock-in etc. gate on
+// requireMode("corporate"), which explicitly allows "both") the moment any
+// academic-role user logged in.
+describe("POST /api/auth/login — mode self-heal preserves 'both'", () => {
+  test("a lecturer logging into a 'both'-mode company does not flip it to 'academic'", async () => {
+    const hybrid = await Company.create({
+      name: "Hybrid Mode Test Co",
+      mode: "both",
+      institutionCode: "AUTHBOTH1",
+      subscriptionActive: true,
+      subscriptionStatus: "active",
+    });
+    await User.create({
+      name: "Hybrid Lecturer",
+      email: "lecturer@hybrid.test",
+      password: "HybridPass!1",
+      role: "lecturer",
+      company: hybrid._id,
+      department: "CS",
+      isActive: true,
+      isApproved: true,
+    });
+
+    const res = await request(app).post("/api/auth/login").send({
+      email: "lecturer@hybrid.test",
+      password: "HybridPass!1",
+      loginRole: "lecturer",
+      institutionCode: "AUTHBOTH1",
+    });
+    expect(res.status).toBe(200);
+
+    const after = await Company.findById(hybrid._id).lean();
+    expect(after.mode).toBe("both");
+  });
+});
+
 // ── Refresh-token rotation ───────────────────────────────────────────────────
 
 describe("POST /api/auth/refresh", () => {

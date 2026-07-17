@@ -169,7 +169,12 @@ describe("clock-in/clock-out — employee dashboard cache invalidation", () => {
     const res = await request(app)
       .post("/api/corporate-attendance/clock-in")
       .set("Authorization", `Bearer ${employeeToken}`)
-      .send({ method: "web" });
+      // GPS is a hard, always-on requirement of the clock-in anti-cheat
+      // contract (attendanceAntiCheat.js check #3) -- omitting coordinates
+      // gets a 403 location_missing before the code under test ever runs.
+      // Coordinates must be non-integer and accuracy within (1, 500] to
+      // pass the mock-location detector.
+      .send({ method: "web", latitude: 5.6037, longitude: -0.187, accuracy: 25 });
 
     expect(res.status).toBe(200);
     expect(invalidateCache).toHaveBeenCalledWith(`dash:employee:${company._id}:${employeeUser._id}`);

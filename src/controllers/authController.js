@@ -1034,7 +1034,12 @@ exports.login = async (req, res) => {
     // In/Out, IP/geofence "employee" settings) indefinitely. The real signal
     // is whether the company HAS any academic-only-role users at all, not
     // just who is logging in right now, so check that directly.
-    if (company && company.mode !== "academic") {
+    // "both" is exempt: hybrid companies legitimately have academic-role
+    // users AND corporate features (requireMode explicitly allows "both"
+    // everywhere "corporate" is required) -- downgrading them to "academic"
+    // here silently killed clock-in and every other corporate feature the
+    // moment any student logged in.
+    if (company && company.mode !== "academic" && company.mode !== "both") {
       const hasAcademicRole = ["lecturer", "hod", "student"].includes(user.role)
         || await User.exists({ company: company._id, role: { $in: ["lecturer", "hod", "student"] } });
       if (hasAcademicRole) {
