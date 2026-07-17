@@ -187,5 +187,15 @@ attendanceSessionSchema.index({ company: 1, status: 1 });
 attendanceSessionSchema.index({ company: 1, startedAt: -1 });
 attendanceSessionSchema.index({ deviceId: 1, status: 1 });
 attendanceSessionSchema.index({ createdBy: 1, status: 1 });
+// `course` had no index at all -- student dashboard's course-scoped session
+// lookups (find + distinct on {company, course}) fell back to scanning every
+// session in the company.
+attendanceSessionSchema.index({ company: 1, course: 1 });
+// Covers markAttendance's session auto-detect: filters {company, status},
+// sorts startedAt -- neither existing index above combines status with the sort.
+attendanceSessionSchema.index({ company: 1, status: 1, startedAt: -1 });
+// Covers the lecturer dashboard's "recent sessions" widget: {company, createdBy}
+// filter sorted by startedAt.
+attendanceSessionSchema.index({ company: 1, createdBy: 1, startedAt: -1 });
 
 module.exports = mongoose.model("AttendanceSession", attendanceSessionSchema);

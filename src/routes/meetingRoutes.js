@@ -11,6 +11,7 @@ const preflight      = require('../services/sessionPreflight');
 const authenticate        = require('../middleware/auth');
 const { companyIsolation } = require('../middleware/companyIsolation');
 const requireNoDeviceLock  = require('../middleware/requireNoDeviceLock');
+const { snapshotLimiter }  = require('../middleware/rateLimiter');
 
 const {
   requireActiveSubscription,
@@ -88,7 +89,8 @@ router.post('/:id/participants/:uid/kick',   loadMeeting, isModerator, monitorCt
 // Student posts a monitoring event (tab switch, fullscreen exit, face detection, etc.)
 router.post('/:id/proctoring/event',            proctoringCtrl.postEvent);
 // Student posts an AI snapshot for Claude Opus 4.8 analysis
-router.post('/:id/proctoring/snapshot',         loadMeeting, canJoin, proctoringCtrl.postSnapshot);
+// Rate-limited: each snapshot triggers a paid Claude vision-model call.
+router.post('/:id/proctoring/snapshot',         loadMeeting, canJoin, snapshotLimiter, proctoringCtrl.postSnapshot);
 // Invigilator gets detailed event log + screenshots for one participant
 router.get('/:id/proctoring/student/:uid',      loadMeeting, isModerator, proctoringCtrl.getStudentDetail);
 // Invigilator gets session-level analytics (risk distribution, event counts)

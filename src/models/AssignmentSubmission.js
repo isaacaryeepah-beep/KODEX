@@ -142,5 +142,9 @@ assignmentSubmissionSchema.index(
 
 assignmentSubmissionSchema.index({ assignment: 1, status: 1 });
 assignmentSubmissionSchema.index({ company: 1, assignment: 1, status: 1 });
+// Student dashboard's submission count filters {company, student, status} --
+// `student` and `company` each had only their own single-field index, so
+// Mongo could use one or the other but not both together.
+assignmentSubmissionSchema.index({ company: 1, student: 1, status: 1 });
 
 module.exports = mongoose.model("AssignmentSubmission", assignmentSubmissionSchema);

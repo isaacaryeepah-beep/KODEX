@@ -32,6 +32,7 @@ const antiCheat           = require("../utils/attendanceAntiCheat");
 const { AUDIT_ACTIONS }   = AuditLog;
 const notificationService = require("../services/notificationService");
 const { getVisibleUserIds, requirePeopleOpsAccess } = require("../utils/corporateScope");
+const { invalidateCache } = require("../services/cacheService");
 
 const mw        = [authenticate, requireMode("corporate"), requireActiveSubscription];
 const canManage = requireRole("admin", "manager", "superadmin");
@@ -340,6 +341,11 @@ router.post("/clock-in", ...mw, async (req, res) => {
       { upsert: true, new: true, setDefaultsOnInsert: true }
     ).populate("shift", "name startTime endTime");
 
+    // The employee dashboard caches today's clock status for
+    // DASHBOARD_TTL_SECONDS -- invalidate it now so a refresh right after
+    // clocking in shows the real state instead of a stale "not clocked in".
+    invalidateCache(`dash:employee:${req.user.company}:${req.user._id}`);
+
     res.json({
       record,
       message: isLate ? "Clocked in (late)" : "Clocked in",
@@ -475,6 +481,8 @@ router.post("/clock-out", ...mw, async (req, res) => {
       },
       { new: true }
     ).populate("shift", "name startTime endTime");
+
+    invalidateCache(`dash:employee:${req.user.company}:${req.user._id}`);
 
     res.json({ record, message: "Clocked out", hoursWorked: worked, trustScore: after });
   } catch (e) {
@@ -706,6 +714,7 @@ router.patch("/:id/override", ...mw, requireRole("admin", "superadmin"), async (
       req,
     });
     notificationService.notifyAttendanceOverridden(record, req.user.name);
+    invalidateCache(`dash:employee:${existing.company}:${existing.employee}`);
 
     res.json({ record });
   } catch (e) {

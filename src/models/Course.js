@@ -119,5 +119,8 @@ courseSchema.index({ enrolledStudents: 1 });
 courseSchema.index({ companyId: 1, qualificationType: 1, studyType: 1 });
 // Student visibility queries: "show me all published active courses for this company"
 courseSchema.index({ companyId: 1, isPublished: 1, isActive: 1 });
+// The base course-list endpoint (courseService.js) filters {companyId, isActive}
+// and sorts by createdAt desc for pagination -- no prior index included createdAt.
+courseSchema.index({ companyId: 1, isActive: 1, createdAt: -1 });
 
 module.exports = mongoose.model('Course', courseSchema);

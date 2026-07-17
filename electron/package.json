@@ -31,7 +31,7 @@
       "icon": "icon.icns"
     },
     "publish": [
-      { "provider": "github", "owner": "isaacaryeepah-beep", "repo": "Dikly_releases" }
+      { "provider": "github", "owner": "isaacaryeepah-beep", "repo": "Dikly_releases", "releaseType": "release" }
     ]
   },
   "dependencies": {

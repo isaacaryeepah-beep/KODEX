@@ -164,5 +164,14 @@ assignmentSchema.index({ company: 1, course: 1 });
 assignmentSchema.index({ company: 1, course: 1, createdBy: 1, status: 1 });
 assignmentSchema.index({ company: 1, course: 1, isPublished: 1, isActive: 1 });
 assignmentSchema.index({ dueDate: 1 });
+// Lecturer/student dashboard "due this week" widgets filter
+// {company, course, status, dueDate range} and sort by dueDate -- the
+// standalone {dueDate} index above isn't scoped to company/course, so it
+// gave no real narrowing for a per-course query.
+assignmentSchema.index({ company: 1, course: 1, status: 1, dueDate: 1 });
+// Admin dashboard's due-soon count filters {company, status, dueDate range}
+// with NO course filter -- the compound above needs course as an equality
+// match first, so this case gets its own index.
+assignmentSchema.index({ company: 1, status: 1, dueDate: 1 });
 
 module.exports = mongoose.model("Assignment", assignmentSchema);

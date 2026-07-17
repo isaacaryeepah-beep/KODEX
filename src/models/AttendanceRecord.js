@@ -95,5 +95,14 @@ attendanceRecordSchema.index({ company: 1, user: 1, checkInTime: -1 });
 attendanceRecordSchema.index({ syncStatus: 1 });
 attendanceRecordSchema.index({ company: 1, newDeviceFlag: 1 });
 attendanceRecordSchema.index({ company: 1, flagged: 1 });
+// `deviceId` had no index anywhere -- the per-mark device-lock check
+// ({company, deviceId, user:$ne, checkInTime range}, sorted checkInTime)
+// runs on every single attendance mark and previously only had `company`
+// to narrow on.
+attendanceRecordSchema.index({ company: 1, deviceId: 1, checkInTime: -1 });
+// Covers the admin dashboard's 30-day attendance trend aggregate
+// ({company, checkInTime range}) -- the only prior compound needing
+// checkInTime also required an exact `user` match first.
+attendanceRecordSchema.index({ company: 1, checkInTime: 1 });
 
 module.exports = mongoose.model("AttendanceRecord", attendanceRecordSchema);

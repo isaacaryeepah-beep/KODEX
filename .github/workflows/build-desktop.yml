@@ -1,8 +1,15 @@
 name: Build Desktop App
 
+# Path-filtered (see build-android.yml for why): this was firing on every
+# backend/unrelated push, and its artifacts share the same account-wide
+# GitHub Actions storage quota that build-android.yml was exhausting.
 on:
   push:
     branches: [main, claude/are-you-there-hjdx9r]
+    paths:
+      - 'electron/**'
+      - 'resources/**'
+      - '.github/workflows/build-desktop.yml'
   workflow_dispatch:
 
 concurrency:
@@ -35,8 +42,16 @@ jobs:
       # release to detect an update is available — there's no manual bump
       # process, so derive one from the run number (monotonic across every
       # build regardless of branch).
+      #
+      # The trailing "1" keeps this distinct from build-mac's version below.
+      # Both jobs run in parallel and each calls `electron-builder --publish
+      # always`, which creates a GitHub release tagged from this version --
+      # sharing one meant whichever job finished packaging first won the
+      # race to create the tag, and the other failed outright with
+      # "422 already_exists" before ever reaching the real publish step
+      # further down, silently dropping that platform's installer.
       - name: Set build version
-        run: npm version 1.0.${{ github.run_number }} --no-git-tag-version --allow-same-version
+        run: npm version 1.0.${{ github.run_number }}1 --no-git-tag-version --allow-same-version
         working-directory: electron
         shell: pwsh
 
@@ -50,13 +65,6 @@ jobs:
       - name: List dist folder
         run: dir electron\dist /s /b
         shell: cmd
-
-      - name: Upload Windows artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: DIKLY-Windows
-          path: electron/dist/
-          retention-days: 30
 
       # ── Publish Windows to GitHub Releases ────────────────────────────────
       - name: Find Windows installer
@@ -89,6 +97,17 @@ jobs:
         shell: pwsh
         env:
           GH_TOKEN: ${{ secrets.RELEASES_PAT }}
+
+      # Internal debug copy only, uploaded last on purpose: if this step
+      # hits the account's GitHub Actions storage quota, the public release
+      # above (the one users actually download from) has already succeeded
+      # regardless.
+      - name: Upload Windows artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: DIKLY-Windows
+          path: electron/dist/
+          retention-days: 3
 
   build-mac:
     runs-on: macos-latest
@@ -132,10 +151,13 @@ jobs:
         run: npm install
         working-directory: electron
 
-      # Keep in lockstep with the Windows job's versioning (see its comment)
-      # so both platforms publish under the same version per build.
+      # Trailing "2" (Windows uses "1", see its comment) so this job's
+      # electron-builder publish never targets the same release tag as the
+      # parallel Windows job -- sharing one caused a create-release race
+      # where whichever platform finished packaging first won the tag, and
+      # the other failed outright with "422 already_exists".
       - name: Set build version
-        run: npm version 1.0.${{ github.run_number }} --no-git-tag-version --allow-same-version
+        run: npm version 1.0.${{ github.run_number }}2 --no-git-tag-version --allow-same-version
         working-directory: electron
 
       - name: Build Mac DMG
@@ -147,13 +169,6 @@ jobs:
 
       - name: List dist folder
         run: ls -la electron/dist/
-
-      - name: Upload Mac artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: DIKLY-Mac
-          path: electron/dist/
-          retention-days: 30
 
       # ── Publish Mac to GitHub Releases ────────────────────────────────────
       - name: Find Mac DMG
@@ -185,3 +200,14 @@ jobs:
           fi
         env:
           GH_TOKEN: ${{ secrets.RELEASES_PAT }}
+
+      # Internal debug copy only, uploaded last on purpose: if this step
+      # hits the account's GitHub Actions storage quota, the public release
+      # above (the one users actually download from) has already succeeded
+      # regardless.
+      - name: Upload Mac artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: DIKLY-Mac
+          path: electron/dist/
+          retention-days: 3

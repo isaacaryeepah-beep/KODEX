@@ -363,6 +363,22 @@ app.get("/health", (req, res) => {
   res.json({ status: "ok", timestamp: new Date().toISOString() });
 });
 
+// Deep health check for external monitors -- verifies MongoDB connectivity
+// instead of just process liveness. Intentionally NOT wired to Render's
+// healthCheckPath (that stays on the fast /health above): a transient DB
+// blip failing this endpoint would otherwise cause Render to kill/restart
+// an otherwise-fine process.
+app.get("/health/deep", async (req, res) => {
+  const mongoose = require("mongoose");
+  const mongoState = mongoose.connection.readyState; // 1 = connected
+  const mongoOk = mongoState === 1;
+  res.status(mongoOk ? 200 : 503).json({
+    status: mongoOk ? "ok" : "degraded",
+    mongo: mongoOk ? "connected" : ["disconnected", "connecting", "disconnecting"][mongoState] || "unknown",
+    timestamp: new Date().toISOString(),
+  });
+});
+
 app.use("/api/auth", authRoutes);
 app.use("/api/users", userRoutes);
 app.use("/api/attendance-sessions", attendanceSessionRoutes);
@@ -637,67 +653,89 @@ const start = async () => {
   server.listen(PORT, "0.0.0.0", () => {
     logger.info(`Server running on port ${PORT}`);
 
-    try {
-      const { startScheduler } = require("./services/emailScheduler");
-      const { runWatchdog } = require("./controllers/sessionController");
-      setInterval(runWatchdog, 5000);
-      startScheduler();
-    } catch (e) {
-      logger.error("Scheduler failed to start", { error: e.message });
-    }
-
-    try {
-      // Auto-closes meetings left "live" forever by a host who never hit
-      // End (or whose tab just died) — see runMeetingWatchdog's own
-      // comment for the exact rule. Not time-critical like attendance
-      // heartbeats, so a 5-minute tick is plenty.
-      const { runMeetingWatchdog } = require("./controllers/meetingController");
-      setInterval(runMeetingWatchdog, 5 * 60 * 1000);
-    } catch (e) {
-      logger.error("Meeting watchdog failed to start", { error: e.message });
-    }
-
-    try {
-      require("./services/arrivalIQScheduler").start();
-    } catch (e) {
-      logger.error("ArrivalIQ scheduler failed to start", { error: e.message });
-    }
-
-    try {
-      require("./services/timetableReminder").startTimetableReminder();
-    } catch (e) {
-      logger.error("Timetable reminder scheduler failed to start", { error: e.message });
-    }
-
-    try {
-      require("./services/quizReminder").startQuizReminder();
-    } catch (e) {
-      logger.error("Quiz reminder scheduler failed to start", { error: e.message });
-    }
-
-    // Daily MongoDB backup at 02:00 (only when backup is configured)
-    if (process.env.BACKUP_DIR || process.env.BACKUP_S3_BUCKET) {
+    // Everything below is a cron job / recurring interval. Gated behind
+    // leader election so exactly one instance runs them under horizontal
+    // scaling (REDIS_URL set) -- without Redis configured, this calls the
+    // callback immediately on every instance, i.e. exact prior behavior.
+    // See src/services/leaderElection.js for what this guarantees.
+    const { electLeaderThenRun } = require("./services/leaderElection");
+    electLeaderThenRun(() => {
       try {
-        const cron       = require("node-cron");
-        const { execFile } = require("child_process");
-        const backupScript = path.join(__dirname, "..", "scripts", "backup-mongo.sh");
-        cron.schedule("0 2 * * *", () => {
-          logger.info("[backup] Starting scheduled MongoDB backup...");
-          execFile(backupScript, { env: { ...process.env, PATH: process.env.PATH } }, (err, stdout, stderr) => {
-            if (err) {
-              logger.error("[backup] Backup failed", { error: err.message, stderr: stderr?.trim() });
-            } else {
-              logger.info("[backup] Backup complete", { output: stdout?.trim() });
-            }
-          });
-        });
-        logger.info("[backup] Daily backup scheduled at 02:00");
+        const { startScheduler } = require("./services/emailScheduler");
+        const { runWatchdog } = require("./controllers/sessionController");
+        setInterval(runWatchdog, 5000);
+        startScheduler();
       } catch (e) {
-        logger.error("[backup] Failed to schedule backup", { error: e.message });
+        logger.error("Scheduler failed to start", { error: e.message });
       }
-    }
+
+      try {
+        // Auto-closes meetings left "live" forever by a host who never hit
+        // End (or whose tab just died) — see runMeetingWatchdog's own
+        // comment for the exact rule. Not time-critical like attendance
+        // heartbeats, so a 5-minute tick is plenty.
+        const { runMeetingWatchdog } = require("./controllers/meetingController");
+        setInterval(runMeetingWatchdog, 5 * 60 * 1000);
+      } catch (e) {
+        logger.error("Meeting watchdog failed to start", { error: e.message });
+      }
+
+      try {
+        require("./services/arrivalIQScheduler").start();
+      } catch (e) {
+        logger.error("ArrivalIQ scheduler failed to start", { error: e.message });
+      }
+
+      try {
+        require("./services/timetableReminder").startTimetableReminder();
+      } catch (e) {
+        logger.error("Timetable reminder scheduler failed to start", { error: e.message });
+      }
+
+      try {
+        require("./services/quizReminder").startQuizReminder();
+      } catch (e) {
+        logger.error("Quiz reminder scheduler failed to start", { error: e.message });
+      }
+
+      // Daily MongoDB backup at 02:00 (only when backup is configured)
+      if (process.env.BACKUP_DIR || process.env.BACKUP_S3_BUCKET) {
+        try {
+          const cron       = require("node-cron");
+          const { execFile } = require("child_process");
+          const backupScript = path.join(__dirname, "..", "scripts", "backup-mongo.sh");
+          cron.schedule("0 2 * * *", () => {
+            logger.info("[backup] Starting scheduled MongoDB backup...");
+            execFile(backupScript, { env: { ...process.env, PATH: process.env.PATH } }, (err, stdout, stderr) => {
+              if (err) {
+                logger.error("[backup] Backup failed", { error: err.message, stderr: stderr?.trim() });
+              } else {
+                logger.info("[backup] Backup complete", { output: stdout?.trim() });
+              }
+            });
+          });
+          logger.info("[backup] Daily backup scheduled at 02:00");
+        } catch (e) {
+          logger.error("[backup] Failed to schedule backup", { error: e.message });
+        }
+      }
+    });
   });
 };
+
+// Graceful shutdown: release cron leadership immediately so a redeploy
+// hands it to the new instance right away instead of waiting out the
+// lock's TTL (src/services/leaderElection.js).
+["SIGTERM", "SIGINT"].forEach((sig) => {
+  process.on(sig, async () => {
+    try {
+      await require("./services/leaderElection").release();
+    } catch (e) {
+      logger.error("Leader release failed during shutdown", { error: e.message });
+    }
+    process.exit(0);
+  });
+});
 
 // ── Process-level error handlers ─────────────────────────────────────────────
 

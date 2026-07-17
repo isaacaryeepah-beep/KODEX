@@ -1,12 +1,12 @@
 name: Semgrep SAST
 
+# Disabled automatic triggers: the scan step itself succeeds, but the
+# "Upload Semgrep results to GitHub Security" step fails on every run
+# because this private repo doesn't have GitHub Advanced Security enabled
+# (same root cause as codeql.yml -- see that file's comment). Left as
+# workflow_dispatch-only so it's a one-line change to restore push/PR/
+# schedule triggers once Advanced Security is turned on.
 on:
-  push:
-    branches: [main]
-  pull_request:
-    branches: [main]
-  schedule:
-    - cron: "0 4 * * 1"
   workflow_dispatch:
 
 jobs:

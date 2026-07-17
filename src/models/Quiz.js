@@ -90,5 +90,10 @@ const quizSchema = new mongoose.Schema(
 
 quizSchema.index({ company: 1, course: 1 });
 quizSchema.index({ createdBy: 1 });
+// The legacy quiz-list endpoint (quizController.js) filters {company, isActive}
+// (plus an optional createdBy or course, not indexed here since that filter
+// is conditional and equality on company+isActive already narrows sharply)
+// and sorts by startTime desc -- neither field was in any index before.
+quizSchema.index({ company: 1, isActive: 1, startTime: -1 });
 
 module.exports = mongoose.model("Quiz", quizSchema);

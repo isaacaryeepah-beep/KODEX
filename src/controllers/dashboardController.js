@@ -41,6 +41,13 @@ const AttendanceSummary    = require("../models/AttendanceSummary");
 const Goal                = require("../models/Goal");
 const TrainingProgress    = require("../models/TrainingProgress");
 
+const { getOrSetCache } = require("../services/cacheService");
+
+// Dashboards are read-heavy and re-fetched on every navigation/refresh, but
+// don't need to be second-accurate -- a short TTL cuts DB load on repeat
+// views without meaningfully staling the numbers users see.
+const DASHBOARD_TTL_SECONDS = 30;
+
 // ---------------------------------------------------------------------------
 // Tiny helpers
 // ---------------------------------------------------------------------------
@@ -70,9 +77,7 @@ function utcMonthBounds(date) {
 // GET /api/dashboard/academic
 // Admin / superadmin — institution-wide view
 // ---------------------------------------------------------------------------
-exports.academicOverview = async (req, res) => {
-  try {
-    const company = req.user.company;
+async function _computeAcademicOverview(company) {
     const now     = new Date();
     const ago30   = addDays(now, -30);
     const ahead7  = addDays(now, 7);
@@ -146,7 +151,7 @@ exports.academicOverview = async (req, res) => {
       .select("title createdAt")
       .lean();
 
-    res.json({
+    return {
       totals: {
         courses:              totalCourses,
         students:             totalStudents,
@@ -166,7 +171,18 @@ exports.academicOverview = async (req, res) => {
       attendanceTrend,
       topCourses,
       recentAnnouncements,
-    });
+    };
+}
+
+exports.academicOverview = async (req, res) => {
+  try {
+    const company = req.user.company;
+    const data = await getOrSetCache(
+      `dash:academic:${company}`,
+      DASHBOARD_TTL_SECONDS,
+      () => _computeAcademicOverview(company)
+    );
+    res.json(data);
   } catch (err) {
     console.error("academicOverview:", err);
     res.status(500).json({ error: "Failed to load academic dashboard" });
@@ -177,9 +193,7 @@ exports.academicOverview = async (req, res) => {
 // GET /api/dashboard/corporate
 // Admin / manager / superadmin — workforce overview
 // ---------------------------------------------------------------------------
-exports.corporateOverview = async (req, res) => {
-  try {
-    const company = req.user.company;
+async function _computeCorporateOverview(company) {
     const now     = new Date();
     const today   = utcDayStart(now);
     const todayEnd = new Date(today); todayEnd.setUTCHours(23, 59, 59, 999);
@@ -269,7 +283,7 @@ exports.corporateOverview = async (req, res) => {
       { $sort: { _id: 1 } },
     ]);
 
-    res.json({
+    return {
       workforce: {
         total: totalEmployees,
         ...todayStats,
@@ -286,7 +300,18 @@ exports.corporateOverview = async (req, res) => {
         completionRate: trainingCompletionRate,
       },
       attendanceTrend,
-    });
+    };
+}
+
+exports.corporateOverview = async (req, res) => {
+  try {
+    const company = req.user.company;
+    const data = await getOrSetCache(
+      `dash:corporate:${company}`,
+      DASHBOARD_TTL_SECONDS,
+      () => _computeCorporateOverview(company)
+    );
+    res.json(data);
   } catch (err) {
     console.error("corporateOverview:", err);
     res.status(500).json({ error: "Failed to load corporate dashboard" });
@@ -297,10 +322,7 @@ exports.corporateOverview = async (req, res) => {
 // GET /api/dashboard/lecturer
 // Lecturer — own courses, workload, upcoming deadlines
 // ---------------------------------------------------------------------------
-exports.lecturerDashboard = async (req, res) => {
-  try {
-    const company  = req.user.company;
-    const userId   = req.user._id;
+async function _computeLecturerDashboard(company, userId) {
     const now      = new Date();
     const ahead7   = addDays(now, 7);
 
@@ -350,7 +372,7 @@ exports.lecturerDashboard = async (req, res) => {
         ])
       : [0, 0, 0, 0, 0, []];
 
-    res.json({
+    return {
       courses: {
         count:         myCourses.length,
         totalEnrolled,
@@ -373,7 +395,19 @@ exports.lecturerDashboard = async (req, res) => {
         ungradedSubmissions: ungradedCount,
       },
       upcomingDeadlines,
-    });
+    };
+}
+
+exports.lecturerDashboard = async (req, res) => {
+  try {
+    const company = req.user.company;
+    const userId  = req.user._id;
+    const data = await getOrSetCache(
+      `dash:lecturer:${company}:${userId}`,
+      DASHBOARD_TTL_SECONDS,
+      () => _computeLecturerDashboard(company, userId)
+    );
+    res.json(data);
   } catch (err) {
     console.error("lecturerDashboard:", err);
     res.status(500).json({ error: "Failed to load lecturer dashboard" });
@@ -384,10 +418,7 @@ exports.lecturerDashboard = async (req, res) => {
 // GET /api/dashboard/student
 // Student — personal academic progress across all enrolled courses
 // ---------------------------------------------------------------------------
-exports.studentDashboard = async (req, res) => {
-  try {
-    const company   = req.user.company;
-    const studentId = req.user._id;
+async function _computeStudentDashboard(company, studentId) {
     const now       = new Date();
     const ahead7    = addDays(now, 7);
 
@@ -473,7 +504,7 @@ exports.studentDashboard = async (req, res) => {
       .select("score maxScore submittedAt quiz")
       .lean();
 
-    res.json({
+    return {
       enrolledCourses: courses.length,
       courseSummaries,
       attendance: {
@@ -496,7 +527,19 @@ exports.studentDashboard = async (req, res) => {
         pct:         a.maxScore > 0 ? Math.round((a.score / a.maxScore) * 1000) / 10 : 0,
         submittedAt: a.submittedAt,
       })),
-    });
+    };
+}
+
+exports.studentDashboard = async (req, res) => {
+  try {
+    const company   = req.user.company;
+    const studentId = req.user._id;
+    const data = await getOrSetCache(
+      `dash:student:${company}:${studentId}`,
+      DASHBOARD_TTL_SECONDS,
+      () => _computeStudentDashboard(company, studentId)
+    );
+    res.json(data);
   } catch (err) {
     console.error("studentDashboard:", err);
     res.status(500).json({ error: "Failed to load student dashboard" });
@@ -507,10 +550,7 @@ exports.studentDashboard = async (req, res) => {
 // GET /api/dashboard/employee
 // Employee / manager — personal HR snapshot
 // ---------------------------------------------------------------------------
-exports.employeeDashboard = async (req, res) => {
-  try {
-    const company    = req.user.company;
-    const employeeId = req.user._id;
+async function _computeEmployeeDashboard(company, employeeId) {
     const now        = new Date();
     const { start: monthStart, end: monthEnd } = utcMonthBounds(now);
     const today      = utcDayStart(now);
@@ -572,7 +612,7 @@ exports.employeeDashboard = async (req, res) => {
       .limit(5)
       .lean();
 
-    res.json({
+    return {
       attendance: {
         month:             `${now.getUTCFullYear()}-${String(now.getUTCMonth() + 1).padStart(2, "0")}`,
         daysPresent,
@@ -600,7 +640,25 @@ exports.employeeDashboard = async (req, res) => {
       latestAttendanceSummary: latestSummary,
       training,
       activeGoals:          goals,
-    });
+    };
+}
+
+// Shorter TTL than the other dashboards: includes today's clock-in/out
+// status, which the clock-in/out routes also proactively invalidate on
+// write -- this TTL is just the fallback bound for anything that isn't
+// (e.g. an admin's manual override landing between reads).
+const EMPLOYEE_DASHBOARD_TTL_SECONDS = 10;
+
+exports.employeeDashboard = async (req, res) => {
+  try {
+    const company    = req.user.company;
+    const employeeId = req.user._id;
+    const data = await getOrSetCache(
+      `dash:employee:${company}:${employeeId}`,
+      EMPLOYEE_DASHBOARD_TTL_SECONDS,
+      () => _computeEmployeeDashboard(company, employeeId)
+    );
+    res.json(data);
   } catch (err) {
     console.error("employeeDashboard:", err);
     res.status(500).json({ error: "Failed to load employee dashboard" });

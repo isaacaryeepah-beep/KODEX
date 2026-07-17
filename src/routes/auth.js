@@ -2,7 +2,7 @@ const express = require("express");
 const authenticate = require("../middleware/auth");
 const { requireRole } = require("../middleware/role");
 const authController = require("../controllers/authController");
-const { loginLimiter, registerLimiter, passwordResetLimiter } = require("../middleware/rateLimiter");
+const { loginLimiter, registerLimiter, passwordResetLimiter, institutionLookupLimiter } = require("../middleware/rateLimiter");
 
 const router = express.Router();
 
@@ -16,7 +16,7 @@ router.post("/register-hod",           registerLimiter,       authController.reg
 router.post("/self-register",          registerLimiter,       authController.registerSelfService);
 router.post("/verify-email",           passwordResetLimiter,  authController.verifyEmail);
 router.post("/resend-verification-code", passwordResetLimiter, authController.resendVerificationCode);
-router.get("/lookup-institution",                             authController.lookupInstitution);
+router.get("/lookup-institution",      institutionLookupLimiter, authController.lookupInstitution);
 router.post("/login",                  loginLimiter,          authController.login);
 router.post("/refresh",                loginLimiter,          authController.refresh);
 router.post("/logout",                 authenticate,          authController.logout);

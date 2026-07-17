@@ -7,6 +7,7 @@ const authenticate         = require('../middleware/auth');
 const deviceAuth           = require('../middleware/deviceAuth');
 const { companyIsolation } = require('../middleware/companyIsolation');
 const { requireRole }      = require('../middleware/role');
+const { devicePairLimiter } = require('../middleware/rateLimiter');
 
 // ─── ESP32 DEVICE-SIDE ROUTES (device JWT) ────────────────────────────────────
 // These are called by the ESP32 firmware using `Authorization: Bearer <token>`
@@ -17,7 +18,7 @@ router.post('/devices/mark-online', deviceAuth, deviceCtrl.markOnline);
 router.get('/devices/roster',       deviceAuth, deviceCtrl.getRoster);
 
 // ─── PAIRING (no JWT — device uses pairingCode + institutionCode) ─────────────
-router.post('/devices/pair',          deviceCtrl.pairDevice);
+router.post('/devices/pair',          devicePairLimiter, deviceCtrl.pairDevice);
 
 // ─── LECTURER PORTAL ROUTES (user JWT) ────────────────────────────────────────
 router.post('/devices/pairing-code',   authenticate, deviceCtrl.generatePairingCode);

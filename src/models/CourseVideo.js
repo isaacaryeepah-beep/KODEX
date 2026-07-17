@@ -15,5 +15,10 @@ const courseVideoSchema = new mongoose.Schema({
 }, { timestamps: true });
 
 courseVideoSchema.index({ courseId: 1, order: 1 });
+// The "my-courses videos" endpoint (courseVideoController.js) filters by
+// companyId alone and sorts {courseId, order, createdAt} -- no prior index
+// even started with companyId, so it sorted every video in the company
+// in memory on each load.
+courseVideoSchema.index({ companyId: 1, courseId: 1, order: 1, createdAt: 1 });
 
 module.exports = mongoose.model('CourseVideo', courseVideoSchema);
