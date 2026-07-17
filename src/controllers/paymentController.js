@@ -296,19 +296,19 @@ exports.verifyPaystackSubscription = async (req, res) => {
     user.lastPaymentDate      = now;
     await user.save({ validateBeforeSave: false });
 
-    // Send confirmation email (non-fatal)
-    try {
-      if (user.email) {
-        await sendSubscriptionConfirmed({
-          email:     user.email,
-          name:      user.name || user.email,
-          plan:      meta.plan,
-          endDate:   newExpiry,
-          amountGhs: planInfo.price,
-        });
-      }
-    } catch (emailErr) {
-      console.error("Subscription email failed:", emailErr.message);
+    // Confirmation email is fire-and-forget: the response below never uses
+    // its result, and Gmail/MailerSend can each take up to 15s to fail over
+    // (see emailService.js) -- awaiting it would hold a paying user's "verify
+    // my payment" screen on a spinner for something that can't change the
+    // outcome they're waiting on.
+    if (user.email) {
+      sendSubscriptionConfirmed({
+        email:     user.email,
+        name:      user.name || user.email,
+        plan:      meta.plan,
+        endDate:   newExpiry,
+        amountGhs: planInfo.price,
+      }).catch((emailErr) => console.error("Subscription email failed:", emailErr.message));
     }
 
     return res.json({
