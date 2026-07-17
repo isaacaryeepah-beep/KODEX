@@ -165,10 +165,14 @@ assignmentSchema.index({ company: 1, course: 1, createdBy: 1, status: 1 });
 assignmentSchema.index({ company: 1, course: 1, isPublished: 1, isActive: 1 });
 assignmentSchema.index({ dueDate: 1 });
 // Lecturer/student dashboard "due this week" widgets filter
-// {company, course, status, dueDate range} and sort by dueDate -- the
-// standalone {dueDate} index above isn't scoped to company/course, so it
-// gave no real narrowing for a per-course query.
-assignmentSchema.index({ company: 1, course: 1, status: 1, dueDate: 1 });
+// {company, course, status, dueDate range} and sort by dueDate. dueDate
+// must come BEFORE status in the key order (Equality-Sort-Range): the
+// lecturer variant filters status with $ne -- an inequality -- and any
+// inequality key ahead of the sort key forces a blocking in-memory SORT.
+// Caught by tests/db/indexCoverage.test.js on the first real CI run: the
+// original {company, course, status, dueDate} ordering used the index for
+// filtering but still sorted in memory.
+assignmentSchema.index({ company: 1, course: 1, dueDate: 1, status: 1 });
 // Admin dashboard's due-soon count filters {company, status, dueDate range}
 // with NO course filter -- the compound above needs course as an equality
 // match first, so this case gets its own index.
