@@ -17652,7 +17652,6 @@ async function exportAllAttendanceToExcel() {
 const TIMETABLE_DAYS = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
 const TIMETABLE_DAYS_SHORT = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
 const TIMETABLE_COLORS = ['#6366f1','#0ea5e9','#10b981','#f59e0b','#ef4444','#8b5cf6','#ec4899','#14b8a6'];
-const TT_HOUR_PX = 64; // pixel height of one hour row in the day timeline
 
 // Caches the inputs of the most recent _timetableGrid() call so the day-pill
 // click handler can re-render just the "This Week" card — the three pages
@@ -17667,26 +17666,13 @@ function _timetableGrid(slots, canEdit) {
   return `<div class="tt-week-card" id="tt-week-card">${_ttWeekCardInner()}</div>`;
 }
 
-function _ttFmtHour(h) {
+// Formats a "HH:MM" 24h time string as "H:MM AM/PM" (matches the reference
+// design's card time labels, e.g. "11:00 AM").
+function _ttFmtTime(t) {
+  const [h, m] = (t || '0:0').split(':').map(Number);
   const ap = h >= 12 ? 'PM' : 'AM';
   const h12 = h % 12 || 12;
-  return `${h12} ${ap}`;
-}
-
-// Greedy interval-graph column packing so overlapping slots on the same day
-// sit side by side instead of stacking on top of each other.
-function _ttPackColumns(dayEvents) {
-  const sorted = [...dayEvents].sort((a, b) => a._startMin - b._startMin);
-  const columns = []; // each entry: last event's _endMin
-  sorted.forEach(ev => {
-    let col = columns.findIndex(endMin => endMin <= ev._startMin);
-    if (col === -1) { col = columns.length; columns.push(0); }
-    columns[col] = ev._endMin;
-    ev._col = col;
-  });
-  const totalCols = columns.length || 1;
-  sorted.forEach(ev => { ev._totalCols = totalCols; });
-  return sorted;
+  return `${h12}:${String(m).padStart(2, '0')} ${ap}`;
 }
 
 function _ttWeekCardInner() {
@@ -17697,11 +17683,8 @@ function _ttWeekCardInner() {
 
   const dayEvents = slots
     .filter(s => s.dayOfWeek === _ttSelectedDay)
-    .map(s => ({ ...s, _startMin: toMin(s.startTime), _endMin: Math.max(toMin(s.endTime), toMin(s.startTime) + 20) }));
-  const packed = _ttPackColumns(dayEvents);
-
-  const nowMin = new Date().getHours() * 60 + new Date().getMinutes();
-  const showNowLine = _ttSelectedDay === today;
+    .map(s => ({ ...s, _startMin: toMin(s.startTime), _endMin: Math.max(toMin(s.endTime), toMin(s.startTime) + 20) }))
+    .sort((a, b) => a._startMin - b._startMin);
 
   const pillsHtml = days.map(d => {
     const isSelected = d === _ttSelectedDay;
@@ -17711,46 +17694,47 @@ function _ttWeekCardInner() {
     </button>`;
   }).join('');
 
-  const eventsHtml = packed.map(ev => {
-    const top = (ev._startMin / 60) * TT_HOUR_PX;
-    const height = Math.max(((ev._endMin - ev._startMin) / 60) * TT_HOUR_PX, 30);
-    const widthPct = 100 / ev._totalCols;
-    const leftPct = ev._col * widthPct;
-    const color = ev.color || '#6366f1';
-    const label = esc(ev.title || ev.course?.title || 'Class');
-    const sub = [ev.startTime + '–' + ev.endTime, ev.room].filter(Boolean).map(esc).join(' · ');
-    return `
-      <div class="tt-event-block" style="top:${top}px;height:${height}px;left:calc(${leftPct}% + 2px);width:calc(${widthPct}% - 4px);background:${color}1c;border-left-color:${color};cursor:${canEdit ? 'pointer' : 'default'}"
-        ${canEdit ? `onclick="openEditSlotModal('${ev._id}')"` : ''} title="${label} — ${sub}">
-        <div class="tt-event-title" style="color:${color}">${label}</div>
-        <div class="tt-event-sub">${sub}</div>
-        ${canEdit ? `<button onclick="event.stopPropagation();deleteSlot('${ev._id}')" class="tt-event-del">×</button>` : ''}
-      </div>`;
-  }).join('');
+  const addBtnHtml = canEdit
+    ? `<button class="tt-add-btn" onclick="openAddSlotModal(${_ttSelectedDay})">
+        ${svgIcon('<line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>', 15)}
+        Add to Schedule
+      </button>`
+    : '';
 
-  const nowLineHtml = showNowLine ? `<div class="tt-now-line" style="top:${(nowMin / 60) * TT_HOUR_PX}px"><span class="tt-now-dot"></span></div>` : '';
-
-  const hourRows = Array.from({ length: 24 }, (_, h) => `
-    <div class="tt-hour-row" style="height:${TT_HOUR_PX}px">
-      <div class="tt-hour-label">${_ttFmtHour(h)}</div>
-      <div class="tt-hour-line"></div>
-    </div>`).join('');
+  const cardsHtml = dayEvents.length === 0
+    ? `<div class="tt-empty-day">
+        <div class="tt-empty-day-icon">${svgIcon('<circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>', 22)}</div>
+        <p>No classes scheduled for ${TIMETABLE_DAYS[_ttSelectedDay]}.</p>
+      </div>`
+    : dayEvents.map(ev => {
+        const color = ev.color || '#4f6ef7';
+        const code = esc(ev.course?.code || ev.code || '');
+        const title = esc(ev.title || ev.course?.title || 'Class');
+        const room = esc(ev.room || '');
+        return `
+          <div class="tt-event-card" style="--tt-accent:${color}" ${canEdit ? `onclick="openEditSlotModal('${ev._id}')"` : ''}>
+            <div class="tt-event-time-col">
+              <span class="tt-event-time">${_ttFmtTime(ev.startTime)}</span>
+              <span class="tt-event-time-line"></span>
+              <span class="tt-event-time">${_ttFmtTime(ev.endTime)}</span>
+            </div>
+            <div class="tt-event-card-body">
+              ${code ? `<span class="tt-event-code-pill">${code}</span>` : ''}
+              <div class="tt-event-card-title">${title}</div>
+              ${room ? `<div class="tt-event-card-location">${svgIcon('<path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/>', 13)}<span>${room}</span></div>` : ''}
+            </div>
+            ${canEdit ? `<button onclick="event.stopPropagation();deleteSlot('${ev._id}')" class="tt-event-del" aria-label="Delete class">×</button>` : ''}
+          </div>`;
+      }).join('');
 
   return `
     <div class="tt-week-head">
       ${svgIcon('<circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>', 16)}
-      <span>This Week</span>
+      <span>${TIMETABLE_DAYS[_ttSelectedDay]} Schedule</span>
     </div>
     <div class="tt-pills-row">${pillsHtml}</div>
-    <div class="tt-day-label">${TIMETABLE_DAYS_SHORT[_ttSelectedDay].toUpperCase()}</div>
-    <div class="tt-hourgrid-wrap">
-      <div class="tt-hourgrid">
-        ${hourRows}
-        <div class="tt-events-layer">${eventsHtml}</div>
-        ${nowLineHtml}
-      </div>
-    </div>
-    ${canEdit ? `<button class="btn btn-secondary btn-sm tt-add-btn" onclick="openAddSlotModal(${_ttSelectedDay})">+ Add class on ${TIMETABLE_DAYS[_ttSelectedDay]}</button>` : ''}
+    ${addBtnHtml}
+    <div class="tt-cards-list">${cardsHtml}</div>
   `;
 }
 

@@ -777,8 +777,34 @@ async function sendAdminNewSelfReg({ adminEmail, applicantName, role, orgName })
   return send({ to: adminEmail, subject: `New ${roleLabel} registration request — ${orgName}`, html });
 }
 
+// ── Free-form email from the superadmin panel to an institution's admin ───────
+// The superadmin route (superadmin.js POST /email/:companyId) has called this
+// since it shipped, but the function never existed -- every send threw
+// "sendCustom is not a function" and surfaced as a 500 "Server error" toast.
+// Subject/message/toName are free-typed text going into an HTML body, so they
+// are escaped here, with typed newlines preserved as <br/>.
+function escapeHtml(s) {
+  return String(s ?? '')
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+}
+
+async function sendCustom({ to, toName, subject, message }) {
+  const safeSubject = escapeHtml(subject);
+  const safeBody    = escapeHtml(message).replace(/\n/g, '<br/>');
+  const html = wrap(`
+    ${heading('Message from Dikly', safeSubject)}
+    <p>Hi <span class="highlight">${escapeHtml(toName) || 'there'}</span>,</p>
+    <p>${safeBody}</p>
+    <hr class="divider"/>
+    <p style="font-size:13px">This message was sent to you by the Dikly platform team.</p>
+  `, safeSubject);
+  return send({ to, subject, html });
+}
+
 module.exports = {
   send,
+  sendCustom,
   sendWelcome,
   sendTrialEndingSoon,
   sendTrialExpired,
