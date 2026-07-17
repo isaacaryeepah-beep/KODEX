@@ -1,9 +1,14 @@
 name: GPT-o1 Code Review
 
+# Disabled automatic pull_request triggers: this workflow's own GitHub-hosted
+# runner usage was counting against the account's Actions budget (capped at
+# $0) on every push, blocking runner allocation for the required Jest suite
+# too. Left as workflow_dispatch-only for now. Note: this job's diff-fetching
+# step depends on pull_request event context (github.event.pull_request,
+# github.base_ref), which isn't populated on a manual dispatch run -- it
+# would need a `pr_number` workflow_dispatch input wired through before
+# manual runs would actually work, not just re-adding the trigger.
 on:
-  pull_request:
-    branches: [main]
-    types: [opened, synchronize, reopened]
   workflow_dispatch:
 
 jobs:

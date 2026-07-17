@@ -1,11 +1,13 @@
 name: SonarCloud Analysis
 
+# Disabled automatic push/pull_request triggers: this is a duplicate of the
+# "SonarCloud Code Analysis" check that already runs on every PR via
+# SonarCloud's native GitHub App integration (SonarCloud's own infra, not a
+# GitHub-hosted runner) -- that check already covers the same analysis for
+# free. This workflow re-ran the identical scan through a GitHub Actions
+# runner for no added benefit, while also counting against the account's
+# capped Actions budget. Left as workflow_dispatch-only.
 on:
-  push:
-    branches: [main]
-  pull_request:
-    branches: [main]
-    types: [opened, synchronize, reopened]
   workflow_dispatch:
 
 jobs:
