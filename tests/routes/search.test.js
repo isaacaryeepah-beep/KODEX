@@ -9,8 +9,14 @@
 
 jest.setTimeout(120000);
 
-process.env.JWT_SECRET         = process.env.JWT_SECRET         || "test-jwt-secret-search-suite-000000001";
-process.env.JWT_REFRESH_SECRET = process.env.JWT_REFRESH_SECRET || "test-jwt-refresh-secret-search-suite-01";
+const crypto = require("crypto");
+// Random per-run values, not literals — avoids hardcoded-credential security
+// scans flagging fixture strings that merely look like real secrets.
+const randSecret = (bytes = 24) => crypto.randomBytes(bytes).toString("hex");
+const randPassword = () => `Test${crypto.randomBytes(6).toString("hex")}!1`;
+
+process.env.JWT_SECRET         = process.env.JWT_SECRET         || randSecret();
+process.env.JWT_REFRESH_SECRET = process.env.JWT_REFRESH_SECRET || randSecret();
 process.env.NODE_ENV           = "test";
 
 jest.mock("../../src/services/emailService", () => ({
@@ -38,7 +44,7 @@ const User    = require("../../src/models/User");
 const INSTITUTION_CODE = "SEARCHTEST1";
 const OTHER_INSTITUTION_CODE = "SEARCHTEST2";
 const LECTURER_EMAIL    = "searching.lecturer@searchtest.edu";
-const LECTURER_PASSWORD = "LecturerPassw0rd!1";
+const LECTURER_PASSWORD = randPassword();
 
 let company, otherCompany, searchingLecturer, otherLecturer, student, crossTenantLecturer;
 let accessToken;
@@ -89,7 +95,7 @@ beforeAll(async () => {
   otherLecturer = await User.create({
     name: "Dr. Nathaniel Mensah",
     email: "nathaniel.mensah@searchtest.edu",
-    password: "SomePassw0rd!1",
+    password: randPassword(),
     role: "lecturer",
     company: company._id,
     department: "Computer Science",
@@ -100,7 +106,7 @@ beforeAll(async () => {
   student = await User.create({
     name: "Nathaniel Student",
     email: "nathaniel.student@searchtest.edu",
-    password: "SomePassw0rd!1",
+    password: randPassword(),
     role: "student",
     company: company._id,
     IndexNumber: "SEARCHTEST/CS/26/0001",
@@ -112,7 +118,7 @@ beforeAll(async () => {
   crossTenantLecturer = await User.create({
     name: "Nathaniel Cross Tenant",
     email: "nathaniel.crosstenant@othertest.edu",
-    password: "SomePassw0rd!1",
+    password: randPassword(),
     role: "lecturer",
     company: otherCompany._id,
     department: "Computer Science",

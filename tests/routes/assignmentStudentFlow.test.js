@@ -14,8 +14,14 @@
 
 jest.setTimeout(120000);
 
-process.env.JWT_SECRET         = process.env.JWT_SECRET         || "test-jwt-secret-asgnflow-suite-0000001";
-process.env.JWT_REFRESH_SECRET = process.env.JWT_REFRESH_SECRET || "test-jwt-refresh-asgnflow-suite-00001";
+const crypto = require("crypto");
+// Random per-run values, not literals — avoids hardcoded-credential security
+// scans flagging fixture strings that merely look like real secrets.
+const randSecret = (bytes = 24) => crypto.randomBytes(bytes).toString("hex");
+const randPassword = () => `Test${crypto.randomBytes(6).toString("hex")}!1`;
+
+process.env.JWT_SECRET         = process.env.JWT_SECRET         || randSecret();
+process.env.JWT_REFRESH_SECRET = process.env.JWT_REFRESH_SECRET || randSecret();
 process.env.NODE_ENV           = "test";
 
 jest.mock("../../src/services/emailService", () => ({
@@ -42,10 +48,11 @@ const Course  = require("../../src/models/Course");
 
 const INSTITUTION_CODE = "ASGNFLOW1";
 const LECTURER_EMAIL    = "lecturer@asgnflow.edu";
-const LECTURER_PASSWORD = "LecturerPassw0rd!1";
+const LECTURER_PASSWORD = randPassword();
 const STUDENT_EMAIL     = "student@asgnflow.edu";
-const STUDENT_PASSWORD  = "StudentPassw0rd!1";
+const STUDENT_PASSWORD  = randPassword();
 const GROUP_B_EMAIL     = "groupb@asgnflow.edu";
+const GROUP_B_PASSWORD  = randPassword();
 
 let company, lecturer, student, groupBStudent, course;
 let lecturerToken, studentToken, groupBToken;
@@ -106,7 +113,7 @@ beforeAll(async () => {
   groupBStudent = await User.create({
     name: "Kofi GroupB",
     email: GROUP_B_EMAIL,
-    password: STUDENT_PASSWORD,
+    password: GROUP_B_PASSWORD,
     role: "student",
     company: company._id,
     IndexNumber: "ASGNFLOW/CS/26/0002",
@@ -126,7 +133,7 @@ beforeAll(async () => {
 
   lecturerToken = await loginAs(LECTURER_EMAIL, LECTURER_PASSWORD);
   studentToken  = await loginAs(STUDENT_EMAIL, STUDENT_PASSWORD);
-  groupBToken   = await loginAs(GROUP_B_EMAIL, STUDENT_PASSWORD);
+  groupBToken   = await loginAs(GROUP_B_EMAIL, GROUP_B_PASSWORD);
 });
 
 afterAll(async () => {

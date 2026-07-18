@@ -17,8 +17,15 @@
 
 jest.setTimeout(120000);
 
-process.env.JWT_SECRET         = process.env.JWT_SECRET         || "test-jwt-secret-apiv1-suite-00000001";
-process.env.JWT_REFRESH_SECRET = process.env.JWT_REFRESH_SECRET || "test-jwt-refresh-secret-apiv1-suite-1";
+const crypto = require("crypto");
+// Random per-run values, not literals — avoids hardcoded-credential security
+// scans flagging fixture strings that merely look like real secrets.
+const randSecret = (bytes = 24) => crypto.randomBytes(bytes).toString("hex");
+const randPassword = () => `Test${crypto.randomBytes(6).toString("hex")}!1`;
+const randApiKey = () => `dk_live_test_${crypto.randomBytes(20).toString("hex")}`;
+
+process.env.JWT_SECRET         = process.env.JWT_SECRET         || randSecret();
+process.env.JWT_REFRESH_SECRET = process.env.JWT_REFRESH_SECRET || randSecret();
 process.env.NODE_ENV           = "test";
 
 const request  = require("supertest");
@@ -81,7 +88,7 @@ beforeAll(async () => {
   const lecturer = await User.create({
     name: "Prof. API Lecturer",
     email: "lecturer@apiv1acad.edu",
-    password: "SomePassw0rd!1",
+    password: randPassword(),
     role: "lecturer",
     company: academicCompany._id,
     department: "Computer Science",
@@ -92,7 +99,7 @@ beforeAll(async () => {
   await User.create({
     name: "Nana Yaa Student",
     email: "nanayaa@apiv1acad.edu",
-    password: "SomePassw0rd!1",
+    password: randPassword(),
     role: "student",
     company: academicCompany._id,
     IndexNumber: "APIV1/CS/26/0001",
@@ -115,7 +122,7 @@ beforeAll(async () => {
   });
 
   const makeKey = async (company, scopes) => {
-    const raw = `dk_live_test_${crypto_randomHex()}`;
+    const raw = randApiKey();
     await ApiKey.create({
       company: company._id,
       name: "Test Key",
@@ -125,10 +132,6 @@ beforeAll(async () => {
     });
     return raw;
   };
-
-  function crypto_randomHex() {
-    return require("crypto").randomBytes(20).toString("hex");
-  }
 
   academicStudentsKey    = await makeKey(academicCompany, ["read:students", "read:courses"]);
   academicNoScopeKey     = await makeKey(academicCompany, []);
@@ -163,7 +166,7 @@ describe("GET /api/v1/students", () => {
   test("400s a corporate-mode key even with the scope (academic_only)", async () => {
     // corporateAttendanceKey's company is corporate-mode; give it read:students
     // implicitly via a fresh key to isolate from the attendance scope test.
-    const raw = `dk_live_test_${require("crypto").randomBytes(20).toString("hex")}`;
+    const raw = randApiKey();
     await ApiKey.create({
       company: corporateCompany._id,
       name: "Corporate key with students scope",
