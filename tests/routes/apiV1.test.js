@@ -184,6 +184,24 @@ describe("GET /api/v1/students", () => {
     expect(res.status).toBe(200);
     expect(Array.isArray(res.body.data)).toBe(true);
   });
+
+  test("NoSQL operator injection via bracket-notation query params is neutralized", async () => {
+    // Express's qs parser turns `programme[$ne]=null` into
+    // req.query.programme = { $ne: null } — an object, not a string. If that
+    // object reached the Mongoose filter unsanitized, Mongoose would either
+    // throw casting it (500) or apply real $ne/$regex semantics instead of
+    // "no filter". The fix must make this behave IDENTICALLY to the filter
+    // being omitted entirely: same 200, same result set, never a 500.
+    const injected = await request(app)
+      .get("/api/v1/students?programme[$ne]=null&department[$regex]=.*")
+      .set("X-API-Key", academicStudentsKey);
+    const omitted = await request(app)
+      .get("/api/v1/students")
+      .set("X-API-Key", academicStudentsKey);
+
+    expect(injected.status).toBe(200);
+    expect(injected.body.data).toEqual(omitted.body.data);
+  });
 });
 
 describe("GET /api/v1/courses", () => {

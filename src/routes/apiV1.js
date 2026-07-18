@@ -35,6 +35,15 @@ const Course = require("../models/Course");
 
 router.use(apiKeyAuth);
 
+// Express's query parser (qs) turns bracket notation like `?role[$ne]=x`
+// into a nested object instead of a string. Assigning that straight into a
+// Mongoose filter lets a caller inject Mongo operators ($ne, $regex, ...) —
+// every query param used as a filter value must go through this first so
+// anything that isn't a plain string is treated as "not provided".
+function str(v) {
+  return typeof v === "string" && v.length > 0 ? v : undefined;
+}
+
 function paging(req) {
   const limit = Math.min(200, Math.max(1, parseInt(req.query.limit, 10) || 50));
   const offset = Math.max(0, parseInt(req.query.offset, 10) || 0);
@@ -52,7 +61,7 @@ function dayRange(req) {
     else d.setUTCHours(0, 0, 0, 0);
     return d;
   };
-  return { from: parse(req.query.from, false), to: parse(req.query.to, true) };
+  return { from: parse(str(req.query.from), false), to: parse(str(req.query.to), true) };
 }
 
 // ── GET /ping — verify a key works and see what it can do ──────────────────
@@ -71,8 +80,8 @@ router.get("/employees", requireScope("read:employees"), async (req, res) => {
   try {
     const { limit, offset } = paging(req);
     const filter = { company: req.apiCompany._id };
-    if (req.query.role) filter.role = req.query.role;
-    if (req.query.active !== undefined) filter.isActive = req.query.active !== "false";
+    if (str(req.query.role)) filter.role = str(req.query.role);
+    if (req.query.active !== undefined) filter.isActive = str(req.query.active) !== "false";
 
     const [total, users] = await Promise.all([
       User.countDocuments(filter),
@@ -116,7 +125,7 @@ router.get("/attendance", requireScope("read:attendance"), requireCorporate, asy
       if (from) filter.date.$gte = from;
       if (to)   filter.date.$lte = to;
     }
-    if (req.query.employeeId) filter.employee = req.query.employeeId;
+    if (str(req.query.employeeId)) filter.employee = str(req.query.employeeId);
 
     const [total, records] = await Promise.all([
       CorporateAttendance.countDocuments(filter),
@@ -159,8 +168,8 @@ router.get("/leaves", requireScope("read:leaves"), requireCorporate, async (req,
   try {
     const { limit, offset } = paging(req);
     const filter = { company: req.apiCompany._id };
-    if (req.query.status) filter.status = req.query.status;
-    if (req.query.employeeId) filter.employee = req.query.employeeId;
+    if (str(req.query.status)) filter.status = str(req.query.status);
+    if (str(req.query.employeeId)) filter.employee = str(req.query.employeeId);
 
     const [total, leaves] = await Promise.all([
       LeaveRequest.countDocuments(filter),
@@ -220,10 +229,10 @@ router.get("/students", requireScope("read:students"), requireAcademic, async (r
   try {
     const { limit, offset } = paging(req);
     const filter = { company: req.apiCompany._id, role: "student" };
-    if (req.query.programme) filter.programme = req.query.programme;
-    if (req.query.department) filter.department = req.query.department;
-    if (req.query.level) filter.studentLevel = req.query.level;
-    if (req.query.active !== undefined) filter.isActive = req.query.active !== "false";
+    if (str(req.query.programme)) filter.programme = str(req.query.programme);
+    if (str(req.query.department)) filter.department = str(req.query.department);
+    if (str(req.query.level)) filter.studentLevel = str(req.query.level);
+    if (req.query.active !== undefined) filter.isActive = str(req.query.active) !== "false";
 
     const [total, students] = await Promise.all([
       User.countDocuments(filter),
@@ -259,10 +268,10 @@ router.get("/courses", requireScope("read:courses"), requireAcademic, async (req
   try {
     const { limit, offset } = paging(req);
     const filter = { companyId: req.apiCompany._id };
-    if (req.query.academicYear) filter.academicYear = req.query.academicYear;
-    if (req.query.semester) filter.semester = req.query.semester;
-    if (req.query.status) filter.status = req.query.status;
-    if (req.query.active !== undefined) filter.isActive = req.query.active !== "false";
+    if (str(req.query.academicYear)) filter.academicYear = str(req.query.academicYear);
+    if (str(req.query.semester)) filter.semester = str(req.query.semester);
+    if (str(req.query.status)) filter.status = str(req.query.status);
+    if (req.query.active !== undefined) filter.isActive = str(req.query.active) !== "false";
 
     const [total, courses] = await Promise.all([
       Course.countDocuments(filter),
