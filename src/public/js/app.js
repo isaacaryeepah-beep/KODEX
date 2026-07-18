@@ -20420,10 +20420,12 @@ window._aiqSaveSettings = async function() {
 
 // ── API Access (admin) — public API keys for /api/v1 integrations ──────────
 const _API_SCOPE_META = {
-  'read:attendance': 'Attendance records (clock-in/out, hours, overtime)',
-  'read:employees':  'Employee directory (names, emails, departments)',
-  'read:leaves':     'Leave requests and their statuses',
-  'read:shifts':     'Shift definitions',
+  'read:attendance': 'Attendance records (clock-in/out, hours, overtime) — corporate mode',
+  'read:employees':  'Employee directory (names, emails, departments) — corporate mode',
+  'read:leaves':     'Leave requests and their statuses — corporate mode',
+  'read:shifts':     'Shift definitions — corporate mode',
+  'read:students':   'Student directory (names, emails, index numbers, programme) — academic mode',
+  'read:courses':    'Course catalogue (codes, titles, lecturers, enrollment counts) — academic mode',
 };
 
 async function renderApiAccess() {
@@ -20486,6 +20488,8 @@ async function renderApiAccess() {
           <div><code style="font-family:monospace">GET /api/v1/attendance?from=&amp;to=</code> — daily attendance records</div>
           <div><code style="font-family:monospace">GET /api/v1/leaves?status=</code> — leave requests</div>
           <div><code style="font-family:monospace">GET /api/v1/shifts</code> — shift definitions</div>
+          <div><code style="font-family:monospace">GET /api/v1/students</code> — student directory</div>
+          <div><code style="font-family:monospace">GET /api/v1/courses</code> — course catalogue</div>
         </div>
         <div style="font-size:11px;color:var(--text-light);margin-top:10px">Limit: 120 requests/minute per key · pagination via <code style="font-family:monospace">?limit=</code> (max 200) and <code style="font-family:monospace">?offset=</code></div>
         <a href="/api-docs" target="_blank" rel="noopener" class="btn btn-secondary btn-sm" style="margin-top:12px;display:inline-block;text-decoration:none">📄 View full API documentation →</a>

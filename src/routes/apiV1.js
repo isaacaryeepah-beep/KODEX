@@ -17,6 +17,8 @@
  *   /attendance  daily clock-in/out records         scope: read:attendance   (corporate)
  *   /leaves      leave requests                     scope: read:leaves       (corporate)
  *   /shifts      shift definitions                  scope: read:shifts       (corporate)
+ *   /students    student directory                  scope: read:students     (academic)
+ *   /courses     course catalogue                   scope: read:courses      (academic)
  *
  * Pagination: ?limit= (default 50, max 200) & ?offset=. Every list response
  * is { data: [...], pagination: { total, limit, offset } }.
@@ -24,11 +26,12 @@
 
 const express = require("express");
 const router = express.Router();
-const { apiKeyAuth, requireScope, requireCorporate } = require("../middleware/apiKeyAuth");
+const { apiKeyAuth, requireScope, requireCorporate, requireAcademic } = require("../middleware/apiKeyAuth");
 const User = require("../models/User");
 const CorporateAttendance = require("../models/CorporateAttendance");
 const LeaveRequest = require("../models/LeaveRequest");
 const Shift = require("../models/Shift");
+const Course = require("../models/Course");
 
 router.use(apiKeyAuth);
 
@@ -209,6 +212,89 @@ router.get("/shifts", requireScope("read:shifts"), requireCorporate, async (req,
     });
   } catch (e) {
     res.status(500).json({ error: "server_error", message: "Failed to list shifts." });
+  }
+});
+
+// ── GET /students ────────────────────────────────────────────────────────
+router.get("/students", requireScope("read:students"), requireAcademic, async (req, res) => {
+  try {
+    const { limit, offset } = paging(req);
+    const filter = { company: req.apiCompany._id, role: "student" };
+    if (req.query.programme) filter.programme = req.query.programme;
+    if (req.query.department) filter.department = req.query.department;
+    if (req.query.level) filter.studentLevel = req.query.level;
+    if (req.query.active !== undefined) filter.isActive = req.query.active !== "false";
+
+    const [total, students] = await Promise.all([
+      User.countDocuments(filter),
+      User.find(filter)
+        .select("name email IndexNumber programme department studentLevel isActive createdAt")
+        .sort({ name: 1 })
+        .skip(offset)
+        .limit(limit)
+        .lean(),
+    ]);
+
+    res.json({
+      data: students.map((s) => ({
+        id: s._id,
+        name: s.name,
+        email: s.email,
+        indexNumber: s.IndexNumber || null,
+        programme: s.programme || null,
+        department: s.department || null,
+        level: s.studentLevel || null,
+        active: !!s.isActive,
+        createdAt: s.createdAt,
+      })),
+      pagination: { total, limit, offset },
+    });
+  } catch (e) {
+    res.status(500).json({ error: "server_error", message: "Failed to list students." });
+  }
+});
+
+// ── GET /courses ─────────────────────────────────────────────────────────
+router.get("/courses", requireScope("read:courses"), requireAcademic, async (req, res) => {
+  try {
+    const { limit, offset } = paging(req);
+    const filter = { companyId: req.apiCompany._id };
+    if (req.query.academicYear) filter.academicYear = req.query.academicYear;
+    if (req.query.semester) filter.semester = req.query.semester;
+    if (req.query.status) filter.status = req.query.status;
+    if (req.query.active !== undefined) filter.isActive = req.query.active !== "false";
+
+    const [total, courses] = await Promise.all([
+      Course.countDocuments(filter),
+      Course.find(filter)
+        .populate("lecturerId", "name email")
+        .select("title code academicYear semester level group status isActive isPublished enrolledStudents lecturerId createdAt")
+        .sort({ createdAt: -1 })
+        .skip(offset)
+        .limit(limit)
+        .lean(),
+    ]);
+
+    res.json({
+      data: courses.map((c) => ({
+        id: c._id,
+        code: c.code,
+        title: c.title,
+        academicYear: c.academicYear || null,
+        semester: c.semester || null,
+        level: c.level || null,
+        group: c.group || null,
+        lecturer: c.lecturerId ? { id: c.lecturerId._id, name: c.lecturerId.name, email: c.lecturerId.email } : null,
+        enrolledCount: (c.enrolledStudents || []).length,
+        status: c.status,
+        active: !!c.isActive,
+        published: !!c.isPublished,
+        createdAt: c.createdAt,
+      })),
+      pagination: { total, limit, offset },
+    });
+  } catch (e) {
+    res.status(500).json({ error: "server_error", message: "Failed to list courses." });
   }
 });
 

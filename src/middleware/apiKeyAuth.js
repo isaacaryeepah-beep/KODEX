@@ -115,9 +115,12 @@ function requireScope(scope) {
 }
 
 // Corporate-mode gate for endpoints whose data model only exists in
-// corporate mode (attendance/leaves/shifts).
+// corporate mode (attendance/leaves/shifts). "both"-mode organizations run
+// corporate AND academic features, so they pass this gate too — same
+// allowance as requireMode() in middleware/role.js.
 function requireCorporate(req, res, next) {
-  if (req.apiCompany?.mode !== "corporate") {
+  const mode = req.apiCompany?.mode;
+  if (mode !== "corporate" && mode !== "both") {
     return res.status(400).json({
       error: "corporate_only",
       message: "This endpoint is only available for corporate-mode organizations.",
@@ -126,4 +129,17 @@ function requireCorporate(req, res, next) {
   next();
 }
 
-module.exports = { apiKeyAuth, requireScope, requireCorporate, hashKey };
+// Academic-mode gate for endpoints whose data model only exists in academic
+// mode (students/courses). Same "both" allowance as requireCorporate.
+function requireAcademic(req, res, next) {
+  const mode = req.apiCompany?.mode;
+  if (mode !== "academic" && mode !== "both") {
+    return res.status(400).json({
+      error: "academic_only",
+      message: "This endpoint is only available for academic-mode organizations.",
+    });
+  }
+  next();
+}
+
+module.exports = { apiKeyAuth, requireScope, requireCorporate, requireAcademic, hashKey };

@@ -33,6 +33,8 @@ const API_SCOPES = Object.freeze([
   "read:employees",
   "read:leaves",
   "read:shifts",
+  "read:students",
+  "read:courses",
 ]);
 
 const apiKeySchema = new mongoose.Schema(
