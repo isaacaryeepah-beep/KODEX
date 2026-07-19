@@ -6963,22 +6963,35 @@ function _getGPSLocation() {
 }
 
 
-function _showGPSBlockedModal(code) {
-  document.getElementById('gps-blocked-modal')?.remove();
+// Friendly, actionable text for a raw GPS error code — shared by every GPS
+// entry point (corporate clock-in AND the lecturer GPS-session flow) so a
+// lecturer never sees a bare "GPS_DENIED" dumped on screen.
+function _gpsErrorMessage(code) {
   const messages = {
     GPS_DENIED:      'Location permission was denied. Open your browser or device settings, allow location access for this site, then try again.',
     GPS_UNAVAILABLE: 'Your device location is turned off. Enable GPS / Location Services in your device settings and try again.',
     GPS_TIMEOUT:     'Location could not be determined in time. Make sure GPS is on and you have a clear signal.',
     GPS_UNSUPPORTED: 'Your browser does not support GPS. Please use a modern browser.',
+    GPS_ERROR:       'Something went wrong getting your location. Make sure GPS is on and try again.',
   };
-  const msg = messages[code] || 'Location is required to clock in or out. Please enable GPS and try again.';
+  return messages[code] || 'Location is required. Please enable GPS and try again.';
+}
 
-  const helpLink = (code === 'GPS_DENIED' || code === 'GPS_UNAVAILABLE')
+// A "How to enable location" help link, for the permission/off cases where it
+// actually helps. Returns '' otherwise.
+function _gpsHelpLink(code) {
+  return (code === 'GPS_DENIED' || code === 'GPS_UNAVAILABLE')
     ? `<a href="https://support.google.com/chrome/answer/142065" target="_blank" rel="noopener"
          style="display:inline-block;margin-top:12px;font-size:12px;color:var(--primary);text-decoration:underline">
          How to enable location →
        </a>`
     : '';
+}
+
+function _showGPSBlockedModal(code) {
+  document.getElementById('gps-blocked-modal')?.remove();
+  const msg = _gpsErrorMessage(code);
+  const helpLink = _gpsHelpLink(code);
 
   const ol = document.createElement('div');
   ol.id = 'gps-blocked-modal';
@@ -8733,13 +8746,18 @@ async function showGpsSessionModal() {
   try {
     loc = await _getGPSLocation();
   } catch (e) {
+    // e.message is a raw code (GPS_DENIED / GPS_UNAVAILABLE / …) from
+    // _getGPSLocation — translate it to friendly, actionable guidance
+    // instead of showing the code, matching the corporate clock-in flow.
+    const code = e.message || 'GPS_ERROR';
     container.innerHTML = `
       <div class="modal-overlay" onclick="closeModal(event)">
         <div class="modal" onclick="event.stopPropagation()" style="text-align:center;max-width:400px">
           <div style="font-size:40px;margin-bottom:12px">📍</div>
           <h3 style="margin-bottom:8px">Location Unavailable</h3>
-          <p style="font-size:13px;color:var(--text-muted);margin-bottom:20px;line-height:1.6">${esc(e.message || 'Could not get your GPS position. Enable location access and try again.')}</p>
-          <div style="display:flex;gap:8px;justify-content:center">
+          <p style="font-size:13px;color:var(--text-muted);margin-bottom:6px;line-height:1.6">${esc(_gpsErrorMessage(code))}</p>
+          ${_gpsHelpLink(code)}
+          <div style="display:flex;gap:8px;justify-content:center;margin-top:20px">
             <button class="btn btn-secondary btn-sm" onclick="closeModal()">Cancel</button>
             <button class="btn btn-primary btn-sm" onclick="showGpsSessionModal()">↻ Retry</button>
           </div>
