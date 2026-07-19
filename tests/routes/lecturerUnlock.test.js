@@ -46,6 +46,7 @@ const Company           = require("../../src/models/Company");
 const User              = require("../../src/models/User");
 const Course            = require("../../src/models/Course");
 const AttendanceSession = require("../../src/models/AttendanceSession");
+const Timetable         = require("../../src/models/Timetable");
 const { SIX_HOURS_MS }  = require("../../src/middleware/deviceValidation");
 
 const LECTURER_PASSWORD = randPassword();
@@ -80,6 +81,31 @@ async function clearSessions() {
   await AttendanceSession.deleteMany({ company: companyId });
 }
 
+const minToHHMM = (m) => `${String(Math.floor(m / 60)).padStart(2, "0")}:${String(m % 60).padStart(2, "0")}`;
+
+// A slot whose window comfortably covers the current time.
+function coveringWindow() {
+  const now = new Date();
+  const nowMin = now.getHours() * 60 + now.getMinutes();
+  return {
+    dayOfWeek: now.getDay(),
+    startTime: minToHHMM(Math.max(0, nowMin - 60)),
+    endTime:   minToHHMM(Math.min(1439, nowMin + 60)),
+  };
+}
+
+// A same-day slot far from the current time (beyond the 15-min grace).
+function farWindow() {
+  const now = new Date();
+  const nowMin = now.getHours() * 60 + now.getMinutes();
+  const start = nowMin < 720 ? 1200 : 120; // 20:00 when it's morning, 02:00 otherwise
+  return { dayOfWeek: now.getDay(), startTime: minToHHMM(start), endTime: minToHHMM(start + 60) };
+}
+
+async function addSlot(course, window) {
+  return Timetable.create({ company: companyId, lecturer: lecturerId, course: course._id, isActive: true, ...window });
+}
+
 beforeAll(async () => {
   let uri = process.env.TEST_MONGO_URI;
   if (!uri) {
@@ -91,7 +117,7 @@ beforeAll(async () => {
   ({ app } = require("../../src/server"));
 
   await Promise.all(
-    ["users", "companies", "courses", "attendancesessions"].map((c) =>
+    ["users", "companies", "courses", "attendancesessions", "timetables"].map((c) =>
       mongoose.connection.db.collection(c).deleteMany({}).catch(() => {})
     )
   );
@@ -329,5 +355,105 @@ describe("lecturer unlock scope", () => {
 
     const fresh = await User.findById(studentC._id);
     expect(fresh.lastLogoutTime).toBeNull();
+  });
+});
+
+// The tests above run with NO timetable rows, which doubles as coverage of
+// the fallback for institutions that don't timetable their lecturers. Once a
+// lecturer HAS timetable entries, a running session alone is no longer
+// enough — the current time must fall inside a scheduled slot, for the
+// session's course.
+describe("lecturer unlock timetable gate", () => {
+  beforeEach(async () => {
+    await clearSessions();
+    await Timetable.deleteMany({ company: companyId });
+  });
+
+  test("running session outside every scheduled slot is refused", async () => {
+    await addSlot(courseA, farWindow());
+    await AttendanceSession.create({ company: companyId, createdBy: lecturerId, course: courseA._id, status: "active" });
+    await setCooldown(studentA);
+
+    const unlock = await request(app)
+      .post(`/api/users/${studentA._id}/unlock-account-device`)
+      .set("Authorization", `Bearer ${lecturerToken}`)
+      .send({});
+    expect(unlock.status).toBe(403);
+    expect(unlock.body.error).toMatch(/scheduled class/i);
+
+    const list = await request(app)
+      .get("/api/users/lecturer-locked-students")
+      .set("Authorization", `Bearer ${lecturerToken}`);
+    expect(list.body.active).toBe(false);
+    expect(list.body.reason).toBe("outside_timetable");
+  });
+
+  test("running session inside the scheduled slot for its course is allowed", async () => {
+    await addSlot(courseA, coveringWindow());
+    await AttendanceSession.create({ company: companyId, createdBy: lecturerId, course: courseA._id, status: "active" });
+    await setCooldown(studentA);
+
+    const list = await request(app)
+      .get("/api/users/lecturer-locked-students")
+      .set("Authorization", `Bearer ${lecturerToken}`);
+    expect(list.body.active).toBe(true);
+    expect(list.body.students.map(s => String(s._id))).toContain(String(studentA._id));
+
+    const unlock = await request(app)
+      .post(`/api/users/${studentA._id}/unlock-account-device`)
+      .set("Authorization", `Bearer ${lecturerToken}`)
+      .send({});
+    expect(unlock.status).toBe(200);
+
+    const fresh = await User.findById(studentA._id);
+    expect(fresh.lastLogoutTime).toBeNull();
+  });
+
+  test("session for a course not scheduled right now is refused (course B session during course A slot)", async () => {
+    await addSlot(courseA, coveringWindow());
+    await AttendanceSession.create({ company: companyId, createdBy: lecturerId, course: courseB._id, status: "active" });
+    await setCooldown(studentB);
+
+    const unlock = await request(app)
+      .post(`/api/users/${studentB._id}/unlock-account-device`)
+      .set("Authorization", `Bearer ${lecturerToken}`)
+      .send({});
+    expect(unlock.status).toBe(403);
+    expect(unlock.body.error).toMatch(/scheduled class/i);
+  });
+
+  test("course-less session narrows to the course scheduled now, not all the lecturer's courses", async () => {
+    await addSlot(courseA, coveringWindow());
+    await AttendanceSession.create({ company: companyId, createdBy: lecturerId, course: null, status: "active" });
+    await setCooldown(studentA);
+    await setCooldown(studentB);
+
+    const okUnlock = await request(app)
+      .post(`/api/users/${studentA._id}/unlock-account-device`)
+      .set("Authorization", `Bearer ${lecturerToken}`)
+      .send({});
+    expect(okUnlock.status).toBe(200);
+
+    const denied = await request(app)
+      .post(`/api/users/${studentB._id}/unlock-account-device`)
+      .set("Authorization", `Bearer ${lecturerToken}`)
+      .send({});
+    expect(denied.status).toBe(403);
+  });
+
+  test("inactive slots are ignored — with none active the no-timetable fallback applies", async () => {
+    const slot = await addSlot(courseA, coveringWindow());
+    await Timetable.findByIdAndUpdate(slot._id, { isActive: false });
+    await AttendanceSession.create({ company: companyId, createdBy: lecturerId, course: courseA._id, status: "active" });
+    await setCooldown(studentA);
+
+    // With the only slot inactive, the lecturer has no active timetable rows
+    // left, so the no-timetable fallback applies — unlock succeeds by
+    // session-course scope.
+    const unlock = await request(app)
+      .post(`/api/users/${studentA._id}/unlock-account-device`)
+      .set("Authorization", `Bearer ${lecturerToken}`)
+      .send({});
+    expect(unlock.status).toBe(200);
   });
 });

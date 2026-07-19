@@ -8456,12 +8456,15 @@ async function showLecturerUnlockModal() {
     const data = await api('/api/users/lecturer-locked-students');
 
     if (!data.active) {
+      const outsideTT = data.reason === 'outside_timetable';
       container.innerHTML = `
         <div class="modal-overlay" onclick="closeModal(event)">
           <div class="modal" onclick="event.stopPropagation()" style="text-align:center;max-width:400px">
-            <div style="font-size:40px;margin-bottom:12px">⏸️</div>
-            <h3 style="margin-bottom:8px">No Session Running</h3>
-            <p style="font-size:13px;color:var(--text-muted);margin-bottom:20px">You can only unlock students while your attendance session is running. Start your session first.</p>
+            <div style="font-size:40px;margin-bottom:12px">${outsideTT ? '📅' : '⏸️'}</div>
+            <h3 style="margin-bottom:8px">${outsideTT ? 'Outside Class Time' : 'No Session Running'}</h3>
+            <p style="font-size:13px;color:var(--text-muted);margin-bottom:20px">${outsideTT
+              ? 'You can only unlock students during your scheduled class time — check your timetable.'
+              : 'You can only unlock students while your attendance session is running. Start your session first.'}</p>
             <button class="btn btn-secondary btn-sm" onclick="closeModal()">Close</button>
           </div>
         </div>`;

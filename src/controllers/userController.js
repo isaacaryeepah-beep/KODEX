@@ -7,25 +7,70 @@ const { ROLE_HIERARCHY } = require("../middleware/role");
 const { getVisibleUserIds, getMyActiveHRAssignment } = require("../utils/corporateScope");
 const { SIX_HOURS_MS } = require("../middleware/deviceValidation");
 const AttendanceSession = require("../models/AttendanceSession");
+const Timetable = require("../models/Timetable");
 
 const IN_PROGRESS_SESSION_STATUSES = ["active", "live", "paused", "locked"];
+const UNLOCK_TIMETABLE_GRACE_MIN = 15;
 
-// Lecturers may unlock students only mid-class: they must have an attendance
-// session in progress, and the student must be enrolled in that session's
-// course. Sessions without a course (legacy/general) fall back to any course
-// the lecturer teaches. Returns { session, courseFilter } — session null
-// means "no session running", so the caller should refuse.
+function _hhmmToMinutes(s) {
+  const [h, m] = String(s || "").split(":").map(Number);
+  if (!Number.isFinite(h) || !Number.isFinite(m)) return null;
+  return h * 60 + m;
+}
+
+// Lecturers may unlock students only mid-class: an attendance session of
+// theirs must be in progress, and — when the institution keeps a timetable
+// for them — the current time must fall inside one of their scheduled slots
+// (±15 min grace), with the unlock scoped to the course scheduled right now.
+// Otherwise a lecturer could start a session at any hour purely to unlock.
+// Lecturers with no timetable entries at all fall back to the session's
+// course (any of their courses for course-less sessions).
+// Returns { session, courseFilter, reason } — a set reason means refuse:
+// "no_session" or "outside_timetable".
 async function lecturerUnlockScope(lecturer) {
   const session = await AttendanceSession.findOne({
     company: lecturer.company,
     createdBy: lecturer._id,
     status: { $in: IN_PROGRESS_SESSION_STATUSES },
   }).select("_id course").lean();
-  if (!session) return { session: null, courseFilter: null };
+  if (!session) return { session: null, courseFilter: null, reason: "no_session" };
+
+  const slots = await Timetable.find({
+    company: lecturer.company,
+    lecturer: lecturer._id,
+    isActive: true,
+  }).select("course dayOfWeek startTime endTime").lean();
+
+  if (slots.length) {
+    const now = new Date();
+    const nowMin = now.getHours() * 60 + now.getMinutes();
+    const covering = slots.filter(sl => {
+      if (sl.dayOfWeek !== now.getDay()) return false;
+      const start = _hhmmToMinutes(sl.startTime);
+      const end = _hhmmToMinutes(sl.endTime);
+      if (start === null || end === null) return false;
+      return nowMin >= start - UNLOCK_TIMETABLE_GRACE_MIN && nowMin <= end + UNLOCK_TIMETABLE_GRACE_MIN;
+    });
+    if (!covering.length) return { session, courseFilter: null, reason: "outside_timetable" };
+
+    const coveringCourseIds = covering.map(sl => String(sl.course));
+    if (session.course) {
+      if (!coveringCourseIds.includes(String(session.course))) {
+        return { session, courseFilter: null, reason: "outside_timetable" };
+      }
+      return { session, courseFilter: { _id: session.course, companyId: lecturer.company }, reason: null };
+    }
+    return {
+      session,
+      courseFilter: { _id: { $in: covering.map(sl => sl.course) }, companyId: lecturer.company },
+      reason: null,
+    };
+  }
+
   const courseFilter = session.course
     ? { _id: session.course, companyId: lecturer.company }
     : { companyId: lecturer.company, $or: [{ lecturerId: lecturer._id }, { createdBy: lecturer._id }] };
-  return { session, courseFilter };
+  return { session, courseFilter, reason: null };
 }
 
 const ALLOWED_ROLES = ['student', 'lecturer', 'admin', 'superadmin', 'hod', 'manager', 'employee', 'class_rep'];
@@ -900,9 +945,12 @@ exports.unlockAccountDeviceLock = async (req, res) => {
       if (user.role !== "student") {
         return res.status(403).json({ error: "Lecturers can only unlock student accounts" });
       }
-      const { session, courseFilter } = await lecturerUnlockScope(req.user);
-      if (!session) {
+      const { courseFilter, reason } = await lecturerUnlockScope(req.user);
+      if (reason === "no_session") {
         return res.status(403).json({ error: "You can only unlock students while your attendance session is running. Start your session first." });
+      }
+      if (reason === "outside_timetable") {
+        return res.status(403).json({ error: "You can only unlock students during your scheduled class time — check your timetable." });
       }
       const teaches = await Course.findOne({ ...courseFilter, enrolledStudents: user._id }).select("_id").lean();
       if (!teaches) {
@@ -957,8 +1005,8 @@ exports.unlockAccountDeviceLock = async (req, res) => {
 // and clearing login locks stays an HOD/admin action.
 exports.lecturerLockedStudents = async (req, res) => {
   try {
-    const { session, courseFilter } = await lecturerUnlockScope(req.user);
-    if (!session) return res.json({ active: false, students: [] });
+    const { courseFilter, reason } = await lecturerUnlockScope(req.user);
+    if (reason) return res.json({ active: false, reason, students: [] });
 
     const courses = await Course.find(courseFilter).select("enrolledStudents").lean();
     const studentIds = [...new Set(courses.flatMap(c => (c.enrolledStudents || []).map(String)))];
