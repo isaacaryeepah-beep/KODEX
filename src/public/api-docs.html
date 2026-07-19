@@ -107,10 +107,12 @@
       <p>Every key carries an explicit whitelist of scopes, set by your admin at creation. An endpoint call without the required scope returns <code>403</code> naming exactly which scope is missing.</p>
       <div style="overflow-x:auto"><table>
         <tr><th>Scope</th><th>Grants</th></tr>
-        <tr><td><code>read:attendance</code></td><td>Daily clock-in/out records, hours worked, overtime</td></tr>
-        <tr><td><code>read:employees</code></td><td>Employee directory (name, email, department, role)</td></tr>
-        <tr><td><code>read:leaves</code></td><td>Leave requests and their statuses</td></tr>
-        <tr><td><code>read:shifts</code></td><td>Shift definitions (name, hours, grace period)</td></tr>
+        <tr><td><code>read:attendance</code></td><td>Daily clock-in/out records, hours worked, overtime (corporate mode)</td></tr>
+        <tr><td><code>read:employees</code></td><td>Employee directory (name, email, department, role) (corporate mode)</td></tr>
+        <tr><td><code>read:leaves</code></td><td>Leave requests and their statuses (corporate mode)</td></tr>
+        <tr><td><code>read:shifts</code></td><td>Shift definitions (name, hours, grace period) (corporate mode)</td></tr>
+        <tr><td><code>read:students</code></td><td>Student directory (name, email, index number, programme, department) (academic mode)</td></tr>
+        <tr><td><code>read:courses</code></td><td>Course catalogue (code, title, lecturer, enrollment count) (academic mode)</td></tr>
       </table></div>
       <div class="note">Phase 1 of the API is read-only by design — there are no write scopes yet. This keeps the blast radius of a leaked key strictly limited to reading data, never changing it.</div>
     </div>
@@ -129,7 +131,7 @@
       <p>Errors are JSON with a machine-readable <code>error</code> code and a human-readable <code>message</code>.</p>
       <div style="overflow-x:auto"><table>
         <tr><th>Status</th><th>error</th><th>Meaning</th></tr>
-        <tr><td>400</td><td><code>bad_request</code> / <code>corporate_only</code></td><td>Malformed input (e.g. an invalid date), or the endpoint doesn't apply to an academic-mode organization.</td></tr>
+        <tr><td>400</td><td><code>bad_request</code> / <code>corporate_only</code> / <code>academic_only</code></td><td>Malformed input (e.g. an invalid date), or the endpoint doesn't apply to your organization's mode.</td></tr>
         <tr><td>401</td><td><code>missing_api_key</code> / <code>invalid_api_key</code> / <code>revoked_api_key</code></td><td>No key sent, key not recognised, or key has been revoked.</td></tr>
         <tr><td>402</td><td><code>subscription_expired</code></td><td>The organization's Dikly subscription/trial has ended — API access pauses along with the rest of the account.</td></tr>
         <tr><td>403</td><td><code>missing_scope</code></td><td>The key doesn't have the scope this endpoint requires.</td></tr>
@@ -235,8 +237,56 @@
     </div>
 
     <div class="card">
+      <div class="endpoint-title"><span class="method">GET</span><code>/students</code></div>
+      <div class="scope-badge">read:students</div>
+      <p style="margin-bottom:6px"><strong>Academic-mode organizations only.</strong> Query params: <code>programme</code>, <code>department</code>, <code>level</code>, <code>active</code> (<code>true</code>/<code>false</code>), <code>limit</code>, <code>offset</code></p>
+      <pre><code>{
+  "data": [
+    {
+      "id": "64f...",
+      "name": "Ama Serwaa",
+      "email": "ama@student.edu",
+      "indexNumber": "UG/CS/26/0042",
+      "programme": "BSc Computer Science",
+      "department": "Computer Science",
+      "level": "300",
+      "active": true,
+      "createdAt": "2026-01-14T09:02:00.000Z"
+    }
+  ],
+  "pagination": { "total": 214, "limit": 50, "offset": 0 }
+}</code></pre>
+    </div>
+
+    <div class="card">
+      <div class="endpoint-title"><span class="method">GET</span><code>/courses</code></div>
+      <div class="scope-badge">read:courses</div>
+      <p style="margin-bottom:6px"><strong>Academic-mode organizations only.</strong> Query params: <code>academicYear</code>, <code>semester</code>, <code>status</code>, <code>active</code> (<code>true</code>/<code>false</code>), <code>limit</code>, <code>offset</code></p>
+      <pre><code>{
+  "data": [
+    {
+      "id": "64f...",
+      "code": "CSCD 401",
+      "title": "Software Engineering",
+      "academicYear": "2025/2026",
+      "semester": "1",
+      "level": "400",
+      "group": "A",
+      "lecturer": { "id": "...", "name": "Prof. Ama Owusu", "email": "ama.owusu@uni.edu" },
+      "enrolledCount": 63,
+      "status": "active",
+      "active": true,
+      "published": true,
+      "createdAt": "2026-01-14T09:02:00.000Z"
+    }
+  ],
+  "pagination": { "total": 18, "limit": 50, "offset": 0 }
+}</code></pre>
+    </div>
+
+    <div class="card">
       <h3>Data we don't expose</h3>
-      <p>The API is deliberately limited to workforce/attendance data. It never returns pay amounts, currency, payment/subscription records, or anything from Dikly's billing system (Paystack) — that data doesn't leave Dikly through this API in any form.</p>
+      <p>The API is deliberately limited to directory/attendance/academic-catalogue data. It never returns pay amounts, currency, payment/subscription records, grades, or anything from Dikly's billing system (Paystack) — none of that leaves Dikly through this API in any form.</p>
     </div>
 
     <div class="card">

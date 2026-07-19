@@ -3137,7 +3137,13 @@ function buildSidebar() {
       links.push({ id: 'approvals', label: 'Approvals', icon: approvalsIcon() });
       links.push({ id: 'search', label: 'Search', icon: svgIcon('<circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>') });
       links.push({ id: 'users', label: 'Users', icon: usersIcon() });
-      if (currentUser.company?.mode === 'academic') {
+      if (currentUser.company?.mode === 'both') {
+        // Hybrid institutions run corporate features alongside academic ones
+        // (see requireMode() in middleware/role.js) — ArrivalIQ's backend
+        // already allows "both", the nav link was just never added here.
+        links.push({ id: 'arrival-iq-settings', label: 'ArrivalIQ Settings', icon: svgIcon('<path d="M3 11l19-9-9 19-2-8-8-2z"/>') });
+      }
+      if (currentUser.company?.mode === 'academic' || currentUser.company?.mode === 'both') {
         links.push({ id: 'sessions', label: 'Sessions', icon: sessionsIcon() });
         links.push({ id: 'admin-lecturer-activity', label: 'Lecturer Activity', icon: svgIcon('<rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/>') });
         links.push({ sep: true, label: 'ACADEMIC' });
@@ -3165,8 +3171,11 @@ function buildSidebar() {
       links.push({ id: 'subscription', label: 'Subscription', icon: subscriptionIcon() });
       break;
     case 'manager':
-      if (currentUser.company?.mode === 'corporate') {
-        // ── Corporate manager: grouped enterprise layout ──
+      if (currentUser.company?.mode === 'corporate' || currentUser.company?.mode === 'both') {
+        // ── Corporate manager: grouped enterprise layout ── ("both"-mode
+        // managers get the full corporate layout too — manager is a
+        // corporate-only role (CORPORATE_ROLES in middleware/role.js), so
+        // there's no academic nav to lose by taking this branch.
         links.push({ id: 'executive-dashboard', label: 'Executive Dashboard', icon: svgIcon('<rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/><line x1="7" y1="13" x2="7" y2="9"/><line x1="12" y1="13" x2="12" y2="7"/><line x1="17" y1="13" x2="17" y2="11"/>') });
         links.push({ sep: true, label: 'WORKFORCE' });
         links.push({ id: 'users',           label: 'Team',                icon: usersIcon() });
@@ -20420,10 +20429,12 @@ window._aiqSaveSettings = async function() {
 
 // ── API Access (admin) — public API keys for /api/v1 integrations ──────────
 const _API_SCOPE_META = {
-  'read:attendance': 'Attendance records (clock-in/out, hours, overtime)',
-  'read:employees':  'Employee directory (names, emails, departments)',
-  'read:leaves':     'Leave requests and their statuses',
-  'read:shifts':     'Shift definitions',
+  'read:attendance': 'Attendance records (clock-in/out, hours, overtime) — corporate mode',
+  'read:employees':  'Employee directory (names, emails, departments) — corporate mode',
+  'read:leaves':     'Leave requests and their statuses — corporate mode',
+  'read:shifts':     'Shift definitions — corporate mode',
+  'read:students':   'Student directory (names, emails, index numbers, programme) — academic mode',
+  'read:courses':    'Course catalogue (codes, titles, lecturers, enrollment counts) — academic mode',
 };
 
 async function renderApiAccess() {
@@ -20486,6 +20497,8 @@ async function renderApiAccess() {
           <div><code style="font-family:monospace">GET /api/v1/attendance?from=&amp;to=</code> — daily attendance records</div>
           <div><code style="font-family:monospace">GET /api/v1/leaves?status=</code> — leave requests</div>
           <div><code style="font-family:monospace">GET /api/v1/shifts</code> — shift definitions</div>
+          <div><code style="font-family:monospace">GET /api/v1/students</code> — student directory</div>
+          <div><code style="font-family:monospace">GET /api/v1/courses</code> — course catalogue</div>
         </div>
         <div style="font-size:11px;color:var(--text-light);margin-top:10px">Limit: 120 requests/minute per key · pagination via <code style="font-family:monospace">?limit=</code> (max 200) and <code style="font-family:monospace">?offset=</code></div>
         <a href="/api-docs" target="_blank" rel="noopener" class="btn btn-secondary btn-sm" style="margin-top:12px;display:inline-block;text-decoration:none">📄 View full API documentation →</a>
