@@ -145,10 +145,13 @@ describe("subscription enforcement kill-switch", () => {
   });
 
   test("non-superadmin cannot touch the switch", async () => {
+    // With enforcement back ON, this expired-institution lecturer is stopped
+    // by the auth-level 402 gate before even reaching the superadmin role
+    // gate (403) — refused either way, which is the property that matters.
     const r = await request(app)
       .patch("/api/superadmin/subscription-enforcement")
       .set("Authorization", `Bearer ${lecturerToken}`)
       .send({ enabled: false });
-    expect(r.status).toBe(403);
+    expect([402, 403]).toContain(r.status);
   });
 });

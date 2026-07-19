@@ -13,6 +13,13 @@ async function subscriptionEnforced() {
   if (Date.now() - _enforcementCache.fetchedAt < ENFORCEMENT_TTL_MS) {
     return _enforcementCache.value;
   }
+  // No usable DB connection → return the last known value immediately
+  // instead of letting mongoose buffer the query (which can hang callers
+  // for seconds during reconnects). Fail-safe default is "enforced".
+  const mongoose = require("mongoose");
+  if (mongoose.connection.readyState !== 1) {
+    return _enforcementCache.value;
+  }
   try {
     const s = await PlatformSettings.findOne().select("subscriptionEnforced").lean();
     _enforcementCache = { value: s ? s.subscriptionEnforced !== false : true, fetchedAt: Date.now() };
