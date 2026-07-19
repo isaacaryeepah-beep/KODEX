@@ -93,6 +93,15 @@ const companySchema = new mongoose.Schema(
       requireEsp32Attendance: { type: Boolean, default: false },
       // Whether students must be enrolled in a course to view its content.
       enforceEnrollment: { type: Boolean, default: true },
+      // ── GPS attendance defaults (academic counterpart of the corporate
+      // clock-in geofence). A campus center + default check-in radius that
+      // the hardware-free GPS session flow (showGpsSessionModal) pre-fills,
+      // so a lecturer can anchor a session to the admin-set campus boundary
+      // instead of their own live position every time. Null center = fall
+      // back to the lecturer's current location (the original behaviour).
+      campusLatitude:  { type: Number, default: null },
+      campusLongitude: { type: Number, default: null },
+      defaultGeofenceRadiusMeters: { type: Number, default: 100 },
     },
     // Corporate-mode specific configuration.
     corporateSettings: {

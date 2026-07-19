@@ -21,7 +21,8 @@ const router = express.Router();
 const authenticate = require("../middleware/auth");
 const { requireRole } = require("../middleware/role");
 const ApiKey = require("../models/ApiKey");
-const { API_SCOPES } = require("../models/ApiKey");
+const { scopesForMode } = require("../models/ApiKey");
+const Company = require("../models/Company");
 const { hashKey } = require("../middleware/apiKeyAuth");
 const AuditLog = require("../models/AuditLog");
 const { AUDIT_ACTIONS } = AuditLog;
@@ -30,13 +31,25 @@ const mw = [authenticate, requireRole("admin", "superadmin")];
 
 const MAX_KEYS_PER_COMPANY = 10;
 
+// The scopes a company may see and grant depend on its mode — an academic
+// institution has no shifts/leaves to expose, and a corporate org has no
+// students/courses. "both"-mode gets the full list.
+async function allowedScopes(companyId) {
+  const company = await Company.findById(companyId).select("mode").lean();
+  return scopesForMode(company?.mode);
+}
+
 router.get("/", ...mw, async (req, res) => {
   try {
-    const keys = await ApiKey.find({ company: req.user.company })
-      .select("name prefix scopes revokedAt lastUsedAt requestCount createdAt")
-      .sort({ createdAt: -1 })
-      .lean();
-    res.json({ keys, scopes: API_SCOPES });
+    const [keys, scopes, company] = await Promise.all([
+      ApiKey.find({ company: req.user.company })
+        .select("name prefix scopes revokedAt lastUsedAt requestCount createdAt")
+        .sort({ createdAt: -1 })
+        .lean(),
+      allowedScopes(req.user.company),
+      Company.findById(req.user.company).select("mode").lean(),
+    ]);
+    res.json({ keys, scopes, mode: company?.mode || null });
   } catch (e) {
     res.status(500).json({ error: "Failed to list API keys" });
   }
@@ -45,7 +58,13 @@ router.get("/", ...mw, async (req, res) => {
 router.post("/", ...mw, async (req, res) => {
   try {
     const name = (req.body.name || "").trim();
-    const scopes = Array.isArray(req.body.scopes) ? req.body.scopes.filter((s) => API_SCOPES.includes(s)) : [];
+    const allowed = await allowedScopes(req.user.company);
+    const requested = Array.isArray(req.body.scopes) ? req.body.scopes : [];
+    const disallowed = requested.filter((s) => !allowed.includes(s));
+    if (disallowed.length) {
+      return res.status(400).json({ error: `Scope not available for your organization's mode: ${disallowed.join(", ")}` });
+    }
+    const scopes = requested;
     if (!name) return res.status(400).json({ error: "Key name is required (e.g. \"HR system integration\")" });
     if (!scopes.length) return res.status(400).json({ error: "Select at least one scope" });
 

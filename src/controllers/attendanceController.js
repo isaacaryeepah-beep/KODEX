@@ -1886,3 +1886,74 @@ exports.offlineSync = async (req, res) => {
     res.status(500).json({ error: e.message });
   }
 };
+
+// ── Academic GPS attendance settings ─────────────────────────────────────
+// The academic counterpart of the corporate clock-in geofence: a campus
+// center + default check-in radius that the hardware-free GPS session flow
+// pre-fills. Admin/superadmin only; academic ("academic"/"both") mode only —
+// corporate companies use /api/corporate-attendance/settings instead.
+exports.getCampusSettings = async (req, res) => {
+  try {
+    const company = await Company.findById(req.user.company)
+      .select("mode academicSettings")
+      .lean();
+    if (!company) return res.status(404).json({ error: "Company not found" });
+    if (company.mode === "corporate") {
+      return res.status(400).json({ error: "Campus settings apply to academic institutions only." });
+    }
+    const a = company.academicSettings || {};
+    res.json({
+      campusLatitude:  a.campusLatitude  ?? null,
+      campusLongitude: a.campusLongitude ?? null,
+      defaultGeofenceRadiusMeters: a.defaultGeofenceRadiusMeters ?? 100,
+      requireEsp32Attendance: !!a.requireEsp32Attendance,
+    });
+  } catch (e) {
+    console.error("[getCampusSettings]", e);
+    res.status(500).json({ error: "Failed to load campus settings" });
+  }
+};
+
+exports.updateCampusSettings = async (req, res) => {
+  try {
+    const company = await Company.findById(req.user.company).select("mode");
+    if (!company) return res.status(404).json({ error: "Company not found" });
+    if (company.mode === "corporate") {
+      return res.status(400).json({ error: "Campus settings apply to academic institutions only." });
+    }
+
+    const { campusLatitude, campusLongitude, defaultGeofenceRadiusMeters, requireEsp32Attendance } = req.body;
+    const update = {};
+
+    if (campusLatitude !== undefined) {
+      const lat = campusLatitude === null || campusLatitude === "" ? null : Number(campusLatitude);
+      if (lat !== null && (!isFinite(lat) || Math.abs(lat) > 90)) {
+        return res.status(400).json({ error: "Latitude must be between -90 and 90." });
+      }
+      update["academicSettings.campusLatitude"] = lat;
+    }
+    if (campusLongitude !== undefined) {
+      const lng = campusLongitude === null || campusLongitude === "" ? null : Number(campusLongitude);
+      if (lng !== null && (!isFinite(lng) || Math.abs(lng) > 180)) {
+        return res.status(400).json({ error: "Longitude must be between -180 and 180." });
+      }
+      update["academicSettings.campusLongitude"] = lng;
+    }
+    if (defaultGeofenceRadiusMeters !== undefined) {
+      const r = Math.round(Number(defaultGeofenceRadiusMeters) || 100);
+      if (r < 20 || r > 1000) {
+        return res.status(400).json({ error: "Default radius must be between 20 and 1000 meters." });
+      }
+      update["academicSettings.defaultGeofenceRadiusMeters"] = r;
+    }
+    if (requireEsp32Attendance !== undefined) {
+      update["academicSettings.requireEsp32Attendance"] = !!requireEsp32Attendance;
+    }
+
+    await Company.findByIdAndUpdate(req.user.company, { $set: update });
+    res.json({ message: "Campus settings saved" });
+  } catch (e) {
+    console.error("[updateCampusSettings]", e);
+    res.status(500).json({ error: "Failed to save campus settings" });
+  }
+};

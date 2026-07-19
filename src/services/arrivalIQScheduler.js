@@ -3,9 +3,11 @@
 /**
  * arrivalIQScheduler.js
  *
- * Runs every 5 minutes. For each corporate company with ArrivalIQ enabled,
- * finds employees who have granted both location + notification consent
- * and have a shift starting within the next ~2 hours today, computes
+ * Runs every 5 minutes. For each company with ArrivalIQ enabled (any mode),
+ * finds staff who have granted both location + notification consent and
+ * have an anchor starting within the next ~2 hours today — a Shift for
+ * corporate staff, or the first Timetable class of the day for academic
+ * staff (lecturer/hod) — then computes
  * today's ArrivalPrediction from their last (foreground-captured, non-
  * stale) location via trafficService, and fires the personalized "time to
  * leave" push the moment each employee's own recommended departure time
@@ -30,6 +32,7 @@ const User = require("../models/User");
 const ShiftAssignment = require("../models/ShiftAssignment");
 const CorporateAttendance = require("../models/CorporateAttendance");
 const ArrivalPrediction = require("../models/ArrivalPrediction");
+const Timetable = require("../models/Timetable");
 const trafficService = require("./traffic/trafficService");
 const pushService = require("./push/pushService");
 
@@ -64,7 +67,10 @@ function formatClock(date) {
 async function sweep() {
   let companies;
   try {
-    companies = await Company.find({ mode: "corporate", "arrivalIQ.enabled": true })
+    // No mode filter: corporate staff anchor on their Shift, academic staff
+    // (lecturer/hod) on their first Timetable class of the day, and
+    // "both"-mode companies get whichever anchor each user actually has.
+    companies = await Company.find({ "arrivalIQ.enabled": true })
       .select("arrivalIQ corporateSettings.officeLatitude corporateSettings.officeLongitude")
       .lean();
   } catch (err) {
@@ -94,13 +100,14 @@ async function sweepCompany(company) {
 
   const employees = await User.find({
     company: company._id,
-    role: { $in: ["employee", "manager"] },
+    role: { $in: ["employee", "manager", "lecturer", "hod"] },
     isActive: true,
     "arrivalIQConsent.locationGranted": true,
     "arrivalIQConsent.notificationGranted": true,
-  }).select("name arrivalIQLocation").lean();
+  }).select("name role arrivalIQLocation").lean();
   if (!employees.length) return;
 
+  // Corporate anchor: today's active shift assignment.
   const employeeIds = employees.map((e) => e._id);
   const assignments = await ShiftAssignment.find({ employee: { $in: employeeIds }, isActive: true })
     .populate("shift")
@@ -112,11 +119,37 @@ async function sweepCompany(company) {
     }
   }
 
-  for (const employee of employees) {
-    const shift = shiftByEmployee.get(employee._id.toString());
-    if (!shift) continue;
+  // Academic anchor: the user's EARLIEST timetable class today. One
+  // prediction per user per day (unique index), so later classes the same
+  // day don't retrigger — the commute to campus happens once.
+  const academicIds = employees.filter((e) => ["lecturer", "hod"].includes(e.role)).map((e) => e._id);
+  const classByLecturer = new Map();
+  if (academicIds.length) {
+    const slots = await Timetable.find({
+      company: company._id,
+      lecturer: { $in: academicIds },
+      dayOfWeek: now.getDay(),
+      isActive: true,
+    }).select("lecturer startTime").lean();
+    for (const s of slots) {
+      const key = s.lecturer.toString();
+      const prev = classByLecturer.get(key);
+      if (!prev || s.startTime < prev.startTime) classByLecturer.set(key, s);
+    }
+  }
 
-    const shiftStart = shiftStartToday(shift.startTime, now);
+  for (const employee of employees) {
+    // Resolve this user's anchor — a shift, or their first class today.
+    const shift = shiftByEmployee.get(employee._id.toString());
+    const slot = classByLecturer.get(employee._id.toString());
+    const anchor = shift
+      ? { type: "shift", id: shift._id, startTime: shift.startTime, label: "shift" }
+      : slot
+      ? { type: "class", id: slot._id, startTime: slot.startTime, label: "class" }
+      : null;
+    if (!anchor) continue;
+
+    const shiftStart = shiftStartToday(anchor.startTime, now);
     const msUntilShift = shiftStart - now;
     // Outside the planning window — too far in the future, or long past.
     if (msUntilShift > LOOKAHEAD_MS || msUntilShift < -LATE_RISK_WINDOW_MS) continue;
@@ -127,8 +160,10 @@ async function sweepCompany(company) {
         company: company._id,
         user: employee._id,
         date: dateKey,
-        shift: shift._id,
-        shiftStartTime: shift.startTime,
+        shift: anchor.type === "shift" ? anchor.id : null,
+        timetableSlot: anchor.type === "class" ? anchor.id : null,
+        anchorType: anchor.type,
+        shiftStartTime: anchor.startTime,
       });
     }
     if (prediction.departureNotifiedAt) continue; // already handled today
@@ -165,7 +200,7 @@ async function sweepCompany(company) {
         prediction.checkInPromptedAt = now;
         await pushService.sendToUser(employee._id, {
           title: "🚗 ArrivalIQ",
-          body: `Open Dikly now so we can plan your commute for your ${shift.startTime} shift.`,
+          body: `Open Dikly now so we can plan your commute for your ${anchor.startTime} ${anchor.label}.`,
           url: "/?view=arrival-iq",
           tag: "arrivaliq-checkin",
         });
@@ -181,7 +216,7 @@ async function sweepCompany(company) {
         // with the employing company's name/logo when no icon is given, and
         // the title keeps just the feature name.
         title: "🚗 ArrivalIQ",
-        body: `Time to leave for your ${shift.startTime} shift — ~${prediction.travelMinutesInTraffic} min drive (${prediction.trafficLevel} traffic). Estimated arrival ${formatClock(prediction.estimatedArrivalAt)}.`,
+        body: `Time to leave for your ${anchor.startTime} ${anchor.label} — ~${prediction.travelMinutesInTraffic} min drive (${prediction.trafficLevel} traffic). Estimated arrival ${formatClock(prediction.estimatedArrivalAt)}.`,
         url: "/?view=arrival-iq",
         tag: "arrivaliq-departure",
       });
@@ -199,6 +234,10 @@ async function sweepLateRisk(company, dateKey, now) {
     date: dateKey,
     departureNotifiedAt: { $ne: null },
     lateRiskNotifiedAt: null,
+    // Class-anchored (academic) predictions have no clock-in record to
+    // check against — CorporateAttendance is corporate-only — so a
+    // late-risk push here would fire even for a lecturer already mid-class.
+    anchorType: { $ne: "class" },
   }).lean();
   if (!predictions.length) return;
 

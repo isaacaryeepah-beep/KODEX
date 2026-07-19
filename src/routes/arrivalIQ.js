@@ -26,16 +26,18 @@
  * Later phases add: geofence-arrival events, the late-arrival form + manager
  * review queue, and punctuality analytics.
  *
- * Corporate mode only — reuses corporateSettings.officeLatitude/
- * officeLongitude/geofenceRadiusMeters (Company model) for office location,
- * and Shift.startTime/gracePeriodMinutes for per-shift timing, rather than
- * duplicating either.
+ * Mode-neutral (staff roles only, never students): corporate staff anchor on
+ * their Shift, academic staff (lecturer/hod) anchor on their first Timetable
+ * class of the day — see arrivalIQScheduler.js. Office/campus location and
+ * geofence radius reuse corporateSettings.officeLatitude/officeLongitude/
+ * geofenceRadiusMeters (Company model) for both modes rather than
+ * duplicating the fields.
  */
 
 const express = require("express");
 const router = express.Router();
 const authenticate = require("../middleware/auth");
-const { requireRole, requireMode } = require("../middleware/role");
+const { requireRole } = require("../middleware/role");
 const { requireActiveSubscription } = require("../middleware/subscription");
 const Company = require("../models/Company");
 const User = require("../models/User");
@@ -47,7 +49,15 @@ const { todayKey } = require("../services/arrivalIQScheduler");
 const tomtomProvider = require("../services/traffic/providers/tomtomProvider");
 const { haversineMeters } = require("../utils/attendanceAntiCheat");
 
-const mw = [authenticate, requireMode("corporate"), requireActiveSubscription];
+// No mode gate: ArrivalIQ now serves academic staff too (user decision).
+// The staff-role gate replaces it — students never had access before (no
+// student role exists in corporate mode) and still don't: commute tracking
+// is a staff feature, not something students should be able to opt into.
+const mw = [
+  authenticate,
+  requireRole("employee", "manager", "lecturer", "hod", "admin", "superadmin"),
+  requireActiveSubscription,
+];
 const adminOnly = requireRole("admin", "superadmin");
 const canManage = requireRole("admin", "manager", "superadmin");
 

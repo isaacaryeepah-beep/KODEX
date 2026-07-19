@@ -3145,6 +3145,7 @@ function buildSidebar() {
       }
       if (currentUser.company?.mode === 'academic' || currentUser.company?.mode === 'both') {
         links.push({ id: 'sessions', label: 'Sessions', icon: sessionsIcon() });
+        links.push({ id: 'attendance-settings', label: 'Attendance Settings', icon: svgIcon('<circle cx="12" cy="12" r="3"/><path d="M12 1v6m0 6v6m11-7h-6m-6 0H1"/>') });
         links.push({ id: 'admin-lecturer-activity', label: 'Lecturer Activity', icon: svgIcon('<rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/>') });
         links.push({ sep: true, label: 'ACADEMIC' });
         links.push({ id: 'courses', label: 'Courses', icon: coursesIcon() });
@@ -3165,6 +3166,8 @@ function buildSidebar() {
       links.push({ id: 'ai-reports', label: 'Dikly AI', icon: svgIcon('<path d="M15 4V2"/><path d="M15 16v-2"/><path d="M8 9h2"/><path d="M20 9h2"/><path d="M17.8 11.8 19 13"/><path d="M15 9h.01"/><path d="M17.8 6.2 19 5"/><path d="M13.2 6.2 12 5"/><path d="M3 21l9-9"/>') });
       links.push({ sep: true, label: 'ADMINISTRATION' });
       links.push({ id: 'company-settings', label: 'Company Settings', icon: svgIcon('<circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/>') });
+      links.push({ id: 'branding', label: 'Institution Branding', icon: svgIcon('<circle cx="12" cy="12" r="10"/><path d="M8 14s1.5 2 4 2 4-2 4-2"/><line x1="9" y1="9" x2="9.01" y2="9"/><line x1="15" y1="9" x2="15.01" y2="9"/>') });
+      links.push({ id: 'arrival-iq-settings', label: 'ArrivalIQ Settings', icon: svgIcon('<path d="M3 11l19-9-9 19-2-8-8-2z"/>') });
       links.push({ id: 'api-access', label: 'API Access', icon: svgIcon('<polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/>') });
       links.push({ sep: true, label: 'SUPPORT' });
       links.push({ id: 'faq-center', label: 'FAQ Center', icon: svgIcon('<circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/>') });
@@ -3231,6 +3234,7 @@ function buildSidebar() {
       links.push({ id: 'exam-timetable',   label: 'Exams Timetable', icon: svgIcon('<rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/><path d="M9 15l2 2 4-4"/>') });
       links.push({ id: 'hod-lecturers',    label: 'Lecturers',      icon: svgIcon('<path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/>') });
       links.push({ id: 'hod-students',     label: 'Students',       icon: usersIcon() });
+      links.push({ id: 'arrival-iq',       label: 'ArrivalIQ',      icon: svgIcon('<path d="M3 11l19-9-9 19-2-8-8-2z"/>') });
       links.push({ sep: true, label: 'INSIGHTS' });
       links.push({ id: 'hod-performance',  label: 'Performance',    icon: svgIcon('<line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/>') });
       links.push({ id: 'quiz-monitor',     label: 'Quiz Monitor 🔴', icon: svgIcon('<path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7z"/><circle cx="12" cy="12" r="3"/>') });
@@ -3256,6 +3260,7 @@ function buildSidebar() {
     case 'lecturer':
       links.push({ id: 'sessions', label: 'Sessions', icon: sessionsIcon() });
       links.push({ id: 'attendance-device', label: 'Attendance Device', icon: svgIcon('<rect x="5" y="2" width="14" height="20" rx="2" ry="2"/><line x1="12" y1="18" x2="12.01" y2="18"/>') });
+      links.push({ id: 'arrival-iq', label: 'ArrivalIQ', icon: svgIcon('<path d="M3 11l19-9-9 19-2-8-8-2z"/>') });
       links.push({ sep: true, label: 'CONTENT' });
       links.push({ id: 'search', label: 'Search', icon: svgIcon('<circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>') });
       links.push({ id: 'courses', label: 'Courses', icon: coursesIcon() });
@@ -3652,6 +3657,7 @@ function navigateTo(view) {
     case 'sign-in-out': renderSignInOut(); break;
     case 'corp-attendance': renderCorporateAttendance(); break;
     case 'corp-clock-settings': renderCorpClockSettings(); break;
+    case 'attendance-settings': renderAcademicAttendanceSettings(); break;
     case 'arrival-iq-settings': renderArrivalIQSettings(); break;
     case 'api-access': renderApiAccess(); break;
     case 'arrival-iq': renderArrivalIQ(); break;
@@ -6959,22 +6965,35 @@ function _getGPSLocation() {
 }
 
 
-function _showGPSBlockedModal(code) {
-  document.getElementById('gps-blocked-modal')?.remove();
+// Friendly, actionable text for a raw GPS error code — shared by every GPS
+// entry point (corporate clock-in AND the lecturer GPS-session flow) so a
+// lecturer never sees a bare "GPS_DENIED" dumped on screen.
+function _gpsErrorMessage(code) {
   const messages = {
     GPS_DENIED:      'Location permission was denied. Open your browser or device settings, allow location access for this site, then try again.',
     GPS_UNAVAILABLE: 'Your device location is turned off. Enable GPS / Location Services in your device settings and try again.',
     GPS_TIMEOUT:     'Location could not be determined in time. Make sure GPS is on and you have a clear signal.',
     GPS_UNSUPPORTED: 'Your browser does not support GPS. Please use a modern browser.',
+    GPS_ERROR:       'Something went wrong getting your location. Make sure GPS is on and try again.',
   };
-  const msg = messages[code] || 'Location is required to clock in or out. Please enable GPS and try again.';
+  return messages[code] || 'Location is required. Please enable GPS and try again.';
+}
 
-  const helpLink = (code === 'GPS_DENIED' || code === 'GPS_UNAVAILABLE')
+// A "How to enable location" help link, for the permission/off cases where it
+// actually helps. Returns '' otherwise.
+function _gpsHelpLink(code) {
+  return (code === 'GPS_DENIED' || code === 'GPS_UNAVAILABLE')
     ? `<a href="https://support.google.com/chrome/answer/142065" target="_blank" rel="noopener"
          style="display:inline-block;margin-top:12px;font-size:12px;color:var(--primary);text-decoration:underline">
          How to enable location →
        </a>`
     : '';
+}
+
+function _showGPSBlockedModal(code) {
+  document.getElementById('gps-blocked-modal')?.remove();
+  const msg = _gpsErrorMessage(code);
+  const helpLink = _gpsHelpLink(code);
 
   const ol = document.createElement('div');
   ol.id = 'gps-blocked-modal';
@@ -8725,17 +8744,35 @@ async function showGpsSessionModal() {
   container.classList.remove('hidden');
   container.innerHTML = `<div class="modal-overlay"><div class="modal"><p style="color:var(--text-muted);text-align:center;padding:16px 0">📍 Getting your location…</p></div></div>`;
 
+  // Campus defaults (admin-set, via Attendance Settings) — a saved campus
+  // center + default radius the lecturer can anchor to instead of their own
+  // live position. Best-effort: any failure just falls back to live location.
+  let campus = {};
+  try { campus = await api('/api/attendance-sessions/campus-settings'); } catch (_) {}
+  const hasCampus = campus.campusLatitude != null && campus.campusLongitude != null;
+  const defaultRadius = campus.defaultGeofenceRadiusMeters || 100;
+
   let loc;
   try {
     loc = await _getGPSLocation();
   } catch (e) {
+    // e.message is a raw code (GPS_DENIED / GPS_UNAVAILABLE / …) from
+    // _getGPSLocation — translate it to friendly, actionable guidance
+    // instead of showing the code, matching the corporate clock-in flow.
+    const code = e.message || 'GPS_ERROR';
+    // With a saved campus center, the lecturer can still start a session even
+    // if their own GPS is unavailable — offer that as an escape hatch.
+    const campusFallback = hasCampus
+      ? `<button class="btn btn-secondary btn-sm" style="margin-top:10px;width:100%" onclick="_startGpsSessionFromCampus()">📍 Use saved campus location instead</button>`
+      : '';
     container.innerHTML = `
       <div class="modal-overlay" onclick="closeModal(event)">
         <div class="modal" onclick="event.stopPropagation()" style="text-align:center;max-width:400px">
           <div style="font-size:40px;margin-bottom:12px">📍</div>
           <h3 style="margin-bottom:8px">Location Unavailable</h3>
-          <p style="font-size:13px;color:var(--text-muted);margin-bottom:20px;line-height:1.6">${esc(e.message || 'Could not get your GPS position. Enable location access and try again.')}</p>
-          <div style="display:flex;gap:8px;justify-content:center">
+          <p style="font-size:13px;color:var(--text-muted);margin-bottom:6px;line-height:1.6">${esc(_gpsErrorMessage(code))}</p>
+          ${_gpsHelpLink(code)}
+          <div style="display:flex;gap:8px;justify-content:center;margin-top:20px">
             <button class="btn btn-secondary btn-sm" onclick="closeModal()">Cancel</button>
             <button class="btn btn-primary btn-sm" onclick="showGpsSessionModal()">↻ Retry</button>
           </div>
@@ -8762,13 +8799,121 @@ async function showGpsSessionModal() {
     return;
   }
 
+  // Radius options with the admin's configured default pre-selected. If the
+  // default isn't one of the presets, add it as its own option so it's honoured.
+  const radiusPresets = [50, 100, 200, 500];
+  const radiusLabels = { 50: '50 m — single classroom', 100: '100 m — building', 200: '200 m — large hall / block', 500: '500 m — campus area' };
+  const radiusOpts = (radiusPresets.includes(defaultRadius) ? radiusPresets : [defaultRadius, ...radiusPresets])
+    .map(r => `<option value="${r}" ${r === defaultRadius ? 'selected' : ''}>${radiusLabels[r] || (r + ' m')}</option>`).join('');
+
+  // If a campus center is configured, let the lecturer anchor the session to it
+  // (admin-set boundary) instead of their own live position.
+  const centerChoice = hasCampus ? `
+    <div class="form-group">
+      <label>Class Center</label>
+      <div style="display:flex;flex-direction:column;gap:6px;margin-top:4px">
+        <label style="display:flex;align-items:center;gap:8px;font-size:13px;cursor:pointer;font-weight:400">
+          <input type="radio" name="gps-center" value="me" checked> My current location (±${Math.round(loc.accuracy)}m)
+        </label>
+        <label style="display:flex;align-items:center;gap:8px;font-size:13px;cursor:pointer;font-weight:400">
+          <input type="radio" name="gps-center" value="campus"> Campus location (set by admin)
+        </label>
+      </div>
+    </div>` : '';
+
   container.innerHTML = `
     <div class="modal-overlay" onclick="closeModal(event)">
       <div class="modal" onclick="event.stopPropagation()" style="max-width:440px">
         <h3>Start GPS Check-in Session</h3>
         <div style="background:#eff6ff;border:1px solid #bfdbfe;border-radius:8px;padding:10px 14px;font-size:12px;color:#1e40af;margin:10px 0 14px;display:flex;gap:8px;align-items:flex-start">
           <span style="font-size:16px;flex-shrink:0">📍</span>
-          <div>Students mark attendance by sharing their GPS position — anyone outside the radius is rejected. No classroom device needed. Your current location (±${Math.round(loc.accuracy)}m) is the class center.</div>
+          <div>Students mark attendance by sharing their GPS position — anyone outside the radius is rejected. No classroom device needed.${hasCampus ? '' : ` Your current location (±${Math.round(loc.accuracy)}m) is the class center.`}</div>
+        </div>
+        <div class="form-group">
+          <label>Course <span style="color:red">*</span></label>
+          <select id="gps-session-course" style="width:100%;padding:9px 12px;border:1.5px solid var(--border);border-radius:8px;font-size:13px">
+            <option value="">— Select Course —</option>
+            ${courses.map(c => `<option value="${c._id}">${esc(c.title)}${c.level ? ' · L' + c.level : ''}${c.group ? ' · Grp ' + c.group : ''}</option>`).join('')}
+          </select>
+        </div>
+        ${centerChoice}
+        <div class="form-group">
+          <label>Check-in Radius</label>
+          <select id="gps-session-radius" style="width:100%;padding:9px 12px;border:1.5px solid var(--border);border-radius:8px;font-size:13px">
+            ${radiusOpts}
+          </select>
+        </div>
+        <div class="form-group">
+          <label>Session Title <span style="font-weight:400;color:var(--text-muted);font-size:12px">(optional)</span></label>
+          <input type="text" id="gps-session-title" placeholder="e.g., Week 5 Lecture">
+        </div>
+        <div class="modal-actions">
+          <button class="btn btn-secondary btn-sm" onclick="closeModal()">Cancel</button>
+          <button class="btn btn-primary btn-sm" onclick="startGpsSession(${loc.latitude}, ${loc.longitude}, ${hasCampus ? campus.campusLatitude : 'null'}, ${hasCampus ? campus.campusLongitude : 'null'})">Start GPS Session</button>
+        </div>
+      </div>
+    </div>`;
+}
+
+async function startGpsSession(latitude, longitude, campusLat = null, campusLng = null) {
+  const courseId = document.getElementById('gps-session-course')?.value;
+  const radius   = Number(document.getElementById('gps-session-radius')?.value) || 100;
+  const title    = document.getElementById('gps-session-title')?.value?.trim() || '';
+  if (!courseId) { toastWarning('Please select a course.'); return; }
+
+  // Honour the "Class Center" choice — the admin-set campus center, or the
+  // lecturer's own live position (the default).
+  let lat = latitude, lng = longitude;
+  const centerChoice = document.querySelector('input[name="gps-center"]:checked')?.value;
+  if (centerChoice === 'campus' && campusLat != null && campusLng != null) {
+    lat = campusLat; lng = campusLng;
+  }
+  try {
+    await api('/api/attendance-sessions/start', {
+      method: 'POST',
+      body: JSON.stringify({ title, courseId, gpsGeofence: { latitude: lat, longitude: lng, radiusMeters: radius } }),
+    });
+    closeModal();
+    toastSuccess('GPS session started — students can now check in with their location.');
+    renderSessions();
+  } catch (e) {
+    toastError(e.message || 'Failed to start GPS session');
+  }
+}
+
+// Escape hatch from the "Location Unavailable" state: start a GPS session
+// anchored to the admin-set campus location when the lecturer's own GPS fails.
+window._startGpsSessionFromCampus = async function() {
+  let campus = {};
+  try { campus = await api('/api/attendance-sessions/campus-settings'); } catch (_) {}
+  if (campus.campusLatitude == null || campus.campusLongitude == null) {
+    toastError('No campus location is set. Ask your admin to set one in Attendance Settings.');
+    return;
+  }
+  const container = document.getElementById('modal-container');
+  if (!container) return;
+  const defaultRadius = campus.defaultGeofenceRadiusMeters || 100;
+
+  let courses = [];
+  try {
+    const d = await api('/api/courses');
+    courses = (d.courses || d || []).filter(c => !c.needsApproval || c.approvalStatus === 'approved');
+  } catch (_) {}
+  if (!courses.length) { toastError('Could not load your courses. Check your connection and try again.'); return; }
+
+  const radiusPresets = [50, 100, 200, 500];
+  const radiusLabels = { 50: '50 m — single classroom', 100: '100 m — building', 200: '200 m — large hall / block', 500: '500 m — campus area' };
+  const radiusOpts = (radiusPresets.includes(defaultRadius) ? radiusPresets : [defaultRadius, ...radiusPresets])
+    .map(r => `<option value="${r}" ${r === defaultRadius ? 'selected' : ''}>${radiusLabels[r] || (r + ' m')}</option>`).join('');
+
+  container.classList.remove('hidden');
+  container.innerHTML = `
+    <div class="modal-overlay" onclick="closeModal(event)">
+      <div class="modal" onclick="event.stopPropagation()" style="max-width:440px">
+        <h3>Start GPS Check-in Session</h3>
+        <div style="background:#eff6ff;border:1px solid #bfdbfe;border-radius:8px;padding:10px 14px;font-size:12px;color:#1e40af;margin:10px 0 14px;display:flex;gap:8px;align-items:flex-start">
+          <span style="font-size:16px;flex-shrink:0">📍</span>
+          <div>Using the <strong>admin-set campus location</strong> as the class center — students outside the radius are rejected. No classroom device needed.</div>
         </div>
         <div class="form-group">
           <label>Course <span style="color:red">*</span></label>
@@ -8779,12 +8924,7 @@ async function showGpsSessionModal() {
         </div>
         <div class="form-group">
           <label>Check-in Radius</label>
-          <select id="gps-session-radius" style="width:100%;padding:9px 12px;border:1.5px solid var(--border);border-radius:8px;font-size:13px">
-            <option value="50">50 m — single classroom</option>
-            <option value="100" selected>100 m — building</option>
-            <option value="200">200 m — large hall / block</option>
-            <option value="500">500 m — campus area</option>
-          </select>
+          <select id="gps-session-radius" style="width:100%;padding:9px 12px;border:1.5px solid var(--border);border-radius:8px;font-size:13px">${radiusOpts}</select>
         </div>
         <div class="form-group">
           <label>Session Title <span style="font-weight:400;color:var(--text-muted);font-size:12px">(optional)</span></label>
@@ -8792,29 +8932,11 @@ async function showGpsSessionModal() {
         </div>
         <div class="modal-actions">
           <button class="btn btn-secondary btn-sm" onclick="closeModal()">Cancel</button>
-          <button class="btn btn-primary btn-sm" onclick="startGpsSession(${loc.latitude}, ${loc.longitude})">Start GPS Session</button>
+          <button class="btn btn-primary btn-sm" onclick="startGpsSession(${campus.campusLatitude}, ${campus.campusLongitude})">Start GPS Session</button>
         </div>
       </div>
     </div>`;
-}
-
-async function startGpsSession(latitude, longitude) {
-  const courseId = document.getElementById('gps-session-course')?.value;
-  const radius   = Number(document.getElementById('gps-session-radius')?.value) || 100;
-  const title    = document.getElementById('gps-session-title')?.value?.trim() || '';
-  if (!courseId) { toastWarning('Please select a course.'); return; }
-  try {
-    await api('/api/attendance-sessions/start', {
-      method: 'POST',
-      body: JSON.stringify({ title, courseId, gpsGeofence: { latitude, longitude, radiusMeters: radius } }),
-    });
-    closeModal();
-    toastSuccess('GPS session started — students can now check in with their location.');
-    renderSessions();
-  } catch (e) {
-    toastError(e.message || 'Failed to start GPS session');
-  }
-}
+};
 
 async function loadSessionDevices(courseId) {
   const group  = document.getElementById('session-device-group');
@@ -20312,6 +20434,149 @@ async function renderCorpClockSettings() {
   }
 }
 
+// ── Academic Attendance Settings (campus GPS geofence) ──────────────────────
+// The academic counterpart of renderCorpClockSettings: instead of a workforce
+// clock-in geofence + WiFi/time windows, academic admins configure a campus
+// center + default GPS check-in radius that the hardware-free GPS session flow
+// pre-fills, plus whether a classroom device is required.
+async function renderAcademicAttendanceSettings() {
+  const content = document.getElementById('main-content');
+  if (!content) return;
+  content.innerHTML = '<div class="loading">Loading settings…</div>';
+  try {
+    const s = await api('/api/attendance-sessions/campus-settings').catch(() => ({}));
+    const hasCampus = s.campusLatitude != null && s.campusLongitude != null;
+
+    content.innerHTML = `
+      <div class="page-header" style="display:flex;align-items:flex-start;justify-content:space-between;flex-wrap:wrap;gap:12px;">
+        <div>
+          <h2>Attendance Settings</h2>
+          <p>Configure the campus location and GPS check-in defaults for hardware-free attendance.</p>
+        </div>
+        <button class="btn btn-secondary btn-sm" onclick="navigateTo('sessions')">← Sessions</button>
+      </div>
+
+      <div class="card" style="max-width:600px;margin-bottom:20px">
+        <h3 style="font-size:15px;font-weight:700;margin-bottom:4px">Campus Geofence</h3>
+        <p style="font-size:12px;color:var(--text-light);margin-bottom:8px">Set your campus location once, and lecturers can anchor a GPS check-in session to it — students outside the radius are rejected. Stand on campus and tap <strong>Detect Location</strong>, or enter coordinates manually.${hasCampus ? '' : ' Leave blank to have each lecturer use their own current position as the class center instead (the original behaviour).'}</p>
+        ${hasCampus
+          ? `<div style="font-size:12.5px;margin-bottom:12px;color:var(--text-muted)">Current campus center: <strong>${s.campusLatitude.toFixed(6)}, ${s.campusLongitude.toFixed(6)}</strong></div>`
+          : ''}
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:8px">
+          <div>
+            <label style="font-size:11px;font-weight:700;text-transform:uppercase;color:var(--text-muted)">Latitude</label>
+            <input id="aas-lat" type="number" step="any" value="${s.campusLatitude ?? ''}" placeholder="e.g. 5.6037" style="width:100%;padding:8px;border:1px solid var(--border);border-radius:6px;font-size:13px">
+          </div>
+          <div>
+            <label style="font-size:11px;font-weight:700;text-transform:uppercase;color:var(--text-muted)">Longitude</label>
+            <input id="aas-lng" type="number" step="any" value="${s.campusLongitude ?? ''}" placeholder="e.g. -0.1870" style="width:100%;padding:8px;border:1px solid var(--border);border-radius:6px;font-size:13px">
+          </div>
+        </div>
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:14px">
+          <button id="aas-detect-btn" onclick="_aasDetectLocation()" type="button" style="background:#f1f5f9;border:none;border-radius:6px;padding:5px 10px;font-size:11px;font-weight:600;cursor:pointer">Detect Location</button>
+          <span id="aas-geo-status" style="font-size:11px;color:var(--text-muted)"></span>
+          ${hasCampus ? `<button onclick="_aasClearCampus()" type="button" style="background:none;border:none;color:var(--danger);font-size:11px;font-weight:600;cursor:pointer;margin-left:auto">Clear campus location</button>` : ''}
+        </div>
+        <div>
+          <label style="font-size:11px;font-weight:700;text-transform:uppercase;color:var(--text-muted)">Default Check-in Radius (metres)</label>
+          <input id="aas-radius" type="number" min="20" max="1000" value="${s.defaultGeofenceRadiusMeters || 100}" placeholder="100" style="width:120px;padding:8px;border:1px solid var(--border);border-radius:6px;font-size:13px;display:block">
+          <div style="font-size:11px;color:var(--text-light);margin-top:4px">Pre-selected when a lecturer starts a GPS check-in session (they can still change it per session).</div>
+        </div>
+        <button class="btn btn-primary" onclick="_aasSaveSettings()" style="margin-top:14px">Save Attendance Settings</button>
+      </div>
+
+      <div class="card" style="max-width:600px">
+        <h3 style="font-size:15px;font-weight:700;margin-bottom:4px">Attendance Method</h3>
+        <p style="font-size:12px;color:var(--text-light);margin-bottom:14px">Control whether lecturers must use a classroom device or can fall back to GPS check-in.</p>
+        <div style="display:flex;align-items:center;justify-content:space-between;padding:12px 0">
+          <div>
+            <div style="font-weight:600;font-size:13px">Require classroom device</div>
+            <div style="font-size:11px;color:var(--text-light)">On: lecturers must use a paired attendance device. Off (default): the hardware-free GPS check-in is always available as a fallback.</div>
+          </div>
+          <label style="display:flex;align-items:center;gap:8px;cursor:pointer">
+            <input type="checkbox" id="aas-require-device" ${s.requireEsp32Attendance ? 'checked' : ''} style="width:16px;height:16px;cursor:pointer">
+          </label>
+        </div>
+        <button class="btn btn-primary" onclick="_aasSaveSettings()" style="margin-top:8px">Save Attendance Settings</button>
+      </div>`;
+  } catch(e) {
+    content.innerHTML = `<div class="card"><p style="color:var(--danger)">${esc(e.message)}</p></div>`;
+  }
+}
+
+async function _aasDetectLocation() {
+  const btn = document.getElementById('aas-detect-btn');
+  const status = document.getElementById('aas-geo-status');
+  if (!navigator.geolocation) { toastError('This browser/device does not support location detection.'); return; }
+  if (btn) { btn.disabled = true; btn.textContent = 'Detecting…'; }
+  if (status) status.textContent = '';
+  navigator.geolocation.getCurrentPosition(
+    pos => {
+      const { latitude, longitude, accuracy } = pos.coords;
+      const latEl = document.getElementById('aas-lat');
+      const lngEl = document.getElementById('aas-lng');
+      if (latEl) latEl.value = latitude.toFixed(6);
+      if (lngEl) lngEl.value = longitude.toFixed(6);
+      if (btn) { btn.disabled = false; btn.textContent = 'Detect Location'; }
+      const accText = Math.round(accuracy);
+      if (status) {
+        status.textContent = `Detected — accurate to ±${accText}m`;
+        status.style.color = accuracy <= 30 ? 'var(--success)' : accuracy <= 100 ? '#d97706' : 'var(--danger)';
+      }
+      if (accuracy > 100) {
+        toastInfo(`Location detected, but accuracy is only ±${accText}m. For a reliable geofence, try again outdoors or on WiFi/GPS.`);
+      } else {
+        toastSuccess(`Location detected (±${accText}m) — click Save to apply`);
+      }
+    },
+    err => {
+      if (btn) { btn.disabled = false; btn.textContent = 'Detect Location'; }
+      const msg = err.code === err.PERMISSION_DENIED
+        ? 'Location permission denied. Enable location access for this site and try again.'
+        : err.code === err.TIMEOUT
+        ? 'Location detection timed out. Try again with a clearer GPS/WiFi signal.'
+        : 'Could not detect your location. Enter latitude/longitude manually.';
+      if (status) { status.textContent = msg; status.style.color = 'var(--danger)'; }
+      toastError(msg);
+    },
+    { enableHighAccuracy: true, timeout: 20000, maximumAge: 0 }
+  );
+}
+
+async function _aasSaveSettings() {
+  const lat    = document.getElementById('aas-lat')?.value;
+  const lng    = document.getElementById('aas-lng')?.value;
+  const radius = document.getElementById('aas-radius')?.value;
+  const reqDev = document.getElementById('aas-require-device')?.checked ?? false;
+  // Both lat and lng must be present together, or both cleared.
+  if ((lat && !lng) || (!lat && lng)) { toastError('Enter both latitude and longitude, or clear both.'); return; }
+  try {
+    await api('/api/attendance-sessions/campus-settings', {
+      method: 'PATCH',
+      body: JSON.stringify({
+        campusLatitude:  lat ? parseFloat(lat) : null,
+        campusLongitude: lng ? parseFloat(lng) : null,
+        defaultGeofenceRadiusMeters: radius ? parseInt(radius, 10) : 100,
+        requireEsp32Attendance: reqDev,
+      }),
+    });
+    toastSuccess('Attendance settings saved');
+    renderAcademicAttendanceSettings();
+  } catch(e) { toastError(e.message || 'Failed to save settings'); }
+}
+
+window._aasClearCampus = async function() {
+  if (!confirm('Clear the campus location? Lecturers will fall back to using their own current position as the class center.')) return;
+  try {
+    await api('/api/attendance-sessions/campus-settings', {
+      method: 'PATCH',
+      body: JSON.stringify({ campusLatitude: null, campusLongitude: null }),
+    });
+    toastSuccess('Campus location cleared');
+    renderAcademicAttendanceSettings();
+  } catch(e) { toastError(e.message || 'Failed to clear campus location'); }
+};
+
 // ── ArrivalIQ (Smart Arrival Assistant) — admin settings ────────────────────
 async function renderArrivalIQSettings() {
   const content = document.getElementById('main-content');
@@ -20320,6 +20585,8 @@ async function renderArrivalIQSettings() {
   try {
     const s = await api('/api/arrival-iq/settings');
     const hasOffice = s.officeLatitude != null && s.officeLongitude != null;
+    const _aiqIsAcademic = currentUser?.company?.mode === 'academic';
+    const _aiqStaff = _aiqIsAcademic ? 'staff' : 'employees';
 
     content.innerHTML = `
       <div class="page-header" style="display:flex;align-items:flex-start;justify-content:space-between;flex-wrap:wrap;gap:12px;">
@@ -20333,7 +20600,7 @@ async function renderArrivalIQSettings() {
         <div style="display:flex;align-items:center;justify-content:space-between;padding:12px 0;border-bottom:1px solid var(--border)">
           <div>
             <div style="font-weight:600;font-size:13px">Enable ArrivalIQ</div>
-            <div style="font-size:11px;color:var(--text-light)">When on, employees can opt in to receive personalized departure-time reminders</div>
+            <div style="font-size:11px;color:var(--text-light)">When on, ${_aiqStaff} can opt in to receive personalized departure-time reminders</div>
           </div>
           <label style="display:flex;align-items:center;gap:8px;cursor:pointer">
             <input type="checkbox" id="aiq-enabled" ${s.enabled ? 'checked' : ''} style="width:16px;height:16px;cursor:pointer">
@@ -20350,8 +20617,8 @@ async function renderArrivalIQSettings() {
         </div>
         <div style="display:flex;align-items:center;justify-content:space-between;padding:12px 0;border-bottom:1px solid var(--border)">
           <div>
-            <div style="font-weight:600;font-size:13px">Mandatory for all employees</div>
-            <div style="font-size:11px;color:var(--text-light)">Employees can't disable ArrivalIQ notifications/location themselves once granted. Off = fully optional (employees can turn it off anytime).</div>
+            <div style="font-weight:600;font-size:13px">Mandatory for all ${_aiqStaff}</div>
+            <div style="font-size:11px;color:var(--text-light)">${_aiqIsAcademic ? 'Staff' : 'Employees'} can't disable ArrivalIQ notifications/location themselves once granted. Off = fully optional.</div>
           </div>
           <label style="display:flex;align-items:center;gap:8px;cursor:pointer">
             <input type="checkbox" id="aiq-mandatory" ${s.mandatory ? 'checked' : ''} style="width:16px;height:16px;cursor:pointer">
@@ -20366,23 +20633,32 @@ async function renderArrivalIQSettings() {
       </div>
 
       <div class="card" style="max-width:600px;margin-bottom:20px">
-        <h3 style="font-size:15px;font-weight:700;margin-bottom:4px">Office Location</h3>
-        <p style="font-size:12px;color:var(--text-light);margin-bottom:14px">ArrivalIQ calculates travel time to this same office location used for geofenced clock-in.</p>
+        <h3 style="font-size:15px;font-weight:700;margin-bottom:4px">${_aiqIsAcademic ? 'Campus Location' : 'Office Location'}</h3>
+        <p style="font-size:12px;color:var(--text-light);margin-bottom:14px">${_aiqIsAcademic
+          ? 'ArrivalIQ calculates travel time to your campus — set its coordinates here.'
+          : 'ArrivalIQ calculates travel time to this same office location used for geofenced clock-in.'}</p>
         ${hasOffice
           ? `<div style="font-size:13px;margin-bottom:12px"><strong>${s.officeLatitude.toFixed(6)}, ${s.officeLongitude.toFixed(6)}</strong> · ${s.geofenceRadiusMeters}m geofence radius</div>`
-          : `<div style="font-size:13px;color:#b54708;margin-bottom:12px">⚠ No office location set yet — ArrivalIQ can't estimate travel time until this is configured.</div>`}
-        <button class="btn btn-secondary btn-sm" onclick="navigateTo('corp-clock-settings')">${hasOffice ? 'Edit' : 'Set'} office location →</button>
+          : `<div style="font-size:13px;color:#b54708;margin-bottom:12px">⚠ No ${_aiqIsAcademic ? 'campus' : 'office'} location set yet — ArrivalIQ can't estimate travel time until this is configured.</div>`}
+        ${_aiqIsAcademic ? `
+        <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+          <input id="aiq-camp-lat" type="number" step="any" value="${s.officeLatitude ?? ''}" placeholder="Latitude (e.g. 5.6037)" style="width:170px;padding:8px;border:1px solid var(--border);border-radius:6px;font-size:13px">
+          <input id="aiq-camp-lng" type="number" step="any" value="${s.officeLongitude ?? ''}" placeholder="Longitude (e.g. -0.1870)" style="width:170px;padding:8px;border:1px solid var(--border);border-radius:6px;font-size:13px">
+          <button class="btn btn-secondary btn-sm" onclick="_aiqSaveCampusLocation(this)">Save location</button>
+          <button class="btn btn-secondary btn-sm" onclick="_aiqUseMyLocation(this)">📍 Use my current location</button>
+        </div>` : `
+        <button class="btn btn-secondary btn-sm" onclick="navigateTo('corp-clock-settings')">${hasOffice ? 'Edit' : 'Set'} office location →</button>`}
       </div>
 
       <div class="card" style="max-width:600px;margin-bottom:20px">
         <h3 style="font-size:15px;font-weight:700;margin-bottom:4px">Active Live Trips</h3>
-        <p style="font-size:12px;color:var(--text-light);margin-bottom:14px">Employees currently tracking a live trip to the office. Status only — their exact route/position isn't shown here, matching what they consented to when they opted in.</p>
+        <p style="font-size:12px;color:var(--text-light);margin-bottom:14px">${_aiqIsAcademic ? 'Staff' : 'Employees'} currently tracking a live trip to ${_aiqIsAcademic ? 'campus' : 'the office'}. Status only — their exact route/position isn't shown here, matching what they consented to when they opted in.</p>
         <div id="aiq-active-trips">Loading…</div>
       </div>
 
       <div class="card" style="max-width:600px">
         <h3 style="font-size:15px;font-weight:700;margin-bottom:4px">Verify Push Notifications</h3>
-        <p style="font-size:12px;color:var(--text-light);margin-bottom:14px">Send yourself a test push to confirm notifications are wired up correctly for this browser/device before rolling ArrivalIQ out to employees.</p>
+        <p style="font-size:12px;color:var(--text-light);margin-bottom:14px">Send yourself a test push to confirm notifications are wired up correctly for this browser/device before rolling ArrivalIQ out to ${_aiqStaff}.</p>
         <button class="btn btn-secondary btn-sm" onclick="_pushEnableAndTest(this)">Send Test Notification</button>
       </div>`;
     _aiqLoadActiveTrips();
@@ -20408,6 +20684,51 @@ async function _aiqLoadActiveTrips() {
     el.innerHTML = `<div style="font-size:12px;color:var(--danger)">${esc(e.message)}</div>`;
   }
 }
+// Academic mode: campus coordinates are set right on the ArrivalIQ settings
+// page — the corporate "Set office location" flow lives in corp-clock-settings,
+// a page academic admins don't have.
+window._aiqSaveCampusLocation = async function(btn) {
+  const lat = parseFloat(document.getElementById('aiq-camp-lat')?.value);
+  const lng = parseFloat(document.getElementById('aiq-camp-lng')?.value);
+  if (!isFinite(lat) || !isFinite(lng) || Math.abs(lat) > 90 || Math.abs(lng) > 180) {
+    toastError('Enter a valid latitude (−90 to 90) and longitude (−180 to 180)');
+    return;
+  }
+  const label = btn?.textContent;
+  if (btn) { btn.disabled = true; btn.textContent = 'Saving…'; }
+  try {
+    await api('/api/arrival-iq/settings', {
+      method: 'PATCH',
+      body: JSON.stringify({ officeLatitude: lat, officeLongitude: lng }),
+    });
+    toastSuccess('Campus location saved');
+    renderArrivalIQSettings();
+  } catch (e) {
+    toastError(e.message || 'Failed to save campus location');
+    if (btn) { btn.disabled = false; btn.textContent = label; }
+  }
+};
+
+window._aiqUseMyLocation = function(btn) {
+  if (!navigator.geolocation) { toastError('Geolocation is not available in this browser'); return; }
+  const label = btn?.textContent;
+  if (btn) { btn.disabled = true; btn.textContent = 'Locating…'; }
+  navigator.geolocation.getCurrentPosition(
+    pos => {
+      const latEl = document.getElementById('aiq-camp-lat');
+      const lngEl = document.getElementById('aiq-camp-lng');
+      if (latEl) latEl.value = pos.coords.latitude.toFixed(6);
+      if (lngEl) lngEl.value = pos.coords.longitude.toFixed(6);
+      if (btn) { btn.disabled = false; btn.textContent = label; }
+    },
+    err => {
+      toastError('Could not get your location: ' + err.message);
+      if (btn) { btn.disabled = false; btn.textContent = label; }
+    },
+    { enableHighAccuracy: true, timeout: 15000 }
+  );
+};
+
 window._aiqSaveSettings = async function() {
   const enabled       = document.getElementById('aiq-enabled')?.checked ?? false;
   const pushEnabled   = document.getElementById('aiq-push')?.checked ?? false;
@@ -20428,21 +20749,46 @@ window._aiqSaveSettings = async function() {
 };
 
 // ── API Access (admin) — public API keys for /api/v1 integrations ──────────
+// Descriptions per scope. The server already filters the scope list to the
+// company's mode, so the mode tag is only appended for "both"-mode orgs
+// where corporate and academic scopes appear side by side.
 const _API_SCOPE_META = {
-  'read:attendance': 'Attendance records (clock-in/out, hours, overtime) — corporate mode',
-  'read:employees':  'Employee directory (names, emails, departments) — corporate mode',
-  'read:leaves':     'Leave requests and their statuses — corporate mode',
-  'read:shifts':     'Shift definitions — corporate mode',
-  'read:students':   'Student directory (names, emails, index numbers, programme) — academic mode',
-  'read:courses':    'Course catalogue (codes, titles, lecturers, enrollment counts) — academic mode',
+  'read:attendance': { desc: 'Attendance records (clock-in/out, hours, overtime)', mode: 'corporate' },
+  'read:employees':  { desc: 'Employee directory (names, emails, departments)',    mode: 'corporate' },
+  'read:leaves':     { desc: 'Leave requests and their statuses',                  mode: 'corporate' },
+  'read:shifts':     { desc: 'Shift definitions',                                  mode: 'corporate' },
+  'read:students':   { desc: 'Student directory (names, emails, index numbers, programme)', mode: 'academic' },
+  'read:courses':    { desc: 'Course catalogue (codes, titles, lecturers, enrollment counts)', mode: 'academic' },
 };
+
+// Quick Start endpoint rows, tagged by mode so academic orgs aren't shown
+// corporate endpoints their keys can never call (and vice versa).
+const _API_ENDPOINT_ROWS = [
+  { mode: null,        sig: 'GET /api/v1/ping',                 desc: 'verify a key and list its scopes' },
+  { mode: 'corporate', sig: 'GET /api/v1/employees',            desc: 'employee directory' },
+  { mode: 'corporate', sig: 'GET /api/v1/attendance?from=&to=', desc: 'daily attendance records' },
+  { mode: 'corporate', sig: 'GET /api/v1/leaves?status=',       desc: 'leave requests' },
+  { mode: 'corporate', sig: 'GET /api/v1/shifts',               desc: 'shift definitions' },
+  { mode: 'academic',  sig: 'GET /api/v1/students',             desc: 'student directory' },
+  { mode: 'academic',  sig: 'GET /api/v1/courses',              desc: 'course catalogue' },
+];
 
 async function renderApiAccess() {
   const content = document.getElementById('main-content');
   if (!content) return;
   content.innerHTML = '<div class="loading">Loading…</div>';
   try {
-    const { keys, scopes } = await api('/api/api-keys');
+    const { keys, scopes, mode } = await api('/api/api-keys');
+    const _scopeDesc = s => {
+      const m = _API_SCOPE_META[s];
+      if (!m) return '';
+      return mode === 'both' ? `${m.desc} — ${m.mode} mode` : m.desc;
+    };
+    const _endpointRows = _API_ENDPOINT_ROWS
+      .filter(r => !r.mode || mode === 'both' || r.mode === mode)
+      .map(r => `<div><code style="font-family:monospace">${esc(r.sig)}</code> — ${esc(r.desc)}</div>`)
+      .join('');
+    const _exampleEndpoint = mode === 'academic' ? '/api/v1/students' : '/api/v1/attendance?from=2026-07-01&to=2026-07-31';
 
     const scopeChip = s => `<span style="background:#eef2ff;color:#4338ca;border-radius:999px;padding:2px 8px;font-size:10px;font-weight:700;white-space:nowrap">${esc(s)}</span>`;
     const rows = (keys || []).map(k => `
@@ -20481,7 +20827,7 @@ async function renderApiAccess() {
         ${(scopes || []).map(s => `
           <label style="display:flex;align-items:flex-start;gap:8px;padding:6px 0;cursor:pointer">
             <input type="checkbox" class="ak-scope" value="${esc(s)}" style="width:15px;height:15px;margin-top:2px;cursor:pointer">
-            <span style="font-size:13px"><strong style="font-family:monospace;font-size:12px">${esc(s)}</strong><br><span style="font-size:11px;color:var(--text-light)">${esc(_API_SCOPE_META[s] || '')}</span></span>
+            <span style="font-size:13px"><strong style="font-family:monospace;font-size:12px">${esc(s)}</strong><br><span style="font-size:11px;color:var(--text-light)">${esc(_scopeDesc(s))}</span></span>
           </label>`).join('')}
         <button class="btn btn-primary" style="margin-top:12px" onclick="_akCreate(this)">Create Key</button>
       </div>
@@ -20489,16 +20835,10 @@ async function renderApiAccess() {
       <div class="card" style="max-width:760px">
         <h3 style="font-size:15px;font-weight:700;margin-bottom:4px">Quick Start</h3>
         <p style="font-size:12px;color:var(--text-light);margin-bottom:10px">Send the key in the <code style="font-family:monospace">X-API-Key</code> header. All endpoints are read-only and return JSON with <code style="font-family:monospace">{ data, pagination }</code>.</p>
-        <pre style="background:var(--bg);border-radius:8px;padding:12px;font-size:11.5px;overflow-x:auto;line-height:1.6">curl https://dikly.sbs/api/v1/attendance?from=2026-07-01&amp;to=2026-07-31 \\
+        <pre style="background:var(--bg);border-radius:8px;padding:12px;font-size:11.5px;overflow-x:auto;line-height:1.6">curl https://dikly.sbs${esc(_exampleEndpoint)} \\
   -H "X-API-Key: dk_live_…"</pre>
         <div style="font-size:12px;line-height:2;margin-top:8px">
-          <div><code style="font-family:monospace">GET /api/v1/ping</code> — verify a key and list its scopes</div>
-          <div><code style="font-family:monospace">GET /api/v1/employees</code> — employee directory</div>
-          <div><code style="font-family:monospace">GET /api/v1/attendance?from=&amp;to=</code> — daily attendance records</div>
-          <div><code style="font-family:monospace">GET /api/v1/leaves?status=</code> — leave requests</div>
-          <div><code style="font-family:monospace">GET /api/v1/shifts</code> — shift definitions</div>
-          <div><code style="font-family:monospace">GET /api/v1/students</code> — student directory</div>
-          <div><code style="font-family:monospace">GET /api/v1/courses</code> — course catalogue</div>
+          ${_endpointRows}
         </div>
         <div style="font-size:11px;color:var(--text-light);margin-top:10px">Limit: 120 requests/minute per key · pagination via <code style="font-family:monospace">?limit=</code> (max 200) and <code style="font-family:monospace">?offset=</code></div>
         <a href="/api-docs" target="_blank" rel="noopener" class="btn btn-secondary btn-sm" style="margin-top:12px;display:inline-block;text-decoration:none">📄 View full API documentation →</a>
@@ -24373,9 +24713,10 @@ async function renderBranding() {
   content.innerHTML = '<div class="loading">Loading…</div>';
   try {
     const { branding, companyName } = await api('/api/advanced/branding');
+    const _isAcademicBrand = currentUser?.company?.mode === 'academic';
 
     content.innerHTML = `
-      <div class="page-header"><h2>Branding & Settings</h2><p>Customize your portal appearance and attendance reporting</p></div>
+      <div class="page-header"><h2>${_isAcademicBrand ? 'Institution Branding' : 'Branding & Settings'}</h2><p>${_isAcademicBrand ? "Customize your institution's portal appearance" : 'Customize your portal appearance and attendance reporting'}</p></div>
 
       <!-- Branding -->
       <div class="card" style="margin-bottom:16px">
@@ -24396,7 +24737,7 @@ async function renderBranding() {
 
         <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:12px;margin-bottom:14px">
           <div>
-            <label style="font-size:11px;font-weight:700;text-transform:uppercase;color:#6b7280;display:block;margin-bottom:4px">Company Logo</label>
+            <label style="font-size:11px;font-weight:700;text-transform:uppercase;color:#6b7280;display:block;margin-bottom:4px">${_isAcademicBrand ? 'Institution Logo' : 'Company Logo'}</label>
             <input type="file" id="bd-logo-file" accept="image/png,image/jpeg,image/webp" style="display:none" onchange="_bdUploadLogo(this)">
             <div style="display:flex;gap:6px;align-items:center;margin-bottom:6px">
               <button type="button" class="btn btn-secondary btn-sm" id="bd-upload-btn" onclick="document.getElementById('bd-logo-file').click()">📤 Upload logo</button>
@@ -24413,7 +24754,7 @@ async function renderBranding() {
           </div>
           <div>
             <label style="font-size:11px;font-weight:700;text-transform:uppercase;color:#6b7280;display:block;margin-bottom:4px">Tagline</label>
-            <input id="bd-tagline" value="${branding.companyTagline||''}" placeholder="Your company tagline" style="width:100%;padding:8px;border:1px solid #d1d5db;border-radius:6px;font-size:13px" oninput="updateBrandPreview()">
+            <input id="bd-tagline" value="${branding.companyTagline||''}" placeholder="${_isAcademicBrand ? 'Your institution tagline' : 'Your company tagline'}" style="width:100%;padding:8px;border:1px solid #d1d5db;border-radius:6px;font-size:13px" oninput="updateBrandPreview()">
           </div>
           <div>
             <label style="font-size:11px;font-weight:700;text-transform:uppercase;color:#6b7280;display:block;margin-bottom:4px">Support Email</label>
@@ -24431,7 +24772,9 @@ async function renderBranding() {
         </div>
       </div>
 
-      <!-- Attendance Reporting Settings -->
+      <!-- Attendance Reporting Settings — corporate payroll-handoff config,
+           not applicable to academic institutions -->
+      ${_isAcademicBrand ? '' : `
       <div class="card">
         <h3 style="font-size:15px;font-weight:700;margin-bottom:6px">Attendance Reporting</h3>
         <p style="font-size:12.5px;color:#6b7280;margin-bottom:14px;line-height:1.6">
@@ -24454,7 +24797,7 @@ async function renderBranding() {
         </div>
         <div id="pr-error" style="color:#ef4444;font-size:13px;margin-bottom:8px;display:none"></div>
         <button class="btn btn-primary" onclick="saveAttendanceReportingSettings()">Save Settings</button>
-      </div>
+      </div>`}
     `;
   } catch(e) {
     content.innerHTML = `<div class="card"><p style="color:#ef4444">Error: ${e.message}</p></div>`;
@@ -26596,181 +26939,310 @@ const AI_REPORT_DEFS = {
   student_lookup:      { label: 'Student Lookup',          roles: ['admin','superadmin','hod','lecturer'], modes: ['academic'], icon: '<circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>',                                                                                                    color: '#0ea5e9', desc: 'Enter a student\'s index number or name to instantly pull up their full profile and academic details.' },
 };
 
+// Client-side transcript for the Dikly AI chat. Each entry is
+// { role:'user'|'assistant', ... }. The backend (POST /api/ai-reports/
+// generate) is stateless per call, so the transcript lives here and is
+// rebuilt into the DOM on every renderAIReports() (e.g. returning to the
+// page keeps the current session's conversation until a full reload).
+let _aiChat = [];
+
 async function renderAIReports() {
   const content = document.getElementById('main-content');
   if (!content) return;
 
   const role = currentUser?.role || '';
-  // Quick Actions differ by institution type: academic institutions get
-  // student/course reports, corporate ones get workforce/leave/shift reports.
   const instMode = currentUser?.company?.mode === 'corporate' ? 'corporate' : 'academic';
   const available = Object.entries(AI_REPORT_DEFS).filter(([, d]) =>
     d.roles.includes(role) && (!d.modes || d.modes.includes(instMode)));
   const canAsk = AI_REPORT_DEFS.custom_query.roles.includes(role);
-
-  const firstName = (currentUser?.name || 'there').trim().split(/\s+/)[0];
-  const hour = new Date().getHours();
-  const greeting = hour < 12 ? 'Good Morning' : hour < 17 ? 'Good Afternoon' : 'Good Evening';
   const hasSpeech = !!(window.SpeechRecognition || window.webkitSpeechRecognition);
 
+  content.style.padding = '0';
   content.innerHTML = `
     <style>
-      .ai-hero {
-        position:relative; border-radius:20px; overflow:hidden;
-        padding:3.2rem 1.5rem 2.4rem; text-align:center; margin-bottom:1.5rem;
-        background:
-          radial-gradient(900px 420px at 15% -10%, rgba(124,58,237,.14), transparent 60%),
-          radial-gradient(800px 420px at 85% 10%, rgba(79,110,247,.14), transparent 60%),
-          radial-gradient(600px 300px at 50% 110%, rgba(236,72,153,.08), transparent 60%),
-          linear-gradient(180deg, rgba(124,58,237,.05), transparent 55%);
-        border:1px solid var(--border);
+      .aic-wrap { display:flex; flex-direction:column; height:calc(100vh - 58px); max-height:calc(100vh - 58px); background:var(--bg); }
+      [data-theme="dark"] .aic-wrap { background:#0b1020; }
+      .aic-head {
+        display:flex; align-items:center; gap:.6rem; padding:.85rem 1.1rem;
+        border-bottom:1px solid var(--border); flex-shrink:0; background:var(--bg);
       }
-      [data-theme="dark"] .ai-hero {
-        background:
-          radial-gradient(900px 420px at 15% -10%, rgba(124,58,237,.22), transparent 60%),
-          radial-gradient(800px 420px at 85% 10%, rgba(79,110,247,.20), transparent 60%),
-          radial-gradient(600px 300px at 50% 110%, rgba(236,72,153,.10), transparent 60%),
-          #0d1224;
-      }
-      .ai-hero-label { font-size:1.05rem; font-weight:700; letter-spacing:.2px; color:var(--text); opacity:.85; }
-      .ai-orb {
-        width:64px; height:64px; border-radius:50%; margin:1.4rem auto 1.2rem; position:relative;
+      [data-theme="dark"] .aic-head { background:#0d1224; }
+      .aic-head-orb {
+        width:26px; height:26px; border-radius:50%; flex-shrink:0;
         background: radial-gradient(circle at 62% 38%, #fde68a 0%, #f9a8d4 32%, #a78bfa 68%, #7c3aed 100%);
-        box-shadow: 0 0 34px 10px rgba(167,139,250,.45), 0 0 80px 26px rgba(124,58,237,.18);
+        box-shadow:0 0 12px 2px rgba(167,139,250,.5);
+      }
+      .aic-head-title { font-weight:800; font-size:1rem; color:var(--text); }
+      .aic-head-new {
+        margin-left:auto; border:1px solid var(--border); background:transparent; color:var(--text-light);
+        border-radius:8px; padding:.4rem .7rem; font-size:.78rem; font-weight:600; cursor:pointer; font-family:inherit;
+        display:inline-flex; align-items:center; gap:.35rem; transition:border-color .12s, color .12s;
+      }
+      .aic-head-new:hover { border-color:var(--accent); color:var(--accent); }
+
+      .aic-scroll { flex:1; overflow-y:auto; padding:1.2rem 0; scroll-behavior:smooth; }
+      .aic-thread { max-width:760px; margin:0 auto; padding:0 1rem; display:flex; flex-direction:column; gap:1.3rem; }
+
+      .aic-row { display:flex; gap:.75rem; align-items:flex-start; }
+      .aic-row.user { justify-content:flex-end; }
+      .aic-avatar {
+        width:30px; height:30px; border-radius:50%; flex-shrink:0; margin-top:2px;
+        background: radial-gradient(circle at 62% 38%, #fde68a 0%, #f9a8d4 32%, #a78bfa 68%, #7c3aed 100%);
+        box-shadow:0 0 10px 1px rgba(167,139,250,.4);
+      }
+      .aic-bubble-user {
+        background:linear-gradient(135deg, var(--accent, #4f6ef7), var(--accent2, #7c3aed)); color:#fff;
+        padding:.7rem 1rem; border-radius:18px 18px 4px 18px; max-width:80%;
+        font-size:.92rem; line-height:1.55; white-space:pre-wrap; word-break:break-word;
+      }
+      .aic-msg-assistant {
+        flex:1; min-width:0; color:var(--text); font-size:.92rem; line-height:1.7;
+        padding-top:.15rem; word-break:break-word;
+      }
+      .aic-msg-assistant h2 { font-size:1rem; font-weight:700; margin:1.1rem 0 .45rem; }
+      .aic-msg-assistant h3 { font-size:.9rem; font-weight:700; margin:.9rem 0 .35rem; }
+      .aic-msg-assistant ul { padding-left:1.25rem; margin:.5rem 0; }
+      .aic-msg-assistant li { margin:.25rem 0; }
+      .aic-msg-assistant p  { margin:.5rem 0; }
+      .aic-msg-tools { display:flex; gap:.4rem; margin-top:.6rem; }
+      .aic-msg-tool {
+        border:1px solid var(--border); background:transparent; color:var(--text-light);
+        border-radius:7px; padding:.28rem .6rem; font-size:.72rem; font-weight:600; cursor:pointer; font-family:inherit;
+        display:inline-flex; align-items:center; gap:.3rem; transition:border-color .12s, color .12s;
+      }
+      .aic-msg-tool:hover { border-color:var(--accent); color:var(--accent); }
+
+      .aic-typing { display:flex; gap:5px; padding:.5rem 0; }
+      .aic-typing span {
+        width:8px; height:8px; border-radius:50%; background:var(--text-muted);
+        animation:aicBlink 1.3s infinite ease-in-out both;
+      }
+      .aic-typing span:nth-child(2) { animation-delay:.18s; }
+      .aic-typing span:nth-child(3) { animation-delay:.36s; }
+      @keyframes aicBlink { 0%,80%,100% { opacity:.25; transform:scale(.85); } 40% { opacity:1; transform:scale(1); } }
+
+      /* Empty state */
+      .aic-empty { max-width:720px; margin:auto; padding:2rem 1rem; text-align:center; }
+      .aic-empty-orb {
+        width:60px; height:60px; border-radius:50%; margin:0 auto 1.1rem;
+        background: radial-gradient(circle at 62% 38%, #fde68a 0%, #f9a8d4 32%, #a78bfa 68%, #7c3aed 100%);
+        box-shadow:0 0 30px 8px rgba(167,139,250,.4);
         animation: aiOrbFloat 5s ease-in-out infinite;
       }
       @keyframes aiOrbFloat { 0%,100% { transform:translateY(0) scale(1); } 50% { transform:translateY(-6px) scale(1.04); } }
-      .ai-greet { margin:0; font-size:clamp(1.6rem, 4vw, 2.3rem); font-weight:800; letter-spacing:-.5px; color:var(--text); }
-      .ai-sub  { margin:.45rem 0 0; font-size:1rem; font-weight:600; color:var(--text-light); }
-      .ai-sub2 { margin:.3rem 0 0; font-size:.8rem; color:var(--text-muted); }
-      .ai-ask {
-        max-width:680px; margin:1.6rem auto 0; background:var(--bg-card, var(--bg-secondary, #fff));
-        border:1.5px solid var(--border); border-radius:18px; padding:1rem 1rem .7rem;
-        box-shadow:0 10px 34px rgba(15,23,42,.08); text-align:left; transition:border-color .15s, box-shadow .15s;
-      }
-      .ai-ask:focus-within { border-color:var(--accent); box-shadow:0 10px 34px rgba(79,110,247,.16); }
-      .ai-ask input {
-        width:100%; border:none; outline:none; background:transparent; color:var(--text);
-        font-size:1rem; font-family:inherit; padding:.1rem .1rem .8rem;
-      }
-      .ai-ask-row { display:flex; align-items:center; gap:.35rem; }
-      .ai-ask-tool {
-        width:32px; height:32px; border:none; border-radius:9px; background:transparent; cursor:pointer;
-        display:flex; align-items:center; justify-content:center; color:var(--text-light); transition:background .12s;
-      }
-      .ai-ask-tool:hover { background:var(--bg-secondary); }
-      .ai-ask-send {
-        margin-left:auto; width:36px; height:36px; border:none; border-radius:50%; cursor:pointer;
-        background:linear-gradient(135deg, var(--accent, #4f6ef7), var(--accent2, #7c3aed));
-        display:flex; align-items:center; justify-content:center; color:#fff;
-        box-shadow:0 4px 14px rgba(124,58,237,.35); transition:transform .12s, box-shadow .12s;
-      }
-      .ai-ask-send:hover { transform:scale(1.06); box-shadow:0 6px 18px rgba(124,58,237,.45); }
-      .ai-qa-label { margin:1.8rem 0 .7rem; font-size:.86rem; font-weight:700; color:var(--text); text-align:left; max-width:680px; margin-left:auto; margin-right:auto; }
-      .ai-qa-chips { display:flex; flex-wrap:wrap; gap:.5rem; justify-content:center; max-width:760px; margin:0 auto; }
-      .ai-qa-chip {
-        display:inline-flex; align-items:center; gap:.42rem; padding:.5rem .85rem; border-radius:999px;
+      .aic-empty h1 { margin:0; font-size:clamp(1.4rem,4vw,2rem); font-weight:800; letter-spacing:-.5px; color:var(--text); }
+      .aic-empty p { margin:.5rem 0 0; font-size:.92rem; color:var(--text-light); }
+      .aic-chips { display:flex; flex-wrap:wrap; gap:.5rem; justify-content:center; margin-top:1.6rem; }
+      .aic-chip {
+        display:inline-flex; align-items:center; gap:.42rem; padding:.55rem .9rem; border-radius:999px;
         background:var(--bg-card, var(--bg-secondary, #fff)); border:1px solid var(--border); cursor:pointer;
         font-size:.78rem; font-weight:600; color:var(--text); font-family:inherit;
         transition:transform .12s, box-shadow .12s, border-color .12s;
       }
-      .ai-qa-chip:hover { transform:translateY(-1px); border-color:var(--accent); box-shadow:0 4px 14px rgba(79,110,247,.15); }
+      .aic-chip:hover { transform:translateY(-1px); border-color:var(--accent); box-shadow:0 4px 14px rgba(79,110,247,.15); }
+
+      /* Composer pinned at the bottom */
+      .aic-composer-wrap { flex-shrink:0; padding:.7rem 1rem 1rem; border-top:1px solid var(--border); background:var(--bg); }
+      [data-theme="dark"] .aic-composer-wrap { background:#0d1224; }
+      .aic-composer {
+        max-width:760px; margin:0 auto; display:flex; align-items:flex-end; gap:.4rem;
+        background:var(--bg-card, var(--bg-secondary, #fff)); border:1.5px solid var(--border);
+        border-radius:24px; padding:.4rem .4rem .4rem 1rem; transition:border-color .15s, box-shadow .15s;
+      }
+      .aic-composer:focus-within { border-color:var(--accent); box-shadow:0 4px 18px rgba(79,110,247,.16); }
+      .aic-composer textarea {
+        flex:1; border:none; outline:none; background:transparent; color:var(--text); resize:none;
+        font-size:.95rem; font-family:inherit; line-height:1.5; max-height:140px; padding:.5rem 0;
+      }
+      .aic-tool {
+        width:36px; height:36px; border:none; border-radius:50%; background:transparent; cursor:pointer;
+        display:flex; align-items:center; justify-content:center; color:var(--text-light); flex-shrink:0; transition:background .12s;
+      }
+      .aic-tool:hover { background:var(--bg-secondary); }
+      .aic-send {
+        width:38px; height:38px; border:none; border-radius:50%; cursor:pointer; flex-shrink:0;
+        background:linear-gradient(135deg, var(--accent, #4f6ef7), var(--accent2, #7c3aed));
+        display:flex; align-items:center; justify-content:center; color:#fff;
+        box-shadow:0 4px 14px rgba(124,58,237,.35); transition:transform .12s, opacity .12s;
+      }
+      .aic-send:hover { transform:scale(1.06); }
+      .aic-send:disabled { opacity:.45; cursor:not-allowed; transform:none; }
+      .aic-composer-hint { max-width:760px; margin:.5rem auto 0; text-align:center; font-size:.7rem; color:var(--text-muted); }
     </style>
 
-    <div class="ai-hero">
-      <div class="ai-hero-label">Dikly AI</div>
-      <div class="ai-orb"></div>
-      <h1 class="ai-greet">${greeting}, ${esc(firstName)}</h1>
-      <p class="ai-sub">Master your day with AI automation</p>
-      <p class="ai-sub2">Experience the next level of productivity. Let AI handle the busywork</p>
+    <div class="aic-wrap">
+      <div class="aic-head">
+        <div class="aic-head-orb"></div>
+        <div class="aic-head-title">Dikly AI</div>
+        <button class="aic-head-new" onclick="_aiChatReset()" title="Start a new chat">
+          ${svgIcon('<line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>', 13)} New chat
+        </button>
+      </div>
+
+      <div class="aic-scroll" id="aic-scroll">
+        <div class="aic-thread" id="aic-thread"></div>
+      </div>
 
       ${canAsk ? `
-      <div class="ai-ask">
-        <input id="ai-ask-input" type="text" placeholder="Ask Anything" autocomplete="off"
-          onkeydown="if(event.key==='Enter')_aiAskSubmit()" />
-        <div class="ai-ask-row">
-          <button class="ai-ask-tool" title="Open detailed question box" onclick="_aiShowCustomQueryModal()">
-            ${svgIcon('<line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>', 16)}
-          </button>
-          ${hasSpeech ? `
-          <button class="ai-ask-tool" id="ai-mic-btn" title="Speak your question" onclick="_aiAskVoice()">
-            ${svgIcon('<path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/>', 15)}
+      <div class="aic-composer-wrap">
+        <div class="aic-composer">
+          <textarea id="aic-input" rows="1" placeholder="Ask Dikly AI anything about your institution…"
+            oninput="_aiChatAutogrow(this)" onkeydown="_aiChatKeydown(event)"></textarea>
+          ${hasSpeech ? `<button class="aic-tool" id="aic-mic" title="Speak your question" onclick="_aiChatVoice()">
+            ${svgIcon('<path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/>', 16)}
           </button>` : ''}
-          <button class="ai-ask-send" title="Ask Dikly AI" onclick="_aiAskSubmit()">
-            ${svgIcon('<line x1="12" y1="19" x2="12" y2="5"/><polyline points="5 12 12 5 19 12"/>', 16, '#fff')}
+          <button class="aic-send" id="aic-send" title="Send" onclick="_aiChatSubmit()">
+            ${svgIcon('<line x1="12" y1="19" x2="12" y2="5"/><polyline points="5 12 12 5 19 12"/>', 17, '#fff')}
           </button>
         </div>
-      </div>` : ''}
-
-      <div class="ai-qa-label">Quick Action</div>
-      <div class="ai-qa-chips">
-        ${available.filter(([t]) => t !== 'custom_query').map(([type, d]) => `
-          <button class="ai-qa-chip" title="${esc(d.desc)}" onclick="aiReportOpen('${type}')">
-            ${svgIcon(d.icon, 13, d.color)} ${d.label}
-          </button>`).join('')}
-      </div>
-    </div>
-
-    <div id="ai-report-panel" style="display:none">
-      <div class="card" id="ai-report-view"></div>
+        <div class="aic-composer-hint">Dikly AI can make mistakes. Verify important figures against your dashboards.</div>
+      </div>` : `
+      <div class="aic-composer-wrap"><div class="aic-composer-hint">Free-form questions aren't available for your role — use the quick actions above.</div></div>`}
     </div>`;
 
-  // Load recent reports list
-  _aiLoadRecentReports();
+  // Store quick actions for the empty state + expose to chip handlers.
+  window._aiQuickActions = available.filter(([t]) => t !== 'custom_query');
+  _aiChatRepaint();
 }
 
-// Submit the hero "Ask Anything" input as a custom AI query
-window._aiAskSubmit = function() {
-  const input = document.getElementById('ai-ask-input');
+// Rebuild the thread DOM from the _aiChat transcript (or the empty state).
+function _aiChatRepaint() {
+  const thread = document.getElementById('aic-thread');
+  if (!thread) return;
+
+  if (!_aiChat.length) {
+    const firstName = (currentUser?.name || 'there').trim().split(/\s+/)[0];
+    const hour = new Date().getHours();
+    const greeting = hour < 12 ? 'Good morning' : hour < 17 ? 'Good afternoon' : 'Good evening';
+    const chips = (window._aiQuickActions || []).map(([type, d]) => `
+      <button class="aic-chip" title="${esc(d.desc)}" onclick="aiReportOpen('${type}')">
+        ${svgIcon(d.icon, 13, d.color)} ${esc(d.label)}
+      </button>`).join('');
+    thread.innerHTML = `
+      <div class="aic-empty">
+        <div class="aic-empty-orb"></div>
+        <h1>${greeting}, ${esc(firstName)}</h1>
+        <p>Ask me anything about your institution's data — attendance, performance, at-risk students, and more.</p>
+        ${chips ? `<div class="aic-chips">${chips}</div>` : ''}
+      </div>`;
+    return;
+  }
+
+  thread.innerHTML = _aiChat.map((m, i) => {
+    if (m.role === 'user') {
+      return `<div class="aic-row user"><div class="aic-bubble-user">${esc(m.text)}</div></div>`;
+    }
+    if (m.role === 'typing') {
+      return `<div class="aic-row"><div class="aic-avatar"></div><div class="aic-msg-assistant"><div class="aic-typing"><span></span><span></span><span></span></div></div></div>`;
+    }
+    // assistant
+    const tools = m.reportId || m.regen
+      ? `<div class="aic-msg-tools">
+           ${m.regen ? `<button class="aic-msg-tool" onclick='_aiChatRegen(${JSON.stringify(m.regen)})'>${svgIcon('<polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-.57-4.13"/>', 12)} Regenerate</button>` : ''}
+           <button class="aic-msg-tool" onclick="_aiChatCopy(${i})">${svgIcon('<rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>', 12)} Copy</button>
+         </div>`
+      : '';
+    return `<div class="aic-row"><div class="aic-avatar"></div><div class="aic-msg-assistant">${m.html || esc(m.text || '')}${tools}</div></div>`;
+  }).join('');
+
+  _aiChatScrollBottom();
+}
+
+function _aiChatScrollBottom() {
+  const scroll = document.getElementById('aic-scroll');
+  if (scroll) scroll.scrollTop = scroll.scrollHeight;
+}
+
+window._aiChatReset = function() {
+  _aiChat = [];
+  _aiChatRepaint();
+  document.getElementById('aic-input')?.focus();
+};
+
+window._aiChatAutogrow = function(el) {
+  el.style.height = 'auto';
+  el.style.height = Math.min(el.scrollHeight, 140) + 'px';
+};
+
+window._aiChatKeydown = function(e) {
+  // Enter sends, Shift+Enter inserts a newline (ChatGPT behavior).
+  if (e.key === 'Enter' && !e.shiftKey) {
+    e.preventDefault();
+    _aiChatSubmit();
+  }
+};
+
+// Send the composer text as a custom_query and stream the answer into the thread.
+window._aiChatSubmit = function() {
+  const input = document.getElementById('aic-input');
   const q = (input?.value || '').trim();
   if (!q) { input?.focus(); return; }
   input.value = '';
-  aiReportGenerate('custom_query', { question: q });
+  _aiChatAutogrow(input);
+  _aiChat.push({ role: 'user', text: q });
+  _aiChatRepaint();
+  _aiChatAsk('custom_query', { question: q });
 };
 
-// Voice input for the Ask bar (Chrome/Edge SpeechRecognition)
-window._aiAskVoice = function() {
+// Shared path for both free-text questions and quick-action reports: show a
+// typing indicator, call the backend, then replace it with the answer.
+async function _aiChatAsk(type, parameters = {}, forceRefresh = false) {
+  _aiChat.push({ role: 'typing' });
+  _aiChatRepaint();
+  const send = document.getElementById('aic-send');
+  if (send) send.disabled = true;
+  try {
+    const d = await api('/api/ai-reports/generate', {
+      method: 'POST',
+      body: JSON.stringify({ type, parameters, forceRefresh }),
+    });
+    const report = d.report || {};
+    _aiChat.pop(); // remove typing
+    _aiChat.push({
+      role: 'assistant',
+      html: _aiMarkdownToHtml(report.report || report.summary || 'No answer was returned.'),
+      regen: { type, parameters },
+    });
+  } catch (e) {
+    _aiChat.pop();
+    _aiChat.push({ role: 'assistant', html: `<p style="color:var(--error)">Sorry — I couldn't answer that. ${esc(e.message)}</p>` });
+  } finally {
+    if (send) send.disabled = false;
+    _aiChatRepaint();
+    document.getElementById('aic-input')?.focus();
+  }
+}
+
+window._aiChatRegen = function(regen) {
+  if (!regen?.type) return;
+  _aiChatAsk(regen.type, regen.parameters || {}, true);
+};
+
+window._aiChatCopy = function(i) {
+  const m = _aiChat[i];
+  if (!m) return;
+  const tmp = document.createElement('div');
+  tmp.innerHTML = m.html || '';
+  navigator.clipboard?.writeText(tmp.innerText.trim()).then(() => toastSuccess('Copied to clipboard'));
+};
+
+// Voice input for the composer (Chrome/Edge SpeechRecognition)
+window._aiChatVoice = function() {
   const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
   if (!SR) return;
-  const btn = document.getElementById('ai-mic-btn');
+  const btn = document.getElementById('aic-mic');
   const rec = new SR();
   rec.lang = 'en-US';
   rec.interimResults = false;
   if (btn) btn.style.color = 'var(--error)';
   rec.onresult = (e) => {
-    const input = document.getElementById('ai-ask-input');
-    if (input) { input.value = e.results[0][0].transcript; input.focus(); }
+    const input = document.getElementById('aic-input');
+    if (input) { input.value = e.results[0][0].transcript; input.focus(); _aiChatAutogrow(input); }
   };
   rec.onend = () => { if (btn) btn.style.color = ''; };
   rec.onerror = () => { if (btn) btn.style.color = ''; };
   rec.start();
 };
-
-async function _aiLoadRecentReports() {
-  try {
-    const d = await api('/api/ai-reports?limit=5');
-    if (!d.reports?.length) return;
-    const panel = document.getElementById('ai-report-panel');
-    if (!panel) return;
-    panel.style.display = 'block';
-    const view = document.getElementById('ai-report-view');
-    view.innerHTML = `
-      <h3 style="margin:0 0 1rem;font-size:1rem">Recent Reports</h3>
-      <div style="display:flex;flex-direction:column;gap:.6rem">
-        ${d.reports.map(r => {
-          const def = AI_REPORT_DEFS[r.type] || { label: r.type, color: 'var(--accent)' };
-          return `<div style="display:flex;align-items:center;gap:.75rem;padding:.65rem .85rem;border-radius:8px;border:1px solid var(--border);cursor:pointer;transition:background .12s" onmouseover="this.style.background='var(--bg-secondary)'" onmouseout="this.style.background=''" onclick="aiReportView('${r._id}')">
-            <div style="width:8px;height:8px;border-radius:50%;background:${def.color};flex-shrink:0"></div>
-            <div style="flex:1;min-width:0">
-              <div style="font-size:.84rem;font-weight:600">${def.label}</div>
-              <div style="font-size:.73rem;color:var(--text-light);overflow:hidden;white-space:nowrap;text-overflow:ellipsis">${esc(r.summary || '')}</div>
-            </div>
-            <div style="font-size:.72rem;color:var(--text-muted);white-space:nowrap">${new Date(r.createdAt).toLocaleDateString()}</div>
-          </div>`;
-        }).join('')}
-      </div>`;
-  } catch(_) {}
-}
 
 window.aiReportOpen = async function(type) {
   const def = AI_REPORT_DEFS[type];
@@ -26804,91 +27276,39 @@ window.aiReportOpen = async function(type) {
   aiReportGenerate(type);
 };
 
+// A quick-action report becomes a chat turn: a user "action" bubble naming
+// the report, then the assistant answer via the shared _aiChatAsk path.
 window.aiReportGenerate = async function(type, parameters = {}, forceRefresh = false) {
   const def = AI_REPORT_DEFS[type];
   if (!def) return;
-
-  const panel = document.getElementById('ai-report-panel');
-  const view  = document.getElementById('ai-report-view');
-  if (!panel || !view) return;
-
-  panel.style.display = 'block';
-  view.innerHTML = `
-    <div style="display:flex;flex-direction:column;align-items:center;padding:3rem 1rem;gap:1rem">
-      <div style="width:48px;height:48px;border-radius:12px;background:${def.color}20;display:flex;align-items:center;justify-content:center">
-        ${svgIcon(def.icon, 22, def.color)}
-      </div>
-      <div style="font-weight:700;font-size:1rem">${def.label}</div>
-      <div style="font-size:.85rem;color:var(--text-light)">Analysing data and generating report…</div>
-      <div style="width:200px;height:4px;background:var(--border);border-radius:2px;overflow:hidden">
-        <div style="height:100%;background:${def.color};border-radius:2px;animation:aiProgress 2.5s ease-in-out infinite"></div>
-      </div>
-    </div>
-    <style>@keyframes aiProgress{0%{width:0;margin-left:0}50%{width:60%;margin-left:20%}100%{width:0;margin-left:100%}}</style>`;
-
-  panel.scrollIntoView({ behavior: 'smooth', block: 'start' });
-
-  try {
-    const d = await api('/api/ai-reports/generate', {
-      method: 'POST',
-      body: JSON.stringify({ type, parameters, forceRefresh }),
-    });
-    _aiRenderReport(d.report, def);
-  } catch (e) {
-    view.innerHTML = `<div style="padding:2rem;text-align:center">
-      <div style="color:var(--error);font-weight:600;margin-bottom:.5rem">Failed to generate report</div>
-      <div style="font-size:.85rem;color:var(--text-light)">${esc(e.message)}</div>
-      <button class="btn btn-sm btn-primary" style="margin-top:1rem" onclick="aiReportGenerate('${type}',${JSON.stringify(parameters)},true)">Retry</button>
-    </div>`;
+  // Only push the action bubble on a fresh request, not a regenerate (which
+  // already has its own turn in the transcript).
+  if (!forceRefresh) {
+    _aiChat.push({ role: 'user', text: def.label });
+    _aiChatRepaint();
   }
+  _aiChatAsk(type, parameters, forceRefresh);
 };
 
+// Opening a saved report from elsewhere drops its rendered body into the chat
+// as an assistant turn.
 window.aiReportView = async function(id) {
-  const panel = document.getElementById('ai-report-panel');
-  const view  = document.getElementById('ai-report-view');
-  if (!panel || !view) return;
-  panel.style.display = 'block';
-  view.innerHTML = `<div style="padding:2rem;text-align:center;color:var(--text-light)">Loading…</div>`;
-  panel.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  if (currentView !== 'ai-reports') navigateTo('ai-reports');
   try {
     const d = await api(`/api/ai-reports/${id}`);
-    const def = AI_REPORT_DEFS[d.report.type] || { label: d.report.type, color: 'var(--accent)', icon: '' };
-    _aiRenderReport(d.report, def);
-  } catch(e) {
-    view.innerHTML = `<div style="padding:2rem;color:var(--error)">${esc(e.message)}</div>`;
+    const report = d.report || {};
+    const def = AI_REPORT_DEFS[report.type] || { label: report.type };
+    _aiChat.push({ role: 'user', text: def.label });
+    _aiChat.push({
+      role: 'assistant',
+      html: _aiMarkdownToHtml(report.report || report.summary || ''),
+      regen: { type: report.type, parameters: report.parameters || {} },
+    });
+    _aiChatRepaint();
+  } catch (e) {
+    toastError(e.message || 'Failed to open report');
   }
 };
-
-function _aiRenderReport(report, def) {
-  const view = document.getElementById('ai-report-view');
-  if (!view) return;
-
-  // Convert markdown to simple HTML
-  const html = _aiMarkdownToHtml(report.report || '');
-  const when = report.createdAt ? new Date(report.createdAt).toLocaleString() : '';
-
-  view.innerHTML = `
-    <div style="display:flex;align-items:flex-start;justify-content:space-between;flex-wrap:wrap;gap:.75rem;margin-bottom:1.25rem;padding-bottom:1rem;border-bottom:1px solid var(--border)">
-      <div style="display:flex;align-items:center;gap:.65rem">
-        <div style="width:36px;height:36px;border-radius:9px;background:${def.color}20;display:flex;align-items:center;justify-content:center;flex-shrink:0">
-          ${svgIcon(def.icon, 17, def.color)}
-        </div>
-        <div>
-          <div style="font-weight:700;font-size:1rem">${def.label}</div>
-          ${when ? `<div style="font-size:.73rem;color:var(--text-muted)">${when}</div>` : ''}
-        </div>
-      </div>
-      <div style="display:flex;gap:.5rem">
-        <button class="btn btn-sm btn-ghost" style="font-size:.78rem" onclick="aiReportGenerate('${report.type}',${JSON.stringify(report.parameters||{})},true)">
-          ${svgIcon('<polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-.57-4.13"/>', 13)} Regenerate
-        </button>
-        <button class="btn btn-sm btn-ghost" style="font-size:.78rem" onclick="_aiCopyReport()">
-          ${svgIcon('<rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>', 13)} Copy
-        </button>
-      </div>
-    </div>
-    <div id="ai-report-body" style="line-height:1.75;font-size:.9rem">${html}</div>`;
-}
 
 function _aiMarkdownToHtml(md) {
   return md
@@ -26904,12 +27324,6 @@ function _aiMarkdownToHtml(md) {
     .replace(/\n/g, '<br>')
     + '';
 }
-
-window._aiCopyReport = function() {
-  const body = document.getElementById('ai-report-body');
-  if (!body) return;
-  navigator.clipboard?.writeText(body.innerText).then(() => toastSuccess('Report copied to clipboard'));
-};
 
 async function _aiShowCoursePickerModal(type) {
   let courses = [];
@@ -27069,6 +27483,23 @@ window._slCard = function(s) {
     </div>`;
 };
 
+// A free-text question asked from the modal (or the dashboard "Ask Dikly AI"
+// entry point) lands in the chat as the real question text, then answers.
+window._aiAskFromModal = function(question) {
+  const go = () => {
+    _aiChat.push({ role: 'user', text: question });
+    _aiChatRepaint();
+    _aiChatAsk('custom_query', { question });
+  };
+  if (currentView !== 'ai-reports') {
+    navigateTo('ai-reports');
+    // Let renderAIReports() build the thread first, then post into it.
+    setTimeout(go, 60);
+  } else {
+    go();
+  }
+};
+
 function _aiShowCustomQueryModal() {
   const overlay = document.createElement('div');
   overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:9999;display:flex;align-items:center;justify-content:center;padding:1rem';
@@ -27082,7 +27513,7 @@ function _aiShowCustomQueryModal() {
       <textarea id="ai-query-input" rows="4" placeholder="e.g. Which students in Level 300 had below 60% attendance last month?" style="width:100%;padding:.7rem;border-radius:8px;border:1px solid var(--border);background:var(--bg);color:var(--text);font-size:.88rem;resize:vertical;margin-bottom:1rem;font-family:inherit"></textarea>
       <div style="display:flex;gap:.5rem;justify-content:flex-end">
         <button class="btn btn-ghost" onclick="this.closest('[style*=position]').remove()">Cancel</button>
-        <button class="btn btn-primary" onclick="(()=>{const v=document.getElementById('ai-query-input')?.value?.trim();if(!v)return;this.closest('[style*=position]').remove();aiReportGenerate('custom_query',{question:v})})()">
+        <button class="btn btn-primary" onclick="(()=>{const v=document.getElementById('ai-query-input')?.value?.trim();if(!v)return;this.closest('[style*=position]').remove();_aiAskFromModal(v)})()">
           ${svgIcon('<path d="M15 4V2"/><path d="M15 16v-2"/><path d="M8 9h2"/><path d="M20 9h2"/><path d="M17.8 11.8 19 13"/><path d="M15 9h.01"/><path d="M17.8 6.2 19 5"/><path d="M13.2 6.2 12 5"/><path d="M3 21l9-9"/>', 13)}
           Ask AI
         </button>
