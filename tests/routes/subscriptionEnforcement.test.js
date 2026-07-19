@@ -91,7 +91,7 @@ beforeAll(async () => {
   lecturerToken = lecLogin.body.token;
 
   const rootLogin = await request(app).post("/api/auth/login")
-    .send({ email: "root@dikly.test", password: PASSWORD });
+    .send({ email: "root@dikly.test", password: PASSWORD, loginRole: "superadmin" });
   expect(rootLogin.status).toBe(200);
   superadminToken = rootLogin.body.token;
 });
@@ -103,9 +103,12 @@ afterAll(async () => {
 
 describe("subscription enforcement kill-switch", () => {
   test("with enforcement ON (default), an expired institution's lecturer is blocked", async () => {
+    // The authenticate middleware's own subscription gate fires first (402
+    // subscriptionExpired) — before requireActiveSubscription's 403 — so
+    // that's the block a real expired-institution lecturer hits.
     const r = await gatedRequest();
-    expect(r.status).toBe(403);
-    expect(r.body.subscriptionRequired).toBe(true);
+    expect(r.status).toBe(402);
+    expect(r.body.subscriptionExpired).toBe(true);
   });
 
   test("superadmin reads the current state", async () => {
@@ -137,8 +140,8 @@ describe("subscription enforcement kill-switch", () => {
     expect(toggle.body.enabled).toBe(true);
 
     const r = await gatedRequest();
-    expect(r.status).toBe(403);
-    expect(r.body.subscriptionRequired).toBe(true);
+    expect(r.status).toBe(402);
+    expect(r.body.subscriptionExpired).toBe(true);
   });
 
   test("non-superadmin cannot touch the switch", async () => {

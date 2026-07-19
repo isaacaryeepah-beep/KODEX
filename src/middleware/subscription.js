@@ -140,4 +140,4 @@ const requirePlan = (...allowedPlans) => {
   };
 };
 
-module.exports = { requireActiveSubscription, requirePlan, clearEnforcementCache };
+module.exports = { requireActiveSubscription, requirePlan, clearEnforcementCache, subscriptionEnforced };
