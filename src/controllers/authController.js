@@ -1282,6 +1282,9 @@ exports.login = async (req, res) => {
         plan: company.subscriptionPlan,
       } : null,
       userTrial: ALL_PAID_ROLES.includes(user.role) ? computeUserTrial(user, company, await getTrialDays()) : null,
+      // Platform kill-switch: when false the client hides the entire
+      // subscription surface (banner, expired warnings, sidebar link, page).
+      subscriptionEnforced: await require("../middleware/subscription").subscriptionEnforced(),
     });
   } catch (error) {
     console.error("Login error:", error);
@@ -1397,6 +1400,9 @@ exports.getMe = async (req, res) => {
         plan: company.subscriptionPlan,
       } : null,
       userTrial: ALL_PAID_ROLES.includes(user.role) ? computeUserTrial(user, company, await getTrialDays()) : null,
+      // Platform kill-switch: when false the client hides the entire
+      // subscription surface (banner, expired warnings, sidebar link, page).
+      subscriptionEnforced: await require("../middleware/subscription").subscriptionEnforced(),
     });
   } catch (error) {
     console.error("Get me error:", error);
