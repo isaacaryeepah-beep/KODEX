@@ -17,6 +17,12 @@ const mw        = [authenticate, requireMode("corporate"), requireActiveSubscrip
 const adminOnly = requireRole("admin", "superadmin");
 const canManage = requireRole("admin", "manager", "superadmin");
 
+// Branding is mode-neutral — every institution has a name, logo, and colors,
+// and applyBranding() in app.js fetches it on every dashboard load regardless
+// of mode. The corporate gate here used to 403 academic companies, which both
+// hid the settings page AND silently disabled branding display for them.
+const brandingMw = [authenticate, requireActiveSubscription];
+
 // ─────────────────────────────────────────────────────────────
 // BRANCHES
 // ─────────────────────────────────────────────────────────────
@@ -100,12 +106,12 @@ router.patch("/branches/:id/remove-user", ...mw, canManage, asyncHandler(async (
 // WHITE-LABEL BRANDING
 // ─────────────────────────────────────────────────────────────
 
-router.get("/branding", ...mw, asyncHandler(async (req, res) => {
+router.get("/branding", ...brandingMw, asyncHandler(async (req, res) => {
   const company = await Company.findById(req.user.company).select("name branding");
   res.json({ branding: company?.branding || {}, companyName: company?.name });
 }));
 
-router.patch("/branding", ...mw, adminOnly, asyncHandler(async (req, res) => {
+router.patch("/branding", ...brandingMw, adminOnly, asyncHandler(async (req, res) => {
   const { logoUrl, primaryColor, accentColor, companyTagline, supportEmail, website } = req.body;
   const update = {};
   if (logoUrl       !== undefined) update["branding.logoUrl"]        = logoUrl;
@@ -133,7 +139,7 @@ const logoUpload = multer({
   limits: { fileSize: 2 * 1024 * 1024 }, // 2 MB — logos are small
 });
 
-router.post("/branding/logo", ...mw, adminOnly, logoUpload.single("logo"), asyncHandler(async (req, res) => {
+router.post("/branding/logo", ...brandingMw, adminOnly, logoUpload.single("logo"), asyncHandler(async (req, res) => {
   if (!req.file) return res.status(400).json({ error: "No file uploaded (field name: logo)" });
   // No SVG: Cloudinary refuses to deliver SVG originals by default (security
   // setting), so an SVG upload "succeeds" but the logo never displays.

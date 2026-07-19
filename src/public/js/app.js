@@ -3165,6 +3165,7 @@ function buildSidebar() {
       links.push({ id: 'ai-reports', label: 'Dikly AI', icon: svgIcon('<path d="M15 4V2"/><path d="M15 16v-2"/><path d="M8 9h2"/><path d="M20 9h2"/><path d="M17.8 11.8 19 13"/><path d="M15 9h.01"/><path d="M17.8 6.2 19 5"/><path d="M13.2 6.2 12 5"/><path d="M3 21l9-9"/>') });
       links.push({ sep: true, label: 'ADMINISTRATION' });
       links.push({ id: 'company-settings', label: 'Company Settings', icon: svgIcon('<circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/>') });
+      links.push({ id: 'branding', label: 'Institution Branding', icon: svgIcon('<circle cx="12" cy="12" r="10"/><path d="M8 14s1.5 2 4 2 4-2 4-2"/><line x1="9" y1="9" x2="9.01" y2="9"/><line x1="15" y1="9" x2="15.01" y2="9"/>') });
       links.push({ id: 'api-access', label: 'API Access', icon: svgIcon('<polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/>') });
       links.push({ sep: true, label: 'SUPPORT' });
       links.push({ id: 'faq-center', label: 'FAQ Center', icon: svgIcon('<circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/>') });
@@ -24392,9 +24393,10 @@ async function renderBranding() {
   content.innerHTML = '<div class="loading">Loading…</div>';
   try {
     const { branding, companyName } = await api('/api/advanced/branding');
+    const _isAcademicBrand = currentUser?.company?.mode === 'academic';
 
     content.innerHTML = `
-      <div class="page-header"><h2>Branding & Settings</h2><p>Customize your portal appearance and attendance reporting</p></div>
+      <div class="page-header"><h2>${_isAcademicBrand ? 'Institution Branding' : 'Branding & Settings'}</h2><p>${_isAcademicBrand ? "Customize your institution's portal appearance" : 'Customize your portal appearance and attendance reporting'}</p></div>
 
       <!-- Branding -->
       <div class="card" style="margin-bottom:16px">
@@ -24415,7 +24417,7 @@ async function renderBranding() {
 
         <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:12px;margin-bottom:14px">
           <div>
-            <label style="font-size:11px;font-weight:700;text-transform:uppercase;color:#6b7280;display:block;margin-bottom:4px">Company Logo</label>
+            <label style="font-size:11px;font-weight:700;text-transform:uppercase;color:#6b7280;display:block;margin-bottom:4px">${_isAcademicBrand ? 'Institution Logo' : 'Company Logo'}</label>
             <input type="file" id="bd-logo-file" accept="image/png,image/jpeg,image/webp" style="display:none" onchange="_bdUploadLogo(this)">
             <div style="display:flex;gap:6px;align-items:center;margin-bottom:6px">
               <button type="button" class="btn btn-secondary btn-sm" id="bd-upload-btn" onclick="document.getElementById('bd-logo-file').click()">📤 Upload logo</button>
@@ -24432,7 +24434,7 @@ async function renderBranding() {
           </div>
           <div>
             <label style="font-size:11px;font-weight:700;text-transform:uppercase;color:#6b7280;display:block;margin-bottom:4px">Tagline</label>
-            <input id="bd-tagline" value="${branding.companyTagline||''}" placeholder="Your company tagline" style="width:100%;padding:8px;border:1px solid #d1d5db;border-radius:6px;font-size:13px" oninput="updateBrandPreview()">
+            <input id="bd-tagline" value="${branding.companyTagline||''}" placeholder="${_isAcademicBrand ? 'Your institution tagline' : 'Your company tagline'}" style="width:100%;padding:8px;border:1px solid #d1d5db;border-radius:6px;font-size:13px" oninput="updateBrandPreview()">
           </div>
           <div>
             <label style="font-size:11px;font-weight:700;text-transform:uppercase;color:#6b7280;display:block;margin-bottom:4px">Support Email</label>
@@ -24450,7 +24452,9 @@ async function renderBranding() {
         </div>
       </div>
 
-      <!-- Attendance Reporting Settings -->
+      <!-- Attendance Reporting Settings — corporate payroll-handoff config,
+           not applicable to academic institutions -->
+      ${_isAcademicBrand ? '' : `
       <div class="card">
         <h3 style="font-size:15px;font-weight:700;margin-bottom:6px">Attendance Reporting</h3>
         <p style="font-size:12.5px;color:#6b7280;margin-bottom:14px;line-height:1.6">
@@ -24473,7 +24477,7 @@ async function renderBranding() {
         </div>
         <div id="pr-error" style="color:#ef4444;font-size:13px;margin-bottom:8px;display:none"></div>
         <button class="btn btn-primary" onclick="saveAttendanceReportingSettings()">Save Settings</button>
-      </div>
+      </div>`}
     `;
   } catch(e) {
     content.innerHTML = `<div class="card"><p style="color:#ef4444">Error: ${e.message}</p></div>`;
