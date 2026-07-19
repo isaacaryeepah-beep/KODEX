@@ -1011,6 +1011,36 @@ async function loadDevices() {
 }
 
 // ── Fee Adjuster ─────────────────────────────────────────────────────────────
+let ENF_ENABLED = true; // platform-wide subscription enforcement kill-switch
+
+function _renderEnforcementPanel() {
+  return '<div class="panel" style="padding:18px 22px;display:flex;align-items:center;justify-content:space-between;gap:14px;flex-wrap:wrap;'+(ENF_ENABLED?'':'background:#FFFBEB;border-color:#FDE68A;')+'">'+
+    '<div style="flex:1;min-width:240px">'+
+      '<h2 style="margin:0 0 4px;font-size:15px">Subscription enforcement '+
+        '<span style="font-size:10.5px;font-weight:700;padding:2px 8px;border-radius:12px;margin-left:6px;background:'+(ENF_ENABLED?'#ECFDF3':'#FEF3C7')+';color:'+(ENF_ENABLED?'#067647':'#92400E')+'">'+(ENF_ENABLED?'ON':'OFF')+'</span></h2>'+
+      '<p style="margin:0;font-size:13px;color:var(--muted);line-height:1.55">'+(ENF_ENABLED
+        ? 'Expired trials and unpaid subscriptions are blocked platform-wide (the normal state).'
+        : 'Enforcement is OFF — nobody is blocked for an expired trial or unpaid subscription, on any institution. Prices and banners still display, but nothing is locked.')+'</p>'+
+    '</div>'+
+    '<button id="enf-btn" onclick="toggleEnforcement('+(ENF_ENABLED?'false':'true')+')" style="border:none;border-radius:8px;padding:10px 20px;font-size:13.5px;font-weight:700;cursor:pointer;color:#fff;flex-shrink:0;background:'+(ENF_ENABLED?'#B42318':'#12B76A')+'">'+
+      (ENF_ENABLED?'Turn enforcement OFF':'Turn enforcement ON')+'</button>'+
+  '</div>';
+}
+
+async function toggleEnforcement(enable) {
+  const btn = document.getElementById('enf-btn');
+  if (btn) { btn.disabled = true; btn.textContent = 'Applying…'; }
+  try {
+    await api('/api/superadmin/subscription-enforcement', { method:'PATCH', body: JSON.stringify({ enabled: enable }) });
+    ENF_ENABLED = enable;
+    showToast('Subscription enforcement turned ' + (enable ? 'ON' : 'OFF') + ' platform-wide');
+    _renderAdjusterBody();
+  } catch(e) {
+    if (btn) { btn.disabled = false; btn.textContent = enable ? 'Turn enforcement ON' : 'Turn enforcement OFF'; }
+    showToast('Failed: ' + e.message);
+  }
+}
+
 function _renderAdjusterBody() {
   const s = PLATFORM_SETTINGS || {};
   const cur = s.currency || 'GHS';
@@ -1043,6 +1073,7 @@ function _renderAdjusterBody() {
   }).join('');
 
   document.getElementById('adjusterBody').innerHTML =
+    _renderEnforcementPanel()+
     '<div class="panel">'+
       '<div class="panel-head">'+
         '<h2>Subscription prices</h2>'+
@@ -1065,6 +1096,9 @@ function _renderAdjusterBody() {
 
 async function renderAdjuster() {
   document.getElementById('adjusterBody').innerHTML = '<div class="loading">Loading pricing…</div>';
+  try {
+    ENF_ENABLED = (await api('/api/superadmin/subscription-enforcement')).enabled !== false;
+  } catch(e) { /* keep last known */ }
   try {
     const s = await api('/api/superadmin/settings');
     PLATFORM_SETTINGS = s;
