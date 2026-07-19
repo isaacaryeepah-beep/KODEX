@@ -6,6 +6,27 @@ const Course = require("../models/Course");
 const { ROLE_HIERARCHY } = require("../middleware/role");
 const { getVisibleUserIds, getMyActiveHRAssignment } = require("../utils/corporateScope");
 const { SIX_HOURS_MS } = require("../middleware/deviceValidation");
+const AttendanceSession = require("../models/AttendanceSession");
+
+const IN_PROGRESS_SESSION_STATUSES = ["active", "live", "paused", "locked"];
+
+// Lecturers may unlock students only mid-class: they must have an attendance
+// session in progress, and the student must be enrolled in that session's
+// course. Sessions without a course (legacy/general) fall back to any course
+// the lecturer teaches. Returns { session, courseFilter } — session null
+// means "no session running", so the caller should refuse.
+async function lecturerUnlockScope(lecturer) {
+  const session = await AttendanceSession.findOne({
+    company: lecturer.company,
+    createdBy: lecturer._id,
+    status: { $in: IN_PROGRESS_SESSION_STATUSES },
+  }).select("_id course").lean();
+  if (!session) return { session: null, courseFilter: null };
+  const courseFilter = session.course
+    ? { _id: session.course, companyId: lecturer.company }
+    : { companyId: lecturer.company, $or: [{ lecturerId: lecturer._id }, { createdBy: lecturer._id }] };
+  return { session, courseFilter };
+}
 
 const ALLOWED_ROLES = ['student', 'lecturer', 'admin', 'superadmin', 'hod', 'manager', 'employee', 'class_rep'];
 
@@ -872,6 +893,23 @@ exports.unlockAccountDeviceLock = async (req, res) => {
     const user = await User.findOne({ _id: req.params.id, company: req.user.company });
     if (!user) return res.status(404).json({ error: "User not found" });
 
+    // Lecturers get a deliberately narrow unlock window: only while one of
+    // their own sessions is running, and only for students of the class
+    // being taught. (Admin/HOD/manager keep the unscoped unlock.)
+    if (req.user.role === "lecturer") {
+      if (user.role !== "student") {
+        return res.status(403).json({ error: "Lecturers can only unlock student accounts" });
+      }
+      const { session, courseFilter } = await lecturerUnlockScope(req.user);
+      if (!session) {
+        return res.status(403).json({ error: "You can only unlock students while your attendance session is running. Start your session first." });
+      }
+      const teaches = await Course.findOne({ ...courseFilter, enrolledStudents: user._id }).select("_id").lean();
+      if (!teaches) {
+        return res.status(403).json({ error: "You can only unlock students enrolled in the class you are currently teaching" });
+      }
+    }
+
     const hadDeviceLock = !!user.accountDeviceLock?.isLocked;
     // A plain logout (no device/account lock) still leaves the 6-hour
     // enforceLogoutRestriction cooldown active. Without this check, a user
@@ -908,6 +946,39 @@ exports.unlockAccountDeviceLock = async (req, res) => {
   } catch (error) {
     console.error("Unlock account device lock error:", error);
     res.status(500).json({ error: "Failed to unlock account" });
+  }
+};
+
+// ── GET /api/users/lecturer-locked-students ──────────────────────────────────
+// Students the lecturer may unlock right now: enrolled in the in-progress
+// session's course (or any of their courses for course-less sessions) and
+// currently blocked by a device lock or the post-logout cooldown. Failed-login
+// locks are excluded on purpose — a student standing in class is logged in,
+// and clearing login locks stays an HOD/admin action.
+exports.lecturerLockedStudents = async (req, res) => {
+  try {
+    const { session, courseFilter } = await lecturerUnlockScope(req.user);
+    if (!session) return res.json({ active: false, students: [] });
+
+    const courses = await Course.find(courseFilter).select("enrolledStudents").lean();
+    const studentIds = [...new Set(courses.flatMap(c => (c.enrolledStudents || []).map(String)))];
+    if (!studentIds.length) return res.json({ active: true, students: [] });
+
+    const now = new Date();
+    const students = await User.find({
+      _id: { $in: studentIds },
+      company: req.user.company,
+      role: "student",
+      $or: [
+        { "accountDeviceLock.isLocked": true, "accountDeviceLock.lockedUntil": { $gt: now } },
+        { lastLogoutTime: { $gt: new Date(now.getTime() - SIX_HOURS_MS) } },
+      ],
+    }).select("name IndexNumber accountDeviceLock lastLogoutTime").lean();
+
+    res.json({ active: true, students });
+  } catch (error) {
+    console.error("Lecturer locked students error:", error);
+    res.status(500).json({ error: "Failed to fetch locked students" });
   }
 };
 
