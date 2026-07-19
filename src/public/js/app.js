@@ -26678,181 +26678,310 @@ const AI_REPORT_DEFS = {
   student_lookup:      { label: 'Student Lookup',          roles: ['admin','superadmin','hod','lecturer'], modes: ['academic'], icon: '<circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>',                                                                                                    color: '#0ea5e9', desc: 'Enter a student\'s index number or name to instantly pull up their full profile and academic details.' },
 };
 
+// Client-side transcript for the Dikly AI chat. Each entry is
+// { role:'user'|'assistant', ... }. The backend (POST /api/ai-reports/
+// generate) is stateless per call, so the transcript lives here and is
+// rebuilt into the DOM on every renderAIReports() (e.g. returning to the
+// page keeps the current session's conversation until a full reload).
+let _aiChat = [];
+
 async function renderAIReports() {
   const content = document.getElementById('main-content');
   if (!content) return;
 
   const role = currentUser?.role || '';
-  // Quick Actions differ by institution type: academic institutions get
-  // student/course reports, corporate ones get workforce/leave/shift reports.
   const instMode = currentUser?.company?.mode === 'corporate' ? 'corporate' : 'academic';
   const available = Object.entries(AI_REPORT_DEFS).filter(([, d]) =>
     d.roles.includes(role) && (!d.modes || d.modes.includes(instMode)));
   const canAsk = AI_REPORT_DEFS.custom_query.roles.includes(role);
-
-  const firstName = (currentUser?.name || 'there').trim().split(/\s+/)[0];
-  const hour = new Date().getHours();
-  const greeting = hour < 12 ? 'Good Morning' : hour < 17 ? 'Good Afternoon' : 'Good Evening';
   const hasSpeech = !!(window.SpeechRecognition || window.webkitSpeechRecognition);
 
+  content.style.padding = '0';
   content.innerHTML = `
     <style>
-      .ai-hero {
-        position:relative; border-radius:20px; overflow:hidden;
-        padding:3.2rem 1.5rem 2.4rem; text-align:center; margin-bottom:1.5rem;
-        background:
-          radial-gradient(900px 420px at 15% -10%, rgba(124,58,237,.14), transparent 60%),
-          radial-gradient(800px 420px at 85% 10%, rgba(79,110,247,.14), transparent 60%),
-          radial-gradient(600px 300px at 50% 110%, rgba(236,72,153,.08), transparent 60%),
-          linear-gradient(180deg, rgba(124,58,237,.05), transparent 55%);
-        border:1px solid var(--border);
+      .aic-wrap { display:flex; flex-direction:column; height:calc(100vh - 58px); max-height:calc(100vh - 58px); background:var(--bg); }
+      [data-theme="dark"] .aic-wrap { background:#0b1020; }
+      .aic-head {
+        display:flex; align-items:center; gap:.6rem; padding:.85rem 1.1rem;
+        border-bottom:1px solid var(--border); flex-shrink:0; background:var(--bg);
       }
-      [data-theme="dark"] .ai-hero {
-        background:
-          radial-gradient(900px 420px at 15% -10%, rgba(124,58,237,.22), transparent 60%),
-          radial-gradient(800px 420px at 85% 10%, rgba(79,110,247,.20), transparent 60%),
-          radial-gradient(600px 300px at 50% 110%, rgba(236,72,153,.10), transparent 60%),
-          #0d1224;
-      }
-      .ai-hero-label { font-size:1.05rem; font-weight:700; letter-spacing:.2px; color:var(--text); opacity:.85; }
-      .ai-orb {
-        width:64px; height:64px; border-radius:50%; margin:1.4rem auto 1.2rem; position:relative;
+      [data-theme="dark"] .aic-head { background:#0d1224; }
+      .aic-head-orb {
+        width:26px; height:26px; border-radius:50%; flex-shrink:0;
         background: radial-gradient(circle at 62% 38%, #fde68a 0%, #f9a8d4 32%, #a78bfa 68%, #7c3aed 100%);
-        box-shadow: 0 0 34px 10px rgba(167,139,250,.45), 0 0 80px 26px rgba(124,58,237,.18);
+        box-shadow:0 0 12px 2px rgba(167,139,250,.5);
+      }
+      .aic-head-title { font-weight:800; font-size:1rem; color:var(--text); }
+      .aic-head-new {
+        margin-left:auto; border:1px solid var(--border); background:transparent; color:var(--text-light);
+        border-radius:8px; padding:.4rem .7rem; font-size:.78rem; font-weight:600; cursor:pointer; font-family:inherit;
+        display:inline-flex; align-items:center; gap:.35rem; transition:border-color .12s, color .12s;
+      }
+      .aic-head-new:hover { border-color:var(--accent); color:var(--accent); }
+
+      .aic-scroll { flex:1; overflow-y:auto; padding:1.2rem 0; scroll-behavior:smooth; }
+      .aic-thread { max-width:760px; margin:0 auto; padding:0 1rem; display:flex; flex-direction:column; gap:1.3rem; }
+
+      .aic-row { display:flex; gap:.75rem; align-items:flex-start; }
+      .aic-row.user { justify-content:flex-end; }
+      .aic-avatar {
+        width:30px; height:30px; border-radius:50%; flex-shrink:0; margin-top:2px;
+        background: radial-gradient(circle at 62% 38%, #fde68a 0%, #f9a8d4 32%, #a78bfa 68%, #7c3aed 100%);
+        box-shadow:0 0 10px 1px rgba(167,139,250,.4);
+      }
+      .aic-bubble-user {
+        background:linear-gradient(135deg, var(--accent, #4f6ef7), var(--accent2, #7c3aed)); color:#fff;
+        padding:.7rem 1rem; border-radius:18px 18px 4px 18px; max-width:80%;
+        font-size:.92rem; line-height:1.55; white-space:pre-wrap; word-break:break-word;
+      }
+      .aic-msg-assistant {
+        flex:1; min-width:0; color:var(--text); font-size:.92rem; line-height:1.7;
+        padding-top:.15rem; word-break:break-word;
+      }
+      .aic-msg-assistant h2 { font-size:1rem; font-weight:700; margin:1.1rem 0 .45rem; }
+      .aic-msg-assistant h3 { font-size:.9rem; font-weight:700; margin:.9rem 0 .35rem; }
+      .aic-msg-assistant ul { padding-left:1.25rem; margin:.5rem 0; }
+      .aic-msg-assistant li { margin:.25rem 0; }
+      .aic-msg-assistant p  { margin:.5rem 0; }
+      .aic-msg-tools { display:flex; gap:.4rem; margin-top:.6rem; }
+      .aic-msg-tool {
+        border:1px solid var(--border); background:transparent; color:var(--text-light);
+        border-radius:7px; padding:.28rem .6rem; font-size:.72rem; font-weight:600; cursor:pointer; font-family:inherit;
+        display:inline-flex; align-items:center; gap:.3rem; transition:border-color .12s, color .12s;
+      }
+      .aic-msg-tool:hover { border-color:var(--accent); color:var(--accent); }
+
+      .aic-typing { display:flex; gap:5px; padding:.5rem 0; }
+      .aic-typing span {
+        width:8px; height:8px; border-radius:50%; background:var(--text-muted);
+        animation:aicBlink 1.3s infinite ease-in-out both;
+      }
+      .aic-typing span:nth-child(2) { animation-delay:.18s; }
+      .aic-typing span:nth-child(3) { animation-delay:.36s; }
+      @keyframes aicBlink { 0%,80%,100% { opacity:.25; transform:scale(.85); } 40% { opacity:1; transform:scale(1); } }
+
+      /* Empty state */
+      .aic-empty { max-width:720px; margin:auto; padding:2rem 1rem; text-align:center; }
+      .aic-empty-orb {
+        width:60px; height:60px; border-radius:50%; margin:0 auto 1.1rem;
+        background: radial-gradient(circle at 62% 38%, #fde68a 0%, #f9a8d4 32%, #a78bfa 68%, #7c3aed 100%);
+        box-shadow:0 0 30px 8px rgba(167,139,250,.4);
         animation: aiOrbFloat 5s ease-in-out infinite;
       }
       @keyframes aiOrbFloat { 0%,100% { transform:translateY(0) scale(1); } 50% { transform:translateY(-6px) scale(1.04); } }
-      .ai-greet { margin:0; font-size:clamp(1.6rem, 4vw, 2.3rem); font-weight:800; letter-spacing:-.5px; color:var(--text); }
-      .ai-sub  { margin:.45rem 0 0; font-size:1rem; font-weight:600; color:var(--text-light); }
-      .ai-sub2 { margin:.3rem 0 0; font-size:.8rem; color:var(--text-muted); }
-      .ai-ask {
-        max-width:680px; margin:1.6rem auto 0; background:var(--bg-card, var(--bg-secondary, #fff));
-        border:1.5px solid var(--border); border-radius:18px; padding:1rem 1rem .7rem;
-        box-shadow:0 10px 34px rgba(15,23,42,.08); text-align:left; transition:border-color .15s, box-shadow .15s;
-      }
-      .ai-ask:focus-within { border-color:var(--accent); box-shadow:0 10px 34px rgba(79,110,247,.16); }
-      .ai-ask input {
-        width:100%; border:none; outline:none; background:transparent; color:var(--text);
-        font-size:1rem; font-family:inherit; padding:.1rem .1rem .8rem;
-      }
-      .ai-ask-row { display:flex; align-items:center; gap:.35rem; }
-      .ai-ask-tool {
-        width:32px; height:32px; border:none; border-radius:9px; background:transparent; cursor:pointer;
-        display:flex; align-items:center; justify-content:center; color:var(--text-light); transition:background .12s;
-      }
-      .ai-ask-tool:hover { background:var(--bg-secondary); }
-      .ai-ask-send {
-        margin-left:auto; width:36px; height:36px; border:none; border-radius:50%; cursor:pointer;
-        background:linear-gradient(135deg, var(--accent, #4f6ef7), var(--accent2, #7c3aed));
-        display:flex; align-items:center; justify-content:center; color:#fff;
-        box-shadow:0 4px 14px rgba(124,58,237,.35); transition:transform .12s, box-shadow .12s;
-      }
-      .ai-ask-send:hover { transform:scale(1.06); box-shadow:0 6px 18px rgba(124,58,237,.45); }
-      .ai-qa-label { margin:1.8rem 0 .7rem; font-size:.86rem; font-weight:700; color:var(--text); text-align:left; max-width:680px; margin-left:auto; margin-right:auto; }
-      .ai-qa-chips { display:flex; flex-wrap:wrap; gap:.5rem; justify-content:center; max-width:760px; margin:0 auto; }
-      .ai-qa-chip {
-        display:inline-flex; align-items:center; gap:.42rem; padding:.5rem .85rem; border-radius:999px;
+      .aic-empty h1 { margin:0; font-size:clamp(1.4rem,4vw,2rem); font-weight:800; letter-spacing:-.5px; color:var(--text); }
+      .aic-empty p { margin:.5rem 0 0; font-size:.92rem; color:var(--text-light); }
+      .aic-chips { display:flex; flex-wrap:wrap; gap:.5rem; justify-content:center; margin-top:1.6rem; }
+      .aic-chip {
+        display:inline-flex; align-items:center; gap:.42rem; padding:.55rem .9rem; border-radius:999px;
         background:var(--bg-card, var(--bg-secondary, #fff)); border:1px solid var(--border); cursor:pointer;
         font-size:.78rem; font-weight:600; color:var(--text); font-family:inherit;
         transition:transform .12s, box-shadow .12s, border-color .12s;
       }
-      .ai-qa-chip:hover { transform:translateY(-1px); border-color:var(--accent); box-shadow:0 4px 14px rgba(79,110,247,.15); }
+      .aic-chip:hover { transform:translateY(-1px); border-color:var(--accent); box-shadow:0 4px 14px rgba(79,110,247,.15); }
+
+      /* Composer pinned at the bottom */
+      .aic-composer-wrap { flex-shrink:0; padding:.7rem 1rem 1rem; border-top:1px solid var(--border); background:var(--bg); }
+      [data-theme="dark"] .aic-composer-wrap { background:#0d1224; }
+      .aic-composer {
+        max-width:760px; margin:0 auto; display:flex; align-items:flex-end; gap:.4rem;
+        background:var(--bg-card, var(--bg-secondary, #fff)); border:1.5px solid var(--border);
+        border-radius:24px; padding:.4rem .4rem .4rem 1rem; transition:border-color .15s, box-shadow .15s;
+      }
+      .aic-composer:focus-within { border-color:var(--accent); box-shadow:0 4px 18px rgba(79,110,247,.16); }
+      .aic-composer textarea {
+        flex:1; border:none; outline:none; background:transparent; color:var(--text); resize:none;
+        font-size:.95rem; font-family:inherit; line-height:1.5; max-height:140px; padding:.5rem 0;
+      }
+      .aic-tool {
+        width:36px; height:36px; border:none; border-radius:50%; background:transparent; cursor:pointer;
+        display:flex; align-items:center; justify-content:center; color:var(--text-light); flex-shrink:0; transition:background .12s;
+      }
+      .aic-tool:hover { background:var(--bg-secondary); }
+      .aic-send {
+        width:38px; height:38px; border:none; border-radius:50%; cursor:pointer; flex-shrink:0;
+        background:linear-gradient(135deg, var(--accent, #4f6ef7), var(--accent2, #7c3aed));
+        display:flex; align-items:center; justify-content:center; color:#fff;
+        box-shadow:0 4px 14px rgba(124,58,237,.35); transition:transform .12s, opacity .12s;
+      }
+      .aic-send:hover { transform:scale(1.06); }
+      .aic-send:disabled { opacity:.45; cursor:not-allowed; transform:none; }
+      .aic-composer-hint { max-width:760px; margin:.5rem auto 0; text-align:center; font-size:.7rem; color:var(--text-muted); }
     </style>
 
-    <div class="ai-hero">
-      <div class="ai-hero-label">Dikly AI</div>
-      <div class="ai-orb"></div>
-      <h1 class="ai-greet">${greeting}, ${esc(firstName)}</h1>
-      <p class="ai-sub">Master your day with AI automation</p>
-      <p class="ai-sub2">Experience the next level of productivity. Let AI handle the busywork</p>
+    <div class="aic-wrap">
+      <div class="aic-head">
+        <div class="aic-head-orb"></div>
+        <div class="aic-head-title">Dikly AI</div>
+        <button class="aic-head-new" onclick="_aiChatReset()" title="Start a new chat">
+          ${svgIcon('<line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>', 13)} New chat
+        </button>
+      </div>
+
+      <div class="aic-scroll" id="aic-scroll">
+        <div class="aic-thread" id="aic-thread"></div>
+      </div>
 
       ${canAsk ? `
-      <div class="ai-ask">
-        <input id="ai-ask-input" type="text" placeholder="Ask Anything" autocomplete="off"
-          onkeydown="if(event.key==='Enter')_aiAskSubmit()" />
-        <div class="ai-ask-row">
-          <button class="ai-ask-tool" title="Open detailed question box" onclick="_aiShowCustomQueryModal()">
-            ${svgIcon('<line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>', 16)}
-          </button>
-          ${hasSpeech ? `
-          <button class="ai-ask-tool" id="ai-mic-btn" title="Speak your question" onclick="_aiAskVoice()">
-            ${svgIcon('<path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/>', 15)}
+      <div class="aic-composer-wrap">
+        <div class="aic-composer">
+          <textarea id="aic-input" rows="1" placeholder="Ask Dikly AI anything about your institution…"
+            oninput="_aiChatAutogrow(this)" onkeydown="_aiChatKeydown(event)"></textarea>
+          ${hasSpeech ? `<button class="aic-tool" id="aic-mic" title="Speak your question" onclick="_aiChatVoice()">
+            ${svgIcon('<path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/>', 16)}
           </button>` : ''}
-          <button class="ai-ask-send" title="Ask Dikly AI" onclick="_aiAskSubmit()">
-            ${svgIcon('<line x1="12" y1="19" x2="12" y2="5"/><polyline points="5 12 12 5 19 12"/>', 16, '#fff')}
+          <button class="aic-send" id="aic-send" title="Send" onclick="_aiChatSubmit()">
+            ${svgIcon('<line x1="12" y1="19" x2="12" y2="5"/><polyline points="5 12 12 5 19 12"/>', 17, '#fff')}
           </button>
         </div>
-      </div>` : ''}
-
-      <div class="ai-qa-label">Quick Action</div>
-      <div class="ai-qa-chips">
-        ${available.filter(([t]) => t !== 'custom_query').map(([type, d]) => `
-          <button class="ai-qa-chip" title="${esc(d.desc)}" onclick="aiReportOpen('${type}')">
-            ${svgIcon(d.icon, 13, d.color)} ${d.label}
-          </button>`).join('')}
-      </div>
-    </div>
-
-    <div id="ai-report-panel" style="display:none">
-      <div class="card" id="ai-report-view"></div>
+        <div class="aic-composer-hint">Dikly AI can make mistakes. Verify important figures against your dashboards.</div>
+      </div>` : `
+      <div class="aic-composer-wrap"><div class="aic-composer-hint">Free-form questions aren't available for your role — use the quick actions above.</div></div>`}
     </div>`;
 
-  // Load recent reports list
-  _aiLoadRecentReports();
+  // Store quick actions for the empty state + expose to chip handlers.
+  window._aiQuickActions = available.filter(([t]) => t !== 'custom_query');
+  _aiChatRepaint();
 }
 
-// Submit the hero "Ask Anything" input as a custom AI query
-window._aiAskSubmit = function() {
-  const input = document.getElementById('ai-ask-input');
+// Rebuild the thread DOM from the _aiChat transcript (or the empty state).
+function _aiChatRepaint() {
+  const thread = document.getElementById('aic-thread');
+  if (!thread) return;
+
+  if (!_aiChat.length) {
+    const firstName = (currentUser?.name || 'there').trim().split(/\s+/)[0];
+    const hour = new Date().getHours();
+    const greeting = hour < 12 ? 'Good morning' : hour < 17 ? 'Good afternoon' : 'Good evening';
+    const chips = (window._aiQuickActions || []).map(([type, d]) => `
+      <button class="aic-chip" title="${esc(d.desc)}" onclick="aiReportOpen('${type}')">
+        ${svgIcon(d.icon, 13, d.color)} ${esc(d.label)}
+      </button>`).join('');
+    thread.innerHTML = `
+      <div class="aic-empty">
+        <div class="aic-empty-orb"></div>
+        <h1>${greeting}, ${esc(firstName)}</h1>
+        <p>Ask me anything about your institution's data — attendance, performance, at-risk students, and more.</p>
+        ${chips ? `<div class="aic-chips">${chips}</div>` : ''}
+      </div>`;
+    return;
+  }
+
+  thread.innerHTML = _aiChat.map((m, i) => {
+    if (m.role === 'user') {
+      return `<div class="aic-row user"><div class="aic-bubble-user">${esc(m.text)}</div></div>`;
+    }
+    if (m.role === 'typing') {
+      return `<div class="aic-row"><div class="aic-avatar"></div><div class="aic-msg-assistant"><div class="aic-typing"><span></span><span></span><span></span></div></div></div>`;
+    }
+    // assistant
+    const tools = m.reportId || m.regen
+      ? `<div class="aic-msg-tools">
+           ${m.regen ? `<button class="aic-msg-tool" onclick='_aiChatRegen(${JSON.stringify(m.regen)})'>${svgIcon('<polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-.57-4.13"/>', 12)} Regenerate</button>` : ''}
+           <button class="aic-msg-tool" onclick="_aiChatCopy(${i})">${svgIcon('<rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>', 12)} Copy</button>
+         </div>`
+      : '';
+    return `<div class="aic-row"><div class="aic-avatar"></div><div class="aic-msg-assistant">${m.html || esc(m.text || '')}${tools}</div></div>`;
+  }).join('');
+
+  _aiChatScrollBottom();
+}
+
+function _aiChatScrollBottom() {
+  const scroll = document.getElementById('aic-scroll');
+  if (scroll) scroll.scrollTop = scroll.scrollHeight;
+}
+
+window._aiChatReset = function() {
+  _aiChat = [];
+  _aiChatRepaint();
+  document.getElementById('aic-input')?.focus();
+};
+
+window._aiChatAutogrow = function(el) {
+  el.style.height = 'auto';
+  el.style.height = Math.min(el.scrollHeight, 140) + 'px';
+};
+
+window._aiChatKeydown = function(e) {
+  // Enter sends, Shift+Enter inserts a newline (ChatGPT behavior).
+  if (e.key === 'Enter' && !e.shiftKey) {
+    e.preventDefault();
+    _aiChatSubmit();
+  }
+};
+
+// Send the composer text as a custom_query and stream the answer into the thread.
+window._aiChatSubmit = function() {
+  const input = document.getElementById('aic-input');
   const q = (input?.value || '').trim();
   if (!q) { input?.focus(); return; }
   input.value = '';
-  aiReportGenerate('custom_query', { question: q });
+  _aiChatAutogrow(input);
+  _aiChat.push({ role: 'user', text: q });
+  _aiChatRepaint();
+  _aiChatAsk('custom_query', { question: q });
 };
 
-// Voice input for the Ask bar (Chrome/Edge SpeechRecognition)
-window._aiAskVoice = function() {
+// Shared path for both free-text questions and quick-action reports: show a
+// typing indicator, call the backend, then replace it with the answer.
+async function _aiChatAsk(type, parameters = {}, forceRefresh = false) {
+  _aiChat.push({ role: 'typing' });
+  _aiChatRepaint();
+  const send = document.getElementById('aic-send');
+  if (send) send.disabled = true;
+  try {
+    const d = await api('/api/ai-reports/generate', {
+      method: 'POST',
+      body: JSON.stringify({ type, parameters, forceRefresh }),
+    });
+    const report = d.report || {};
+    _aiChat.pop(); // remove typing
+    _aiChat.push({
+      role: 'assistant',
+      html: _aiMarkdownToHtml(report.report || report.summary || 'No answer was returned.'),
+      regen: { type, parameters },
+    });
+  } catch (e) {
+    _aiChat.pop();
+    _aiChat.push({ role: 'assistant', html: `<p style="color:var(--error)">Sorry — I couldn't answer that. ${esc(e.message)}</p>` });
+  } finally {
+    if (send) send.disabled = false;
+    _aiChatRepaint();
+    document.getElementById('aic-input')?.focus();
+  }
+}
+
+window._aiChatRegen = function(regen) {
+  if (!regen?.type) return;
+  _aiChatAsk(regen.type, regen.parameters || {}, true);
+};
+
+window._aiChatCopy = function(i) {
+  const m = _aiChat[i];
+  if (!m) return;
+  const tmp = document.createElement('div');
+  tmp.innerHTML = m.html || '';
+  navigator.clipboard?.writeText(tmp.innerText.trim()).then(() => toastSuccess('Copied to clipboard'));
+};
+
+// Voice input for the composer (Chrome/Edge SpeechRecognition)
+window._aiChatVoice = function() {
   const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
   if (!SR) return;
-  const btn = document.getElementById('ai-mic-btn');
+  const btn = document.getElementById('aic-mic');
   const rec = new SR();
   rec.lang = 'en-US';
   rec.interimResults = false;
   if (btn) btn.style.color = 'var(--error)';
   rec.onresult = (e) => {
-    const input = document.getElementById('ai-ask-input');
-    if (input) { input.value = e.results[0][0].transcript; input.focus(); }
+    const input = document.getElementById('aic-input');
+    if (input) { input.value = e.results[0][0].transcript; input.focus(); _aiChatAutogrow(input); }
   };
   rec.onend = () => { if (btn) btn.style.color = ''; };
   rec.onerror = () => { if (btn) btn.style.color = ''; };
   rec.start();
 };
-
-async function _aiLoadRecentReports() {
-  try {
-    const d = await api('/api/ai-reports?limit=5');
-    if (!d.reports?.length) return;
-    const panel = document.getElementById('ai-report-panel');
-    if (!panel) return;
-    panel.style.display = 'block';
-    const view = document.getElementById('ai-report-view');
-    view.innerHTML = `
-      <h3 style="margin:0 0 1rem;font-size:1rem">Recent Reports</h3>
-      <div style="display:flex;flex-direction:column;gap:.6rem">
-        ${d.reports.map(r => {
-          const def = AI_REPORT_DEFS[r.type] || { label: r.type, color: 'var(--accent)' };
-          return `<div style="display:flex;align-items:center;gap:.75rem;padding:.65rem .85rem;border-radius:8px;border:1px solid var(--border);cursor:pointer;transition:background .12s" onmouseover="this.style.background='var(--bg-secondary)'" onmouseout="this.style.background=''" onclick="aiReportView('${r._id}')">
-            <div style="width:8px;height:8px;border-radius:50%;background:${def.color};flex-shrink:0"></div>
-            <div style="flex:1;min-width:0">
-              <div style="font-size:.84rem;font-weight:600">${def.label}</div>
-              <div style="font-size:.73rem;color:var(--text-light);overflow:hidden;white-space:nowrap;text-overflow:ellipsis">${esc(r.summary || '')}</div>
-            </div>
-            <div style="font-size:.72rem;color:var(--text-muted);white-space:nowrap">${new Date(r.createdAt).toLocaleDateString()}</div>
-          </div>`;
-        }).join('')}
-      </div>`;
-  } catch(_) {}
-}
 
 window.aiReportOpen = async function(type) {
   const def = AI_REPORT_DEFS[type];
@@ -26886,91 +27015,39 @@ window.aiReportOpen = async function(type) {
   aiReportGenerate(type);
 };
 
+// A quick-action report becomes a chat turn: a user "action" bubble naming
+// the report, then the assistant answer via the shared _aiChatAsk path.
 window.aiReportGenerate = async function(type, parameters = {}, forceRefresh = false) {
   const def = AI_REPORT_DEFS[type];
   if (!def) return;
-
-  const panel = document.getElementById('ai-report-panel');
-  const view  = document.getElementById('ai-report-view');
-  if (!panel || !view) return;
-
-  panel.style.display = 'block';
-  view.innerHTML = `
-    <div style="display:flex;flex-direction:column;align-items:center;padding:3rem 1rem;gap:1rem">
-      <div style="width:48px;height:48px;border-radius:12px;background:${def.color}20;display:flex;align-items:center;justify-content:center">
-        ${svgIcon(def.icon, 22, def.color)}
-      </div>
-      <div style="font-weight:700;font-size:1rem">${def.label}</div>
-      <div style="font-size:.85rem;color:var(--text-light)">Analysing data and generating report…</div>
-      <div style="width:200px;height:4px;background:var(--border);border-radius:2px;overflow:hidden">
-        <div style="height:100%;background:${def.color};border-radius:2px;animation:aiProgress 2.5s ease-in-out infinite"></div>
-      </div>
-    </div>
-    <style>@keyframes aiProgress{0%{width:0;margin-left:0}50%{width:60%;margin-left:20%}100%{width:0;margin-left:100%}}</style>`;
-
-  panel.scrollIntoView({ behavior: 'smooth', block: 'start' });
-
-  try {
-    const d = await api('/api/ai-reports/generate', {
-      method: 'POST',
-      body: JSON.stringify({ type, parameters, forceRefresh }),
-    });
-    _aiRenderReport(d.report, def);
-  } catch (e) {
-    view.innerHTML = `<div style="padding:2rem;text-align:center">
-      <div style="color:var(--error);font-weight:600;margin-bottom:.5rem">Failed to generate report</div>
-      <div style="font-size:.85rem;color:var(--text-light)">${esc(e.message)}</div>
-      <button class="btn btn-sm btn-primary" style="margin-top:1rem" onclick="aiReportGenerate('${type}',${JSON.stringify(parameters)},true)">Retry</button>
-    </div>`;
+  // Only push the action bubble on a fresh request, not a regenerate (which
+  // already has its own turn in the transcript).
+  if (!forceRefresh) {
+    _aiChat.push({ role: 'user', text: def.label });
+    _aiChatRepaint();
   }
+  _aiChatAsk(type, parameters, forceRefresh);
 };
 
+// Opening a saved report from elsewhere drops its rendered body into the chat
+// as an assistant turn.
 window.aiReportView = async function(id) {
-  const panel = document.getElementById('ai-report-panel');
-  const view  = document.getElementById('ai-report-view');
-  if (!panel || !view) return;
-  panel.style.display = 'block';
-  view.innerHTML = `<div style="padding:2rem;text-align:center;color:var(--text-light)">Loading…</div>`;
-  panel.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  if (currentView !== 'ai-reports') navigateTo('ai-reports');
   try {
     const d = await api(`/api/ai-reports/${id}`);
-    const def = AI_REPORT_DEFS[d.report.type] || { label: d.report.type, color: 'var(--accent)', icon: '' };
-    _aiRenderReport(d.report, def);
-  } catch(e) {
-    view.innerHTML = `<div style="padding:2rem;color:var(--error)">${esc(e.message)}</div>`;
+    const report = d.report || {};
+    const def = AI_REPORT_DEFS[report.type] || { label: report.type };
+    _aiChat.push({ role: 'user', text: def.label });
+    _aiChat.push({
+      role: 'assistant',
+      html: _aiMarkdownToHtml(report.report || report.summary || ''),
+      regen: { type: report.type, parameters: report.parameters || {} },
+    });
+    _aiChatRepaint();
+  } catch (e) {
+    toastError(e.message || 'Failed to open report');
   }
 };
-
-function _aiRenderReport(report, def) {
-  const view = document.getElementById('ai-report-view');
-  if (!view) return;
-
-  // Convert markdown to simple HTML
-  const html = _aiMarkdownToHtml(report.report || '');
-  const when = report.createdAt ? new Date(report.createdAt).toLocaleString() : '';
-
-  view.innerHTML = `
-    <div style="display:flex;align-items:flex-start;justify-content:space-between;flex-wrap:wrap;gap:.75rem;margin-bottom:1.25rem;padding-bottom:1rem;border-bottom:1px solid var(--border)">
-      <div style="display:flex;align-items:center;gap:.65rem">
-        <div style="width:36px;height:36px;border-radius:9px;background:${def.color}20;display:flex;align-items:center;justify-content:center;flex-shrink:0">
-          ${svgIcon(def.icon, 17, def.color)}
-        </div>
-        <div>
-          <div style="font-weight:700;font-size:1rem">${def.label}</div>
-          ${when ? `<div style="font-size:.73rem;color:var(--text-muted)">${when}</div>` : ''}
-        </div>
-      </div>
-      <div style="display:flex;gap:.5rem">
-        <button class="btn btn-sm btn-ghost" style="font-size:.78rem" onclick="aiReportGenerate('${report.type}',${JSON.stringify(report.parameters||{})},true)">
-          ${svgIcon('<polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-.57-4.13"/>', 13)} Regenerate
-        </button>
-        <button class="btn btn-sm btn-ghost" style="font-size:.78rem" onclick="_aiCopyReport()">
-          ${svgIcon('<rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>', 13)} Copy
-        </button>
-      </div>
-    </div>
-    <div id="ai-report-body" style="line-height:1.75;font-size:.9rem">${html}</div>`;
-}
 
 function _aiMarkdownToHtml(md) {
   return md
@@ -26986,12 +27063,6 @@ function _aiMarkdownToHtml(md) {
     .replace(/\n/g, '<br>')
     + '';
 }
-
-window._aiCopyReport = function() {
-  const body = document.getElementById('ai-report-body');
-  if (!body) return;
-  navigator.clipboard?.writeText(body.innerText).then(() => toastSuccess('Report copied to clipboard'));
-};
 
 async function _aiShowCoursePickerModal(type) {
   let courses = [];
@@ -27151,6 +27222,23 @@ window._slCard = function(s) {
     </div>`;
 };
 
+// A free-text question asked from the modal (or the dashboard "Ask Dikly AI"
+// entry point) lands in the chat as the real question text, then answers.
+window._aiAskFromModal = function(question) {
+  const go = () => {
+    _aiChat.push({ role: 'user', text: question });
+    _aiChatRepaint();
+    _aiChatAsk('custom_query', { question });
+  };
+  if (currentView !== 'ai-reports') {
+    navigateTo('ai-reports');
+    // Let renderAIReports() build the thread first, then post into it.
+    setTimeout(go, 60);
+  } else {
+    go();
+  }
+};
+
 function _aiShowCustomQueryModal() {
   const overlay = document.createElement('div');
   overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:9999;display:flex;align-items:center;justify-content:center;padding:1rem';
@@ -27164,7 +27252,7 @@ function _aiShowCustomQueryModal() {
       <textarea id="ai-query-input" rows="4" placeholder="e.g. Which students in Level 300 had below 60% attendance last month?" style="width:100%;padding:.7rem;border-radius:8px;border:1px solid var(--border);background:var(--bg);color:var(--text);font-size:.88rem;resize:vertical;margin-bottom:1rem;font-family:inherit"></textarea>
       <div style="display:flex;gap:.5rem;justify-content:flex-end">
         <button class="btn btn-ghost" onclick="this.closest('[style*=position]').remove()">Cancel</button>
-        <button class="btn btn-primary" onclick="(()=>{const v=document.getElementById('ai-query-input')?.value?.trim();if(!v)return;this.closest('[style*=position]').remove();aiReportGenerate('custom_query',{question:v})})()">
+        <button class="btn btn-primary" onclick="(()=>{const v=document.getElementById('ai-query-input')?.value?.trim();if(!v)return;this.closest('[style*=position]').remove();_aiAskFromModal(v)})()">
           ${svgIcon('<path d="M15 4V2"/><path d="M15 16v-2"/><path d="M8 9h2"/><path d="M20 9h2"/><path d="M17.8 11.8 19 13"/><path d="M15 9h.01"/><path d="M17.8 6.2 19 5"/><path d="M13.2 6.2 12 5"/><path d="M3 21l9-9"/>', 13)}
           Ask AI
         </button>
