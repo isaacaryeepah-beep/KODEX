@@ -10,8 +10,18 @@ const AttendanceRecord  = require("../models/AttendanceRecord");
 const Conversation      = require("../models/Conversation");
 const Message           = require("../models/Message");
 const notificationService = require("../services/notificationService");
+const { SIX_HOURS_MS } = require("../middleware/deviceValidation");
 
 const isValidObjectId = (id) => mongoose.Types.ObjectId.isValid(id);
+
+// A student who simply logged out < 6h ago is blocked from marking
+// attendance/quizzes/meetings by enforceLogoutRestriction, even though
+// neither isLocked nor accountDeviceLock is set. Without this clause that
+// student never appears as "locked" and unlock actions 404/no-op against
+// them, leaving the restriction impossible for an HOD/admin to clear.
+function logoutCooldownClause(now) {
+  return { lastLogoutTime: { $gt: new Date(now.getTime() - SIX_HOURS_MS) } };
+}
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 function hodDeptFilter(req, base = {}) {
@@ -42,11 +52,12 @@ exports.listLockedStudents = async (req, res) => {
       $or: [
         { isLocked: true },
         { "accountDeviceLock.isLocked": true, "accountDeviceLock.lockedUntil": { $gt: now } },
+        logoutCooldownClause(now),
       ],
     };
 
     const students = await User.find(filter)
-      .select("name IndexNumber department lockReason lockedAt lockedBy failedLoginAttempts lastFailedLoginAt accountDeviceLock isLocked")
+      .select("name IndexNumber department lockReason lockedAt lockedBy failedLoginAttempts lastFailedLoginAt accountDeviceLock isLocked lastLogoutTime")
       .populate("lockedBy", "name role")
       .sort({ lockedAt: -1, "accountDeviceLock.lockedAt": -1 })
       .lean();
@@ -70,6 +81,7 @@ exports.unlockStudent = async (req, res) => {
       $or: [
         { isLocked: true },
         { "accountDeviceLock.isLocked": true, "accountDeviceLock.lockedUntil": { $gt: now } },
+        logoutCooldownClause(now),
       ],
     };
 
@@ -389,6 +401,7 @@ exports.bulkUnlockStudents = async (req, res) => {
       $or: [
         { isLocked: true },
         { "accountDeviceLock.isLocked": true, "accountDeviceLock.lockedUntil": { $gt: now } },
+        logoutCooldownClause(now),
       ],
     };
     const students = await User.find(filter).lean();
@@ -400,6 +413,7 @@ exports.bulkUnlockStudents = async (req, res) => {
           isLocked: false, lockedAt: null, lockReason: null, lockedBy: null,
           failedLoginAttempts: 0, lastFailedLoginAt: null,
           "accountDeviceLock.isLocked": false, "accountDeviceLock.lockedUntil": null,
+          lastLogoutTime: null,
         },
       }
     );

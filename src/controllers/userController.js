@@ -5,6 +5,7 @@ const Company = require("../models/Company");
 const Course = require("../models/Course");
 const { ROLE_HIERARCHY } = require("../middleware/role");
 const { getVisibleUserIds, getMyActiveHRAssignment } = require("../utils/corporateScope");
+const { SIX_HOURS_MS } = require("../middleware/deviceValidation");
 
 const ALLOWED_ROLES = ['student', 'lecturer', 'admin', 'superadmin', 'hod', 'manager', 'employee', 'class_rep'];
 
@@ -871,19 +872,31 @@ exports.unlockAccountDeviceLock = async (req, res) => {
     const user = await User.findOne({ _id: req.params.id, company: req.user.company });
     if (!user) return res.status(404).json({ error: "User not found" });
 
-    if (!user.accountDeviceLock?.isLocked) {
+    const hadDeviceLock = !!user.accountDeviceLock?.isLocked;
+    // A plain logout (no device/account lock) still leaves the 6-hour
+    // enforceLogoutRestriction cooldown active. Without this check, a user
+    // blocked only by that cooldown hits the early "not currently locked"
+    // return below and never gets unlocked.
+    const hasLogoutCooldown = !!(
+      user.lastLogoutTime &&
+      Date.now() - new Date(user.lastLogoutTime).getTime() < SIX_HOURS_MS
+    );
+
+    if (!hadDeviceLock && !hasLogoutCooldown) {
       return res.json({ message: "Account is not currently locked", alreadyUnlocked: true });
     }
 
-    user.accountDeviceLock = {
-      isLocked: false,
-      lockedAt: user.accountDeviceLock.lockedAt,
-      lockedUntil: user.accountDeviceLock.lockedUntil,
-      triggerDevice: user.accountDeviceLock.triggerDevice,
-      knownDevice: user.accountDeviceLock.knownDevice,
-      unlockedBy: req.user._id,
-      unlockedAt: new Date(),
-    };
+    if (hadDeviceLock) {
+      user.accountDeviceLock = {
+        isLocked: false,
+        lockedAt: user.accountDeviceLock.lockedAt,
+        lockedUntil: user.accountDeviceLock.lockedUntil,
+        triggerDevice: user.accountDeviceLock.triggerDevice,
+        knownDevice: user.accountDeviceLock.knownDevice,
+        unlockedBy: req.user._id,
+        unlockedAt: new Date(),
+      };
+    }
     // Also clear the post-logout attendance restriction so the student
     // can mark attendance immediately after being unlocked.
     user.lastLogoutTime = null;

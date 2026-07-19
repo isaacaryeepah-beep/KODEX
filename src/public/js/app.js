@@ -5253,6 +5253,10 @@ async function renderHodUnlockStudents() {
     function getLockInfo(s) {
       const hasDevice = s.accountDeviceLock?.isLocked && s.accountDeviceLock?.lockedUntil && new Date(s.accountDeviceLock.lockedUntil) > new Date();
       const hasLogin  = s.isLocked;
+      const cooldownUntil = s.lastLogoutTime ? new Date(new Date(s.lastLogoutTime).getTime() + 6*3600000) : null;
+      // Logging out alone (no device/login lock) still blocks attendance,
+      // quizzes and meetings for 6h — surface it so it can actually be unlocked.
+      const hasCooldown = !hasDevice && !hasLogin && cooldownUntil && cooldownUntil > new Date();
       let type, color, bg, border, reason;
       if (hasDevice && hasLogin) {
         type = 'Login + Device'; color = '#92400e'; bg = '#fef3c7'; border = '#fde68a';
@@ -5260,13 +5264,18 @@ async function renderHodUnlockStudents() {
       } else if (hasDevice) {
         type = 'New Device'; color = '#5b21b6'; bg = '#ede9fe'; border = '#c4b5fd';
         reason = `New device login detected — locked until ${new Date(s.accountDeviceLock.lockedUntil).toLocaleString([], {dateStyle:'short',timeStyle:'short'})}`;
+      } else if (hasCooldown) {
+        type = 'Post-Logout Wait'; color = '#1d4ed8'; bg = '#dbeafe'; border = '#93c5fd';
+        reason = `Logged out recently — attendance, quizzes and meetings blocked until ${cooldownUntil.toLocaleString([], {dateStyle:'short',timeStyle:'short'})}`;
       } else {
         type = 'Failed Login'; color = '#991b1b'; bg = '#fee2e2'; border = '#fca5a5';
         reason = s.lockReason || 'Too many failed login attempts';
       }
       const since = hasDevice && !hasLogin
         ? (s.accountDeviceLock.lockedUntil ? timeAgo(new Date(s.accountDeviceLock.lockedUntil).getTime() - 6*3600000) : '—')
-        : (s.lockedAt ? timeAgo(s.lockedAt) : '—');
+        : hasCooldown
+          ? (s.lastLogoutTime ? timeAgo(s.lastLogoutTime) : '—')
+          : (s.lockedAt ? timeAgo(s.lockedAt) : '—');
       return { type, color, bg, border, reason, since };
     }
 
@@ -5278,7 +5287,7 @@ async function renderHodUnlockStudents() {
         <div>
           <h2 style="margin:0 0 2px;">Locked Student Accounts</h2>
           <p style="margin:0;color:var(--text-muted);font-size:13px;">
-            ${students.length === 0 ? 'All accounts are clear' : `${students.length} account${students.length !== 1 ? 's' : ''} locked · Failed logins &amp; new device locks`}
+            ${students.length === 0 ? 'All accounts are clear' : `${students.length} account${students.length !== 1 ? 's' : ''} locked · Failed logins, new device &amp; post-logout waits`}
           </p>
         </div>
         ${students.length > 1 ? `<button class="btn btn-danger btn-sm" onclick="hodBulkUnlockSelected()" id="hod-bulk-btn" style="display:none;gap:6px;align-items:center;">
