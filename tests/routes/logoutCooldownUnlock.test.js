@@ -225,3 +225,58 @@ describe("post-logout cooldown visibility + unlock", () => {
     expect(fresh.accountDeviceLock.isLocked).toBe(false);
   });
 });
+
+// Logging out and straight back in on the SAME phone used to leave the
+// 6-hour cooldown armed — the student was blocked from attendance on the
+// very device they never let go of. Re-login from an already-trusted
+// device now clears it; a new device does not (it gets the separate
+// accountDeviceLock instead).
+describe("same-device re-login clears the post-logout cooldown", () => {
+  test("re-login on a trusted device clears lastLogoutTime", async () => {
+    const s = await makeStudent();
+
+    // First login registers the device as trusted (first device ever)
+    const first = await request(app).post("/api/auth/login")
+      .send({ email: s.email, password: STUDENT_PASSWORD, loginRole: "student", deviceId: "dev-same-1" });
+    expect(first.status).toBe(200);
+
+    // Simulate a logout that armed the cooldown
+    await User.findByIdAndUpdate(s._id, { lastLogoutTime: new Date(), deviceId: null });
+
+    const again = await request(app).post("/api/auth/login")
+      .send({ email: s.email, password: STUDENT_PASSWORD, loginRole: "student", deviceId: "dev-same-1" });
+    expect(again.status).toBe(200);
+
+    const fresh = await User.findById(s._id);
+    expect(fresh.lastLogoutTime).toBeNull();
+  });
+
+  test("re-login on a NEW device keeps the cooldown and adds the device lock", async () => {
+    const s = await makeStudent();
+
+    const first = await request(app).post("/api/auth/login")
+      .send({ email: s.email, password: STUDENT_PASSWORD, loginRole: "student", deviceId: "dev-original" });
+    expect(first.status).toBe(200);
+
+    await User.findByIdAndUpdate(s._id, { lastLogoutTime: new Date(), deviceId: null });
+
+    const other = await request(app).post("/api/auth/login")
+      .send({ email: s.email, password: STUDENT_PASSWORD, loginRole: "student", deviceId: "dev-intruder" });
+    expect(other.status).toBe(200);
+
+    const fresh = await User.findById(s._id);
+    expect(fresh.lastLogoutTime).not.toBeNull();
+    expect(fresh.accountDeviceLock.isLocked).toBe(true);
+  });
+
+  test("login without a deviceId leaves the cooldown untouched", async () => {
+    const s = await makeStudent({ lastLogoutTime: new Date() });
+
+    const res = await request(app).post("/api/auth/login")
+      .send({ email: s.email, password: STUDENT_PASSWORD, loginRole: "student" });
+    expect(res.status).toBe(200);
+
+    const fresh = await User.findById(s._id);
+    expect(fresh.lastLogoutTime).not.toBeNull();
+  });
+});

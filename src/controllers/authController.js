@@ -1148,6 +1148,17 @@ exports.login = async (req, res) => {
           }
         }
 
+        // Logging back in on a device this account already trusts means the
+        // owner has their own phone — the post-logout attendance cooldown
+        // exists to stop a logout on one device being followed by marking
+        // from somewhere else, so it has nothing to guard here. Without
+        // this, a student who logs out and straight back in on the same
+        // phone loses attendance/quizzes/meetings for 6 hours. A NEW
+        // device still gets the full accountDeviceLock below.
+        if (isLockableRole && user.lastLogoutTime) {
+          user.lastLogoutTime = null;
+        }
+
       } else if (user.trustedDevices.length === 0) {
         // First device ever — add silently, no lock for any role
         user.trustedDevices.push({
