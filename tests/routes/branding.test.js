@@ -137,9 +137,14 @@ describe("/api/advanced/branding — open to academic mode", () => {
   });
 
   test("a corporate-only route (GET /api/advanced/branches) still rejects academic mode", async () => {
+    // Use the lecturer, not the admin: requireMode() exempts admin/superadmin
+    // entirely (see middleware/role.js), so an academic admin reaches every
+    // mode-gated route regardless. A non-admin academic user is what the
+    // corporate mode gate actually blocks — proving the gate is still in
+    // place on /branches (i.e. the branding change didn't over-open it).
     const res = await request(app)
       .get("/api/advanced/branches")
-      .set("Authorization", `Bearer ${adminToken}`);
+      .set("Authorization", `Bearer ${lecturerToken}`);
     expect(res.status).toBe(403);
   });
 });
