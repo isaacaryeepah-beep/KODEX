@@ -110,6 +110,23 @@ exports.startSession = async (req, res) => {
       return res.status(404).json({ error: "Company not found or inactive" });
     }
 
+    // ── One session at a time per creator ────────────────────────────────────
+    // A second running session splits student marks between two open windows
+    // and makes "which one do I mark?" ambiguous. Applies to both the GPS
+    // and device paths below — stop (or let expire) the running one first.
+    const runningSession = await AttendanceSession.findOne({
+      company: companyId,
+      createdBy: req.user._id,
+      status: { $in: ["active", "live", "paused", "locked"] },
+    }).select("title startedAt").lean();
+    if (runningSession) {
+      return res.status(409).json({
+        error: "You already have a session running",
+        message: `"${runningSession.title || "Untitled session"}" (started ${new Date(runningSession.startedAt).toLocaleTimeString()}) is still open. Stop it before starting a new one.`,
+        activeSessionId: runningSession._id,
+      });
+    }
+
     // ── GPS geofence mode (hardware-free backup) ─────────────────────────────
     // Lecturer-selectable alternative to the ESP32 flow: the session is
     // anchored to a lat/lng + radius and students mark by submitting their own
@@ -613,7 +630,9 @@ exports.getActiveSession = async (req, res) => {
         const dev = await Device.findOne({ deviceId: session.deviceId, companyId: req.user.company }).select('localIp').lean();
         deviceLocalIp = dev?.localIp || null;
       }
-      return res.json({ session: session || null, deviceLocalIp });
+      // serverNow lets the client render an accurate countdown regardless of
+      // how wrong the phone's clock is (skew-corrected against server time).
+      return res.json({ session: session || null, deviceLocalIp, serverNow: new Date().toISOString() });
     }
 
     const session = await AttendanceSession.findOne(activeFilter)
@@ -627,10 +646,73 @@ exports.getActiveSession = async (req, res) => {
       const sessionDevice = await Device.findOne({ deviceId: session.deviceId, companyId: req.user.company }).select('localIp').lean();
       deviceLocalIp = sessionDevice?.localIp || null;
     }
-    res.json({ session: session || null, deviceLocalIp });
+    res.json({ session: session || null, deviceLocalIp, serverNow: new Date().toISOString() });
   } catch (error) {
     console.error("Active session error:", error);
     res.status(500).json({ error: "Failed to fetch active session" });
+  }
+};
+
+// ── POST /:id/extend — add time to a running session's marking window ────────
+// Allowed: the session's creator, admin/superadmin/HOD, or a class rep
+// (student with isClassRep) enrolled in the session's course. If the window
+// already closed (but the session wasn't stopped), extension counts from NOW,
+// so "add 5 minutes" always means 5 more minutes of marking.
+exports.extendSession = async (req, res) => {
+  try {
+    const { id } = req.params;
+    if (!validateObjectId(res, id, "session ID")) return;
+
+    const addMinutes = Math.round(Number(req.body.addMinutes));
+    if (!Number.isFinite(addMinutes) || addMinutes < 1 || addMinutes > 120) {
+      return res.status(400).json({ error: "addMinutes must be between 1 and 120" });
+    }
+
+    const session = await AttendanceSession.findOne({
+      _id: id,
+      company: req.user.company,
+      status: { $in: ["active", "live", "paused", "locked"] },
+    });
+    if (!session) return res.status(404).json({ error: "No running session found" });
+
+    const role = req.user.role;
+    let allowed =
+      ["admin", "superadmin", "hod"].includes(role) ||
+      session.createdBy.toString() === req.user._id.toString();
+    if (!allowed && role === "student" && session.course) {
+      const me = await User.findById(req.user._id).select("isClassRep").lean();
+      if (me?.isClassRep) {
+        const Course = require("../models/Course");
+        const enrolled = await Course.findOne({
+          _id: session.course,
+          companyId: req.user.company,
+          enrolledStudents: req.user._id,
+        }).select("_id").lean();
+        allowed = !!enrolled;
+      }
+    }
+    if (!allowed) {
+      return res.status(403).json({ error: "Only the lecturer who started the session, a class rep of this course, or an admin can add time." });
+    }
+
+    const startedMs = new Date(session.startedAt).getTime();
+    const closeAt = startedMs + (session.durationSeconds || 300) * 1000;
+    const base = Math.max(closeAt, Date.now());
+    const newCloseAt = base + addMinutes * 60 * 1000;
+    session.durationSeconds = Math.round((newCloseAt - startedMs) / 1000);
+    await session.save();
+
+    console.log(`[SESSION EXTEND] "${session.title || 'Untitled'}" +${addMinutes}min by ${req.user.name} (${role}) — closes ${new Date(newCloseAt).toISOString()}`);
+    res.json({
+      ok: true,
+      addedMinutes: addMinutes,
+      durationSeconds: session.durationSeconds,
+      closesAt: new Date(newCloseAt).toISOString(),
+      serverNow: new Date().toISOString(),
+    });
+  } catch (error) {
+    console.error("Extend session error:", error);
+    res.status(500).json({ error: "Failed to extend session" });
   }
 };
 

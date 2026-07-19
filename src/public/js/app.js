@@ -3260,6 +3260,7 @@ function buildSidebar() {
     case 'lecturer':
       links.push({ id: 'sessions', label: 'Sessions', icon: sessionsIcon() });
       links.push({ id: 'attendance-device', label: 'Attendance Device', icon: svgIcon('<rect x="5" y="2" width="14" height="20" rx="2" ry="2"/><line x1="12" y1="18" x2="12.01" y2="18"/>') });
+      links.push({ id: 'lecturer-attendance-settings', label: 'Attendance Settings', icon: svgIcon('<circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>') });
       links.push({ id: 'arrival-iq', label: 'ArrivalIQ', icon: svgIcon('<path d="M3 11l19-9-9 19-2-8-8-2z"/>') });
       links.push({ sep: true, label: 'CONTENT' });
       links.push({ id: 'search', label: 'Search', icon: svgIcon('<circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>') });
@@ -3658,6 +3659,7 @@ function navigateTo(view) {
     case 'corp-attendance': renderCorporateAttendance(); break;
     case 'corp-clock-settings': renderCorpClockSettings(); break;
     case 'attendance-settings': renderAcademicAttendanceSettings(); break;
+    case 'lecturer-attendance-settings': renderLecturerAttendanceSettings(); break;
     case 'arrival-iq-settings': renderArrivalIQSettings(); break;
     case 'api-access': renderApiAccess(); break;
     case 'arrival-iq': renderArrivalIQ(); break;
@@ -6260,7 +6262,28 @@ async function renderSuperadminDashboard(content) {
         <span style="display:flex;align-items:center;padding:0 11px;font-size:12.5px;font-weight:600;color:${C.muted};background:#FAFBFC;border-right:1px solid ${C.line}">${unit}</span>
         <input type="number" min="0" id="${id}" value="${val}" style="flex:1;width:100%;min-width:0;border:none;outline:none;padding:9px 12px;font-size:14px;color:${C.ink};background:transparent;text-align:right;font-variant-numeric:tabular-nums">
       </div>`;
+
+    // Global subscription enforcement kill-switch
+    let enfEnabled = true;
+    try { enfEnabled = (await api('/api/superadmin/subscription-enforcement')).enabled !== false; } catch(_) {}
+    const enfCard = `
+      <div style="background:${enfEnabled ? C.surface : '#FFFBEB'};border:1px solid ${enfEnabled ? C.line : '#FDE68A'};border-radius:12px;box-shadow:0 1px 2px rgba(16,24,40,.05);margin-bottom:18px;padding:18px 22px;display:flex;align-items:center;justify-content:space-between;gap:14px;flex-wrap:wrap">
+        <div style="flex:1;min-width:240px">
+          <div style="font-size:15px;font-weight:700;color:${C.ink};margin-bottom:4px">Subscription enforcement
+            <span style="font-size:10.5px;font-weight:700;padding:2px 8px;border-radius:12px;margin-left:6px;background:${enfEnabled ? '#ECFDF3' : '#FEF3C7'};color:${enfEnabled ? '#067647' : '#92400E'}">${enfEnabled ? 'ON' : 'OFF'}</span>
+          </div>
+          <div style="color:${C.muted};font-size:13px;line-height:1.55">${enfEnabled
+            ? 'Expired trials and unpaid subscriptions are blocked platform-wide (the normal state).'
+            : 'Enforcement is OFF — nobody is blocked for an expired trial or unpaid subscription, on any institution. Prices and banners still display, but nothing is locked.'}</div>
+        </div>
+        <button id="sa-enf-btn" onclick="window._saToggleEnforcement(${enfEnabled ? 'false' : 'true'})"
+          style="background:${enfEnabled ? '#B42318' : C.green};color:#fff;border:none;border-radius:8px;padding:10px 20px;font-size:13.5px;font-weight:700;cursor:pointer;box-shadow:0 1px 2px rgba(16,24,40,.05);flex-shrink:0">
+          ${enfEnabled ? 'Turn enforcement OFF' : 'Turn enforcement ON'}
+        </button>
+      </div>`;
+
     return `
+      ${enfCard}
       <div style="background:${C.surface};border:1px solid ${C.line};border-radius:12px;box-shadow:0 1px 2px rgba(16,24,40,.05);margin-bottom:18px;overflow:hidden">
         <div style="padding:18px 22px 0">
           <div style="font-size:15px;font-weight:700;color:${C.ink};margin-bottom:4px">Subscription prices</div>
@@ -6382,6 +6405,19 @@ async function renderSuperadminDashboard(content) {
       saShowToast('Failed to save rate: ' + (e.message || 'unknown error'));
     }
     if (currentTab === 'institutions') { const body = document.getElementById('sa-body'); if (body) body.innerHTML = renderInstTab(); }
+  };
+
+  window._saToggleEnforcement = async (enable) => {
+    const btn = document.getElementById('sa-enf-btn');
+    if (btn) { btn.disabled = true; btn.textContent = 'Applying…'; }
+    try {
+      await api('/api/superadmin/subscription-enforcement', { method: 'PATCH', body: JSON.stringify({ enabled: enable }) });
+      saShowToast(`Subscription enforcement turned ${enable ? 'ON' : 'OFF'} platform-wide`);
+      drawTab('adjuster');
+    } catch (e) {
+      if (btn) { btn.disabled = false; btn.textContent = enable ? 'Turn enforcement ON' : 'Turn enforcement OFF'; }
+      saShowToast('Failed: ' + (e.message || 'unknown error'));
+    }
   };
 
   window._saSaveSubPrices = async () => {
@@ -8433,6 +8469,7 @@ function _renderSessionsHTML(content, sessions, isOffline, extras) {
               <td>${s.stoppedAt ? new Date(s.stoppedAt).toLocaleString() : '-'}</td>
               <td>${['active','live','paused','locked'].includes(s.status) && canStart ? `
                 <button class="btn btn-danger btn-sm" onclick="stopSession('${s._id}')">Stop</button>
+                ${!isOffline ? `<button class="btn btn-sm" style="background:#0e9384;color:#fff;font-size:11px" onclick="_extendSessionPrompt('${s._id}')" title="Add time to the marking window">⏱ +Time</button>` : ''}
                 ${!isOffline ? `<button class="btn btn-sm" style="background:#7c3aed;color:#fff;font-size:11px" onclick="generateVerbalCode('${s._id}')">Verbal Code</button>` : ''}
                 <button class="btn btn-sm" style="font-size:11px;background:var(--bg);border:1px solid var(--border)" onclick="viewAttendees('${s._id}', '${(s.title||'Session').replace(/['\''\'']/g,'')}')">Attendees</button>
                 ${isLecturer && !isOffline ? `<button class="btn btn-sm" style="font-size:11px;background:#059669;color:#fff" onclick="showLecturerUnlockModal()" title="Unlock students in this class who are blocked by a device or post-logout lock">🔓 Unlock</button>` : ''}
@@ -8873,6 +8910,12 @@ async function showGpsSessionModal() {
   const hasCampus = campus.campusLatitude != null && campus.campusLongitude != null;
   const defaultRadius = campus.defaultGeofenceRadiusMeters || 100;
 
+  // The lecturer's own saved class locations (multi-campus teaching) —
+  // managed on their Attendance Settings page.
+  let savedLocs = [];
+  try { savedLocs = (await api('/api/users/me/class-locations')).locations || []; } catch (_) {}
+  window._gpsSavedLocs = savedLocs;
+
   let loc;
   try {
     loc = await _getGPSLocation();
@@ -8927,20 +8970,30 @@ async function showGpsSessionModal() {
   const radiusOpts = (radiusPresets.includes(defaultRadius) ? radiusPresets : [defaultRadius, ...radiusPresets])
     .map(r => `<option value="${r}" ${r === defaultRadius ? 'selected' : ''}>${radiusLabels[r] || (r + ' m')}</option>`).join('');
 
-  // If a campus center is configured, let the lecturer anchor the session to it
-  // (admin-set boundary) instead of their own live position.
-  const centerChoice = hasCampus ? `
+  // Class center choices: the lecturer's live position, any of their own
+  // saved locations (multi-campus), and the admin-set campus default.
+  const centerChoice = (hasCampus || savedLocs.length) ? `
     <div class="form-group">
-      <label>Class Center</label>
-      <div style="display:flex;flex-direction:column;gap:6px;margin-top:4px">
+      <label style="display:flex;align-items:center;justify-content:space-between">Class Center
+        <span style="font-size:11.5px;font-weight:600;color:var(--primary);cursor:pointer" onclick="closeModal();navigateTo('lecturer-attendance-settings')">Manage my locations →</span>
+      </label>
+      <div style="display:flex;flex-direction:column;gap:6px;margin-top:4px;max-height:180px;overflow-y:auto">
         <label style="display:flex;align-items:center;gap:8px;font-size:13px;cursor:pointer;font-weight:400">
           <input type="radio" name="gps-center" value="me" checked> My current location (±${Math.round(loc.accuracy)}m)
         </label>
+        ${savedLocs.map((l, i) => `
+        <label style="display:flex;align-items:center;gap:8px;font-size:13px;cursor:pointer;font-weight:400">
+          <input type="radio" name="gps-center" value="loc-${i}"> 📌 ${esc(l.name)}
+        </label>`).join('')}
+        ${hasCampus ? `
         <label style="display:flex;align-items:center;gap:8px;font-size:13px;cursor:pointer;font-weight:400">
           <input type="radio" name="gps-center" value="campus"> Campus location (set by admin)
-        </label>
+        </label>` : ''}
       </div>
-    </div>` : '';
+    </div>` : `
+    <div style="font-size:11.5px;color:var(--text-muted);margin:-4px 0 12px">
+      Teaching on several campuses? <span style="color:var(--primary);font-weight:600;cursor:pointer" onclick="closeModal();navigateTo('lecturer-attendance-settings')">Save your class locations →</span>
+    </div>`;
 
   container.innerHTML = `
     <div class="modal-overlay" onclick="closeModal(event)">
@@ -8982,12 +9035,15 @@ async function startGpsSession(latitude, longitude, campusLat = null, campusLng 
   const title    = document.getElementById('gps-session-title')?.value?.trim() || '';
   if (!courseId) { toastWarning('Please select a course.'); return; }
 
-  // Honour the "Class Center" choice — the admin-set campus center, or the
-  // lecturer's own live position (the default).
+  // Honour the "Class Center" choice — the admin-set campus center, one of
+  // the lecturer's own saved locations, or their live position (the default).
   let lat = latitude, lng = longitude;
   const centerChoice = document.querySelector('input[name="gps-center"]:checked')?.value;
   if (centerChoice === 'campus' && campusLat != null && campusLng != null) {
     lat = campusLat; lng = campusLng;
+  } else if (centerChoice?.startsWith('loc-')) {
+    const saved = (window._gpsSavedLocs || [])[Number(centerChoice.slice(4))];
+    if (saved) { lat = saved.latitude; lng = saved.longitude; }
   }
   try {
     await api('/api/attendance-sessions/start', {
@@ -15147,6 +15203,38 @@ window.crConnectWifi = async function(localIp, ssid, idx, isOpen = false) {
 };
 // ─────────────────────────────────────────────────────────────────────────────
 // ── GPS geofence check-in (student side) ─────────────────────────────────────
+// Marking-window helpers — the window is startedAt + durationSeconds,
+// enforced server-side; countdowns are rendered against the server clock
+// (skew captured when /active is fetched) so they match reality.
+function _sessionCloseMs(session) {
+  if (!session?.startedAt || !session?.durationSeconds) return null;
+  return new Date(session.startedAt).getTime() + session.durationSeconds * 1000;
+}
+function _srvNowMs() { return Date.now() + (window._srvClockSkewMs || 0); }
+
+let _gpsWinTimer = null;
+function _startGpsWindowTimer(session) {
+  if (_gpsWinTimer) { clearInterval(_gpsWinTimer); _gpsWinTimer = null; }
+  const closeMs = _sessionCloseMs(session);
+  if (!closeMs) return;
+  const tick = () => {
+    const el = document.getElementById('gps-window-chip');
+    if (!el) { clearInterval(_gpsWinTimer); _gpsWinTimer = null; return; }
+    const left = closeMs - _srvNowMs();
+    if (left <= 0) {
+      clearInterval(_gpsWinTimer); _gpsWinTimer = null;
+      renderMarkAttendance();
+      return;
+    }
+    const m = Math.floor(left / 60000);
+    const s = Math.floor((left % 60000) / 1000);
+    el.textContent = `⏱ Window closes in ${m}:${String(s).padStart(2, '0')}`;
+    el.style.color = left < 60000 ? '#dc2626' : left < 3 * 60000 ? '#b45708' : '';
+  };
+  tick();
+  _gpsWinTimer = setInterval(tick, 1000);
+}
+
 async function _renderGpsMarkAttendance(session) {
   const content = document.getElementById('main-content');
   if (!content) return;
@@ -15158,12 +15246,20 @@ async function _renderGpsMarkAttendance(session) {
       .catch(() => false);
   }
 
+  const closeMs = _sessionCloseMs(session);
+  const windowClosed = closeMs != null && _srvNowMs() > closeMs;
+  const isRep = !!currentUser?.isClassRep;
+  const repExtendBtn = isRep
+    ? `<button class="btn btn-secondary btn-sm" style="margin-top:12px" onclick="_extendSessionPrompt('${session._id}')">⏱ Add time (class rep)</button>`
+    : '';
+
   content.innerHTML = `
     <div class="page-header"><h2>Mark Attendance</h2><p>GPS check-in session</p></div>
     <div class="card" style="border-left:4px solid var(--primary);margin-bottom:16px;padding:14px 16px">
       <div style="font-size:11px;text-transform:uppercase;color:var(--primary);font-weight:700">Active Session · GPS Check-in</div>
       <div style="font-size:16px;font-weight:700;margin-top:4px">${esc(session.title || session.course?.title || 'Attendance Session')}</div>
       <div style="font-size:12px;color:var(--text-muted);margin-top:2px">Started ${new Date(session.startedAt).toLocaleTimeString()} · you must be within ${session.geoRadiusMeters}m of the class</div>
+      ${closeMs != null && !windowClosed ? `<div id="gps-window-chip" style="font-size:12.5px;font-weight:700;margin-top:6px"></div>` : ''}
     </div>
     ${alreadyMarked ? `
       <div class="card" style="text-align:center;padding:40px 20px;border-left:4px solid var(--success)">
@@ -15171,6 +15267,16 @@ async function _renderGpsMarkAttendance(session) {
         <div style="font-size:18px;font-weight:700;color:var(--success)">Already Marked</div>
         <p style="font-size:13px;color:var(--text-light);margin-top:6px">You've checked in to this session.</p>
         <button class="btn btn-primary btn-sm" style="margin-top:16px" onclick="navigateTo('my-attendance')">View My Attendance</button>
+        ${repExtendBtn}
+      </div>` : windowClosed ? `
+      <div class="card" style="text-align:center;padding:40px 20px;border-left:4px solid #f59e0b">
+        <div style="font-size:52px;margin-bottom:12px">⏱</div>
+        <div style="font-size:18px;font-weight:700">Marking Window Closed</div>
+        <p style="font-size:13px;color:var(--text-light);margin-top:6px;max-width:320px;margin-left:auto;margin-right:auto;line-height:1.7">
+          The check-in window for this session has ended.${isRep ? ' As class rep you can add more time below.' : ' Ask your lecturer or class rep to add time.'}
+        </p>
+        ${repExtendBtn}
+        <div><button class="btn btn-primary btn-sm" style="margin-top:12px" onclick="renderMarkAttendance()">↻ Refresh</button></div>
       </div>` : `
       <div class="card" style="text-align:center;padding:40px 20px">
         <div style="font-size:52px;margin-bottom:14px">📍</div>
@@ -15181,9 +15287,50 @@ async function _renderGpsMarkAttendance(session) {
         </p>
         <div id="gps-mark-status" style="font-size:12px;color:var(--text-light);margin-top:14px"></div>
         <button class="btn btn-primary" id="gps-mark-btn" style="margin-top:14px" onclick="_gpsMarkCheckIn('${session._id}')">📍 Check In Now</button>
+        ${repExtendBtn}
       </div>`}
   `;
+  if (!windowClosed) _startGpsWindowTimer(session);
 }
+
+// ── Add-time modal (lecturer, class rep, admin/HOD) ──────────────────────────
+window._extendSessionPrompt = function(sessionId) {
+  const container = document.getElementById('modal-container');
+  if (!container) return;
+  container.classList.remove('hidden');
+  const opts = [5, 10, 15, 30].map(m =>
+    `<button class="btn btn-secondary" style="flex:1;min-width:70px" onclick="_extendSessionDo('${sessionId}', ${m}, this)">+${m} min</button>`
+  ).join('');
+  container.innerHTML = `
+    <div class="modal-overlay" onclick="closeModal(event)">
+      <div class="modal" onclick="event.stopPropagation()" style="max-width:400px;text-align:center">
+        <h3 style="margin-bottom:4px">Add Time</h3>
+        <p style="font-size:12.5px;color:var(--text-muted);margin-bottom:16px">Extends the marking window so students can still check in.</p>
+        <div style="display:flex;gap:8px;flex-wrap:wrap">${opts}</div>
+        <div style="text-align:right;margin-top:16px">
+          <button class="btn btn-secondary btn-sm" onclick="closeModal()">Cancel</button>
+        </div>
+      </div>
+    </div>`;
+};
+
+window._extendSessionDo = async function(sessionId, minutes, btn) {
+  if (btn) { btn.disabled = true; btn.textContent = 'Adding…'; }
+  try {
+    const r = await api(`/api/attendance-sessions/${sessionId}/extend`, {
+      method: 'POST',
+      body: JSON.stringify({ addMinutes: minutes }),
+    });
+    if (r.serverNow) window._srvClockSkewMs = new Date(r.serverNow).getTime() - Date.now();
+    closeModal();
+    toastSuccess(`Added ${minutes} minutes — window now closes at ${new Date(r.closesAt).toLocaleTimeString([], {hour:'numeric',minute:'2-digit'})}`);
+    if (currentUser?.role === 'student') renderMarkAttendance();
+    else if (typeof renderSessions === 'function') renderSessions();
+  } catch (e) {
+    if (btn) { btn.disabled = false; btn.textContent = `+${minutes} min`; }
+    toastError(e.message || 'Failed to add time');
+  }
+};
 
 window._gpsMarkCheckIn = async function(sessionId) {
   const btn = document.getElementById('gps-mark-btn');
@@ -15242,6 +15389,9 @@ async function renderMarkAttendance() {
     try {
       const data = await api('/api/attendance-sessions/active');
       serverSession = data.session;
+      // Clock-skew correction for the marking-window countdown: the window is
+      // enforced with the SERVER's clock, so render it with the server's clock.
+      if (data.serverNow) window._srvClockSkewMs = new Date(data.serverNow).getTime() - Date.now();
       if (serverSession) offlineCache('activeSession', serverSession);
     } catch (e) { /* server unreachable */ }
   } else {
@@ -20560,6 +20710,122 @@ async function renderCorpClockSettings() {
 // clock-in geofence + WiFi/time windows, academic admins configure a campus
 // center + default GPS check-in radius that the hardware-free GPS session flow
 // pre-fills, plus whether a classroom device is required.
+// ── Lecturer Attendance Settings — personal saved class locations ────────────
+// A lecturer teaching on several campuses saves each spot once; the saved
+// list appears as "Class Center" choices when starting a GPS session.
+async function renderLecturerAttendanceSettings() {
+  const content = document.getElementById('main-content');
+  if (!content) return;
+  content.innerHTML = '<div class="loading">Loading your locations…</div>';
+  try {
+    const { locations = [] } = await api('/api/users/me/class-locations').catch(() => ({ locations: [] }));
+
+    const rows = locations.map(l => `
+      <div style="display:flex;align-items:center;gap:10px;padding:11px 0;border-bottom:1px solid var(--border)">
+        <span style="font-size:18px;flex-shrink:0">📌</span>
+        <div style="flex:1;min-width:0">
+          <div style="font-weight:600;font-size:13.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(l.name)}</div>
+          <div style="font-size:11.5px;color:var(--text-muted);font-family:monospace">${Number(l.latitude).toFixed(5)}, ${Number(l.longitude).toFixed(5)} · ${l.radiusMeters || 100}m radius</div>
+        </div>
+        <button class="btn btn-sm" style="background:#fee2e2;color:#b42318;font-size:11.5px;flex-shrink:0" onclick="_lasDelete('${l._id}', this)">Delete</button>
+      </div>`).join('');
+
+    content.innerHTML = `
+      <div class="page-header" style="display:flex;align-items:flex-start;justify-content:space-between;flex-wrap:wrap;gap:12px;">
+        <div>
+          <h2>Attendance Settings</h2>
+          <p>Save the places you teach — pick one as the class center when starting a GPS check-in session.</p>
+        </div>
+        <button class="btn btn-secondary btn-sm" onclick="navigateTo('sessions')">← Sessions</button>
+      </div>
+
+      <div class="card" style="max-width:600px;margin-bottom:20px">
+        <h3 style="font-size:15px;font-weight:700;margin-bottom:4px">My Class Locations</h3>
+        <p style="font-size:12px;color:var(--text-light);margin-bottom:6px">Useful when you teach on more than one campus. Students must be inside the chosen radius to check in.</p>
+        ${locations.length ? rows : '<div style="font-size:13px;color:var(--text-muted);padding:14px 0">No saved locations yet — add your first below.</div>'}
+      </div>
+
+      <div class="card" style="max-width:600px">
+        <h3 style="font-size:15px;font-weight:700;margin-bottom:10px">Add a Location</h3>
+        <div class="form-group">
+          <label>Name <span style="color:red">*</span></label>
+          <input id="las-name" type="text" maxlength="60" placeholder="e.g. Main Campus – Lecture Theatre 1">
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px">
+          <div>
+            <label style="font-size:11px;font-weight:700;text-transform:uppercase;color:var(--text-muted)">Latitude</label>
+            <input id="las-lat" type="number" step="any" placeholder="e.g. 5.6037" style="width:100%;padding:8px;border:1px solid var(--border);border-radius:6px;font-size:13px">
+          </div>
+          <div>
+            <label style="font-size:11px;font-weight:700;text-transform:uppercase;color:var(--text-muted)">Longitude</label>
+            <input id="las-lng" type="number" step="any" placeholder="e.g. -0.1870" style="width:100%;padding:8px;border:1px solid var(--border);border-radius:6px;font-size:13px">
+          </div>
+        </div>
+        <button class="btn btn-secondary btn-sm" style="margin-bottom:12px" onclick="_lasDetect(this)">📍 Use my current location</button>
+        <div class="form-group">
+          <label>Check-in Radius</label>
+          <select id="las-radius" style="width:100%;padding:9px 12px;border:1.5px solid var(--border);border-radius:8px;font-size:13px">
+            <option value="50">50 m — single classroom</option>
+            <option value="100" selected>100 m — building</option>
+            <option value="200">200 m — large hall / block</option>
+            <option value="500">500 m — campus area</option>
+          </select>
+        </div>
+        <div id="las-status" style="font-size:12px;color:var(--text-muted);margin-bottom:10px"></div>
+        <button class="btn btn-primary btn-sm" onclick="_lasAdd(this)">Save Location</button>
+      </div>
+    `;
+  } catch (e) {
+    content.innerHTML = `<div class="card"><p>Error: ${esc(e.message)}</p></div>`;
+  }
+}
+
+window._lasDetect = async function(btn) {
+  const label = btn?.textContent;
+  if (btn) { btn.disabled = true; btn.textContent = 'Detecting…'; }
+  try {
+    const loc = await _getGPSLocation();
+    document.getElementById('las-lat').value = loc.latitude;
+    document.getElementById('las-lng').value = loc.longitude;
+    const st = document.getElementById('las-status');
+    if (st) st.textContent = `Position captured (±${Math.round(loc.accuracy)}m)`;
+  } catch (e) {
+    _showGPSBlockedModal ? _showGPSBlockedModal(e.message) : toastError(e.message);
+  } finally {
+    if (btn) { btn.disabled = false; btn.textContent = label; }
+  }
+};
+
+window._lasAdd = async function(btn) {
+  const name = document.getElementById('las-name')?.value?.trim();
+  const latitude = Number(document.getElementById('las-lat')?.value);
+  const longitude = Number(document.getElementById('las-lng')?.value);
+  const radiusMeters = Number(document.getElementById('las-radius')?.value) || 100;
+  if (!name) { toastWarning('Give this location a name.'); return; }
+  if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) { toastWarning('Set the coordinates — tap "Use my current location" while standing there.'); return; }
+  if (btn) { btn.disabled = true; btn.textContent = 'Saving…'; }
+  try {
+    await api('/api/users/me/class-locations', { method: 'POST', body: JSON.stringify({ name, latitude, longitude, radiusMeters }) });
+    toastSuccess('Location saved');
+    renderLecturerAttendanceSettings();
+  } catch (e) {
+    toastError(e.message || 'Failed to save location');
+    if (btn) { btn.disabled = false; btn.textContent = 'Save Location'; }
+  }
+};
+
+window._lasDelete = async function(locId, btn) {
+  if (btn) { btn.disabled = true; btn.textContent = '…'; }
+  try {
+    await api(`/api/users/me/class-locations/${locId}`, { method: 'DELETE' });
+    toastSuccess('Location removed');
+    renderLecturerAttendanceSettings();
+  } catch (e) {
+    toastError(e.message || 'Failed to delete location');
+    if (btn) { btn.disabled = false; btn.textContent = 'Delete'; }
+  }
+};
+
 async function renderAcademicAttendanceSettings() {
   const content = document.getElementById('main-content');
   if (!content) return;

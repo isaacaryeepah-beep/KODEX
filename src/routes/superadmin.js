@@ -160,6 +160,33 @@ router.get("/overview", async (req, res) => {
   }
 });
 
+// ── Subscription enforcement kill-switch ─────────────────────────────────────
+// When off, requireActiveSubscription/requirePlan pass every request
+// platform-wide. Superadmin-only (router-level requireRole above).
+router.get("/subscription-enforcement", async (req, res) => {
+  try {
+    const s = await PlatformSettings.findOne().select("subscriptionEnforced").lean();
+    res.json({ enabled: s ? s.subscriptionEnforced !== false : true });
+  } catch (err) {
+    res.status(500).json({ error: "Failed to read enforcement setting" });
+  }
+});
+
+router.patch("/subscription-enforcement", async (req, res) => {
+  try {
+    const enabled = !!req.body.enabled;
+    let s = await PlatformSettings.findOne();
+    if (!s) s = new PlatformSettings();
+    s.subscriptionEnforced = enabled;
+    await s.save();
+    require("../middleware/subscription").clearEnforcementCache();
+    console.log(`[Superadmin] Subscription enforcement turned ${enabled ? "ON" : "OFF"} by ${req.user.name}`);
+    res.json({ enabled });
+  } catch (err) {
+    res.status(500).json({ error: "Failed to update enforcement setting" });
+  }
+});
+
 // ── PATCH /api/superadmin/companies/:id/toggle ────────────────────────────────
 router.patch("/companies/:id/toggle", async (req, res) => {
   try {

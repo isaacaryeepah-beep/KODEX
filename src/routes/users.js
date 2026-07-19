@@ -18,6 +18,10 @@ router.delete("/:id", requireRole("manager", "admin", "superadmin"), companyIsol
 router.delete("/:id/permanent", requireRole("manager", "admin", "superadmin"), companyIsolation, userController.deleteUser);
 router.get("/student-lookup", requireRole("lecturer", "hod", "admin", "superadmin"), companyIsolation, userController.studentLookup);
 router.get("/lecturer-locked-students", requireRole("lecturer"), companyIsolation, userController.lecturerLockedStudents);
+// Saved class locations — lecturer's own multi-campus GPS session centers
+router.get("/me/class-locations", requireRole("lecturer", "hod", "admin", "superadmin"), userController.listMyClassLocations);
+router.post("/me/class-locations", requireRole("lecturer", "hod", "admin", "superadmin"), userController.addMyClassLocation);
+router.delete("/me/class-locations/:locId", requireRole("lecturer", "hod", "admin", "superadmin"), userController.deleteMyClassLocation);
 router.get("/reset-logs/all", requireRole("admin", "superadmin"), companyIsolation, userController.getResetLogs);
 router.post("/:id/admin-reset-password", requireRole("admin", "superadmin", "manager", "hod"), companyIsolation, userController.adminResetStudentPassword);
 router.post("/change-password-after-reset", userController.changePasswordAfterReset);

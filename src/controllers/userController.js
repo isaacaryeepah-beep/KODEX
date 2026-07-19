@@ -1030,6 +1030,64 @@ exports.lecturerLockedStudents = async (req, res) => {
   }
 };
 
+// ── Saved class locations (lecturer multi-campus GPS sessions) ──────────────
+const MAX_CLASS_LOCATIONS = 12;
+
+exports.listMyClassLocations = async (req, res) => {
+  try {
+    const me = await User.findById(req.user._id).select("savedClassLocations").lean();
+    res.json({ locations: me?.savedClassLocations || [] });
+  } catch (error) {
+    console.error("List class locations error:", error);
+    res.status(500).json({ error: "Failed to load saved locations" });
+  }
+};
+
+exports.addMyClassLocation = async (req, res) => {
+  try {
+    const name = String(req.body.name || "").trim();
+    const lat = Number(req.body.latitude);
+    const lng = Number(req.body.longitude);
+    const radius = Math.round(Number(req.body.radiusMeters) || 100);
+    if (!name || name.length > 60) {
+      return res.status(400).json({ error: "A name (max 60 characters) is required, e.g. \"Main Campus – LT1\"" });
+    }
+    if (!Number.isFinite(lat) || !Number.isFinite(lng) || lat < -90 || lat > 90 || lng < -180 || lng > 180) {
+      return res.status(400).json({ error: "A valid latitude/longitude is required" });
+    }
+    if (radius < 20 || radius > 1000) {
+      return res.status(400).json({ error: "Radius must be between 20 and 1000 meters" });
+    }
+
+    const me = await User.findById(req.user._id).select("savedClassLocations");
+    if ((me.savedClassLocations || []).length >= MAX_CLASS_LOCATIONS) {
+      return res.status(400).json({ error: `You can save up to ${MAX_CLASS_LOCATIONS} locations — delete one first` });
+    }
+    me.savedClassLocations.push({ name, latitude: lat, longitude: lng, radiusMeters: radius });
+    await me.save({ validateModifiedOnly: true });
+    res.status(201).json({ locations: me.savedClassLocations });
+  } catch (error) {
+    console.error("Add class location error:", error);
+    res.status(500).json({ error: "Failed to save location" });
+  }
+};
+
+exports.deleteMyClassLocation = async (req, res) => {
+  try {
+    const me = await User.findById(req.user._id).select("savedClassLocations");
+    const before = me.savedClassLocations.length;
+    me.savedClassLocations = me.savedClassLocations.filter(l => l._id.toString() !== req.params.locId);
+    if (me.savedClassLocations.length === before) {
+      return res.status(404).json({ error: "Saved location not found" });
+    }
+    await me.save({ validateModifiedOnly: true });
+    res.json({ locations: me.savedClassLocations });
+  } catch (error) {
+    console.error("Delete class location error:", error);
+    res.status(500).json({ error: "Failed to delete location" });
+  }
+};
+
 // GET /api/users/student-lookup?q=<indexNumber or name>
 // Accessible to lecturer, hod, admin, superadmin
 exports.studentLookup = async (req, res) => {

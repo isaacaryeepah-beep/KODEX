@@ -16,6 +16,9 @@ const platformSettingsSchema = new mongoose.Schema({
   rateStudent:  { type: Number, default: 3  },
   rateManager:  { type: Number, default: 12 },
   rateEmployee: { type: Number, default: 8  },
+  // Global kill-switch: when false, requireActiveSubscription/requirePlan let
+  // every request through platform-wide. Superadmin-only toggle.
+  subscriptionEnforced: { type: Boolean, default: true },
 }, { timestamps: true });
 
 // PlatformSettings is a singleton collection (no company field).
