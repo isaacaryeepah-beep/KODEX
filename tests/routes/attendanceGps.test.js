@@ -279,3 +279,124 @@ describe("POST /api/attendance-sessions/mark — method gps", () => {
     expect(res.body.record.method).toBe("gps_mark");
   });
 });
+
+describe("Campus WiFi rescue — marking from a known campus IP overrides a failing GPS check", () => {
+  const SESSION_WIFI_IP = "197.251.144.12";
+  const CAMPUS_WIFI_IP  = "41.66.200.5";
+  const STRANGER_IP     = "8.8.8.8";
+
+  let wifiSession, studentC, studentD, studentCToken, studentDToken;
+
+  beforeAll(async () => {
+    // The one-session-at-a-time guard would 409 the new start while the
+    // suite's earlier GPS session is still live.
+    await AttendanceSession.updateMany(
+      { createdBy: lecturer._id, status: { $in: ["active", "live", "paused", "locked"] } },
+      { $set: { status: "stopped", stoppedAt: new Date() } }
+    );
+
+    // Admin-configured campus-wide WiFi IP (endpoint coercion is covered in
+    // campusSettings.test.js — here we test the marking behaviour it feeds).
+    await Company.updateOne(
+      { _id: company._id },
+      { $set: { "academicSettings.allowedWifiIPs": [CAMPUS_WIFI_IP] } }
+    );
+
+    studentC = await User.create({
+      name: "Student Indoors", email: `sc${Date.now()}@gps.edu`, password: "Passw0rd!123",
+      role: "student", company: company._id, department: "CS", IndexNumber: "GPS-C-" + Date.now(),
+      isActive: true, isApproved: true,
+    });
+    studentD = await User.create({
+      name: "Student Elsewhere", email: `sd${Date.now()}@gps.edu`, password: "Passw0rd!123",
+      role: "student", company: company._id, department: "CS", IndexNumber: "GPS-D-" + Date.now(),
+      isActive: true, isApproved: true,
+    });
+    await Course.updateOne({ _id: course._id }, { $addToSet: { enrolledStudents: { $each: [studentC._id, studentD._id] } } });
+    studentCToken = generateToken(studentC._id);
+    studentDToken = generateToken(studentD._id);
+  });
+
+  test("start stores the saved location's WiFi IP on the session", async () => {
+    const res = await request(app)
+      .post("/api/attendance-sessions/start")
+      .set("Authorization", `Bearer ${lecturerToken}`)
+      .send({
+        courseId: course._id.toString(),
+        title: "WiFi-backed GPS session",
+        durationSeconds: 3600,
+        gpsGeofence: { latitude: CENTER.lat, longitude: CENTER.lng, radiusMeters: 100, wifiIp: ` ${SESSION_WIFI_IP} ` },
+      });
+    expect(res.status).toBe(201);
+    expect(res.body.session.geoWifiIp).toBe(SESSION_WIFI_IP);
+    wifiSession = res.body.session;
+  });
+
+  test("outside the geofence but on the session's WiFi → rescued, marked present", async () => {
+    const res = await request(app)
+      .post("/api/attendance-sessions/mark")
+      .set("Authorization", `Bearer ${studentCToken}`)
+      .set("X-Forwarded-For", SESSION_WIFI_IP)
+      .send({
+        sessionId: wifiSession._id, method: "gps", deviceId: "phone-C",
+        latitude: OUTSIDE.lat, longitude: OUTSIDE.lng, accuracy: 15,
+      });
+    expect(res.status).toBe(201);
+    expect(res.body.record.status).toBe("present");
+    const record = await AttendanceRecord.findOne({ session: wifiSession._id, user: studentC._id }).lean();
+    expect(record.gpsDistanceMeters).toBeGreaterThan(100);
+  });
+
+  test("outside the geofence on an unknown network → still 403, with a WiFi hint", async () => {
+    const res = await request(app)
+      .post("/api/attendance-sessions/mark")
+      .set("Authorization", `Bearer ${studentDToken}`)
+      .set("X-Forwarded-For", STRANGER_IP)
+      .send({
+        sessionId: wifiSession._id, method: "gps", deviceId: "phone-D",
+        latitude: OUTSIDE.lat, longitude: OUTSIDE.lng, accuracy: 15,
+      });
+    expect(res.status).toBe(403);
+    expect(res.body.outsideGeofence).toBe(true);
+    expect(res.body.error).toMatch(/connect to the campus WiFi/i);
+    const records = await AttendanceRecord.find({ session: wifiSession._id, user: studentD._id }).lean();
+    expect(records.length).toBe(0);
+  });
+
+  test("hopelessly imprecise reading but on an admin-configured campus IP → rescued", async () => {
+    const res = await request(app)
+      .post("/api/attendance-sessions/mark")
+      .set("Authorization", `Bearer ${studentDToken}`)
+      .set("X-Forwarded-For", CAMPUS_WIFI_IP)
+      .send({
+        sessionId: wifiSession._id, method: "gps", deviceId: "phone-D",
+        latitude: INSIDE.lat, longitude: INSIDE.lng, accuracy: 900,
+      });
+    expect(res.status).toBe(201);
+    expect(res.body.record.method).toBe("gps_mark");
+  });
+
+  test("a plain GPS session (no WiFi configured anywhere) keeps the original error text", async () => {
+    await Company.updateOne(
+      { _id: company._id },
+      { $set: { "academicSettings.allowedWifiIPs": [] } }
+    );
+    const plainSession = await AttendanceSession.create({
+      company: company._id, createdBy: lecturer._id, course: course._id,
+      title: "Plain GPS session", status: "active", startedAt: new Date(),
+      durationSeconds: 3600, deviceId: null, esp32Seed: null,
+      geoLat: CENTER.lat, geoLng: CENTER.lng, geoRadiusMeters: 100,
+    });
+    const res = await request(app)
+      .post("/api/attendance-sessions/mark")
+      .set("Authorization", `Bearer ${studentDToken}`)
+      .set("X-Forwarded-For", STRANGER_IP)
+      .send({
+        sessionId: plainSession._id.toString(), method: "gps", deviceId: "phone-D",
+        latitude: OUTSIDE.lat, longitude: OUTSIDE.lng, accuracy: 15,
+      });
+    expect(res.status).toBe(403);
+    expect(res.body.error).not.toMatch(/campus WiFi/i);
+  });
+});
+

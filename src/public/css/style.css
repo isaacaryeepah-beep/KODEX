@@ -7638,3 +7638,25 @@ table tr:hover td { background: #f8fafc !important; }
   .sd-rep-chip { padding: 8px 12px; margin-bottom: 12px; }
   .quick-actions-bar { padding: 12px 14px !important; }
 }
+
+/* ══════════════════════════════════════════════════
+   SESSIONS PAGE — MOBILE CARD LIST + LECTURER LOCATION FORM
+   The sessions table can't fit 6 columns on a phone (action buttons were
+   cut off past the right edge), so ≤640px swaps the table for a stacked
+   card list rendered alongside it. `.latlng-row` exists because the global
+   mobile rule collapses all inline grid-template-columns to 1fr — a
+   dedicated class keeps lat/lng side by side.
+══════════════════════════════════════════════════ */
+.latlng-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+
+.sess-cards { display: none; }
+
+@media (max-width: 640px) {
+  .sess-table-wrap { display: none; }
+  .sess-cards { display: flex; flex-direction: column; gap: 10px; }
+}

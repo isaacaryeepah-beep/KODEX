@@ -124,6 +124,14 @@ const attendanceSessionSchema = new mongoose.Schema(
       min: 20,
       max: 1000,
     },
+    // Optional classroom/campus WiFi IP for this GPS session (from the
+    // lecturer's saved location) — marks arriving from this IP count as
+    // present even when the student's GPS reading fails the geofence.
+    geoWifiIp: {
+      type: String,
+      default: null,
+      maxlength: 60,
+    },
     // Rotating code (current)
     currentCode: {
       type: String,

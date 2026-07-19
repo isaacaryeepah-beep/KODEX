@@ -102,6 +102,11 @@ const companySchema = new mongoose.Schema(
       campusLatitude:  { type: Number, default: null },
       campusLongitude: { type: Number, default: null },
       defaultGeofenceRadiusMeters: { type: Number, default: 100 },
+      // Campus WiFi public IPs — a student marking from one of these is
+      // treated as physically present, rescuing GPS-mark attempts whose
+      // reading is too imprecise or just outside the geofence (mirrors
+      // corporateSettings.allowedWifiIPs for clock-in).
+      allowedWifiIPs: { type: [String], default: [] },
     },
     // Corporate-mode specific configuration.
     corporateSettings: {

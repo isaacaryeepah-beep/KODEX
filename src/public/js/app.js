@@ -8456,6 +8456,34 @@ function _renderSessionsHTML(content, sessions, isOffline, extras) {
     </div>
     <div class="card">
       ${sessions.length ? `
+        <div class="sess-cards">
+          ${sessions.map(s => {
+            const inProg = ['active','live','paused','locked'].includes(s.status);
+            const flags = flaggedBySession[s._id] || 0;
+            const safeTitle = (s.title || 'Session').replace(/['"\\]/g, '');
+            const actions = inProg ? `
+              ${canStart ? `<button class="btn btn-danger btn-sm" onclick="stopSession('${s._id}')">Stop</button>` : ''}
+              ${canStart && !isOffline ? `<button class="btn btn-sm" style="background:#0e9384;color:#fff;font-size:11.5px" onclick="_extendSessionPrompt('${s._id}')">⏱ +Time</button>` : ''}
+              ${canStart && !isOffline ? `<button class="btn btn-sm" style="background:#7c3aed;color:#fff;font-size:11.5px" onclick="generateVerbalCode('${s._id}')">Verbal Code</button>` : ''}
+              <button class="btn btn-sm" style="font-size:11.5px;background:var(--bg);border:1px solid var(--border)" onclick="viewAttendees('${s._id}', '${safeTitle}')">Attendees</button>
+              ${canStart && isLecturer && !isOffline ? `<button class="btn btn-sm" style="background:#059669;color:#fff;font-size:11.5px" onclick="showLecturerUnlockModal()">🔓 Unlock</button>` : ''}
+            ` : '';
+            return `
+            <div style="border:1px solid var(--border);border-radius:12px;padding:12px 14px;${flags > 0 ? 'background:#fffbeb;' : ''}">
+              <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:10px">
+                <div style="flex:1;min-width:0">
+                  <div style="font-weight:700;font-size:14px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(s.title || 'Untitled')}${flags > 0 ? ` <span onclick="showFlaggedDevicesModal('${s._id}')" style="background:#fef3c7;color:#92400e;border-radius:4px;padding:1px 6px;font-size:10.5px;font-weight:700;cursor:pointer">⚠️ ${flags}</span>` : ''}</div>
+                  <div style="font-size:11.5px;color:var(--text-muted);margin-top:2px">
+                    ${s.course ? `<span style="font-weight:600;color:#6366f1">${esc(s.course.code || s.course.title || '')}</span> · ` : ''}${new Date(s.startedAt).toLocaleString([], {dateStyle:'short', timeStyle:'short'})}
+                  </div>
+                </div>
+                <span class="status-badge status-${s.status}" style="flex-shrink:0">${s.status}</span>
+              </div>
+              ${actions.trim() ? `<div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:10px">${actions}</div>` : ''}
+            </div>`;
+          }).join('')}
+        </div>
+        <div class="sess-table-wrap">
         <table>
           <thead><tr>
             <th>Title</th>
@@ -8486,6 +8514,7 @@ function _renderSessionsHTML(content, sessions, isOffline, extras) {
             </tr>`;
           }).join('')}</tbody>
         </table>
+        </div>
       ` : `<div class="empty-state"><p>${_sessionsFilterCourseId ? 'No sessions for this course yet.' : 'No sessions found'}</p></div>`}
     </div>
   `;
@@ -9044,18 +9073,18 @@ async function startGpsSession(latitude, longitude, campusLat = null, campusLng 
 
   // Honour the "Class Center" choice — the admin-set campus center, one of
   // the lecturer's own saved locations, or their live position (the default).
-  let lat = latitude, lng = longitude;
+  let lat = latitude, lng = longitude, wifiIp = null;
   const centerChoice = document.querySelector('input[name="gps-center"]:checked')?.value;
   if (centerChoice === 'campus' && campusLat != null && campusLng != null) {
     lat = campusLat; lng = campusLng;
   } else if (centerChoice?.startsWith('loc-')) {
     const saved = (window._gpsSavedLocs || [])[Number(centerChoice.slice(4))];
-    if (saved) { lat = saved.latitude; lng = saved.longitude; }
+    if (saved) { lat = saved.latitude; lng = saved.longitude; wifiIp = saved.wifiIp || null; }
   }
   try {
     await api('/api/attendance-sessions/start', {
       method: 'POST',
-      body: JSON.stringify({ title, courseId, gpsGeofence: { latitude: lat, longitude: lng, radiusMeters: radius } }),
+      body: JSON.stringify({ title, courseId, gpsGeofence: { latitude: lat, longitude: lng, radiusMeters: radius, wifiIp } }),
     });
     closeModal();
     toastSuccess('GPS session started — students can now check in with their location.');
@@ -20735,7 +20764,7 @@ async function renderLecturerAttendanceSettings() {
         <span style="font-size:18px;flex-shrink:0">📌</span>
         <div style="flex:1;min-width:0">
           <div style="font-weight:600;font-size:13.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(l.name)}</div>
-          <div style="font-size:11.5px;color:var(--text-muted);font-family:monospace">${Number(l.latitude).toFixed(5)}, ${Number(l.longitude).toFixed(5)} · ${l.radiusMeters || 100}m radius</div>
+          <div style="font-size:11.5px;color:var(--text-muted);font-family:monospace">${Number(l.latitude).toFixed(5)}, ${Number(l.longitude).toFixed(5)} · ${l.radiusMeters || 100}m${l.wifiIp ? ` · 📶 ${esc(l.wifiIp)}` : ''}</div>
         </div>
         <button class="btn btn-sm" style="background:#fee2e2;color:#b42318;font-size:11.5px;flex-shrink:0" onclick="_lasDelete('${l._id}', this)">Delete</button>
       </div>`).join('');
@@ -20761,17 +20790,18 @@ async function renderLecturerAttendanceSettings() {
           <label>Name <span style="color:red">*</span></label>
           <input id="las-name" type="text" maxlength="60" placeholder="e.g. Main Campus – Lecture Theatre 1">
         </div>
-        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px">
+        <button class="btn btn-secondary btn-sm" style="margin-bottom:10px;width:100%" onclick="_lasDetect(this)">📍 Use my current location</button>
+        <div class="latlng-row">
           <div>
             <label style="font-size:11px;font-weight:700;text-transform:uppercase;color:var(--text-muted)">Latitude</label>
-            <input id="las-lat" type="number" step="any" placeholder="e.g. 5.6037" style="width:100%;padding:8px;border:1px solid var(--border);border-radius:6px;font-size:13px">
+            <input id="las-lat" type="number" step="any" placeholder="e.g. 5.6037" style="width:100%;padding:8px;border:1px solid var(--border);border-radius:6px;font-size:13px;font-family:monospace">
           </div>
           <div>
             <label style="font-size:11px;font-weight:700;text-transform:uppercase;color:var(--text-muted)">Longitude</label>
-            <input id="las-lng" type="number" step="any" placeholder="e.g. -0.1870" style="width:100%;padding:8px;border:1px solid var(--border);border-radius:6px;font-size:13px">
+            <input id="las-lng" type="number" step="any" placeholder="e.g. -0.1870" style="width:100%;padding:8px;border:1px solid var(--border);border-radius:6px;font-size:13px;font-family:monospace">
           </div>
         </div>
-        <button class="btn btn-secondary btn-sm" style="margin-bottom:12px" onclick="_lasDetect(this)">📍 Use my current location</button>
+        <div id="las-status" style="font-size:12px;color:var(--text-muted);margin-bottom:10px"></div>
         <div class="form-group">
           <label>Check-in Radius</label>
           <select id="las-radius" style="width:100%;padding:9px 12px;border:1.5px solid var(--border);border-radius:8px;font-size:13px">
@@ -20781,7 +20811,11 @@ async function renderLecturerAttendanceSettings() {
             <option value="500">500 m — campus area</option>
           </select>
         </div>
-        <div id="las-status" style="font-size:12px;color:var(--text-muted);margin-bottom:10px"></div>
+        <div class="form-group">
+          <label>Campus WiFi IP <span style="font-weight:400;color:var(--text-muted);font-size:12px">(optional)</span></label>
+          <input id="las-wifi" type="text" maxlength="60" placeholder="e.g. 197.251.144.12" style="font-family:monospace">
+          <div style="font-size:11.5px;color:var(--text-muted);margin-top:4px">Students marking from this WiFi are accepted even when their GPS reading is imprecise indoors. Find it by searching "what is my IP" while on the campus WiFi.</div>
+        </div>
         <button class="btn btn-primary btn-sm" onclick="_lasAdd(this)">Save Location</button>
       </div>
     `;
@@ -20795,10 +20829,16 @@ window._lasDetect = async function(btn) {
   if (btn) { btn.disabled = true; btn.textContent = 'Detecting…'; }
   try {
     const loc = await _getGPSLocation();
-    document.getElementById('las-lat').value = loc.latitude;
-    document.getElementById('las-lng').value = loc.longitude;
+    document.getElementById('las-lat').value = Number(loc.latitude).toFixed(6);
+    document.getElementById('las-lng').value = Number(loc.longitude).toFixed(6);
     const st = document.getElementById('las-status');
-    if (st) st.textContent = `Position captured (±${Math.round(loc.accuracy)}m)`;
+    if (st) {
+      const acc = Math.round(loc.accuracy);
+      st.textContent = acc > 100
+        ? `Position captured, but it's rough (±${acc}m) — for a tighter fix, step outdoors and detect again.`
+        : `Position captured (±${acc}m)`;
+      st.style.color = acc > 100 ? '#b45708' : '';
+    }
   } catch (e) {
     _showGPSBlockedModal ? _showGPSBlockedModal(e.message) : toastError(e.message);
   } finally {
@@ -20811,11 +20851,12 @@ window._lasAdd = async function(btn) {
   const latitude = Number(document.getElementById('las-lat')?.value);
   const longitude = Number(document.getElementById('las-lng')?.value);
   const radiusMeters = Number(document.getElementById('las-radius')?.value) || 100;
+  const wifiIp = document.getElementById('las-wifi')?.value?.trim() || null;
   if (!name) { toastWarning('Give this location a name.'); return; }
   if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) { toastWarning('Set the coordinates — tap "Use my current location" while standing there.'); return; }
   if (btn) { btn.disabled = true; btn.textContent = 'Saving…'; }
   try {
-    await api('/api/users/me/class-locations', { method: 'POST', body: JSON.stringify({ name, latitude, longitude, radiusMeters }) });
+    await api('/api/users/me/class-locations', { method: 'POST', body: JSON.stringify({ name, latitude, longitude, radiusMeters, wifiIp }) });
     toastSuccess('Location saved');
     renderLecturerAttendanceSettings();
   } catch (e) {
@@ -20878,6 +20919,11 @@ async function renderAcademicAttendanceSettings() {
           <label style="font-size:11px;font-weight:700;text-transform:uppercase;color:var(--text-muted)">Default Check-in Radius (metres)</label>
           <input id="aas-radius" type="number" min="20" max="1000" value="${s.defaultGeofenceRadiusMeters || 100}" placeholder="100" style="width:120px;padding:8px;border:1px solid var(--border);border-radius:6px;font-size:13px;display:block">
           <div style="font-size:11px;color:var(--text-light);margin-top:4px">Pre-selected when a lecturer starts a GPS check-in session (they can still change it per session).</div>
+        </div>
+        <div style="margin-top:12px">
+          <label style="font-size:11px;font-weight:700;text-transform:uppercase;color:var(--text-muted)">Campus WiFi IPs (optional)</label>
+          <input id="aas-wifi-ips" value="${esc((s.allowedWifiIPs || []).join(', '))}" placeholder="e.g. 197.251.144.12, 41.66.200.5" style="width:100%;padding:8px;border:1px solid var(--border);border-radius:6px;font-size:13px;font-family:monospace">
+          <div style="font-size:11px;color:var(--text-light);margin-top:4px">Public IP addresses of your campus WiFi networks, comma-separated (up to 20). Students marking attendance from one of these networks are accepted even when their GPS reading is imprecise indoors. Find an IP by searching "what is my IP" on a device connected to that WiFi.</div>
         </div>
         <button class="btn btn-primary" onclick="_aasSaveSettings()" style="margin-top:14px">Save Attendance Settings</button>
       </div>
@@ -20944,6 +20990,7 @@ async function _aasSaveSettings() {
   const lat    = document.getElementById('aas-lat')?.value;
   const lng    = document.getElementById('aas-lng')?.value;
   const radius = document.getElementById('aas-radius')?.value;
+  const wifiEl = document.getElementById('aas-wifi-ips');
   const reqDev = document.getElementById('aas-require-device')?.checked ?? false;
   // Both lat and lng must be present together, or both cleared.
   if ((lat && !lng) || (!lat && lng)) { toastError('Enter both latitude and longitude, or clear both.'); return; }
@@ -20955,6 +21002,7 @@ async function _aasSaveSettings() {
         campusLongitude: lng ? parseFloat(lng) : null,
         defaultGeofenceRadiusMeters: radius ? parseInt(radius, 10) : 100,
         requireEsp32Attendance: reqDev,
+        ...(wifiEl ? { allowedWifiIPs: wifiEl.value } : {}),
       }),
     });
     toastSuccess('Attendance settings saved');
