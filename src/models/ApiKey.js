@@ -28,14 +28,26 @@ const mongoose = require("mongoose");
 
 // Read-only in Phase 1 by design — write scopes arrive with Phase 2
 // (webhooks + writes) once the read surface has proven itself in the wild.
-const API_SCOPES = Object.freeze([
+const CORPORATE_SCOPES = Object.freeze([
   "read:attendance",
   "read:employees",
   "read:leaves",
   "read:shifts",
+]);
+const ACADEMIC_SCOPES = Object.freeze([
   "read:students",
   "read:courses",
 ]);
+const API_SCOPES = Object.freeze([...CORPORATE_SCOPES, ...ACADEMIC_SCOPES]);
+
+// Which scopes a company may grant, by its mode. "both"-mode (hybrid)
+// companies get everything; unknown/missing modes fall back to the full
+// list rather than locking an admin out of key creation entirely.
+function scopesForMode(mode) {
+  if (mode === "corporate") return CORPORATE_SCOPES;
+  if (mode === "academic") return ACADEMIC_SCOPES;
+  return API_SCOPES;
+}
 
 const apiKeySchema = new mongoose.Schema(
   {
@@ -81,3 +93,6 @@ const ApiKey = mongoose.model("ApiKey", apiKeySchema);
 
 module.exports = ApiKey;
 module.exports.API_SCOPES = API_SCOPES;
+module.exports.CORPORATE_SCOPES = CORPORATE_SCOPES;
+module.exports.ACADEMIC_SCOPES = ACADEMIC_SCOPES;
+module.exports.scopesForMode = scopesForMode;

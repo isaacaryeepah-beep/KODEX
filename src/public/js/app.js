@@ -20428,21 +20428,46 @@ window._aiqSaveSettings = async function() {
 };
 
 // ── API Access (admin) — public API keys for /api/v1 integrations ──────────
+// Descriptions per scope. The server already filters the scope list to the
+// company's mode, so the mode tag is only appended for "both"-mode orgs
+// where corporate and academic scopes appear side by side.
 const _API_SCOPE_META = {
-  'read:attendance': 'Attendance records (clock-in/out, hours, overtime) — corporate mode',
-  'read:employees':  'Employee directory (names, emails, departments) — corporate mode',
-  'read:leaves':     'Leave requests and their statuses — corporate mode',
-  'read:shifts':     'Shift definitions — corporate mode',
-  'read:students':   'Student directory (names, emails, index numbers, programme) — academic mode',
-  'read:courses':    'Course catalogue (codes, titles, lecturers, enrollment counts) — academic mode',
+  'read:attendance': { desc: 'Attendance records (clock-in/out, hours, overtime)', mode: 'corporate' },
+  'read:employees':  { desc: 'Employee directory (names, emails, departments)',    mode: 'corporate' },
+  'read:leaves':     { desc: 'Leave requests and their statuses',                  mode: 'corporate' },
+  'read:shifts':     { desc: 'Shift definitions',                                  mode: 'corporate' },
+  'read:students':   { desc: 'Student directory (names, emails, index numbers, programme)', mode: 'academic' },
+  'read:courses':    { desc: 'Course catalogue (codes, titles, lecturers, enrollment counts)', mode: 'academic' },
 };
+
+// Quick Start endpoint rows, tagged by mode so academic orgs aren't shown
+// corporate endpoints their keys can never call (and vice versa).
+const _API_ENDPOINT_ROWS = [
+  { mode: null,        sig: 'GET /api/v1/ping',                 desc: 'verify a key and list its scopes' },
+  { mode: 'corporate', sig: 'GET /api/v1/employees',            desc: 'employee directory' },
+  { mode: 'corporate', sig: 'GET /api/v1/attendance?from=&to=', desc: 'daily attendance records' },
+  { mode: 'corporate', sig: 'GET /api/v1/leaves?status=',       desc: 'leave requests' },
+  { mode: 'corporate', sig: 'GET /api/v1/shifts',               desc: 'shift definitions' },
+  { mode: 'academic',  sig: 'GET /api/v1/students',             desc: 'student directory' },
+  { mode: 'academic',  sig: 'GET /api/v1/courses',              desc: 'course catalogue' },
+];
 
 async function renderApiAccess() {
   const content = document.getElementById('main-content');
   if (!content) return;
   content.innerHTML = '<div class="loading">Loading…</div>';
   try {
-    const { keys, scopes } = await api('/api/api-keys');
+    const { keys, scopes, mode } = await api('/api/api-keys');
+    const _scopeDesc = s => {
+      const m = _API_SCOPE_META[s];
+      if (!m) return '';
+      return mode === 'both' ? `${m.desc} — ${m.mode} mode` : m.desc;
+    };
+    const _endpointRows = _API_ENDPOINT_ROWS
+      .filter(r => !r.mode || mode === 'both' || r.mode === mode)
+      .map(r => `<div><code style="font-family:monospace">${esc(r.sig)}</code> — ${esc(r.desc)}</div>`)
+      .join('');
+    const _exampleEndpoint = mode === 'academic' ? '/api/v1/students' : '/api/v1/attendance?from=2026-07-01&to=2026-07-31';
 
     const scopeChip = s => `<span style="background:#eef2ff;color:#4338ca;border-radius:999px;padding:2px 8px;font-size:10px;font-weight:700;white-space:nowrap">${esc(s)}</span>`;
     const rows = (keys || []).map(k => `
@@ -20481,7 +20506,7 @@ async function renderApiAccess() {
         ${(scopes || []).map(s => `
           <label style="display:flex;align-items:flex-start;gap:8px;padding:6px 0;cursor:pointer">
             <input type="checkbox" class="ak-scope" value="${esc(s)}" style="width:15px;height:15px;margin-top:2px;cursor:pointer">
-            <span style="font-size:13px"><strong style="font-family:monospace;font-size:12px">${esc(s)}</strong><br><span style="font-size:11px;color:var(--text-light)">${esc(_API_SCOPE_META[s] || '')}</span></span>
+            <span style="font-size:13px"><strong style="font-family:monospace;font-size:12px">${esc(s)}</strong><br><span style="font-size:11px;color:var(--text-light)">${esc(_scopeDesc(s))}</span></span>
           </label>`).join('')}
         <button class="btn btn-primary" style="margin-top:12px" onclick="_akCreate(this)">Create Key</button>
       </div>
@@ -20489,16 +20514,10 @@ async function renderApiAccess() {
       <div class="card" style="max-width:760px">
         <h3 style="font-size:15px;font-weight:700;margin-bottom:4px">Quick Start</h3>
         <p style="font-size:12px;color:var(--text-light);margin-bottom:10px">Send the key in the <code style="font-family:monospace">X-API-Key</code> header. All endpoints are read-only and return JSON with <code style="font-family:monospace">{ data, pagination }</code>.</p>
-        <pre style="background:var(--bg);border-radius:8px;padding:12px;font-size:11.5px;overflow-x:auto;line-height:1.6">curl https://dikly.sbs/api/v1/attendance?from=2026-07-01&amp;to=2026-07-31 \\
+        <pre style="background:var(--bg);border-radius:8px;padding:12px;font-size:11.5px;overflow-x:auto;line-height:1.6">curl https://dikly.sbs${esc(_exampleEndpoint)} \\
   -H "X-API-Key: dk_live_…"</pre>
         <div style="font-size:12px;line-height:2;margin-top:8px">
-          <div><code style="font-family:monospace">GET /api/v1/ping</code> — verify a key and list its scopes</div>
-          <div><code style="font-family:monospace">GET /api/v1/employees</code> — employee directory</div>
-          <div><code style="font-family:monospace">GET /api/v1/attendance?from=&amp;to=</code> — daily attendance records</div>
-          <div><code style="font-family:monospace">GET /api/v1/leaves?status=</code> — leave requests</div>
-          <div><code style="font-family:monospace">GET /api/v1/shifts</code> — shift definitions</div>
-          <div><code style="font-family:monospace">GET /api/v1/students</code> — student directory</div>
-          <div><code style="font-family:monospace">GET /api/v1/courses</code> — course catalogue</div>
+          ${_endpointRows}
         </div>
         <div style="font-size:11px;color:var(--text-light);margin-top:10px">Limit: 120 requests/minute per key · pagination via <code style="font-family:monospace">?limit=</code> (max 200) and <code style="font-family:monospace">?offset=</code></div>
         <a href="/api-docs" target="_blank" rel="noopener" class="btn btn-secondary btn-sm" style="margin-top:12px;display:inline-block;text-decoration:none">📄 View full API documentation →</a>
