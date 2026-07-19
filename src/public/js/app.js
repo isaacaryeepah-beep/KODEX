@@ -7542,19 +7542,30 @@ async function renderStudentDashboard(content) {
   })() : '';
 
   const classRepBanner = currentUser.isClassRep ? `
-    <div style="background:linear-gradient(135deg,#ede9fe,#f5f3ff);border:1.5px solid #c4b5fd;border-radius:12px;padding:16px 20px;margin-bottom:16px;display:flex;gap:14px;align-items:center;cursor:pointer" onclick="navigateTo('class-device')">
-      <div style="width:44px;height:44px;border-radius:12px;background:linear-gradient(135deg,#7c3aed,#6366f1);display:flex;align-items:center;justify-content:center;flex-shrink:0">
-        ${svgIcon('<path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/><polyline points="9 11 12 14 22 4"/>', 20, '#fff')}
-      </div>
-      <div style="flex:1">
-        <div style="font-weight:700;color:#5b21b6;font-size:14px;display:flex;align-items:center;gap:6px">
-          <span style="background:#7c3aed;color:#fff;font-size:10px;font-weight:800;padding:2px 7px;border-radius:20px;letter-spacing:.5px">CLASS REP</span>
-          You are a Class Representative
-        </div>
-        <div style="color:#6d28d9;font-size:12px;margin-top:2px">Tap to manage the class device &amp; connect attendance for your group.</div>
-      </div>
-      <div style="color:#7c3aed;opacity:.7">${svgIcon('<polyline points="9 18 15 12 9 6"/>', 18)}</div>
+    <div class="sd-rep-chip" onclick="navigateTo('class-device')">
+      <span class="sd-rep-badge">CLASS REP</span>
+      <span class="sd-rep-chip-text">Manage your class device</span>
+      <span style="color:#7c3aed;opacity:.7;flex-shrink:0;display:flex">${svgIcon('<polyline points="9 18 15 12 9 6"/>', 16)}</span>
     </div>` : '';
+
+  // Full hero only when there's a live or upcoming class to talk about; an
+  // empty day collapses to one slim row so the page leads with real info.
+  const heroHtml = (liveSlot || nextSlot) ? `
+    <div class="sd-hero-card">
+      <div class="sd-hero-icon">${svgIcon(heroIcon, 22)}</div>
+      <div class="sd-hero-eyebrow">${heroEyebrow}</div>
+      <div class="sd-hero-title">${heroTitle}</div>
+      <div class="sd-hero-body">${heroBody}</div>
+      <button class="btn sd-hero-btn" onclick="navigateTo('courses')">My Courses <span style="font-size:14px">›</span></button>
+    </div>` : `
+    <div class="sd-hero-card sd-hero-mini" onclick="navigateTo('timetable')" style="cursor:pointer">
+      <div class="sd-hero-icon">${svgIcon(heroIcon, 17)}</div>
+      <div style="flex:1;min-width:0">
+        <div class="sd-hero-eyebrow">TIMETABLE</div>
+        <div class="sd-hero-title">${todaySlots.length > 0 ? 'All done for today' : 'No classes today'} 🎉</div>
+      </div>
+      <button class="sd-hero-mini-btn" onclick="event.stopPropagation();navigateTo('courses')">My Courses ›</button>
+    </div>`;
 
   content.innerHTML = `
     <div class="page-header">
@@ -7562,35 +7573,30 @@ async function renderStudentDashboard(content) {
       <p>Here's what's happening at ${esc(currentUser.company?.name || 'your institution')} today.</p>
     </div>
     ${deptChip}
-    ${classRepBanner}
     ${devLockBanner}
 
-    <div class="sd-hero-card">
-      <div class="sd-hero-icon">${svgIcon(heroIcon, 22)}</div>
-      <div class="sd-hero-eyebrow">${heroEyebrow}</div>
-      <div class="sd-hero-title">${heroTitle}</div>
-      <div class="sd-hero-body">${heroBody}</div>
-      <button class="btn sd-hero-btn" onclick="navigateTo('courses')">My Courses <span style="font-size:14px">\u203a</span></button>
-    </div>
-
-    ${_diklyAiBandHtml(studentInsights)}
-
     ${activeSession ? `
-      <div class="card" style="border-left:4px solid var(--success);background:linear-gradient(135deg,#f0fdf4,#ecfdf5);cursor:pointer" onclick="navigateTo('mark-attendance')">
-        <div style="display:flex;align-items:center;gap:16px;flex-wrap:wrap">
-          <div style="background:var(--success);color:white;border-radius:12px;padding:12px;display:flex;align-items:center;justify-content:center">
-            ${svgIcon('<polyline points="9 11 12 14 22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/>', 28)}
+      <div class="card" style="border-left:4px solid var(--success);background:linear-gradient(135deg,#f0fdf4,#ecfdf5);cursor:pointer;margin-bottom:14px" onclick="navigateTo('mark-attendance')">
+        <div style="display:flex;align-items:center;gap:14px">
+          <div style="background:var(--success);color:white;border-radius:12px;padding:11px;display:flex;align-items:center;justify-content:center;flex-shrink:0">
+            ${svgIcon('<polyline points="9 11 12 14 22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/>', 24)}
           </div>
-          <div style="flex:1">
-            <div style="font-size:12px;text-transform:uppercase;color:var(--success);font-weight:700;letter-spacing:0.5px">Active Session — Mark Now</div>
-            <div style="font-size:16px;font-weight:700;margin-top:2px">${activeSession.title || 'Untitled Session'}</div>
-            <div style="font-size:12px;color:var(--text-light)">Started ${new Date(activeSession.startedAt).toLocaleString()}</div>
+          <div style="flex:1;min-width:0">
+            <div style="font-size:11.5px;text-transform:uppercase;color:var(--success);font-weight:700;letter-spacing:0.5px">Active Session — Mark Now</div>
+            <div style="font-size:15.5px;font-weight:700;margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${activeSession.title || 'Untitled Session'}</div>
+            <div style="font-size:12px;color:var(--text-light)">Started ${new Date(activeSession.startedAt).toLocaleTimeString([], {hour:'numeric',minute:'2-digit'})} · tap to check in</div>
           </div>
-          <span class="status-badge status-active" style="animation:pulse 2s infinite">LIVE</span>
+          <span class="status-badge status-active" style="animation:pulse 2s infinite;flex-shrink:0">LIVE</span>
         </div>
       </div>
     ` : ''}
-    
+
+    ${heroHtml}
+
+    ${classRepBanner}
+
+    ${_diklyAiBandHtml(studentInsights)}
+
     <div class="stats-grid">
       <div class="stat-card-v2">
         <div class="stat-top-bar" style="background:#16a34a"></div>
@@ -7612,17 +7618,6 @@ async function renderStudentDashboard(content) {
         <div class="stat-header"><span class="stat-label">Quizzes Taken</span></div>
         <div class="stat-value" style="color:#d97706">${quizzesTaken}</div>
       </div>
-    </div>
-
-    <div class="section-label" style="margin-top:4px">Notifications</div>
-    <div class="card sd-notif-card">
-      <div style="font-weight:700;font-size:14px">Class reminders</div>
-      <div style="font-size:12px;color:var(--text-light);margin-top:2px">Push notifications before your classes start.</div>
-      <div style="display:flex;gap:10px;margin-top:12px;flex-wrap:wrap">
-        <button class="btn btn-secondary btn-sm" onclick="_sdEnableClassReminders(this)">Enable reminders</button>
-        <button class="btn btn-primary btn-sm" onclick="_pushEnableAndTest(this)">Send test push</button>
-      </div>
-      <div id="sd-push-status" style="font-size:12px;color:var(--text-light);margin-top:10px"></div>
     </div>
 
     <div class="card quick-actions-bar">
@@ -7695,6 +7690,17 @@ async function renderStudentDashboard(content) {
           `).join('')}</tbody>
         </table>
       ` : '<div class="empty-state"><p>No attendance records yet. Mark attendance when a session is active.</p></div>'}
+    </div>
+
+    <div class="section-label" style="margin-top:4px">Notifications</div>
+    <div class="card sd-notif-card">
+      <div style="font-weight:700;font-size:14px">Class reminders</div>
+      <div style="font-size:12px;color:var(--text-light);margin-top:2px">Push notifications before your classes start.</div>
+      <div style="display:flex;gap:10px;margin-top:12px;flex-wrap:wrap">
+        <button class="btn btn-secondary btn-sm" onclick="_sdEnableClassReminders(this)">Enable reminders</button>
+        <button class="btn btn-primary btn-sm" onclick="_pushEnableAndTest(this)">Send test push</button>
+      </div>
+      <div id="sd-push-status" style="font-size:12px;color:var(--text-light);margin-top:10px"></div>
     </div>
   `;
   _sdRefreshPushStatus();
