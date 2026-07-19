@@ -3166,6 +3166,7 @@ function buildSidebar() {
       links.push({ sep: true, label: 'ADMINISTRATION' });
       links.push({ id: 'company-settings', label: 'Company Settings', icon: svgIcon('<circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/>') });
       links.push({ id: 'branding', label: 'Institution Branding', icon: svgIcon('<circle cx="12" cy="12" r="10"/><path d="M8 14s1.5 2 4 2 4-2 4-2"/><line x1="9" y1="9" x2="9.01" y2="9"/><line x1="15" y1="9" x2="15.01" y2="9"/>') });
+      links.push({ id: 'arrival-iq-settings', label: 'ArrivalIQ Settings', icon: svgIcon('<path d="M3 11l19-9-9 19-2-8-8-2z"/>') });
       links.push({ id: 'api-access', label: 'API Access', icon: svgIcon('<polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/>') });
       links.push({ sep: true, label: 'SUPPORT' });
       links.push({ id: 'faq-center', label: 'FAQ Center', icon: svgIcon('<circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/>') });
@@ -3232,6 +3233,7 @@ function buildSidebar() {
       links.push({ id: 'exam-timetable',   label: 'Exams Timetable', icon: svgIcon('<rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/><path d="M9 15l2 2 4-4"/>') });
       links.push({ id: 'hod-lecturers',    label: 'Lecturers',      icon: svgIcon('<path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/>') });
       links.push({ id: 'hod-students',     label: 'Students',       icon: usersIcon() });
+      links.push({ id: 'arrival-iq',       label: 'ArrivalIQ',      icon: svgIcon('<path d="M3 11l19-9-9 19-2-8-8-2z"/>') });
       links.push({ sep: true, label: 'INSIGHTS' });
       links.push({ id: 'hod-performance',  label: 'Performance',    icon: svgIcon('<line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/>') });
       links.push({ id: 'quiz-monitor',     label: 'Quiz Monitor 🔴', icon: svgIcon('<path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7z"/><circle cx="12" cy="12" r="3"/>') });
@@ -3257,6 +3259,7 @@ function buildSidebar() {
     case 'lecturer':
       links.push({ id: 'sessions', label: 'Sessions', icon: sessionsIcon() });
       links.push({ id: 'attendance-device', label: 'Attendance Device', icon: svgIcon('<rect x="5" y="2" width="14" height="20" rx="2" ry="2"/><line x1="12" y1="18" x2="12.01" y2="18"/>') });
+      links.push({ id: 'arrival-iq', label: 'ArrivalIQ', icon: svgIcon('<path d="M3 11l19-9-9 19-2-8-8-2z"/>') });
       links.push({ sep: true, label: 'CONTENT' });
       links.push({ id: 'search', label: 'Search', icon: svgIcon('<circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>') });
       links.push({ id: 'courses', label: 'Courses', icon: coursesIcon() });
@@ -20321,6 +20324,8 @@ async function renderArrivalIQSettings() {
   try {
     const s = await api('/api/arrival-iq/settings');
     const hasOffice = s.officeLatitude != null && s.officeLongitude != null;
+    const _aiqIsAcademic = currentUser?.company?.mode === 'academic';
+    const _aiqStaff = _aiqIsAcademic ? 'staff' : 'employees';
 
     content.innerHTML = `
       <div class="page-header" style="display:flex;align-items:flex-start;justify-content:space-between;flex-wrap:wrap;gap:12px;">
@@ -20334,7 +20339,7 @@ async function renderArrivalIQSettings() {
         <div style="display:flex;align-items:center;justify-content:space-between;padding:12px 0;border-bottom:1px solid var(--border)">
           <div>
             <div style="font-weight:600;font-size:13px">Enable ArrivalIQ</div>
-            <div style="font-size:11px;color:var(--text-light)">When on, employees can opt in to receive personalized departure-time reminders</div>
+            <div style="font-size:11px;color:var(--text-light)">When on, ${_aiqStaff} can opt in to receive personalized departure-time reminders</div>
           </div>
           <label style="display:flex;align-items:center;gap:8px;cursor:pointer">
             <input type="checkbox" id="aiq-enabled" ${s.enabled ? 'checked' : ''} style="width:16px;height:16px;cursor:pointer">
@@ -20351,8 +20356,8 @@ async function renderArrivalIQSettings() {
         </div>
         <div style="display:flex;align-items:center;justify-content:space-between;padding:12px 0;border-bottom:1px solid var(--border)">
           <div>
-            <div style="font-weight:600;font-size:13px">Mandatory for all employees</div>
-            <div style="font-size:11px;color:var(--text-light)">Employees can't disable ArrivalIQ notifications/location themselves once granted. Off = fully optional (employees can turn it off anytime).</div>
+            <div style="font-weight:600;font-size:13px">Mandatory for all ${_aiqStaff}</div>
+            <div style="font-size:11px;color:var(--text-light)">${_aiqIsAcademic ? 'Staff' : 'Employees'} can't disable ArrivalIQ notifications/location themselves once granted. Off = fully optional.</div>
           </div>
           <label style="display:flex;align-items:center;gap:8px;cursor:pointer">
             <input type="checkbox" id="aiq-mandatory" ${s.mandatory ? 'checked' : ''} style="width:16px;height:16px;cursor:pointer">
@@ -20367,23 +20372,32 @@ async function renderArrivalIQSettings() {
       </div>
 
       <div class="card" style="max-width:600px;margin-bottom:20px">
-        <h3 style="font-size:15px;font-weight:700;margin-bottom:4px">Office Location</h3>
-        <p style="font-size:12px;color:var(--text-light);margin-bottom:14px">ArrivalIQ calculates travel time to this same office location used for geofenced clock-in.</p>
+        <h3 style="font-size:15px;font-weight:700;margin-bottom:4px">${_aiqIsAcademic ? 'Campus Location' : 'Office Location'}</h3>
+        <p style="font-size:12px;color:var(--text-light);margin-bottom:14px">${_aiqIsAcademic
+          ? 'ArrivalIQ calculates travel time to your campus — set its coordinates here.'
+          : 'ArrivalIQ calculates travel time to this same office location used for geofenced clock-in.'}</p>
         ${hasOffice
           ? `<div style="font-size:13px;margin-bottom:12px"><strong>${s.officeLatitude.toFixed(6)}, ${s.officeLongitude.toFixed(6)}</strong> · ${s.geofenceRadiusMeters}m geofence radius</div>`
-          : `<div style="font-size:13px;color:#b54708;margin-bottom:12px">⚠ No office location set yet — ArrivalIQ can't estimate travel time until this is configured.</div>`}
-        <button class="btn btn-secondary btn-sm" onclick="navigateTo('corp-clock-settings')">${hasOffice ? 'Edit' : 'Set'} office location →</button>
+          : `<div style="font-size:13px;color:#b54708;margin-bottom:12px">⚠ No ${_aiqIsAcademic ? 'campus' : 'office'} location set yet — ArrivalIQ can't estimate travel time until this is configured.</div>`}
+        ${_aiqIsAcademic ? `
+        <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+          <input id="aiq-camp-lat" type="number" step="any" value="${s.officeLatitude ?? ''}" placeholder="Latitude (e.g. 5.6037)" style="width:170px;padding:8px;border:1px solid var(--border);border-radius:6px;font-size:13px">
+          <input id="aiq-camp-lng" type="number" step="any" value="${s.officeLongitude ?? ''}" placeholder="Longitude (e.g. -0.1870)" style="width:170px;padding:8px;border:1px solid var(--border);border-radius:6px;font-size:13px">
+          <button class="btn btn-secondary btn-sm" onclick="_aiqSaveCampusLocation(this)">Save location</button>
+          <button class="btn btn-secondary btn-sm" onclick="_aiqUseMyLocation(this)">📍 Use my current location</button>
+        </div>` : `
+        <button class="btn btn-secondary btn-sm" onclick="navigateTo('corp-clock-settings')">${hasOffice ? 'Edit' : 'Set'} office location →</button>`}
       </div>
 
       <div class="card" style="max-width:600px;margin-bottom:20px">
         <h3 style="font-size:15px;font-weight:700;margin-bottom:4px">Active Live Trips</h3>
-        <p style="font-size:12px;color:var(--text-light);margin-bottom:14px">Employees currently tracking a live trip to the office. Status only — their exact route/position isn't shown here, matching what they consented to when they opted in.</p>
+        <p style="font-size:12px;color:var(--text-light);margin-bottom:14px">${_aiqIsAcademic ? 'Staff' : 'Employees'} currently tracking a live trip to ${_aiqIsAcademic ? 'campus' : 'the office'}. Status only — their exact route/position isn't shown here, matching what they consented to when they opted in.</p>
         <div id="aiq-active-trips">Loading…</div>
       </div>
 
       <div class="card" style="max-width:600px">
         <h3 style="font-size:15px;font-weight:700;margin-bottom:4px">Verify Push Notifications</h3>
-        <p style="font-size:12px;color:var(--text-light);margin-bottom:14px">Send yourself a test push to confirm notifications are wired up correctly for this browser/device before rolling ArrivalIQ out to employees.</p>
+        <p style="font-size:12px;color:var(--text-light);margin-bottom:14px">Send yourself a test push to confirm notifications are wired up correctly for this browser/device before rolling ArrivalIQ out to ${_aiqStaff}.</p>
         <button class="btn btn-secondary btn-sm" onclick="_pushEnableAndTest(this)">Send Test Notification</button>
       </div>`;
     _aiqLoadActiveTrips();
@@ -20409,6 +20423,51 @@ async function _aiqLoadActiveTrips() {
     el.innerHTML = `<div style="font-size:12px;color:var(--danger)">${esc(e.message)}</div>`;
   }
 }
+// Academic mode: campus coordinates are set right on the ArrivalIQ settings
+// page — the corporate "Set office location" flow lives in corp-clock-settings,
+// a page academic admins don't have.
+window._aiqSaveCampusLocation = async function(btn) {
+  const lat = parseFloat(document.getElementById('aiq-camp-lat')?.value);
+  const lng = parseFloat(document.getElementById('aiq-camp-lng')?.value);
+  if (!isFinite(lat) || !isFinite(lng) || Math.abs(lat) > 90 || Math.abs(lng) > 180) {
+    toastError('Enter a valid latitude (−90 to 90) and longitude (−180 to 180)');
+    return;
+  }
+  const label = btn?.textContent;
+  if (btn) { btn.disabled = true; btn.textContent = 'Saving…'; }
+  try {
+    await api('/api/arrival-iq/settings', {
+      method: 'PATCH',
+      body: JSON.stringify({ officeLatitude: lat, officeLongitude: lng }),
+    });
+    toastSuccess('Campus location saved');
+    renderArrivalIQSettings();
+  } catch (e) {
+    toastError(e.message || 'Failed to save campus location');
+    if (btn) { btn.disabled = false; btn.textContent = label; }
+  }
+};
+
+window._aiqUseMyLocation = function(btn) {
+  if (!navigator.geolocation) { toastError('Geolocation is not available in this browser'); return; }
+  const label = btn?.textContent;
+  if (btn) { btn.disabled = true; btn.textContent = 'Locating…'; }
+  navigator.geolocation.getCurrentPosition(
+    pos => {
+      const latEl = document.getElementById('aiq-camp-lat');
+      const lngEl = document.getElementById('aiq-camp-lng');
+      if (latEl) latEl.value = pos.coords.latitude.toFixed(6);
+      if (lngEl) lngEl.value = pos.coords.longitude.toFixed(6);
+      if (btn) { btn.disabled = false; btn.textContent = label; }
+    },
+    err => {
+      toastError('Could not get your location: ' + err.message);
+      if (btn) { btn.disabled = false; btn.textContent = label; }
+    },
+    { enableHighAccuracy: true, timeout: 15000 }
+  );
+};
+
 window._aiqSaveSettings = async function() {
   const enabled       = document.getElementById('aiq-enabled')?.checked ?? false;
   const pushEnabled   = document.getElementById('aiq-push')?.checked ?? false;

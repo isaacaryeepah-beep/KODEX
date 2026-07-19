@@ -40,6 +40,21 @@ const arrivalPredictionSchema = new mongoose.Schema(
       ref: "Shift",
       default: null,
     },
+    // Academic-mode anchor: staff have no Shift — their day is anchored on
+    // their first Timetable class instead. Exactly one of shift/timetableSlot
+    // is set, and anchorType says which (it also drives push copy and makes
+    // the late-risk pass skip class anchors, since there's no clock-in
+    // signal to check a lecturer against).
+    timetableSlot: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Timetable",
+      default: null,
+    },
+    anchorType: {
+      type: String,
+      enum: ["shift", "class"],
+      default: "shift",
+    },
     shiftStartTime: {
       type: String, // "HH:MM"
       required: true,
