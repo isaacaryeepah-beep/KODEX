@@ -2921,10 +2921,15 @@ function showDashboard(data) {
     const _hideBoth   = () => { _bannerEl.style.display = 'none'; _expiredEl.style.display = 'none'; };
     const _dayLabel   = n => `${n} day${n !== 1 ? 's' : ''}`;
 
+    // Platform kill-switch: when the superadmin turns subscription
+    // enforcement off, the entire subscription surface disappears —
+    // banner, expired warnings, sidebar link, and page.
+    window._subEnforced = data.subscriptionEnforced !== false;
+
     // Corporate pilots: trial/subscribe nagging is suppressed entirely
     // while we're piloting with real companies — remove this block once
     // piloting wraps up and normal corporate billing prompts should resume.
-    if (currentUser?.company?.mode === 'corporate') {
+    if (!window._subEnforced || currentUser?.company?.mode === 'corporate') {
       _hideBoth();
     } else if (role === 'hod') {
       // HODs are fully free — no banners needed
@@ -3420,7 +3425,9 @@ function buildSidebar() {
 
   // Corporate pilots: no Subscription link either, matching the dashboard
   // banner suppression — same reasoning, remove once piloting wraps up.
-  if (currentUser.company?.mode === 'corporate') {
+  // Also dropped platform-wide while the superadmin has subscription
+  // enforcement turned off (the kill-switch hides the whole surface).
+  if (currentUser.company?.mode === 'corporate' || window._subEnforced === false) {
     links = links.filter(l => l.id !== 'subscription');
   }
 
@@ -16103,7 +16110,10 @@ async function renderSubscription() {
   // "Renew Subscription" button inside showSubscriptionBlock's hard-block
   // overlay), so it needs its own guard, not just a hidden nav link.
   // Remove this early return once piloting wraps up.
-  if (currentUser?.company?.mode === 'corporate') {
+  // The platform kill-switch takes the same path: with enforcement off,
+  // anyone reaching this page directly (stale bookmark, old overlay
+  // button) sees the all-set note instead of pricing.
+  if (currentUser?.company?.mode === 'corporate' || window._subEnforced === false) {
     content.innerHTML = `
       <div class="page-header">
         <h2>Subscription</h2>
@@ -16112,7 +16122,7 @@ async function renderSubscription() {
       <div class="card" style="max-width:520px;text-align:center;padding:32px 24px">
         <div style="font-size:32px;margin-bottom:8px">✓</div>
         <div style="font-weight:700;margin-bottom:6px">You're all set</div>
-        <div style="font-size:13px;color:var(--text-light)">Your organization is currently part of an extended pilot program with full access to Dikly. There's nothing to subscribe to right now — we'll follow up before this changes.</div>
+        <div style="font-size:13px;color:var(--text-light)">Your organization currently has full access to Dikly. There's nothing to subscribe to right now — we'll follow up before this changes.</div>
       </div>`;
     return;
   }

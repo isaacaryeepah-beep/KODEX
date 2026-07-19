@@ -144,6 +144,35 @@ describe("subscription enforcement kill-switch", () => {
     expect(r.body.subscriptionExpired).toBe(true);
   });
 
+  test("auth payloads expose the flag so the client can hide the subscription surface", async () => {
+    // ON (current state from the previous test)
+    let me = await request(app).get("/api/auth/me").set("Authorization", `Bearer ${superadminToken}`);
+    expect(me.status).toBe(200);
+    expect(me.body.subscriptionEnforced).toBe(true);
+
+    // OFF → both /me and a fresh login report false (banner/link/page hidden)
+    await request(app)
+      .patch("/api/superadmin/subscription-enforcement")
+      .set("Authorization", `Bearer ${superadminToken}`)
+      .send({ enabled: false });
+
+    me = await request(app).get("/api/auth/me").set("Authorization", `Bearer ${superadminToken}`);
+    expect(me.body.subscriptionEnforced).toBe(false);
+
+    const login = await request(app).post("/api/auth/login")
+      .send({ email: "lect@expuni.edu", password: PASSWORD, loginRole: "lecturer" });
+    expect(login.status).toBe(200);
+    expect(login.body.subscriptionEnforced).toBe(false);
+
+    // restore ON for the remaining tests
+    await request(app)
+      .patch("/api/superadmin/subscription-enforcement")
+      .set("Authorization", `Bearer ${superadminToken}`)
+      .send({ enabled: true });
+    me = await request(app).get("/api/auth/me").set("Authorization", `Bearer ${superadminToken}`);
+    expect(me.body.subscriptionEnforced).toBe(true);
+  });
+
   test("non-superadmin cannot touch the switch", async () => {
     // With enforcement back ON, this expired-institution lecturer is stopped
     // by the auth-level 402 gate before even reaching the superadmin role
