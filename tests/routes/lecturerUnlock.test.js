@@ -58,9 +58,11 @@ let courseA, courseB, courseC;
 let studentA, studentB, studentC;
 
 async function makeStudent(name) {
+  const uniq = `${Date.now()}${Math.random().toString(36).slice(2, 8)}`;
   return User.create({
     name,
-    email: `${name.toLowerCase().replace(/\s+/g, "")}${Math.random().toString(36).slice(2)}@lecunlock.edu`,
+    email: `${name.toLowerCase().replace(/\s+/g, "")}${uniq}@lecunlock.edu`,
+    IndexNumber: `LCU/${uniq}`,
     password: STUDENT_PASSWORD,
     role: "student",
     company: companyId,

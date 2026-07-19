@@ -51,9 +51,11 @@ const STUDENT_PASSWORD = randPassword();
 let hodToken, companyId;
 
 async function makeStudent(overrides = {}) {
+  const uniq = `${Date.now()}${Math.random().toString(36).slice(2, 8)}`;
   const student = await User.create({
     name: "Cooldown Student",
-    email: `student${Date.now()}${Math.random().toString(36).slice(2)}@cooldown.edu`,
+    email: `student${uniq}@cooldown.edu`,
+    IndexNumber: `CLD/${uniq}`,
     password: STUDENT_PASSWORD,
     role: "student",
     company: companyId,
