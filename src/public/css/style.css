@@ -6941,6 +6941,35 @@ table tr:hover td { background: #f8fafc !important; }
 }
 .sd-hero-btn:hover { transform: translateY(-1px); }
 
+/* Slim hero variant — used when there's no live/upcoming class, so an
+   empty timetable doesn't hog the top of the dashboard. */
+.sd-hero-mini { display: flex; align-items: center; gap: 12px; padding: 13px 15px; }
+.sd-hero-mini .sd-hero-icon { width: 34px; height: 34px; border-radius: 9px; margin-bottom: 0; flex-shrink: 0; }
+.sd-hero-mini .sd-hero-eyebrow { font-size: 10px; }
+.sd-hero-mini .sd-hero-title { font-size: 14.5px; margin-top: 1px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.sd-hero-mini-btn {
+  background: rgba(255,255,255,.16); color: #fff; border: 1px solid rgba(255,255,255,.4);
+  border-radius: 9px; padding: 7px 12px; font-size: 12px; font-weight: 700;
+  cursor: pointer; flex-shrink: 0; white-space: nowrap;
+}
+
+/* Compact one-line class-rep chip (replaces the old tall banner) */
+.sd-rep-chip {
+  display: flex; align-items: center; gap: 10px;
+  background: linear-gradient(135deg, #ede9fe, #f5f3ff); border: 1px solid #ddd6fe;
+  border-radius: 12px; padding: 10px 14px; margin-bottom: 14px; cursor: pointer;
+}
+.sd-rep-badge {
+  background: #7c3aed; color: #fff; font-size: 9.5px; font-weight: 800;
+  padding: 3px 8px; border-radius: 20px; letter-spacing: .5px; flex-shrink: 0;
+}
+.sd-rep-chip-text {
+  flex: 1; font-size: 13px; font-weight: 600; color: #5b21b6;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+[data-theme="dark"] .sd-rep-chip { background: #1e1b34; border-color: #3b2f63; }
+[data-theme="dark"] .sd-rep-chip-text { color: #c4b5fd; }
+
 .sd-notif-card { margin-top: 8px; }
 
 @media (max-width: 900px) {
