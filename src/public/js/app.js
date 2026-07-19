@@ -3145,6 +3145,7 @@ function buildSidebar() {
       }
       if (currentUser.company?.mode === 'academic' || currentUser.company?.mode === 'both') {
         links.push({ id: 'sessions', label: 'Sessions', icon: sessionsIcon() });
+        links.push({ id: 'attendance-settings', label: 'Attendance Settings', icon: svgIcon('<circle cx="12" cy="12" r="3"/><path d="M12 1v6m0 6v6m11-7h-6m-6 0H1"/>') });
         links.push({ id: 'admin-lecturer-activity', label: 'Lecturer Activity', icon: svgIcon('<rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/>') });
         links.push({ sep: true, label: 'ACADEMIC' });
         links.push({ id: 'courses', label: 'Courses', icon: coursesIcon() });
@@ -3656,6 +3657,7 @@ function navigateTo(view) {
     case 'sign-in-out': renderSignInOut(); break;
     case 'corp-attendance': renderCorporateAttendance(); break;
     case 'corp-clock-settings': renderCorpClockSettings(); break;
+    case 'attendance-settings': renderAcademicAttendanceSettings(); break;
     case 'arrival-iq-settings': renderArrivalIQSettings(); break;
     case 'api-access': renderApiAccess(); break;
     case 'arrival-iq': renderArrivalIQ(); break;
@@ -8742,6 +8744,14 @@ async function showGpsSessionModal() {
   container.classList.remove('hidden');
   container.innerHTML = `<div class="modal-overlay"><div class="modal"><p style="color:var(--text-muted);text-align:center;padding:16px 0">📍 Getting your location…</p></div></div>`;
 
+  // Campus defaults (admin-set, via Attendance Settings) — a saved campus
+  // center + default radius the lecturer can anchor to instead of their own
+  // live position. Best-effort: any failure just falls back to live location.
+  let campus = {};
+  try { campus = await api('/api/attendance-sessions/campus-settings'); } catch (_) {}
+  const hasCampus = campus.campusLatitude != null && campus.campusLongitude != null;
+  const defaultRadius = campus.defaultGeofenceRadiusMeters || 100;
+
   let loc;
   try {
     loc = await _getGPSLocation();
@@ -8750,6 +8760,11 @@ async function showGpsSessionModal() {
     // _getGPSLocation — translate it to friendly, actionable guidance
     // instead of showing the code, matching the corporate clock-in flow.
     const code = e.message || 'GPS_ERROR';
+    // With a saved campus center, the lecturer can still start a session even
+    // if their own GPS is unavailable — offer that as an escape hatch.
+    const campusFallback = hasCampus
+      ? `<button class="btn btn-secondary btn-sm" style="margin-top:10px;width:100%" onclick="_startGpsSessionFromCampus()">📍 Use saved campus location instead</button>`
+      : '';
     container.innerHTML = `
       <div class="modal-overlay" onclick="closeModal(event)">
         <div class="modal" onclick="event.stopPropagation()" style="text-align:center;max-width:400px">
@@ -8784,13 +8799,121 @@ async function showGpsSessionModal() {
     return;
   }
 
+  // Radius options with the admin's configured default pre-selected. If the
+  // default isn't one of the presets, add it as its own option so it's honoured.
+  const radiusPresets = [50, 100, 200, 500];
+  const radiusLabels = { 50: '50 m — single classroom', 100: '100 m — building', 200: '200 m — large hall / block', 500: '500 m — campus area' };
+  const radiusOpts = (radiusPresets.includes(defaultRadius) ? radiusPresets : [defaultRadius, ...radiusPresets])
+    .map(r => `<option value="${r}" ${r === defaultRadius ? 'selected' : ''}>${radiusLabels[r] || (r + ' m')}</option>`).join('');
+
+  // If a campus center is configured, let the lecturer anchor the session to it
+  // (admin-set boundary) instead of their own live position.
+  const centerChoice = hasCampus ? `
+    <div class="form-group">
+      <label>Class Center</label>
+      <div style="display:flex;flex-direction:column;gap:6px;margin-top:4px">
+        <label style="display:flex;align-items:center;gap:8px;font-size:13px;cursor:pointer;font-weight:400">
+          <input type="radio" name="gps-center" value="me" checked> My current location (±${Math.round(loc.accuracy)}m)
+        </label>
+        <label style="display:flex;align-items:center;gap:8px;font-size:13px;cursor:pointer;font-weight:400">
+          <input type="radio" name="gps-center" value="campus"> Campus location (set by admin)
+        </label>
+      </div>
+    </div>` : '';
+
   container.innerHTML = `
     <div class="modal-overlay" onclick="closeModal(event)">
       <div class="modal" onclick="event.stopPropagation()" style="max-width:440px">
         <h3>Start GPS Check-in Session</h3>
         <div style="background:#eff6ff;border:1px solid #bfdbfe;border-radius:8px;padding:10px 14px;font-size:12px;color:#1e40af;margin:10px 0 14px;display:flex;gap:8px;align-items:flex-start">
           <span style="font-size:16px;flex-shrink:0">📍</span>
-          <div>Students mark attendance by sharing their GPS position — anyone outside the radius is rejected. No classroom device needed. Your current location (±${Math.round(loc.accuracy)}m) is the class center.</div>
+          <div>Students mark attendance by sharing their GPS position — anyone outside the radius is rejected. No classroom device needed.${hasCampus ? '' : ` Your current location (±${Math.round(loc.accuracy)}m) is the class center.`}</div>
+        </div>
+        <div class="form-group">
+          <label>Course <span style="color:red">*</span></label>
+          <select id="gps-session-course" style="width:100%;padding:9px 12px;border:1.5px solid var(--border);border-radius:8px;font-size:13px">
+            <option value="">— Select Course —</option>
+            ${courses.map(c => `<option value="${c._id}">${esc(c.title)}${c.level ? ' · L' + c.level : ''}${c.group ? ' · Grp ' + c.group : ''}</option>`).join('')}
+          </select>
+        </div>
+        ${centerChoice}
+        <div class="form-group">
+          <label>Check-in Radius</label>
+          <select id="gps-session-radius" style="width:100%;padding:9px 12px;border:1.5px solid var(--border);border-radius:8px;font-size:13px">
+            ${radiusOpts}
+          </select>
+        </div>
+        <div class="form-group">
+          <label>Session Title <span style="font-weight:400;color:var(--text-muted);font-size:12px">(optional)</span></label>
+          <input type="text" id="gps-session-title" placeholder="e.g., Week 5 Lecture">
+        </div>
+        <div class="modal-actions">
+          <button class="btn btn-secondary btn-sm" onclick="closeModal()">Cancel</button>
+          <button class="btn btn-primary btn-sm" onclick="startGpsSession(${loc.latitude}, ${loc.longitude}, ${hasCampus ? campus.campusLatitude : 'null'}, ${hasCampus ? campus.campusLongitude : 'null'})">Start GPS Session</button>
+        </div>
+      </div>
+    </div>`;
+}
+
+async function startGpsSession(latitude, longitude, campusLat = null, campusLng = null) {
+  const courseId = document.getElementById('gps-session-course')?.value;
+  const radius   = Number(document.getElementById('gps-session-radius')?.value) || 100;
+  const title    = document.getElementById('gps-session-title')?.value?.trim() || '';
+  if (!courseId) { toastWarning('Please select a course.'); return; }
+
+  // Honour the "Class Center" choice — the admin-set campus center, or the
+  // lecturer's own live position (the default).
+  let lat = latitude, lng = longitude;
+  const centerChoice = document.querySelector('input[name="gps-center"]:checked')?.value;
+  if (centerChoice === 'campus' && campusLat != null && campusLng != null) {
+    lat = campusLat; lng = campusLng;
+  }
+  try {
+    await api('/api/attendance-sessions/start', {
+      method: 'POST',
+      body: JSON.stringify({ title, courseId, gpsGeofence: { latitude: lat, longitude: lng, radiusMeters: radius } }),
+    });
+    closeModal();
+    toastSuccess('GPS session started — students can now check in with their location.');
+    renderSessions();
+  } catch (e) {
+    toastError(e.message || 'Failed to start GPS session');
+  }
+}
+
+// Escape hatch from the "Location Unavailable" state: start a GPS session
+// anchored to the admin-set campus location when the lecturer's own GPS fails.
+window._startGpsSessionFromCampus = async function() {
+  let campus = {};
+  try { campus = await api('/api/attendance-sessions/campus-settings'); } catch (_) {}
+  if (campus.campusLatitude == null || campus.campusLongitude == null) {
+    toastError('No campus location is set. Ask your admin to set one in Attendance Settings.');
+    return;
+  }
+  const container = document.getElementById('modal-container');
+  if (!container) return;
+  const defaultRadius = campus.defaultGeofenceRadiusMeters || 100;
+
+  let courses = [];
+  try {
+    const d = await api('/api/courses');
+    courses = (d.courses || d || []).filter(c => !c.needsApproval || c.approvalStatus === 'approved');
+  } catch (_) {}
+  if (!courses.length) { toastError('Could not load your courses. Check your connection and try again.'); return; }
+
+  const radiusPresets = [50, 100, 200, 500];
+  const radiusLabels = { 50: '50 m — single classroom', 100: '100 m — building', 200: '200 m — large hall / block', 500: '500 m — campus area' };
+  const radiusOpts = (radiusPresets.includes(defaultRadius) ? radiusPresets : [defaultRadius, ...radiusPresets])
+    .map(r => `<option value="${r}" ${r === defaultRadius ? 'selected' : ''}>${radiusLabels[r] || (r + ' m')}</option>`).join('');
+
+  container.classList.remove('hidden');
+  container.innerHTML = `
+    <div class="modal-overlay" onclick="closeModal(event)">
+      <div class="modal" onclick="event.stopPropagation()" style="max-width:440px">
+        <h3>Start GPS Check-in Session</h3>
+        <div style="background:#eff6ff;border:1px solid #bfdbfe;border-radius:8px;padding:10px 14px;font-size:12px;color:#1e40af;margin:10px 0 14px;display:flex;gap:8px;align-items:flex-start">
+          <span style="font-size:16px;flex-shrink:0">📍</span>
+          <div>Using the <strong>admin-set campus location</strong> as the class center — students outside the radius are rejected. No classroom device needed.</div>
         </div>
         <div class="form-group">
           <label>Course <span style="color:red">*</span></label>
@@ -8801,12 +8924,7 @@ async function showGpsSessionModal() {
         </div>
         <div class="form-group">
           <label>Check-in Radius</label>
-          <select id="gps-session-radius" style="width:100%;padding:9px 12px;border:1.5px solid var(--border);border-radius:8px;font-size:13px">
-            <option value="50">50 m — single classroom</option>
-            <option value="100" selected>100 m — building</option>
-            <option value="200">200 m — large hall / block</option>
-            <option value="500">500 m — campus area</option>
-          </select>
+          <select id="gps-session-radius" style="width:100%;padding:9px 12px;border:1.5px solid var(--border);border-radius:8px;font-size:13px">${radiusOpts}</select>
         </div>
         <div class="form-group">
           <label>Session Title <span style="font-weight:400;color:var(--text-muted);font-size:12px">(optional)</span></label>
@@ -8814,29 +8932,11 @@ async function showGpsSessionModal() {
         </div>
         <div class="modal-actions">
           <button class="btn btn-secondary btn-sm" onclick="closeModal()">Cancel</button>
-          <button class="btn btn-primary btn-sm" onclick="startGpsSession(${loc.latitude}, ${loc.longitude})">Start GPS Session</button>
+          <button class="btn btn-primary btn-sm" onclick="startGpsSession(${campus.campusLatitude}, ${campus.campusLongitude})">Start GPS Session</button>
         </div>
       </div>
     </div>`;
-}
-
-async function startGpsSession(latitude, longitude) {
-  const courseId = document.getElementById('gps-session-course')?.value;
-  const radius   = Number(document.getElementById('gps-session-radius')?.value) || 100;
-  const title    = document.getElementById('gps-session-title')?.value?.trim() || '';
-  if (!courseId) { toastWarning('Please select a course.'); return; }
-  try {
-    await api('/api/attendance-sessions/start', {
-      method: 'POST',
-      body: JSON.stringify({ title, courseId, gpsGeofence: { latitude, longitude, radiusMeters: radius } }),
-    });
-    closeModal();
-    toastSuccess('GPS session started — students can now check in with their location.');
-    renderSessions();
-  } catch (e) {
-    toastError(e.message || 'Failed to start GPS session');
-  }
-}
+};
 
 async function loadSessionDevices(courseId) {
   const group  = document.getElementById('session-device-group');
@@ -20333,6 +20433,149 @@ async function renderCorpClockSettings() {
     content.innerHTML = `<div class="card"><p style="color:var(--danger)">${esc(e.message)}</p></div>`;
   }
 }
+
+// ── Academic Attendance Settings (campus GPS geofence) ──────────────────────
+// The academic counterpart of renderCorpClockSettings: instead of a workforce
+// clock-in geofence + WiFi/time windows, academic admins configure a campus
+// center + default GPS check-in radius that the hardware-free GPS session flow
+// pre-fills, plus whether a classroom device is required.
+async function renderAcademicAttendanceSettings() {
+  const content = document.getElementById('main-content');
+  if (!content) return;
+  content.innerHTML = '<div class="loading">Loading settings…</div>';
+  try {
+    const s = await api('/api/attendance-sessions/campus-settings').catch(() => ({}));
+    const hasCampus = s.campusLatitude != null && s.campusLongitude != null;
+
+    content.innerHTML = `
+      <div class="page-header" style="display:flex;align-items:flex-start;justify-content:space-between;flex-wrap:wrap;gap:12px;">
+        <div>
+          <h2>Attendance Settings</h2>
+          <p>Configure the campus location and GPS check-in defaults for hardware-free attendance.</p>
+        </div>
+        <button class="btn btn-secondary btn-sm" onclick="navigateTo('sessions')">← Sessions</button>
+      </div>
+
+      <div class="card" style="max-width:600px;margin-bottom:20px">
+        <h3 style="font-size:15px;font-weight:700;margin-bottom:4px">Campus Geofence</h3>
+        <p style="font-size:12px;color:var(--text-light);margin-bottom:8px">Set your campus location once, and lecturers can anchor a GPS check-in session to it — students outside the radius are rejected. Stand on campus and tap <strong>Detect Location</strong>, or enter coordinates manually.${hasCampus ? '' : ' Leave blank to have each lecturer use their own current position as the class center instead (the original behaviour).'}</p>
+        ${hasCampus
+          ? `<div style="font-size:12.5px;margin-bottom:12px;color:var(--text-muted)">Current campus center: <strong>${s.campusLatitude.toFixed(6)}, ${s.campusLongitude.toFixed(6)}</strong></div>`
+          : ''}
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:8px">
+          <div>
+            <label style="font-size:11px;font-weight:700;text-transform:uppercase;color:var(--text-muted)">Latitude</label>
+            <input id="aas-lat" type="number" step="any" value="${s.campusLatitude ?? ''}" placeholder="e.g. 5.6037" style="width:100%;padding:8px;border:1px solid var(--border);border-radius:6px;font-size:13px">
+          </div>
+          <div>
+            <label style="font-size:11px;font-weight:700;text-transform:uppercase;color:var(--text-muted)">Longitude</label>
+            <input id="aas-lng" type="number" step="any" value="${s.campusLongitude ?? ''}" placeholder="e.g. -0.1870" style="width:100%;padding:8px;border:1px solid var(--border);border-radius:6px;font-size:13px">
+          </div>
+        </div>
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:14px">
+          <button id="aas-detect-btn" onclick="_aasDetectLocation()" type="button" style="background:#f1f5f9;border:none;border-radius:6px;padding:5px 10px;font-size:11px;font-weight:600;cursor:pointer">Detect Location</button>
+          <span id="aas-geo-status" style="font-size:11px;color:var(--text-muted)"></span>
+          ${hasCampus ? `<button onclick="_aasClearCampus()" type="button" style="background:none;border:none;color:var(--danger);font-size:11px;font-weight:600;cursor:pointer;margin-left:auto">Clear campus location</button>` : ''}
+        </div>
+        <div>
+          <label style="font-size:11px;font-weight:700;text-transform:uppercase;color:var(--text-muted)">Default Check-in Radius (metres)</label>
+          <input id="aas-radius" type="number" min="20" max="1000" value="${s.defaultGeofenceRadiusMeters || 100}" placeholder="100" style="width:120px;padding:8px;border:1px solid var(--border);border-radius:6px;font-size:13px;display:block">
+          <div style="font-size:11px;color:var(--text-light);margin-top:4px">Pre-selected when a lecturer starts a GPS check-in session (they can still change it per session).</div>
+        </div>
+        <button class="btn btn-primary" onclick="_aasSaveSettings()" style="margin-top:14px">Save Attendance Settings</button>
+      </div>
+
+      <div class="card" style="max-width:600px">
+        <h3 style="font-size:15px;font-weight:700;margin-bottom:4px">Attendance Method</h3>
+        <p style="font-size:12px;color:var(--text-light);margin-bottom:14px">Control whether lecturers must use a classroom device or can fall back to GPS check-in.</p>
+        <div style="display:flex;align-items:center;justify-content:space-between;padding:12px 0">
+          <div>
+            <div style="font-weight:600;font-size:13px">Require classroom device</div>
+            <div style="font-size:11px;color:var(--text-light)">On: lecturers must use a paired attendance device. Off (default): the hardware-free GPS check-in is always available as a fallback.</div>
+          </div>
+          <label style="display:flex;align-items:center;gap:8px;cursor:pointer">
+            <input type="checkbox" id="aas-require-device" ${s.requireEsp32Attendance ? 'checked' : ''} style="width:16px;height:16px;cursor:pointer">
+          </label>
+        </div>
+        <button class="btn btn-primary" onclick="_aasSaveSettings()" style="margin-top:8px">Save Attendance Settings</button>
+      </div>`;
+  } catch(e) {
+    content.innerHTML = `<div class="card"><p style="color:var(--danger)">${esc(e.message)}</p></div>`;
+  }
+}
+
+async function _aasDetectLocation() {
+  const btn = document.getElementById('aas-detect-btn');
+  const status = document.getElementById('aas-geo-status');
+  if (!navigator.geolocation) { toastError('This browser/device does not support location detection.'); return; }
+  if (btn) { btn.disabled = true; btn.textContent = 'Detecting…'; }
+  if (status) status.textContent = '';
+  navigator.geolocation.getCurrentPosition(
+    pos => {
+      const { latitude, longitude, accuracy } = pos.coords;
+      const latEl = document.getElementById('aas-lat');
+      const lngEl = document.getElementById('aas-lng');
+      if (latEl) latEl.value = latitude.toFixed(6);
+      if (lngEl) lngEl.value = longitude.toFixed(6);
+      if (btn) { btn.disabled = false; btn.textContent = 'Detect Location'; }
+      const accText = Math.round(accuracy);
+      if (status) {
+        status.textContent = `Detected — accurate to ±${accText}m`;
+        status.style.color = accuracy <= 30 ? 'var(--success)' : accuracy <= 100 ? '#d97706' : 'var(--danger)';
+      }
+      if (accuracy > 100) {
+        toastInfo(`Location detected, but accuracy is only ±${accText}m. For a reliable geofence, try again outdoors or on WiFi/GPS.`);
+      } else {
+        toastSuccess(`Location detected (±${accText}m) — click Save to apply`);
+      }
+    },
+    err => {
+      if (btn) { btn.disabled = false; btn.textContent = 'Detect Location'; }
+      const msg = err.code === err.PERMISSION_DENIED
+        ? 'Location permission denied. Enable location access for this site and try again.'
+        : err.code === err.TIMEOUT
+        ? 'Location detection timed out. Try again with a clearer GPS/WiFi signal.'
+        : 'Could not detect your location. Enter latitude/longitude manually.';
+      if (status) { status.textContent = msg; status.style.color = 'var(--danger)'; }
+      toastError(msg);
+    },
+    { enableHighAccuracy: true, timeout: 20000, maximumAge: 0 }
+  );
+}
+
+async function _aasSaveSettings() {
+  const lat    = document.getElementById('aas-lat')?.value;
+  const lng    = document.getElementById('aas-lng')?.value;
+  const radius = document.getElementById('aas-radius')?.value;
+  const reqDev = document.getElementById('aas-require-device')?.checked ?? false;
+  // Both lat and lng must be present together, or both cleared.
+  if ((lat && !lng) || (!lat && lng)) { toastError('Enter both latitude and longitude, or clear both.'); return; }
+  try {
+    await api('/api/attendance-sessions/campus-settings', {
+      method: 'PATCH',
+      body: JSON.stringify({
+        campusLatitude:  lat ? parseFloat(lat) : null,
+        campusLongitude: lng ? parseFloat(lng) : null,
+        defaultGeofenceRadiusMeters: radius ? parseInt(radius, 10) : 100,
+        requireEsp32Attendance: reqDev,
+      }),
+    });
+    toastSuccess('Attendance settings saved');
+    renderAcademicAttendanceSettings();
+  } catch(e) { toastError(e.message || 'Failed to save settings'); }
+}
+
+window._aasClearCampus = async function() {
+  if (!confirm('Clear the campus location? Lecturers will fall back to using their own current position as the class center.')) return;
+  try {
+    await api('/api/attendance-sessions/campus-settings', {
+      method: 'PATCH',
+      body: JSON.stringify({ campusLatitude: null, campusLongitude: null }),
+    });
+    toastSuccess('Campus location cleared');
+    renderAcademicAttendanceSettings();
+  } catch(e) { toastError(e.message || 'Failed to clear campus location'); }
+};
 
 // ── ArrivalIQ (Smart Arrival Assistant) — admin settings ────────────────────
 async function renderArrivalIQSettings() {

@@ -22,6 +22,10 @@ router.get("/", requireRole("manager", "lecturer", "admin", "superadmin", "hod")
 router.get("/active", companyIsolation, attendanceController.getActiveSession);
 router.get("/my-attendance", attendanceController.getMyAttendance);
 router.get("/sign-in-status", attendanceController.getSignInStatus);
+// Academic GPS attendance settings (campus geofence defaults) — admin-only.
+// Static paths, so they must sit above the dynamic /:id routes below.
+router.get("/campus-settings", requireRole("admin", "superadmin"), attendanceController.getCampusSettings);
+router.patch("/campus-settings", requireRole("admin", "superadmin"), attendanceController.updateCampusSettings);
 router.post("/sign-in", requireRole("employee", "admin", "manager"), attendanceController.employeeSignIn);
 router.post("/sign-out", requireRole("employee", "admin", "manager"), attendanceController.employeeSignOut);
 router.post("/mark", attendanceMarkLimiter, requireRole("student", "employee"), requireNoDeviceLock, enforceLogoutRestriction, attendanceController.markAttendance);
