@@ -2380,9 +2380,22 @@ input[type="checkbox"] {
   [style*="minmax(240px"] { grid-template-columns: 1fr !important; }
 
   /* ── Trial / expired banners ──────────────────── */
+  /* At this width, .sub-banner-left (icon + title + "·" + detail) and
+     .sub-banner-right (pill + button) fighting for one row leaves too
+     little space for the text — .sub-banner-text's flex-wrap then wraps
+     BETWEEN spans instead of within them, stranding the "·" separator
+     alone on its own line. Stack left/right onto two full-width rows so
+     the text always has the whole banner width to lay out on one line. */
   .trial-banner,
   .trial-expired-banner,
-  .hr-access-banner { font-size: 11px; padding: 6px 10px; }
+  .hr-access-banner {
+    font-size: 11px;
+    padding: 8px 10px;
+    flex-wrap: wrap;
+    row-gap: 8px;
+  }
+  .sub-banner-left { flex: 1 1 100%; }
+  .sub-banner-right { flex: 1 1 100%; justify-content: flex-end; }
 
   /* ── Bottom nav ───────────────────────────────── */
   .bottom-nav-item { gap: 3px; }
