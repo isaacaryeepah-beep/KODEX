@@ -7612,3 +7612,29 @@ table tr:hover td { background: #f8fafc !important; }
     animation: none !important;
   }
 }
+
+/* ══════════════════════════════════════════════════
+   MOBILE DENSITY PASS — dashboards felt packed on phones: shrink the
+   oversized stat digits (a late layer forces 36px), tighten card padding
+   and vertical rhythm. Kept at the END of the file so these win the
+   cascade over the earlier !important layers.
+══════════════════════════════════════════════════ */
+@media (max-width: 480px) {
+  .page-header h2 { font-size: 20px; }
+  .page-header p { font-size: 12.5px; }
+
+  .stats-grid { gap: 9px; margin-bottom: 12px; }
+  .stat-card-v2 { padding: 11px 13px !important; border-radius: 12px !important; }
+  .stat-card-v2 .stat-header { margin-bottom: 3px !important; }
+  .stat-card-v2 .stat-label { font-size: 9.5px !important; letter-spacing: .4px !important; }
+  .stat-card-v2 .stat-value { font-size: 22px !important; letter-spacing: -.5px !important; }
+
+  /* The whole band is tappable, so the arrow CTA is dead weight on phones */
+  .adx-ai-band { padding: 11px 13px !important; border-radius: 12px !important; }
+  .adx-ai-headline { font-size: 12.5px !important; }
+  .adx-ai-cta { display: none !important; }
+
+  .sd-hero-card { margin-bottom: 12px; }
+  .sd-rep-chip { padding: 8px 12px; margin-bottom: 12px; }
+  .quick-actions-bar { padding: 12px 14px !important; }
+}
