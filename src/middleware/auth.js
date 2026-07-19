@@ -54,7 +54,14 @@ const authenticate = async (req, res, next) => {
     const fullPath = (req.originalUrl || req.url || '').split('?')[0];
     const isExempt = EXEMPT.some(p => fullPath.startsWith(p));
 
-    if (!isExempt && user.role !== 'superadmin') {
+    // Honour the platform-wide subscription kill-switch: when the superadmin
+    // turns enforcement off, THIS gate must open too — it fires before
+    // requireActiveSubscription ever runs, so skipping only that middleware
+    // would still leave everyone 402-blocked here.
+    const { subscriptionEnforced } = require('./subscription');
+    const enforced = await subscriptionEnforced().catch(() => true);
+
+    if (!isExempt && enforced && user.role !== 'superadmin') {
       const now = Date.now();
       // 3-day grace period — buffer for payment processing delays
       const GRACE_MS = 3 * 24 * 60 * 60 * 1000;

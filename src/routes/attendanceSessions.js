@@ -29,6 +29,10 @@ router.patch("/campus-settings", requireRole("admin", "superadmin"), attendanceC
 router.post("/sign-in", requireRole("employee", "admin", "manager"), attendanceController.employeeSignIn);
 router.post("/sign-out", requireRole("employee", "admin", "manager"), attendanceController.employeeSignOut);
 router.post("/mark", attendanceMarkLimiter, requireRole("student", "employee"), requireNoDeviceLock, enforceLogoutRestriction, attendanceController.markAttendance);
+// Add time to a running session's marking window. Students are allowed
+// through the role gate because class reps are students — the controller
+// verifies isClassRep + course enrollment before permitting.
+router.post("/:id/extend", requireRole("lecturer", "hod", "admin", "superadmin", "student"), companyIsolation, attendanceController.extendSession);
 router.get("/flagged/new-devices", requireRole("lecturer", "hod", "admin", "superadmin"), companyIsolation, attendanceController.getFlaggedNewDevices);
 router.post("/flagged/:recordId/resolve", requireRole("lecturer", "hod", "admin", "superadmin"), companyIsolation, attendanceController.resolveFlaggedRecord);
 router.post("/flagged/:recordId/trust", requireRole("lecturer", "hod", "admin", "superadmin"), companyIsolation, attendanceController.trustFlaggedDevice);

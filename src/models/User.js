@@ -332,6 +332,18 @@ const userSchema = new mongoose.Schema(
       _id: false,
     },
 
+    // ── Lecturer saved class locations (multi-campus GPS sessions) ──────────
+    // A lecturer teaching on several campuses saves each spot once, then picks
+    // it when starting a GPS session instead of relying on live GPS or the
+    // single institution-wide campus default.
+    savedClassLocations: [{
+      name:         { type: String, trim: true, required: true, maxlength: 60 },
+      latitude:     { type: Number, required: true, min: -90,  max: 90 },
+      longitude:    { type: Number, required: true, min: -180, max: 180 },
+      radiusMeters: { type: Number, default: 100, min: 20, max: 1000 },
+      createdAt:    { type: Date, default: Date.now },
+    }],
+
     // ── ArrivalIQ consent (Smart Arrival Assistant) ─────────────────────────
     // Explicit per-user opt-in, separate from company-level arrivalIQ.enabled.
     // Location is only ever read around shift time for travel estimation —

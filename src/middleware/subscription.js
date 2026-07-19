@@ -1,4 +1,38 @@
 const Company = require("../models/Company");
+const PlatformSettings = require("../models/PlatformSettings");
+
+// ── Global enforcement kill-switch ───────────────────────────────────────────
+// Superadmin can turn subscription enforcement off platform-wide
+// (PlatformSettings.subscriptionEnforced). Cached briefly so the check adds
+// no DB read to most requests; the superadmin toggle route clears the cache
+// on write, and other instances converge within the TTL.
+const ENFORCEMENT_TTL_MS = 30 * 1000;
+let _enforcementCache = { value: true, fetchedAt: 0 };
+
+async function subscriptionEnforced() {
+  if (Date.now() - _enforcementCache.fetchedAt < ENFORCEMENT_TTL_MS) {
+    return _enforcementCache.value;
+  }
+  // No usable DB connection → return the last known value immediately
+  // instead of letting mongoose buffer the query (which can hang callers
+  // for seconds during reconnects). Fail-safe default is "enforced".
+  const mongoose = require("mongoose");
+  if (mongoose.connection.readyState !== 1) {
+    return _enforcementCache.value;
+  }
+  try {
+    const s = await PlatformSettings.findOne().select("subscriptionEnforced").lean();
+    _enforcementCache = { value: s ? s.subscriptionEnforced !== false : true, fetchedAt: Date.now() };
+  } catch (_) {
+    // DB hiccup — keep the last known value, retry after the TTL
+    _enforcementCache.fetchedAt = Date.now();
+  }
+  return _enforcementCache.value;
+}
+
+function clearEnforcementCache() {
+  _enforcementCache = { value: true, fetchedAt: 0 };
+}
 
 const requireActiveSubscription = async (req, res, next) => {
   if (!req.user) {
@@ -9,6 +43,10 @@ const requireActiveSubscription = async (req, res, next) => {
   // Admin is exempt -- they own the company, blocking them locks them out of their own account
   const alwaysExempt = ["superadmin", "admin", "employee", "student"];  // hod & manager follow subscription rules
   if (alwaysExempt.includes(req.user.role)) {
+    return next();
+  }
+
+  if (!(await subscriptionEnforced())) {
     return next();
   }
 
@@ -77,6 +115,10 @@ const requirePlan = (...allowedPlans) => {
       return next();
     }
 
+    if (!(await subscriptionEnforced())) {
+      return next();
+    }
+
     try {
       const company = req.company || await Company.findById(req.user.company);
 
@@ -105,4 +147,4 @@ const requirePlan = (...allowedPlans) => {
   };
 };
 
-module.exports = { requireActiveSubscription, requirePlan };
+module.exports = { requireActiveSubscription, requirePlan, clearEnforcementCache, subscriptionEnforced };
