@@ -5,6 +5,73 @@ const Company = require("../models/Company");
 const Course = require("../models/Course");
 const { ROLE_HIERARCHY } = require("../middleware/role");
 const { getVisibleUserIds, getMyActiveHRAssignment } = require("../utils/corporateScope");
+const { SIX_HOURS_MS } = require("../middleware/deviceValidation");
+const AttendanceSession = require("../models/AttendanceSession");
+const Timetable = require("../models/Timetable");
+
+const IN_PROGRESS_SESSION_STATUSES = ["active", "live", "paused", "locked"];
+const UNLOCK_TIMETABLE_GRACE_MIN = 15;
+
+function _hhmmToMinutes(s) {
+  const [h, m] = String(s || "").split(":").map(Number);
+  if (!Number.isFinite(h) || !Number.isFinite(m)) return null;
+  return h * 60 + m;
+}
+
+// Lecturers may unlock students only mid-class: an attendance session of
+// theirs must be in progress, and — when the institution keeps a timetable
+// for them — the current time must fall inside one of their scheduled slots
+// (±15 min grace), with the unlock scoped to the course scheduled right now.
+// Otherwise a lecturer could start a session at any hour purely to unlock.
+// Lecturers with no timetable entries at all fall back to the session's
+// course (any of their courses for course-less sessions).
+// Returns { session, courseFilter, reason } — a set reason means refuse:
+// "no_session" or "outside_timetable".
+async function lecturerUnlockScope(lecturer) {
+  const session = await AttendanceSession.findOne({
+    company: lecturer.company,
+    createdBy: lecturer._id,
+    status: { $in: IN_PROGRESS_SESSION_STATUSES },
+  }).select("_id course").lean();
+  if (!session) return { session: null, courseFilter: null, reason: "no_session" };
+
+  const slots = await Timetable.find({
+    company: lecturer.company,
+    lecturer: lecturer._id,
+    isActive: true,
+  }).select("course dayOfWeek startTime endTime").lean();
+
+  if (slots.length) {
+    const now = new Date();
+    const nowMin = now.getHours() * 60 + now.getMinutes();
+    const covering = slots.filter(sl => {
+      if (sl.dayOfWeek !== now.getDay()) return false;
+      const start = _hhmmToMinutes(sl.startTime);
+      const end = _hhmmToMinutes(sl.endTime);
+      if (start === null || end === null) return false;
+      return nowMin >= start - UNLOCK_TIMETABLE_GRACE_MIN && nowMin <= end + UNLOCK_TIMETABLE_GRACE_MIN;
+    });
+    if (!covering.length) return { session, courseFilter: null, reason: "outside_timetable" };
+
+    const coveringCourseIds = covering.map(sl => String(sl.course));
+    if (session.course) {
+      if (!coveringCourseIds.includes(String(session.course))) {
+        return { session, courseFilter: null, reason: "outside_timetable" };
+      }
+      return { session, courseFilter: { _id: session.course, companyId: lecturer.company }, reason: null };
+    }
+    return {
+      session,
+      courseFilter: { _id: { $in: covering.map(sl => sl.course) }, companyId: lecturer.company },
+      reason: null,
+    };
+  }
+
+  const courseFilter = session.course
+    ? { _id: session.course, companyId: lecturer.company }
+    : { companyId: lecturer.company, $or: [{ lecturerId: lecturer._id }, { createdBy: lecturer._id }] };
+  return { session, courseFilter, reason: null };
+}
 
 const ALLOWED_ROLES = ['student', 'lecturer', 'admin', 'superadmin', 'hod', 'manager', 'employee', 'class_rep'];
 
@@ -871,19 +938,51 @@ exports.unlockAccountDeviceLock = async (req, res) => {
     const user = await User.findOne({ _id: req.params.id, company: req.user.company });
     if (!user) return res.status(404).json({ error: "User not found" });
 
-    if (!user.accountDeviceLock?.isLocked) {
+    // Lecturers get a deliberately narrow unlock window: only while one of
+    // their own sessions is running, and only for students of the class
+    // being taught. (Admin/HOD/manager keep the unscoped unlock.)
+    if (req.user.role === "lecturer") {
+      if (user.role !== "student") {
+        return res.status(403).json({ error: "Lecturers can only unlock student accounts" });
+      }
+      const { courseFilter, reason } = await lecturerUnlockScope(req.user);
+      if (reason === "no_session") {
+        return res.status(403).json({ error: "You can only unlock students while your attendance session is running. Start your session first." });
+      }
+      if (reason === "outside_timetable") {
+        return res.status(403).json({ error: "You can only unlock students during your scheduled class time — check your timetable." });
+      }
+      const teaches = await Course.findOne({ ...courseFilter, enrolledStudents: user._id }).select("_id").lean();
+      if (!teaches) {
+        return res.status(403).json({ error: "You can only unlock students enrolled in the class you are currently teaching" });
+      }
+    }
+
+    const hadDeviceLock = !!user.accountDeviceLock?.isLocked;
+    // A plain logout (no device/account lock) still leaves the 6-hour
+    // enforceLogoutRestriction cooldown active. Without this check, a user
+    // blocked only by that cooldown hits the early "not currently locked"
+    // return below and never gets unlocked.
+    const hasLogoutCooldown = !!(
+      user.lastLogoutTime &&
+      Date.now() - new Date(user.lastLogoutTime).getTime() < SIX_HOURS_MS
+    );
+
+    if (!hadDeviceLock && !hasLogoutCooldown) {
       return res.json({ message: "Account is not currently locked", alreadyUnlocked: true });
     }
 
-    user.accountDeviceLock = {
-      isLocked: false,
-      lockedAt: user.accountDeviceLock.lockedAt,
-      lockedUntil: user.accountDeviceLock.lockedUntil,
-      triggerDevice: user.accountDeviceLock.triggerDevice,
-      knownDevice: user.accountDeviceLock.knownDevice,
-      unlockedBy: req.user._id,
-      unlockedAt: new Date(),
-    };
+    if (hadDeviceLock) {
+      user.accountDeviceLock = {
+        isLocked: false,
+        lockedAt: user.accountDeviceLock.lockedAt,
+        lockedUntil: user.accountDeviceLock.lockedUntil,
+        triggerDevice: user.accountDeviceLock.triggerDevice,
+        knownDevice: user.accountDeviceLock.knownDevice,
+        unlockedBy: req.user._id,
+        unlockedAt: new Date(),
+      };
+    }
     // Also clear the post-logout attendance restriction so the student
     // can mark attendance immediately after being unlocked.
     user.lastLogoutTime = null;
@@ -895,6 +994,39 @@ exports.unlockAccountDeviceLock = async (req, res) => {
   } catch (error) {
     console.error("Unlock account device lock error:", error);
     res.status(500).json({ error: "Failed to unlock account" });
+  }
+};
+
+// ── GET /api/users/lecturer-locked-students ──────────────────────────────────
+// Students the lecturer may unlock right now: enrolled in the in-progress
+// session's course (or any of their courses for course-less sessions) and
+// currently blocked by a device lock or the post-logout cooldown. Failed-login
+// locks are excluded on purpose — a student standing in class is logged in,
+// and clearing login locks stays an HOD/admin action.
+exports.lecturerLockedStudents = async (req, res) => {
+  try {
+    const { courseFilter, reason } = await lecturerUnlockScope(req.user);
+    if (reason) return res.json({ active: false, reason, students: [] });
+
+    const courses = await Course.find(courseFilter).select("enrolledStudents").lean();
+    const studentIds = [...new Set(courses.flatMap(c => (c.enrolledStudents || []).map(String)))];
+    if (!studentIds.length) return res.json({ active: true, students: [] });
+
+    const now = new Date();
+    const students = await User.find({
+      _id: { $in: studentIds },
+      company: req.user.company,
+      role: "student",
+      $or: [
+        { "accountDeviceLock.isLocked": true, "accountDeviceLock.lockedUntil": { $gt: now } },
+        { lastLogoutTime: { $gt: new Date(now.getTime() - SIX_HOURS_MS) } },
+      ],
+    }).select("name IndexNumber accountDeviceLock lastLogoutTime").lean();
+
+    res.json({ active: true, students });
+  } catch (error) {
+    console.error("Lecturer locked students error:", error);
+    res.status(500).json({ error: "Failed to fetch locked students" });
   }
 };
 

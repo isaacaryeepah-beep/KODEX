@@ -5253,6 +5253,10 @@ async function renderHodUnlockStudents() {
     function getLockInfo(s) {
       const hasDevice = s.accountDeviceLock?.isLocked && s.accountDeviceLock?.lockedUntil && new Date(s.accountDeviceLock.lockedUntil) > new Date();
       const hasLogin  = s.isLocked;
+      const cooldownUntil = s.lastLogoutTime ? new Date(new Date(s.lastLogoutTime).getTime() + 6*3600000) : null;
+      // Logging out alone (no device/login lock) still blocks attendance,
+      // quizzes and meetings for 6h — surface it so it can actually be unlocked.
+      const hasCooldown = !hasDevice && !hasLogin && cooldownUntil && cooldownUntil > new Date();
       let type, color, bg, border, reason;
       if (hasDevice && hasLogin) {
         type = 'Login + Device'; color = '#92400e'; bg = '#fef3c7'; border = '#fde68a';
@@ -5260,13 +5264,18 @@ async function renderHodUnlockStudents() {
       } else if (hasDevice) {
         type = 'New Device'; color = '#5b21b6'; bg = '#ede9fe'; border = '#c4b5fd';
         reason = `New device login detected — locked until ${new Date(s.accountDeviceLock.lockedUntil).toLocaleString([], {dateStyle:'short',timeStyle:'short'})}`;
+      } else if (hasCooldown) {
+        type = 'Post-Logout Wait'; color = '#1d4ed8'; bg = '#dbeafe'; border = '#93c5fd';
+        reason = `Logged out recently — attendance, quizzes and meetings blocked until ${cooldownUntil.toLocaleString([], {dateStyle:'short',timeStyle:'short'})}`;
       } else {
         type = 'Failed Login'; color = '#991b1b'; bg = '#fee2e2'; border = '#fca5a5';
         reason = s.lockReason || 'Too many failed login attempts';
       }
       const since = hasDevice && !hasLogin
         ? (s.accountDeviceLock.lockedUntil ? timeAgo(new Date(s.accountDeviceLock.lockedUntil).getTime() - 6*3600000) : '—')
-        : (s.lockedAt ? timeAgo(s.lockedAt) : '—');
+        : hasCooldown
+          ? (s.lastLogoutTime ? timeAgo(s.lastLogoutTime) : '—')
+          : (s.lockedAt ? timeAgo(s.lockedAt) : '—');
       return { type, color, bg, border, reason, since };
     }
 
@@ -5278,7 +5287,7 @@ async function renderHodUnlockStudents() {
         <div>
           <h2 style="margin:0 0 2px;">Locked Student Accounts</h2>
           <p style="margin:0;color:var(--text-muted);font-size:13px;">
-            ${students.length === 0 ? 'All accounts are clear' : `${students.length} account${students.length !== 1 ? 's' : ''} locked · Failed logins &amp; new device locks`}
+            ${students.length === 0 ? 'All accounts are clear' : `${students.length} account${students.length !== 1 ? 's' : ''} locked · Failed logins, new device &amp; post-logout waits`}
           </p>
         </div>
         ${students.length > 1 ? `<button class="btn btn-danger btn-sm" onclick="hodBulkUnlockSelected()" id="hod-bulk-btn" style="display:none;gap:6px;align-items:center;">
@@ -8420,6 +8429,7 @@ function _renderSessionsHTML(content, sessions, isOffline, extras) {
                 <button class="btn btn-danger btn-sm" onclick="stopSession('${s._id}')">Stop</button>
                 ${!isOffline ? `<button class="btn btn-sm" style="background:#7c3aed;color:#fff;font-size:11px" onclick="generateVerbalCode('${s._id}')">Verbal Code</button>` : ''}
                 <button class="btn btn-sm" style="font-size:11px;background:var(--bg);border:1px solid var(--border)" onclick="viewAttendees('${s._id}', '${(s.title||'Session').replace(/['\''\'']/g,'')}')">Attendees</button>
+                ${isLecturer && !isOffline ? `<button class="btn btn-sm" style="font-size:11px;background:#059669;color:#fff" onclick="showLecturerUnlockModal()" title="Unlock students in this class who are blocked by a device or post-logout lock">🔓 Unlock</button>` : ''}
               ` : ['active','live','paused','locked'].includes(s.status) ? `
                 <button class="btn btn-sm" style="font-size:11px;background:var(--bg);border:1px solid var(--border)" onclick="viewAttendees('${s._id}', '${(s.title||'Session').replace(/['\''\'']/g,'')}')">Attendees</button>
               ` : ''}</td>
@@ -8431,6 +8441,111 @@ function _renderSessionsHTML(content, sessions, isOffline, extras) {
   `;
 }
 
+
+// ── Lecturer in-session unlock modal ─────────────────────────────────────────
+// Lists students of the class being taught who are blocked by a new-device
+// lock or the 6-hour post-logout wait. Backend enforces the same scope, so
+// this only works while the lecturer has a session running.
+async function showLecturerUnlockModal() {
+  const container = document.getElementById('modal-container');
+  if (!container) return;
+  container.classList.remove('hidden');
+  container.innerHTML = `<div class="modal-overlay"><div class="modal"><p style="color:var(--text-muted);text-align:center;padding:16px 0">⏳ Checking for locked students…</p></div></div>`;
+
+  try {
+    const data = await api('/api/users/lecturer-locked-students');
+
+    if (!data.active) {
+      const outsideTT = data.reason === 'outside_timetable';
+      container.innerHTML = `
+        <div class="modal-overlay" onclick="closeModal(event)">
+          <div class="modal" onclick="event.stopPropagation()" style="text-align:center;max-width:400px">
+            <div style="font-size:40px;margin-bottom:12px">${outsideTT ? '📅' : '⏸️'}</div>
+            <h3 style="margin-bottom:8px">${outsideTT ? 'Outside Class Time' : 'No Session Running'}</h3>
+            <p style="font-size:13px;color:var(--text-muted);margin-bottom:20px">${outsideTT
+              ? 'You can only unlock students during your scheduled class time — check your timetable.'
+              : 'You can only unlock students while your attendance session is running. Start your session first.'}</p>
+            <button class="btn btn-secondary btn-sm" onclick="closeModal()">Close</button>
+          </div>
+        </div>`;
+      return;
+    }
+
+    const students = data.students || [];
+    if (!students.length) {
+      container.innerHTML = `
+        <div class="modal-overlay" onclick="closeModal(event)">
+          <div class="modal" onclick="event.stopPropagation()" style="text-align:center;max-width:400px">
+            <div style="font-size:40px;margin-bottom:12px">✅</div>
+            <h3 style="margin-bottom:8px">Nobody Is Locked</h3>
+            <p style="font-size:13px;color:var(--text-muted);margin-bottom:20px">Every student in this class can mark attendance right now.</p>
+            <button class="btn btn-secondary btn-sm" onclick="closeModal()">Close</button>
+          </div>
+        </div>`;
+      return;
+    }
+
+    const rows = students.map(s => {
+      const dev = s.accountDeviceLock?.isLocked && s.accountDeviceLock?.lockedUntil && new Date(s.accountDeviceLock.lockedUntil) > new Date();
+      const badge = dev
+        ? `<span style="background:#ede9fe;color:#5b21b6;border:1px solid #c4b5fd;padding:2px 8px;border-radius:20px;font-size:10px;font-weight:700;white-space:nowrap;">New Device</span>`
+        : `<span style="background:#dbeafe;color:#1d4ed8;border:1px solid #93c5fd;padding:2px 8px;border-radius:20px;font-size:10px;font-weight:700;white-space:nowrap;">Post-Logout Wait</span>`;
+      const until = dev
+        ? new Date(s.accountDeviceLock.lockedUntil)
+        : new Date(new Date(s.lastLogoutTime).getTime() + 6*3600000);
+      return `
+        <div id="lec-unlock-row-${s._id}" style="display:flex;align-items:center;gap:10px;padding:10px 0;border-bottom:1px solid var(--border);">
+          <div style="flex:1;min-width:0;">
+            <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+              <span style="font-weight:600;font-size:13.5px;">${esc(s.name)}</span>
+              ${badge}
+            </div>
+            <div style="font-size:11.5px;color:var(--text-muted);margin-top:2px;">
+              ${s.IndexNumber ? `<span style="font-family:monospace;">${esc(s.IndexNumber)}</span> · ` : ''}blocked until ${until.toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'})}
+            </div>
+          </div>
+          <button class="btn btn-sm" style="background:#059669;color:#fff;font-size:11.5px;flex-shrink:0;" onclick="lecturerUnlockStudent('${s._id}', this)">🔓 Unlock</button>
+        </div>`;
+    }).join('');
+
+    container.innerHTML = `
+      <div class="modal-overlay" onclick="closeModal(event)">
+        <div class="modal" onclick="event.stopPropagation()" style="max-width:460px;">
+          <h3 style="margin-bottom:4px;">Unlock Students</h3>
+          <p style="font-size:12.5px;color:var(--text-muted);margin-bottom:12px;">${students.length} student${students.length !== 1 ? 's' : ''} in this class ${students.length !== 1 ? 'are' : 'is'} currently blocked from marking attendance.</p>
+          <div style="max-height:320px;overflow-y:auto;">${rows}</div>
+          <div style="text-align:right;margin-top:14px;">
+            <button class="btn btn-secondary btn-sm" onclick="closeModal()">Close</button>
+          </div>
+        </div>
+      </div>`;
+  } catch (e) {
+    container.innerHTML = `
+      <div class="modal-overlay" onclick="closeModal(event)">
+        <div class="modal" onclick="event.stopPropagation()" style="text-align:center;max-width:400px">
+          <p style="font-size:13px;color:#dc2626;margin-bottom:16px;">${esc(e.message || 'Failed to load locked students')}</p>
+          <button class="btn btn-secondary btn-sm" onclick="closeModal()">Close</button>
+        </div>
+      </div>`;
+  }
+}
+
+async function lecturerUnlockStudent(userId, btn) {
+  if (btn) { btn.disabled = true; btn.textContent = 'Unlocking…'; }
+  try {
+    await api(`/api/users/${userId}/unlock-account-device`, { method: 'POST' });
+    const row = document.getElementById(`lec-unlock-row-${userId}`);
+    if (row) {
+      row.style.opacity = '0.55';
+      row.querySelector('button')?.remove();
+      row.insertAdjacentHTML('beforeend', `<span style="color:#059669;font-size:12px;font-weight:700;flex-shrink:0;">✓ Unlocked</span>`);
+    }
+    toastSuccess('Student unlocked — they can mark attendance now.');
+  } catch (e) {
+    if (btn) { btn.disabled = false; btn.textContent = '🔓 Unlock'; }
+    toastError(e.message || 'Failed to unlock student');
+  }
+}
 
 // ── Flagged new-device review modal ──────────────────────────────────────────
 async function showFlaggedDevicesModal(sessionId) {
