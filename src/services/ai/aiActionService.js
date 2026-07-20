@@ -80,7 +80,8 @@ const TOOLS = [
     description:
       "Summary of today's attendance in the caller's institution. Academic: " +
       "sessions started today and how many students marked. Corporate: how " +
-      "many employees clocked in today.",
+      "many employees clocked in today. For any other day or a period, use " +
+      "get_attendance_range instead.",
     input_schema: { type: "object", properties: {}, additionalProperties: false },
     roles: ["admin", "hod", "manager", "lecturer"],
     async handler(user, _input, ctx) {
@@ -114,6 +115,78 @@ const TOOLS = [
           startedAt: s.startedAt,
           marked: s.totalMarked || 0,
         })),
+      };
+    },
+  },
+  {
+    name: "get_attendance_range",
+    description:
+      "Attendance summary for a date range (inclusive) in the caller's " +
+      "institution — totals, a present/late/absent status breakdown, and a " +
+      "per-day series. Convert relative phrases ('last week', 'June') to " +
+      "explicit dates first. Maximum span 92 days.",
+    input_schema: {
+      type: "object",
+      properties: {
+        from: { type: "string", description: "Start date, YYYY-MM-DD" },
+        to: { type: "string", description: "End date (inclusive), YYYY-MM-DD" },
+      },
+      required: ["from", "to"],
+      additionalProperties: false,
+    },
+    roles: ["admin", "hod", "manager", "lecturer"],
+    async handler(user, input, ctx) {
+      const from = new Date(`${input.from}T00:00:00.000Z`);
+      const toEnd = new Date(`${input.to}T00:00:00.000Z`);
+      if (isNaN(from) || isNaN(toEnd)) return { error: "Dates must be YYYY-MM-DD" };
+      if (toEnd < from) return { error: "'to' must not be before 'from'" };
+      const spanDays = Math.round((toEnd - from) / 86400e3) + 1;
+      if (spanDays > 92) return { error: "Range too large — maximum span is 92 days" };
+      const until = new Date(toEnd.getTime() + 86400e3); // exclusive end
+
+      if (ctx.mode === "corporate") {
+        const base = { company: user.company, date: { $gte: from, $lt: until } };
+        const [total, present, late, absent] = await Promise.all([
+          CorporateAttendance.countDocuments(base),
+          CorporateAttendance.countDocuments({ ...base, status: "present" }),
+          CorporateAttendance.countDocuments({ ...base, status: "late" }),
+          CorporateAttendance.countDocuments({ ...base, status: "absent" }),
+        ]);
+        const rows = await CorporateAttendance.find(base).select("date status").lean();
+        const perDay = {};
+        for (const r of rows) {
+          const d = new Date(r.date).toISOString().slice(0, 10);
+          perDay[d] = (perDay[d] || 0) + 1;
+        }
+        return {
+          mode: "corporate", from: input.from, to: input.to, days: spanDays,
+          totalRecords: total, present, late, absent, recordsPerDay: perDay,
+        };
+      }
+
+      const sessions = await AttendanceSession.find({
+        company: user.company,
+        startedAt: { $gte: from, $lt: until },
+      }).select("startedAt totalMarked title").lean();
+      const recBase = { company: user.company, createdAt: { $gte: from, $lt: until } };
+      const [marks, present, late] = await Promise.all([
+        AttendanceRecord.countDocuments(recBase),
+        AttendanceRecord.countDocuments({ ...recBase, status: "present" }),
+        AttendanceRecord.countDocuments({ ...recBase, status: "late" }),
+      ]);
+      const perDay = {};
+      for (const s of sessions) {
+        const d = new Date(s.startedAt).toISOString().slice(0, 10);
+        perDay[d] = (perDay[d] || 0) + 1;
+      }
+      return {
+        mode: "academic", from: input.from, to: input.to, days: spanDays,
+        sessions: sessions.length, marks, present, late,
+        sessionsPerDay: perDay,
+        busiestSessions: sessions
+          .sort((a, b) => (b.totalMarked || 0) - (a.totalMarked || 0))
+          .slice(0, 5)
+          .map((s) => ({ title: s.title || "Untitled", startedAt: s.startedAt, marked: s.totalMarked || 0 })),
       };
     },
   },

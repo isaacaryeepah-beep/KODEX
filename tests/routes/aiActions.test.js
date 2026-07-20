@@ -393,6 +393,89 @@ describe("Phase 2 — propose → confirm → execute", () => {
     expect(String(after.reviewedBy)).toBe(String(corpAdmin._id));
   });
 
+  test("date-range attendance: totals, status breakdown and per-day series, company-scoped", async () => {
+    const AttendanceRecord = require("../../src/models/AttendanceRecord");
+    // Two sessions + three marks inside June 2026, one session outside the
+    // range, and one session in ANOTHER company that must not be counted.
+    const mk = (d) => new Date(`${d}T09:00:00.000Z`);
+    const s1 = await AttendanceSession.create({
+      company: acadCompany._id, createdBy: acadAdmin._id, title: "June A",
+      status: "ended", startedAt: mk("2026-06-02"), durationSeconds: 300,
+      totalMarked: 2, createdAt: mk("2026-06-02"),
+    });
+    const s2 = await AttendanceSession.create({
+      company: acadCompany._id, createdBy: acadAdmin._id, title: "June B",
+      status: "ended", startedAt: mk("2026-06-15"), durationSeconds: 300,
+      totalMarked: 1,
+    });
+    await AttendanceSession.create({
+      company: acadCompany._id, createdBy: acadAdmin._id, title: "Outside range",
+      status: "ended", startedAt: mk("2026-08-01"), durationSeconds: 300,
+    });
+    await AttendanceSession.create({
+      company: otherCompany._id, createdBy: acadAdmin._id, title: "Other company June",
+      status: "ended", startedAt: mk("2026-06-10"), durationSeconds: 300,
+    });
+    await AttendanceRecord.create([
+      { company: acadCompany._id, session: s1._id, user: student._id, status: "present", createdAt: mk("2026-06-02") },
+      { company: acadCompany._id, session: s1._id, user: acadAdmin._id, status: "late", createdAt: mk("2026-06-02") },
+      { company: acadCompany._id, session: s2._id, user: student._id, status: "present", createdAt: mk("2026-06-15") },
+    ]);
+
+    const calls = [];
+    global.__anthropicCreate = jest.fn(async (params) => {
+      calls.push(params);
+      return calls.length === 1
+        ? toolTurn("get_attendance_range", { from: "2026-06-01", to: "2026-07-03" })
+        : textTurn("Between June 1 and July 3 there were 2 sessions and 3 marks.");
+    });
+
+    const res = await request(app)
+      .post("/api/ai-actions/chat")
+      .set("Authorization", `Bearer ${acadAdminToken}`)
+      .send({ question: "Give me the attendance from 1st June to 3rd July" });
+
+    expect(res.status).toBe(200);
+    expect(res.body.toolsUsed).toContain("get_attendance_range");
+    const toolResultMsg = calls[1].messages.find(
+      (m) => Array.isArray(m.content) && m.content.some((c) => c.type === "tool_result")
+    );
+    const payload = JSON.parse(
+      toolResultMsg.content.find((c) => c.type === "tool_result").content
+    );
+    expect(payload.sessions).toBe(2);       // outside-range + other-company excluded
+    expect(payload.marks).toBe(3);
+    expect(payload.present).toBe(2);
+    expect(payload.late).toBe(1);
+    expect(payload.sessionsPerDay["2026-06-02"]).toBe(1);
+    expect(payload.sessionsPerDay["2026-06-15"]).toBe(1);
+    expect(payload.days).toBe(33);
+  });
+
+  test("date-range attendance rejects an oversized or malformed range", async () => {
+    for (const range of [
+      { from: "2026-01-01", to: "2026-12-31" }, // > 92 days
+      { from: "junk", to: "2026-06-01" },
+      { from: "2026-06-10", to: "2026-06-01" }, // reversed
+    ]) {
+      const calls = [];
+      global.__anthropicCreate = jest.fn(async (params) => {
+        calls.push(params);
+        return calls.length === 1 ? toolTurn("get_attendance_range", range) : textTurn("Understood.");
+      });
+      const res = await request(app)
+        .post("/api/ai-actions/chat")
+        .set("Authorization", `Bearer ${acadAdminToken}`)
+        .send({ question: "attendance report" });
+      expect(res.status).toBe(200);
+      const toolResultMsg = calls[1].messages.find(
+        (m) => Array.isArray(m.content) && m.content.some((c) => c.type === "tool_result")
+      );
+      const payload = JSON.parse(toolResultMsg.content.find((c) => c.type === "tool_result").content);
+      expect(payload.error).toBeTruthy();
+    }
+  });
+
   test("extend session flow: Confirm adds minutes to the caller's running session", async () => {
     const session = await AttendanceSession.create({
       company: acadCompany._id, createdBy: acadAdmin._id, title: "AI Extend Test",
