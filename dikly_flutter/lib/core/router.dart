@@ -35,6 +35,7 @@ import '../screens/employee/employee_shell.dart';
 import '../screens/employee/employee_leaves_screen.dart';
 import '../screens/employee/employee_shift_screen.dart';
 import '../screens/shared/announcements_screen.dart';
+import '../screens/shared/dikly_ai_screen.dart';
 import '../screens/shared/reports_screen.dart';
 import '../screens/shared/profile_screen.dart';
 import '../screens/shared/timetable_screen.dart';
@@ -196,6 +197,7 @@ final routerProvider = Provider<GoRouter>((ref) {
       GoRoute(path: '/announcements', builder: (context, state) => const AnnouncementsScreen()),
 
       // Shared
+      GoRoute(path: '/dikly-ai',     builder: (context, state) => const DiklyAiScreen()),
       GoRoute(path: '/reports',      builder: (context, state) => const ReportsScreen()),
       GoRoute(path: '/profile',      builder: (context, state) => const ProfileScreen()),
       GoRoute(path: '/gradebook',    builder: (context, state) => const GradeBookScreen()),

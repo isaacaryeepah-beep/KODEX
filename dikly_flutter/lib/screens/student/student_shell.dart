@@ -54,6 +54,9 @@ class _StudentShellState extends ConsumerState<StudentShell> {
       DrawerItem(Icons.assessment_outlined, 'My Results', '/quiz-history'),
       DrawerItem(Icons.video_library_outlined, 'Course Videos', '/student/course-videos'),
     ]),
+    DrawerSection(header: 'INSIGHTS', items: [
+      DrawerItem(Icons.auto_awesome_outlined, 'Dikly AI', '/dikly-ai'),
+    ]),
     DrawerSection(header: 'COMMUNICATE', items: [
       DrawerItem(Icons.message_outlined, 'Messages', '/messages'),
       DrawerItem(Icons.video_call_outlined, 'Meetings', '/meetings'),

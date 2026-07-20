@@ -76,6 +76,7 @@ class _AdminShellState extends ConsumerState<AdminShell> {
     ]),
     const DrawerSection(header: 'INSIGHTS', items: [
       DrawerItem(Icons.assessment_outlined, 'Reports', '/reports'),
+      DrawerItem(Icons.auto_awesome_outlined, 'Dikly AI', '/dikly-ai'),
     ]),
     const DrawerSection(header: 'SUPPORT', items: [
       DrawerItem(Icons.help_outline, 'FAQ Center', '/faq'),
