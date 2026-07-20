@@ -7685,3 +7685,34 @@ table tr:hover td { background: #f8fafc !important; }
   border-color: var(--accent, #4f6ef7);
   color: #fff;
 }
+
+/* ── Collapsible sidebar sections ── */
+.nav-acc-hd { cursor: pointer; user-select: none; }
+.nav-acc-chevron { flex-shrink: 0; opacity: .6; transition: transform .18s ease; }
+.nav-acc.collapsed .nav-acc-chevron { transform: rotate(-90deg); }
+.nav-acc.collapsed .nav-acc-body { display: none; }
+.nav-acc-hd:hover .nav-acc-chevron { opacity: 1; }
+/* Sidebar search re-parents matches into its own results list; a folded
+   section must never hide them. */
+.nav-searching .nav-acc-body { display: block !important; }
+
+/* ── Settings hub pills: compact single scroll row on phones ── */
+@media (max-width: 640px) {
+  .settings-hub-tabs {
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+    gap: 6px;
+    margin-bottom: 12px;
+    padding-bottom: 2px;
+  }
+  .settings-hub-tabs::-webkit-scrollbar { display: none; }
+  .sht-pill {
+    flex: 0 0 auto;
+    white-space: nowrap;
+    padding: 6px 12px;
+    font-size: 12px;
+  }
+}
+.nav-acc-hd { justify-content: space-between; }
