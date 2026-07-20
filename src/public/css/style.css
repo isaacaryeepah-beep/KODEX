@@ -7752,48 +7752,50 @@ table tr:hover td { background: #f8fafc !important; }
 }
 
 /* ══════════════════════════════════════════════════
-   SIDEBAR POLISH — soft icon chips, roomier rows, pill active state.
-   The mid-file sidebar layer uses !important throughout; these rules
-   match that and win by source order.
+   SIDEBAR POLISH — colorful per-feature icon chips (owner-picked style A).
+   Each link carries --nav-hue (set by navItemHtml from _navHue); the chip
+   tints from it and the active row adopts it. The translucent tints work
+   on both light and dark surfaces. The mid-file sidebar layer uses
+   !important throughout; these rules match that and win by source order.
 ══════════════════════════════════════════════════ */
 .sidebar-nav a {
-  height: 44px !important;
-  gap: 12px !important;
+  height: 42px !important;
+  gap: 11px !important;
   padding: 0 10px !important;
-  border-radius: 12px !important;
-  font-size: 13.5px !important;
+  border-radius: 11px !important;
+  font-size: 13px !important;
   font-weight: 600 !important;
-  color: #5b6472 !important;
-  margin-bottom: 2px !important;
+  color: #3f4756 !important;
+  margin-bottom: 1px !important;
 }
-.sidebar-nav a span { font-size: 13.5px !important; }
+.sidebar-nav a span { font-size: 13px !important; }
 
 .sidebar-nav a .nav-ic {
   display: flex !important;
   align-items: center !important;
   justify-content: center !important;
-  width: 30px !important;
-  height: 30px !important;
-  border-radius: 9px !important;
-  background: #eef1f6 !important;
-  color: #64748b !important;
+  width: 28px !important;
+  height: 28px !important;
+  border-radius: 8px !important;
+  background: color-mix(in srgb, var(--nav-hue, #4f6ef7) 10%, transparent) !important;
+  color: var(--nav-hue, #4f6ef7) !important;
   flex-shrink: 0 !important;
   overflow: visible !important;
   transition: background .15s, color .15s !important;
 }
 .sidebar-nav a:hover { background: #f4f6fa !important; color: #1e293b !important; }
-.sidebar-nav a:hover .nav-ic { background: #e5e9f2 !important; color: #334155 !important; }
+.sidebar-nav a:hover .nav-ic { background: color-mix(in srgb, var(--nav-hue, #4f6ef7) 16%, transparent) !important; }
 
 .sidebar-nav a.active {
-  background: rgba(79, 110, 247, .08) !important;
-  color: var(--portal-primary, #4f6ef7) !important;
+  background: color-mix(in srgb, var(--nav-hue, #4f6ef7) 9%, transparent) !important;
+  color: var(--nav-hue, #4f6ef7) !important;
   border-left: none !important;
   padding-left: 10px !important;
 }
 .sidebar-nav a.active .nav-ic {
-  background: var(--portal-primary, #4f6ef7) !important;
+  background: var(--nav-hue, #4f6ef7) !important;
   color: #fff !important;
-  box-shadow: 0 3px 8px rgba(79, 110, 247, .28) !important;
+  box-shadow: none !important;
 }
 
 /* Quick row (pinned/recent) copies keep a smaller chip */
@@ -7811,8 +7813,16 @@ table tr:hover td { background: #f8fafc !important; }
   display: block !important;
 }
 
-[data-theme="dark"] .sidebar-nav a { color: #94a3b8 !important; }
-[data-theme="dark"] .sidebar-nav a .nav-ic { background: #1c2434 !important; color: #8b98ab !important; }
+[data-theme="dark"] .sidebar-nav a { color: #a7b0bf !important; }
+[data-theme="dark"] .sidebar-nav a .nav-ic { background: color-mix(in srgb, var(--nav-hue, #4f6ef7) 22%, transparent) !important; }
 [data-theme="dark"] .sidebar-nav a:hover { background: #151d2c !important; color: #e2e8f0 !important; }
-[data-theme="dark"] .sidebar-nav a:hover .nav-ic { background: #243048 !important; color: #cbd5e1 !important; }
-[data-theme="dark"] .sidebar-nav a.active { background: rgba(79, 110, 247, .16) !important; }
+[data-theme="dark"] .sidebar-nav a.active { background: color-mix(in srgb, var(--nav-hue, #4f6ef7) 20%, transparent) !important; color: #dfe5ff !important; }
+
+/* All Features tiles pick up the same per-feature hue */
+.af-tile-icon {
+  display: flex; align-items: center; justify-content: center;
+  width: 34px; height: 34px; border-radius: 9px;
+  background: color-mix(in srgb, var(--nav-hue, #4f6ef7) 10%, transparent);
+}
+.af-tile-icon svg { color: var(--nav-hue, #4f6ef7); }
+.af-tile:hover { border-color: var(--nav-hue, #4f6ef7); }
