@@ -376,6 +376,32 @@ html, body {
 // ── Embed mode ────────────────────────────────────────────────────────────────
 const _params = new URLSearchParams(window.location.search);
 const _embed  = _params.get('embed') === '1';
+const _mode   = _params.get('mode') || 'academic';
+
+// Corporate portals search people (employees/managers), not students —
+// the academic wording and role tabs made no sense there.
+if (_mode === 'corporate') {
+  document.querySelector('.topbar-title').textContent = 'People Lookup';
+  document.querySelector('.search-label').textContent = 'Search People';
+  document.getElementById('searchInput').placeholder = 'Name, email or employee ID…';
+  document.getElementById('roleTabs').innerHTML = `
+        <button class="role-tab active" data-role="employee">Employees</button>
+        <button class="role-tab" data-role="manager">Managers</button>
+        <button class="role-tab" data-role="all">All</button>`;
+  const _es = document.getElementById('emptyState');
+  _es.querySelector('h3').textContent = 'Select a person';
+  _es.querySelector('p').textContent = 'Search by name, email or employee ID, then click a result to view their profile.';
+}
+
+// Match the host app's theme when embedded — the page's native dark look
+// clashed as a floating dark box inside the light portal.
+if (_params.get('theme') === 'light') {
+  const L = {
+    '--bg': '#f1f5f9', '--surface': '#ffffff', '--surface2': '#f8fafc',
+    '--border': '#e2e8f0', '--text': '#0f172a', '--muted': '#64748b',
+  };
+  for (const k in L) document.documentElement.style.setProperty(k, L[k]);
+}
 
 if (_embed) {
   // Hide topbar, make layout fill full height with no sticky offset
@@ -383,7 +409,11 @@ if (_embed) {
   if (tb) tb.style.display = 'none';
   const ly = document.getElementById('mainLayout');
   if (ly) { ly.style.minHeight = '100vh'; }
-  document.querySelector('.left-panel').style.height = '100vh';
+  // Full-height pinned search column only makes sense in the two-column
+  // desktop layout; on phones the panels stack and must size to content.
+  if (window.matchMedia('(min-width: 901px)').matches) {
+    document.querySelector('.left-panel').style.height = '100vh';
+  }
 }
 
 // ── Auth ──────────────────────────────────────────────────────────────────────
@@ -415,7 +445,7 @@ const api = (method, url, body) =>
   });
 
 // ── State ─────────────────────────────────────────────────────────────────────
-let activeRole = 'student';
+let activeRole = _mode === 'corporate' ? 'employee' : 'student';
 let searchTimer = null;
 let activeResultId = null;
 

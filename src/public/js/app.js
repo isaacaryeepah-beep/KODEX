@@ -3445,7 +3445,7 @@ function buildSidebar() {
   const navItemHtml = (l, mini) =>
     `<a onclick="navigateTo('${l.id}')" ${mini ? '' : `id="nav-${l.id}"`} data-view="${l.id}" data-tooltip="${l.label}" class="${mini ? 'nav-mini' : ''}${currentView === l.id ? ' active' : ''}">` +
     (l.id === 'announcements' ? '<div class="ann-line"></div>' : '') +
-    `${l.icon}<span>${l.label}</span><span class="nav-badge" data-badge></span>` +
+    `<span class="nav-ic">${l.icon}</span><span>${l.label}</span><span class="nav-badge" data-badge></span>` +
     (mini ? '' : `<span class="nav-pin ${_pins.includes(l.id) ? 'pinned' : ''}" title="${_pins.includes(l.id) ? 'Unpin' : 'Pin to top'}" onclick="event.stopPropagation();_navTogglePin('${l.id}')">${_pins.includes(l.id) ? '★' : '☆'}</span>`) +
     (l.id === 'announcements' ? '<span id="ann-badge" style="display:none;position:absolute;top:4px;right:4px;background:#ef4444;color:#fff;font-size:9px;font-weight:700;padding:1px 5px;border-radius:20px;min-width:14px;text-align:center;line-height:14px;"></span>' : '') +
     '</a>';
@@ -3637,7 +3637,8 @@ function _sidebarSearch(q) {
   // natural order. Now the best match is always first.
   const scored = [];
   window._navSearchOrig.forEach((pos, el) => {
-    const label = (el.querySelector('span') || el).textContent.trim().toLowerCase();
+    // First span is now the .nav-ic icon chip — read the label span instead.
+    const label = (el.querySelector('span:not(.nav-ic):not(.nav-badge):not(.nav-pin)') || el).textContent.trim().toLowerCase();
     let rank = -1;
     if (label === term) rank = 0;
     else if (label.startsWith(term)) rank = 1;
@@ -16450,7 +16451,10 @@ async function renderSearch() {
   content.style.padding = '0';
   content.style.overflow = 'hidden';
   const frame = document.createElement('iframe');
-  frame.src = '/student-search.html?embed=1';
+  const _searchDark = document.documentElement.getAttribute('data-theme') === 'dark';
+  frame.src = '/student-search.html?embed=1'
+    + (currentUser.company?.mode === 'corporate' ? '&mode=corporate' : '')
+    + (_searchDark ? '' : '&theme=light');
   frame.style.cssText = 'width:100%;height:calc(100vh - 60px);border:none;display:block';
   frame.setAttribute('allowfullscreen', '');
   content.innerHTML = '';
