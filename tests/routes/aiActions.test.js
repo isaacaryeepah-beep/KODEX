@@ -50,6 +50,8 @@ let memoryServer = null;
 const Company      = require("../../src/models/Company");
 const User         = require("../../src/models/User");
 const LeaveRequest = require("../../src/models/LeaveRequest");
+const AttendanceSession = require("../../src/models/AttendanceSession");
+const AuditLog     = require("../../src/models/AuditLog");
 const { generateToken } = require("../../src/utils/jwt");
 
 let acadCompany, corpCompany, otherCompany;
@@ -267,5 +269,155 @@ describe("POST /api/ai-actions/chat", () => {
     } finally {
       process.env.ANTHROPIC_API_KEY = saved;
     }
+  });
+});
+
+describe("Phase 2 — propose → confirm → execute", () => {
+  test("unlock flow: proposal changes nothing; Confirm unlocks and audit-logs", async () => {
+    const locked = await User.findOne({ name: "Locked Louis" }).lean();
+
+    let n = 0;
+    global.__anthropicCreate = jest.fn(async () =>
+      ++n === 1
+        ? toolTurn("propose_unlock_student", { studentId: String(locked._id) })
+        : textTurn("Ready — tap Confirm to unlock Locked Louis.")
+    );
+
+    const chat = await request(app)
+      .post("/api/ai-actions/chat")
+      .set("Authorization", `Bearer ${acadAdminToken}`)
+      .send({ question: "Unlock Locked Louis please" });
+
+    expect(chat.status).toBe(200);
+    expect(chat.body.pendingAction).toBeTruthy();
+    expect(chat.body.pendingAction.summary).toContain("Locked Louis");
+    expect(typeof chat.body.pendingAction.token).toBe("string");
+
+    // Proposing must not have changed the database.
+    let inDb = await User.findById(locked._id).lean();
+    expect(inDb.isLocked).toBe(true);
+
+    // Confirm executes.
+    const exec = await request(app)
+      .post("/api/ai-actions/execute")
+      .set("Authorization", `Bearer ${acadAdminToken}`)
+      .send({ token: chat.body.pendingAction.token });
+
+    expect(exec.status).toBe(200);
+    expect(exec.body.message).toMatch(/unlocked/i);
+
+    inDb = await User.findById(locked._id).lean();
+    expect(inDb.isLocked).toBe(false);
+    expect(inDb.lockReason).toBeNull();
+    expect(inDb.lastLogoutTime).toBeNull();
+
+    // Audit trail carries the via-Dikly-AI marker (fire-and-forget write).
+    await new Promise((r) => setTimeout(r, 300));
+    const audit = await AuditLog.findOne({ resourceId: locked._id, "metadata.viaDiklyAI": true }).lean();
+    expect(audit).toBeTruthy();
+  });
+
+  test("a proposal token cannot be executed by a different user", async () => {
+    const dora = await User.findOne({ name: "Device Dora" }).lean();
+    let n = 0;
+    global.__anthropicCreate = jest.fn(async () =>
+      ++n === 1
+        ? toolTurn("propose_unlock_student", { studentId: String(dora._id) })
+        : textTurn("Ready.")
+    );
+    const chat = await request(app)
+      .post("/api/ai-actions/chat")
+      .set("Authorization", `Bearer ${acadAdminToken}`)
+      .send({ question: "Unlock Device Dora" });
+    expect(chat.body.pendingAction).toBeTruthy();
+
+    // The STUDENT tries to replay the admin's token.
+    const exec = await request(app)
+      .post("/api/ai-actions/execute")
+      .set("Authorization", `Bearer ${studentToken}`)
+      .send({ token: chat.body.pendingAction.token });
+    expect(exec.status).toBe(400);
+    expect(exec.body.error).toMatch(/different user/i);
+    const inDb = await User.findById(dora._id).lean();
+    expect(inDb.accountDeviceLock.isLocked).toBe(true);
+  });
+
+  test("a tampered token is rejected", async () => {
+    const res = await request(app)
+      .post("/api/ai-actions/execute")
+      .set("Authorization", `Bearer ${acadAdminToken}`)
+      .send({ token: "aaaa.bbbb" });
+    expect(res.status).toBe(400);
+  });
+
+  test("an expired token is rejected", async () => {
+    const crypto2 = require("crypto");
+    const payload = Buffer.from(JSON.stringify({
+      a: "unlock_student",
+      p: { studentId: String(student._id) },
+      u: String(acadAdmin._id),
+      c: String(acadCompany._id),
+      exp: Date.now() - 1000,
+    })).toString("base64url");
+    const sig = crypto2.createHmac("sha256", process.env.JWT_SECRET).update(payload).digest("base64url");
+    const res = await request(app)
+      .post("/api/ai-actions/execute")
+      .set("Authorization", `Bearer ${acadAdminToken}`)
+      .send({ token: `${payload}.${sig}` });
+    expect(res.status).toBe(400);
+    expect(res.body.error).toMatch(/expired/i);
+  });
+
+  test("leave decision flow: approve via Confirm sets status and reviewer", async () => {
+    const leave = await LeaveRequest.findOne({ status: "pending" }).lean();
+    let n = 0;
+    global.__anthropicCreate = jest.fn(async () =>
+      ++n === 1
+        ? toolTurn("propose_leave_decision", { leaveRequestId: String(leave._id), decision: "approved" })
+        : textTurn("Ready — confirm to approve.")
+    );
+    const chat = await request(app)
+      .post("/api/ai-actions/chat")
+      .set("Authorization", `Bearer ${corpAdminToken}`)
+      .send({ question: "Approve Ellen's leave" });
+    expect(chat.body.pendingAction.summary).toMatch(/approve/i);
+
+    const exec = await request(app)
+      .post("/api/ai-actions/execute")
+      .set("Authorization", `Bearer ${corpAdminToken}`)
+      .send({ token: chat.body.pendingAction.token });
+    expect(exec.status).toBe(200);
+
+    const after = await LeaveRequest.findById(leave._id).lean();
+    expect(after.status).toBe("approved");
+    expect(String(after.reviewedBy)).toBe(String(corpAdmin._id));
+  });
+
+  test("extend session flow: Confirm adds minutes to the caller's running session", async () => {
+    const session = await AttendanceSession.create({
+      company: acadCompany._id, createdBy: acadAdmin._id, title: "AI Extend Test",
+      status: "active", startedAt: new Date(), durationSeconds: 300,
+    });
+    let n = 0;
+    global.__anthropicCreate = jest.fn(async () =>
+      ++n === 1
+        ? toolTurn("propose_extend_session", { addMinutes: 15 })
+        : textTurn("Ready — confirm to add 15 minutes.")
+    );
+    const chat = await request(app)
+      .post("/api/ai-actions/chat")
+      .set("Authorization", `Bearer ${acadAdminToken}`)
+      .send({ question: "Add 15 minutes to my session" });
+    expect(chat.body.pendingAction.summary).toContain("15 minutes");
+
+    const exec = await request(app)
+      .post("/api/ai-actions/execute")
+      .set("Authorization", `Bearer ${acadAdminToken}`)
+      .send({ token: chat.body.pendingAction.token });
+    expect(exec.status).toBe(200);
+
+    const after = await AttendanceSession.findById(session._id).lean();
+    expect(after.durationSeconds).toBeGreaterThanOrEqual(1190); // 300 + 900, minus clock skew tolerance
+    await AttendanceSession.deleteOne({ _id: session._id });
   });
 });
