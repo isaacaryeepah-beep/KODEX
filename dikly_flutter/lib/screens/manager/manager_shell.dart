@@ -61,6 +61,7 @@ class _ManagerShellState extends ConsumerState<ManagerShell> {
     DrawerSection(header: 'INSIGHTS', items: [
       DrawerItem(Icons.assessment_outlined, 'Reports', '/reports'),
       DrawerItem(Icons.history_outlined, 'Audit Logs', '/reports'),
+      DrawerItem(Icons.auto_awesome_outlined, 'Dikly AI', '/dikly-ai'),
     ]),
     DrawerSection(header: 'SUPPORT', items: [
       DrawerItem(Icons.card_membership_outlined, 'Subscription', '/subscription'),

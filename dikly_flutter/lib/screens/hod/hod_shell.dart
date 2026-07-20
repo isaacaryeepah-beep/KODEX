@@ -55,6 +55,7 @@ class _HodShellState extends ConsumerState<HodShell> {
       DrawerItem(Icons.visibility_outlined, 'Quiz Monitor', '/hod/quiz-monitor'),
       DrawerItem(Icons.warning_amber_outlined, 'Smart Alerts', '/hod/alerts'),
       DrawerItem(Icons.assessment_outlined, 'Reports', '/hod/reports'),
+      DrawerItem(Icons.auto_awesome_outlined, 'Dikly AI', '/dikly-ai'),
     ]),
     DrawerSection(header: 'COMMUNICATE', items: [
       DrawerItem(Icons.forum_outlined, 'Dept. Messaging', '/hod/dept-messaging'),

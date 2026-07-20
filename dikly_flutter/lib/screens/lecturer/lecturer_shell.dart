@@ -70,6 +70,7 @@ class _LecturerShellState extends ConsumerState<LecturerShell> {
     DrawerSection(header: 'INSIGHTS', items: [
       DrawerItem(Icons.bar_chart_outlined, 'Performance', '/lecturer/performance'),
       DrawerItem(Icons.assessment_outlined, 'Reports', '/lecturer/performance'),
+      DrawerItem(Icons.auto_awesome_outlined, 'Dikly AI', '/dikly-ai'),
     ]),
     DrawerSection(items: [
       DrawerItem(Icons.campaign_outlined, 'Announcements', '/announcements'),

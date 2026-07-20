@@ -146,6 +146,39 @@ class ApiService {
     return response.data;
   }
 
+  // ── Dikly AI ───────────────────────────────────────────────────────────────
+  // Mirrors the web chat: the tool-enabled endpoint answers with live data
+  // and may return a pendingAction the user must confirm; if it isn't
+  // configured server-side the caller falls back to the classic
+  // ai-reports custom_query answer.
+  Future<Map<String, dynamic>> aiActionChat(
+    String question,
+    List<Map<String, String>> history,
+  ) async {
+    final response = await _dio.post('/api/ai-actions/chat', data: {
+      'question': question,
+      'history': history,
+    });
+    return (response.data as Map).cast<String, dynamic>();
+  }
+
+  Future<Map<String, dynamic>> aiActionExecute(String token) async {
+    final response = await _dio.post('/api/ai-actions/execute', data: {'token': token});
+    return (response.data as Map).cast<String, dynamic>();
+  }
+
+  Future<String> aiReportAsk(String question) async {
+    final response = await _dio.post('/api/ai-reports/generate', data: {
+      'type': 'custom_query',
+      'parameters': {'question': question},
+    });
+    final report = (response.data as Map)['report'];
+    if (report is Map) {
+      return (report['report'] ?? report['summary'] ?? 'No answer was returned.').toString();
+    }
+    return 'No answer was returned.';
+  }
+
   Future<void> flushWriteQueue() async {
     final queue = CacheService.getPendingWrites();
     if (queue.isEmpty) return;
