@@ -921,11 +921,22 @@ async function loginOnlineWithOfflineFallback(credentials, formId) {
   }
 }
 
+// Offline cache entries are namespaced per institution. Without this, one
+// shared 'users_list' (etc.) leaks across Switch Institution on the same
+// device: a flaky connection silently rendered institution A's cached
+// users inside institution B, and editing one of them PATCHed an id the
+// current company doesn't own — the "User not found" save failure.
+function _offlineNS(key) {
+  const co = currentUser?.company?._id || currentUser?.company || 'anon';
+  return `${co}:${key}`;
+}
+
 function offlineCache(key, data) {
+  key = _offlineNS(key);
   try {
     const store = JSON.parse(localStorage.getItem(OFFLINE_CACHE_KEY) || '{}');
     // Prune old attendees_ entries if we have more than 20 (saves localStorage space)
-    const attendeeKeys = Object.keys(store).filter(k => k.startsWith('attendees_'));
+    const attendeeKeys = Object.keys(store).filter(k => k.includes(':attendees_') || k.startsWith('attendees_'));
     if (attendeeKeys.length > 20) {
       // Remove oldest 10
       attendeeKeys.slice(0, 10).forEach(k => delete store[k]);
@@ -936,6 +947,7 @@ function offlineCache(key, data) {
 }
 
 function offlineRead(key) {
+  key = _offlineNS(key);
   try {
     const store = JSON.parse(localStorage.getItem(OFFLINE_CACHE_KEY) || '{}');
     return store[key]?.data ?? null;
