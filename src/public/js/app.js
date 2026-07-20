@@ -3451,25 +3451,51 @@ function buildSidebar() {
     '</a>';
   window._navItemHtml = navItemHtml;
 
-  // Collapsible sections: everything starts folded except the section that
-  // holds the current page (and any the user has explicitly opened —
-  // remembered per role). This is what keeps the sidebar short.
-  let _accState = {};
-  try { _accState = JSON.parse(localStorage.getItem('navAccState_' + role)) || {}; } catch (_) {}
-  const _accChevron = '<svg class="nav-acc-chevron" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>';
+  // ── Curated short sidebar + "All features" catalog ──
+  // The sidebar shows only each role's everyday links, flat, no folding.
+  // Every other page lives on the All Features grid (one entry below) and
+  // stays reachable through the sidebar search, which also scans the
+  // hidden #nav-extra copies rendered at the end.
+  window._allFeaturesSections = navSections
+    .map(sec => ({ label: sec.label, title: _navSecTitle(sec.label), items: sec.items }))
+    .filter(sec => sec.items.length);
 
+  const mode = currentUser.company?.mode || 'corporate';
+  const CURATED_BY_ROLE = {
+    admin: mode === 'corporate'
+      ? ['dashboard', 'executive-dashboard', 'users', 'corp-attendance', 'leave-requests', 'approvals', 'messages', 'reports', 'company-settings']
+      : ['dashboard', 'users', 'sessions', 'approvals', 'courses', 'attendance-settings', 'messages', 'reports', 'company-settings'],
+    manager: (mode === 'corporate' || mode === 'both')
+      ? ['dashboard', 'executive-dashboard', 'users', 'corp-attendance', 'sign-in-out', 'leave-requests', 'approvals', 'messages', 'reports']
+      : ['dashboard', 'approvals', 'users', 'messages', 'meetings', 'reports'],
+    hod:      ['dashboard', 'hod-overview', 'hod-sessions', 'hod-courses', 'hod-students', 'approvals', 'messages', 'hod-reports'],
+    lecturer: ['dashboard', 'sessions', 'courses', 'quizzes', 'assignments', 'gradebook', 'messages', 'reports'],
+    student:  ['dashboard', 'mark-attendance', 'my-attendance', 'courses', 'timetable', 'quizzes', 'assignments', 'messages'],
+    employee: ['emp-home', 'dashboard', 'sign-in-out', 'my-attendance', 'my-shift', 'my-leaves', 'tasks', 'messages'],
+    superadmin: ['dashboard', 'superadmin-platform', 'approvals', 'search', 'ai-reports'],
+  };
+
+  const flatLinks = [...navTop, ...navSections.flatMap(s => s.items)];
+  const curatedIds = CURATED_BY_ROLE[role] || flatLinks.slice(0, 8).map(l => l.id);
+  const curated = curatedIds.map(id => flatLinks.find(l => l.id === id)).filter(Boolean);
+  const extras = flatLinks.filter(l => !curatedIds.includes(l.id));
+
+  const allFeaturesLink = {
+    id: 'all-features',
+    label: 'All Features',
+    icon: svgIcon('<rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/>'),
+  };
+  window._navLinkMeta['all-features'] = { label: allFeaturesLink.label, icon: allFeaturesLink.icon };
+
+  // Extras keep their real nav-<id> ids: the later buildSidebar patches
+  // (Training, Performance, Timesheets/Assets, Analytics/Branches) check
+  // getElementById before appending their links — hidden-but-present ids
+  // stop them from re-adding visible duplicates.
   nav.innerHTML =
     '<div id="nav-quick"></div>' +
-    navTop.map(l => navItemHtml(l)).join('') +
-    navSections.map(sec => {
-      const containsActive = sec.items.some(l => l.id === currentView);
-      const collapsed = containsActive ? false : (_accState[sec.label] !== undefined ? _accState[sec.label] : true);
-      return `
-      <div class="nav-acc${collapsed ? ' collapsed' : ''}" data-acc="${sec.label}">
-        <div class="nav-acc-hd" onclick="_navAccToggle('${sec.label.replace(/'/g, '')}')"><span class="nav-acc-hd-left">${_navSecIcon(sec.label)}<span>${_navSecTitle(sec.label)}</span></span>${_accChevron}</div>
-        <div class="nav-acc-body"><div class="nav-acc-inner">${sec.items.map(l => navItemHtml(l)).join('')}</div></div>
-      </div>`;
-    }).join('');
+    curated.map(l => navItemHtml(l)).join('') +
+    navItemHtml(allFeaturesLink) +
+    `<div id="nav-extra">${extras.map(l => navItemHtml(l)).join('')}</div>`;
 
   _navRenderQuick();
   setTimeout(() => { try { _updateNavBadges(); } catch (_) {} }, 400);
@@ -3523,17 +3549,23 @@ function buildSidebar() {
   }
 }
 
-// Fold/unfold a sidebar section and remember the choice per role.
-window._navAccToggle = function(label) {
-  const acc = document.querySelector(`.nav-acc[data-acc="${label}"]`);
-  if (!acc) return;
-  acc.classList.toggle('collapsed');
-  const key = 'navAccState_' + (currentUser?.role || '');
-  let st = {};
-  try { st = JSON.parse(localStorage.getItem(key)) || {}; } catch (_) {}
-  st[label] = acc.classList.contains('collapsed');
-  try { localStorage.setItem(key, JSON.stringify(st)); } catch (_) {}
-};
+// ── All Features — full catalog of this role's pages as a tile grid ──────────
+function renderAllFeatures() {
+  const content = document.getElementById('main-content');
+  if (!content) return;
+  const secs = window._allFeaturesSections || [];
+  content.innerHTML = `
+    <div class="page-header"><h2>All Features</h2><p>Everything in your portal, grouped in one place.</p></div>
+    ${secs.map(sec => `
+      <div class="af-sec-title">${sec.title}</div>
+      <div class="af-grid">
+        ${sec.items.map(l => `
+          <button type="button" class="af-tile" onclick="navigateTo('${l.id}')">
+            <span class="af-tile-icon">${l.icon}</span>
+            <span class="af-tile-label">${esc(l.label)}</span>
+          </button>`).join('')}
+      </div>`).join('')}`;
+}
 
 function _sidebarSearch(q) {
   const nav = document.getElementById('sidebar-nav');
@@ -3645,12 +3677,7 @@ function navigateTo(view) {
   currentView = view;
   document.querySelectorAll('.sidebar-nav a').forEach(a => a.classList.remove('active'));
   const navEl = document.getElementById(`nav-${view}`);
-  if (navEl) {
-    navEl.classList.add('active');
-    // Unfold the sidebar section holding the now-active page (may have been
-    // reached via a pin, the bottom nav, or another page's button).
-    navEl.closest('.nav-acc')?.classList.remove('collapsed');
-  }
+  if (navEl) navEl.classList.add('active');
 
   const content = document.getElementById('main-content');
   if (!content) return;
@@ -3700,6 +3727,7 @@ function navigateTo(view) {
     case 'my-leaves': renderMyLeaves(); break;
     case 'approvals': renderApprovals(); break;
     case 'search': renderSearch(); break;
+    case 'all-features': renderAllFeatures(); break;
     case 'assignments': location.href='/assignments.html'; return;
     case 'profile':     renderProfile(); break;
     case 'contact':     renderContact(); break;
@@ -22925,12 +22953,7 @@ navigateTo = function(view) {
 function _setNavActive(view) {
   document.querySelectorAll('.sidebar-nav a').forEach(a => a.classList.remove('active'));
   const el = document.getElementById(`nav-${view}`);
-  if (el) {
-    el.classList.add('active');
-    // Reveal the section that holds the now-active page (e.g. arrived via a
-    // pinned shortcut or the bottom nav while its section was folded).
-    el.closest('.nav-acc')?.classList.remove('collapsed');
-  }
+  if (el) el.classList.add('active');
   const content = document.getElementById('main-content');
   if (content) content.innerHTML = '<div class="loading">Loading...</div>';
 }
