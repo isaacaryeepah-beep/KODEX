@@ -3455,7 +3455,7 @@ function buildSidebar() {
 
   const _pins = _navGetPins();
   const navItemHtml = (l, mini) =>
-    `<a onclick="navigateTo('${l.id}')" ${mini ? '' : `id="nav-${l.id}"`} data-view="${l.id}" data-tooltip="${l.label}" class="${mini ? 'nav-mini' : ''}${currentView === l.id ? ' active' : ''}">` +
+    `<a onclick="navigateTo('${l.id}')" ${mini ? '' : `id="nav-${l.id}"`} data-view="${l.id}" data-tooltip="${l.label}" style="--nav-hue:${_navHue(l.id)}" class="${mini ? 'nav-mini' : ''}${currentView === l.id ? ' active' : ''}">` +
     (l.id === 'announcements' ? '<div class="ann-line"></div>' : '') +
     `<span class="nav-ic">${l.icon}</span><span>${l.label}</span><span class="nav-badge" data-badge></span>` +
     (mini ? '' : `<span class="nav-pin ${_pins.includes(l.id) ? 'pinned' : ''}" title="${_pins.includes(l.id) ? 'Unpin' : 'Pin to top'}" onclick="event.stopPropagation();_navTogglePin('${l.id}')">${_pins.includes(l.id) ? '★' : '☆'}</span>`) +
@@ -3572,11 +3572,34 @@ function renderAllFeatures() {
       <div class="af-sec-title">${sec.title}</div>
       <div class="af-grid">
         ${sec.items.map(l => `
-          <button type="button" class="af-tile" onclick="navigateTo('${l.id}')">
+          <button type="button" class="af-tile" style="--nav-hue:${_navHue(l.id)}" onclick="navigateTo('${l.id}')">
             <span class="af-tile-icon">${l.icon}</span>
             <span class="af-tile-label">${esc(l.label)}</span>
           </button>`).join('')}
       </div>`).join('')}`;
+}
+
+// Per-feature accent hue — drives the colored icon chips in the sidebar and
+// the All Features grid. Known pages get intentional colors; anything else
+// hashes into the same palette so it stays stable across sessions.
+const _NAV_HUES = {
+  dashboard: '#4F46E5', 'executive-dashboard': '#0284C7', 'emp-home': '#4F46E5',
+  users: '#2563EB', 'hod-students': '#2563EB',
+  'corp-attendance': '#16A34A', 'mark-attendance': '#16A34A', 'my-attendance': '#16A34A',
+  'sign-in-out': '#16A34A', sessions: '#16A34A', 'hod-sessions': '#16A34A',
+  'leave-requests': '#EA580C', 'my-leaves': '#EA580C', courses: '#EA580C', 'hod-courses': '#EA580C',
+  approvals: '#A21CAF', quizzes: '#A21CAF',
+  messages: '#0891B2', meetings: '#0891B2',
+  reports: '#7C3AED', 'hod-reports': '#7C3AED', 'ai-reports': '#7C3AED',
+  assignments: '#0D9488', gradebook: '#CA8A04', timetable: '#0284C7', 'my-shift': '#0284C7',
+  tasks: '#E11D48', 'company-settings': '#64748B', 'all-features': '#334155',
+};
+const _NAV_PALETTE = ['#4F46E5', '#2563EB', '#0891B2', '#0D9488', '#16A34A', '#CA8A04', '#EA580C', '#E11D48', '#A21CAF', '#7C3AED'];
+function _navHue(id) {
+  if (_NAV_HUES[id]) return _NAV_HUES[id];
+  let h = 0;
+  for (let i = 0; i < id.length; i++) h = ((h * 31) + id.charCodeAt(i)) | 0;
+  return _NAV_PALETTE[Math.abs(h) % _NAV_PALETTE.length];
 }
 
 function _sidebarSearch(q) {
