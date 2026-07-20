@@ -524,7 +524,10 @@ function renderProfile(s, transcript) {
   const classRepTag = s.isClassRep ? `<span class="tag blue">Class Rep</span>` : '';
   const selfRegTag = s.selfRegistered ? `<span class="tag yellow">Self-Registered</span>` : '';
 
-  const fields = [
+  // Staff results (lecturer/HOD/admin/manager) share this pane — skip the
+  // student-only rows for them instead of a wall of em-dashes.
+  const isStudentProfile = (s.role || 'student') === 'student';
+  const fields = isStudentProfile ? [
     { label: 'Index Number', value: s.IndexNumber || '—', mono: true },
     { label: 'Email', value: s.email || '—' },
     { label: 'Phone', value: s.phone || '—' },
@@ -535,6 +538,14 @@ function renderProfile(s, transcript) {
     { label: 'Session', value: s.sessionType || '—' },
     { label: 'Semester', value: s.semester || '—' },
     { label: 'Academic Year', value: s.academicYear || '—' },
+    { label: 'Joined', value: s.createdAt ? new Date(s.createdAt).toLocaleDateString() : '—' },
+    { label: 'Last Login', value: s.lastLoginAt ? timeAgo(new Date(s.lastLoginAt)) : 'Never' },
+  ] : [
+    { label: 'Role', value: (s.role || '').replace(/^hod$/i, 'HOD').replace(/^\w/, c => c.toUpperCase()) },
+    { label: 'Email', value: s.email || '—' },
+    { label: 'Phone', value: s.phone || '—' },
+    { label: 'Employee ID', value: s.employeeId || '—', mono: true },
+    { label: 'Department', value: s.department || '—' },
     { label: 'Joined', value: s.createdAt ? new Date(s.createdAt).toLocaleDateString() : '—' },
     { label: 'Last Login', value: s.lastLoginAt ? timeAgo(new Date(s.lastLoginAt)) : 'Never' },
   ];
@@ -600,7 +611,7 @@ function renderProfile(s, transcript) {
       </div>
       <div class="profile-meta">
         <div class="profile-name">${esc(s.name)}</div>
-        <div class="profile-index">${esc(s.IndexNumber || 'No Index Number')}</div>
+        <div class="profile-index">${esc(isStudentProfile ? (s.IndexNumber || 'No Index Number') : (s.employeeId || s.email || ''))}</div>
         <div class="profile-tags">
           ${statusTag}${classRepTag}${selfRegTag}
           ${s.programme ? `<span class="tag">${esc(s.programme)}</span>` : ''}

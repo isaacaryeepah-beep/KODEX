@@ -865,13 +865,27 @@ async function toggleInstitution(id, name, wasActive) {
 }
 
 async function loginAsAdmin(id, name) {
-  if (!confirm('Log in as admin of "'+name+'"? Opens in a new tab.')) return;
+  if (!confirm('Log in as admin of "'+name+'"?')) return;
   try {
     const d = await api('/api/superadmin/impersonate/'+id, { method:'POST' });
-    const w = window.open('', '_blank');
-    w.localStorage.setItem('token', d.token);
-    w.localStorage.setItem('user', JSON.stringify(Object.assign({}, d.admin, {role:'admin'})));
-    w.location.href = '/admin.html';
+    const payload = JSON.stringify(Object.assign({}, d.admin, {role:'admin'}));
+    // window.open after an await is popup-blocked on iOS Safari and returns
+    // null (the crash the user saw: "null is not an object"). Try the new
+    // tab, but fall back to navigating this tab — the superadmin session
+    // lives under separate sa_token/sa_user keys, so it survives the trip.
+    let w = null;
+    try { w = window.open('', '_blank'); } catch(_) {}
+    if (w) {
+      try {
+        w.localStorage.setItem('token', d.token);
+        w.localStorage.setItem('user', payload);
+        w.location.href = '/admin.html';
+        return;
+      } catch(_) { try { w.close(); } catch(__) {} }
+    }
+    localStorage.setItem('token', d.token);
+    localStorage.setItem('user', payload);
+    location.href = '/admin.html';
   } catch(e) { showToast('Error: ' + e.message); }
 }
 

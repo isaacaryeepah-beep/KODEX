@@ -2064,7 +2064,10 @@ exports.updateCampusSettings = async (req, res) => {
       update["academicSettings.requireEsp32Attendance"] = !!requireEsp32Attendance;
     }
 
-    await Company.findByIdAndUpdate(req.user.company, { $set: update });
+    // updateOne, not findByIdAndUpdate: the latter runs findAndModify with
+    // the schema's select:false projections, which FerretDB (local test DB)
+    // doesn't implement. We don't need the doc back anyway.
+    await Company.updateOne({ _id: req.user.company }, { $set: update });
     res.json({ message: "Campus settings saved" });
   } catch (e) {
     console.error("[updateCampusSettings]", e);

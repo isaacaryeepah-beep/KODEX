@@ -7660,3 +7660,28 @@ table tr:hover td { background: #f8fafc !important; }
   .sess-table-wrap { display: none; }
   .sess-cards { display: flex; flex-direction: column; gap: 10px; }
 }
+
+/* ── Settings hub pill bar (Company / Branding / Clock / ArrivalIQ) ── */
+.settings-hub-tabs {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-bottom: 18px;
+}
+.sht-pill {
+  border: 1px solid var(--border);
+  background: var(--card-bg, #fff);
+  color: var(--text-muted, #64748b);
+  border-radius: 20px;
+  padding: 7px 15px;
+  font-size: 12.5px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all .15s;
+}
+.sht-pill:hover { border-color: var(--accent, #4f6ef7); color: var(--text, #0f172a); }
+.sht-pill.active {
+  background: var(--accent, #4f6ef7);
+  border-color: var(--accent, #4f6ef7);
+  color: #fff;
+}
