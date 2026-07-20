@@ -202,3 +202,33 @@ describe("GET /api/search", () => {
     expect(res.status).toBe(401);
   });
 });
+
+describe("GET /api/search/student/:id — profile pane lookup", () => {
+  test("returns a student profile", async () => {
+    const res = await request(app)
+      .get(`/api/search/student/${student._id}`)
+      .set("Authorization", `Bearer ${accessToken}`);
+
+    expect(res.status).toBe(200);
+    expect(res.body.student.role).toBe("student");
+    expect(res.body.student.IndexNumber).toBe("SEARCHTEST/CS/26/0001");
+  });
+
+  test("returns a staff profile too — clicking a lecturer/HOD result no longer 404s", async () => {
+    const res = await request(app)
+      .get(`/api/search/student/${otherLecturer._id}`)
+      .set("Authorization", `Bearer ${accessToken}`);
+
+    expect(res.status).toBe(200);
+    expect(res.body.student.role).toBe("lecturer");
+    expect(res.body.student.name).toBe("Dr. Nathaniel Mensah");
+  });
+
+  test("never serves a user from another company", async () => {
+    const res = await request(app)
+      .get(`/api/search/student/${crossTenantLecturer._id}`)
+      .set("Authorization", `Bearer ${accessToken}`);
+
+    expect(res.status).toBe(404);
+  });
+});

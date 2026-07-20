@@ -70,15 +70,18 @@ router.get(
       }
       companyId = String(companyId);
 
-      const student = await User.findOne({ _id: req.params.id, company: companyId, role: "student" })
+      // Serves ANY user in the company, not just students: the search list
+      // includes lecturers/HODs/admins (role tabs), and clicking one of
+      // those rows used to 404 here because of a role:"student" filter.
+      const student = await User.findOne({ _id: req.params.id, company: companyId })
         .select(
-          "name email IndexNumber phone programme department studentLevel studentGroup " +
+          "name email role IndexNumber employeeId phone programme department studentLevel studentGroup " +
           "sessionType semester academicYear isActive isLocked lockReason lockedAt " +
           "profilePhoto createdAt lastLoginAt isApproved selfRegistered isClassRep"
         )
         .lean();
 
-      if (!student) return res.status(404).json({ error: "Student not found" });
+      if (!student) return res.status(404).json({ error: "User not found" });
 
       return res.json({ student });
     } catch (e) {

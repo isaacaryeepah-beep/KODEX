@@ -136,10 +136,11 @@ exports.startSession = async (req, res) => {
     // duplicated from the device path below so neither path depends on the
     // other's control flow.
     if (req.body.gpsGeofence) {
-      const { latitude, longitude, radiusMeters } = req.body.gpsGeofence || {};
+      const { latitude, longitude, radiusMeters, wifiIp } = req.body.gpsGeofence || {};
       const lat = Number(latitude);
       const lng = Number(longitude);
       const radius = Math.round(Number(radiusMeters) || 100);
+      const sessionWifiIp = typeof wifiIp === "string" && wifiIp.trim() ? wifiIp.trim().slice(0, 60) : null;
       if (!Number.isFinite(lat) || !Number.isFinite(lng) || lat < -90 || lat > 90 || lng < -180 || lng > 180) {
         return res.status(400).json({ error: "A valid latitude/longitude is required for GPS geofence sessions." });
       }
@@ -191,6 +192,7 @@ exports.startSession = async (req, res) => {
         geoLat: lat,
         geoLng: lng,
         geoRadiusMeters: radius,
+        geoWifiIp: sessionWifiIp,
       });
 
       const populated = await session.populate([
@@ -1353,21 +1355,39 @@ exports.markAttendance = async (req, res) => {
       // A reading whose uncertainty dwarfs the geofence proves nothing —
       // ask the student to move to open sky rather than guessing.
       const maxAccuracy = Math.max(200, session.geoRadiusMeters * 2);
-      if (accuracy != null && Number.isFinite(accuracy) && accuracy > maxAccuracy) {
-        return res.status(422).json({
-          error: `GPS reading too imprecise (±${Math.round(accuracy)}m). Move outdoors or near a window and try again.`,
-          gpsAccuracyMeters: Math.round(accuracy),
-        });
-      }
-      const { haversineMeters } = require("../utils/attendanceAntiCheat");
+      const tooImprecise = accuracy != null && Number.isFinite(accuracy) && accuracy > maxAccuracy;
+      const { haversineMeters, extractClientIp } = require("../utils/attendanceAntiCheat");
       const distance = haversineMeters(session.geoLat, session.geoLng, lat, lng);
-      if (distance > session.geoRadiusMeters) {
-        return res.status(403).json({
-          error: `You appear to be ${Math.round(distance)}m from the class location — attendance requires being within ${session.geoRadiusMeters}m.`,
-          outsideGeofence: true,
-          distanceMeters: Math.round(distance),
-          radiusMeters: session.geoRadiusMeters,
-        });
+      const outsideGeofence = distance > session.geoRadiusMeters;
+
+      if (tooImprecise || outsideGeofence) {
+        // Campus WiFi rescue: marking from the classroom's WiFi (session's
+        // saved-location IP) or any admin-configured campus IP is proof of
+        // presence in its own right — GPS imprecision indoors shouldn't
+        // fail a student who is demonstrably on the campus network.
+        const clientIp = extractClientIp(req);
+        const co = await Company.findById(session.company).select("academicSettings.allowedWifiIPs").lean();
+        const campusIPs = co?.academicSettings?.allowedWifiIPs || [];
+        const wifiOk = !!clientIp && (clientIp === session.geoWifiIp || campusIPs.includes(clientIp));
+
+        if (!wifiOk) {
+          const wifiHint = (session.geoWifiIp || campusIPs.length)
+            ? " If you are in class, connect to the campus WiFi and try again."
+            : "";
+          if (tooImprecise) {
+            return res.status(422).json({
+              error: `GPS reading too imprecise (±${Math.round(accuracy)}m). Move outdoors or near a window and try again.${wifiHint}`,
+              gpsAccuracyMeters: Math.round(accuracy),
+            });
+          }
+          return res.status(403).json({
+            error: `You appear to be ${Math.round(distance)}m from the class location — attendance requires being within ${session.geoRadiusMeters}m.${wifiHint}`,
+            outsideGeofence: true,
+            distanceMeters: Math.round(distance),
+            radiusMeters: session.geoRadiusMeters,
+          });
+        }
+        console.log(`[MARK] GPS check rescued by campus WiFi (${clientIp}) for session ${session._id}`);
       }
       gpsDistanceMeters = Math.round(distance);
       gpsAccuracy = accuracy != null && Number.isFinite(accuracy) ? Math.round(accuracy) : null;
@@ -1989,6 +2009,7 @@ exports.getCampusSettings = async (req, res) => {
       campusLongitude: a.campusLongitude ?? null,
       defaultGeofenceRadiusMeters: a.defaultGeofenceRadiusMeters ?? 100,
       requireEsp32Attendance: !!a.requireEsp32Attendance,
+      allowedWifiIPs: a.allowedWifiIPs || [],
     });
   } catch (e) {
     console.error("[getCampusSettings]", e);
@@ -2004,8 +2025,19 @@ exports.updateCampusSettings = async (req, res) => {
       return res.status(400).json({ error: "Campus settings apply to academic institutions only." });
     }
 
-    const { campusLatitude, campusLongitude, defaultGeofenceRadiusMeters, requireEsp32Attendance } = req.body;
+    const { campusLatitude, campusLongitude, defaultGeofenceRadiusMeters, requireEsp32Attendance, allowedWifiIPs } = req.body;
     const update = {};
+
+    if (allowedWifiIPs !== undefined) {
+      const list = Array.isArray(allowedWifiIPs)
+        ? allowedWifiIPs
+        : String(allowedWifiIPs || "").split(",");
+      const cleaned = list.map(ip => String(ip).trim()).filter(Boolean).slice(0, 20);
+      if (cleaned.some(ip => ip.length > 60)) {
+        return res.status(400).json({ error: "Each WiFi IP must be at most 60 characters." });
+      }
+      update["academicSettings.allowedWifiIPs"] = cleaned;
+    }
 
     if (campusLatitude !== undefined) {
       const lat = campusLatitude === null || campusLatitude === "" ? null : Number(campusLatitude);
@@ -2032,7 +2064,10 @@ exports.updateCampusSettings = async (req, res) => {
       update["academicSettings.requireEsp32Attendance"] = !!requireEsp32Attendance;
     }
 
-    await Company.findByIdAndUpdate(req.user.company, { $set: update });
+    // updateOne, not findByIdAndUpdate: the latter runs findAndModify with
+    // the schema's select:false projections, which FerretDB (local test DB)
+    // doesn't implement. We don't need the doc back anyway.
+    await Company.updateOne({ _id: req.user.company }, { $set: update });
     res.json({ message: "Campus settings saved" });
   } catch (e) {
     console.error("[updateCampusSettings]", e);

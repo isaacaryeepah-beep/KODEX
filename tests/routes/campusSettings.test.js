@@ -157,6 +157,64 @@ describe("GET/PATCH /api/attendance-sessions/campus-settings", () => {
     expect(res.status).toBe(400);
   });
 
+  test("saves campus WiFi IPs as an array, and they read back", async () => {
+    const patch = await request(app)
+      .patch("/api/attendance-sessions/campus-settings")
+      .set("Authorization", `Bearer ${academicAdminToken}`)
+      .send({ allowedWifiIPs: ["197.251.144.12", " 41.66.200.5 ", ""] });
+    expect(patch.status).toBe(200);
+
+    const get = await request(app)
+      .get("/api/attendance-sessions/campus-settings")
+      .set("Authorization", `Bearer ${academicAdminToken}`);
+    expect(get.body.allowedWifiIPs).toEqual(["197.251.144.12", "41.66.200.5"]);
+  });
+
+  test("accepts campus WiFi IPs as the comma-separated string the settings form sends", async () => {
+    const patch = await request(app)
+      .patch("/api/attendance-sessions/campus-settings")
+      .set("Authorization", `Bearer ${academicAdminToken}`)
+      .send({ allowedWifiIPs: " 10.10.1.1, 10.10.1.2 ,, " });
+    expect(patch.status).toBe(200);
+
+    const get = await request(app)
+      .get("/api/attendance-sessions/campus-settings")
+      .set("Authorization", `Bearer ${academicAdminToken}`);
+    expect(get.body.allowedWifiIPs).toEqual(["10.10.1.1", "10.10.1.2"]);
+  });
+
+  test("clearing campus WiFi IPs with an empty string empties the list", async () => {
+    const patch = await request(app)
+      .patch("/api/attendance-sessions/campus-settings")
+      .set("Authorization", `Bearer ${academicAdminToken}`)
+      .send({ allowedWifiIPs: "" });
+    expect(patch.status).toBe(200);
+
+    const get = await request(app)
+      .get("/api/attendance-sessions/campus-settings")
+      .set("Authorization", `Bearer ${academicAdminToken}`);
+    expect(get.body.allowedWifiIPs).toEqual([]);
+  });
+
+  test("caps the campus WiFi IP list at 20 entries", async () => {
+    const many = Array.from({ length: 25 }, (_, i) => `10.0.0.${i + 1}`);
+    const patch = await request(app)
+      .patch("/api/attendance-sessions/campus-settings")
+      .set("Authorization", `Bearer ${academicAdminToken}`)
+      .send({ allowedWifiIPs: many });
+    expect(patch.status).toBe(200);
+
+    const get = await request(app)
+      .get("/api/attendance-sessions/campus-settings")
+      .set("Authorization", `Bearer ${academicAdminToken}`);
+    expect(get.body.allowedWifiIPs.length).toBe(20);
+    // Reset so this suite leaves clean state for any later additions.
+    await request(app)
+      .patch("/api/attendance-sessions/campus-settings")
+      .set("Authorization", `Bearer ${academicAdminToken}`)
+      .send({ allowedWifiIPs: [] });
+  });
+
   test("a non-admin (lecturer) is rejected", async () => {
     const res = await request(app)
       .get("/api/attendance-sessions/campus-settings")

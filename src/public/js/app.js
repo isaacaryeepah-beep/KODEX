@@ -3115,8 +3115,6 @@ function buildSidebar() {
         links.push({ id: 'timesheets',      label: 'Timesheets',          icon: svgIcon('<rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/><line x1="8" y1="14" x2="16" y2="14"/>') });
         links.push({ id: 'approvals',       label: 'Approvals',           icon: approvalsIcon() });
         links.push({ id: 'tasks',           label: 'Tasks',               icon: svgIcon('<path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/>') });
-        links.push({ id: 'corp-clock-settings', label: 'Clock Settings',  icon: svgIcon('<circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/><circle cx="12" cy="12" r="2"/>') });
-        links.push({ id: 'arrival-iq-settings', label: 'ArrivalIQ Settings', icon: svgIcon('<path d="M3 11l19-9-9 19-2-8-8-2z"/>') });
         links.push({ sep: true, label: 'COMMUNICATION' });
         links.push({ id: 'messages',        label: 'Messages',            icon: svgIcon('<path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>') });
         links.push({ id: 'meetings',        label: 'Meetings',            icon: meetingsIcon() });
@@ -3129,8 +3127,10 @@ function buildSidebar() {
         links.push({ id: 'ai-reports',      label: 'Dikly AI',            icon: svgIcon('<path d="M15 4V2"/><path d="M15 16v-2"/><path d="M8 9h2"/><path d="M20 9h2"/><path d="M17.8 11.8 19 13"/><path d="M15 9h.01"/><path d="M17.8 6.2 19 5"/><path d="M13.2 6.2 12 5"/><path d="M3 21l9-9"/>') });
         links.push({ sep: true, label: 'ADMINISTRATION' });
         links.push({ id: 'roles-permissions', label: 'Roles & Permissions', icon: svgIcon('<rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/>') });
-        links.push({ id: 'company-settings',  label: 'Company Settings',    icon: svgIcon('<circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/>') });
-        links.push({ id: 'branding',        label: 'Branding',            icon: svgIcon('<circle cx="12" cy="12" r="10"/><path d="M8 14s1.5 2 4 2 4-2 4-2"/><line x1="9" y1="9" x2="9.01" y2="9"/><line x1="15" y1="9" x2="15.01" y2="9"/>') });
+        // Company Settings, Branding, Clock Settings and ArrivalIQ Settings
+        // are one hub now — a pill bar on the pages cross-links them, so the
+        // sidebar carries a single entry (user asked for a shorter sidebar).
+        links.push({ id: 'company-settings',  label: 'Settings & Branding', icon: svgIcon('<circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/>') });
         links.push({ id: 'api-access',      label: 'API Access',          icon: svgIcon('<polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/>') });
         links.push({ id: 'search',          label: 'Search',              icon: svgIcon('<circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>') });
         links.push({ sep: true, label: 'SUPPORT' });
@@ -3142,12 +3142,6 @@ function buildSidebar() {
       links.push({ id: 'approvals', label: 'Approvals', icon: approvalsIcon() });
       links.push({ id: 'search', label: 'Search', icon: svgIcon('<circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>') });
       links.push({ id: 'users', label: 'Users', icon: usersIcon() });
-      if (currentUser.company?.mode === 'both') {
-        // Hybrid institutions run corporate features alongside academic ones
-        // (see requireMode() in middleware/role.js) — ArrivalIQ's backend
-        // already allows "both", the nav link was just never added here.
-        links.push({ id: 'arrival-iq-settings', label: 'ArrivalIQ Settings', icon: svgIcon('<path d="M3 11l19-9-9 19-2-8-8-2z"/>') });
-      }
       if (currentUser.company?.mode === 'academic' || currentUser.company?.mode === 'both') {
         links.push({ id: 'sessions', label: 'Sessions', icon: sessionsIcon() });
         links.push({ id: 'attendance-settings', label: 'Attendance Settings', icon: svgIcon('<circle cx="12" cy="12" r="3"/><path d="M12 1v6m0 6v6m11-7h-6m-6 0H1"/>') });
@@ -3170,9 +3164,9 @@ function buildSidebar() {
       links.push({ id: 'reports', label: 'Reports', icon: reportsIcon() });
       links.push({ id: 'ai-reports', label: 'Dikly AI', icon: svgIcon('<path d="M15 4V2"/><path d="M15 16v-2"/><path d="M8 9h2"/><path d="M20 9h2"/><path d="M17.8 11.8 19 13"/><path d="M15 9h.01"/><path d="M17.8 6.2 19 5"/><path d="M13.2 6.2 12 5"/><path d="M3 21l9-9"/>') });
       links.push({ sep: true, label: 'ADMINISTRATION' });
-      links.push({ id: 'company-settings', label: 'Company Settings', icon: svgIcon('<circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/>') });
-      links.push({ id: 'branding', label: 'Institution Branding', icon: svgIcon('<circle cx="12" cy="12" r="10"/><path d="M8 14s1.5 2 4 2 4-2 4-2"/><line x1="9" y1="9" x2="9.01" y2="9"/><line x1="15" y1="9" x2="15.01" y2="9"/>') });
-      links.push({ id: 'arrival-iq-settings', label: 'ArrivalIQ Settings', icon: svgIcon('<path d="M3 11l19-9-9 19-2-8-8-2z"/>') });
+      // Settings hub: Company / Institution Branding / ArrivalIQ share one
+      // entry — a pill bar on the pages themselves switches between them.
+      links.push({ id: 'company-settings', label: 'Settings & Branding', icon: svgIcon('<circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/>') });
       links.push({ id: 'api-access', label: 'API Access', icon: svgIcon('<polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/>') });
       links.push({ sep: true, label: 'SUPPORT' });
       links.push({ id: 'faq-center', label: 'FAQ Center', icon: svgIcon('<circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/>') });
@@ -8456,6 +8450,34 @@ function _renderSessionsHTML(content, sessions, isOffline, extras) {
     </div>
     <div class="card">
       ${sessions.length ? `
+        <div class="sess-cards">
+          ${sessions.map(s => {
+            const inProg = ['active','live','paused','locked'].includes(s.status);
+            const flags = flaggedBySession[s._id] || 0;
+            const safeTitle = (s.title || 'Session').replace(/['"\\]/g, '');
+            const actions = inProg ? `
+              ${canStart ? `<button class="btn btn-danger btn-sm" onclick="stopSession('${s._id}')">Stop</button>` : ''}
+              ${canStart && !isOffline ? `<button class="btn btn-sm" style="background:#0e9384;color:#fff;font-size:11.5px" onclick="_extendSessionPrompt('${s._id}')">⏱ +Time</button>` : ''}
+              ${canStart && !isOffline ? `<button class="btn btn-sm" style="background:#7c3aed;color:#fff;font-size:11.5px" onclick="generateVerbalCode('${s._id}')">Verbal Code</button>` : ''}
+              <button class="btn btn-sm" style="font-size:11.5px;background:var(--bg);border:1px solid var(--border)" onclick="viewAttendees('${s._id}', '${safeTitle}')">Attendees</button>
+              ${canStart && isLecturer && !isOffline ? `<button class="btn btn-sm" style="background:#059669;color:#fff;font-size:11.5px" onclick="showLecturerUnlockModal()">🔓 Unlock</button>` : ''}
+            ` : '';
+            return `
+            <div style="border:1px solid var(--border);border-radius:12px;padding:12px 14px;${flags > 0 ? 'background:#fffbeb;' : ''}">
+              <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:10px">
+                <div style="flex:1;min-width:0">
+                  <div style="font-weight:700;font-size:14px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(s.title || 'Untitled')}${flags > 0 ? ` <span onclick="showFlaggedDevicesModal('${s._id}')" style="background:#fef3c7;color:#92400e;border-radius:4px;padding:1px 6px;font-size:10.5px;font-weight:700;cursor:pointer">⚠️ ${flags}</span>` : ''}</div>
+                  <div style="font-size:11.5px;color:var(--text-muted);margin-top:2px">
+                    ${s.course ? `<span style="font-weight:600;color:#6366f1">${esc(s.course.code || s.course.title || '')}</span> · ` : ''}${new Date(s.startedAt).toLocaleString([], {dateStyle:'short', timeStyle:'short'})}
+                  </div>
+                </div>
+                <span class="status-badge status-${s.status}" style="flex-shrink:0">${s.status}</span>
+              </div>
+              ${actions.trim() ? `<div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:10px">${actions}</div>` : ''}
+            </div>`;
+          }).join('')}
+        </div>
+        <div class="sess-table-wrap">
         <table>
           <thead><tr>
             <th>Title</th>
@@ -8486,6 +8508,7 @@ function _renderSessionsHTML(content, sessions, isOffline, extras) {
             </tr>`;
           }).join('')}</tbody>
         </table>
+        </div>
       ` : `<div class="empty-state"><p>${_sessionsFilterCourseId ? 'No sessions for this course yet.' : 'No sessions found'}</p></div>`}
     </div>
   `;
@@ -9044,18 +9067,18 @@ async function startGpsSession(latitude, longitude, campusLat = null, campusLng 
 
   // Honour the "Class Center" choice — the admin-set campus center, one of
   // the lecturer's own saved locations, or their live position (the default).
-  let lat = latitude, lng = longitude;
+  let lat = latitude, lng = longitude, wifiIp = null;
   const centerChoice = document.querySelector('input[name="gps-center"]:checked')?.value;
   if (centerChoice === 'campus' && campusLat != null && campusLng != null) {
     lat = campusLat; lng = campusLng;
   } else if (centerChoice?.startsWith('loc-')) {
     const saved = (window._gpsSavedLocs || [])[Number(centerChoice.slice(4))];
-    if (saved) { lat = saved.latitude; lng = saved.longitude; }
+    if (saved) { lat = saved.latitude; lng = saved.longitude; wifiIp = saved.wifiIp || null; }
   }
   try {
     await api('/api/attendance-sessions/start', {
       method: 'POST',
-      body: JSON.stringify({ title, courseId, gpsGeofence: { latitude: lat, longitude: lng, radiusMeters: radius } }),
+      body: JSON.stringify({ title, courseId, gpsGeofence: { latitude: lat, longitude: lng, radiusMeters: radius, wifiIp } }),
     });
     closeModal();
     toastSuccess('GPS session started — students can now check in with their location.');
@@ -10127,7 +10150,10 @@ window._revokeHR = async function(assignmentId, userName) {
 
 // ── Edit an existing user's department (corporate) ─────────────────────────
 async function showEditUserModal(userId) {
-  const target = (window._cachedUsers || []).find(u => u._id === userId);
+  // _cachedUsers is a top-level `let`, not a window property — reading
+  // window._cachedUsers here always returned undefined, so Edit failed
+  // with "User not found" for every user.
+  const target = (_cachedUsers || []).find(u => u._id === userId);
   if (!target) { toastError('User not found — refresh and try again.'); return; }
   const userName    = target.name || '';
   const currentDept = target.department || '';
@@ -10145,7 +10171,7 @@ async function showEditUserModal(userId) {
     : '';
 
   // Reporting manager candidates — any manager/admin in the company except the user themselves
-  const mgrCandidates = (window._cachedUsers || [])
+  const mgrCandidates = (_cachedUsers || [])
     .filter(u => ['manager', 'admin', 'superadmin'].includes(u.role) && u._id !== userId)
     .sort((a, b) => (a.name || '').localeCompare(b.name || ''));
   const mgrOptions = `<option value="">— No reporting manager —</option>` +
@@ -20603,6 +20629,23 @@ async function _caSaveSettings() {
 
 // ── SHIFTS (Admin/Manager) ─────────────────────────────────────────────────
 // ── Corporate Clock In/Out Settings (direct admin page) ───────────────────
+// ── Settings hub ─────────────────────────────────────────────────────────────
+// One "Settings & Branding" sidebar entry; the individual settings pages
+// (Company, Branding, Clock, ArrivalIQ) stay separate views and cross-link
+// through this pill bar, so the sidebar carries one link instead of four.
+function _settingsHubTabs(active) {
+  const mode = currentUser?.company?.mode;
+  const tabs = [
+    { id: 'company-settings',    label: '⚙️ Company' },
+    { id: 'branding',            label: '🎨 Branding' },
+    ...(mode === 'corporate' ? [{ id: 'corp-clock-settings', label: '🕐 Clock In/Out' }] : []),
+    { id: 'arrival-iq-settings', label: '🚗 ArrivalIQ' },
+  ];
+  return `<div class="settings-hub-tabs">${tabs.map(t =>
+    `<button type="button" class="sht-pill${t.id === active ? ' active' : ''}" onclick="navigateTo('${t.id}')">${t.label}</button>`
+  ).join('')}</div>`;
+}
+
 async function renderCorpClockSettings() {
   const content = document.getElementById('main-content');
   if (!content) return;
@@ -20614,6 +20657,7 @@ async function renderCorpClockSettings() {
     ]);
 
     content.innerHTML = `
+      ${_settingsHubTabs('corp-clock-settings')}
       <div class="page-header" style="display:flex;align-items:flex-start;justify-content:space-between;flex-wrap:wrap;gap:12px;">
         <div>
           <h2>Clock In / Out Settings</h2>
@@ -20735,7 +20779,7 @@ async function renderLecturerAttendanceSettings() {
         <span style="font-size:18px;flex-shrink:0">📌</span>
         <div style="flex:1;min-width:0">
           <div style="font-weight:600;font-size:13.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(l.name)}</div>
-          <div style="font-size:11.5px;color:var(--text-muted);font-family:monospace">${Number(l.latitude).toFixed(5)}, ${Number(l.longitude).toFixed(5)} · ${l.radiusMeters || 100}m radius</div>
+          <div style="font-size:11.5px;color:var(--text-muted);font-family:monospace">${Number(l.latitude).toFixed(5)}, ${Number(l.longitude).toFixed(5)} · ${l.radiusMeters || 100}m${l.wifiIp ? ` · 📶 ${esc(l.wifiIp)}` : ''}</div>
         </div>
         <button class="btn btn-sm" style="background:#fee2e2;color:#b42318;font-size:11.5px;flex-shrink:0" onclick="_lasDelete('${l._id}', this)">Delete</button>
       </div>`).join('');
@@ -20761,17 +20805,18 @@ async function renderLecturerAttendanceSettings() {
           <label>Name <span style="color:red">*</span></label>
           <input id="las-name" type="text" maxlength="60" placeholder="e.g. Main Campus – Lecture Theatre 1">
         </div>
-        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px">
+        <button class="btn btn-secondary btn-sm" style="margin-bottom:10px;width:100%" onclick="_lasDetect(this)">📍 Use my current location</button>
+        <div class="latlng-row">
           <div>
             <label style="font-size:11px;font-weight:700;text-transform:uppercase;color:var(--text-muted)">Latitude</label>
-            <input id="las-lat" type="number" step="any" placeholder="e.g. 5.6037" style="width:100%;padding:8px;border:1px solid var(--border);border-radius:6px;font-size:13px">
+            <input id="las-lat" type="number" step="any" placeholder="e.g. 5.6037" style="width:100%;padding:8px;border:1px solid var(--border);border-radius:6px;font-size:13px;font-family:monospace">
           </div>
           <div>
             <label style="font-size:11px;font-weight:700;text-transform:uppercase;color:var(--text-muted)">Longitude</label>
-            <input id="las-lng" type="number" step="any" placeholder="e.g. -0.1870" style="width:100%;padding:8px;border:1px solid var(--border);border-radius:6px;font-size:13px">
+            <input id="las-lng" type="number" step="any" placeholder="e.g. -0.1870" style="width:100%;padding:8px;border:1px solid var(--border);border-radius:6px;font-size:13px;font-family:monospace">
           </div>
         </div>
-        <button class="btn btn-secondary btn-sm" style="margin-bottom:12px" onclick="_lasDetect(this)">📍 Use my current location</button>
+        <div id="las-status" style="font-size:12px;color:var(--text-muted);margin-bottom:10px"></div>
         <div class="form-group">
           <label>Check-in Radius</label>
           <select id="las-radius" style="width:100%;padding:9px 12px;border:1.5px solid var(--border);border-radius:8px;font-size:13px">
@@ -20781,7 +20826,11 @@ async function renderLecturerAttendanceSettings() {
             <option value="500">500 m — campus area</option>
           </select>
         </div>
-        <div id="las-status" style="font-size:12px;color:var(--text-muted);margin-bottom:10px"></div>
+        <div class="form-group">
+          <label>Campus WiFi IP <span style="font-weight:400;color:var(--text-muted);font-size:12px">(optional)</span></label>
+          <input id="las-wifi" type="text" maxlength="60" placeholder="e.g. 197.251.144.12" style="font-family:monospace">
+          <div style="font-size:11.5px;color:var(--text-muted);margin-top:4px">Students marking from this WiFi are accepted even when their GPS reading is imprecise indoors. Find it by searching "what is my IP" while on the campus WiFi.</div>
+        </div>
         <button class="btn btn-primary btn-sm" onclick="_lasAdd(this)">Save Location</button>
       </div>
     `;
@@ -20795,10 +20844,16 @@ window._lasDetect = async function(btn) {
   if (btn) { btn.disabled = true; btn.textContent = 'Detecting…'; }
   try {
     const loc = await _getGPSLocation();
-    document.getElementById('las-lat').value = loc.latitude;
-    document.getElementById('las-lng').value = loc.longitude;
+    document.getElementById('las-lat').value = Number(loc.latitude).toFixed(6);
+    document.getElementById('las-lng').value = Number(loc.longitude).toFixed(6);
     const st = document.getElementById('las-status');
-    if (st) st.textContent = `Position captured (±${Math.round(loc.accuracy)}m)`;
+    if (st) {
+      const acc = Math.round(loc.accuracy);
+      st.textContent = acc > 100
+        ? `Position captured, but it's rough (±${acc}m) — for a tighter fix, step outdoors and detect again.`
+        : `Position captured (±${acc}m)`;
+      st.style.color = acc > 100 ? '#b45708' : '';
+    }
   } catch (e) {
     _showGPSBlockedModal ? _showGPSBlockedModal(e.message) : toastError(e.message);
   } finally {
@@ -20811,11 +20866,12 @@ window._lasAdd = async function(btn) {
   const latitude = Number(document.getElementById('las-lat')?.value);
   const longitude = Number(document.getElementById('las-lng')?.value);
   const radiusMeters = Number(document.getElementById('las-radius')?.value) || 100;
+  const wifiIp = document.getElementById('las-wifi')?.value?.trim() || null;
   if (!name) { toastWarning('Give this location a name.'); return; }
   if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) { toastWarning('Set the coordinates — tap "Use my current location" while standing there.'); return; }
   if (btn) { btn.disabled = true; btn.textContent = 'Saving…'; }
   try {
-    await api('/api/users/me/class-locations', { method: 'POST', body: JSON.stringify({ name, latitude, longitude, radiusMeters }) });
+    await api('/api/users/me/class-locations', { method: 'POST', body: JSON.stringify({ name, latitude, longitude, radiusMeters, wifiIp }) });
     toastSuccess('Location saved');
     renderLecturerAttendanceSettings();
   } catch (e) {
@@ -20878,6 +20934,11 @@ async function renderAcademicAttendanceSettings() {
           <label style="font-size:11px;font-weight:700;text-transform:uppercase;color:var(--text-muted)">Default Check-in Radius (metres)</label>
           <input id="aas-radius" type="number" min="20" max="1000" value="${s.defaultGeofenceRadiusMeters || 100}" placeholder="100" style="width:120px;padding:8px;border:1px solid var(--border);border-radius:6px;font-size:13px;display:block">
           <div style="font-size:11px;color:var(--text-light);margin-top:4px">Pre-selected when a lecturer starts a GPS check-in session (they can still change it per session).</div>
+        </div>
+        <div style="margin-top:12px">
+          <label style="font-size:11px;font-weight:700;text-transform:uppercase;color:var(--text-muted)">Campus WiFi IPs (optional)</label>
+          <input id="aas-wifi-ips" value="${esc((s.allowedWifiIPs || []).join(', '))}" placeholder="e.g. 197.251.144.12, 41.66.200.5" style="width:100%;padding:8px;border:1px solid var(--border);border-radius:6px;font-size:13px;font-family:monospace">
+          <div style="font-size:11px;color:var(--text-light);margin-top:4px">Public IP addresses of your campus WiFi networks, comma-separated (up to 20). Students marking attendance from one of these networks are accepted even when their GPS reading is imprecise indoors. Find an IP by searching "what is my IP" on a device connected to that WiFi.</div>
         </div>
         <button class="btn btn-primary" onclick="_aasSaveSettings()" style="margin-top:14px">Save Attendance Settings</button>
       </div>
@@ -20944,6 +21005,7 @@ async function _aasSaveSettings() {
   const lat    = document.getElementById('aas-lat')?.value;
   const lng    = document.getElementById('aas-lng')?.value;
   const radius = document.getElementById('aas-radius')?.value;
+  const wifiEl = document.getElementById('aas-wifi-ips');
   const reqDev = document.getElementById('aas-require-device')?.checked ?? false;
   // Both lat and lng must be present together, or both cleared.
   if ((lat && !lng) || (!lat && lng)) { toastError('Enter both latitude and longitude, or clear both.'); return; }
@@ -20955,6 +21017,7 @@ async function _aasSaveSettings() {
         campusLongitude: lng ? parseFloat(lng) : null,
         defaultGeofenceRadiusMeters: radius ? parseInt(radius, 10) : 100,
         requireEsp32Attendance: reqDev,
+        ...(wifiEl ? { allowedWifiIPs: wifiEl.value } : {}),
       }),
     });
     toastSuccess('Attendance settings saved');
@@ -20986,6 +21049,7 @@ async function renderArrivalIQSettings() {
     const _aiqStaff = _aiqIsAcademic ? 'staff' : 'employees';
 
     content.innerHTML = `
+      ${['admin','superadmin'].includes(currentUser?.role) ? _settingsHubTabs('arrival-iq-settings') : ''}
       <div class="page-header" style="display:flex;align-items:flex-start;justify-content:space-between;flex-wrap:wrap;gap:12px;">
         <div>
           <h2>ArrivalIQ Settings</h2>
@@ -24767,9 +24831,10 @@ buildSidebar = function() {
   if (!anchor) return;
 
   [
+    // 'nav-branding' intentionally absent: Branding lives inside the
+    // Settings & Branding hub now, not as its own sidebar entry.
     ['nav-analytics',  icons.analytics, 'Analytics',   'analytics'],
     ['nav-branches',   icons.branches,  'Branches',    'branches'],
-    ['nav-branding',   icons.branding,  'Branding',    'branding'],
   ].forEach(([id, icon, label, view]) => {
     if (!document.getElementById(id)) {
       const a = document.createElement('a');
@@ -25113,6 +25178,7 @@ async function renderBranding() {
     const _isAcademicBrand = currentUser?.company?.mode === 'academic';
 
     content.innerHTML = `
+      ${_settingsHubTabs('branding')}
       <div class="page-header"><h2>${_isAcademicBrand ? 'Institution Branding' : 'Branding & Settings'}</h2><p>${_isAcademicBrand ? "Customize your institution's portal appearance" : 'Customize your portal appearance and attendance reporting'}</p></div>
 
       <!-- Branding -->
@@ -26877,6 +26943,7 @@ async function renderCompanySettings() {
   window._csAddLocation = () => document.getElementById('cs-locations').insertAdjacentHTML('beforeend', locationRow(null));
 
   content.innerHTML = `
+    ${_settingsHubTabs('company-settings')}
     ${_corpHeader('Company Settings', 'Organization-wide configuration')}
     <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:1rem;align-items:start">
       <div class="card" style="padding:1.2rem">

@@ -341,6 +341,9 @@ const userSchema = new mongoose.Schema(
       latitude:     { type: Number, required: true, min: -90,  max: 90 },
       longitude:    { type: Number, required: true, min: -180, max: 180 },
       radiusMeters: { type: Number, default: 100, min: 20, max: 1000 },
+      // Optional classroom/campus WiFi public IP — passed into GPS sessions
+      // anchored at this location as an alternative proof of presence.
+      wifiIp:       { type: String, trim: true, default: null, maxlength: 60 },
       createdAt:    { type: Date, default: Date.now },
     }],
 

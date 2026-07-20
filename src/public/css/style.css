@@ -7638,3 +7638,50 @@ table tr:hover td { background: #f8fafc !important; }
   .sd-rep-chip { padding: 8px 12px; margin-bottom: 12px; }
   .quick-actions-bar { padding: 12px 14px !important; }
 }
+
+/* ══════════════════════════════════════════════════
+   SESSIONS PAGE — MOBILE CARD LIST + LECTURER LOCATION FORM
+   The sessions table can't fit 6 columns on a phone (action buttons were
+   cut off past the right edge), so ≤640px swaps the table for a stacked
+   card list rendered alongside it. `.latlng-row` exists because the global
+   mobile rule collapses all inline grid-template-columns to 1fr — a
+   dedicated class keeps lat/lng side by side.
+══════════════════════════════════════════════════ */
+.latlng-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+
+.sess-cards { display: none; }
+
+@media (max-width: 640px) {
+  .sess-table-wrap { display: none; }
+  .sess-cards { display: flex; flex-direction: column; gap: 10px; }
+}
+
+/* ── Settings hub pill bar (Company / Branding / Clock / ArrivalIQ) ── */
+.settings-hub-tabs {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-bottom: 18px;
+}
+.sht-pill {
+  border: 1px solid var(--border);
+  background: var(--card-bg, #fff);
+  color: var(--text-muted, #64748b);
+  border-radius: 20px;
+  padding: 7px 15px;
+  font-size: 12.5px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all .15s;
+}
+.sht-pill:hover { border-color: var(--accent, #4f6ef7); color: var(--text, #0f172a); }
+.sht-pill.active {
+  background: var(--accent, #4f6ef7);
+  border-color: var(--accent, #4f6ef7);
+  color: #fff;
+}

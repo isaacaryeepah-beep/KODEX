@@ -1049,6 +1049,9 @@ exports.addMyClassLocation = async (req, res) => {
     const lat = Number(req.body.latitude);
     const lng = Number(req.body.longitude);
     const radius = Math.round(Number(req.body.radiusMeters) || 100);
+    const wifiIp = typeof req.body.wifiIp === "string" && req.body.wifiIp.trim()
+      ? req.body.wifiIp.trim().slice(0, 60)
+      : null;
     if (!name || name.length > 60) {
       return res.status(400).json({ error: "A name (max 60 characters) is required, e.g. \"Main Campus – LT1\"" });
     }
@@ -1063,7 +1066,7 @@ exports.addMyClassLocation = async (req, res) => {
     if ((me.savedClassLocations || []).length >= MAX_CLASS_LOCATIONS) {
       return res.status(400).json({ error: `You can save up to ${MAX_CLASS_LOCATIONS} locations — delete one first` });
     }
-    me.savedClassLocations.push({ name, latitude: lat, longitude: lng, radiusMeters: radius });
+    me.savedClassLocations.push({ name, latitude: lat, longitude: lng, radiusMeters: radius, wifiIp });
     await me.save({ validateModifiedOnly: true });
     res.status(201).json({ locations: me.savedClassLocations });
   } catch (error) {
