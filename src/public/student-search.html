@@ -312,8 +312,12 @@ html, body {
 
 /* Responsive */
 @media (max-width: 900px) {
-  .layout { grid-template-columns: 1fr; }
-  .left-panel { height: auto; position: static; border-right: none; border-bottom: 1px solid var(--border); }
+  .layout { grid-template-columns: 1fr; min-height: 0; }
+  .left-panel { height: auto; position: static; border-right: none; border-bottom: 1px solid var(--border); overflow: visible; }
+  /* flex:1 + overflow:auto collapses to 0px height inside the stacked
+     (content-sized) phone layout — iOS Safari clipped the entire results
+     list. Size to content instead and let the page scroll. */
+  .results-area { flex: none; overflow-y: visible; min-height: 90px; padding-bottom: 20px; }
   .right-panel { padding: 16px; }
 }
 @media (max-width: 600px) {
@@ -538,6 +542,11 @@ async function loadProfile(userId, role, clickedEl) {
 
     const [profileData, transcriptData] = await Promise.all(promises);
     renderProfile(profileData.student, transcriptData?.transcript || null);
+    // Stacked phone layout renders the profile below the results — bring it
+    // into view so a tap visibly does something.
+    if (window.matchMedia('(max-width: 900px)').matches) {
+      view.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
   } catch (e) {
     view.innerHTML = `<div class="empty-state"><svg fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/></svg><h3>Error</h3><p>${esc(e.message)}</p></div>`;
   }
