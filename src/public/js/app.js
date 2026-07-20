@@ -27705,8 +27705,42 @@ window._aiChatSubmit = function() {
   _aiChatAutogrow(input);
   _aiChat.push({ role: 'user', text: q });
   _aiChatRepaint();
-  _aiChatAsk('custom_query', { question: q });
+  _aiChatAskActions(q);
 };
+
+// Free-text questions go to the tool-enabled endpoint first — it can read
+// live data (locked students, today's attendance, pending approvals…). If
+// it isn't configured on the server (503) or is missing, fall back to the
+// classic report-based answer path.
+async function _aiChatAskActions(q) {
+  _aiChat.push({ role: 'typing' });
+  _aiChatRepaint();
+  const send = document.getElementById('aic-send');
+  if (send) send.disabled = true;
+  const history = _aiChat
+    .filter(m => (m.role === 'user' && m.text) || (m.role === 'assistant' && m.plain))
+    .slice(-8)
+    .map(m => ({ role: m.role, text: m.role === 'user' ? m.text : m.plain }));
+  try {
+    const d = await api('/api/ai-actions/chat', {
+      method: 'POST',
+      body: JSON.stringify({ question: q, history }),
+    });
+    _aiChat.pop();
+    const toolNote = (d.toolsUsed && d.toolsUsed.length)
+      ? `<div style="margin-top:.5rem;font-size:.72rem;color:var(--text-light);display:inline-flex;align-items:center;gap:.3rem;border:1px solid var(--border);border-radius:20px;padding:.2rem .6rem">🔍 Checked live data</div>`
+      : '';
+    _aiChat.push({ role: 'assistant', html: _aiMarkdownToHtml(d.reply || 'No answer was returned.') + toolNote, plain: d.reply || '' });
+    if (send) send.disabled = false;
+    _aiChatRepaint();
+    document.getElementById('aic-input')?.focus();
+  } catch (e) {
+    // Not configured / unavailable → classic path answers instead.
+    _aiChat.pop();
+    if (send) send.disabled = false;
+    _aiChatAsk('custom_query', { question: q });
+  }
+}
 
 // Shared path for both free-text questions and quick-action reports: show a
 // typing indicator, call the backend, then replace it with the answer.

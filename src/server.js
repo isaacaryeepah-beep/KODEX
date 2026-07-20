@@ -61,6 +61,7 @@ const assignmentLecturerRoutes      = require("./routes/assignmentLecturerRoutes
 const assignmentStudentRoutes       = require("./routes/assignmentStudentRoutes");
 const aiGeneratorRoutes             = require("./routes/aiGeneratorRoutes");
 const aiReportRoutes                = require("./routes/aiReports");
+const aiActionRoutes                = require("./routes/aiActions");
 const hodRoutes = require("./routes/hod");
 let superadminRoutes = null;
 try { superadminRoutes = require("./routes/superadmin"); } catch(_) { logger.warn('superadmin routes not found — skipping'); }
@@ -520,6 +521,7 @@ app.use("/api/class-rep",       classRepRoutes);
 app.use("/api/course-videos",   courseVideoRoutes);
 app.use("/api/exam",            examRoutes);
 app.use("/api/ai-reports",      aiReportRoutes);
+app.use("/api/ai-actions",      aiActionRoutes);
 
 if (superadminRoutes) app.use("/api/superadmin", superadminRoutes);
 
