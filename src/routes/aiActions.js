@@ -12,7 +12,7 @@ const express = require("express");
 const router = express.Router();
 const authenticate = require("../middleware/auth");
 const { aiGenerateLimiter } = require("../middleware/rateLimiter");
-const { runActionChat, isConfigured } = require("../services/ai/aiActionService");
+const { runActionChat, executeAction, isConfigured } = require("../services/ai/aiActionService");
 const Company = require("../models/Company");
 
 router.use(authenticate);
@@ -41,16 +41,38 @@ router.post("/chat", aiGenerateLimiter, async (req, res) => {
       ? await Company.findById(req.user.company).select("mode").lean()
       : null;
     const mode = co?.mode || "corporate";
-    const { reply, toolsUsed } = await runActionChat({
+    const { reply, toolsUsed, pendingAction } = await runActionChat({
       user: req.user,
       mode,
       question: question.trim(),
       history: cleanHistory,
     });
-    return res.json({ reply, toolsUsed });
+    return res.json({ reply, toolsUsed, pendingAction });
   } catch (err) {
     console.error("[aiActions/chat]", err.message);
     return res.status(502).json({ error: "Dikly AI could not answer right now. Please try again." });
+  }
+});
+
+// Execute a previously proposed action. No model call happens here — this is
+// the user's explicit Confirm tap. The token is verified (signature, expiry,
+// same user, same company) and the executor re-checks the role gate.
+router.post("/execute", async (req, res) => {
+  try {
+    const { token } = req.body || {};
+    if (!token || typeof token !== "string") {
+      return res.status(400).json({ error: "token is required" });
+    }
+    const co = req.user.company
+      ? await Company.findById(req.user.company).select("mode").lean()
+      : null;
+    const mode = co?.mode || "corporate";
+    const { status, result, error } = await executeAction({ user: req.user, mode, token });
+    if (error) return res.status(status).json({ error });
+    return res.json(result);
+  } catch (err) {
+    console.error("[aiActions/execute]", err.message);
+    return res.status(500).json({ error: "Failed to execute the action" });
   }
 });
 

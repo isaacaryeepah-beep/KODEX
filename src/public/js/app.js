@@ -27730,7 +27730,24 @@ async function _aiChatAskActions(q) {
     const toolNote = (d.toolsUsed && d.toolsUsed.length)
       ? `<div style="margin-top:.5rem;font-size:.72rem;color:var(--text-light);display:inline-flex;align-items:center;gap:.3rem;border:1px solid var(--border);border-radius:20px;padding:.2rem .6rem">🔍 Checked live data</div>`
       : '';
-    _aiChat.push({ role: 'assistant', html: _aiMarkdownToHtml(d.reply || 'No answer was returned.') + toolNote, plain: d.reply || '' });
+    const idx = _aiChat.length;
+    // A proposed action renders as a Confirm card — nothing has been changed
+    // yet; only the Confirm tap calls /api/ai-actions/execute.
+    const confirmCard = d.pendingAction
+      ? `<div id="aic-confirm-${idx}" style="margin-top:.7rem;border:1.5px solid var(--accent,#4f6ef7);border-radius:12px;padding:.8rem 1rem;background:rgba(79,110,247,.05)">
+           <div style="font-weight:700;font-size:.88rem;margin-bottom:.6rem">⚡ ${esc(d.pendingAction.summary)}</div>
+           <div style="display:flex;gap:.5rem">
+             <button class="btn btn-primary btn-sm" onclick="_aiActionConfirm(${idx})">Confirm</button>
+             <button class="btn btn-secondary btn-sm" onclick="_aiActionCancel(${idx})">Cancel</button>
+           </div>
+         </div>`
+      : '';
+    _aiChat.push({
+      role: 'assistant',
+      html: _aiMarkdownToHtml(d.reply || 'No answer was returned.') + toolNote + confirmCard,
+      plain: d.reply || '',
+      pendingToken: d.pendingAction?.token || null,
+    });
     if (send) send.disabled = false;
     _aiChatRepaint();
     document.getElementById('aic-input')?.focus();
@@ -27770,6 +27787,40 @@ async function _aiChatAsk(type, parameters = {}, forceRefresh = false) {
     document.getElementById('aic-input')?.focus();
   }
 }
+
+// Confirm/cancel for AI-proposed actions. The token lives only in the chat
+// transcript entry; Confirm posts it to the execute endpoint.
+window._aiActionConfirm = async function(idx) {
+  const m = _aiChat[idx];
+  const card = document.getElementById(`aic-confirm-${idx}`);
+  if (!m?.pendingToken) return;
+  if (card) card.innerHTML = '<div style="font-size:.85rem;color:var(--text-light)">Working…</div>';
+  try {
+    const d = await api('/api/ai-actions/execute', {
+      method: 'POST',
+      body: JSON.stringify({ token: m.pendingToken }),
+    });
+    m.pendingToken = null;
+    const doneHtml = `<div style="margin-top:.7rem;border:1.5px solid #16a34a;border-radius:12px;padding:.7rem 1rem;background:rgba(22,163,74,.06);font-size:.86rem">✅ ${esc(d.message || 'Done.')}</div>`;
+    m.html = m.html.replace(/<div id="aic-confirm-\d+"[\s\S]*$/, '') + doneHtml;
+    toastSuccess(d.message || 'Done');
+  } catch (e) {
+    m.pendingToken = null;
+    const failHtml = `<div style="margin-top:.7rem;border:1.5px solid var(--error,#ef4444);border-radius:12px;padding:.7rem 1rem;background:rgba(239,68,68,.06);font-size:.86rem">❌ ${esc(e.message || 'The action failed.')}</div>`;
+    m.html = m.html.replace(/<div id="aic-confirm-\d+"[\s\S]*$/, '') + failHtml;
+    toastError(e.message || 'The action failed');
+  }
+  _aiChatRepaint();
+};
+
+window._aiActionCancel = function(idx) {
+  const m = _aiChat[idx];
+  if (!m) return;
+  m.pendingToken = null;
+  m.html = m.html.replace(/<div id="aic-confirm-\d+"[\s\S]*$/, '') +
+    '<div style="margin-top:.7rem;font-size:.8rem;color:var(--text-light)">Action cancelled — nothing was changed.</div>';
+  _aiChatRepaint();
+};
 
 window._aiChatRegen = function(regen) {
   if (!regen?.type) return;
