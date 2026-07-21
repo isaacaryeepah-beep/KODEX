@@ -16512,16 +16512,18 @@ function renderReports() {
 }
 
 function reportCard(c1, c2, iconPath, title, desc, type, apiBase) {
-  const downloadIcon = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>';
+  const downloadIcon = '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>';
   return `
-    <div class="report-card" style="--report-gradient:linear-gradient(135deg,${c1},${c2});--report-shadow:${c1}33" onclick="downloadReport('${type}','${apiBase}', event)">
-      <div class="report-card-icon">
-        ${svgIcon(iconPath, 28)}
+    <div class="report-row" onclick="downloadReport('${type}','${apiBase}', event)">
+      <div class="report-row-icon" style="background:linear-gradient(135deg,${c1},${c2})">
+        ${svgIcon(iconPath, 18)}
       </div>
-      <div class="report-card-title">${title}</div>
-      <div class="report-card-desc">${desc}</div>
-      <button class="report-card-btn" onclick="event.stopPropagation(); downloadReport('${type}','${apiBase}', event)">
-        ${downloadIcon} Download PDF
+      <div class="report-row-text">
+        <div class="report-row-title">${title}</div>
+        <div class="report-row-desc">${desc}</div>
+      </div>
+      <button class="report-row-btn" title="Download PDF" aria-label="Download ${title} as PDF" onclick="event.stopPropagation(); downloadReport('${type}','${apiBase}', event)">
+        ${downloadIcon}
       </button>
     </div>`;
 }
@@ -16593,13 +16595,11 @@ function renderAdminReports(content, isAcademic) {
 }
 
 async function downloadReport(type, apiBase = 'reports', e) {
-  const btn = e ? e.target.closest('.report-card-btn') || e.target.closest('.btn') : null;
-  const card = btn ? btn.closest('.report-card') : null;
-  const originalHTML = btn ? btn.innerHTML : '';
+  const btn = e ? e.target.closest('.report-row-btn') || e.target.closest('.btn') : null;
+  const card = btn ? btn.closest('.report-row') : null;
   if (btn) {
-    btn.innerHTML = 'Generating...';
+    btn.classList.add('report-row-btn-loading');
     btn.disabled = true;
-    btn.style.opacity = '0.7';
   }
   if (card) card.style.pointerEvents = 'none';
   try {
@@ -16616,9 +16616,8 @@ async function downloadReport(type, apiBase = 'reports', e) {
     toastError(err.message);
   } finally {
     if (btn) {
-      btn.innerHTML = originalHTML;
+      btn.classList.remove('report-row-btn-loading');
       btn.disabled = false;
-      btn.style.opacity = '';
     }
     if (card) card.style.pointerEvents = '';
   }
@@ -27005,8 +27004,8 @@ async function renderCompanySettings() {
           ${TZS.map(z => `<option value="${z}" ${st.timezone === z ? 'selected' : ''}>${z}</option>`).join('')}
         </select>
         <div style="display:flex;gap:.5rem;flex-wrap:wrap;margin-top:.4rem">
-          <button class="btn btn-sm btn-ghost" onclick="navigateTo('branding')">🎨 Branding & logo</button>
-          ${currentUser.company?.mode === 'corporate' ? `<button class="btn btn-sm btn-ghost" onclick="navigateTo('corp-clock-settings')">🕐 Working hours</button>` : ''}
+          <button class="btn btn-sm btn-ghost" style="display:inline-flex;align-items:center;gap:6px" onclick="navigateTo('branding')">${svgIcon('<circle cx="13.5" cy="6.5" r=".5"/><circle cx="17.5" cy="10.5" r=".5"/><circle cx="8.5" cy="7.5" r=".5"/><circle cx="6.5" cy="12.5" r=".5"/><path d="M12 2C6.5 2 2 6.5 2 12s4.5 10 10 10c.926 0 1.648-.746 1.648-1.688 0-.437-.18-.835-.437-1.125-.29-.289-.438-.652-.438-1.125a1.64 1.64 0 0 1 1.668-1.668h1.996c3.051 0 5.555-2.503 5.555-5.554C21.965 6.012 17.461 2 12 2z"/>', 14)} Branding &amp; logo</button>
+          ${currentUser.company?.mode === 'corporate' ? `<button class="btn btn-sm btn-ghost" style="display:inline-flex;align-items:center;gap:6px" onclick="navigateTo('corp-clock-settings')">${svgIcon('<circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>', 14)} Working hours</button>` : ''}
         </div>
       </div>
       <div class="card" style="padding:1.2rem">

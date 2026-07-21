@@ -1459,86 +1459,74 @@ input[type="checkbox"] {
    REPORTS
 ══════════════════════════════════════════════════ */
 
+/* Compact list rows — was a grid of large tile cards (min-height 190px),
+   which meant heavy scrolling to see more than 2-3 reports on a phone.
+   One row per report reads as a professional pick-one-of-N list instead. */
 .reports-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
-  gap: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
   margin-bottom: 20px;
 }
 
-.report-card {
-  background: white;
-  border-radius: var(--radius-lg);
-  border: 1px solid var(--border);
-  padding: 22px 18px 18px;
+.report-row {
   display: flex;
-  flex-direction: column;
   align-items: center;
-  text-align: center;
+  gap: 12px;
+  background: var(--card, #fff);
+  border: 1px solid var(--border);
+  border-radius: var(--radius, 10px);
+  padding: 12px 14px;
   cursor: pointer;
-  transition: all .22s var(--ease);
-  position: relative;
-  overflow: hidden;
-  min-height: 190px;
+  transition: border-color .15s, box-shadow .15s;
+}
+
+.report-row:hover {
+  border-color: var(--accent, #4f6ef7);
   box-shadow: var(--shadow-sm);
 }
 
-.report-card::before {
-  content: '';
-  position: absolute;
-  top: 0; left: 0; right: 0;
-  height: 3px;
-  background: var(--report-gradient);
-  opacity: .7;
-  transition: opacity .2s;
-}
-
-.report-card:hover {
-  transform: translateY(-4px);
-  box-shadow: var(--shadow-lg);
-  border-color: transparent;
-}
-
-.report-card:hover::before { opacity: 1; }
-
-.report-card-icon {
-  width: 50px; height: 50px;
-  border-radius: 13px;
+.report-row-icon {
+  flex-shrink: 0;
+  width: 38px; height: 38px;
+  border-radius: 10px;
   display: flex;
   align-items: center;
   justify-content: center;
-  margin-bottom: 11px;
-  background: var(--report-gradient);
   color: white;
-  box-shadow: 0 3px 10px var(--report-shadow, rgba(0,0,0,.14));
-  transition: transform .2s;
 }
 
-.report-card:hover .report-card-icon { transform: scale(1.06); }
+.report-row-text { flex: 1; min-width: 0; }
+.report-row-title { font-size: 13.5px; font-weight: 700; color: var(--text); }
+.report-row-desc {
+  font-size: 11.5px; color: var(--text-light); line-height: 1.4; margin-top: 2px;
+  display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
+}
 
-.report-card-title { font-size: 13px; font-weight: 700; color: var(--text); margin-bottom: 4px; }
-.report-card-desc  { font-size: 11px; color: var(--text-light); line-height: 1.5; flex: 1; margin-bottom: 12px; }
-
-.report-card-btn {
-  display: inline-flex;
+.report-row-btn {
+  flex-shrink: 0;
+  width: 34px; height: 34px;
+  border-radius: 8px;
+  display: flex;
   align-items: center;
-  gap: 5px;
-  padding: 6px 13px;
-  border-radius: 6px;
-  font-size: 11px;
-  font-weight: 600;
-  border: none;
+  justify-content: center;
+  border: 1px solid var(--border);
+  background: var(--bg, #f8fafc);
+  color: var(--text-light);
   cursor: pointer;
-  transition: all .18s;
-  background: var(--report-gradient);
-  color: white;
-  box-shadow: 0 2px 6px var(--report-shadow, rgba(0,0,0,.1));
+  transition: background .15s, border-color .15s, color .15s;
 }
 
-.report-card-btn:hover {
-  box-shadow: 0 4px 12px var(--report-shadow, rgba(0,0,0,.18));
-  transform: translateY(-1px);
+.report-row-btn:hover {
+  background: var(--accent, #4f6ef7);
+  border-color: var(--accent, #4f6ef7);
+  color: white;
 }
+
+.report-row-btn-loading svg { animation: report-row-spin .8s linear infinite; }
+@keyframes report-row-spin { to { transform: rotate(360deg); } }
+
+[data-theme="dark"] .report-row-btn { background: rgba(255,255,255,.06); }
 
 /* ══════════════════════════════════════════════════
    PORTAL THEMES
@@ -1742,7 +1730,6 @@ input[type="checkbox"] {
 
   .quick-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
   .quick-actions .btn { min-width: unset; }
-  .reports-grid { grid-template-columns: 1fr; }
 
   .topbar .user-info { display: none !important; }
   .topbar { padding: 0 12px !important; height: 44px !important; }
@@ -2371,8 +2358,6 @@ input[type="checkbox"] {
     grid-template-columns: 1fr !important;
   }
 
-  /* ── Reports grid ─────────────────────────────── */
-  .reports-grid { grid-template-columns: 1fr !important; }
 
   /* ── Course cards ─────────────────────────────── */
   [style*="minmax(280px"] { grid-template-columns: 1fr !important; }
