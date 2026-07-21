@@ -83,19 +83,32 @@ beforeAll(async () => {
 
   const now = new Date();
   const pad = (n) => String(n).padStart(2, "0");
-  const inMin = (mins) => { const d = new Date(now.getTime() + mins * 60000); return `${pad(d.getHours())}:${pad(d.getMinutes())}`; };
+  // Returns both the clock time AND the day-of-week for now+mins, since
+  // the two can disagree once the offset crosses midnight — a fixed
+  // `dayOfWeek: now.getDay()` paired with a rolled-over HH:MM produces a
+  // slot buildSlotFilter() (src/services/timetableReminder.js) was never
+  // going to match: it already splits its own window across days for
+  // exactly this case, so a same-day-only fixture silently stops
+  // representing a "starts in N minutes" slot once run within ~4 hours of
+  // UTC midnight (this suite's cron runs in UTC).
+  const inMin = (mins) => {
+    const d = new Date(now.getTime() + mins * 60000);
+    return { dayOfWeek: d.getDay(), time: `${pad(d.getHours())}:${pad(d.getMinutes())}` };
+  };
 
   // Inside the sweep's 28-32 min trigger window
+  const startIn = inMin(30);
   slotInWindow = await Timetable.create({
     company: company._id, course: courseInWindow._id, lecturer: lecturer._id,
-    dayOfWeek: now.getDay(), startTime: inMin(30), endTime: inMin(90),
+    dayOfWeek: startIn.dayOfWeek, startTime: startIn.time, endTime: inMin(90).time,
     title: "In-Window Lecture", room: "LT1", isActive: true,
   });
 
   // Well outside the window (starts in 3 hours) — should NOT trigger
+  const startOut = inMin(180);
   slotOutOfWindow = await Timetable.create({
     company: company._id, course: courseOutOfWindow._id, lecturer: lecturer._id,
-    dayOfWeek: now.getDay(), startTime: inMin(180), endTime: inMin(240),
+    dayOfWeek: startOut.dayOfWeek, startTime: startOut.time, endTime: inMin(240).time,
     title: "Out-of-Window Lecture", room: "LT2", isActive: true,
   });
 });
