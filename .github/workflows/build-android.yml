@@ -330,15 +330,30 @@ jobs:
 
       # Publish to the PUBLIC dikly-releases repo so downloads work without GitHub login.
       # Requires RELEASES_PAT secret: a fine-grained PAT with Contents write on dikly-releases.
+      #
+      # This workflow triggers on push to both `main` and
+      # `claude/are-you-there-hjdx9r` (see the `on:` block above), and the
+      # standard post-merge routine pushes the same commit to both branches
+      # within seconds of each other. That fires two parallel runs for the
+      # same SHA, and delete-then-create against the same `apk-latest` tag
+      # is a race: whichever run's `gh release create` lands second sees
+      # "a release with the same tag name already exists" and fails, even
+      # though both runs produced an equally valid APK for the same commit.
+      # Retrying the delete+create pair tolerates that race without
+      # serializing the whole job (which would double build time on every
+      # merge) and without depending on `gh release create --clobber`
+      # semantics we have no local `gh` install to verify.
       - name: Publish to Dikly_releases (public repo)
         run: |
-          gh release delete apk-latest --yes \
-            --repo isaacaryeepah-beep/Dikly_releases 2>/dev/null || true
-          gh api -X DELETE /repos/isaacaryeepah-beep/Dikly_releases/git/refs/tags/apk-latest 2>/dev/null || true
-          gh release create apk-latest dikly.apk \
-            --repo isaacaryeepah-beep/Dikly_releases \
-            --title "DIKLY App — Latest Build" \
-            --notes "**DIKLY Android App** — latest build (build #${{ github.run_number }}).
+          for attempt in 1 2 3 4 5; do
+            gh release delete apk-latest --yes \
+              --repo isaacaryeepah-beep/Dikly_releases 2>/dev/null || true
+            gh api -X DELETE /repos/isaacaryeepah-beep/Dikly_releases/git/refs/tags/apk-latest 2>/dev/null || true
+
+            if gh release create apk-latest dikly.apk \
+              --repo isaacaryeepah-beep/Dikly_releases \
+              --title "DIKLY App — Latest Build" \
+              --notes "**DIKLY Android App** — latest build (build #${{ github.run_number }}).
 
           ### How to install
           1. Download **dikly.apk** below
@@ -346,6 +361,16 @@ jobs:
              *(If prompted, enable \"Install from unknown sources\" in Settings)*
 
           > iOS App Store release coming soon." \
-            --latest
+              --latest; then
+              echo "Published on attempt $attempt"
+              exit 0
+            fi
+
+            echo "Publish attempt $attempt failed (likely a concurrent run for the same commit) — retrying in $((attempt * 5))s"
+            sleep $((attempt * 5))
+          done
+
+          echo "ERROR: failed to publish apk-latest after 5 attempts"
+          exit 1
         env:
           GH_TOKEN: ${{ secrets.RELEASES_PAT }}
