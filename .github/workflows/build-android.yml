@@ -15,7 +15,6 @@ on:
     paths:
       - 'src/public/**'
       - 'scripts/gen_icons.py'
-      - 'scripts/gen_splash.py'
       - 'scripts/patch-android-splash.sh'
       - 'capacitor.config.json'
       - 'package.json'
@@ -60,7 +59,6 @@ jobs:
           mkdir -p android/app/src/main/res/drawable
           mkdir -p android/app/src/main/res/drawable-land
           python3 scripts/gen_icons.py
-          python3 scripts/gen_splash.py
 
       - name: Patch Android splash screen — dark background, no white flash
         run: |
@@ -68,20 +66,26 @@ jobs:
           mkdir -p android/app/src/main/res/values
           mkdir -p android/app/src/main/res/values-v31
 
-          # Replace splash drawable with a plain dark colour layer-list.
-          # This removes the white background AND the default Capacitor icon
-          # for ALL Android versions (pre-12 and 12+).
+          # Replace splash drawable with a dark background layer-list plus
+          # the Dikly mark centered on top (ic_splash.png — 288px,
+          # safe-zone padded, written by gen_icons.py, which runs before
+          # this step). Previously this was a *plain* colour layer-list
+          # with no icon at all on pre-Android-12 devices (Android 12+ got
+          # an icon separately, via the values-v31 SplashScreen theme below
+          # — pre-12 got nothing but a flat colour flash). This gives both
+          # cases the same look.
           cat > android/app/src/main/res/drawable/splash.xml << 'SPLASHEOF'
           <?xml version="1.0" encoding="utf-8"?>
           <layer-list xmlns:android="http://schemas.android.com/apk/res/android">
               <item><color android:color="#080F20"/></item>
+              <item>
+                  <bitmap
+                      android:src="@drawable/ic_splash"
+                      android:gravity="center" />
+              </item>
           </layer-list>
           SPLASHEOF
-          # Remove splash.png if gen_splash.py created it — same resource name
-          # would cause an ambiguous-resource build error.
-          rm -f android/app/src/main/res/drawable/splash.png
-          rm -f android/app/src/main/res/drawable-land/splash.png
-          echo "splash.xml written (dark #080F20 background)"
+          echo "splash.xml written (dark #080F20 background + centered ic_splash icon)"
 
           # Pre-Android 12: ensure the launch theme uses AppTheme.NoActionBar as
           # parent and sets the window background to our dark colour explicitly.
@@ -107,7 +111,7 @@ jobs:
           fi
 
           # Android 12+ (API 31): SplashScreen API — dark background, Dikly icon.
-          # ic_splash.png is written by gen_icons.py (288px transparent Dikly logo).
+          # ic_splash.png is written by gen_icons.py (288px, safe-zone padded).
           cat > android/app/src/main/res/values-v31/styles.xml << 'V31EOF'
           <?xml version="1.0" encoding="utf-8"?>
           <resources>
