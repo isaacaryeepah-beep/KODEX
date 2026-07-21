@@ -73,6 +73,9 @@
     "nodemon": "^3.1.0",
     "supertest": "^7.0.0"
   },
+  "overrides": {
+    "tar": "^7.5.20"
+  },
   "jest": {
     "testEnvironment": "node",
     "testMatch": [
