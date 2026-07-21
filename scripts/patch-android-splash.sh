@@ -2,8 +2,13 @@
 # patch-android-splash.sh
 # Run from the KODEX root directory: bash scripts/patch-android-splash.sh
 #
-# Replaces the white Capacitor launch screen with a seamless dark (#080F20)
-# screen on both pre-Android 12 and Android 12+ devices.
+# Local-dev mirror of the "Patch Android splash screen" step in
+# .github/workflows/build-android.yml — keep the two in sync. Replaces the
+# white Capacitor launch screen with a dark (#080F20) background and the
+# Dikly mark centered on top, on both pre-Android-12 and Android 12+
+# devices. Requires ic_splash.png to already exist (run
+# `python3 scripts/gen_icons.py` first, or `npx cap add android` +
+# gen_icons.py if the android/ project doesn't exist yet).
 
 set -e
 
@@ -21,57 +26,68 @@ VALUES_V31="$ANDROID/app/src/main/res/values-v31"
 
 mkdir -p "$DRAWABLE" "$VALUES" "$VALUES_V31"
 
-# ── 1. Replace splash.xml with a plain dark background (no icon) ──────────────
+if [ ! -f "$DRAWABLE/ic_splash.png" ]; then
+  echo "ERROR: $DRAWABLE/ic_splash.png not found — run scripts/gen_icons.py first."
+  exit 1
+fi
+
+# `npx cap add android` scaffolds its own default white splash.png under
+# drawable/ AND under orientation+density-qualified folders (drawable-
+# port-xhdpi, drawable-land-xxxhdpi, etc). The base one collides with
+# splash.xml below (AAPT duplicate-resource build error); the qualified
+# ones don't collide but DO win resource resolution over splash.xml on
+# real devices, silently overriding this whole fix. Delete all of them.
+find "$ANDROID/app/src/main/res" -iname 'splash.png' -delete
+
+# ── 1. Replace splash.xml with dark background + centered Dikly mark ──────────
 cat > "$DRAWABLE/splash.xml" << 'EOF'
 <?xml version="1.0" encoding="utf-8"?>
 <layer-list xmlns:android="http://schemas.android.com/apk/res/android">
     <item><color android:color="#080F20"/></item>
+    <item>
+        <bitmap
+            android:src="@drawable/ic_splash"
+            android:gravity="center" />
+    </item>
 </layer-list>
 EOF
-echo "✓ drawable/splash.xml  →  plain dark background"
+echo "✓ drawable/splash.xml  →  dark background + centered ic_splash icon"
 
-# Remove any old splash.png — it overrides splash.xml if both exist
-if [ -f "$DRAWABLE/splash.png" ]; then
-  rm "$DRAWABLE/splash.png"
-  echo "✓ Removed old splash.png"
-fi
-
-# ── 2. Patch styles.xml — make the launch window background dark ──────────────
+# ── 2. Patch styles.xml — dark launch window background, pre-Android-12 ───────
 STYLES="$VALUES/styles.xml"
 if [ -f "$STYLES" ]; then
   cp "$STYLES" "${STYLES}.bak"
-  # Replace @drawable/splash references with a plain dark color
-  sed -i \
-    -e 's|android:background">@drawable/splash|android:background">#080F20|g' \
-    -e 's|android:windowBackground">@drawable/splash|android:windowBackground">#080F20|g' \
-    "$STYLES"
+  sed -i 's/parent="Theme\.SplashScreen"/parent="AppTheme.NoActionBar"/g' "$STYLES"
+  python3 - << 'PYEOF'
+import re
+with open('android/app/src/main/res/values/styles.xml') as f:
+    s = f.read()
+if 'NoActionBarLaunch' in s and 'android:background' not in s:
+    s = re.sub(
+        r'(<style name="AppTheme\.NoActionBarLaunch"[^>]*>)',
+        r'\1\n        <item name="android:background">#080F20</item>',
+        s
+    )
+with open('android/app/src/main/res/values/styles.xml', 'w') as f:
+    f.write(s)
+PYEOF
   echo "✓ values/styles.xml   →  windowBackground = #080F20  (backup: styles.xml.bak)"
 else
   echo "⚠  values/styles.xml not found — skipping (create the Android project first)"
 fi
 
 # ── 3. Android 12+ system splash screen config ────────────────────────────────
-# Creates a minimal splash_icon.xml (solid dark square) so no icon appears.
-cat > "$DRAWABLE/splash_icon.xml" << 'EOF'
-<?xml version="1.0" encoding="utf-8"?>
-<shape xmlns:android="http://schemas.android.com/apk/res/android">
-    <solid android:color="#080F20"/>
-    <size android:width="108dp" android:height="108dp"/>
-</shape>
-EOF
-echo "✓ drawable/splash_icon.xml  →  invisible icon placeholder"
-
-cat > "$VALUES_V31/themes.xml" << 'EOF'
+cat > "$VALUES_V31/styles.xml" << 'EOF'
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <!-- Android 12+ splash screen: dark background, no visible icon -->
     <style name="AppTheme.NoActionBarLaunch" parent="AppTheme.NoActionBar">
         <item name="android:windowSplashScreenBackground">#080F20</item>
-        <item name="android:windowSplashScreenAnimatedIcon">@drawable/splash_icon</item>
+        <item name="android:windowSplashScreenAnimatedIcon">@drawable/ic_splash</item>
+        <item name="android:windowSplashScreenIconBackgroundColor">#080F20</item>
     </style>
 </resources>
 EOF
-echo "✓ values-v31/themes.xml  →  Android 12+ splash = dark, no icon"
+echo "✓ values-v31/styles.xml  →  Android 12+ splash = dark background + Dikly icon"
 
 echo ""
 echo "Done. Now rebuild the APK:"
