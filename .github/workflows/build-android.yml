@@ -45,11 +45,35 @@ jobs:
       - name: Accept Android SDK licenses
         run: yes | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --licenses || true
 
+      # Explicit install rather than relying on AGP's auto-download-on-build
+      # for a component this new — Google Play requires targeting API 36
+      # (Android 16) from 2026-08-31; don't leave whether the runner's SDK
+      # image already has it to chance.
+      - name: Install Android 16 (API 36) SDK platform + build-tools
+        run: $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager "platforms;android-36" "build-tools;35.0.0" "build-tools;36.0.0"
+
       - name: Install Node dependencies
         run: npm install --legacy-peer-deps
 
       - name: Add Android platform
         run: npx cap add android
+
+      # `npx cap add android` scaffolds AGP 8.2.1 / Gradle 8.2.1 from
+      # @capacitor/android's template — confirmed (via an earlier build's
+      # own warning log) only tested up to compileSdk 34, and Android's
+      # docs confirm AGP 8.2.1 caps out below API 36 entirely. Bumping the
+      # SDK target without bumping the toolchain that compiles against it
+      # would be compiling against an API level the build system doesn't
+      # actually know about. AGP 8.12.0 / Gradle 8.13 is the pairing Google
+      # documents as supporting compileSdk 36, staying within the 8.x line
+      # rather than the current AGP 9.x (which requires Gradle 9.5+ and
+      # likely carries its own breaking changes unrelated to this fix).
+      - name: Bump AGP + Gradle for Android 16 (API 36) support
+        run: |
+          sed -i -E "s/classpath 'com\.android\.tools\.build:gradle:[0-9.]+'/classpath 'com.android.tools.build:gradle:8.12.0'/" android/build.gradle
+          sed -i -E 's#distributionUrl=.*gradle-[0-9.]+-all\.zip#distributionUrl=https\\://services.gradle.org/distributions/gradle-8.13-all.zip#' android/gradle/wrapper/gradle-wrapper.properties
+          grep "classpath 'com.android.tools.build:gradle" android/build.gradle
+          grep distributionUrl android/gradle/wrapper/gradle-wrapper.properties
 
       - name: Generate app icons
         run: |
@@ -258,13 +282,13 @@ jobs:
       - name: Bump SDK versions and set versionCode
         run: |
           if [ -f android/variables.gradle ]; then
-            sed -i -E 's/compileSdkVersion = [0-9]+/compileSdkVersion = 35/' android/variables.gradle
-            sed -i -E 's/targetSdkVersion = [0-9]+/targetSdkVersion = 35/' android/variables.gradle
+            sed -i -E 's/compileSdkVersion = [0-9]+/compileSdkVersion = 36/' android/variables.gradle
+            sed -i -E 's/targetSdkVersion = [0-9]+/targetSdkVersion = 36/' android/variables.gradle
           fi
-          sed -i -E 's/compileSdkVersion[[:space:]]+[0-9]+/compileSdkVersion 35/' android/app/build.gradle
-          sed -i -E 's/compileSdk[[:space:]]+[0-9]+/compileSdk 35/' android/app/build.gradle
-          sed -i -E 's/targetSdkVersion[[:space:]]+[0-9]+/targetSdkVersion 35/' android/app/build.gradle
-          sed -i -E 's/targetSdk[[:space:]]+[0-9]+/targetSdk 35/' android/app/build.gradle
+          sed -i -E 's/compileSdkVersion[[:space:]]+[0-9]+/compileSdkVersion 36/' android/app/build.gradle
+          sed -i -E 's/compileSdk[[:space:]]+[0-9]+/compileSdk 36/' android/app/build.gradle
+          sed -i -E 's/targetSdkVersion[[:space:]]+[0-9]+/targetSdkVersion 36/' android/app/build.gradle
+          sed -i -E 's/targetSdk[[:space:]]+[0-9]+/targetSdk 36/' android/app/build.gradle
           sed -i -E "s/versionCode[[:space:]]+[0-9]+/versionCode ${{ github.run_number }}/" android/app/build.gradle
           echo "versionCode: ${{ github.run_number }}"
 
