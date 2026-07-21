@@ -6636,22 +6636,37 @@ table tr:hover td { background: #f8fafc !important; }
 .sidebar-nav a.nav-mini { height: 32px; }
 .sidebar-nav a.nav-mini svg { width: 16px; height: 16px; }
 
-/* Section dividers — always-expanded, non-interactive: small icon + uppercase
-   label above each group, everything visible with no click required. */
-.nav-acc { margin: 14px 8px 2px; }
+/* Collapsible sidebar sections — tap-to-fold pill headers. Everything
+   starts folded except the section holding the current page; choice
+   persists per role (buildSidebar's _accState / _navAccToggle). */
+.nav-acc { margin: 0 8px 10px; }
 .nav-acc:first-child { margin-top: 6px; }
 .nav-acc-hd {
-  display: flex; align-items: center;
-  width: 100%; box-sizing: border-box; margin: 0 4px 6px; padding: 0 8px 7px;
-  border-bottom: 1px solid var(--border);
-  font-family: inherit; font-size: 11px; font-weight: 800; letter-spacing: .6px;
-  text-transform: uppercase; color: #9ca3af;
+  display: flex; align-items: center; justify-content: space-between;
+  width: 100%; box-sizing: border-box; padding: 13px 14px;
+  border-radius: 12px;
+  background: rgba(15, 23, 42, .045);
+  font-family: inherit; font-size: 14px; font-weight: 700;
+  color: #374151;
+  cursor: pointer; user-select: none;
+  transition: background .15s ease;
 }
-.nav-acc-hd-left { display: flex; align-items: center; gap: 8px; min-width: 0; }
-.nav-acc-hd-left svg { flex-shrink: 0; opacity: .75; }
+.nav-acc-hd:hover { background: rgba(15, 23, 42, .07); }
+.nav-acc-hd-left { display: flex; align-items: center; gap: 10px; min-width: 0; }
+.nav-acc-hd-left svg { flex-shrink: 0; opacity: .7; }
 .nav-acc-hd-left span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-[data-theme="dark"] .nav-acc-hd { color: #6b7787; }
-.nav-acc-body { display: block; }
+[data-theme="dark"] .nav-acc-hd { background: rgba(255, 255, 255, .06); color: #d1d5db; }
+[data-theme="dark"] .nav-acc-hd:hover { background: rgba(255, 255, 255, .09); }
+
+.nav-acc-chevron { flex-shrink: 0; opacity: .55; transition: transform .18s ease; }
+.nav-acc.collapsed .nav-acc-chevron { transform: rotate(-90deg); }
+.nav-acc.collapsed .nav-acc-body { display: none; }
+.nav-acc-hd:hover .nav-acc-chevron { opacity: 1; }
+/* Sidebar search re-parents matches into its own results list; a folded
+   section must never hide them. */
+.nav-searching .nav-acc-body { display: block !important; }
+
+.nav-acc-body { display: block; padding-top: 4px; }
 .nav-acc-inner { display: flex; flex-direction: column; }
 
 /* Flat, relevance-sorted search results (replaces the scattered
