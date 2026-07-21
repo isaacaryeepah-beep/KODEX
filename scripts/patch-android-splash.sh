@@ -31,6 +31,14 @@ if [ ! -f "$DRAWABLE/ic_splash.png" ]; then
   exit 1
 fi
 
+# `npx cap add android` scaffolds its own default white splash.png under
+# drawable/ AND under orientation+density-qualified folders (drawable-
+# port-xhdpi, drawable-land-xxxhdpi, etc). The base one collides with
+# splash.xml below (AAPT duplicate-resource build error); the qualified
+# ones don't collide but DO win resource resolution over splash.xml on
+# real devices, silently overriding this whole fix. Delete all of them.
+find "$ANDROID/app/src/main/res" -iname 'splash.png' -delete
+
 # ── 1. Replace splash.xml with dark background + centered Dikly mark ──────────
 cat > "$DRAWABLE/splash.xml" << 'EOF'
 <?xml version="1.0" encoding="utf-8"?>
