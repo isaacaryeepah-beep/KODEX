@@ -3463,51 +3463,19 @@ function buildSidebar() {
     '</a>';
   window._navItemHtml = navItemHtml;
 
-  // ── Curated short sidebar + "All features" catalog ──
-  // The sidebar shows only each role's everyday links, flat, no folding.
-  // Every other page lives on the All Features grid (one entry below) and
-  // stays reachable through the sidebar search, which also scans the
-  // hidden #nav-extra copies rendered at the end.
-  window._allFeaturesSections = navSections
-    .map(sec => ({ label: sec.label, title: _navSecTitle(sec.label), items: sec.items }))
-    .filter(sec => sec.items.length);
-
-  const mode = currentUser.company?.mode || 'corporate';
-  const CURATED_BY_ROLE = {
-    admin: mode === 'corporate'
-      ? ['dashboard', 'executive-dashboard', 'users', 'corp-attendance', 'leave-requests', 'approvals', 'messages', 'reports', 'company-settings']
-      : ['dashboard', 'users', 'sessions', 'approvals', 'courses', 'attendance-settings', 'messages', 'reports', 'company-settings'],
-    manager: (mode === 'corporate' || mode === 'both')
-      ? ['dashboard', 'executive-dashboard', 'users', 'corp-attendance', 'sign-in-out', 'leave-requests', 'approvals', 'messages', 'reports']
-      : ['dashboard', 'approvals', 'users', 'messages', 'meetings', 'reports'],
-    hod:      ['dashboard', 'hod-overview', 'hod-sessions', 'hod-courses', 'hod-students', 'approvals', 'messages', 'hod-reports'],
-    lecturer: ['dashboard', 'sessions', 'courses', 'quizzes', 'assignments', 'gradebook', 'messages', 'reports'],
-    student:  ['dashboard', 'mark-attendance', 'my-attendance', 'courses', 'timetable', 'quizzes', 'assignments', 'messages'],
-    employee: ['emp-home', 'dashboard', 'sign-in-out', 'my-attendance', 'my-shift', 'my-leaves', 'tasks', 'messages'],
-    superadmin: ['dashboard', 'superadmin-platform', 'approvals', 'search', 'ai-reports'],
-  };
-
-  const flatLinks = [...navTop, ...navSections.flatMap(s => s.items)];
-  const curatedIds = CURATED_BY_ROLE[role] || flatLinks.slice(0, 8).map(l => l.id);
-  const curated = curatedIds.map(id => flatLinks.find(l => l.id === id)).filter(Boolean);
-  const extras = flatLinks.filter(l => !curatedIds.includes(l.id));
-
-  const allFeaturesLink = {
-    id: 'all-features',
-    label: 'All Features',
-    icon: svgIcon('<rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/>'),
-  };
-  window._navLinkMeta['all-features'] = { label: allFeaturesLink.label, icon: allFeaturesLink.icon };
-
-  // Extras keep their real nav-<id> ids: the later buildSidebar patches
-  // (Training, Performance, Timesheets/Assets, Analytics/Branches) check
-  // getElementById before appending their links — hidden-but-present ids
-  // stop them from re-adding visible duplicates.
+  // ── Full sidebar list, grouped by section ──
+  // Every page the role has access to is listed directly — no curated
+  // subset hiding the rest behind an "All Features" grid page. Sections
+  // keep their existing labels (Workforce, Insights, Support, ...) as
+  // light headers so a long list still reads as organized, not a wall
+  // of links.
   nav.innerHTML =
     '<div id="nav-quick"></div>' +
-    curated.map(l => navItemHtml(l)).join('') +
-    navItemHtml(allFeaturesLink) +
-    `<div id="nav-extra">${extras.map(l => navItemHtml(l)).join('')}</div>`;
+    navTop.map(l => navItemHtml(l)).join('') +
+    navSections.filter(sec => sec.items.length).map(sec =>
+      `<div class="nav-section-label">${esc(_navSecTitle(sec.label))}</div>` +
+      sec.items.map(l => navItemHtml(l)).join('')
+    ).join('');
 
   _navRenderQuick();
   setTimeout(() => { try { _updateNavBadges(); } catch (_) {} }, 400);
@@ -3559,24 +3527,6 @@ function buildSidebar() {
       }
     }).catch(function() {});
   }
-}
-
-// ── All Features — full catalog of this role's pages as a tile grid ──────────
-function renderAllFeatures() {
-  const content = document.getElementById('main-content');
-  if (!content) return;
-  const secs = window._allFeaturesSections || [];
-  content.innerHTML = `
-    <div class="page-header"><h2>All Features</h2><p>Everything in your portal, grouped in one place.</p></div>
-    ${secs.map(sec => `
-      <div class="af-sec-title">${sec.title}</div>
-      <div class="af-grid">
-        ${sec.items.map(l => `
-          <button type="button" class="af-tile" onclick="navigateTo('${l.id}')">
-            <span class="af-tile-icon">${l.icon}</span>
-            <span class="af-tile-label">${esc(l.label)}</span>
-          </button>`).join('')}
-      </div>`).join('')}`;
 }
 
 function _sidebarSearch(q) {
@@ -3740,7 +3690,6 @@ function navigateTo(view) {
     case 'my-leaves': renderMyLeaves(); break;
     case 'approvals': renderApprovals(); break;
     case 'search': renderSearch(); break;
-    case 'all-features': renderAllFeatures(); break;
     case 'assignments': location.href='/assignments.html'; return;
     case 'profile':     renderProfile(); break;
     case 'contact':     renderContact(); break;
