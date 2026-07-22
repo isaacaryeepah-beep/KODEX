@@ -1469,6 +1469,19 @@ input[type="checkbox"] {
   margin-bottom: 20px;
 }
 
+/* Single column reads fine on a phone, but a 4-6 item list stretched
+   full-width in a wide desktop main-content column leaves a large empty
+   gap under and beside it — sparse, not "professional". A 2-up grid uses
+   the same compact row (not the old oversized tile) but fills the space
+   a dashboard page is expected to use. */
+@media (min-width: 900px) {
+  .reports-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 10px;
+  }
+}
+
 .report-row {
   display: flex;
   align-items: center;
