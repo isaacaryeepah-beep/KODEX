@@ -1170,6 +1170,12 @@ async function _doFetch(path, options, tok) {
   } catch (e) {
     clearTimeout(timer);
     if (e.name === 'AbortError') throw new Error('Request timed out. Check your connection and try again.');
+    // A TypeError here means the request never reached the network -- the
+    // URL, headers, or body were malformed (or it's a genuine connectivity
+    // failure, which browsers also report as TypeError). Either way the raw
+    // engine message ("Failed to fetch", "The string did not match the
+    // expected pattern." on Safari, etc.) is meaningless to a user.
+    if (e instanceof TypeError) throw new Error('Could not reach the server. Check your connection and try again.');
     throw e;
   }
 }
@@ -27137,6 +27143,17 @@ const EMP_MODULES = [
 async function renderRolesPermissions() {
   const content = document.getElementById('main-content');
   if (!content) return;
+  // This page controls module visibility for the "manager" and "employee"
+  // roles, which only exist in corporate-mode companies -- academic
+  // institutions use lecturer/HOD/student/class-rep instead, so there is
+  // nothing here for them to configure.
+  if (currentUser.company?.mode !== 'corporate') {
+    content.innerHTML = _corpHeader('Roles & Permissions', 'Control which modules each role can access') + `
+      <div class="card" style="padding:2rem;text-align:center;color:var(--text-light)">
+        Roles & Permissions manages module access for Manager and Employee accounts, which are specific to corporate-mode organizations. Your institution doesn't have this page -- lecturer, HOD, and student access is managed elsewhere.
+      </div>`;
+    return;
+  }
   content.innerHTML = _corpHeader('Roles & Permissions', 'Control which modules each role can access') + '<div class="card" style="padding:2rem;text-align:center;color:var(--text-light)">Loading…</div>';
   let mp = null;
   try { mp = (await api('/api/advanced/company-settings')).settings?.modulePermissions || null; }
