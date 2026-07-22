@@ -16945,14 +16945,14 @@ function renderContact() {
     <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:16px;margin-bottom:24px">
 
       <div class="card" style="text-align:center">
-        <div style="font-size:36px;margin-bottom:12px">📧</div>
+        <div style="margin-bottom:12px;color:var(--accent)">${svgIcon('<rect x="2" y="4" width="20" height="16" rx="2"/><path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7"/>', 36)}</div>
         <div style="font-size:16px;font-weight:700;margin-bottom:6px">Email</div>
         <p style="font-size:13px;color:var(--text-light);margin-bottom:12px">Send us an email anytime</p>
         <a href="mailto:info@dikly.sbs" class="btn btn-primary btn-sm" style="display:inline-block;text-decoration:none">info@dikly.sbs</a>
       </div>
 
       <div class="card" style="text-align:center">
-        <div style="font-size:36px;margin-bottom:12px">📞</div>
+        <div style="margin-bottom:12px;color:var(--accent)">${svgIcon('<path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72c.127.96.361 1.903.7 2.81a2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0 1 22 16.92z"/>', 36)}</div>
         <div style="font-size:16px;font-weight:700;margin-bottom:6px">Phone</div>
         <p style="font-size:13px;color:var(--text-light);margin-bottom:12px">Call us during business hours</p>
         <div style="display:flex;flex-direction:column;gap:6px">
@@ -16962,7 +16962,7 @@ function renderContact() {
       </div>
 
       <div class="card" style="text-align:center">
-        <div style="font-size:36px;margin-bottom:12px">💬</div>
+        <div style="margin-bottom:12px;color:#25d366">${svgIcon('<path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>', 36)}</div>
         <div style="font-size:16px;font-weight:700;margin-bottom:6px">WhatsApp</div>
         <p style="font-size:13px;color:var(--text-light);margin-bottom:12px">Chat with us on WhatsApp</p>
         <div style="display:flex;flex-direction:column;gap:6px">
@@ -16988,7 +16988,7 @@ function renderContact() {
         ['Can students use the system offline?', 'Yes — students can mark attendance offline using a code. It will sync automatically when they reconnect.'],
       ]).map(([q, a]) => `
         <div style="padding:14px 0;border-bottom:1px solid var(--border)">
-          <div style="font-weight:600;font-size:14px;margin-bottom:4px">❓ ${q}</div>
+          <div style="font-weight:600;font-size:14px;margin-bottom:4px;display:flex;align-items:center;gap:6px">${svgIcon('<circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/>', 15)} ${q}</div>
           <div style="font-size:13px;color:var(--text-light)">${a}</div>
         </div>
       `).join('')}
@@ -21227,7 +21227,11 @@ window._aiqUseMyLocation = function(btn) {
       if (btn) { btn.disabled = false; btn.textContent = label; }
     },
     err => {
-      toastError('Could not get your location: ' + err.message);
+      const msg = err.code === 1 ? 'Location permission was denied. Allow location access in your browser settings and try again.'
+        : err.code === 2 ? 'Your location could not be determined. Check your device\'s location/GPS is turned on.'
+        : err.code === 3 ? 'Getting your location timed out. Try again.'
+        : 'Could not get your location. Try again.';
+      toastError(msg);
       if (btn) { btn.disabled = false; btn.textContent = label; }
     },
     { enableHighAccuracy: true, timeout: 15000 }
