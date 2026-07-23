@@ -12449,7 +12449,7 @@ async function showAddQuestionsView(quizId) {
                   <div style="font-size:12px;color:#9ca3af;margin-top:5px;">Marks: ${q.marks}</div>
                 </div>
                 <div style="display:flex;gap:5px;flex-shrink:0;">
-                  <button class="btn btn-sm btn-secondary" title="Save to Question Bank" onclick="saveQuestionToBank('${quizId}','${q._id}')">💾 Save</button>
+                  <button class="btn btn-sm btn-secondary" style="display:inline-flex;align-items:center;gap:5px" title="Save to Question Bank" onclick="saveQuestionToBank('${quizId}','${q._id}')">${svgIcon('<path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/>', 13)} Save</button>
                   <button class="btn btn-sm btn-danger" onclick="deleteQuizQuestion('${quizId}','${q._id}')">Delete</button>
                 </div>
               </div>
@@ -20686,13 +20686,13 @@ async function _caSaveSettings() {
 function _settingsHubTabs(active) {
   const mode = currentUser?.company?.mode;
   const tabs = [
-    { id: 'company-settings',    label: '⚙️ Company' },
-    { id: 'branding',            label: '🎨 Branding' },
-    ...(mode === 'corporate' ? [{ id: 'corp-clock-settings', label: '🕐 Clock In/Out' }] : []),
-    { id: 'arrival-iq-settings', label: '🚗 ArrivalIQ' },
+    { id: 'company-settings',    label: 'Company',       icon: '<circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/>' },
+    { id: 'branding',            label: 'Branding',      icon: '<circle cx="13.5" cy="6.5" r=".5"/><circle cx="17.5" cy="10.5" r=".5"/><circle cx="8.5" cy="7.5" r=".5"/><circle cx="6.5" cy="12.5" r=".5"/><path d="M12 2C6.5 2 2 6.5 2 12s4.5 10 10 10c.926 0 1.648-.746 1.648-1.688 0-.437-.18-.835-.437-1.125-.29-.289-.438-.652-.438-1.125a1.64 1.64 0 0 1 1.668-1.668h1.996c3.051 0 5.555-2.503 5.555-5.554C21.965 6.012 17.461 2 12 2z"/>' },
+    ...(mode === 'corporate' ? [{ id: 'corp-clock-settings', label: 'Clock In/Out', icon: '<circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>' }] : []),
+    { id: 'arrival-iq-settings', label: 'ArrivalIQ',     icon: '<path d="M3 11l19-9-9 19-2-8-8-2z"/>' },
   ];
   return `<div class="settings-hub-tabs">${tabs.map(t =>
-    `<button type="button" class="sht-pill${t.id === active ? ' active' : ''}" onclick="navigateTo('${t.id}')">${t.label}</button>`
+    `<button type="button" class="sht-pill${t.id === active ? ' active' : ''}" style="display:inline-flex;align-items:center;gap:5px" onclick="navigateTo('${t.id}')">${svgIcon(t.icon, 13)}${t.label}</button>`
   ).join('')}</div>`;
 }
 
@@ -25262,7 +25262,7 @@ async function renderBranding() {
             <label style="font-size:11px;font-weight:700;text-transform:uppercase;color:#6b7280;display:block;margin-bottom:4px">${_isAcademicBrand ? 'Institution Logo' : 'Company Logo'}</label>
             <input type="file" id="bd-logo-file" accept="image/png,image/jpeg,image/webp" style="display:none" onchange="_bdUploadLogo(this)">
             <div style="display:flex;gap:6px;align-items:center;margin-bottom:6px">
-              <button type="button" class="btn btn-secondary btn-sm" id="bd-upload-btn" onclick="document.getElementById('bd-logo-file').click()">📤 Upload logo</button>
+              <button type="button" class="btn btn-secondary btn-sm" id="bd-upload-btn" style="display:inline-flex;align-items:center;gap:6px" onclick="document.getElementById('bd-logo-file').click()">${svgIcon('<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/>', 14)} Upload logo</button>
               <span style="font-size:11px;color:#6b7280">PNG/JPG/WebP, max 2 MB</span>
             </div>
             <input id="bd-logo" value="${branding.logoUrl||''}" placeholder="…or paste an image URL" style="width:100%;padding:8px;border:1px solid #d1d5db;border-radius:6px;font-size:13px" oninput="updateBrandPreview()">
@@ -25290,7 +25290,7 @@ async function renderBranding() {
         <div id="bd-error" style="color:#ef4444;font-size:13px;margin-bottom:8px;display:none"></div>
         <div style="display:flex;gap:10px;flex-wrap:wrap">
           <button class="btn btn-primary" onclick="saveBranding()">Save Branding</button>
-          <button class="btn btn-secondary" onclick="previewLoginPage()">👁 Preview Login Page</button>
+          <button class="btn btn-secondary" style="display:inline-flex;align-items:center;gap:6px" onclick="previewLoginPage()">${svgIcon('<path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/>', 14)} Preview Login Page</button>
         </div>
       </div>
 
