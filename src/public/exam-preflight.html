@@ -399,63 +399,56 @@ let _personDetectorLoading = false;
 const FACE_OK_CHECK_MSG = 'Camera feed active — face visible';
 const FACE_OK_STATUS_MSG = 'Camera active — face presence confirmed';
 
-async function checkFace() {
-  const video = document.getElementById('camPreview');
-  const faceDot = document.getElementById('faceDot');
-  const faceMsg = document.getElementById('faceStatusMsg');
-
-  if (!video || video.readyState < 2 || video.videoWidth === 0) {
-    faceMsg.textContent = 'Camera not ready — retrying…';
-    setTimeout(checkFace, 1000);
-    return;
-  }
-
-  // Real person detection first: this is the only path that can actually
-  // enforce rule #6 above ("multiple people... will trigger a high-severity
-  // flag") -- the brightness fallback below cannot count people at all, so
-  // it silently let a second person in frame pass every time.
-  if (!_personDetectorFailed && window._getPersonDetector) {
-    try {
-      if (!_personDetectorLoading) {
-        _personDetectorLoading = true;
-        faceMsg.textContent = 'Loading detection model… (first time only)';
-      }
-      const detector = await window._getPersonDetector();
-      const canvas = document.createElement('canvas');
-      canvas.width = 320; canvas.height = 240;
-      canvas.getContext('2d').drawImage(video, 0, 0, 320, 240);
-      const results = await detector(canvas.toDataURL('image/jpeg', 0.85), { threshold: 0.6 });
-      const people = results.filter(r => r.label === 'person');
-
-      if (people.length === 0) {
-        setCheck('face', false, 'No face detected. Ensure good lighting and face the camera.');
-        faceDot.className = 'face-dot err';
-        faceMsg.textContent = 'No person detected — face the camera';
-        setTimeout(checkFace, 3000);
-      } else if (people.length > 1) {
-        setCheck('face', false, `${people.length} people detected — only the exam taker may be in frame.`);
-        faceDot.className = 'face-dot err';
-        faceMsg.textContent = `${people.length} people in frame — only you may be visible`;
-        setTimeout(checkFace, 3000);
-      } else {
-        setCheck('face', true, FACE_OK_CHECK_MSG);
-        faceDot.className = 'face-dot ok';
-        faceMsg.textContent = FACE_OK_STATUS_MSG;
-        // Keep watching (rather than stopping on first pass) so someone
-        // joining the frame after this check passes still gets caught
-        // before the exam begins.
-        setTimeout(checkFace, 4000);
-      }
-      return;
-    } catch (_) {
-      // Model couldn't load (offline, blocked network, unsupported browser)
-      // or inference failed -- give up on it for this session and fall
-      // through to the brightness heuristic below instead of blocking
-      // the student over an infrastructure problem.
-      _personDetectorFailed = true;
+// Real person detection: the only path that can actually enforce rule #6
+// above ("multiple people... will trigger a high-severity flag") -- the
+// brightness fallback below cannot count people at all, so it silently let
+// a second person in frame pass every time. Returns true if it produced a
+// result (caller should stop), false if the caller should fall through to
+// the brightness heuristic (model couldn't load or inference failed).
+async function _tryPersonDetection(video, faceDot, faceMsg) {
+  try {
+    if (!_personDetectorLoading) {
+      _personDetectorLoading = true;
+      faceMsg.textContent = 'Loading detection model… (first time only)';
     }
-  }
+    const detector = await window._getPersonDetector();
+    const canvas = document.createElement('canvas');
+    canvas.width = 320; canvas.height = 240;
+    canvas.getContext('2d').drawImage(video, 0, 0, 320, 240);
+    const results = await detector(canvas.toDataURL('image/jpeg', 0.85), { threshold: 0.6 });
+    const people = results.filter(r => r.label === 'person');
 
+    if (people.length === 0) {
+      setCheck('face', false, 'No face detected. Ensure good lighting and face the camera.');
+      faceDot.className = 'face-dot err';
+      faceMsg.textContent = 'No person detected — face the camera';
+      setTimeout(checkFace, 3000);
+    } else if (people.length > 1) {
+      setCheck('face', false, `${people.length} people detected — only the exam taker may be in frame.`);
+      faceDot.className = 'face-dot err';
+      faceMsg.textContent = `${people.length} people in frame — only you may be visible`;
+      setTimeout(checkFace, 3000);
+    } else {
+      setCheck('face', true, FACE_OK_CHECK_MSG);
+      faceDot.className = 'face-dot ok';
+      faceMsg.textContent = FACE_OK_STATUS_MSG;
+      // Keep watching (rather than stopping on first pass) so someone
+      // joining the frame after this check passes still gets caught
+      // before the exam begins.
+      setTimeout(checkFace, 4000);
+    }
+    return true;
+  } catch (_) {
+    // Model couldn't load (offline, blocked network, unsupported browser)
+    // or inference failed -- give up on it for this session and let the
+    // caller fall through to the brightness heuristic instead of blocking
+    // the student over an infrastructure problem.
+    _personDetectorFailed = true;
+    return false;
+  }
+}
+
+function _brightnessFallbackCheck(video, faceDot, faceMsg) {
   try {
     const canvas = document.createElement('canvas');
     canvas.width = 80; canvas.height = 60;
@@ -482,6 +475,25 @@ async function checkFace() {
     faceDot.className = 'face-dot ok';
     faceMsg.textContent = 'Camera active';
   }
+}
+
+async function checkFace() {
+  const video = document.getElementById('camPreview');
+  const faceDot = document.getElementById('faceDot');
+  const faceMsg = document.getElementById('faceStatusMsg');
+
+  if (!video || video.readyState < 2 || video.videoWidth === 0) {
+    faceMsg.textContent = 'Camera not ready — retrying…';
+    setTimeout(checkFace, 1000);
+    return;
+  }
+
+  if (!_personDetectorFailed && window._getPersonDetector) {
+    const handled = await _tryPersonDetection(video, faceDot, faceMsg);
+    if (handled) return;
+  }
+
+  _brightnessFallbackCheck(video, faceDot, faceMsg);
 }
 
 async function beginExam() {
