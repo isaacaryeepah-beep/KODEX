@@ -105,7 +105,12 @@ app.use(helmet({
       // script 'blob:...' violates ... script-src" console violation plus
       // an uncaught "Failed to execute 'importScripts' ... script ...
       // failed to load" thrown from tomtom-maps-web.min.js.
-      "script-src":      ["'self'", "'unsafe-inline'", "https://cdn.jsdelivr.net", "https://cdnjs.cloudflare.com", "https://meet.dikly.live", "blob:"],
+      // 'wasm-unsafe-eval' (not the broader 'unsafe-eval', deliberately kept
+      // out per the note above) -- the in-browser person-detection model on
+      // exam-preflight.html (src/public/js/vendor/transformers.min.js) runs
+      // its ONNX model through WebAssembly, which browsers refuse to
+      // instantiate under CSP without this narrower, WASM-only grant.
+      "script-src":      ["'self'", "'unsafe-inline'", "'wasm-unsafe-eval'", "https://cdn.jsdelivr.net", "https://cdnjs.cloudflare.com", "https://meet.dikly.live", "blob:"],
       "script-src-attr": ["'unsafe-inline'"],
       "style-src":       ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com", "https://cdn.jsdelivr.net"],
       "font-src":        ["'self'", "https://fonts.gstatic.com", "https://cdn.jsdelivr.net", "data:"],
@@ -131,7 +136,14 @@ app.use(helmet({
       // confirmed via a real "Fetch API cannot load blob:... Refused to
       // connect" console violation plus an uncaught "Failed to fetch"
       // thrown from inside tomtom-maps-web.min.js.
-      "connect-src":     ["'self'", "https://api.anthropic.com", "https://res.cloudinary.com", "https://*.dikly.sbs", "https://*.dikly.live", "wss://*.dikly.sbs", "wss://*.dikly.live", "wss://*.livekit.cloud", "https://cdn.jsdelivr.net", "https://cdnjs.cloudflare.com", "https://api.tomtom.com", "https://*.api.tomtom.com", "blob:"],
+      // huggingface.co / *.hf.co / *.huggingface.co: the exam-preflight
+      // person-detection model weights are fetched lazily at runtime (not
+      // vendored -- ~40MB, cached by the browser/library after first load).
+      // The initial request goes to huggingface.co, which redirects to one
+      // of several lettered/regional CDN subdomains for the actual file --
+      // same "fans out across subdomains" situation as the TomTom entries
+      // below, so it needs the wildcard forms too, not just the bare host.
+      "connect-src":     ["'self'", "https://api.anthropic.com", "https://res.cloudinary.com", "https://*.dikly.sbs", "https://*.dikly.live", "wss://*.dikly.sbs", "wss://*.dikly.live", "wss://*.livekit.cloud", "https://cdn.jsdelivr.net", "https://cdnjs.cloudflare.com", "https://api.tomtom.com", "https://*.api.tomtom.com", "https://huggingface.co", "https://*.hf.co", "https://*.huggingface.co", "blob:"],
       "frame-src":       ["'self'", "https://meet.dikly.live", "https://*.livekit.cloud"],
       // worker-src isn't in Helmet's defaults, so without this it falls
       // back to default-src 'self' — which does NOT cover blob:. The

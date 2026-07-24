@@ -286,6 +286,24 @@
   </button>
 </div>
 
+<script type="module">
+// Real in-browser person detection (Hugging Face DETR object-detection
+// model, ONNX + WebAssembly, runs entirely client-side -- no image ever
+// leaves the browser for this check). Lazily loaded and cached on first
+// use so the model download only happens once per device, not per exam.
+// checkFace() below falls back to the old brightness-only heuristic if
+// this never resolves (slow/offline connection, unsupported browser), so
+// a model-load failure never blocks a student from starting their exam.
+import { pipeline } from '/js/vendor/transformers.min.js';
+let _personDetectorPromise = null;
+window._getPersonDetector = function () {
+  if (!_personDetectorPromise) {
+    _personDetectorPromise = pipeline('object-detection', 'Xenova/detr-resnet-50');
+  }
+  return _personDetectorPromise;
+};
+</script>
+
 <script>
 'use strict';
 const _p       = new URLSearchParams(location.search);
@@ -375,7 +393,10 @@ async function runChecks() {
   }
 }
 
-function checkFace() {
+let _personDetectorFailed = false;
+let _personDetectorLoading = false;
+
+async function checkFace() {
   const video = document.getElementById('camPreview');
   const faceDot = document.getElementById('faceDot');
   const faceMsg = document.getElementById('faceStatusMsg');
@@ -384,6 +405,52 @@ function checkFace() {
     faceMsg.textContent = 'Camera not ready — retrying…';
     setTimeout(checkFace, 1000);
     return;
+  }
+
+  // Real person detection first: this is the only path that can actually
+  // enforce rule #6 above ("multiple people... will trigger a high-severity
+  // flag") -- the brightness fallback below cannot count people at all, so
+  // it silently let a second person in frame pass every time.
+  if (!_personDetectorFailed && window._getPersonDetector) {
+    try {
+      if (!_personDetectorLoading) {
+        _personDetectorLoading = true;
+        faceMsg.textContent = 'Loading detection model… (first time only)';
+      }
+      const detector = await window._getPersonDetector();
+      const canvas = document.createElement('canvas');
+      canvas.width = 320; canvas.height = 240;
+      canvas.getContext('2d').drawImage(video, 0, 0, 320, 240);
+      const results = await detector(canvas.toDataURL('image/jpeg', 0.85), { threshold: 0.6 });
+      const people = results.filter(r => r.label === 'person');
+
+      if (people.length === 0) {
+        setCheck('face', false, 'No face detected. Ensure good lighting and face the camera.');
+        faceDot.className = 'face-dot err';
+        faceMsg.textContent = 'No person detected — face the camera';
+        setTimeout(checkFace, 3000);
+      } else if (people.length > 1) {
+        setCheck('face', false, `${people.length} people detected — only the exam taker may be in frame.`);
+        faceDot.className = 'face-dot err';
+        faceMsg.textContent = `${people.length} people in frame — only you may be visible`;
+        setTimeout(checkFace, 3000);
+      } else {
+        setCheck('face', true, 'Camera feed active — face visible');
+        faceDot.className = 'face-dot ok';
+        faceMsg.textContent = 'Camera active — face presence confirmed';
+        // Keep watching (rather than stopping on first pass) so someone
+        // joining the frame after this check passes still gets caught
+        // before the exam begins.
+        setTimeout(checkFace, 4000);
+      }
+      return;
+    } catch (_) {
+      // Model couldn't load (offline, blocked network, unsupported browser)
+      // or inference failed -- give up on it for this session and fall
+      // through to the brightness heuristic below instead of blocking
+      // the student over an infrastructure problem.
+      _personDetectorFailed = true;
+    }
   }
 
   try {
