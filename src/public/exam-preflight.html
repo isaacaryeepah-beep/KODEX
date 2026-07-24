@@ -396,6 +396,9 @@ async function runChecks() {
 let _personDetectorFailed = false;
 let _personDetectorLoading = false;
 
+const FACE_OK_CHECK_MSG = 'Camera feed active — face visible';
+const FACE_OK_STATUS_MSG = 'Camera active — face presence confirmed';
+
 async function checkFace() {
   const video = document.getElementById('camPreview');
   const faceDot = document.getElementById('faceDot');
@@ -435,9 +438,9 @@ async function checkFace() {
         faceMsg.textContent = `${people.length} people in frame — only you may be visible`;
         setTimeout(checkFace, 3000);
       } else {
-        setCheck('face', true, 'Camera feed active — face visible');
+        setCheck('face', true, FACE_OK_CHECK_MSG);
         faceDot.className = 'face-dot ok';
-        faceMsg.textContent = 'Camera active — face presence confirmed';
+        faceMsg.textContent = FACE_OK_STATUS_MSG;
         // Keep watching (rather than stopping on first pass) so someone
         // joining the frame after this check passes still gets caught
         // before the exam begins.
@@ -464,9 +467,9 @@ async function checkFace() {
     const avg = sum / (d.length / 4);
 
     if (avg > 18) {
-      setCheck('face', true, 'Camera feed active — face visible');
+      setCheck('face', true, FACE_OK_CHECK_MSG);
       faceDot.className = 'face-dot ok';
-      faceMsg.textContent = 'Camera active — face presence confirmed';
+      faceMsg.textContent = FACE_OK_STATUS_MSG;
     } else {
       setCheck('face', false, 'No face detected. Ensure good lighting and face the camera.');
       faceDot.className = 'face-dot err';
