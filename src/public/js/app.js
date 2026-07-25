@@ -9091,11 +9091,10 @@ async function showGpsSessionModal() {
         ${centerChoice}
         <div class="form-group">
           <label>Check-in Radius</label>
-          <select id="gps-session-radius" onchange="_gpsLecAccWarn()" style="width:100%;padding:9px 12px;border:1.5px solid var(--border);border-radius:8px;font-size:13px">
+          <select id="gps-session-radius" style="width:100%;padding:9px 12px;border:1.5px solid var(--border);border-radius:8px;font-size:13px">
             ${radiusOpts}
           </select>
         </div>
-        <div id="gps-lec-accuracy-warn"></div>
         <div class="form-group">
           <label>Session Title <span style="font-weight:400;color:var(--text-muted);font-size:12px">(optional)</span></label>
           <input type="text" id="gps-session-title" placeholder="e.g., Week 5 Lecture">
@@ -9106,31 +9105,6 @@ async function showGpsSessionModal() {
         </div>
       </div>
     </div>`;
-
-  // Warn if the chosen class center is the lecturer/rep's own live position
-  // and its accuracy is poor relative to the radius. A bad reading here
-  // becomes the geofence CENTER for the whole class -- students marking
-  // from the real room can then be measured as "outside" even though
-  // they're standing right there, no matter how good their own GPS is.
-  // The student-side check (markAttendance's gps_mark handler) already
-  // guards against an imprecise STUDENT reading; nothing previously
-  // guarded the reading that sets the reference point in the first place.
-  window._gpsLecAccWarn = function() {
-    const warnEl = document.getElementById('gps-lec-accuracy-warn');
-    if (!warnEl) return;
-    const centerChoice = document.querySelector('input[name="gps-center"]:checked')?.value || 'me';
-    const radius = Number(document.getElementById('gps-session-radius')?.value) || defaultRadius;
-    if (centerChoice !== 'me' || !loc.accuracy || loc.accuracy <= radius * 0.75) {
-      warnEl.innerHTML = '';
-      return;
-    }
-    warnEl.innerHTML = `<div style="background:#fffbeb;border:1px solid #fde68a;border-radius:8px;padding:10px 14px;font-size:12px;color:#92400e;margin:-4px 0 14px;display:flex;gap:8px;align-items:flex-start">
-      <span style="flex-shrink:0">⚠️</span>
-      <div>Your location accuracy (±${Math.round(loc.accuracy)}m) is close to or exceeds this ${radius}m radius. Students standing right here could still be measured as outside the geofence. Move near a window or outdoors and reopen this, pick a larger radius, or use a saved location instead.</div>
-    </div>`;
-  };
-  document.querySelectorAll('input[name="gps-center"]').forEach(r => r.addEventListener('change', window._gpsLecAccWarn));
-  window._gpsLecAccWarn();
 }
 
 async function startGpsSession(latitude, longitude, campusLat = null, campusLng = null) {
