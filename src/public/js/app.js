@@ -2624,6 +2624,12 @@ async function handleLogout() {
   currentUser = null;
   currentUserTrial = null;
   window.currentUser = null;
+  // Dikly AI's transcript is a plain in-memory array (see _aiChat's own
+  // comment: the backend is stateless per call, nothing persists
+  // server-side) -- without this, "Switch Institution" left the previous
+  // institution's whole conversation sitting in memory, and the next
+  // institution's Dikly AI page repainted it verbatim on first load.
+  _aiChat = [];
   localStorage.removeItem('token');
   localStorage.removeItem('refreshToken');
   if (_expiryTimer) { clearTimeout(_expiryTimer); _expiryTimer = null; }
