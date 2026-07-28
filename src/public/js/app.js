@@ -2614,46 +2614,38 @@ async function handleLogout() {
   try {
     if (isOnline()) await api('/api/auth/logout', { method: 'POST' });
   } catch (e) {}
-  if (window.DiklyIDB) window.DiklyIDB.clearAll().catch(() => {});
+  // Awaited (was previously fire-and-forget): this clears real cached
+  // institution data (apiCache, dashboardCache, userSession in IndexedDB --
+  // see offline-idb.js). The reload below unloads the page immediately
+  // after, which would otherwise cut this off mid-write.
+  if (window.DiklyIDB) { try { await window.DiklyIDB.clearAll(); } catch (e) {} }
   resetBranding();
   // Clear this user's offline profile so their credentials don't persist on shared devices
   const _logoutUserId = currentUser?._id || currentUser?.id;
   if (_logoutUserId) clearOfflineProfileById(_logoutUserId);
-  _appOfflineMode = false;
-  token = null;
-  currentUser = null;
-  currentUserTrial = null;
-  window.currentUser = null;
   localStorage.removeItem('token');
   localStorage.removeItem('refreshToken');
-  if (_expiryTimer) { clearTimeout(_expiryTimer); _expiryTimer = null; }
-  _dismissExpiryBanner();
-  document.getElementById('main-content').innerHTML = '';
-  document.getElementById('sidebar-nav').innerHTML = '';
-  document.getElementById('user-name').textContent = '';
-  document.getElementById('user-role').textContent = '';
-  document.getElementById('trial-banner').style.display = 'none';
-  document.getElementById('trial-expired-banner').style.display = 'none';
-  const topbarLeft = document.querySelector('.topbar-left');
-  if (topbarLeft) topbarLeft.innerHTML = '';
-  document.getElementById('dashboard-page').classList.add('hidden');
-  document.getElementById('dashboard-page').removeAttribute('data-portal');
-  document.getElementById('auth-page').style.display = 'flex';
 
-  // Clean up mobile UI elements
-  const bottomNav = document.getElementById('bottom-nav');
-  if (bottomNav) bottomNav.remove();
-  const overlay = document.getElementById('sidebar-overlay');
-  if (overlay) overlay.remove();
-  document.body.style.overflow = '';
-  document.body.style.cssText = document.body.style.cssText; // flush
-
-  // If loaded from superadmin.html, redirect back to it
+  // Force a real page reload rather than resetting state in place. This
+  // file has ~70 module-level JS variables, several of which cache real
+  // fetched institution data (student lists, user lists, timetables, quiz
+  // banks, AI chat transcripts, ...). Manually nulling each one out here
+  // is exactly the kind of fix that quietly breaks again the moment
+  // someone adds a new cache and forgets to list it in this function --
+  // which is exactly how _aiChat leaked one institution's Dikly AI
+  // conversation into the next institution's session on a shared device
+  // (a real user-reported bug: switching institutions in the same tab
+  // showed the previous institution's chat, including a student's name
+  // and index number, to whoever logged in next). A hard reload tears
+  // down the whole JS realm, so nothing from the previous account or
+  // institution can survive into the next login, for any variable --
+  // present or future -- without relying on every future cache being
+  // remembered here individually.
   if (window.__superadminMode) {
     window.location.href = '/superadmin';
     return;
   }
-  showPortalSelector();
+  window.location.reload();
 }
 
 async function loadUserData() {
