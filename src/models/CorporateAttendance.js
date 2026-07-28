@@ -43,6 +43,7 @@ const CLOCK_METHODS = Object.freeze([
   "gps",        // mobile GPS check-in
   "face_id",    // facial recognition
   "web",        // browser clock-in button
+  "ussd",       // feature-phone USSD menu — phone number + PIN, no GPS
 ]);
 
 // ---------------------------------------------------------------------------

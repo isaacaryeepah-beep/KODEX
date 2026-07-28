@@ -28,6 +28,8 @@ router.post("/forgot-password-email",  passwordResetLimiter,  authController.for
 router.post("/reset-password-email",   passwordResetLimiter,  authController.resetPasswordEmail);
 router.post("/forgot-password-admin",  passwordResetLimiter,  authController.forgotPasswordAdmin);  // ← ADDED
 router.put("/profile",                 authenticate,          authController.updateProfile);
+router.post("/attendance-pin",         authenticate,          authController.setAttendancePin);
+router.delete("/attendance-pin",       authenticate,          authController.clearAttendancePin);
 router.post("/2fa/toggle",             authenticate,          authController.toggle2FA);
 router.post("/2fa/send",               authenticate,          authController.send2FACode);
 router.post("/2fa/verify",             authenticate,          authController.verify2FACode);

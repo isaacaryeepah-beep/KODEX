@@ -15235,6 +15235,27 @@ window.clearLecturerPin = async function() {
   } catch (e) { showToastNotif(e.message || 'Failed to clear PIN', 'error'); }
 };
 
+window.saveAttendancePin = async function() {
+  const pin = document.getElementById('attendance-pin-input') ? document.getElementById('attendance-pin-input').value : '';
+  if (!pin || !/^\d{4}$/.test(pin)) { showToastNotif('PIN must be 4 digits', 'error'); return; }
+  try {
+    await api('/api/auth/attendance-pin', { method: 'POST', body: JSON.stringify({ pin }) });
+    showToastNotif('Attendance PIN saved — you can now clock in/out by USSD', 'success');
+    const input = document.getElementById('attendance-pin-input');
+    if (input) input.value = '';
+  } catch (e) { showToastNotif(e.message || 'Failed to save PIN', 'error'); }
+};
+
+window.clearAttendancePin = async function() {
+  if (!confirm('Remove your Attendance PIN? You will not be able to clock in/out by USSD until you set a new one.')) return;
+  try {
+    await api('/api/auth/attendance-pin', { method: 'DELETE' });
+    showToastNotif('Attendance PIN cleared', 'success');
+    const input = document.getElementById('attendance-pin-input');
+    if (input) input.value = '';
+  } catch (e) { showToastNotif(e.message || 'Failed to clear PIN', 'error'); }
+};
+
 // ─── Class Rep WiFi Management ────────────────────────────────────────────────
 window.crScanWifi = async function(localIp) {
   const btn     = document.getElementById('cr-wifi-scan-btn');
@@ -16869,6 +16890,19 @@ async function renderProfile() {
           </div>
           <button onclick="saveLecturerPin()" style="padding:10px 18px;background:var(--primary);color:#fff;border:none;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer;white-space:nowrap">Save PIN</button>
           <button onclick="clearLecturerPin()" style="padding:10px 14px;background:transparent;color:#ef4444;border:1.5px solid #ef4444;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;white-space:nowrap">Clear PIN</button>
+        </div>
+      </div>` : ''}
+
+      ${u.role === 'employee' ? `
+      <div style="margin-top:28px;padding-top:24px;border-top:1px solid var(--border)">
+        <h3 style="font-size:14px;font-weight:700;margin-bottom:4px;color:var(--text-primary)">Attendance PIN</h3>
+        <p style="font-size:12px;color:var(--text-muted);margin-bottom:14px">A 4-digit PIN for clocking in or out by USSD (dial-in) from any phone, no app or internet needed. Required before USSD clock-in works.</p>
+        <div style="display:flex;gap:10px;align-items:flex-end">
+          <div style="flex:1">
+            <input type="password" id="attendance-pin-input" inputmode="numeric" maxlength="4" placeholder="4-digit PIN" style="width:100%;padding:10px 12px;border:1.5px solid var(--border);border-radius:8px;font-size:18px;letter-spacing:6px;box-sizing:border-box">
+          </div>
+          <button onclick="saveAttendancePin()" style="padding:10px 18px;background:var(--primary);color:#fff;border:none;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer;white-space:nowrap">Save PIN</button>
+          <button onclick="clearAttendancePin()" style="padding:10px 14px;background:transparent;color:#ef4444;border:1.5px solid #ef4444;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;white-space:nowrap">Clear PIN</button>
         </div>
       </div>` : ''}
 

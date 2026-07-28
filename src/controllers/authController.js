@@ -1927,8 +1927,8 @@ exports.verify2FACode = async (req, res) => {
 
 exports.updateProfile = async (req, res) => {
   try {
-    const { name, currentPassword, newPassword, department, profilePhoto, attendancePin, clearAttendancePin } = req.body;
-    const user = await User.findById(req.user._id).select("+password +attendancePin");
+    const { name, currentPassword, newPassword, department, profilePhoto } = req.body;
+    const user = await User.findById(req.user._id).select("+password");
     if (!user) return res.status(404).json({ error: "User not found" });
 
     if (name && name.trim()) user.name = name.trim();
@@ -1997,6 +1997,43 @@ exports.updateProfile = async (req, res) => {
   } catch (error) {
     console.error("Update profile error:", error);
     res.status(500).json({ error: "Failed to update profile" });
+  }
+};
+
+// ── Attendance PIN (corporate employees) ────────────────────────────────────
+// A 4-digit PIN used to verify identity over channels that can't carry a
+// bearer token — currently just USSD clock-in/out (see ussdController.js),
+// which identifies the employee by phone number and needs a second factor
+// since phone-only would let anyone holding the device clock someone in.
+// Mirrors setLecturerPin/clearLecturerPin in classRepController.js.
+exports.setAttendancePin = async (req, res) => {
+  try {
+    if (req.user.role !== "employee") {
+      return res.status(403).json({ error: "Only employees can set an attendance PIN" });
+    }
+    const { pin } = req.body;
+    if (!pin || !/^\d{4}$/.test(String(pin))) {
+      return res.status(400).json({ error: "PIN must be exactly 4 digits" });
+    }
+    const hashed = await bcrypt.hash(String(pin), 10);
+    await User.updateOne({ _id: req.user._id }, { attendancePin: hashed });
+    res.json({ ok: true, message: "Attendance PIN set" });
+  } catch (error) {
+    console.error("Set attendance PIN error:", error);
+    res.status(500).json({ error: "Failed to set attendance PIN" });
+  }
+};
+
+exports.clearAttendancePin = async (req, res) => {
+  try {
+    if (req.user.role !== "employee") {
+      return res.status(403).json({ error: "Only employees can clear an attendance PIN" });
+    }
+    await User.updateOne({ _id: req.user._id }, { $unset: { attendancePin: 1 } });
+    res.json({ ok: true, message: "Attendance PIN cleared" });
+  } catch (error) {
+    console.error("Clear attendance PIN error:", error);
+    res.status(500).json({ error: "Failed to clear attendance PIN" });
   }
 };
 
