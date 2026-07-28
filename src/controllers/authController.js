@@ -328,6 +328,7 @@ exports.verifyEmail = async (req, res) => {
         institutionName: company?.name,
         trialDays:       company ? Math.ceil((new Date(company.trialEndDate) - new Date(user.createdAt)) / 86400000) : undefined,
         trialEndDate:    company?.trialEndDate,
+        mode:            company?.mode,
       }).catch(err => console.error('Welcome email failed:', err.message));
 
       sendNewInstitutionAlert({

@@ -395,8 +395,17 @@ async function send({ to, subject, html, textBody }) {
 // ═══════════════════════════════════════════════════════════════════════════════
 
 // 1. Welcome / trial started
-async function sendWelcome({ email, name, institutionName, trialDays = 14, trialEndDate }) {
+// `mode` gates the pricing/subscribe language: corporate companies are on
+// the pilot-phase trial (subscription banner/link/page hidden in-app for
+// them, see CLAUDE.md), so quoting a monthly fee and linking to a
+// subscribe page that doesn't exist in their UI is both inaccurate and a
+// dead end. Academic keeps the real pricing -- that's live for them.
+async function sendWelcome({ email, name, institutionName, trialDays = 14, trialEndDate, mode }) {
   const endStr = trialEndDate ? new Date(trialEndDate).toDateString() : `${trialDays} days from now`;
+  const isCorporate = mode === 'corporate';
+  const closingLine = isCorporate
+    ? `<p style="font-size:13px">Your trial runs until <strong>${endStr}</strong>. We'll reach out well before then with next steps to keep your account active.</p>`
+    : `<p style="font-size:13px">Your trial runs until <strong>${endStr}</strong>. After that, subscribe for <strong>GHS 200/month</strong> to keep all your data and features.</p>`;
   const html = wrap(`
     ${heading('Account created', 'Welcome to DIKLY')}
     <p>Hi <span class="highlight">${name}</span>, your account for <strong>${institutionName}</strong> is ready. You're on a <strong>${trialDays}-day free trial</strong> — no card needed.</p>
@@ -414,15 +423,21 @@ async function sendWelcome({ email, name, institutionName, trialDays = 14, trial
     ${button(BASE_URL, 'Open DIKLY')}
 
     <hr class="divider"/>
-    <p style="font-size:13px">Your trial runs until <strong>${endStr}</strong>. After that, subscribe for <strong>GHS 200/month</strong> to keep all your data and features.</p>
+    ${closingLine}
   `, `Welcome to DIKLY — your ${trialDays}-day trial has started`);
 
   return send({ to: email, subject: 'Welcome to DIKLY — your free trial has started', html });
 }
 
 // 2. Trial ending soon (day 10 -- 4 days left)
-async function sendTrialEndingSoon({ email, name, daysLeft, trialEndDate }) {
+async function sendTrialEndingSoon({ email, name, daysLeft, trialEndDate, mode }) {
   const endStr = trialEndDate ? new Date(trialEndDate).toDateString() : `in ${daysLeft} days`;
+  const isCorporate = mode === 'corporate';
+  const ctaSection = isCorporate
+    ? `${button(BASE_URL, 'Open DIKLY')}
+       <p style="font-size:13px">We'll follow up with next steps to keep your account active after your trial ends.</p>`
+    : `${button(`${BASE_URL}/#subscription`, 'Subscribe Now — GHS 200/month')}
+       <p style="font-size:13px">Prefer annual? Pay <strong>GHS 2,000/year</strong> and get 2 months free.</p>`;
   const html = wrap(`
     ${heading('Trial ending soon', `Your trial ends in ${daysLeft} day${daysLeft !== 1 ? 's' : ''}`, C.amber)}
     <p>Hi <span class="highlight">${name}</span>, just a heads-up — your DIKLY free trial expires on <strong>${endStr}</strong>.</p>
@@ -432,56 +447,60 @@ async function sendTrialEndingSoon({ email, name, daysLeft, trialEndDate }) {
       ['Expires', endStr],
     ])}
 
-    <p><strong>What you keep with a subscription:</strong></p>
+    <p><strong>What you keep${isCorporate ? '' : ' with a subscription'}:</strong></p>
     <p>All attendance session history<br/>
        All quizzes and student results<br/>
        All assignments and submissions<br/>
        AI question generation<br/>
        Live proctoring</p>
 
-    ${button(`${BASE_URL}/#subscription`, 'Subscribe Now — GHS 200/month')}
-
-    <p style="font-size:13px">Prefer annual? Pay <strong>GHS 2,000/year</strong> and get 2 months free.</p>
-  `, `Your DIKLY trial ends in ${daysLeft} days — subscribe to keep access`);
+    ${ctaSection}
+  `, isCorporate ? `Your DIKLY trial ends in ${daysLeft} days` : `Your DIKLY trial ends in ${daysLeft} days — subscribe to keep access`);
 
   return send({ to: email, subject: `Your DIKLY trial ends in ${daysLeft} days`, html });
 }
 
 // 3. Trial expired
-async function sendTrialExpired({ email, name }) {
+async function sendTrialExpired({ email, name, mode }) {
+  const isCorporate = mode === 'corporate';
+  const ctaSection = isCorporate
+    ? `<p>Reach out to us and we'll get your account reactivated.</p>
+       ${button(BASE_URL, 'Open DIKLY')}`
+    : `<p>Subscribe now to reactivate your account instantly. No setup needed.</p>
+       ${button(`${BASE_URL}/#subscription`, 'Reactivate — GHS 200/month')}
+       <p style="font-size:13px">Annual plan: <strong>GHS 2,000/year</strong> (save GHS 400 — 2 months free)</p>`;
   const html = wrap(`
     ${heading('Trial expired', 'Your DIKLY trial has ended', C.red)}
-    <p>Hi <span class="highlight">${name}</span>, your 14-day free trial has expired. Your account is currently paused.</p>
+    <p>Hi <span class="highlight">${name}</span>, your free trial has expired. Your account is currently paused.</p>
 
     ${detailCard([
       ['Status', '<span class="badge badge-red">TRIAL EXPIRED</span>'],
       ['Your data', 'Safely saved and waiting for you'],
     ])}
 
-    <p>Subscribe now to reactivate your account instantly. No setup needed.</p>
-
-    ${button(`${BASE_URL}/#subscription`, 'Reactivate — GHS 200/month')}
-
-    <p style="font-size:13px">Annual plan: <strong>GHS 2,000/year</strong> (save GHS 400 — 2 months free)</p>
+    ${ctaSection}
   `, 'Your DIKLY trial has expired — reactivate to keep your data');
 
   return send({ to: email, subject: 'Your DIKLY trial has ended — reactivate your account', html });
 }
 
 // 4. Grace period nudge (day 16 -- 2 days after expiry)
-async function sendGraceNudge({ email, name }) {
+async function sendGraceNudge({ email, name, mode }) {
+  const isCorporate = mode === 'corporate';
+  const ctaSection = isCorporate
+    ? `${button(BASE_URL, 'Open DIKLY', 'green')}`
+    : `${button(`${BASE_URL}/#subscription`, 'Reactivate My Account', 'green')}
+       <p style="font-size:13px;text-align:center">GHS 200/month &nbsp;·&nbsp; GHS 2,000/year (2 months free)</p>`;
   const html = wrap(`
     ${heading('Final notice', 'Your data is still here', C.red)}
     <p>Hi <span class="highlight">${name}</span>, your DIKLY account has been paused for 2 days. We've kept all your data safe, but we wanted to check in one last time.</p>
 
     ${detailCard([
       ['Sessions & quizzes', 'All still saved'],
-      ['Reactivation', 'Instant — subscribe to restore access'],
+      ['Reactivation', isCorporate ? 'Reach out and we\'ll restore access' : 'Instant — subscribe to restore access'],
     ])}
 
-    ${button(`${BASE_URL}/#subscription`, 'Reactivate My Account', 'green')}
-
-    <p style="font-size:13px;text-align:center">GHS 200/month &nbsp;·&nbsp; GHS 2,000/year (2 months free)</p>
+    ${ctaSection}
   `, 'Last chance — your DIKLY data is still waiting for you');
 
   return send({ to: email, subject: 'Last chance — your DIKLY data is still here', html });

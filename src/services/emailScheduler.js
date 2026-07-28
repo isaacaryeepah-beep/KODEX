@@ -55,22 +55,22 @@ async function runDailyEmails() {
 
           // Day 10 reminder (4 days left)
           if (daysLeft === 4) {
-            await sendTrialEndingSoon({ email: user.email, name, daysLeft: 4, trialEndDate: trialEnd });
+            await sendTrialEndingSoon({ email: user.email, name, daysLeft: 4, trialEndDate: trialEnd, mode: company.mode });
           }
 
           // Day 13 reminder (1 day left)
           if (daysLeft === 1) {
-            await sendTrialEndingSoon({ email: user.email, name, daysLeft: 1, trialEndDate: trialEnd });
+            await sendTrialEndingSoon({ email: user.email, name, daysLeft: 1, trialEndDate: trialEnd, mode: company.mode });
           }
 
           // Day 14 -- expired today
           if (daysGone === 0 && msLeft <= 0) {
-            await sendTrialExpired({ email: user.email, name });
+            await sendTrialExpired({ email: user.email, name, mode: company.mode });
           }
 
           // Day 16 -- grace nudge (2 days after expiry)
           if (daysGone === 2) {
-            await sendGraceNudge({ email: user.email, name });
+            await sendGraceNudge({ email: user.email, name, mode: company.mode });
           }
         }
       } catch (err) {
@@ -254,15 +254,31 @@ function startScheduler() {
 }
 
 // ── Per-lecturer subscription expiry check ────────────────────────────────────
+// Per-user subscription ("1 subscription = 1 user", User.js line ~243) only
+// applies to lecturer/manager/admin -- HODs are documented as "always free"
+// there, so they're excluded from the role filter below. Corporate-company
+// users are excluded entirely: their trial/subscription is owned by the
+// Company doc (188-day pilot trial, see trialSettings.js) and already
+// covered correctly by runDailyEmails() above via Company.trialEndDate. Any
+// corporate manager caught by the old, broader query here had no
+// User.trialEndDate set (registerManager()/registerHod() never set it), so
+// this fell back to a hardcoded createdAt+30-day guess that contradicted
+// the real, much longer company trial the user was actually told about at
+// signup -- a real, user-reported bug (two conflicting trial-expiry emails).
 const checkLecturerSubscriptions = async () => {
   try {
     const now = Date.now();
     const lecturers = await User.find({
-      role: { $in: ["lecturer", "hod", "manager"] },
+      role: { $in: ["lecturer", "manager"] },
       isActive: true,
-    }).select("name email trialEndDate subscriptionExpiry subscriptionStatus createdAt").lean();
+    })
+      .select("name email trialEndDate subscriptionExpiry subscriptionStatus createdAt company")
+      .populate("company", "mode")
+      .lean();
 
     for (const l of lecturers) {
+      if (l.company?.mode === "corporate") continue;
+
       const trialEnd = l.trialEndDate
         ? new Date(l.trialEndDate)
         : new Date(new Date(l.createdAt).getTime() + 30*24*60*60*1000);
