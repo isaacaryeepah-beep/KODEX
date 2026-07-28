@@ -116,7 +116,7 @@ This file is the single source of truth for Claude Code sessions. Read it at the
   - Mock only true externals (email/SMS send functions) — see `tests/routes/auth.test.js`'s `jest.mock("../../src/services/emailService", ...)`.
   - Fire-and-forget writes (`notificationService.notify*`) aren't awaited by the code under test either — tests give them a brief `setTimeout` beat before asserting, then read back the real DB rows.
   - Reference suites: `tests/routes/auth.test.js` (HTTP layer, supertest), `tests/services/timetableReminder.test.js` and `tests/services/quizReminder.test.js` (cron/service layer, direct invocation — these have no HTTP surface, so the exported function *is* the surface to test).
-  - Known gap, not yet solved: the vanilla-JS SPA frontend (`src/public/js/app.js`) has no permanent test framework (Jest here is `testEnvironment: node`, no jsdom/testing-library). Frontend changes are verified via Playwright against a live seeded server instead, but that verification is currently throwaway (scratchpad scripts), not committed. If asked to close this gap too, it needs new test infra, not a bolt-on to the existing backend suite.
+  - Frontend E2E gap — closed: `tests/e2e/` (Playwright, `npm run test:e2e`, `.github/workflows/e2e-tests.yml`, separate from the Jest workflow since it needs a real browser and is slower). Boots the real app via `tests/e2e/start-server.js` against the same `mongodb-memory-server`/`TEST_MONGO_URI` strategy as the Jest suites. See `tests/e2e/README.md`. Add new frontend specs here — not another throwaway scratchpad script.
 
 ---
 
