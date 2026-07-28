@@ -55,22 +55,22 @@ async function runDailyEmails() {
 
           // Day 10 reminder (4 days left)
           if (daysLeft === 4) {
-            await sendTrialEndingSoon({ email: user.email, name, daysLeft: 4, trialEndDate: trialEnd });
+            await sendTrialEndingSoon({ email: user.email, name, daysLeft: 4, trialEndDate: trialEnd, mode: company.mode });
           }
 
           // Day 13 reminder (1 day left)
           if (daysLeft === 1) {
-            await sendTrialEndingSoon({ email: user.email, name, daysLeft: 1, trialEndDate: trialEnd });
+            await sendTrialEndingSoon({ email: user.email, name, daysLeft: 1, trialEndDate: trialEnd, mode: company.mode });
           }
 
           // Day 14 -- expired today
           if (daysGone === 0 && msLeft <= 0) {
-            await sendTrialExpired({ email: user.email, name });
+            await sendTrialExpired({ email: user.email, name, mode: company.mode });
           }
 
           // Day 16 -- grace nudge (2 days after expiry)
           if (daysGone === 2) {
-            await sendGraceNudge({ email: user.email, name });
+            await sendGraceNudge({ email: user.email, name, mode: company.mode });
           }
         }
       } catch (err) {
