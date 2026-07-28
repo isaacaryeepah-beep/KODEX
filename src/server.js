@@ -206,9 +206,22 @@ const allowedOrigins = [
   "http://localhost:5000",
 ];
 
+// Classic <script src> loads never send an Origin header and never go
+// through CORS, same-origin or not -- but <script type="module"> (and any
+// import it makes) always fetches in CORS mode per the HTML spec, even for
+// same-origin requests. That was never exercised until exam-preflight.html
+// picked up its first module script (src/public/js/vendor/transformers.min.js),
+// which then hit this allowlist and got rejected on any dev/test port other
+// than the two hardcoded above -- confirmed via a real CORS rejection
+// logged by this exact middleware while running the Playwright E2E suite
+// on port 5099. Production is unaffected (dikly.sbs/dikly.live are already
+// listed, and that's genuinely the page's own origin there), but any other
+// local port needs the same access production's real domain gets.
+const localOriginPattern = /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/;
+
 app.use(cors({
   origin: (origin, callback) => {
-    if (!origin || allowedOrigins.includes(origin)) {
+    if (!origin || allowedOrigins.includes(origin) || (process.env.NODE_ENV !== "production" && localOriginPattern.test(origin))) {
       return callback(null, true);
     } else {
       return callback(new Error(`CORS blocked: ${origin} is not allowed`));

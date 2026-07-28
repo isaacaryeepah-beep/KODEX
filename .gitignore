@@ -4,6 +4,11 @@ node_modules/
 logs/
 .claude/
 
+# Playwright E2E test output (tests/e2e/) -- generated, not source
+/test-results/
+/playwright-report/
+/blob-report/
+
 # Capacitor
 /android
 /ios
