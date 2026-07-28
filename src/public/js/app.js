@@ -15387,13 +15387,14 @@ async function _renderGpsMarkAttendance(session) {
       </div>` : `
       <div class="card" style="text-align:center;padding:40px 20px">
         <div style="font-size:52px;margin-bottom:14px">📍</div>
-        <div style="font-size:18px;font-weight:700;margin-bottom:10px">Check In with Your Location</div>
+        <div style="font-size:18px;font-weight:700;margin-bottom:8px">Allow Dikly to use your location?</div>
         <p style="font-size:13px;color:var(--text-light);max-width:320px;margin:0 auto;line-height:1.7">
           Your lecturer started a GPS session — no classroom device or code needed.
-          Tap below and allow location access. You must be physically at the class location.
+          We'll check that you're within ${session.geoRadiusMeters}m of class, then mark you present.
+          Your location is only used for this one check — it isn't stored or tracked afterward.
         </p>
         <div id="gps-mark-status" style="font-size:12px;color:var(--text-light);margin-top:14px"></div>
-        <button class="btn btn-primary" id="gps-mark-btn" style="margin-top:14px" onclick="_gpsMarkCheckIn('${session._id}')">📍 Check In Now</button>
+        <button class="btn btn-primary" id="gps-mark-btn" style="margin-top:14px" onclick="_gpsMarkCheckIn('${session._id}')">📍 Allow &amp; Check In</button>
         ${repExtendBtn}
       </div>`}
   `;
