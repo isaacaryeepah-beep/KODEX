@@ -7124,6 +7124,44 @@ function _showStrictBlockedModal(message) {
   document.body.appendChild(ol);
 }
 
+// Priming screen shown BEFORE the native browser geolocation prompt fires,
+// so the permission ask is explicit and in-app rather than something the OS
+// dialog springs on the employee after a bare "Clock In"/"Clock Out" tap.
+// `onAllow` runs only if the employee confirms; declining just closes the
+// modal and never calls _getGPSLocation() at all.
+let _gpsPermissionModalCallback = null;
+
+function _showGpsPermissionModal(bodyText, onAllow) {
+  document.getElementById('gps-permission-modal')?.remove();
+  _gpsPermissionModalCallback = onAllow;
+  const ol = document.createElement('div');
+  ol.id = 'gps-permission-modal';
+  ol.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.55);display:flex;align-items:center;justify-content:center;z-index:9999;padding:16px';
+  ol.innerHTML = `
+    <div style="background:var(--card,#fff);border-radius:16px;padding:32px 24px;max-width:380px;width:100%;text-align:center;box-shadow:0 24px 64px rgba(0,0,0,.35)">
+      <div style="font-size:44px;margin-bottom:12px">📍</div>
+      <div style="font-size:16px;font-weight:800;margin-bottom:10px;color:var(--text)">Allow Dikly to use your location?</div>
+      <div style="font-size:13px;color:var(--text-light);line-height:1.65;margin-bottom:6px">${bodyText}</div>
+      <div style="margin-top:22px;display:flex;gap:10px;justify-content:center">
+        <button onclick="_gpsPermissionModalDismiss()" class="btn btn-secondary btn-sm">Not now</button>
+        <button onclick="_gpsPermissionModalAllow()" class="btn btn-primary btn-sm">Allow &amp; Continue</button>
+      </div>
+    </div>`;
+  document.body.appendChild(ol);
+}
+
+function _gpsPermissionModalDismiss() {
+  document.getElementById('gps-permission-modal')?.remove();
+  _gpsPermissionModalCallback = null;
+}
+
+function _gpsPermissionModalAllow() {
+  document.getElementById('gps-permission-modal')?.remove();
+  const cb = _gpsPermissionModalCallback;
+  _gpsPermissionModalCallback = null;
+  if (cb) cb();
+}
+
 // Optional, non-blocking note the employee can attach to an out-of-pattern
 // clock event (late arrival, overtime, early leave). Purely informational —
 // surfaced to managers on the attendance report, never re-evaluated or
@@ -7162,7 +7200,14 @@ async function _submitClockReason(recordId, event) {
   } catch (e) { toastError(e.message || 'Failed to save note'); }
 }
 
-async function employeeSignIn() {
+function employeeSignIn() {
+  _showGpsPermissionModal(
+    "We'll record your location as part of your company's attendance verification — it confirms you clocked in on-site and helps prevent buddy-punching.",
+    _employeeSignInProceed
+  );
+}
+
+async function _employeeSignInProceed() {
   let gpsData;
   try {
     gpsData = await _getGPSLocation();
@@ -7201,8 +7246,15 @@ async function employeeSignIn() {
   }
 }
 
-async function employeeSignOut() {
+function employeeSignOut() {
   if (!confirm('Are you sure you want to clock out?')) return;
+  _showGpsPermissionModal(
+    "We'll record your location as part of your company's attendance verification — it confirms you clocked out on-site and helps prevent buddy-punching.",
+    _employeeSignOutProceed
+  );
+}
+
+async function _employeeSignOutProceed() {
   let gpsData;
   try {
     gpsData = await _getGPSLocation();
